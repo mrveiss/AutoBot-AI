@@ -3,288 +3,273 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Integration tests for device JWT authentication and scoping (MVA-3237).
+Integration tests for device JWT authentication and scoping (GH#9493).
 
-Tests:
-- Device pairing generates valid JWT
-- Device JWT authenticates API requests
-- Read-only scope enforcement
-- Admin scope bypass (when implemented)
-- JWT expiry handling
+Rewritten for the canonical contract (#11648): the MVA-3237-era
+``DeviceTokenScope`` enum ("read-only"/"admin"), sync ``validate_device_jwt``
+and ``type: device_token`` claim were replaced by GH#9493 —
+
+- scopes are ``"read"`` / ``"write"`` (``services.device_jwt.VALID_SCOPES``)
+- ``validate_device_jwt`` is async and enforces a device-existence
+  (revocation) check plus an ``aud`` claim
+- device JWTs authenticate ONLY on ``/api/devices/`` endpoints, and
+  read-scoped tokens cannot use mutating HTTP methods
 """
 
 import uuid
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import Request, status
+from fastapi import HTTPException, Request
 
-from auth_middleware import get_auth_middleware
-from models.mobile_device import DeviceTokenScope
-from services.device_jwt import mint_device_jwt, validate_device_jwt
+from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode_jwt
+from services.device_jwt import VALID_SCOPES, mint_device_jwt, validate_device_jwt
+
+_DEVICE_SIGNING_KEY = "d" * 40  # deterministic test key ≥32 chars
+_AUDIENCE = "autobot:device"
+
+
+@pytest.fixture
+def device_jwt_env(monkeypatch):
+    """Set a stable device-JWT signing key for testing."""
+    monkeypatch.setenv("DEVICE_JWT_SECRET", _DEVICE_SIGNING_KEY)
+    return _DEVICE_SIGNING_KEY
+
+
+@pytest.fixture
+def device_exists(monkeypatch):
+    """Pass the GH#9493 revocation check — device exists in the DB."""
+    monkeypatch.setattr(
+        "services.device_jwt._device_exists_cached",
+        AsyncMock(return_value=True),
+    )
+
+
+def _bearer_request(token: str | None, path: str = "/api/devices/list", method: str = "GET") -> MagicMock:
+    """Mock request carrying an optional Bearer token."""
+    request = MagicMock(spec=Request)
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    request.headers.get = lambda k, d=None: headers.get(k, d)
+    request.url.path = path
+    request.method = method
+    request.cookies = {}
+    return request
 
 
 class TestDeviceJWTGeneration:
     """Test device JWT generation during pairing."""
 
-    def test_mint_device_jwt_read_only_scope(self):
-        """JWT should contain correct claims for read-only device."""
-        device_id = uuid.uuid4()
+    @pytest.mark.asyncio
+    async def test_mint_device_jwt_read_scope(self, device_jwt_env, device_exists):
+        """JWT should carry the canonical claims for a read-scoped device."""
+        device_id = str(uuid.uuid4())
         user_id = "user123"
 
-        token = mint_device_jwt(
-            device_id=device_id,
-            user_id=user_id,
-            scope=DeviceTokenScope.READ_ONLY.value,
-        )
+        token = mint_device_jwt(device_id=device_id, user_id=user_id, scope="read")
 
-        # Should be a non-empty string
         assert isinstance(token, str)
-        assert len(token) > 0
+        assert token.count(".") == 2  # header.payload.signature
 
-        # Should be decodable with correct claims
-        claims = validate_device_jwt(token)
-        assert claims["sub"] == str(device_id)
+        claims = await validate_device_jwt(token)
+        assert claims["device_id"] == device_id
         assert claims["user_id"] == user_id
-        assert claims["scope"] == "read-only"
-        assert claims["type"] == "device_token"
+        assert claims["scope"] == "read"
+        assert claims["aud"] == _AUDIENCE
         assert "exp" in claims
 
-    def test_mint_device_jwt_admin_scope(self):
-        """JWT should contain correct claims for admin device."""
-        device_id = uuid.uuid4()
-        user_id = "user456"
+    @pytest.mark.asyncio
+    async def test_mint_device_jwt_write_scope(self, device_jwt_env, device_exists):
+        """JWT should carry the write scope claim."""
+        token = mint_device_jwt(device_id=str(uuid.uuid4()), user_id="user456", scope="write")
 
-        token = mint_device_jwt(
-            device_id=device_id,
-            user_id=user_id,
-            scope=DeviceTokenScope.ADMIN.value,
-        )
+        claims = await validate_device_jwt(token)
+        assert claims["scope"] == "write"
 
-        claims = validate_device_jwt(token)
-        assert claims["scope"] == "admin"
+    def test_mint_device_jwt_rejects_unknown_scope(self, device_jwt_env):
+        """Legacy MVA-3237 scopes ('read-only'/'admin') are no longer mintable."""
+        assert VALID_SCOPES == frozenset({"read", "write"})
+        for legacy_scope in ("read-only", "admin"):
+            with pytest.raises(ValueError, match="Invalid scope"):
+                mint_device_jwt(device_id=str(uuid.uuid4()), user_id="user123", scope=legacy_scope)
+
+    def test_mint_device_jwt_defaults_to_read(self, device_jwt_env):
+        """Least-privilege default: omitted scope mints a read token."""
+        from autobot_shared.auth.jwt_core import decode_jwt
+
+        token = mint_device_jwt(device_id=str(uuid.uuid4()), user_id="user789")
+        claims = decode_jwt(token, _DEVICE_SIGNING_KEY, audience=_AUDIENCE)
+        assert claims["scope"] == "read"
 
 
 class TestDeviceJWTValidation:
-    """Test device JWT validation."""
+    """Test device JWT validation (async, revocation-checked)."""
 
-    def test_validate_device_jwt_success(self):
-        """Valid JWT should decode successfully."""
-        device_id = uuid.uuid4()
-        user_id = "user789"
-        token = mint_device_jwt(device_id, user_id)
+    @pytest.mark.asyncio
+    async def test_validate_device_jwt_success(self, device_jwt_env, device_exists):
+        """Valid JWT for an existing device should decode successfully."""
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user789")
 
-        claims = validate_device_jwt(token)
+        claims = await validate_device_jwt(token)
 
-        assert claims["sub"] == str(device_id)
-        assert claims["user_id"] == user_id
-        assert claims["scope"] == "read-only"
-        assert claims["type"] == "device_token"
+        assert claims["device_id"] == device_id
+        assert claims["user_id"] == "user789"
+        assert claims["scope"] == "read"
 
-    def test_validate_device_jwt_wrong_type(self):
-        """JWT with wrong type claim should be rejected."""
-        from autobot_shared.auth.jwt_core import JWTDecodeError, encode_jwt
+    @pytest.mark.asyncio
+    async def test_validate_device_jwt_rejects_unpaired_device(self, device_jwt_env, monkeypatch):
+        """Tokens for deleted (unpaired) devices must be rejected."""
+        monkeypatch.setattr(
+            "services.device_jwt._device_exists_cached",
+            AsyncMock(return_value=False),
+        )
+        token = mint_device_jwt(str(uuid.uuid4()), "user123")
 
-        # Create a JWT with wrong type
-        payload = {
-            "sub": str(uuid.uuid4()),
-            "user_id": "user123",
-            "scope": "read-only",
-            "type": "user_token",  # Wrong type
-        }
+        with pytest.raises(JWTDecodeError, match="unpaired"):
+            await validate_device_jwt(token)
 
-        # Use same secret as device JWT
-        import os
+    @pytest.mark.asyncio
+    async def test_validate_device_jwt_missing_device_id(self, device_jwt_env, device_exists):
+        """JWT missing the device_id claim should be rejected."""
+        token = encode_jwt(
+            {"aud": _AUDIENCE, "user_id": "user123", "scope": "read"},
+            secret=_DEVICE_SIGNING_KEY,
+            expires_delta=timedelta(days=1),
+        )
 
-        secret = os.environ.get("DEVICE_JWT_SECRET") or os.environ.get("AUTOBOT_JWT_SECRET", "test-secret")
-        token = encode_jwt(payload, secret=secret, expires_delta=timedelta(days=1))
+        with pytest.raises(JWTDecodeError, match="device_id"):
+            await validate_device_jwt(token)
 
-        with pytest.raises(JWTDecodeError, match="not a device token"):
-            validate_device_jwt(token)
+    @pytest.mark.asyncio
+    async def test_validate_device_jwt_rejects_expired(self, device_jwt_env, device_exists):
+        """JWT past its exp timestamp should raise JWTExpiredError."""
+        token = encode_jwt(
+            {"aud": _AUDIENCE, "device_id": str(uuid.uuid4()), "user_id": "u", "scope": "read"},
+            secret=_DEVICE_SIGNING_KEY,
+            expires_delta=timedelta(seconds=-1),
+        )
 
-    def test_validate_device_jwt_missing_claims(self):
-        """JWT missing required claims should be rejected."""
-        from autobot_shared.auth.jwt_core import JWTDecodeError, encode_jwt
+        with pytest.raises(JWTExpiredError):
+            await validate_device_jwt(token)
 
-        # Create a JWT missing required claims
-        payload = {
-            "sub": str(uuid.uuid4()),
-            "type": "device_token",
-            # Missing user_id and scope
-        }
+    @pytest.mark.asyncio
+    async def test_validate_device_jwt_rejects_wrong_audience(self, device_jwt_env, device_exists):
+        """JWT without the device audience claim should be rejected."""
+        token = encode_jwt(
+            {"aud": "autobot:other", "device_id": str(uuid.uuid4()), "user_id": "u", "scope": "read"},
+            secret=_DEVICE_SIGNING_KEY,
+            expires_delta=timedelta(days=1),
+        )
 
-        import os
-
-        secret = os.environ.get("DEVICE_JWT_SECRET") or os.environ.get("AUTOBOT_JWT_SECRET", "test-secret")
-        token = encode_jwt(payload, secret=secret, expires_delta=timedelta(days=1))
-
-        with pytest.raises(JWTDecodeError, match="missing required claims"):
-            validate_device_jwt(token)
+        with pytest.raises(JWTDecodeError):
+            await validate_device_jwt(token)
 
 
 class TestDeviceJWTAuthentication:
-    """Test device JWT authentication in middleware."""
+    """Test device JWT extraction in the auth middleware fallback chain."""
 
-    def test_extract_user_from_device_jwt(self):
-        """Middleware should extract user from valid device JWT."""
-        device_id = uuid.uuid4()
-        user_id = "user123"
-        token = mint_device_jwt(device_id, user_id, scope="read-only")
+    @staticmethod
+    def _middleware(real_auth_middleware):
+        cls = real_auth_middleware.AuthenticationMiddleware
+        return cls.__new__(cls)
 
-        # Create mock request with Authorization header
-        request = MagicMock(spec=Request)
-        request.headers.get.return_value = f"Bearer {token}"
+    @pytest.mark.asyncio
+    async def test_extract_user_from_device_jwt(self, device_jwt_env, device_exists, real_auth_middleware):
+        """Middleware should build a synthetic device user from a valid JWT."""
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user123", scope="read")
 
-        middleware = get_auth_middleware()
-        user_data = middleware._extract_user_from_device_jwt(request)
+        middleware = self._middleware(real_auth_middleware)
+        user_data = await middleware._extract_user_from_device_jwt(_bearer_request(token))
 
         assert user_data is not None
-        assert user_data["user_id"] == user_id
-        assert user_data["device_id"] == str(device_id)
-        assert user_data["scope"] == "read-only"
+        assert user_data["user_id"] == "user123"
+        assert user_data["device_id"] == device_id
+        assert user_data["scope"] == "read"
         assert user_data["auth_method"] == "device_jwt"
         assert user_data["role"] == "device"
-        assert user_data["username"].startswith("device:")
+        assert user_data["username"] == f"device:{device_id}"
 
-    def test_extract_user_from_device_jwt_no_bearer(self):
-        """Middleware should return None when no Bearer token present."""
-        request = MagicMock(spec=Request)
-        request.headers.get.return_value = None
+    @pytest.mark.asyncio
+    async def test_extract_user_from_device_jwt_no_bearer(self, device_jwt_env, real_auth_middleware):
+        """Middleware should return None when no Bearer token is present."""
+        middleware = self._middleware(real_auth_middleware)
+        assert await middleware._extract_user_from_device_jwt(_bearer_request(None)) is None
 
-        middleware = get_auth_middleware()
-        user_data = middleware._extract_user_from_device_jwt(request)
-
-        assert user_data is None
-
-    def test_extract_user_from_device_jwt_invalid_token(self):
+    @pytest.mark.asyncio
+    async def test_extract_user_from_device_jwt_invalid_token(self, device_jwt_env, real_auth_middleware):
         """Middleware should return None for invalid tokens."""
-        request = MagicMock(spec=Request)
-        request.headers.get.return_value = "Bearer invalid_token"
-
-        middleware = get_auth_middleware()
-        user_data = middleware._extract_user_from_device_jwt(request)
-
-        assert user_data is None
+        middleware = self._middleware(real_auth_middleware)
+        assert await middleware._extract_user_from_device_jwt(_bearer_request("invalid_token")) is None
 
 
 class TestDeviceScopeEnforcement:
-    """Test device token scope enforcement."""
+    """Test the GH#9493 path allow-list and scope enforcement in get_current_user."""
+
+    @staticmethod
+    def _patched(real_auth_middleware):
+        cls = real_auth_middleware.AuthenticationMiddleware
+        middleware = cls.__new__(cls)
+        return (
+            middleware,
+            patch.object(real_auth_middleware, "get_auth_middleware", return_value=middleware),
+            patch.object(middleware, "get_user_from_request", return_value=None),
+        )
 
     @pytest.mark.asyncio
-    async def test_get_current_user_rejects_device_jwt(self):
-        """get_current_user should reject device JWTs by default (fail-closed security)."""
-        from auth_middleware import get_current_user
+    async def test_device_jwt_rejected_outside_devices_prefix(
+        self, device_jwt_env, device_exists, real_auth_middleware
+    ):
+        """A valid device JWT must not authenticate arbitrary REST endpoints."""
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="write")
+        request = _bearer_request(token, path="/api/conversations")
 
-        device_id = uuid.uuid4()
-        user_id = "user123"
-        token = mint_device_jwt(device_id, user_id, scope="read-only")
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            with pytest.raises(HTTPException) as exc_info:
+                await real_auth_middleware.get_current_user(request)
 
-        request = MagicMock(spec=Request)
-        request.headers.get.return_value = f"Bearer {token}"
-        request.url.path = "/api/conversations"
-
-        # get_current_user should reject device JWTs
-        with pytest.raises(Exception) as exc_info:
-            await get_current_user(request)
-
-        assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-        assert "Device tokens not permitted" in str(exc_info.value.detail)
+        assert exc_info.value.status_code == 403
+        assert "Device JWT not permitted" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
-    async def test_require_device_jwt_read_only_success(self):
-        """require_device_jwt should accept read-only device tokens."""
-        from auth_middleware import require_device_jwt
+    async def test_device_jwt_allowed_on_devices_prefix(self, device_jwt_env, device_exists, real_auth_middleware):
+        """A valid read-scoped device JWT authenticates GETs under /api/devices/."""
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user123", scope="read")
+        request = _bearer_request(token, path="/api/devices/list", method="GET")
 
-        device_id = uuid.uuid4()
-        user_id = "user123"
-        token = mint_device_jwt(device_id, user_id, scope="read-only")
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            user = await real_auth_middleware.get_current_user(request)
 
-        request = MagicMock(spec=Request)
-        request.headers.get.return_value = f"Bearer {token}"
-
-        # Mock database check for device existence
-        with patch("auth_middleware.get_db_session") as mock_get_db:
-            mock_session = MagicMock()
-            mock_result = MagicMock()
-            mock_device = MagicMock()
-            mock_device.id = device_id
-
-            mock_result.scalar_one_or_none.return_value = mock_device
-            mock_session.execute.return_value = mock_result
-            mock_session.close = MagicMock()
-
-            async def mock_session_gen():
-                yield mock_session
-
-            mock_get_db.return_value = mock_session_gen()
-
-            user_data = await require_device_jwt(request, min_scope="read-only")
-
-            assert user_data["user_id"] == user_id
-            assert user_data["scope"] == "read-only"
-            assert user_data["auth_method"] == "device_jwt"
+        assert user["auth_method"] == "device_jwt"
+        assert user["device_id"] == device_id
 
     @pytest.mark.asyncio
-    async def test_require_device_jwt_admin_rejected(self):
-        """require_device_jwt with admin scope should reject read-only tokens."""
-        from auth_middleware import require_device_jwt
+    async def test_read_scope_blocks_mutating_methods(self, device_jwt_env, device_exists, real_auth_middleware):
+        """Read-scoped device JWTs cannot use mutating HTTP methods."""
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="read")
+        request = _bearer_request(token, path="/api/devices/pair", method="POST")
 
-        device_id = uuid.uuid4()
-        user_id = "user123"
-        token = mint_device_jwt(device_id, user_id, scope="read-only")
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            with pytest.raises(HTTPException) as exc_info:
+                await real_auth_middleware.get_current_user(request)
 
-        request = MagicMock(spec=Request)
-        request.headers.get.return_value = f"Bearer {token}"
-
-        # Mock database check
-        with patch("auth_middleware.get_db_session") as mock_get_db:
-            mock_session = MagicMock()
-            mock_result = MagicMock()
-            mock_device = MagicMock()
-            mock_device.id = device_id
-            mock_result.scalar_one_or_none.return_value = mock_device
-            mock_session.execute.return_value = mock_result
-            mock_session.close = MagicMock()
-
-            async def mock_session_gen():
-                yield mock_session
-
-            mock_get_db.return_value = mock_session_gen()
-
-            with pytest.raises(Exception) as exc_info:
-                await require_device_jwt(request, min_scope="admin")
-
-            assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-            assert "admin scope" in str(exc_info.value.detail)
+        assert exc_info.value.status_code == 403
+        assert "Read-only device JWT" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
-    async def test_require_device_jwt_revoked_device(self):
-        """require_device_jwt should reject tokens for deleted devices."""
-        from auth_middleware import require_device_jwt
+    async def test_write_scope_allows_mutating_methods(self, device_jwt_env, device_exists, real_auth_middleware):
+        """Write-scoped device JWTs may use mutating HTTP methods on /api/devices/."""
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="write")
+        request = _bearer_request(token, path="/api/devices/pair", method="POST")
 
-        device_id = uuid.uuid4()
-        user_id = "user123"
-        token = mint_device_jwt(device_id, user_id, scope="read-only")
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            user = await real_auth_middleware.get_current_user(request)
 
-        request = MagicMock(spec=Request)
-        request.headers.get.return_value = f"Bearer {token}"
-
-        # Mock database check - device not found (deleted)
-        with patch("auth_middleware.get_db_session") as mock_get_db:
-            mock_session = MagicMock()
-            mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = None  # Device deleted
-            mock_session.execute.return_value = mock_result
-            mock_session.close = MagicMock()
-
-            async def mock_session_gen():
-                yield mock_session
-
-            mock_get_db.return_value = mock_session_gen()
-
-            with pytest.raises(Exception) as exc_info:
-                await require_device_jwt(request)
-
-            assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-            assert "revoked" in str(exc_info.value.detail)
+        assert user["auth_method"] == "device_jwt"
+        assert user["scope"] == "write"

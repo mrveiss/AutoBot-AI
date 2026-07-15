@@ -39,6 +39,14 @@ _ROOT = _BACKEND.parent
 sys.path.insert(0, str(_BACKEND))
 sys.path.insert(0, str(_ROOT))
 
+# #11478: snapshot sys.modules before the stub-heavy bootstrap below.  The
+# tests only use the module references extracted here (_sso_mod, _router_ns
+# values), so every stub this file installs (notably the "fastapi" MagicMock
+# needed to exec api/auth.py) can be rolled back afterwards — leaking it broke
+# later modules in the same directory sweep (test_step_up_auth imported the
+# MagicMock instead of real FastAPI).
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
 # ---------------------------------------------------------------------------
 # SSO model stubs (must be set before sso_service.py is loaded)
 # ---------------------------------------------------------------------------
@@ -153,6 +161,16 @@ exec(compile(_router_src, str(_AUTH_ROUTER_PY), "exec"), _router_ns)  # nosec B1
 
 _build_sso_logout_url = _router_ns["_build_sso_logout_url"]
 _build_end_session_url = _router_ns["_build_end_session_url"]
+
+# #11478: restore the pre-bootstrap sys.modules state (see snapshot above) so
+# the stubs installed for this file's exec-based bootstrap cannot poison
+# modules collected after it in a directory sweep.
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
 
 
 # ---------------------------------------------------------------------------
