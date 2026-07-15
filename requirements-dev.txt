@@ -9,4 +9,4 @@
 # even when pip resolves the -r chain in unexpected order.
 structlog>=26.1.0    # service_auth_enforcement, service_auth_logging, service_client
 aiosqlite>=0.22.1   # memory/storage/general_storage, memory/storage/task_storage, utils/async_database_pool
-fakeredis[lua]>=2.26    # llm_shared provider-degradation cross-worker tests (#11519); [lua] for evalsha/register_script tests (#11604)
+fakeredis[lua]>=2.36.2    # llm_shared provider-degradation cross-worker tests (#11519); [lua] for evalsha/register_script tests (#11604)
