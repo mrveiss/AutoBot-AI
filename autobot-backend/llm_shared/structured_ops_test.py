@@ -159,6 +159,70 @@ def test_extract_json_escaped_quote_inside_string() -> None:
 
 
 # ---------------------------------------------------------------------------
+# json_utils syntax-repair tier (#11688) — promoted from json_formatter_agent
+# ---------------------------------------------------------------------------
+
+
+def test_extract_json_trailing_commas() -> None:
+    from .json_utils import extract_json_object
+
+    raw = '{"a": 1, "b": [1, 2,],}'
+    assert extract_json_object(raw) == {"a": 1, "b": [1, 2]}
+
+
+def test_extract_json_bare_keys() -> None:
+    from .json_utils import extract_json_object
+
+    raw = '{status: "ok",\n  count: 3}'
+    assert extract_json_object(raw) == {"status": "ok", "count": 3}
+
+
+def test_extract_json_single_quotes() -> None:
+    from .json_utils import extract_json_object
+
+    raw = "{'a': 'b', 'n': 1}"
+    assert extract_json_object(raw) == {"a": "b", "n": 1}
+
+
+def test_extract_json_fence_plus_syntax_errors() -> None:
+    from .json_utils import extract_json_object
+
+    raw = '```json\n{result: "done",}\n```'
+    assert extract_json_object(raw) == {"result": "done"}
+
+
+def test_extract_json_syntax_repair_plus_control_chars() -> None:
+    from .json_utils import extract_json_object
+
+    raw = '{note: "line1\nline2",}'
+    assert extract_json_object(raw) == {"note": "line1\nline2"}
+
+
+def test_extract_json_repair_does_not_mangle_string_values() -> None:
+    from .json_utils import extract_json_object
+
+    # Colons/commas inside string values must survive the bare-key repair;
+    # only reached when the direct parse fails (trailing comma forces repair).
+    raw = '{"url": "http://x/y", "csv": "a, b: c",}'
+    assert extract_json_object(raw) == {"url": "http://x/y", "csv": "a, b: c"}
+
+
+def test_extract_json_syntax_tier_still_raises_on_garbage() -> None:
+    from .json_utils import extract_json_object
+
+    with pytest.raises(json.JSONDecodeError):
+        extract_json_object("still {not json")
+
+
+def test_repair_json_syntax_is_textual_only() -> None:
+    from .json_utils import repair_json_syntax
+
+    assert repair_json_syntax('{"a": 1,}') == '{"a": 1}'
+    assert repair_json_syntax('{key: "v"}') == '{"key": "v"}'
+    assert repair_json_syntax("no json here") == "no json here"
+
+
+# ---------------------------------------------------------------------------
 # structured_ops.extract — dict schema path
 # ---------------------------------------------------------------------------
 

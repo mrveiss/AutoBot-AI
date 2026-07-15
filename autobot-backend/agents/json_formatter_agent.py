@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import StringParsingConstants
+from llm_shared.json_utils import extract_json_object
 
 from .base_agent import AgentRequest
 from .standardized_agent import ActionHandler, StandardizedAgent
@@ -150,6 +151,38 @@ class JSONFormatterAgent(StandardizedAgent):
             logger.debug("Direct JSON parse failed, trying extraction: %s", e)
         return None
 
+    def _try_canonical_extraction(self, response: str) -> JSONParseResult | None:
+        """
+        Run the canonical llm_shared.json_utils repair cascade (#11688).
+
+        Covers markdown fence stripping (#10672), control-character escaping
+        (#11587), and common syntax repair — trailing commas, bare keys,
+        single-quote swap (#11688, promoted from this agent).
+
+        Args:
+            response: Raw LLM response text
+
+        Returns:
+            JSONParseResult if the canonical tiers produced a dict, None otherwise.
+        """
+        try:
+            parsed = extract_json_object(response)
+        except json.JSONDecodeError as e:
+            logger.debug("Canonical extraction failed, trying agent strategies: %s", e)
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        with self._stats_lock:
+            self.successful_parses += 1
+        return JSONParseResult(
+            success=True,
+            data=parsed,
+            original_text=response,
+            method_used="canonical_extraction",
+            confidence=0.9,
+            warnings=[],
+        )
+
     def parse_llm_response(self, response: str, expected_schema: Dict[str, Any] | None = None) -> JSONParseResult:
         """
         Parse JSON from an LLM response using multiple strategies.
@@ -172,22 +205,28 @@ class JSONFormatterAgent(StandardizedAgent):
         if direct_result:
             return direct_result
 
-        # Strategy 2: Extract JSON from mixed content
+        # Strategy 2: Canonical shared tiers — fence strip, control-char
+        # escape, syntax repair (llm_shared.json_utils, #11688)
+        canonical_result = self._try_canonical_extraction(response)
+        if canonical_result:
+            return canonical_result
+
+        # Strategy 3: Extract JSON from mixed content
         json_result = self._extract_json_from_text(response)
         if json_result.success:
             return json_result
 
-        # Strategy 3: Fix common JSON errors
+        # Strategy 4: Boundary-slice + agent cleanup patterns, then canonical repair
         fixed_result = self._fix_malformed_json(response)
         if fixed_result.success:
             return fixed_result
 
-        # Strategy 4: Pattern-based reconstruction
+        # Strategy 5: Pattern-based reconstruction
         reconstructed_result = self._reconstruct_from_patterns(response, expected_schema)
         if reconstructed_result.success:
             return reconstructed_result
 
-        # Strategy 5: Last resort - create minimal valid JSON
+        # Strategy 6: Last resort - create minimal valid JSON
         return self._create_fallback_json(response, expected_schema)
 
     def _try_parse_json_match(self, match: str) -> Dict[str, Any] | None:
@@ -243,57 +282,14 @@ class JSONFormatterAgent(StandardizedAgent):
             warnings=["No valid JSON found in text"],
         )
 
-    def _apply_json_fixes(self, json_content: str, warnings: List[str]) -> tuple:
-        """Apply common JSON syntax fixes and return fixed content with fixes list (Issue #665: extracted helper)."""
-        fixes_applied = []
-
-        # Fix trailing commas
-        if re.search(r",\s*}", json_content):
-            json_content = re.sub(r",\s*}", "}", json_content)
-            fixes_applied.append("removed_trailing_commas")
-
-        # Fix missing quotes on keys
-        json_content = re.sub(r"(\w+):", r'"\1":', json_content)
-        if '"' in json_content:
-            fixes_applied.append("added_missing_quotes")
-
-        # Fix single quotes to double quotes
-        if "'" in json_content:
-            json_content = json_content.replace("'", '"')
-            fixes_applied.append("converted_single_quotes")
-
-        return json_content, fixes_applied
-
-    def _try_parse_fixed_json(
-        self,
-        json_content: str,
-        text: str,
-        fixes_applied: List[str],
-        warnings: List[str],
-    ) -> JSONParseResult | None:
-        """Attempt to parse fixed JSON and return result if successful (Issue #665: extracted helper)."""
-        try:
-            parsed = json.loads(json_content)
-            if isinstance(parsed, dict):
-                with self._stats_lock:
-                    self.successful_parses += 1
-                confidence = 0.8 - (len(fixes_applied) * 0.1)
-                warnings.extend([f"Applied fix: {fix}" for fix in fixes_applied])
-
-                return JSONParseResult(
-                    success=True,
-                    data=parsed,
-                    original_text=text,
-                    method_used="malformed_json_fix",
-                    confidence=max(confidence, 0.3),
-                    warnings=warnings,
-                )
-        except json.JSONDecodeError as e:
-            warnings.append(f"JSON fix failed: {e}")
-        return None
-
     def _fix_malformed_json(self, text: str) -> JSONParseResult:
-        """Attempt to fix common JSON formatting errors"""
+        """Attempt to fix common JSON formatting errors.
+
+        Boundary-slices the outermost ``{...}`` from surrounding prose and
+        applies agent-specific empty-key cleanup patterns, then delegates
+        syntax repair (trailing commas, bare keys, single quotes, control
+        chars) to the canonical llm_shared.json_utils cascade (#11688).
+        """
         warnings = []
         fixed_text = text.strip()
 
@@ -321,13 +317,25 @@ class JSONFormatterAgent(StandardizedAgent):
             if old_content != json_content:
                 warnings.append(f"Applied cleanup pattern: {pattern}")
 
-        # Apply common fixes
-        json_content, fixes_applied = self._apply_json_fixes(json_content, warnings)
+        # Delegate syntax repair to the canonical cascade (#11688)
+        try:
+            parsed = extract_json_object(json_content)
+        except json.JSONDecodeError as e:
+            warnings.append(f"JSON fix failed: {e}")
+            parsed = None
 
-        # Try parsing the fixed JSON
-        result = self._try_parse_fixed_json(json_content, text, fixes_applied, warnings)
-        if result:
-            return result
+        if isinstance(parsed, dict):
+            with self._stats_lock:
+                self.successful_parses += 1
+            warnings.append("Applied fix: canonical_syntax_repair")
+            return JSONParseResult(
+                success=True,
+                data=parsed,
+                original_text=text,
+                method_used="malformed_json_fix",
+                confidence=0.7,
+                warnings=warnings,
+            )
 
         return JSONParseResult(
             success=False,
