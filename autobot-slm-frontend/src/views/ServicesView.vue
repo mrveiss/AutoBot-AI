@@ -472,7 +472,7 @@ onUnmounted(() => {
             ]"
           ></span>
           <span :class="connected ? 'text-green-600' : 'text-gray-500'">
-            {{ connected ? 'Live' : 'Offline' }}
+            {{ connected ? $t('servicesView.live') : $t('servicesView.offline') }}
           </span>
         </div>
         <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -542,7 +542,7 @@ onUnmounted(() => {
       class="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between"
     >
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" aria-label="Dismiss error">
+      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('servicesView.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -562,9 +562,7 @@ onUnmounted(() => {
                 ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             ]"
-          >
-            AutoBot ({{ categoryCounts.autobot }})
-          </button>
+          >{{ $t('servicesView.autoBotValue0', { value0: categoryCounts.autobot }) }}</button>
           <button
             @click="categoryFilter = 'system'"
             :class="[
@@ -573,9 +571,7 @@ onUnmounted(() => {
                 ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             ]"
-          >
-            System ({{ categoryCounts.system }})
-          </button>
+          >{{ $t('servicesView.systemValue0', { value0: categoryCounts.system }) }}</button>
           <button
             @click="categoryFilter = 'all'"
             :class="[
@@ -584,9 +580,7 @@ onUnmounted(() => {
                 ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 hover:bg-gray-50'
             ]"
-          >
-            All ({{ categoryCounts.all }})
-          </button>
+          >{{ $t('servicesView.allValue0', { value0: categoryCounts.all }) }}</button>
         </div>
 
         <!-- Search -->
@@ -597,7 +591,7 @@ onUnmounted(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search services..."
+            :placeholder="$t('servicesView.searchServices')"
             class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
@@ -680,9 +674,7 @@ onUnmounted(() => {
                 <span class="font-semibold text-gray-900">{{ node.hostname }}</span>
                 <span class="text-sm text-gray-500">({{ node.ipAddress }})</span>
               </div>
-              <div class="text-sm text-gray-500">
-                {{ node.services.length }} services
-              </div>
+              <div class="text-sm text-gray-500">{{ $t('servicesView.countServices', { count: node.services.length }) }}</div>
             </div>
           </div>
 
@@ -705,7 +697,7 @@ onUnmounted(() => {
               @click.stop="handleRestartAllServices(node.nodeId, node.hostname)"
               :disabled="isRestartingAll && restartAllNodeId === node.nodeId"
               class="px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded-sm hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-              title="Restart all services on this node (SLM agent restarts last)"
+              :title="$t('servicesView.restartAllServicesOnThisNode')"
             >
               <svg
                 v-if="isRestartingAll && restartAllNodeId === node.nodeId"
@@ -756,7 +748,7 @@ onUnmounted(() => {
                         getCategoryBadgeClass(service.category)
                       ]"
                     >
-                      {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                      {{ service.category === 'autobot' ? $t('servicesView.autoBot') : $t('servicesView.system') }}
                       <svg class="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                       </svg>
@@ -798,7 +790,7 @@ onUnmounted(() => {
                       @click.stop="handleServiceAction(node.nodeId, service.service_name, 'start')"
                       :disabled="isActionInProgress"
                       class="p-1 text-green-600 hover:bg-green-50 rounded-sm disabled:opacity-50"
-                      title="Start"
+                      :title="$t('servicesView.start')"
                     >
                       <svg
                         v-if="isActionOnService(node.nodeId, service.service_name) && actionType === 'start'"
@@ -820,7 +812,7 @@ onUnmounted(() => {
                       @click.stop="handleServiceAction(node.nodeId, service.service_name, 'stop')"
                       :disabled="isActionInProgress"
                       class="p-1 text-red-600 hover:bg-red-50 rounded-sm disabled:opacity-50"
-                      title="Stop"
+                      :title="$t('servicesView.stop')"
                     >
                       <svg
                         v-if="isActionOnService(node.nodeId, service.service_name) && actionType === 'stop'"
@@ -841,7 +833,7 @@ onUnmounted(() => {
                       @click.stop="handleServiceAction(node.nodeId, service.service_name, 'restart')"
                       :disabled="isActionInProgress"
                       class="p-1 text-blue-600 hover:bg-blue-50 rounded-sm disabled:opacity-50"
-                      title="Restart"
+                      :title="$t('servicesView.restart')"
                     >
                       <svg
                         v-if="isActionOnService(node.nodeId, service.service_name) && actionType === 'restart'"
@@ -901,7 +893,7 @@ onUnmounted(() => {
                 </p>
                 <p class="mt-2 text-sm text-gray-500">
                   {{ $t('servicesView.servicesWillBeRestarted') }}
-                  <strong>last</strong> {{ $t('servicesView.toEnsureTheNode') }}
+                  <strong>{{ $t('servicesView.last') }}</strong> {{ $t('servicesView.toEnsureTheNode') }}
                 </p>
               </div>
             </div>

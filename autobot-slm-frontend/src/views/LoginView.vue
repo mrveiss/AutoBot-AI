@@ -11,12 +11,14 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { ActiveProvider, useSsoApi } from '@/composables/useSsoApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // Issue #1016: SSO module lazy-loaded only when providers exist
 let ssoApi: ReturnType<typeof useSsoApi> | null = null
@@ -63,7 +65,7 @@ async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
       window.location.href = response.redirect_url
     }
   } catch {
-    ssoError.value = 'SSO login failed. Please try again.'
+    ssoError.value = t('loginView.ssoLoginFailed')
   } finally {
     ssoLoading.value = false
   }
@@ -85,7 +87,7 @@ onMounted(async () => {
   <main
     id="main-content"
     class="min-h-screen bg-slate-900 flex items-center justify-center p-4"
-    aria-label="Login page"
+    :aria-label="$t('loginView.loginPageAria')"
   >
     <div class="w-full max-w-md">
       <!-- Logo/Header -->
@@ -109,7 +111,7 @@ onMounted(async () => {
           v-if="!authStore.mfaPending"
           @submit.prevent="handleLogin"
           class="space-y-6"
-          aria-label="Sign in form"
+          :aria-label="$t('loginView.signInForm')"
         >
           <!-- Username -->
           <div>
@@ -130,7 +132,7 @@ onMounted(async () => {
                 autocomplete="username"
                 aria-required="true"
                 class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
-                placeholder="Enter your username"
+                :placeholder="$t('loginView.placeholderUsername')"
               />
             </div>
           </div>
@@ -154,13 +156,13 @@ onMounted(async () => {
                 autocomplete="current-password"
                 aria-required="true"
                 class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
-                placeholder="Enter your password"
+                :placeholder="$t('loginView.placeholderPassword')"
               />
               <button
                 type="button"
                 @click="showPassword = !showPassword"
                 class="absolute inset-y-0 right-0 pr-3 flex items-center"
-                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                :aria-label="showPassword ? $t('loginView.hidePasswordAria') : $t('loginView.showPasswordAria')"
                 :aria-pressed="showPassword"
               >
                 <svg v-if="showPassword" class="h-5 w-5 text-gray-400 hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -194,12 +196,12 @@ onMounted(async () => {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            <span>{{ authStore.loading ? 'Signing in...' : 'Sign in' }}</span>
+            <span>{{ authStore.loading ? $t('loginView.signingIn') : $t('loginView.signIn') }}</span>
           </button>
         </form>
 
         <!-- MFA Verification Form -->
-        <div v-else class="space-y-6" role="form" aria-label="Two-factor authentication">
+        <div v-else class="space-y-6" role="form" :aria-label="$t('loginView.twoFactorAuthenticationAria')">
           <div class="text-center mb-4">
             <svg class="w-12 h-12 text-primary-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -217,9 +219,9 @@ onMounted(async () => {
               inputmode="numeric"
               maxlength="8"
               autocomplete="one-time-code"
-              aria-label="6-digit authentication code"
+              :aria-label="$t('loginView.digitAuthenticationCodeAria')"
               class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
-              placeholder="000000"
+              :placeholder="$t('loginView.placeholderMfaCode')"
               @keyup.enter="handleMFAVerify"
             />
           </div>
@@ -233,7 +235,7 @@ onMounted(async () => {
             :disabled="authStore.loading || mfaCode.length < 6"
             class="w-full py-2.5 px-4 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
           >
-            {{ authStore.loading ? 'Verifying...' : 'Verify' }}
+            {{ authStore.loading ? $t('loginView.verifying') : $t('loginView.verify') }}
           </button>
 
           <button
@@ -256,7 +258,7 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="space-y-3" role="group" aria-label="Single sign-on providers">
+          <div class="space-y-3" role="group" :aria-label="$t('loginView.singleSignOnProvidersAria')">
             <button
               v-for="provider in ssoProviders"
               :key="provider.id"
@@ -264,7 +266,7 @@ onMounted(async () => {
               :disabled="ssoLoading"
               type="button"
               class="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 transition-colors disabled:opacity-50"
-              :aria-label="`Sign in with ${provider.name}`"
+              :aria-label="$t('loginView.signInWithProviderAria', { provider: provider.name })"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />

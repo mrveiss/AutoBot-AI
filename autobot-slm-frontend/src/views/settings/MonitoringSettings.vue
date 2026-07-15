@@ -173,7 +173,7 @@ onMounted(fetchSettings)
               <button
                 @click="testPrometheusConnection"
                 class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                title="Test Connection"
+                :title="$t('settings.monitoringSettings.testConnection')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -204,7 +204,7 @@ onMounted(fetchSettings)
               <button
                 @click="testGrafanaConnection"
                 class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                title="Test Connection"
+                :title="$t('settings.monitoringSettings.testConnection')"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />

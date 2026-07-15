@@ -124,13 +124,11 @@ function handleMigrateClick() {
       <!-- Header -->
       <div class="modal-header">
         <span class="header-icon" aria-hidden="true">&#9888;</span>
-        <h3 id="decommission-title">
-          Decommission Node: {{ node.hostname }}
-        </h3>
+        <h3 id="decommission-title">{{ $t('fleet.decommissionModal.decommissionNodeHostname', { hostname: node.hostname }) }}</h3>
         <button
           class="close-btn"
           @click="emit('close')"
-          aria-label="Close decommission modal"
+          :aria-label="$t('fleet.decommissionModal.closeDecommissionModal')"
         >
           <span aria-hidden="true">{{ $t('fleet.decommissionModal.times') }}</span>
         </button>
@@ -184,7 +182,7 @@ function handleMigrateClick() {
               </div>
               <button
                 class="btn btn-sm btn-migrate"
-                title="Close this modal and use Role Management to migrate this role"
+                :title="$t('fleet.decommissionModal.closeThisModalAndUseRole')"
                 @click="handleMigrateClick"
               >
                 {{ $t('fleet.decommissionModal.migrate') }}
@@ -286,18 +284,14 @@ function handleMigrateClick() {
           class="status-block"
           role="status"
         >
-          <span class="spinner" aria-hidden="true"></span>
-          Decommissioning node...
-        </div>
+          <span class="spinner" aria-hidden="true"></span>{{ $t('fleet.decommissionModal.decommissioningNode') }}</div>
 
         <!-- Complete -->
         <div
           v-if="state === 'complete'"
           class="status-block status-block--success"
           role="status"
-        >
-          Node decommissioned successfully.
-        </div>
+        >{{ $t('fleet.decommissionModal.nodeDecommissionedSuccessfully') }}</div>
 
         <!-- Failed -->
         <div
@@ -316,9 +310,7 @@ function handleMigrateClick() {
           <button
             class="log-toggle"
             @click="($event.target as HTMLElement)?.closest('.log-section')?.classList.toggle('log-expanded')"
-          >
-            Show Ansible Log
-          </button>
+          >{{ $t('fleet.decommissionModal.showAnsibleLog') }}</button>
           <pre class="log-output">{{ ansibleOutput }}</pre>
         </div>
       </div>
@@ -329,24 +321,18 @@ function handleMigrateClick() {
           <button
             class="btn btn-primary"
             @click="emit('decommissioned')"
-          >
-            Close
-          </button>
+          >{{ $t('fleet.decommissionModal.close') }}</button>
         </template>
         <template v-else-if="state !== 'running'">
           <button
             class="btn btn-cancel"
             @click="emit('close')"
-          >
-            Cancel
-          </button>
+          >{{ $t('fleet.decommissionModal.cancel') }}</button>
           <button
             class="btn btn-danger"
             :disabled="!canDecommission"
             @click="handleDecommission"
-          >
-            Decommission
-          </button>
+          >{{ $t('fleet.decommissionModal.decommission') }}</button>
         </template>
       </div>
     </div>

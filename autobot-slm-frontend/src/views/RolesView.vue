@@ -102,7 +102,9 @@ const formData = ref<RoleFormData>({
 })
 
 // Computed
-const formTitle = computed(() => editingRole.value ? `Edit Role: ${editingRole.value}` : 'Create Role')
+const formTitle = computed(() => editingRole.value
+  ? t('rolesView.editRoleTitle', { name: editingRole.value })
+  : t('rolesView.createRole'))
 const filteredRoles = computed(() => roles.value)
 const nodeStatusSummary = computed(() => {
   const list = nodes.value
@@ -135,7 +137,9 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | nul
     }
     return await response.json()
   } catch (err) {
-    errorMessage.value = `Request failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+    errorMessage.value = t('rolesView.requestFailed', {
+      message: err instanceof Error ? err.message : t('rolesView.unknownError'),
+    })
     logger.error('API error:', err)
     return null
   }
@@ -224,7 +228,7 @@ async function saveRole(): Promise<void> {
       { method: 'PUT', body: JSON.stringify(payload) }
     )
     if (result) {
-      successMessage.value = `Role "${result.name}" updated`
+      successMessage.value = t('rolesView.roleUpdated', { name: result.name })
       showForm.value = false
       await fetchRoles()
       setTimeout(() => { successMessage.value = null }, 3000)
@@ -235,7 +239,7 @@ async function saveRole(): Promise<void> {
       { method: 'POST', body: JSON.stringify(payload) }
     )
     if (result) {
-      successMessage.value = `Role "${result.name}" created`
+      successMessage.value = t('rolesView.roleCreated', { name: result.name })
       showForm.value = false
       await fetchRoles()
       setTimeout(() => { successMessage.value = null }, 3000)
@@ -244,7 +248,7 @@ async function saveRole(): Promise<void> {
 }
 
 async function deleteRole(roleName: string): Promise<void> {
-  if (!confirm(`Delete role "${roleName}"? This cannot be undone.`)) return
+  if (!confirm(t('rolesView.confirmDeleteRole', { name: roleName }))) return
   const result = await apiFetch<{ message: string }>(
     `/roles/${roleName}`,
     { method: 'DELETE' }
@@ -324,11 +328,11 @@ onMounted(() => {
         <!-- Fleet health badge -->
         <span v-if="fleetHealth" :class="['px-3 py-1 rounded-full text-xs font-medium capitalize', healthClass]">
           {{ fleetHealth.health }}
-          <span v-if="fleetHealth.required_down.length"> — {{ fleetHealth.required_down.length }} critical</span>
+          <span v-if="fleetHealth.required_down.length">{{ $t('rolesView.countCritical', { count: fleetHealth.required_down.length }) }}</span>
         </span>
         <button @click="fetchRoles(); fetchFleetHealth()" :disabled="isLoading"
           class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50">
-          {{ isLoading ? 'Loading...' : 'Refresh' }}
+          {{ isLoading ? $t('rolesView.loading') : $t('rolesView.refresh') }}
         </button>
         <button @click="openCreateForm"
           class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -383,12 +387,12 @@ onMounted(() => {
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.name') }}</label>
             <input v-model="formData.name" :disabled="!!editingRole" required
-              class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100" placeholder="e.g. redis-server" />
+              class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100" :placeholder="$t('rolesView.placeholderName')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.displayName') }}</label>
             <input v-model="formData.display_name"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. Redis Server" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderDisplayName')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.syncType') }}</label>
@@ -401,22 +405,22 @@ onMounted(() => {
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.targetPath') }}</label>
             <input v-model="formData.target_path" required
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="/opt/autobot" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderTargetPath')" />
           </div>
           <div class="col-span-2">
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.sourcePathsCommaSeparated') }}</label>
             <input v-model="formData.source_paths"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="autobot-slm-backend/, autobot_shared/" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderSourcePaths')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.systemdService') }}</label>
             <input v-model="formData.systemd_service"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="autobot-slm.service" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderSystemdService')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.ansiblePlaybook') }}</label>
             <input v-model="formData.ansible_playbook"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="deploy-backend.yml" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderAnsiblePlaybook')" />
           </div>
           <div class="flex items-center gap-4 pt-6">
             <label class="flex items-center gap-2 text-sm text-gray-700">
@@ -431,27 +435,27 @@ onMounted(() => {
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.healthCheckPort') }}</label>
             <input v-model="formData.health_check_port" type="number"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="8000" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderHealthCheckPort')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.healthCheckPath') }}</label>
             <input v-model="formData.health_check_path"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="/health" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderHealthCheckPath')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.preSyncCommand') }}</label>
             <input v-model="formData.pre_sync_cmd"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="systemctl stop autobot-slm" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderPreSyncCmd')" />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.postSyncCommand') }}</label>
             <input v-model="formData.post_sync_cmd"
-              class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="systemctl restart autobot-slm" />
+              class="w-full px-3 py-2 border rounded-lg text-sm" :placeholder="$t('rolesView.placeholderPostSyncCmd')" />
           </div>
         </div>
         <div class="flex gap-2 pt-2">
           <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-            {{ editingRole ? 'Update' : 'Create' }}
+            {{ editingRole ? $t('rolesView.update') : $t('rolesView.create') }}
           </button>
           <button type="button" @click="showForm = false"
             class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('rolesView.cancel') }}</button>
@@ -462,7 +466,7 @@ onMounted(() => {
     <!-- Roles Table -->
     <div class="bg-white rounded-lg border">
       <div class="px-4 py-3 bg-gray-50 border-b">
-        <h2 class="font-medium text-gray-900">Registered Roles ({{ filteredRoles.length }})</h2>
+        <h2 class="font-medium text-gray-900">{{ $t('rolesView.registeredRoles', { count: filteredRoles.length }) }}</h2>
       </div>
       <table class="w-full">
         <thead class="bg-gray-50">
@@ -486,7 +490,7 @@ onMounted(() => {
               <p v-if="role.display_name" class="text-xs text-gray-500">{{ role.name }}</p>
             </td>
             <td class="px-4 py-3">
-              <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">{{ role.sync_type || 'component' }}</span>
+              <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">{{ role.sync_type || $t('rolesView.component2') }}</span>
             </td>
             <td class="px-4 py-3 text-sm text-gray-600 font-mono">{{ role.target_path }}</td>
             <td class="px-4 py-3 text-sm text-gray-600">{{ role.systemd_service || '-' }}</td>
@@ -542,7 +546,7 @@ onMounted(() => {
             </select>
           </div>
           <div v-if="migratingRole?.degraded_without?.length" class="text-xs text-yellow-700 bg-yellow-50 p-2 rounded-sm">
-            ⚠ Optional role. Without it: {{ migratingRole.degraded_without.join('; ') }}
+            {{ $t('rolesView.optionalRoleWithout', { detail: migratingRole.degraded_without.join('; ') }) }}
           </div>
           <!-- Output -->
           <div v-if="migrateOutput" class="mt-2">

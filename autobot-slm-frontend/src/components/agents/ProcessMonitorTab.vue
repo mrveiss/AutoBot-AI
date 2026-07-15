@@ -236,7 +236,7 @@ function formatTime(iso: string | null): string {
         <label>{{ $t('agents.processMonitorTab.agentID') }}</label>
         <input
           v-model="agentId"
-          placeholder="e.g. orchestrator"
+          :placeholder="$t('agents.processMonitorTab.eGOrchestrator')"
           @keyup.enter="fetchProcesses"
         />
       </div>
@@ -269,11 +269,11 @@ function formatTime(iso: string | null): string {
         </div>
         <div class="control-group">
           <label>{{ $t('agents.processMonitorTab.command') }}</label>
-          <input v-model="spawnForm.command" placeholder="/usr/bin/python3" />
+          <input v-model="spawnForm.command" :placeholder="$t('agents.processMonitorTab.usrBinPython3')" />
         </div>
         <div class="control-group">
           <label>{{ $t('agents.processMonitorTab.arguments') }}</label>
-          <input v-model="spawnForm.args" placeholder="script.py --flag" />
+          <input v-model="spawnForm.args" :placeholder="$t('agents.processMonitorTab.scriptPyFlag')" />
         </div>
         <div class="control-group">
           <label>{{ $t('agents.processMonitorTab.timeoutS') }}</label>
@@ -342,16 +342,12 @@ function formatTime(iso: string | null): string {
       </table>
     </div>
 
-    <div v-else-if="agentId && !loading" class="empty-state">
-      No processes found for agent "{{ agentId }}"
-    </div>
+    <div v-else-if="agentId && !loading" class="empty-state">{{ $t('agents.processMonitorTab.noProcessesFoundForAgentValue0', { value0: agentId }) }}</div>
 
     <!-- Log viewer -->
     <div v-if="selectedProcess" class="log-panel">
       <div class="log-header">
-        <h4>
-          Process {{ selectedProcess.id.slice(0, 8) }}... Logs
-          <span v-if="isStreaming" class="streaming-badge">LIVE</span>
+        <h4>{{ $t('agents.processMonitorTab.processValue0Logs', { value0: selectedProcess.id.slice(0, 8) }) }}<span v-if="isStreaming" class="streaming-badge">{{ $t('agents.processMonitorTab.lIVE') }}</span>
         </h4>
         <div class="log-actions">
           <button
@@ -374,11 +370,11 @@ function formatTime(iso: string | null): string {
             :disabled="fullLogLoading"
             @click="fetchFullLog(selectedProcess.id)"
           >
-            {{ fullLogLoading ? 'Loading...' : 'View Full Log' }}
+            {{ fullLogLoading ? $t('agents.processMonitorTab.loading') : $t('agents.processMonitorTab.viewFullLog') }}
           </button>
         </div>
       </div>
-      <pre class="log-content">{{ fullLog || selectedProcess.log_excerpt || 'No log output' }}</pre>
+      <pre class="log-content">{{ fullLog || selectedProcess.log_excerpt || $t('agents.processMonitorTab.noLogOutput') }}</pre>
     </div>
   </div>
 </template>

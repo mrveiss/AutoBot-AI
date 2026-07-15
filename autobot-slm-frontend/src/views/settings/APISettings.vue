@@ -113,7 +113,7 @@ function copyToClipboard(text: string): void {
           <button
             @click="copyToClipboard(apiUrl)"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
-            title="Copy to clipboard"
+            :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -130,7 +130,7 @@ function copyToClipboard(text: string): void {
           <button
             @click="copyToClipboard(wsUrl)"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
-            title="Copy to clipboard"
+            :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -147,7 +147,7 @@ function copyToClipboard(text: string): void {
           <button
             @click="copyToClipboard(origin + getGrafanaUrl())"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
-            title="Copy to clipboard"
+            :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -164,7 +164,7 @@ function copyToClipboard(text: string): void {
           <button
             @click="copyToClipboard(origin + getPrometheusUrl())"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
-            title="Copy to clipboard"
+            :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -181,7 +181,7 @@ function copyToClipboard(text: string): void {
           <button
             @click="copyToClipboard(origin + getBackendUrl())"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-sm"
-            title="Copy to clipboard"
+            :title="$t('settings.aPISettings.copyToClipboard')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />

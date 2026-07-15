@@ -80,7 +80,7 @@ function onError(message: string) {
 
         <div class="flex items-center gap-1.5 text-xs">
           <div class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-green-500' : 'bg-red-500'"></div>
-          <span class="text-gray-600">{{ isConnected ? 'Connected' : 'Disconnected' }}</span>
+          <span class="text-gray-600">{{ isConnected ? $t('tools.admin.terminalTool.connected') : $t('tools.admin.terminalTool.disconnected') }}</span>
         </div>
       </div>
 
@@ -98,9 +98,7 @@ function onError(message: string) {
           @disconnected="onDisconnected"
           @error="onError"
         />
-        <div v-else class="h-full flex items-center justify-center text-gray-500 text-sm">
-          Select a host above to start an SSH session.
-        </div>
+        <div v-else class="h-full flex items-center justify-center text-gray-500 text-sm">{{ $t('tools.admin.terminalTool.selectAHostAboveToStart') }}</div>
       </div>
     </div>
 

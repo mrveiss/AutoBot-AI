@@ -46,9 +46,9 @@ const editingKey = ref<string | null>(null)
 const editValue = ref('')
 
 const categories = [
-  { value: 'system', label: 'System' },
-  { value: 'api_token', label: 'API Token' },
-  { value: 'service', label: 'Service' },
+  { value: 'system', label: t('settings.admin.secretsSettings.categorySystem') },
+  { value: 'api_token', label: t('settings.admin.secretsSettings.categoryApiToken') },
+  { value: 'service', label: t('settings.admin.secretsSettings.categoryService') },
 ]
 
 async function fetchSecrets(): Promise<void> {
@@ -59,7 +59,7 @@ async function fetchSecrets(): Promise<void> {
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
     error.value =
-      err.response?.data?.detail || 'Failed to load secrets'
+      err.response?.data?.detail || t('settings.admin.secretsSettings.failedToLoadSecrets')
   } finally {
     loading.value = false
   }
@@ -105,7 +105,7 @@ async function addSecret(): Promise<void> {
   error.value = null
   try {
     await api.createSecret(newSecret.value)
-    success.value = `Secret "${newSecret.value.key}" created`
+    success.value = t('settings.admin.secretsSettings.secretCreated', { key: newSecret.value.key })
     newSecret.value = { key: '', value: '', category: 'system', description: '' }
     showAddForm.value = false
     await fetchSecrets()
@@ -113,7 +113,7 @@ async function addSecret(): Promise<void> {
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
     error.value =
-      err.response?.data?.detail || 'Failed to create secret'
+      err.response?.data?.detail || t('settings.admin.secretsSettings.failedToCreateSecret')
   } finally {
     saving.value = false
   }
@@ -125,7 +125,7 @@ async function updateSecretValue(key: string): Promise<void> {
   error.value = null
   try {
     await api.updateSecret(key, { value: editValue.value })
-    success.value = `Secret "${key}" updated`
+    success.value = t('settings.admin.secretsSettings.secretUpdated', { key })
     editingKey.value = null
     editValue.value = ''
     await fetchSecrets()
@@ -133,24 +133,24 @@ async function updateSecretValue(key: string): Promise<void> {
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
     error.value =
-      err.response?.data?.detail || 'Failed to update secret'
+      err.response?.data?.detail || t('settings.admin.secretsSettings.failedToUpdateSecret')
   } finally {
     saving.value = false
   }
 }
 
 async function removeSecret(key: string): Promise<void> {
-  if (!confirm(`Delete secret "${key}"? This cannot be undone.`)) return
+  if (!confirm(t('settings.admin.secretsSettings.confirmDeleteSecret', { key }))) return
   error.value = null
   try {
     await api.deleteSecret(key)
-    success.value = `Secret "${key}" deleted`
+    success.value = t('settings.admin.secretsSettings.secretDeleted', { key })
     await fetchSecrets()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
     error.value =
-      err.response?.data?.detail || 'Failed to delete secret'
+      err.response?.data?.detail || t('settings.admin.secretsSettings.failedToDeleteSecret')
   }
 }
 
@@ -194,7 +194,7 @@ onMounted(() => {
         />
       </svg>
       {{ error }}
-      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" aria-label="Dismiss error">
+      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" :aria-label="$t('settings.admin.secretsSettings.dismissError')">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -228,7 +228,7 @@ onMounted(() => {
         class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
         @click="showAddForm = !showAddForm"
       >
-        {{ showAddForm ? 'Cancel' : 'Add Secret' }}
+        {{ showAddForm ? $t('settings.admin.secretsSettings.cancel') : $t('settings.admin.secretsSettings.addSecret') }}
       </button>
     </div>
 
@@ -241,7 +241,7 @@ onMounted(() => {
           <input
             v-model="newSecret.key"
             type="text"
-            placeholder="e.g. HF_TOKEN"
+            :placeholder="$t('settings.admin.secretsSettings.placeholderKey')"
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           />
         </div>
@@ -261,7 +261,7 @@ onMounted(() => {
           <input
             v-model="newSecret.value"
             type="password"
-            placeholder="Secret value (will be encrypted)"
+            :placeholder="$t('settings.admin.secretsSettings.placeholderValue')"
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
           />
         </div>
@@ -270,7 +270,7 @@ onMounted(() => {
           <input
             v-model="newSecret.description"
             type="text"
-            placeholder="Optional description"
+            :placeholder="$t('settings.admin.secretsSettings.placeholderDescription')"
             class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
           />
         </div>
@@ -281,7 +281,7 @@ onMounted(() => {
           class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
           @click="addSecret"
         >
-          {{ saving ? 'Saving...' : 'Create Secret' }}
+          {{ saving ? $t('settings.admin.secretsSettings.saving') : $t('settings.admin.secretsSettings.createSecret') }}
         </button>
       </div>
     </div>
@@ -368,7 +368,7 @@ onMounted(() => {
                     <input
                       v-model="editValue"
                       type="password"
-                      placeholder="New value"
+                      :placeholder="$t('settings.admin.secretsSettings.placeholderNewValue')"
                       class="w-48 px-2 py-1 border border-gray-300 rounded-sm text-sm font-mono"
                     />
                     <button
@@ -398,13 +398,13 @@ onMounted(() => {
                     class="text-blue-600 hover:text-blue-800 mr-3"
                     @click="startEdit(secret.key)"
                   >
-                    Update
+                    {{ $t('settings.admin.secretsSettings.update') }}
                   </button>
                   <button
                     class="text-red-600 hover:text-red-800"
                     @click="removeSecret(secret.key)"
                   >
-                    Delete
+                    {{ $t('settings.admin.secretsSettings.delete') }}
                   </button>
                 </template>
               </td>
@@ -441,11 +441,9 @@ onMounted(() => {
           />
         </svg>
         <div class="text-sm text-blue-800">
-          <p class="font-medium">About System Secrets</p>
+          <p class="font-medium">{{ $t('settings.admin.secretsSettings.aboutSystemSecrets') }}</p>
           <p class="mt-1">
-            Secrets are encrypted with AES-256-GCM before storage. Values are never displayed
-            after creation. Use these for internal AutoBot infrastructure tokens
-            (e.g. HuggingFace, external APIs) that fleet nodes need but end users should not see.
+            {{ $t('settings.admin.secretsSettings.aboutSystemSecretsBody') }}
           </p>
         </div>
       </div>

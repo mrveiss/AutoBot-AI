@@ -202,7 +202,7 @@ onMounted(fetchSettings)
             <input
               v-model="notifications.email_address"
               type="email"
-              placeholder="admin@example.com"
+              :placeholder="$t('settings.notificationsSettings.adminExampleCom')"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
@@ -219,7 +219,7 @@ onMounted(fetchSettings)
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ saving ? 'Saving...' : 'Save Changes' }}
+            {{ saving ? $t('settings.notificationsSettings.saving') : $t('settings.notificationsSettings.saveChanges') }}
           </button>
         </div>
       </div>

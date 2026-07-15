@@ -197,7 +197,7 @@ async function runShellCommand(): Promise<void> {
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
       </svg>
-      <span>{{ nodes.length }} nodes available for fleet operations</span>
+      <span>{{ $t('fleet.fleetToolsTab.countNodesAvailableForFleetOperations', { count: nodes.length }) }}</span>
     </div>
 
     <!-- Tools Grid -->
@@ -248,7 +248,7 @@ async function runShellCommand(): Promise<void> {
         <button
           @click="closeTool"
           class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          aria-label="Close tool panel"
+          :aria-label="$t('fleet.fleetToolsTab.closeToolPanel')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -278,7 +278,7 @@ async function runShellCommand(): Promise<void> {
               <input
                 type="text"
                 v-model="selectedService"
-                placeholder="e.g., autobot-agent"
+                :placeholder="$t('fleet.fleetToolsTab.eGAutobotAgent')"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
@@ -304,7 +304,7 @@ async function runShellCommand(): Promise<void> {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ loading ? 'Fetching...' : 'Get Logs' }}
+            {{ loading ? $t('fleet.fleetToolsTab.fetching') : $t('fleet.fleetToolsTab.getLogs') }}
           </button>
         </div>
 
@@ -315,7 +315,7 @@ async function runShellCommand(): Promise<void> {
             <input
               type="text"
               v-model="redisCommand"
-              placeholder="e.g., PING, INFO, KEYS *"
+              :placeholder="$t('fleet.fleetToolsTab.eGPINGINFOKEYS')"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
             />
           </div>
@@ -331,7 +331,7 @@ async function runShellCommand(): Promise<void> {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ loading ? 'Executing...' : 'Execute' }}
+            {{ loading ? $t('fleet.fleetToolsTab.executing') : $t('fleet.fleetToolsTab.execute') }}
           </button>
         </div>
 
@@ -355,7 +355,7 @@ async function runShellCommand(): Promise<void> {
               <input
                 type="text"
                 v-model="shellCommand"
-                placeholder="e.g., uptime, df -h, free -m"
+                :placeholder="$t('fleet.fleetToolsTab.eGUptimeDfHFree')"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono"
               />
             </div>
@@ -372,7 +372,7 @@ async function runShellCommand(): Promise<void> {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ loading ? 'Running...' : 'Run Command' }}
+            {{ loading ? $t('fleet.fleetToolsTab.running') : $t('fleet.fleetToolsTab.runCommand') }}
           </button>
         </div>
 

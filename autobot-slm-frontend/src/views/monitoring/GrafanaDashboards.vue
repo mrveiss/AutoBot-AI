@@ -97,7 +97,7 @@ function openInGrafana() {
           <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
-          {{ isFullscreen ? 'Exit' : 'Fullscreen' }}
+          {{ isFullscreen ? $t('monitoring.grafanaDashboards.exit') : $t('monitoring.grafanaDashboards.fullscreen') }}
         </button>
         <button
           @click="openInGrafana"
@@ -123,7 +123,7 @@ function openInGrafana() {
               class="mt-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             >
               <option v-for="cat in categories" :key="cat" :value="cat">
-                {{ cat === 'all' ? 'All Categories' : cat }}
+                {{ cat === 'all' ? $t('monitoring.grafanaDashboards.allCategories') : cat }}
               </option>
             </select>
           </div>

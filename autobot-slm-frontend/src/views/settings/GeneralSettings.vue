@@ -370,9 +370,7 @@ onMounted(() => {
           <div class="flex items-center justify-between pb-4 border-b border-gray-100">
             <div>
               <label class="block text-sm font-medium text-gray-900">{{ $t('settings.generalSettings.defaultTimezone') }}</label>
-              <p class="text-xs text-gray-500 mt-1">
-                Timezone for displaying dates and times ({{ allTimezones.length }} zones available)
-              </p>
+              <p class="text-xs text-gray-500 mt-1">{{ $t('settings.generalSettings.timezoneForDisplayingDatesAndTimes', { count: allTimezones.length }) }}</p>
             </div>
             <select
               v-model="settings.default_timezone"
@@ -437,7 +435,7 @@ onMounted(() => {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ saving ? 'Saving...' : 'Save Changes' }}
+            {{ saving ? $t('settings.generalSettings.saving') : $t('settings.generalSettings.saveChanges') }}
           </button>
         </div>
       </div>
@@ -464,7 +462,7 @@ onMounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {{ syncing ? 'Syncing…' : 'Sync All Nodes' }}
+            {{ syncing ? $t('settings.generalSettings.syncing') : $t('settings.generalSettings.syncAllNodes') }}
           </button>
         </div>
 
@@ -477,7 +475,7 @@ onMounted(() => {
           <textarea
             v-model="ntpServersText"
             rows="4"
-            placeholder="0.pool.ntp.org&#10;1.pool.ntp.org&#10;time.google.com"
+            :placeholder="$t('settings.generalSettings.n0PoolNtpOrg1Pool')"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-sm"
           />
           <p class="text-xs text-gray-500 mt-1">
@@ -493,10 +491,7 @@ onMounted(() => {
             : 'bg-red-50 border-red-200 text-red-800'"
           class="border rounded-lg p-4 text-sm"
         >
-          <div class="font-medium mb-1">
-            {{ syncResult.success ? '✅ Sync complete' : '❌ Sync failed' }}
-            — {{ syncResult.node_count }} node{{ syncResult.node_count !== 1 ? 's' : '' }}
-          </div>
+          <div class="font-medium mb-1">{{ $t('settings.generalSettings.value0Value1NodePlural', { value0: syncResult.success ? $t('settings.generalSettings.syncComplete') : $t('settings.generalSettings.syncFailed'), value1: syncResult.node_count, plural: syncResult.node_count !== 1 ? 's' : '' }) }}</div>
           <div class="text-xs opacity-80">{{ syncResult.message }}</div>
           <details v-if="syncResult.output" class="mt-2">
             <summary class="cursor-pointer text-xs font-medium">{{ $t('settings.generalSettings.ansibleOutput') }}</summary>
@@ -520,7 +515,7 @@ onMounted(() => {
               : 'bg-yellow-100 text-yellow-800'"
             class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap"
           >
-            {{ wizardStatus.completed ? 'Completed' : `In Progress: ${wizardStatus.current_step}` }}
+            {{ wizardStatus.completed ? $t('settings.generalSettings.completed') : `In Progress: ${wizardStatus.current_step}` }}
           </span>
         </div>
 
@@ -533,7 +528,7 @@ onMounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            {{ wizardStatus?.completed ? 'View Wizard' : 'Launch Wizard' }}
+            {{ wizardStatus?.completed ? $t('settings.generalSettings.viewWizard') : $t('settings.generalSettings.launchWizard') }}
           </button>
           <button
             @click="resetWizard"
@@ -548,7 +543,7 @@ onMounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            {{ wizardResetting ? 'Resetting...' : 'Reset Wizard' }}
+            {{ wizardResetting ? $t('settings.generalSettings.resetting') : $t('settings.generalSettings.resetWizard') }}
           </button>
         </div>
       </div>

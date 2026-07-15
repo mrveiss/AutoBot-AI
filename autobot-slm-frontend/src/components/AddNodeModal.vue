@@ -33,7 +33,7 @@
                 @click="handleClose"
                 :disabled="isSubmitting"
                 class="rounded-md text-gray-400 hover:text-gray-600 focus:outline-hidden focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
-                aria-label="Close dialog"
+                :aria-label="$t('addNodeModal.closeDialogAria')"
               >
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -81,7 +81,7 @@
                         type="text"
                         id="hostname"
                         :class="['input', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.hostname }]"
-                        placeholder="e.g., npu-worker-02"
+                        :placeholder="$t('addNodeModal.placeholderHostname')"
                         aria-required="true"
                         :aria-invalid="!!errors.hostname"
                         :aria-describedby="errors.hostname ? 'hostname-error' : undefined"
@@ -101,7 +101,7 @@
                         type="text"
                         id="ip_address"
                         :class="['input', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ip_address }]"
-                        placeholder="e.g., 10.0.0.26"
+                        :placeholder="$t('addNodeModal.placeholderIpAddress')"
                         aria-required="true"
                         :aria-invalid="!!errors.ip_address"
                         :aria-describedby="errors.ip_address ? 'ip-error' : undefined"
@@ -122,7 +122,7 @@
                         min="1"
                         max="65535"
                         class="input"
-                        placeholder="22"
+                        :placeholder="$t('addNodeModal.placeholderSshPort')"
                       />
                     </div>
                   </div>
@@ -138,7 +138,7 @@
                   </legend>
 
                   <!-- Auth Method Selection -->
-                  <div class="flex gap-4" role="radiogroup" aria-label="Authentication method">
+                  <div class="flex gap-4" role="radiogroup" :aria-label="$t('addNodeModal.authenticationMethodAria')">
                     <label
                       :class="[
                         'flex-1 flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all',
@@ -204,7 +204,7 @@
                           type="text"
                           id="ssh_user"
                           class="input"
-                          placeholder="autobot"
+                          :placeholder="$t('addNodeModal.placeholderSshUser')"
                           aria-required="true"
                         />
                       </div>
@@ -223,7 +223,7 @@
                             :type="showPassword ? 'text' : 'password'"
                             id="ssh_password"
                             :class="['input pr-10', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ssh_password }]"
-                            :placeholder="isEditMode && !needsCredentialsForEdit ? 'Leave empty for basic edit' : 'Enter password'"
+                            :placeholder="isEditMode && !needsCredentialsForEdit ? $t('addNodeModal.placeholderLeaveEmptyForEdit') : $t('addNodeModal.placeholderEnterPassword')"
                             :aria-required="!isEditMode || needsCredentialsForEdit ? 'true' : undefined"
                             :aria-invalid="!!errors.ssh_password"
                             :aria-describedby="errors.ssh_password ? 'password-error' : undefined"
@@ -233,7 +233,7 @@
                             type="button"
                             @click="showPassword = !showPassword"
                             class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                            :aria-label="showPassword ? $t('addNodeModal.hidePasswordAria') : $t('addNodeModal.showPasswordAria')"
                             :aria-pressed="showPassword"
                           >
                             <svg v-if="!showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -273,7 +273,7 @@
                         type="text"
                         id="ssh_user_pki"
                         class="input"
-                        placeholder="autobot"
+                        :placeholder="$t('addNodeModal.placeholderSshUser')"
                         aria-required="true"
                       />
                     </div>
@@ -281,7 +281,7 @@
                     <!-- Key Source Selection -->
                     <div>
                       <label class="block text-sm font-medium text-gray-700 mb-2">{{ $t('addNodeModal.sSHKeySource') }}</label>
-                      <div class="space-y-2" role="radiogroup" aria-label="SSH key source">
+                      <div class="space-y-2" role="radiogroup" :aria-label="$t('addNodeModal.sSHKeySourceAria')">
                         <label
                           v-for="option in keySourceOptions"
                           :key="option.value"
@@ -313,7 +313,7 @@
                         type="text"
                         id="ssh_key_path"
                         class="input"
-                        placeholder="/path/to/private_key"
+                        :placeholder="$t('addNodeModal.placeholderKeyPath')"
                       />
                     </div>
 
@@ -327,7 +327,7 @@
                         id="ssh_key"
                         rows="5"
                         :class="['input font-mono text-xs', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ssh_key }]"
-                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"
+                        :placeholder="$t('addNodeModal.bEGINOPENSSHPRIVATEKEYENDOPENSSH')"
                         :aria-invalid="!!errors.ssh_key"
                         :aria-describedby="errors.ssh_key ? 'ssh-key-error' : undefined"
                         @blur="validateField('ssh_key')"
@@ -346,7 +346,7 @@
                     {{ $t('addNodeModal.roleAssignment') }}
                   </legend>
 
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-label="Available roles">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" :aria-label="$t('addNodeModal.availableRolesAria')">
                     <label
                       v-for="role in availableRoles"
                       :key="role.id"
@@ -378,8 +378,8 @@
                     <div class="space-y-1">
                       <div v-for="role in selectedRolesDetails" :key="role.id" class="flex items-center gap-2 text-xs">
                         <span class="w-2 h-2 bg-primary-500 rounded-full" aria-hidden="true"></span>
-                        <span class="text-gray-700">{{ role.name }}: {{ role.services?.join(', ') || 'No services' }}</span>
-                        <span v-if="role.default_port" class="text-gray-500">(Port {{ role.default_port }})</span>
+                        <span class="text-gray-700">{{ role.name }}: {{ role.services?.join(', ') || $t('addNodeModal.noServices') }}</span>
+                        <span v-if="role.default_port" class="text-gray-500">{{ $t('addNodeModal.portValue0', { value0: role.default_port }) }}</span>
                       </div>
                     </div>
                   </div>
@@ -392,7 +392,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    {{ isEditMode ? 'Update Options' : 'Enrollment Options' }}
+                    {{ isEditMode ? $t('addNodeModal.updateOptions') : $t('addNodeModal.enrollmentOptions') }}
                   </legend>
 
                   <!-- Add/Replace Mode Options -->
@@ -566,7 +566,7 @@
                   </svg>
                   <div>
                     <p :class="['font-medium text-sm', testResult.success ? 'text-green-800' : 'text-red-800']">
-                      {{ testResult.success ? 'Connection Successful' : 'Connection Failed' }}
+                      {{ testResult.success ? $t('addNodeModal.connectionSuccessful') : $t('addNodeModal.connectionFailed') }}
                     </p>
                     <p :class="['text-sm', testResult.success ? 'text-green-700' : 'text-red-700']">
                       {{ testResult.message }}
@@ -619,7 +619,7 @@
                   <svg v-else class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  {{ isTesting ? 'Testing...' : 'Test Connection' }}
+                  {{ isTesting ? $t('addNodeModal.testing') : $t('addNodeModal.testConnection') }}
                 </button>
 
                 <button
@@ -671,6 +671,7 @@
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type { NodeRole, RoleInfo } from '@/types/slm'
 
@@ -736,6 +737,8 @@ const emit = defineEmits<{
   replaced: [data: { oldNodeId: string; newNode: unknown }]
 }>()
 
+const { t } = useI18n()
+
 // API
 const api = useSlmApi()
 
@@ -784,9 +787,9 @@ onMounted(() => {
 
 // Key source options
 const keySourceOptions = [
-  { value: 'default', label: 'Use default key (~/.ssh/autobot_key)' },
-  { value: 'browse', label: 'Browse for key file' },
-  { value: 'paste', label: 'Paste key content' },
+  { value: 'default', label: t('addNodeModal.keySourceDefault') },
+  { value: 'browse', label: t('addNodeModal.keySourceBrowse') },
+  { value: 'paste', label: t('addNodeModal.keySourcePaste') },
 ] as const
 
 // State
@@ -822,20 +825,20 @@ const isEditMode = computed(() => props.mode === 'edit')
 const isReplaceMode = computed(() => props.mode === 'replace')
 
 const modalTitle = computed(() => {
-  if (isEditMode.value) return 'Edit Node'
-  if (isReplaceMode.value) return `Replace Node: ${props.existingNode?.hostname || ''}`
-  return 'Add New Node'
+  if (isEditMode.value) return t('addNodeModal.editNode')
+  if (isReplaceMode.value) return t('addNodeModal.replaceNodeTitle', { hostname: props.existingNode?.hostname || '' })
+  return t('addNodeModal.addNewNode')
 })
 
 const submitButtonText = computed(() => {
   if (isSubmitting.value) {
-    if (isEditMode.value) return 'Saving...'
-    if (isReplaceMode.value) return 'Replacing...'
-    return 'Adding...'
+    if (isEditMode.value) return t('addNodeModal.saving')
+    if (isReplaceMode.value) return t('addNodeModal.replacing')
+    return t('addNodeModal.adding')
   }
-  if (isEditMode.value) return 'Save Changes'
-  if (isReplaceMode.value) return 'Replace Node'
-  return 'Add Node'
+  if (isEditMode.value) return t('addNodeModal.saveChanges')
+  if (isReplaceMode.value) return t('addNodeModal.replaceNode')
+  return t('addNodeModal.addNode')
 })
 
 const selectedRolesDetails = computed(() => {
@@ -996,9 +999,9 @@ function validateField(field: string) {
   switch (field) {
     case 'hostname':
       if (!value || (typeof value === 'string' && value.trim() === '')) {
-        errors.value.hostname = 'Hostname is required'
+        errors.value.hostname = t('addNodeModal.hostnameRequired')
       } else if (typeof value === 'string' && !/^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/.test(value)) {
-        errors.value.hostname = 'Invalid hostname format'
+        errors.value.hostname = t('addNodeModal.hostnameInvalidFormat')
       } else {
         delete errors.value.hostname
       }
@@ -1006,9 +1009,9 @@ function validateField(field: string) {
 
     case 'ip_address':
       if (!value || (typeof value === 'string' && value.trim() === '')) {
-        errors.value.ip_address = 'IP address is required'
+        errors.value.ip_address = t('addNodeModal.iPAddressRequired')
       } else if (typeof value === 'string' && !/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(value)) {
-        errors.value.ip_address = 'Invalid IPv4 address'
+        errors.value.ip_address = t('addNodeModal.iPAddressInvalid')
       } else {
         delete errors.value.ip_address
       }
@@ -1021,7 +1024,7 @@ function validateField(field: string) {
         : formData.value.auth_method === 'password'
 
       if (passwordRequired && (!value || (typeof value === 'string' && value.trim() === ''))) {
-        errors.value.ssh_password = 'Password is required for SSH operations'
+        errors.value.ssh_password = t('addNodeModal.passwordRequired')
       } else {
         delete errors.value.ssh_password
       }
@@ -1030,7 +1033,7 @@ function validateField(field: string) {
 
     case 'ssh_key':
       if (formData.value.auth_method === 'pki' && keySource.value === 'paste' && (!value || (typeof value === 'string' && value.trim() === ''))) {
-        errors.value.ssh_key = 'SSH key is required'
+        errors.value.ssh_key = t('addNodeModal.sSHKeyRequired')
       } else {
         delete errors.value.ssh_key
       }
@@ -1038,7 +1041,7 @@ function validateField(field: string) {
 
     case 'roles':
       if (formData.value.roles.length === 0) {
-        errors.value.roles = 'At least one role is required'
+        errors.value.roles = t('addNodeModal.atLeastOneRoleRequired')
       } else {
         delete errors.value.roles
       }
@@ -1094,13 +1097,13 @@ async function testConnection() {
     testResult.value = {
       success: result.success,
       message: result.success
-        ? `Successfully connected to ${formData.value.ip_address}. OS: ${result.os || 'Unknown'}`
-        : result.error || 'Connection failed',
+        ? t('addNodeModal.successfullyConnectedTo', { ip: formData.value.ip_address, os: result.os || t('addNodeModal.unknown') })
+        : result.error || t('addNodeModal.unknownConnectionFailed'),
     }
   } catch (e) {
     testResult.value = {
       success: false,
-      message: e instanceof Error ? e.message : 'Failed to test connection',
+      message: e instanceof Error ? e.message : t('addNodeModal.failedToTestConnection'),
     }
   } finally {
     isTesting.value = false
@@ -1136,15 +1139,15 @@ async function handleSubmit() {
         ...nodeData,
         run_enrollment: formData.value.run_enrollment,
       })
-      success.value = `Node ${formData.value.hostname} updated successfully`
+      success.value = t('addNodeModal.nodeUpdatedSuccessfully', { hostname: formData.value.hostname })
       emit('updated', node)
     } else if (isReplaceMode.value && props.existingNode) {
       const newNode = await api.replaceNode(props.existingNode.node_id, nodeData)
-      success.value = `Node replaced successfully`
+      success.value = t('addNodeModal.nodeReplacedSuccessfully')
       emit('replaced', { oldNodeId: props.existingNode.node_id, newNode })
     } else {
       const node = await api.registerNode(nodeData)
-      success.value = `Node ${formData.value.hostname} registered successfully`
+      success.value = t('addNodeModal.nodeRegisteredSuccessfully', { hostname: formData.value.hostname })
       emit('added', node)
     }
 
@@ -1152,7 +1155,7 @@ async function handleSubmit() {
       emit('close')
     }, 1500)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Operation failed'
+    error.value = e instanceof Error ? e.message : t('addNodeModal.nodeOperationFailed')
   } finally {
     isSubmitting.value = false
   }

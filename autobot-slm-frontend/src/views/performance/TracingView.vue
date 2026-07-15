@@ -269,7 +269,7 @@ onMounted(() => {
         <input
           v-model="nodeFilter"
           type="text"
-          placeholder="Node ID..."
+          :placeholder="$t('performance.tracingView.nodeID')"
           class="text-sm border border-gray-300 rounded-lg px-2 py-1.5 w-36"
           @keyup.enter="onFilterChange"
         />
@@ -284,9 +284,7 @@ onMounted(() => {
 
       <div class="flex-1"></div>
 
-      <span class="text-sm text-gray-400">
-        {{ traceTotal.toLocaleString() }} trace{{ traceTotal !== 1 ? 's' : '' }}
-      </span>
+      <span class="text-sm text-gray-400">{{ $t('performance.tracingView.value0TracePlural', { value0: traceTotal.toLocaleString(), plural: traceTotal !== 1 ? 's' : '' }) }}</span>
     </div>
 
     <!-- Traces Table -->
@@ -376,9 +374,7 @@ onMounted(() => {
                     {{ $t('performance.tracingView.loadingSpanDetails') }}
                   </div>
                   <div v-else-if="expandedDetail" class="space-y-1">
-                    <div class="text-xs font-medium text-gray-500 mb-2">
-                      Span Waterfall - {{ expandedDetail.spans.length }} span{{ expandedDetail.spans.length !== 1 ? 's' : '' }}
-                    </div>
+                    <div class="text-xs font-medium text-gray-500 mb-2">{{ $t('performance.tracingView.spanWaterfallCountSpanPlural', { count: expandedDetail.spans.length, plural: expandedDetail.spans.length !== 1 ? 's' : '' }) }}</div>
                     <div
                       v-for="span in buildSpanTree(expandedDetail.spans)"
                       :key="span.span_id"
@@ -423,38 +419,28 @@ onMounted(() => {
 
     <!-- Pagination -->
     <div v-if="totalPages > 1" class="flex items-center justify-between">
-      <span class="text-sm text-gray-500">
-        Page {{ page }} of {{ totalPages }}
-      </span>
+      <span class="text-sm text-gray-500">{{ $t('performance.tracingView.pageValue0OfValue1', { value0: page, value1: totalPages }) }}</span>
       <div class="flex items-center gap-1">
         <button
           @click="goToPage(1)"
           :disabled="page === 1"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          First
-        </button>
+        >{{ $t('performance.tracingView.first') }}</button>
         <button
           @click="goToPage(page - 1)"
           :disabled="page === 1"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Prev
-        </button>
+        >{{ $t('performance.tracingView.prev') }}</button>
         <button
           @click="goToPage(page + 1)"
           :disabled="page >= totalPages"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Next
-        </button>
+        >{{ $t('performance.tracingView.next') }}</button>
         <button
           @click="goToPage(totalPages)"
           :disabled="page >= totalPages"
           class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Last
-        </button>
+        >{{ $t('performance.tracingView.last') }}</button>
       </div>
     </div>
   </div>

@@ -15,10 +15,12 @@
  */
 
 import { onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 
 const KEY = 'llc.findings_policy'
 const authStore = useAuthStore()
+const { t } = useI18n()
 const policy = reactive({
   enabled: false,
   min_severity: 'medium' as 'high' | 'medium' | 'low',
@@ -46,7 +48,7 @@ async function load(): Promise<void> {
       policy.verify_batch_size = Number(parsed.verify_batch_size ?? 10)
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load findings policy'
+    error.value = e instanceof Error ? e.message : t('settings.findingsPolicySettings.failedToLoadFindingsPolicy')
   }
 }
 
@@ -73,10 +75,10 @@ async function save(): Promise<void> {
     }
     saved.value = res.ok
     if (!res.ok) {
-      error.value = 'Failed to save findings policy'
+      error.value = t('settings.findingsPolicySettings.failedToSaveFindingsPolicy')
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save findings policy'
+    error.value = e instanceof Error ? e.message : t('settings.findingsPolicySettings.failedToSaveFindingsPolicy')
   } finally {
     saving.value = false
   }
@@ -88,25 +90,25 @@ onMounted(load)
 <template>
   <div class="p-6">
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">Findings Policy</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.findingsPolicySettings.findingsPolicy') }}</h2>
       <p class="text-sm text-gray-500 mb-6">
-        Controls how Company OS code-analysis findings are surfaced and promoted to work items.
+        {{ $t('settings.findingsPolicySettings.controlsHowCompanyOS') }}
       </p>
 
       <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
         {{ error }}
       </div>
       <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-        Policy saved successfully.
+        {{ $t('settings.findingsPolicySettings.policySavedSuccessfully') }}
       </div>
 
       <div class="space-y-6">
         <!-- Enabled -->
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Enable findings policy</label>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.enableFindingsPolicy') }}</label>
             <p class="text-xs text-gray-500 mt-1">
-              When disabled, no findings are promoted to work items regardless of other settings.
+              {{ $t('settings.findingsPolicySettings.whenDisabledNoFindings') }}
             </p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
@@ -118,9 +120,9 @@ onMounted(load)
         <!-- Minimum severity -->
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Minimum severity</label>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.minimumSeverity') }}</label>
             <p class="text-xs text-gray-500 mt-1">
-              Only findings at or above this severity level are promoted.
+              {{ $t('settings.findingsPolicySettings.onlyFindingsAtOr') }}
             </p>
           </div>
           <select
@@ -128,18 +130,18 @@ onMounted(load)
             class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             data-test="select-min-severity"
           >
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
+            <option value="high">{{ $t('settings.findingsPolicySettings.high') }}</option>
+            <option value="medium">{{ $t('settings.findingsPolicySettings.medium') }}</option>
+            <option value="low">{{ $t('settings.findingsPolicySettings.low') }}</option>
           </select>
         </div>
 
         <!-- Require approval to promote -->
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Require approval to promote</label>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.requireApprovalToPromote') }}</label>
             <p class="text-xs text-gray-500 mt-1">
-              When enabled, findings require operator approval before becoming work items.
+              {{ $t('settings.findingsPolicySettings.whenEnabledFindingsRequire') }}
             </p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
@@ -151,9 +153,9 @@ onMounted(load)
         <!-- Run on index -->
         <div class="flex items-center justify-between pb-4 border-b border-gray-100">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Run on index</label>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.runOnIndex') }}</label>
             <p class="text-xs text-gray-500 mt-1">
-              Automatically trigger findings analysis whenever the code index is refreshed.
+              {{ $t('settings.findingsPolicySettings.automaticallyTriggerFindings') }}
             </p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
@@ -165,9 +167,9 @@ onMounted(load)
         <!-- Verify batch size -->
         <div class="flex items-center justify-between">
           <div>
-            <label class="block text-sm font-medium text-gray-900">Verify batch size</label>
+            <label class="block text-sm font-medium text-gray-900">{{ $t('settings.findingsPolicySettings.verifyBatchSize') }}</label>
             <p class="text-xs text-gray-500 mt-1">
-              Number of findings processed per verification batch. Lower values reduce peak load.
+              {{ $t('settings.findingsPolicySettings.numberOfFindingsProcessed') }}
             </p>
           </div>
           <input
@@ -192,7 +194,7 @@ onMounted(load)
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          {{ saving ? 'Saving…' : 'Save Policy' }}
+          {{ saving ? $t('settings.findingsPolicySettings.saving') : $t('settings.findingsPolicySettings.savePolicy') }}
         </button>
       </div>
     </div>

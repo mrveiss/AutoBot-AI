@@ -233,7 +233,7 @@ onMounted(() => {
         <thead>
           <tr class="border-b border-gray-700 text-gray-400 text-left">
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.name') }}</th>
-            <th class="px-4 py-3 font-medium">URL</th>
+            <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.uRL') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.status') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.skills') }}</th>
             <th class="px-4 py-3 font-medium">{{ $t('externalAgentsView.tags') }}</th>
@@ -287,14 +287,14 @@ onMounted(() => {
                   :disabled="verifyingId === agent.id"
                   @click="verifyAgent(agent)"
                 >
-                  {{ verifyingId === agent.id ? 'Verifying…' : 'Verify' }}
+                  {{ verifyingId === agent.id ? $t('externalAgentsView.verifying') : $t('externalAgentsView.verify') }}
                 </button>
                 <button
                   class="text-xs text-gray-400 hover:text-gray-300 disabled:opacity-50"
                   :disabled="refreshingId === agent.id"
                   @click="refreshCard(agent)"
                 >
-                  {{ refreshingId === agent.id ? 'Queued' : 'Refresh' }}
+                  {{ refreshingId === agent.id ? $t('externalAgentsView.queued') : $t('externalAgentsView.refresh') }}
                 </button>
                 <button
                   class="text-xs text-gray-400 hover:text-gray-200"
@@ -323,7 +323,7 @@ onMounted(() => {
     >
       <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-lg p-6 space-y-4">
         <h2 class="text-lg font-semibold text-gray-100">
-          {{ modalMode === 'create' ? 'Register External Agent' : 'Edit Agent' }}
+          {{ modalMode === 'create' ? $t('externalAgentsView.registerExternalAgent') : $t('externalAgentsView.editAgent') }}
         </h2>
 
         <div class="space-y-3">
@@ -332,7 +332,7 @@ onMounted(() => {
             <input
               v-model="form.name"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
-              placeholder="My External Agent"
+              :placeholder="$t('externalAgentsView.myExternalAgent')"
             />
           </div>
           <div>
@@ -340,7 +340,7 @@ onMounted(() => {
             <input
               v-model="form.base_url"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
-              placeholder="https://agent.example.com"
+              :placeholder="$t('externalAgentsView.httpsAgentExampleCom')"
               :disabled="modalMode === 'edit'"
             />
           </div>
@@ -349,7 +349,7 @@ onMounted(() => {
             <input
               v-model="form.description"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
-              placeholder="Optional description"
+              :placeholder="$t('externalAgentsView.optionalDescription')"
             />
           </div>
           <div>
@@ -357,7 +357,7 @@ onMounted(() => {
             <input
               v-model="form.tags"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500"
-              placeholder="finance, analysis"
+              :placeholder="$t('externalAgentsView.financeAnalysis')"
             />
           </div>
           <div>
@@ -369,7 +369,7 @@ onMounted(() => {
               v-model="form.api_key"
               type="password"
               class="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-hidden focus:border-primary-500 font-mono"
-              placeholder="sk-..."
+              :placeholder="$t('externalAgentsView.sk')"
             />
           </div>
           <div class="flex items-center gap-6">
@@ -403,7 +403,7 @@ onMounted(() => {
             :disabled="isSaving || !form.name || !form.base_url"
             @click="saveAgent"
           >
-            {{ isSaving ? 'Saving…' : modalMode === 'create' ? 'Register' : 'Save' }}
+            {{ isSaving ? $t('externalAgentsView.saving') : modalMode === 'create' ? $t('externalAgentsView.register') : $t('externalAgentsView.save') }}
           </button>
         </div>
       </div>
@@ -464,9 +464,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="detailAgent.card_error" class="p-2 bg-danger-900/30 border border-danger-700 rounded-sm text-danger-300 text-xs">
-            Card error: {{ detailAgent.card_error }}
-          </div>
+          <div v-if="detailAgent.card_error" class="p-2 bg-danger-900/30 border border-danger-700 rounded-sm text-danger-300 text-xs">{{ $t('externalAgentsView.cardErrorValue0', { value0: detailAgent.card_error }) }}</div>
 
           <div v-if="detailCardJson">
             <div class="text-xs text-gray-500 mb-1">{{ $t('externalAgentsView.agentCardJSON') }}</div>
@@ -478,9 +476,7 @@ onMounted(() => {
           <button
             class="px-4 py-2 text-sm text-gray-300 hover:text-gray-100 transition-colors"
             @click="closeDetail"
-          >
-            Close
-          </button>
+          >{{ $t('externalAgentsView.close') }}</button>
         </div>
       </div>
     </div>

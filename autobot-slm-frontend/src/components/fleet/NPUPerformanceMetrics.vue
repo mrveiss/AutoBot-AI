@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
               <p class="text-2xl font-bold text-gray-900">
                 {{ (metrics?.total_inference_count ?? 0).toLocaleString() }}
               </p>
-              <p class="text-sm text-gray-500">Total Inferences</p>
+              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.totalInferences') }}</p>
             </div>
           </div>
         </div>
@@ -199,7 +199,7 @@ onBeforeUnmount(() => {
               <p class="text-2xl font-bold text-gray-900">
                 {{ (metrics?.avg_latency_ms ?? 0).toFixed(1) }}
               </p>
-              <p class="text-sm text-gray-500">Avg Latency (ms)</p>
+              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.avgLatencyMs') }}</p>
             </div>
           </div>
         </div>
@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
               <p class="text-2xl font-bold text-gray-900">
                 {{ (metrics?.total_throughput_rps ?? 0).toFixed(2) }}
               </p>
-              <p class="text-sm text-gray-500">Throughput (req/s)</p>
+              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.throughputReqS') }}</p>
             </div>
           </div>
         </div>
@@ -235,7 +235,7 @@ onBeforeUnmount(() => {
               <p class="text-2xl font-bold text-gray-900">
                 {{ metrics?.total_queue_depth ?? 0 }}
               </p>
-              <p class="text-sm text-gray-500">Total Queue Depth</p>
+              <p class="text-sm text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.totalQueueDepth') }}</p>
             </div>
           </div>
         </div>
@@ -243,20 +243,16 @@ onBeforeUnmount(() => {
 
       <!-- Online / Total indicator -->
       <div class="flex items-center gap-2 text-sm text-gray-500">
-        <span class="inline-block w-2 h-2 rounded-full bg-green-500" />
-        {{ metrics?.online_nodes ?? 0 }} of {{ metrics?.total_nodes ?? 0 }} NPU nodes online
-      </div>
+        <span class="inline-block w-2 h-2 rounded-full bg-green-500" />{{ $t('fleet.nPUPerformanceMetrics.value0OfValue1NPUNodesOnline', { value0: metrics?.online_nodes ?? 0, value1: metrics?.total_nodes ?? 0 }) }}</div>
 
       <!-- Per-Node Metrics -->
       <div class="space-y-3">
-        <h3 class="text-lg font-semibold text-gray-900">Per-Node Metrics</h3>
+        <h3 class="text-lg font-semibold text-gray-900">{{ $t('fleet.nPUPerformanceMetrics.perNodeMetrics') }}</h3>
 
         <p
           v-if="nodeMetrics.length === 0"
           class="text-sm text-gray-500 bg-white rounded-lg shadow-xs border border-gray-200 p-6 text-center"
-        >
-          No NPU worker metrics available.
-        </p>
+        >{{ $t('fleet.nPUPerformanceMetrics.noNPUWorkerMetricsAvailable') }}</p>
 
         <div
           v-for="node in nodeMetrics"
@@ -303,9 +299,7 @@ onBeforeUnmount(() => {
               <span
                 v-if="node.error_count > 0"
                 class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700"
-              >
-                {{ node.error_count }} errors
-              </span>
+              >{{ $t('fleet.nPUPerformanceMetrics.value0Errors', { value0: node.error_count }) }}</span>
             </div>
           </button>
 
@@ -317,7 +311,7 @@ onBeforeUnmount(() => {
             <!-- Utilization bar -->
             <div>
               <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>Utilization</span>
+                <span>{{ $t('fleet.nPUPerformanceMetrics.utilization') }}</span>
                 <span :class="utilizationTextColor(node.utilization)">
                   {{ node.utilization.toFixed(1) }}%
                 </span>
@@ -333,7 +327,7 @@ onBeforeUnmount(() => {
             <!-- Memory bar -->
             <div>
               <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>Memory</span>
+                <span>{{ $t('fleet.nPUPerformanceMetrics.memory') }}</span>
                 <span>
                   {{ node.memory_used_gb.toFixed(1) }} / {{ node.memory_total_gb.toFixed(1) }} GB
                 </span>
@@ -356,7 +350,7 @@ onBeforeUnmount(() => {
                 <p :class="['text-lg font-semibold', temperatureColor(node.temperature_celsius)]">
                   {{ temperatureDisplay(node.temperature_celsius) }}
                 </p>
-                <p class="text-xs text-gray-500">Temperature</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.temperature') }}</p>
               </div>
 
               <!-- Inference Count -->
@@ -364,7 +358,7 @@ onBeforeUnmount(() => {
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.inference_count.toLocaleString() }}
                 </p>
-                <p class="text-xs text-gray-500">Inferences</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.inferences') }}</p>
               </div>
 
               <!-- Avg Latency -->
@@ -372,7 +366,7 @@ onBeforeUnmount(() => {
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.avg_latency_ms.toFixed(1) }}
                 </p>
-                <p class="text-xs text-gray-500">Avg Latency (ms)</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.avgLatencyMs') }}</p>
               </div>
 
               <!-- Throughput -->
@@ -380,7 +374,7 @@ onBeforeUnmount(() => {
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.throughput_rps.toFixed(2) }}
                 </p>
-                <p class="text-xs text-gray-500">Throughput (req/s)</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.throughputReqS') }}</p>
               </div>
 
               <!-- Queue Depth -->
@@ -388,7 +382,7 @@ onBeforeUnmount(() => {
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.queue_depth }}
                 </p>
-                <p class="text-xs text-gray-500">Queue Depth</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.queueDepth') }}</p>
               </div>
 
               <!-- Error Count -->
@@ -401,7 +395,7 @@ onBeforeUnmount(() => {
                 >
                   {{ node.error_count }}
                 </p>
-                <p class="text-xs text-gray-500">Errors</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.errors') }}</p>
               </div>
 
               <!-- Uptime -->
@@ -409,7 +403,7 @@ onBeforeUnmount(() => {
                 <p class="text-lg font-semibold text-gray-900">
                   {{ formatUptime(node.uptime_seconds) }}
                 </p>
-                <p class="text-xs text-gray-500">Uptime</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.uptime') }}</p>
               </div>
 
               <!-- Last Report -->
@@ -417,7 +411,7 @@ onBeforeUnmount(() => {
                 <p class="text-lg font-semibold text-gray-900">
                   {{ node.timestamp ? new Date(node.timestamp).toLocaleTimeString() : 'N/A' }}
                 </p>
-                <p class="text-xs text-gray-500">Last Report</p>
+                <p class="text-xs text-gray-500">{{ $t('fleet.nPUPerformanceMetrics.lastReport') }}</p>
               </div>
             </div>
           </div>

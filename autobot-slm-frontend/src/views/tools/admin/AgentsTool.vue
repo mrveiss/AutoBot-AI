@@ -239,7 +239,7 @@ onUnmounted(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search agents..."
+            :placeholder="$t('tools.admin.agentsTool.searchAgents')"
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
         </div>
@@ -349,7 +349,7 @@ onUnmounted(() => {
 
         <!-- Last Activity -->
         <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-200">
-          <span>Last activity: {{ formatDate(agent.last_activity) }}</span>
+          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatDate(agent.last_activity) }) }}</span>
         </div>
 
         <!-- Actions -->

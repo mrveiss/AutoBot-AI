@@ -229,9 +229,7 @@ async function handleDelete(): Promise<void> {
     <div class="flex items-center justify-between mb-6">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">{{ $t('performance.alertRulesView.alertRules') }}</h2>
-        <p class="text-sm text-gray-500">
-          {{ alertRules.length }} rule{{ alertRules.length !== 1 ? 's' : '' }} configured
-        </p>
+        <p class="text-sm text-gray-500">{{ $t('performance.alertRulesView.countRulePluralConfigured', { count: alertRules.length, plural: alertRules.length !== 1 ? 's' : '' }) }}</p>
       </div>
       <button
         @click="openCreateModal"
@@ -350,7 +348,7 @@ async function handleDelete(): Promise<void> {
         ></div>
         <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
           <h3 class="text-lg font-semibold text-gray-900 mb-4">
-            {{ showEditModal ? 'Edit Alert Rule' : 'Create Alert Rule' }}
+            {{ showEditModal ? $t('performance.alertRulesView.editAlertRule') : $t('performance.alertRulesView.createAlertRule') }}
           </h3>
           <form
             @submit.prevent="showEditModal ? handleEdit() : handleCreate()"
@@ -363,7 +361,7 @@ async function handleDelete(): Promise<void> {
                 type="text"
                 required
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="High Latency Alert"
+                :placeholder="$t('performance.alertRulesView.highLatencyAlert')"
               />
             </div>
             <div>
@@ -372,7 +370,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.description"
                 type="text"
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Optional description"
+                :placeholder="$t('performance.alertRulesView.optionalDescription')"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -438,7 +436,7 @@ async function handleDelete(): Promise<void> {
                 v-model="form.node_id"
                 type="text"
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                placeholder="Leave empty for all nodes"
+                :placeholder="$t('performance.alertRulesView.leaveEmptyForAllNodes')"
               />
             </div>
             <div class="flex items-center gap-2">
@@ -463,7 +461,7 @@ async function handleDelete(): Promise<void> {
                 :disabled="!form.name || loading"
                 class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
               >
-                {{ showEditModal ? 'Save' : 'Create' }}
+                {{ showEditModal ? $t('performance.alertRulesView.save') : $t('performance.alertRulesView.create') }}
               </button>
             </div>
           </form>

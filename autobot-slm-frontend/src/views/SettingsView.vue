@@ -93,7 +93,7 @@ onMounted(() => {
       <div
         class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
         role="tablist"
-        aria-label="Settings sections"
+        :aria-label="$t('settingsView.settingsSections')"
       >
         <button
           v-for="tab in tabs"

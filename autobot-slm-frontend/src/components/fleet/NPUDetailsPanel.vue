@@ -166,7 +166,7 @@ onMounted(async () => {
           <button
             @click="emit('close')"
             class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="Close"
+            :aria-label="$t('fleet.nPUDetailsPanel.close')"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -259,9 +259,7 @@ onMounted(async () => {
             </div>
 
             <!-- Error count -->
-            <div v-if="liveMetrics.error_count > 0" class="mt-3 text-xs text-red-600">
-              {{ liveMetrics.error_count }} errors recorded
-            </div>
+            <div v-if="liveMetrics.error_count > 0" class="mt-3 text-xs text-red-600">{{ $t('fleet.nPUDetailsPanel.value0ErrorsRecorded', { value0: liveMetrics.error_count }) }}</div>
           </div>
 
           <!-- Utilization -->
@@ -280,16 +278,12 @@ onMounted(async () => {
                 {{ npuStatus?.capabilities?.utilization ?? 0 }}%
               </span>
             </div>
-            <p class="text-xs text-gray-500 mt-2">
-              Queue Depth: {{ npuStatus?.queueDepth ?? 0 }} requests
-            </p>
+            <p class="text-xs text-gray-500 mt-2">{{ $t('fleet.nPUDetailsPanel.queueDepthValue0Requests', { value0: npuStatus?.queueDepth ?? 0 }) }}</p>
           </div>
 
           <!-- Available Models with Assignment (Issue #590) -->
           <div>
-            <h3 class="text-sm font-medium text-gray-700 mb-3">
-              Models ({{ availableModels.length }})
-            </h3>
+            <h3 class="text-sm font-medium text-gray-700 mb-3">{{ $t('fleet.nPUDetailsPanel.modelsCount', { count: availableModels.length }) }}</h3>
             <div v-if="availableModels.length === 0" class="text-sm text-gray-500">
               {{ $t('fleet.nPUDetailsPanel.noModelsDetected') }}
             </div>
@@ -402,7 +396,7 @@ onMounted(async () => {
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                   <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                {{ saving ? 'Saving...' : 'Save Configuration' }}
+                {{ saving ? $t('fleet.nPUDetailsPanel.saving') : $t('fleet.nPUDetailsPanel.saveConfiguration') }}
               </button>
             </div>
           </div>
@@ -437,7 +431,7 @@ onMounted(async () => {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ loading ? 'Refreshing...' : 'Refresh Status' }}
+            {{ loading ? $t('fleet.nPUDetailsPanel.refreshing') : $t('fleet.nPUDetailsPanel.refreshStatus') }}
           </button>
         </div>
       </div>

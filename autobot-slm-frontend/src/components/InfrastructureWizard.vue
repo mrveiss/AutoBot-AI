@@ -295,13 +295,13 @@ function getStatusColor(status: string): string {
       <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
         <div>
           <h3 class="text-lg font-semibold text-gray-900">{{ $t('infrastructureWizard.infrastructureSetupWizard') }}</h3>
-          <p class="text-sm text-gray-500">Step {{ step }} of 3</p>
+          <p class="text-sm text-gray-500">{{ $t('infrastructureWizard.stepValue0Of3', { value0: step }) }}</p>
         </div>
         <button
           @click="$emit('close')"
           class="text-gray-400 hover:text-gray-600 transition-colors"
           :disabled="currentExecution?.status === 'running'"
-          aria-label="Close"
+          :aria-label="$t('infrastructureWizard.close')"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -486,9 +486,7 @@ function getStatusColor(status: string): string {
                     <li>{{ $t('infrastructureWizard.3InfrastructureComponentsInstalled') }}</li>
                     <li>{{ $t('infrastructureWizard.4ServicesWillBe') }}</li>
                   </ul>
-                  <p class="mt-2 text-blue-500">
-                    Estimated time: {{ selectedPlaybook.estimated_duration }}
-                  </p>
+                  <p class="mt-2 text-blue-500">{{ $t('infrastructureWizard.estimatedTimeValue0', { value0: selectedPlaybook.estimated_duration }) }}</p>
                 </div>
               </div>
             </div>
@@ -588,7 +586,7 @@ function getStatusColor(status: string): string {
             class="btn btn-secondary"
             :disabled="currentExecution?.status === 'running'"
           >
-            {{ isExecutionComplete ? 'Close' : 'Cancel' }}
+            {{ isExecutionComplete ? $t('infrastructureWizard.close') : $t('infrastructureWizard.cancel') }}
           </button>
           <button
             v-if="step === 1"
@@ -613,7 +611,7 @@ function getStatusColor(status: string): string {
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            {{ isExecuting ? 'Starting...' : 'Execute Playbook' }}
+            {{ isExecuting ? $t('infrastructureWizard.starting') : $t('infrastructureWizard.executePlaybook') }}
           </button>
         </div>
       </div>
