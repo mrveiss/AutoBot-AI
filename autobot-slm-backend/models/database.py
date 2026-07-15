@@ -135,8 +135,16 @@ class Node(Base):
 
     @property
     def ansible_target(self) -> str:
-        """Best identifier for Ansible --limit targeting (#1814)."""
-        return self.ansible_name or self.ip_address
+        """Best identifier for Ansible --limit targeting (#1814).
+
+        Falls back to node_id, not ip_address: the dynamic registry
+        inventory (services/inventory_builder.py, #10109) keys every host
+        by node_id and registers no IP alias, so `--limit <ip>` matches no
+        hosts and ansible aborts with "no hosts to target" (#11717). node_id
+        is guaranteed to resolve there; ansible_name still wins first for
+        nodes that carry a human-assigned static-inventory name.
+        """
+        return self.ansible_name or self.node_id
 
 
 class Deployment(Base):
