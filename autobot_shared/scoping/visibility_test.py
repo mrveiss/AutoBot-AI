@@ -48,3 +48,42 @@ def test_domain_specific_members_fail_closed_without_grant():
         assert not is_visible(_p(user="stranger"), _r(owner="owner", scope=scope), False)
         assert is_visible(_p(user="owner"), _r(owner="owner", scope=scope), False)  # owner still wins
         assert is_visible(_p(user="stranger"), _r(owner="owner", scope=scope), True)  # grant still wins
+
+
+def test_system_public_visible_to_authenticated_principal():
+    """#11290: SYSTEM/PUBLIC grant any authenticated principal (knowledge rule)."""
+    authed = Principal(user_id="stranger", company_id=None, group_ids=frozenset(), is_authenticated=True)
+    for scope in (ScopeLevel.SYSTEM, ScopeLevel.PUBLIC):
+        assert is_visible(authed, _r(owner="owner", scope=scope), False)
+        assert not is_visible(_p(user="stranger"), _r(owner="owner", scope=scope), False)  # default: anon
+
+
+def test_group_ids_multi_group_membership():
+    """#11290: multi-group resources union with the deprecated single group_id."""
+    r = ResourceDescriptor(
+        owner_id="owner", company_id=None, scope=ScopeLevel.GROUP, group_id="g0", group_ids=frozenset({"g1", "g2"})
+    )
+    assert is_visible(_p(groups={"g2"}), r, False)
+    assert is_visible(_p(groups={"g0"}), r, False)  # single-group form still honored
+    assert not is_visible(_p(groups={"g9"}), r, False)
+
+
+def test_has_grant_accepts_lazy_callback():
+    """#11290: has_grant may be a subsystem grant-lookup closure."""
+    assert is_visible(_p(user="stranger"), _r(owner="owner", scope=ScopeLevel.USER), lambda: True)
+    assert not is_visible(_p(user="stranger"), _r(owner="owner", scope=ScopeLevel.USER), lambda: False)
+
+
+def test_has_grant_callback_skipped_for_owner():
+    """Owner short-circuits before the grant lookup runs (lazy evaluation)."""
+
+    def _boom() -> bool:
+        raise AssertionError("grant lookup must not run for the owner")
+
+    assert is_visible(_p(user="owner"), _r(owner="owner", scope=ScopeLevel.USER), _boom)
+
+
+def test_falsy_owner_id_never_matches():
+    """#11290: resources without an owner (knowledge) grant no ownership access."""
+    r = ResourceDescriptor(owner_id=None, company_id=None, scope=ScopeLevel.USER)
+    assert not is_visible(_p(user="anyone"), r, False)

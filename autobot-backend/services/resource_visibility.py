@@ -21,7 +21,7 @@ _cache: dict[tuple[str, str], dict[str, bool]] = {}
 
 
 def _principal_key(p: Principal) -> str:
-    return f"{p.user_id}|{p.company_id}|{','.join(sorted(p.group_ids))}"
+    return f"{p.user_id}|{p.company_id}|{','.join(sorted(p.group_ids))}|{int(p.is_authenticated)}"
 
 
 def invalidate(resource_type: str, resource_id: str) -> None:
