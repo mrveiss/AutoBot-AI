@@ -12,6 +12,16 @@ device-JWT path guards, GH#6473 / GH#9493) would silently assert on mocks.
 ``real_auth_middleware`` loads the real module under an ALIAS key so the stub
 — and every other test relying on it — stays untouched (no ``sys.modules``
 pollution of the canonical name). Issue #11648.
+
+JSONB/ARRAY-on-SQLite (#11687): production models use PostgreSQL-only column
+types (``postgresql.JSONB`` / ``postgresql.ARRAY``) while integration tests
+run ``Base.metadata.create_all`` against in-memory SQLite. SQLite's DDL
+compiler has no renderer for those types, so every such test errored at
+fixture setup. The ``@compiles(..., "sqlite")`` hooks below render both as
+``JSON`` (SQLite has native JSON support; JSONB inherits the generic JSON
+bind/result processors, so round-tripping dict/list values keeps working).
+Registration is global and idempotent — a no-op for every other dialect, so
+PostgreSQL DDL is untouched.
 """
 
 import importlib.util
@@ -19,9 +29,23 @@ import sys
 from pathlib import Path
 
 import pytest
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.ext.compiler import compiles
 
 _BACKEND_ROOT = Path(__file__).parent.parent.parent
 _REAL_AM_KEY = "_integration_real_auth_middleware"
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_sqlite(element, compiler, **kw):
+    """Render PostgreSQL JSONB columns as JSON on SQLite test databases (#11687)."""
+    return "JSON"
+
+
+@compiles(ARRAY, "sqlite")
+def _compile_pg_array_sqlite(element, compiler, **kw):
+    """Render PostgreSQL ARRAY columns as JSON on SQLite test databases (#11687)."""
+    return "JSON"
 
 
 @pytest.fixture(scope="session")

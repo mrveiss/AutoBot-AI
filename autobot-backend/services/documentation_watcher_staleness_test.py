@@ -7,16 +7,28 @@
 Covers:
 - _propagate_staleness_for_doc() triggers propagation, store, and enqueue
 - _propagate_staleness_for_doc() swallows errors to avoid breaking indexing
-- _handle_update() calls _propagate_staleness_for_doc() on successful indexing
-- _handle_update() does NOT call _propagate_staleness_for_doc() on skip/failure
+- _handle_update() calls _propagate_staleness_for_doc() after a successful
+  enqueue_reindex (#4453 moved indexing onto DocumentSyncQueue, so there is
+  no per-file index result anymore — propagation follows the enqueue)
+- _handle_update() does NOT propagate when the indexer is unavailable or the
+  enqueue fails
+
+#11687: realigned with the current module — the Redis seam is the async
+``get_async_redis_client`` and ``get_doc_indexer_service`` is imported
+function-locally from ``services.knowledge.doc_indexer``.
 """
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.documentation_watcher import DocumentationWatcherService
+# Import the seam module BEFORE any patch() call so mock.patch targets the
+# canonical sys.modules entry — when patch() itself triggers the first import,
+# the watcher's function-local import can resolve a different module object
+# and the patches silently miss (#11687).
+import services.knowledge.doc_indexer  # noqa: F401
+import services.mesh_brain.staleness_propagator  # noqa: F401
+from services.documentation_watcher import PROJECT_ROOT, DocumentationWatcherService
 
 # =============================================================================
 # _propagate_staleness_for_doc
@@ -38,7 +50,10 @@ class TestPropagateStalnessForDoc:
         mock_staleness_result.flagged_for_reembedding = MagicMock(return_value=["neighbor"])
 
         with (
-            patch("autobot_shared.redis_client.get_redis_client", return_value=mock_redis),
+            patch(
+                "autobot_shared.redis_client.get_async_redis_client",
+                new=AsyncMock(return_value=mock_redis),
+            ),
             patch(
                 "services.mesh_brain.staleness_propagator.RedisGraphAdapter",
                 return_value=mock_graph,
@@ -67,7 +82,7 @@ class TestPropagateStalnessForDoc:
         watcher = DocumentationWatcherService()
 
         with patch(
-            "autobot_shared.redis_client.get_redis_client",
+            "autobot_shared.redis_client.get_async_redis_client",
             side_effect=RuntimeError("Redis is down"),
         ):
             # Must not raise
@@ -80,29 +95,21 @@ class TestPropagateStalnessForDoc:
 
 
 class TestHandleUpdateCallsStaleness:
-    """_handle_update triggers staleness propagation only on success."""
-
-    def _make_index_result(self, success=0, skipped=0, failed=0, errors=None):
-        result = MagicMock()
-        result.success = success
-        result.skipped = skipped
-        result.failed = failed
-        result.errors = errors or []
-        return result
+    """_handle_update triggers staleness propagation only after a good enqueue."""
 
     @pytest.mark.asyncio
     async def test_staleness_called_on_success(self) -> None:
-        """Staleness propagation is triggered when index_file returns success > 0."""
+        """Staleness propagation is triggered after enqueue_reindex succeeds."""
         watcher = DocumentationWatcherService()
-        file_path = Path("/fake/docs/guide.md")
+        file_path = PROJECT_ROOT / "docs" / "guide.md"
 
         mock_indexer = AsyncMock()
         mock_indexer.initialize = AsyncMock(return_value=True)
-        mock_indexer.index_file = AsyncMock(return_value=self._make_index_result(success=1))
+        mock_indexer.enqueue_reindex = AsyncMock()
 
         with (
             patch(
-                "services.documentation_watcher.get_doc_indexer_service",
+                "services.knowledge.doc_indexer.get_doc_indexer_service",
                 return_value=mock_indexer,
             ),
             patch.object(
@@ -113,21 +120,21 @@ class TestHandleUpdateCallsStaleness:
         ):
             await watcher._handle_update(file_path)
 
-        mock_propagate.assert_awaited_once()
+        mock_indexer.enqueue_reindex.assert_awaited_once()
+        mock_propagate.assert_awaited_once_with("docs/guide.md")
 
     @pytest.mark.asyncio
-    async def test_staleness_not_called_on_skip(self) -> None:
-        """Staleness propagation is NOT triggered when file is skipped."""
+    async def test_staleness_not_called_when_indexer_unavailable(self) -> None:
+        """Staleness propagation is NOT triggered when the indexer can't initialize."""
         watcher = DocumentationWatcherService()
-        file_path = Path("/fake/docs/guide.md")
+        file_path = PROJECT_ROOT / "docs" / "guide.md"
 
         mock_indexer = AsyncMock()
-        mock_indexer.initialize = AsyncMock(return_value=True)
-        mock_indexer.index_file = AsyncMock(return_value=self._make_index_result(skipped=1))
+        mock_indexer.initialize = AsyncMock(return_value=False)
 
         with (
             patch(
-                "services.documentation_watcher.get_doc_indexer_service",
+                "services.knowledge.doc_indexer.get_doc_indexer_service",
                 return_value=mock_indexer,
             ),
             patch.object(
@@ -142,17 +149,17 @@ class TestHandleUpdateCallsStaleness:
 
     @pytest.mark.asyncio
     async def test_staleness_not_called_on_failure(self) -> None:
-        """Staleness propagation is NOT triggered when indexing fails."""
+        """Staleness propagation is NOT triggered when enqueue_reindex fails."""
         watcher = DocumentationWatcherService()
-        file_path = Path("/fake/docs/guide.md")
+        file_path = PROJECT_ROOT / "docs" / "guide.md"
 
         mock_indexer = AsyncMock()
         mock_indexer.initialize = AsyncMock(return_value=True)
-        mock_indexer.index_file = AsyncMock(return_value=self._make_index_result(failed=1, errors=["some error"]))
+        mock_indexer.enqueue_reindex = AsyncMock(side_effect=RuntimeError("queue write failed"))
 
         with (
             patch(
-                "services.documentation_watcher.get_doc_indexer_service",
+                "services.knowledge.doc_indexer.get_doc_indexer_service",
                 return_value=mock_indexer,
             ),
             patch.object(
@@ -161,6 +168,7 @@ class TestHandleUpdateCallsStaleness:
                 new=AsyncMock(),
             ) as mock_propagate,
         ):
-            await watcher._handle_update(file_path)
+            with pytest.raises(RuntimeError):
+                await watcher._handle_update(file_path)
 
         mock_propagate.assert_not_awaited()

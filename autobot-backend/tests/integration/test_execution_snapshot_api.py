@@ -19,8 +19,20 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import api.execution_snapshots as execution_snapshots_module
 from api.execution_snapshots import router as execution_snapshots_router
 from services.execution.snapshot_index import SnapshotRecord
+
+# Dependency callables as captured by Depends() at router-import time. The
+# tests below patch the MODULE attributes (api.execution_snapshots.get_*), but
+# FastAPI resolves dependencies through the objects it captured at import — so
+# the app fixture overrides those captured objects with thin delegates that
+# call the CURRENT module attribute, making @patch effective (#11687). Without
+# this, the conftest auth stub (a bare MagicMock whose signature is
+# (*args, **kwargs)) is the dependency and FastAPI turns args/kwargs into
+# required query parameters — every request 422s before reaching the handler.
+_ORIG_GET_CURRENT_USER = execution_snapshots_module.get_current_user
+_ORIG_GET_DOCKER_BACKEND = execution_snapshots_module.get_docker_backend
 
 
 @pytest.fixture
@@ -28,6 +40,8 @@ def app():
     """Create FastAPI app with execution_snapshots router for testing."""
     app = FastAPI()
     app.include_router(execution_snapshots_router)
+    app.dependency_overrides[_ORIG_GET_CURRENT_USER] = lambda: execution_snapshots_module.get_current_user()
+    app.dependency_overrides[_ORIG_GET_DOCKER_BACKEND] = lambda: execution_snapshots_module.get_docker_backend()
     return app
 
 
@@ -159,7 +173,9 @@ class TestListSnapshots:
         """Test listing all snapshots without session filter."""
         mock_get_user.return_value = mock_user
         mock_get_backend.return_value = mock_backend
-        mock_backend._snapshot_index.list_all.return_value = [sample_snapshot_record]
+        # #11687: the endpoint lists ONLY the caller's snapshots now
+        # (list_by_user), not the whole index (list_all).
+        mock_backend._snapshot_index.list_by_user.return_value = [sample_snapshot_record]
 
         response = client.get("/execution/snapshots")
 
@@ -169,7 +185,7 @@ class TestListSnapshots:
         assert data["count"] == 1
         assert len(data["snapshots"]) == 1
 
-        mock_backend._snapshot_index.list_all.assert_called_once()
+        mock_backend._snapshot_index.list_by_user.assert_called_once_with("test-user")
 
     @patch("api.execution_snapshots.get_docker_backend")
     @patch("api.execution_snapshots.get_current_user")
@@ -236,7 +252,9 @@ class TestRestoreSnapshot:
         response = client.post("/execution/snapshots/snap-123/restore")
 
         assert response.status_code == 403
-        assert "User does not own this snapshot" in response.json()["detail"]
+        # #11687: the endpoint deliberately returns a generic message so
+        # internal ownership details never leak to the caller.
+        assert response.json()["detail"] == "Access denied"
 
     @patch("api.execution_snapshots.get_docker_backend")
     @patch("api.execution_snapshots.get_current_user")
@@ -299,7 +317,9 @@ class TestDeleteSnapshot:
         response = client.delete("/execution/snapshots/snap-123")
 
         assert response.status_code == 403
-        assert "User does not own this snapshot" in response.json()["detail"]
+        # #11687: the endpoint deliberately returns a generic message so
+        # internal ownership details never leak to the caller.
+        assert response.json()["detail"] == "Access denied"
 
     @patch("api.execution_snapshots.get_docker_backend")
     @patch("api.execution_snapshots.get_current_user")

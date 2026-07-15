@@ -217,6 +217,17 @@ class FallbackChainManager:
             if chain:
                 return chain.get_next_fallback(qualified_name)
 
+        # Mid-chain hop (#11687): chains are keyed by PRIMARY model only, so a
+        # fallback model that itself rate-limits resolves no chain and
+        # multi-hop fallback dies after the first hop. Find the chain that
+        # lists current_model as a fallback and continue from there —
+        # FallbackChain.get_next_fallback already handles mid-chain positions.
+        needle = current_model.lower()
+        for chain in self._chains.values():
+            for fb_model in chain.fallback_models:
+                if fb_model.lower() == needle:
+                    return chain.get_next_fallback(fb_model)
+
         return None
 
     def list_chains(self) -> Dict[str, List[str]]:

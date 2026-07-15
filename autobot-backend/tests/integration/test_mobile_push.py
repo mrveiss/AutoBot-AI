@@ -36,6 +36,22 @@ from user_management.models.base import Base
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
+@pytest.fixture(autouse=True)
+def _test_encryption_service(monkeypatch):
+    """Provide a REAL EncryptionService with an injected test master key (#11687).
+
+    ``MobileDevice.device_token`` encrypts/decrypts through the module-level
+    ``get_encryption_service()`` singleton, which requires
+    ``AUTOBOT_ENCRYPTION_KEY`` — absent in the hermetic test env (ssot config
+    reads env once at import, so setting the variable here would be too late).
+    Injecting the key keeps the real AES-GCM round-trip under test.
+    """
+    import encryption_service as enc_mod
+
+    svc = enc_mod.EncryptionService(master_key="integration-test-master-key-0123456789abcdef")
+    monkeypatch.setattr(enc_mod, "get_encryption_service", lambda: svc)
+
+
 @pytest.fixture
 async def test_db_engine():
     """Create an in-memory test database engine."""
@@ -74,12 +90,15 @@ def test_user_id():
 
 
 @pytest.fixture
-async def mock_session_factory(test_db_session):
-    """Mock session factory for push service."""
+def mock_session_factory(test_db_session):
+    """Mock session factory for push service.
 
-    async def factory():
-        """Async context manager that yields test session."""
+    Mirrors ``async_sessionmaker``: a SYNC callable whose return value is an
+    async context manager yielding the session (#11687 — the old async-def
+    version handed ``async with`` a coroutine, which has no ``__aenter__``).
+    """
 
+    def factory():
         class SessionContext:
             async def __aenter__(self):
                 return test_db_session
@@ -100,7 +119,7 @@ async def mock_session_factory(test_db_session):
 @pytest.mark.asyncio
 async def test_get_target_devices_no_devices(mock_session_factory, test_user_id):
     """Test retrieving mobile devices when user has none."""
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         devices = await _get_target_devices(test_user_id)
         assert devices == []
 
@@ -130,7 +149,7 @@ async def test_get_target_devices_with_active_devices(mock_session_factory, test
         test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         retrieved = await _get_target_devices(test_user_id)
 
     assert len(retrieved) == 2
@@ -168,7 +187,7 @@ async def test_get_target_devices_filters_expired(mock_session_factory, test_db_
     test_db_session.add(expired)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         retrieved = await _get_target_devices(test_user_id)
 
     assert len(retrieved) == 1
@@ -189,7 +208,7 @@ async def test_get_target_devices_handles_null_last_seen(mock_session_factory, t
     test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         retrieved = await _get_target_devices(test_user_id)
 
     assert len(retrieved) == 1
@@ -214,7 +233,10 @@ async def test_send_mobile_push_to_ios_device(mock_session_factory, test_db_sess
     test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with (
+        patch("user_management.database.get_async_session_factory", return_value=mock_session_factory),
+        patch("push_notifications.mobile_push._send_apns", return_value=True),
+    ):
         count = await _send_mobile_push(
             user_id=test_user_id,
             title="Test Notification",
@@ -222,7 +244,7 @@ async def test_send_mobile_push_to_ios_device(mock_session_factory, test_db_sess
             url="/dashboard",
         )
 
-    # Stub implementation returns 1 for iOS
+    # One iOS device delivered (APNs transport stubbed to succeed)
     assert count == 1
 
 
@@ -239,7 +261,10 @@ async def test_send_mobile_push_to_android_device(mock_session_factory, test_db_
     test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with (
+        patch("user_management.database.get_async_session_factory", return_value=mock_session_factory),
+        patch("push_notifications.mobile_push._send_fcm", return_value=True),
+    ):
         count = await _send_mobile_push(
             user_id=test_user_id,
             title="Android Alert",
@@ -263,7 +288,7 @@ async def test_send_mobile_push_to_pwa_device(mock_session_factory, test_db_sess
     test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         count = await _send_mobile_push(
             user_id=test_user_id,
             title="PWA Test",
@@ -306,7 +331,11 @@ async def test_send_mobile_push_to_multiple_devices(mock_session_factory, test_d
         test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with (
+        patch("user_management.database.get_async_session_factory", return_value=mock_session_factory),
+        patch("push_notifications.mobile_push._send_apns", return_value=True),
+        patch("push_notifications.mobile_push._send_fcm", return_value=True),
+    ):
         count = await _send_mobile_push(
             user_id=test_user_id,
             title="Multi-device Alert",
@@ -321,7 +350,7 @@ async def test_send_mobile_push_to_multiple_devices(mock_session_factory, test_d
 @pytest.mark.asyncio
 async def test_send_mobile_push_no_devices(mock_session_factory, test_user_id):
     """Test push delivery when user has no devices."""
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         count = await _send_mobile_push(
             user_id=test_user_id,
             title="No Devices",
@@ -353,8 +382,9 @@ async def test_send_push_notification_integration(mock_session_factory, test_db_
 
     # Mock web push to return 0 (no web subscriptions)
     with (
-        patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory),
+        patch("user_management.database.get_async_session_factory", return_value=mock_session_factory),
         patch("services.push_notification_service._send_web_push", return_value=0),
+        patch("push_notifications.mobile_push._send_apns", return_value=True),
     ):
         total_count = await send_push_notification(
             user_id=test_user_id,
@@ -381,8 +411,9 @@ async def test_send_push_notification_with_custom_ttl(mock_session_factory, test
     await test_db_session.commit()
 
     with (
-        patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory),
+        patch("user_management.database.get_async_session_factory", return_value=mock_session_factory),
         patch("services.push_notification_service._send_web_push", return_value=0) as mock_web,
+        patch("push_notifications.mobile_push._send_fcm", return_value=True),
     ):
         await send_push_notification(
             user_id=test_user_id,
@@ -392,9 +423,10 @@ async def test_send_push_notification_with_custom_ttl(mock_session_factory, test
             ttl=3600,  # 1 hour
         )
 
-    # Verify TTL was passed to web push
+    # Verify TTL was passed to web push (positional arg 5 of
+    # _send_web_push(user_id, title, body, url, ttl))
     mock_web.assert_called_once()
-    assert mock_web.call_args[1]["ttl"] == 3600
+    assert mock_web.call_args.args[4] == 3600
 
 
 # =============================================================================
@@ -406,10 +438,10 @@ async def test_send_push_notification_with_custom_ttl(mock_session_factory, test
 async def test_send_mobile_push_handles_db_errors_gracefully(test_user_id):
     """Test push service handles database errors gracefully."""
 
-    async def failing_factory():
+    def failing_factory():
         raise Exception("Database connection failed")
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=failing_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=failing_factory):
         # Should not raise, returns empty list
         devices = await _get_target_devices(test_user_id)
 
@@ -431,7 +463,7 @@ async def test_send_mobile_push_handles_decryption_errors(mock_session_factory, 
     test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         # Should handle decryption error gracefully
         try:
             await _get_target_devices(test_user_id)
@@ -461,7 +493,7 @@ async def test_send_mobile_push_unknown_platform(mock_session_factory, test_db_s
     test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with patch("user_management.database.get_async_session_factory", return_value=mock_session_factory):
         # Should log warning but not crash
         count = await _send_mobile_push(
             user_id=test_user_id,
@@ -505,7 +537,11 @@ async def test_send_push_only_to_user_devices(mock_session_factory, test_db_sess
     test_db_session.add(user2_device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with (
+        patch("user_management.database.get_async_session_factory", return_value=mock_session_factory),
+        patch("push_notifications.mobile_push._send_apns", return_value=True),
+        patch("push_notifications.mobile_push._send_fcm", return_value=True),
+    ):
         count = await _send_mobile_push(
             user_id=test_user_id,  # Target user 1 only
             title="User 1 Notification",
@@ -558,7 +594,11 @@ async def test_send_push_to_many_devices_is_efficient(mock_session_factory, test
         test_db_session.add(device)
     await test_db_session.commit()
 
-    with patch("push_notifications.mobile_push.get_async_session_factory", return_value=mock_session_factory):
+    with (
+        patch("user_management.database.get_async_session_factory", return_value=mock_session_factory),
+        patch("push_notifications.mobile_push._send_apns", return_value=True),
+        patch("push_notifications.mobile_push._send_fcm", return_value=True),
+    ):
         import time
 
         start = time.time()
