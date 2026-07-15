@@ -19,12 +19,11 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
+from agent_loop.search.base import DEFAULT_RESULT_COUNT, SearchResult, WebSearchProvider
 from autobot_shared.credential_gated_registry import (
     CredentialGatedRegistry,
     gated_registry_singleton,
 )
-
-from agent_loop.search.base import DEFAULT_RESULT_COUNT, SearchResult, WebSearchProvider
 
 logger = logging.getLogger(__name__)
 
