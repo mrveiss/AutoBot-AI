@@ -255,19 +255,14 @@ if "services" in sys.modules:
     sys.modules["services"].__path__ = [str(backend_root / "services")]  # type: ignore[attr-defined]
 # services.npu_profile_suggester (GH#6738) — pure-logic module with no heavy deps.
 # Load from the real file so test_npu_profile_suggester.py can import it directly
-# without being blocked by the services package stub above.
+# without being blocked by the services package stub above.  #11731: routed
+# through _real_load_and_bind so the module is also bound on the services stub
+# (patch("services.npu_profile_suggester.X") resolves via getattr(parent, child)).
 if "services.npu_profile_suggester" not in sys.modules:
-    import importlib.util as _ilu_ps
-
-    _ps_spec = _ilu_ps.spec_from_file_location(
+    _real_load_and_bind(
         "services.npu_profile_suggester",
-        str(backend_root / "services" / "npu_profile_suggester.py"),
+        backend_root / "services" / "npu_profile_suggester.py",
     )
-    if _ps_spec and _ps_spec.loader:
-        _ps_mod = _ilu_ps.module_from_spec(_ps_spec)
-        _ps_mod.__package__ = "services"
-        sys.modules["services.npu_profile_suggester"] = _ps_mod
-        _ps_spec.loader.exec_module(_ps_mod)  # type: ignore[union-attr]
 # Provide the SUPPORTED_LANGUAGES symbol consumed by api.schemas_agent
 if not hasattr(sys.modules.get("services.personality_service", object()), "SUPPORTED_LANGUAGES"):
     sys.modules["services.personality_service"].SUPPORTED_LANGUAGES = {}  # type: ignore[attr-defined]
@@ -447,46 +442,25 @@ if "llm_shared" not in sys.modules:
         _mpr_stub.ArchitectureFamily = MagicMock()  # type: ignore[attr-defined]
         sys.modules["llm_shared.model_param_registry"] = _mpr_stub
 
-    # Load llm_shared.types (enums only) so models.py can do `from .types import`
-    import importlib.util as _ilu2
-
-    def _load_llm_sub(name: str, filename: str) -> None:
-        """Load a llm_shared sub-module from its actual source file."""
-        _spec = _ilu2.spec_from_file_location(name, str(backend_root / "llm_shared" / filename))
-        if _spec and _spec.loader:
-            _mod = _ilu2.module_from_spec(_spec)
-            _mod.__package__ = "llm_shared"
-            sys.modules[name] = _mod
-            _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
-
-    try:
-        _load_llm_sub("llm_shared.types", "types.py")
-    except Exception:
-        sys.modules["llm_shared.types"] = _make_pkg_stub("llm_shared.types")
-
-    # Load llm_shared.models from its actual source file so that LLMRequest
-    # and LLMResponse are real instantiatable dataclasses (tests call them).
-    try:
-        _load_llm_sub("llm_shared.models", "models.py")
-    except Exception:
-        # Fall back to a MagicMock stub if models.py has import issues
-        _models_stub = _make_pkg_stub("llm_shared.models")
-        _models_stub.LLMRequest = MagicMock()  # type: ignore[attr-defined]
-        _models_stub.LLMResponse = MagicMock()  # type: ignore[attr-defined]
-        _models_stub.ChatMessage = MagicMock()  # type: ignore[attr-defined]
-        _models_stub.LLMSettings = MagicMock()  # type: ignore[attr-defined]
-        sys.modules["llm_shared.models"] = _models_stub
+    # #11730: llm_shared.types and llm_shared.models are load-once — they were
+    # already real-loaded above via _real_load_and_bind.  The former
+    # _load_llm_sub helper (third near-identical loader) re-loaded them here,
+    # creating SECOND module copies: everything loaded in between
+    # (fallback_chain, model_fallback_coordinator, base_provider,
+    # provider_registry, …) held classes from the first copy while later test
+    # imports got the second, breaking isinstance checks.  Nothing depends on
+    # reload semantics — the re-load ran once, immediately after the first
+    # load, inside the same conftest pass.  Only semantic_cache still loads
+    # here (its first and only load), through the canonical helper.
 
     # Load llm_shared.semantic_cache (Issue #8168) — pure Python + numpy,
-    # no heavy deps at import time.
-    try:
-        _load_llm_sub("llm_shared.semantic_cache", "semantic_cache.py")
-        _sc_mod = sys.modules.get("llm_shared.semantic_cache")
-        if _sc_mod and hasattr(_sc_mod, "SemanticLLMCache"):
-            _llm_stub.SemanticLLMCache = _sc_mod.SemanticLLMCache  # type: ignore[attr-defined]
-    except Exception:
-        _llm_stub.SemanticLLMCache = MagicMock()  # type: ignore[attr-defined]
-        sys.modules["llm_shared.semantic_cache"] = _make_pkg_stub("llm_shared.semantic_cache")
+    # no heavy deps at import time.  On load failure _real_load_and_bind
+    # installs a pkg stub whose __getattr__ yields a MagicMock, so the
+    # SemanticLLMCache re-export below stays mock-backed as before.
+    _real_load_and_bind("llm_shared.semantic_cache", _llm_root / "semantic_cache.py")
+    _sc_mod = sys.modules.get("llm_shared.semantic_cache")
+    if _sc_mod is not None and hasattr(_sc_mod, "SemanticLLMCache"):
+        _llm_stub.SemanticLLMCache = _sc_mod.SemanticLLMCache  # type: ignore[attr-defined]
 
 # auth_middleware stub — the real module pulls in the full config/Redis chain
 # at import time (config.manager, error_catalog, etc.) which fails in the dev
