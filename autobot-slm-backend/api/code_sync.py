@@ -1842,9 +1842,7 @@ async def _build_npm_frontend_for_component(component: str, steps: List[str]) ->
         return False
 
 
-async def _restart_component_services(
-    component: str, steps: List[str], services: Optional[List[str]] = None
-) -> None:
+async def _restart_component_services(component: str, steps: List[str], services: Optional[List[str]] = None) -> None:
     """Restart the systemd service(s) associated with a deployed component (#9982).
 
     *services* overrides the _COMPONENT_SERVICES lookup so a caller can restart
@@ -2111,9 +2109,7 @@ async def _wait_component_healthy(component: str, steps: List[str], *, slow_star
     return True
 
 
-async def _restart_dependents_with_health(
-    component: str, snapshot: Optional[str], steps: List[str]
-) -> bool:
+async def _restart_dependents_with_health(component: str, snapshot: Optional[str], steps: List[str]) -> bool:
     """Restart *component*'s dependent services with post-restart verification (#11496).
 
     A shared-lib (autobot_shared) sync fans out to restart BOTH backends — an

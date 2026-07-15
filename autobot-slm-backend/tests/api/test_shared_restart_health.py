@@ -190,9 +190,7 @@ def test_guard_stays_armed_during_verification_window() -> None:
 def test_unhealthy_backend_triggers_rollback_and_blocks_self_restart() -> None:
     """A dependent backend failing its health poll rolls back the shared dir and
     the self-restart never runs (would restart onto broken code)."""
-    steps, pip_ok, mocks = _run_shared_post_sync(
-        {"_wait_component_healthy": AsyncMock(return_value=False)}
-    )
+    steps, pip_ok, mocks = _run_shared_post_sync({"_wait_component_healthy": AsyncMock(return_value=False)})
 
     assert pip_ok is False
     mocks["_rollback_component"].assert_awaited_once()
@@ -217,9 +215,7 @@ def test_failed_url_less_dependent_triggers_rollback() -> None:
     async def _celery_failed(service: str) -> bool:
         return service == "autobot-celery"
 
-    steps, pip_ok, mocks = _run_shared_post_sync(
-        {"_is_systemd_unit_failed": AsyncMock(side_effect=_celery_failed)}
-    )
+    steps, pip_ok, mocks = _run_shared_post_sync({"_is_systemd_unit_failed": AsyncMock(side_effect=_celery_failed)})
 
     assert pip_ok is False
     mocks["_rollback_component"].assert_awaited_once()
