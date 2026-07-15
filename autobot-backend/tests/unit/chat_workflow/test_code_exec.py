@@ -673,7 +673,7 @@ async def test_run_broker_script_mounts_large_script_via_file_not_argv():
         return {"image": "x"}
 
     ex._prepare_container_config = _prep
-    ex._parse_logs = lambda logs: ("", "")
+    ex._parse_logs = lambda stdout_raw, stderr_raw=b"": ("", "")
     ex._collect_security_events = AsyncMock(return_value=[])
     ex._build_sandbox_result = SecureSandboxExecutor._build_sandbox_result.__get__(ex)
     ex._log_execution_metrics = AsyncMock()
@@ -707,7 +707,7 @@ async def test_run_broker_script_starts_container_once():
     ex.docker_client = docker_client
 
     ex._prepare_container_config = lambda cmd, cfg: {"image": "x"}
-    ex._parse_logs = lambda logs: ("out", "")
+    ex._parse_logs = lambda stdout_raw, stderr_raw=b"": ("out", "")
     ex._collect_security_events = AsyncMock(return_value=[])
     ex._build_sandbox_result = SecureSandboxExecutor._build_sandbox_result.__get__(ex)
     ex._log_execution_metrics = AsyncMock()
@@ -924,6 +924,47 @@ async def test_collect_broker_results_uses_script_stdout_not_rpc_logs():
     # stdout must NOT have been sourced from container.logs (called with stdout=False).
     _, kwargs = container.logs.call_args
     assert kwargs.get("stdout") is False
-    # stderr-only logs are surfaced (not silently dropped): _parse_logs lumps
-    # them into element 0, so the broker path reads them from there (#11613 review).
+    # stderr-only logs are surfaced (not silently dropped): the broker path
+    # passes them as the stderr stream to _parse_logs (#11613 review, #11629).
     assert "RESULT clean" in result.stderr
+
+
+def test_parse_logs_splits_stdout_and_stderr():
+    """#11629: _parse_logs returns a real (stdout, stderr) split per stream."""
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    out, err = ex._parse_logs(b"hello out\n", b"boom err\n")
+    assert out.strip() == "hello out"
+    assert err.strip() == "boom err"
+    # stderr defaults empty when only one stream is supplied
+    out, err = ex._parse_logs(b"only out\n")
+    assert (out.strip(), err) == ("only out", "")
+
+
+def test_execute_container_with_timeout_fetches_streams_separately():
+    """#11629: stdout and stderr are requested as separate log streams."""
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    ex.logger = MagicMock()
+    ex._parse_resource_usage = lambda stats: {}
+
+    def _logs(stdout=True, stderr=True, stream=False):
+        if stdout and not stderr:
+            return b"out line\n"
+        if stderr and not stdout:
+            return b"err line\n"
+        raise AssertionError("combined stdout+stderr fetch cannot be demuxed (GH#11629)")
+
+    container = MagicMock()
+    container.wait.return_value = {"StatusCode": 0}
+    container.logs.side_effect = _logs
+    container.stats.return_value = {}
+
+    cfg = SecureSandboxExecutor._codeexec_config(ex, 30)
+    exit_code, stdout_logs, stderr_logs, _ = ex._execute_container_with_timeout(container, cfg)
+
+    assert exit_code == 0
+    assert stdout_logs.strip() == "out line"
+    assert stderr_logs.strip() == "err line"

@@ -241,8 +241,13 @@ class SecureSandboxExecutor:
             container.kill()
             exit_code = -9
 
-        logs = container.logs(stdout=True, stderr=True, stream=False)
-        stdout_logs, stderr_logs = self._parse_logs(logs)
+        # Fetch each stream separately: docker-py demuxes non-tty non-stream
+        # logs itself (headers stripped, streams merged), so a combined fetch
+        # can never be split afterwards (GH#11629). The daemon filters
+        # server-side when only one of stdout/stderr is requested.
+        stdout_raw = container.logs(stdout=True, stderr=False, stream=False)
+        stderr_raw = container.logs(stdout=False, stderr=True, stream=False)
+        stdout_logs, stderr_logs = self._parse_logs(stdout_raw, stderr_raw)
         stats = container.stats(stream=False)
         resource_usage = self._parse_resource_usage(stats)
 
@@ -585,10 +590,9 @@ class SecureSandboxExecutor:
             await asyncio.to_thread(container.kill)
             exit_code = -9
         logs = await asyncio.to_thread(lambda: container.logs(stdout=False, stderr=True, stream=False))
-        # logs holds stderr only (stdout=False); _parse_logs lumps all text into
-        # its first element, so that IS the stderr here (result stdout comes from
-        # the pump-captured script_stdout, not logs).
-        stderr_logs, _ = self._parse_logs(logs)
+        # logs holds stderr only (stdout=False); result stdout comes from the
+        # pump-captured script_stdout, not logs (GH#11613).
+        _, stderr_logs = self._parse_logs(b"", logs)
         security_events = await self._collect_security_events(container_id)
         result = self._build_sandbox_result(
             exit_code, script_stdout, stderr_logs, time.time() - start_time, container_id, security_events, {}, cfg
@@ -739,17 +743,23 @@ class SecureSandboxExecutor:
 
         return container_config
 
-    def _parse_logs(self, logs: bytes) -> Tuple[str, str]:
-        """Parse container logs into stdout and stderr"""
-        # Docker logs format includes stream headers
-        # For simplicity, we'll treat all as stdout for now
-        # In production, would parse the stream headers properly
+    def _parse_logs(self, stdout_raw: bytes, stderr_raw: bytes = b"") -> Tuple[str, str]:
+        """Decode per-stream container log bytes into (stdout, stderr) text (GH#11629).
+
+        Callers must fetch each stream separately (``container.logs(stdout=...,
+        stderr=...)``): docker-py already strips Docker's 8-byte stream-frame
+        headers from non-tty non-streaming logs and merges the payloads, so a
+        combined fetch is impossible to demux at this layer.
+        """
         try:
-            log_text = logs.decode("utf-8", errors="replace")
-            log_text = _strip_ansi(_dedup_consecutive(log_text))
-            return log_text, ""
+            return self._decode_log_stream(stdout_raw), self._decode_log_stream(stderr_raw)
         except Exception:
             return "", "Failed to parse logs"
+
+    @staticmethod
+    def _decode_log_stream(raw: bytes) -> str:
+        """Decode and normalize a single container log stream."""
+        return _strip_ansi(_dedup_consecutive(raw.decode("utf-8", errors="replace")))
 
     def _parse_resource_usage(self, stats: Dict[str, Any]) -> Dict[str, Any]:
         """Parse container stats into resource usage metrics"""
