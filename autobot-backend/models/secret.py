@@ -18,22 +18,16 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import Uuid
 
+from autobot_shared.scoping import ScopeLevel
 from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base
 
-
-class SecretScope(str, Enum):
-    """Secret visibility scope.
-
-    Issue #685: Aligned with knowledge VisibilityLevel for consistency.
-    """
-
-    USER = "user"  # Only accessible by owner (private)
-    SESSION = "session"  # Only accessible in specific session
-    SHARED = "shared"  # Explicitly shared with specific users
-    GROUP = "group"  # Accessible to team members
-    ORGANIZATION = "organization"  # Accessible to all org members
-    WORKFLOW = "workflow"  # Scoped to a specific workflow (Issue #2153)
+# Deprecated alias (#11290): SecretScope is now the canonical
+# autobot_shared.scoping.ScopeLevel. Kept so existing imports keep working;
+# new code should import ScopeLevel directly. Stored `secrets.scope` values
+# (user/session/shared/group/organization/workflow) are unchanged — the
+# canonical enum carries the same .value strings.
+SecretScope = ScopeLevel
 
 
 class SecretType(str, Enum):

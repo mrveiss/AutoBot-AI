@@ -114,6 +114,24 @@ class TestAuthorizeNode:
         assert not authorize(_facts(), "read", VaultRef(VaultKind.NODE, "node1"))
 
 
+class TestScopingPrincipalProjection:
+    """#11290: PrincipalFacts (canonical) projects onto the shared scoping Principal."""
+
+    def test_maps_user_and_teams_to_groups(self) -> None:
+        facts = _facts(team_ids=frozenset({"t1", "t2"}), company_roles={"acme": MembershipRole.MEMBER})
+        principal = facts.scoping_principal("acme")
+        assert principal.user_id == "alice"
+        assert principal.company_id == "acme"
+        assert principal.group_ids == frozenset({"t1", "t2"})
+
+    def test_non_member_company_context_dropped(self) -> None:
+        """company_id the principal is NOT a member of must not leak in (fail closed)."""
+        facts = _facts(company_roles={"acme": MembershipRole.MEMBER})
+        assert facts.scoping_principal("other-co").company_id is None
+        assert facts.scoping_principal(None).company_id is None
+        assert facts.scoping_principal().company_id is None
+
+
 class TestInactivePrincipal:
     def test_inactive_reaches_no_vault(self) -> None:
         # active=False (deactivated/soft-deleted) → empty accessible vaults, denied everywhere (#10346)

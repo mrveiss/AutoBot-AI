@@ -26,6 +26,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from autobot_shared.scoping import Principal
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.models.enums import MembershipRole
 
@@ -73,6 +74,19 @@ class PrincipalFacts:
 
     def _has_perm(self, kind: VaultKind, action: str) -> bool:
         return secrets_permission(kind, action) in self.granted_permissions
+
+    def scoping_principal(self, company_id: str | None = None) -> Principal:
+        """Project onto the shared scoping ``Principal`` (#11290).
+
+        ``PrincipalFacts`` is the canonical, richer principal; the scoping
+        ``Principal`` is its visibility projection (teams map to groups).
+        ``company_id`` selects the company context for ORGANIZATION-scope
+        checks and is dropped unless the principal is actually a member of
+        that company (fail closed). Callers must gate on ``.active`` first,
+        exactly as ``authorize``/``accessible_vaults`` do.
+        """
+        cid = company_id if company_id is not None and company_id in self.company_roles else None
+        return Principal(user_id=self.user_id, company_id=cid, group_ids=self.team_ids)
 
 
 def authorize(facts: PrincipalFacts, action: str, vault: VaultRef) -> bool:

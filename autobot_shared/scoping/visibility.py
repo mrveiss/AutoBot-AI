@@ -11,7 +11,14 @@ from autobot_shared.scoping.scope_level import ScopeLevel
 
 @dataclass(frozen=True)
 class Principal:
-    """Who is asking."""
+    """Who is asking — the visibility projection of a principal (#11290).
+
+    The canonical, richer principal is ``services.secrets_authz.PrincipalFacts``
+    (admin flag, role names, multi-company roles, active flag); it cannot live
+    here because ``autobot_shared`` must not import backend models. Build this
+    projection from it via ``PrincipalFacts.scoping_principal(company_id)``
+    instead of constructing a parallel principal by hand.
+    """
 
     user_id: str
     company_id: str | None
