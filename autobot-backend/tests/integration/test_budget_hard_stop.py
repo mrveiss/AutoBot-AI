@@ -52,6 +52,8 @@ async def fake_redis(monkeypatch):
     monkeypatch.setattr(bp_mod, "get_async_redis_client", _fake_get_client)
     yield client
     await client.aclose()
+
+
 from services.budget_policy import (
     PERIOD_DAY,
     PERIOD_MONTH,
