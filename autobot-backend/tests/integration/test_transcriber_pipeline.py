@@ -62,9 +62,7 @@ async def test_service_availability():
 @pytest.mark.asyncio
 async def test_database_operations(transcriber_db, project_id):
     """Database create/read/update round-trip via the canonical API."""
-    recording_id = await transcriber_db.create_recording(
-        project_id, "test.wav", "/tmp/test.wav", user_id="u1"
-    )
+    recording_id = await transcriber_db.create_recording(project_id, "test.wav", "/tmp/test.wav", user_id="u1")
     assert recording_id > 0
 
     recording = await transcriber_db.get_recording(recording_id)
@@ -91,9 +89,7 @@ async def test_database_operations(transcriber_db, project_id):
 @pytest.mark.asyncio
 async def test_segment_creation(transcriber_db, project_id):
     """Speaker + segment creation and time-ordered retrieval."""
-    recording_id = await transcriber_db.create_recording(
-        project_id, "test.wav", "/tmp/test.wav", user_id="u1"
-    )
+    recording_id = await transcriber_db.create_recording(project_id, "test.wav", "/tmp/test.wav", user_id="u1")
 
     speaker_a = await transcriber_db.create_speaker(recording_id, "SPEAKER_00", "Speaker 1", "lv")
     speaker_b = await transcriber_db.create_speaker(recording_id, "SPEAKER_01", "Speaker 2", "lv")
@@ -123,9 +119,7 @@ async def test_process_recording_unknown_id_raises(orchestrator):
 @pytest.mark.asyncio
 async def test_process_recording_rejects_non_pending(orchestrator, transcriber_db, project_id):
     """Only pending recordings may enter the pipeline (double-run guard)."""
-    recording_id = await transcriber_db.create_recording(
-        project_id, "done.wav", "/tmp/done.wav", user_id="u1"
-    )
+    recording_id = await transcriber_db.create_recording(project_id, "done.wav", "/tmp/done.wav", user_id="u1")
     await transcriber_db.update_recording_status(recording_id, RecordingStatus.COMPLETE.value)
 
     with pytest.raises(ValueError, match="not pending"):
