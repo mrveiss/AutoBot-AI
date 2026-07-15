@@ -31,10 +31,13 @@ from __future__ import annotations
 
 import asyncio
 import os
-import threading
 import time
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.credential_gated_registry import (
+    CredentialGatedRegistry,
+    gated_registry_singleton,
+)
 from autobot_shared.env_utils import env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -66,16 +69,18 @@ _NPU_PIPELINE_MAX_LATENCY_MULTIPLIER: float = env_float("NPU_PIPELINE_MAX_LATENC
 _NPU_POOL_PROVIDER_NAME = "npu_pool"
 
 
-class ProviderRegistry:
+class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
     """
     Manages the set of available LLM providers with fallback and per-conversation
     overrides.
 
-    This is a per-process singleton (obtained via ``get_provider_registry()``).
+    Built on ``CredentialGatedRegistry`` (#11664) — shared with the search and
+    capability registries. This is a per-process singleton (obtained via
+    ``get_provider_registry()``).
     """
 
     def __init__(self) -> None:
-        self._providers: Dict[str, BaseProvider] = {}
+        super().__init__()  # sets self._providers (#11664)
         self._fallback_chain: List[str] = []
         self._conversation_overrides: Dict[str, str] = {}
         # {provider_name: (is_available: bool, checked_at: float)}
@@ -101,9 +106,7 @@ class ProviderRegistry:
         name = provider.provider_name
         if not name:
             raise ValueError("Provider must set provider_name before registration.")
-        if name in self._providers:
-            logger.warning("Replacing existing provider: %s", name)
-        self._providers[name] = provider
+        self._store_entry(name, provider)
         self._provider_facts[name] = ProviderRuntimeFact.build_at_startup(name, provider)
         logger.info("Registered provider: %s", name)
 
@@ -499,7 +502,7 @@ class ProviderRegistry:
         This is the public accessor for ``_providers``; callers should use this
         instead of accessing the private attribute directly.
         """
-        return self._providers.get(name)
+        return self._get_entry(name)
 
     def get_provider_facts(self) -> Dict[str, ProviderRuntimeFact]:
         """Return a snapshot of pre-computed provider capability facts (#7370)."""
@@ -521,31 +524,6 @@ class ProviderRegistry:
             "providers": {n: p.get_stats() for n, p in self._providers.items()},
             "fallback_chain": list(self._fallback_chain),
         }
-
-
-# ---------------------------------------------------------------------------
-# Singleton accessor
-# ---------------------------------------------------------------------------
-
-_registry_instance: ProviderRegistry | None = None
-_registry_lock = threading.Lock()  # sync function — threading.Lock, not asyncio.Lock
-
-
-def get_provider_registry() -> ProviderRegistry:
-    """
-    Return the process-level ProviderRegistry singleton.
-
-    The first caller triggers lazy initialisation of default providers from the
-    SSOT config.  Use ``initialize_default_providers()`` explicitly during
-    application startup to control when this happens and to catch errors early.
-    """
-    global _registry_instance
-    if _registry_instance is None:
-        with _registry_lock:
-            if _registry_instance is None:
-                _registry_instance = ProviderRegistry()
-                _populate_default_providers(_registry_instance)
-    return _registry_instance
 
 
 def _populate_default_providers(registry: ProviderRegistry) -> None:
@@ -766,6 +744,20 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         len(fallback),
         fallback,
     )
+
+
+# ---------------------------------------------------------------------------
+# Singleton accessor
+# ---------------------------------------------------------------------------
+
+# Process-level ProviderRegistry singleton: the first caller triggers lazy
+# initialisation of default providers from the SSOT config. Population
+# failures are logged, never raised (see gated_registry_singleton, #11664).
+get_provider_registry = gated_registry_singleton(
+    ProviderRegistry,
+    _populate_default_providers,
+    log=logger,
+)
 
 
 __all__ = [
