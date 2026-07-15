@@ -54,9 +54,9 @@ def _fallback_agents_from_registry() -> List[Dict[str, Any]]:
     caller can treat both sources uniformly.
     """
     try:
-        from orchestration.agent_registry import AgentCapabilityRegistry
+        from orchestration.agent_registry import get_default_capability_registry
 
-        registry = AgentCapabilityRegistry(initialize_defaults=True)
+        registry = get_default_capability_registry()  # canonical accessor (#6828)
         agents = []
         for profile in registry.get_all().values():
             agents.append(
