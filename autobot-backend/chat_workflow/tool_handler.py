@@ -15,7 +15,6 @@ import ast
 import asyncio
 import html
 import json
-import os
 import re
 import uuid
 from typing import TYPE_CHECKING, Any, AsyncIterator
@@ -24,6 +23,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
+from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -48,15 +48,9 @@ logger = get_logger(__name__)
 CODEEXEC_ENABLED: bool = env_flag("AUTOBOT_CODEEXEC_ENABLED", default=False)
 CODEEXEC_AUTOAPPROVE_READONLY: bool = env_flag("AUTOBOT_CODEEXEC_AUTOAPPROVE_READONLY", default=True)
 CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES", default=1)
-# GH#11568 BLOCKER-4: the read-only tool set eligible for auto-approval (design §3.1).
-# Auto-approve fires ONLY when every shimmed tool is in this set. Env-overridable so it
-# tracks the injectable default; sensitive tools are structurally excluded upstream.
-CODEEXEC_READONLY_TOOLS: frozenset[str] = frozenset(
-    os.environ.get(
-        "AUTOBOT_CODEEXEC_READONLY_TOOLS",
-        "web_search,scrape_url,map_site,extract_structured_data",
-    ).split(",")
-)
+# GH#11568 BLOCKER-4 / GH#11662: the read-only tool set eligible for auto-approval
+# (design §3.1) is CODEEXEC_READONLY_TOOLS, imported above from the single
+# tool-policy classification source (readonly ⊆ injectable; sensitive excluded).
 # Approval-wait polling knobs (mirrors terminal-command approval loop).
 CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
 CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
