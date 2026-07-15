@@ -15,10 +15,43 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from models.heartbeat import AgentRuntimeState, AgentWakeupRequest
+
+# ---------------------------------------------------------------------------
+# Redis fixture: fakeredis for isolation (#11687 — same pattern as
+# test_task_claim_race.py). Without it these tests hit the env-configured
+# ANALYTICS Redis host, which is an unresolvable placeholder in hermetic runs.
+# ---------------------------------------------------------------------------
+
+try:
+    import fakeredis.aioredis as fakeredis_async
+
+    _FAKEREDIS_AVAILABLE = True
+except ImportError:
+    _FAKEREDIS_AVAILABLE = False
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def fake_redis(monkeypatch):
+    """Patch budget_policy's Redis seam with a per-test fakeredis instance."""
+    if not _FAKEREDIS_AVAILABLE:
+        pytest.skip("fakeredis not installed — skipping Redis-backed tests")
+
+    server = fakeredis_async.FakeServer()
+    client = fakeredis_async.FakeRedis(server=server, decode_responses=True)
+
+    import services.budget_policy as bp_mod
+
+    async def _fake_get_client(*_args, **_kwargs):
+        return client
+
+    monkeypatch.setattr(bp_mod, "get_async_redis_client", _fake_get_client)
+    yield client
+    await client.aclose()
 from services.budget_policy import (
     PERIOD_DAY,
     PERIOD_MONTH,
@@ -255,13 +288,15 @@ class TestPauseResume:
         )
         async_db_session.add(state)
 
-        # Add some wakeup requests (unconsumed)
+        # Add some wakeup requests (unconsumed) — #11687: aligned with the
+        # current AgentWakeupRequest model (runtime_state_id FK + reason;
+        # the old source/trigger_time columns no longer exist).
         for i in range(3):
             wake = AgentWakeupRequest(
                 id=uuid.uuid4(),
                 agent_id=agent_id,
-                source="budget_test",
-                trigger_time=datetime.now(timezone.utc),
+                runtime_state_id=state.id,
+                reason=f"budget_test_{i}",
             )
             async_db_session.add(wake)
 
@@ -311,7 +346,10 @@ class TestPauseResume:
         success = await resume_agent(agent_id, approved_by="test_admin")
         assert success is True
 
-        # Verify the state is cleared
+        # Verify the state is cleared. resume_agent committed via its OWN
+        # session; expire this session's identity map so the re-select loads
+        # fresh column values instead of the stale cached instance (#11687).
+        async_db_session.expire_all()
         result = await async_db_session.execute(select(AgentRuntimeState).where(AgentRuntimeState.agent_id == agent_id))
         resumed_state = result.scalar_one_or_none()
         assert resumed_state is not None
