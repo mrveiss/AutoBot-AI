@@ -35,6 +35,7 @@ from models.database import (
     Setting,
 )
 from services.service_categorizer import categorize_service
+from services.service_extra_data import engine_degraded_fields
 
 logger = logging.getLogger(__name__)
 
@@ -1192,6 +1193,7 @@ class ReconcilerService:
             existing_extra["error_message"] = error_msg
         else:
             existing_extra.pop("error_message", None)
+        existing_extra.update(engine_degraded_fields(svc_data))
         service.extra_data = existing_extra
 
     def _create_new_service(
@@ -1254,6 +1256,7 @@ class ReconcilerService:
             # Issue #1019: Capture error context for failed services
             error_msg = svc_data.get("error_message", "")
             svc_extra = {"error_message": error_msg} if error_msg else {}
+            svc_extra.update(engine_degraded_fields(svc_data))
 
             if service:
                 self._update_existing_service(service, svc_data, status, error_msg, now)

@@ -480,6 +480,7 @@
       "actions": "Actions",
       "close": "Close",
       "enabled": "Enabled",
+      "engineDegraded": "Engine degraded",
       "lastCheck": "Last Check",
       "loadingLogs": "Loading logs...",
       "loadingServices": "Loading services...",

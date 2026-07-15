@@ -30,9 +30,33 @@ from services.ansible_secrets import _SECRET_TO_DEPENDENT_ROLES
 from services.auth import require_permission
 from services.database import get_db
 from services.encryption import decrypt_data, encrypt_data
+from services.hf_token_validator import probe_hf_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/secrets", tags=["secrets"])
+
+HF_TOKEN_KEY = "hf_token"  # nosec B105 - secret-store key name, not a credential
+HF_REJECTED_DETAIL = (
+    "HuggingFace rejected this token (401): it appears invalid or revoked. "
+    "Generate a new token at https://huggingface.co/settings/tokens and try again."
+)
+
+
+async def _validate_if_hf_token(key: str, value: str) -> str | None:
+    """Probe HF-token secrets at save time; raise 422 on a confirmed 401 (#11718).
+
+    Returns a non-blocking warning string when HF could not be reached, so the
+    caller can surface it without failing the save (offline installs).
+    """
+    if key != HF_TOKEN_KEY:
+        return None
+    is_valid, warning = await probe_hf_token(value)
+    if is_valid is False:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=HF_REJECTED_DETAIL,
+        )
+    return warning
 
 
 @router.get("", response_model=List[SecretResponse])
@@ -63,6 +87,8 @@ async def create_secret(
             detail=f"Secret '{data.key}' already exists",
         )
 
+    warning = await _validate_if_hf_token(data.key, data.value)
+
     secret = SystemSecret(
         key=data.key,
         encrypted_value=encrypt_data(data.value),
@@ -74,7 +100,9 @@ async def create_secret(
     await db.refresh(secret)
 
     logger.info("System secret created: %s [%s]", data.key, data.category)
-    return SecretResponse.model_validate(secret)
+    response = SecretResponse.model_validate(secret)
+    response.warning = warning
+    return response
 
 
 @router.get("/dependent-roles")
@@ -140,7 +168,9 @@ async def update_secret(
             detail="Secret not found",
         )
 
+    warning = None
     if data.value is not None:
+        warning = await _validate_if_hf_token(key, data.value)
         secret.encrypted_value = encrypt_data(data.value)
     if data.category is not None:
         secret.category = data.category
@@ -151,7 +181,9 @@ async def update_secret(
     await db.refresh(secret)
 
     logger.info("System secret updated: %s", key)
-    return SecretResponse.model_validate(secret)
+    response = SecretResponse.model_validate(secret)
+    response.warning = warning
+    return response
 
 
 @router.delete("/{key}", status_code=status.HTTP_204_NO_CONTENT)
