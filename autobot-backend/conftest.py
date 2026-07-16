@@ -482,6 +482,25 @@ if "auth_middleware" not in sys.modules:
         return True
 
     _auth_stub.check_admin_permission = _check_admin_permission_stub  # type: ignore[attr-defined]
+
+    # require_device_jwt is a dependency FACTORY (GH#9493/#11736) invoked at
+    # module import time — it must return a no-arg callable so FastAPI can
+    # inspect the signature at route registration without producing spurious
+    # (*args, **kwargs) query parameters (same rationale as above, #10472).
+    def _require_device_jwt_stub(min_scope: str = "read"):  # noqa: E301
+        def _device_jwt_dep():
+            return {
+                "username": "device:stub-device",
+                "user_id": "stub-user",
+                "role": "device",
+                "device_id": "00000000-0000-0000-0000-000000000000",
+                "scope": min_scope,
+                "auth_method": "device_jwt",
+            }
+
+        return _device_jwt_dep
+
+    _auth_stub.require_device_jwt = _require_device_jwt_stub  # type: ignore[attr-defined]
     _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
     sys.modules["auth_middleware"] = _auth_stub
 

@@ -1,67 +1,54 @@
-# Device Token JWT Authentication (MVA-3237)
+# Device JWT Authentication (GH#9493)
 
-Security audit [MVA-3084](/MVA/issues/MVA-3084) identified that device token JWT authentication and scoping specified in Phase 1 ([MVA-3081](/MVA/issues/MVA-3081)) was not implemented. This document describes the implementation.
+Mobile devices paired via QR code receive a long-lived, device-scoped JWT that
+authenticates API requests independently from the desktop session. This
+document describes the canonical GH#9493 contract (the earlier MVA-3237
+`read-only`/`admin` design was retired; see #11648/#11736 for the cleanup).
 
 ## Overview
 
-Mobile devices paired via QR code receive a JWT token that allows them to authenticate API requests independently from the desktop session. This provides:
+- **Independent authentication**: devices don't need the desktop to stay connected
+- **Scoped access**: `read` / `write` scopes prevent privilege escalation
+- **Narrow allow-list**: device JWTs authenticate only on `/api/devices/` endpoints
+- **Active revocation**: device existence is checked on every validation
 
-- **Independent authentication**: Devices don't need the desktop to stay connected
-- **Scoped access**: Tokens are scoped to prevent privilege escalation
-- **Audit trail**: Device actions are logged separately from user sessions
+Canonical implementation: `autobot-backend/services/device_jwt.py`
+(`mint_device_jwt`, `validate_device_jwt`, `VALID_SCOPES`).
 
 ## JWT Structure
 
-Device JWTs contain the following claims:
-
 ```json
 {
-  "sub": "<device_id>",
+  "aud": "autobot:device",
+  "device_id": "<device_id>",
   "user_id": "<user_id>",
-  "scope": "read-only" | "admin",
-  "type": "device_token",
-  "exp": <timestamp>
+  "scope": "read" | "write",
+  "exp": 1234567890
 }
 ```
 
-- **sub**: Device UUID from `desktop_mobile_devices.id`
+- **aud**: Audience claim, `autobot:device` by default (`DEVICE_JWT_AUDIENCE`)
+- **device_id**: Device UUID from `desktop_mobile_devices.id`
 - **user_id**: Owner user ID
-- **scope**: Token scope (`read-only` or `admin`)
-- **type**: Always `"device_token"` to distinguish from user JWTs
-- **exp**: Expiry timestamp (default 90 days)
+- **scope**: One of `services.device_jwt.VALID_SCOPES` — `read` or `write`
+- **exp**: Expiry timestamp (default 90 days, `DEVICE_JWT_TTL_DAYS`)
 
 ## Scopes
 
-### read-only
+| Scope | HTTP methods allowed |
+| --- | --- |
+| `read` (default) | GET / HEAD / OPTIONS only |
+| `write` | All methods, including POST / PUT / PATCH / DELETE |
 
-**Default scope** for all newly paired devices. Allows:
-- Reading conversations
-- Reading knowledge base entries
-- Receiving push notifications
-- Syncing conversation history
-
-**Rejects**:
-- Creating/updating/deleting conversations
-- Modifying knowledge base
-- Admin operations
-- User management
-
-### admin
-
-**Elevated scope** (requires manual promotion). Allows:
-- All read-only operations
-- Creating/updating conversations
-- Modifying knowledge base (if user has permission)
-
-**Still rejects**:
-- User management (requires full user session)
-- System admin operations (requires full user session)
+Newly paired devices are minted `read` tokens (least privilege). Any other
+scope value (including the retired `read-only`/`admin`) is rejected by
+`mint_device_jwt` and by the `require_device_jwt` dependency factory.
 
 ## Authentication Flow
 
 ### 1. Device Pairing
 
-```
+```text
 Desktop                                Mobile App
    |                                       |
    | GET /api/devices/pair-qr             |
@@ -83,175 +70,115 @@ Desktop                                Mobile App
 
 ### 2. API Requests
 
-Mobile app includes the device JWT in the `Authorization` header:
+The mobile app sends the device JWT in the `Authorization` header:
 
 ```http
-GET /api/conversations
+GET /api/devices/me
 Authorization: Bearer <device_jwt>
 ```
 
-The middleware:
-1. Extracts the Bearer token
-2. Validates it as a device JWT (checks `type: "device_token"`)
-3. Returns a synthetic user dict with `auth_method: "device_jwt"`
+`get_current_user` accepts device JWTs as a fallback and enforces:
 
-### 3. Scope Enforcement (Fail-Closed Security Model)
+1. Signature + expiry + `aud` claim via `validate_device_jwt`
+2. Device still exists in the database (revocation check, 60 s Redis cache)
+3. Path allow-list — device JWTs are valid ONLY under `/api/devices/`
+4. Scope — `read` tokens are rejected for mutating HTTP methods
 
-**Important**: Device JWTs are **REJECTED by default** by `get_current_user()`. This fail-closed model prevents accidental privilege escalation.
+### 3. Device-Only Endpoints — `require_device_jwt`
 
-Endpoints that should be accessible to mobile devices must explicitly use the `require_device_jwt` dependency:
+`require_device_jwt` (in `auth_middleware.py`) is a **dependency factory**
+for endpoints that accept ONLY device JWTs — user sessions and every other
+token type get 401. It delegates to the same canonical validation seam as
+`get_current_user` (`validate_device_jwt`, including the revocation check).
 
 ```python
-# Read-only endpoint (accessible to all device tokens)
-@router.get("/conversations")
-async def list_conversations(
-    current_user: Dict = Depends(require_device_jwt),  # Accepts read-only and admin
-    ...
+from auth_middleware import require_device_jwt
+
+# read scope suffices
+@router.get("/me")
+async def get_device_identity(
+    device_user: dict = Depends(require_device_jwt()),
 ):
     ...
 
-# Admin-only endpoint (requires admin scope)
-@router.post("/conversations")
-async def create_conversation(
-    current_user: Dict = Depends(lambda r: require_device_jwt(r, min_scope="admin")),
-    ...
+# mutating endpoint — write scope required (read tokens get 403)
+@router.post("/heartbeat")
+async def device_heartbeat(
+    device_user: dict = Depends(require_device_jwt("write")),
 ):
-    # Only device tokens with admin scope can access this
-    ...
-
-# User-only endpoint (device tokens blocked)
-@router.get("/admin/users")
-async def list_users(
-    current_user: Dict = Depends(get_current_user),  # Rejects device JWTs
-    ...
-):
-    # Only full user sessions can access this
     ...
 ```
 
-The `require_device_jwt` dependency:
-- Validates the device JWT
-- Checks the device still exists in the database (revocation check)
-- Enforces minimum scope requirement
-- Returns user data with device-specific fields
+An invalid `min_scope` raises `ValueError` at route-definition time.
+
+Production wiring: `GET /api/devices/me` (`api/mobile_devices.py`) — device
+token introspection plus a `last_seen_at` heartbeat so actively-used devices
+are not pruned by the 90-day inactivity sweep (#11736).
 
 ## API Endpoint Authorization
 
-### Accepts Device Tokens (Read-Only)
-
-| Endpoint | Method | Scope Required |
-|----------|--------|----------------|
-| `/api/conversations` | GET | read-only |
-| `/api/conversations/{id}` | GET | read-only |
-| `/api/conversations/{id}/messages` | GET | read-only |
-| `/api/knowledge` | GET | read-only |
-| `/api/devices` | GET | read-only |
-
-### Requires Admin Scope or User Session
-
-| Endpoint | Method | Scope Required |
-|----------|--------|----------------|
-| `/api/conversations` | POST | admin or user session |
-| `/api/conversations/{id}` | PATCH | admin or user session |
-| `/api/conversations/{id}` | DELETE | admin or user session |
-| `/api/conversations/{id}/messages` | POST | admin or user session |
-| `/api/knowledge` | POST/PATCH/DELETE | admin or user session |
-
-### Requires User Session Only (No Device Tokens)
-
-| Endpoint | Method | Reason |
-|----------|--------|--------|
-| `/api/users` | ALL | User management requires full session |
-| `/api/admin/*` | ALL | System admin operations |
-| `/api/devices/pair-qr` | GET | QR generation tied to active desktop session |
-| `/api/devices/{id}` | DELETE | Device unpairing requires desktop confirmation |
+| Endpoint | Method | Auth |
+| --- | --- | --- |
+| `/api/devices/pair-qr` | GET | User session (QR generation tied to desktop) |
+| `/api/devices/pair` | POST | Challenge token (bound to user at QR time) |
+| `/api/devices` | GET | User session (list own devices) |
+| `/api/devices/me` | GET | Device JWT ONLY (`require_device_jwt()`) |
+| `/api/devices/{id}` | DELETE | User session, or write-scoped device JWT |
+| Everything else | ALL | Device JWTs rejected (403 outside `/api/devices/`) |
 
 ## Configuration
 
-### Environment Variables
-
 ```bash
-# Device JWT signing secret (separate from user JWT secret)
-DEVICE_JWT_SECRET=<64-char-secret>
-
-# Token lifetime in days (default: 90)
-DEVICE_JWT_TTL_DAYS=90
+DEVICE_JWT_SECRET=<64-char-secret>   # falls back to AUTOBOT_JWT_SECRET
+DEVICE_JWT_TTL_DAYS=90               # token lifetime
+DEVICE_JWT_CACHE_TTL=60              # device-existence cache TTL (seconds)
+DEVICE_JWT_AUDIENCE=autobot:device   # expected aud claim
 ```
-
-If `DEVICE_JWT_SECRET` is not set, falls back to `AUTOBOT_JWT_SECRET`.
-
-### Database
-
-The `desktop_mobile_devices` table includes a `token_scope` column:
-
-```sql
-ALTER TABLE desktop_mobile_devices 
-ADD COLUMN token_scope VARCHAR(32) NOT NULL DEFAULT 'read-only';
-```
-
-Migration: `20260604_052_device_token_scope.py`
 
 ## Security Considerations
 
 ### Fail-Closed Authorization Model
 
-Device JWTs use a **fail-closed** security model:
-
-1. **Default Deny**: `get_current_user()` rejects device JWTs - they cannot access standard user endpoints
-2. **Explicit Allowlist**: Only endpoints using `require_device_jwt` accept device tokens
-3. **Revocation Check**: Every request validates the device still exists in the database
-4. **Scope Enforcement**: Minimum scope is validated on every request
-
-This prevents:
-- Privilege escalation via device tokens
-- Revoked devices from accessing APIs (JWT still valid but device deleted)
-- Accidental exposure of admin endpoints to mobile devices
-
-### Scope Promotion
-
-Promoting a device from `read-only` to `admin` scope:
-
-1. Requires desktop user session (not another device token)
-2. Requires explicit user confirmation
-3. Logged to audit trail
-4. New JWT minted with updated scope
-
-**TODO**: Implement scope promotion endpoint (future work)
+1. **Narrow allow-list**: device JWTs authenticate only under `/api/devices/`
+2. **Method gating**: `read` tokens cannot use mutating HTTP methods
+3. **Revocation check**: every validation confirms the device row still exists
+4. **Single validation seam**: `get_current_user` and `require_device_jwt`
+   both delegate to `services.device_jwt.validate_device_jwt`
 
 ### Token Revocation
 
-Device tokens are **actively validated** on every request:
-
-1. `require_device_jwt` checks the database for device existence
-2. If the device was deleted, the request is rejected with 403
-3. Revocation is **immediate** - no delay waiting for JWT expiry
-
 Deleting a device via `DELETE /api/devices/{id}`:
-- Removes the device from `desktop_mobile_devices` table
-- All subsequent API requests with that device's JWT fail instantly
-- No need for Redis denylist (device existence check is sufficient)
+
+- Removes the row from `desktop_mobile_devices`
+- Invalidates the Redis existence cache (`invalidate_device_cache`), so
+  revocation takes effect immediately rather than after the cache TTL
+- All subsequent requests with that device's JWT fail validation
 
 ### Expiry
 
-Device tokens expire after 90 days (configurable via `DEVICE_JWT_TTL_DAYS`). Expired tokens are rejected by the JWT validation layer.
+Tokens expire after `DEVICE_JWT_TTL_DAYS` (default 90). Separately, devices
+inactive for 90+ days are pruned by the device-list sweep; `GET
+/api/devices/me` refreshes `last_seen_at` so active devices survive it.
 
-Mobile apps should:
-- Store the expiry timestamp
-- Prompt re-pairing when near expiry
-- Handle 401 responses gracefully
+Mobile apps should store the expiry timestamp, prompt re-pairing near expiry,
+and handle 401 responses gracefully.
 
 ## Testing
 
-Integration tests: `autobot-backend/tests/integration/test_device_jwt_auth.py`
+- `autobot-backend/tests/integration/test_device_jwt_auth.py` — mint/validate,
+  middleware fallback chain, allow-list + scope enforcement,
+  `require_device_jwt` dependency (401/403/200)
+- `autobot-backend/tests/integration/test_mobile_device_me.py` —
+  `GET /api/devices/me` wiring and heartbeat
 
-Run tests:
 ```bash
-pytest autobot-backend/tests/integration/test_device_jwt_auth.py -v
+pytest autobot-backend/tests/integration/test_device_jwt_auth.py \
+       autobot-backend/tests/integration/test_mobile_device_me.py -v
 ```
 
 ## Related Issues
 
-- [MVA-3237](/MVA/issues/MVA-3237) - Phase 1.5 implementation
-- [MVA-3084](/MVA/issues/MVA-3084) - Security audit findings
-- [MVA-3081](/MVA/issues/MVA-3081) - Phase 1 (incomplete)
-- [MVA-3036](/MVA/issues/MVA-3036#document-adr) - Parent ADR
+- GH#9493 — canonical device-JWT implementation (scopes, allow-list, revocation)
+- GH#4463 — mobile device pairing (QR challenge flow)
+- GH#11648 — test-side rewrite to the canonical contract
+- GH#11736 — `require_device_jwt` rot fix + production wiring
