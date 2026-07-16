@@ -842,8 +842,10 @@ async def get_current_user(request: Request) -> Dict:
     MCP bridge workers and long-running tasks can authenticate without a
     full user session.  Scope enforcement is left to individual endpoints.
 
-    MVA-3237: Device JWTs are REJECTED by default. Use require_device_jwt()
-    dependency instead for mobile-accessible endpoints.
+    GH#9493: Device JWTs authenticate ONLY on /api/devices/ endpoints
+    (path allow-list + read/write scope enforcement below). Device-only
+    endpoints use the require_device_jwt() dependency factory instead
+    (#11736).
 
     Raises HTTPException if authentication fails.
     """
@@ -856,8 +858,8 @@ async def get_current_user(request: Request) -> Dict:
     # Primary: user JWT / session / dev-header auth (sync, no Redis needed)
     user_data = middleware.get_user_from_request(request)
     if user_data:
-        # MVA-3237 Security: Reject device JWTs from get_current_user
-        # Device tokens must use require_device_jwt() dependency explicitly
+        # Defensive: get_user_from_request never yields device-JWT users; the
+        # GH#9493 device-JWT path (allow-list + scope checks) is below.
         if user_data.get("auth_method") == "device_jwt":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -952,79 +954,57 @@ def check_admin_permission(request: Request) -> bool:
     return True
 
 
-async def require_device_jwt(
-    request: Request,
-    min_scope: str = "read-only",
-) -> Dict:
+def require_device_jwt(min_scope: str = "read"):
     """
-    FastAPI dependency for mobile device JWT authentication (MVA-3237).
+    FastAPI dependency factory for device-JWT-ONLY endpoints (GH#9493, #11736).
 
-    This is the ONLY way device JWTs can authenticate to API endpoints.
-    Validates the device still exists and enforces minimum scope.
+    Unlike :func:`get_current_user` (which accepts device JWTs only as a
+    fallback on ``/api/devices/`` paths), the returned dependency accepts
+    ONLY device JWTs — user sessions and every other token type get 401.
+    Use it on endpoints a paired mobile device calls about itself.
 
-    Security model (fail-closed):
-    - Device JWTs are REJECTED by get_current_user() by default
-    - Only endpoints using this dependency accept device tokens
-    - Device existence is validated on every request (revocation check)
-    - Minimum scope is enforced
+    Delegates validation to the canonical ``services.device_jwt`` contract
+    via ``_extract_user_from_device_jwt`` (signature + ``aud`` claim +
+    device-existence/revocation check) so there is a single validation seam.
+    A revoked (unpaired) device fails extraction and receives 401.
 
     Use as:
-        # Read-only endpoint (default)
-        Depends(require_device_jwt)
-
-        # Admin-only endpoint
-        Depends(lambda r: require_device_jwt(r, min_scope="admin"))
+        Depends(require_device_jwt())         # read scope suffices
+        Depends(require_device_jwt("write"))  # mutating endpoints
 
     Args:
-        request: FastAPI Request object
-        min_scope: Minimum required scope ("read-only" or "admin")
+        min_scope: Minimum required scope — one of
+            ``services.device_jwt.VALID_SCOPES`` ({"read", "write"}).
 
     Returns:
-        User dict with device-specific fields
+        Async dependency returning the synthetic device-user dict
+        (``auth_method="device_jwt"``).
 
     Raises:
-        HTTPException: 401 if not a device JWT, 403 if insufficient scope or device revoked
+        ValueError: At route-definition time if ``min_scope`` is not a
+            canonical scope (the legacy MVA-3237 "read-only"/"admin"
+            scopes are not mintable and are rejected here too).
     """
-    middleware = get_auth_middleware()
-    user_data = middleware._extract_user_from_device_jwt(request)
+    from services.device_jwt import VALID_SCOPES
 
-    if not user_data:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Valid device token required",
-        )
+    if min_scope not in VALID_SCOPES:
+        raise ValueError(f"Invalid min_scope: {min_scope!r}. Valid: {sorted(VALID_SCOPES)}")
 
-    # Validate device still exists (revocation check)
-    device_id = user_data.get("device_id")
-    if device_id:
-        from sqlalchemy import select
+    async def _require_device_jwt(request: Request) -> Dict:
+        user_data = await get_auth_middleware()._extract_user_from_device_jwt(request)
+        if not user_data:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Valid device token required",
+            )
+        if min_scope == "write" and user_data.get("scope") != "write":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Device token requires write scope for this operation",
+            )
+        return user_data
 
-        from api.user_management.dependencies import get_db_session
-        from models.mobile_device import MobileDevice
-
-        # Get DB session
-        session_gen = get_db_session()
-        session = await anext(session_gen)
-        try:
-            result = await session.execute(select(MobileDevice).where(MobileDevice.id == device_id))
-            device = result.scalar_one_or_none()
-            if device is None:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Device has been revoked",
-                )
-        finally:
-            await session.close()
-
-    # Enforce minimum scope
-    scope = user_data.get("scope", "")
-    if min_scope == "admin" and scope != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Device token requires admin scope for this operation",
-        )
-
-    return user_data
+    return _require_device_jwt
 
 
 async def authenticate_websocket(websocket) -> dict | None:
