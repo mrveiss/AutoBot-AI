@@ -148,6 +148,24 @@ _EXTRA_SERVICE_MODULES = (
 for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES))):
     _stub(_m)
 
+# ── services.ssh_utils — REAL module, not a stub (#11793) ─────────────────────
+# api/code_sync.py imports it, so the AST-derived loop above just stubbed it —
+# but its ``_ssh_key_usable()`` gate must stay real under test: a MagicMock is
+# truthy, which would silently re-add ``-i <key>`` at every migrated ssh build
+# site.  The module is dependency-light (os/logging/pathlib only), so real-load
+# it via its file spec (the ``services`` parent is a MagicMock, not a package,
+# so a normal import cannot traverse it) and re-bind it onto the parent stub
+# so ``patch("services.ssh_utils.X")`` resolves to the same object.
+import importlib.util as _importlib_util  # noqa: E402
+
+_ssh_utils_spec = _importlib_util.spec_from_file_location(
+    "services.ssh_utils", Path(__file__).parent / "services" / "ssh_utils.py"
+)
+_ssh_utils_mod = _importlib_util.module_from_spec(_ssh_utils_spec)
+sys.modules["services.ssh_utils"] = _ssh_utils_mod
+_ssh_utils_spec.loader.exec_module(_ssh_utils_mod)
+setattr(sys.modules["services"], "ssh_utils", _ssh_utils_mod)
+
 # ── python-multipart ─────────────────────────────────────────────────────────
 # FastAPI's ensure_multipart_is_installed() is called when any route uses
 # UploadFile or Form parameters.  It checks for python_multipart.__version__

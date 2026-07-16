@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
+from services.ssh_utils import _ssh_key_usable
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class SyncOrchestrator:
             f"-o ConnectTimeout=30 "
             f"-p {port}"
         )
-        if Path(SSH_KEY_PATH).exists():
+        if _ssh_key_usable(SSH_KEY_PATH):
             ssh_opts += f" -i {SSH_KEY_PATH}"
         return ssh_opts
 
@@ -119,7 +120,7 @@ class SyncOrchestrator:
             "-p",
             str(port),
         ]
-        if Path(SSH_KEY_PATH).exists():
+        if _ssh_key_usable(SSH_KEY_PATH):
             ssh_cmd.extend(["-i", SSH_KEY_PATH])
         ssh_cmd.append(f"{user}@{host}")
         return ssh_cmd
@@ -293,7 +294,7 @@ class SyncOrchestrator:
         Helper for pull_from_source (Issue #665).
         """
         ssh_opts = "ssh -o StrictHostKeyChecking=accept-new " "-o UserKnownHostsFile=/dev/null " "-o ConnectTimeout=30"
-        if Path(SSH_KEY_PATH).exists():
+        if _ssh_key_usable(SSH_KEY_PATH):
             ssh_opts += f" -i {SSH_KEY_PATH}"
 
         return [
@@ -339,7 +340,7 @@ class SyncOrchestrator:
             "-o",
             "ConnectTimeout=10",
         ]
-        if Path(SSH_KEY_PATH).exists():
+        if _ssh_key_usable(SSH_KEY_PATH):
             ssh_cmd.extend(["-i", SSH_KEY_PATH])
 
         ssh_cmd.extend(
