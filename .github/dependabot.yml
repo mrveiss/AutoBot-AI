@@ -140,6 +140,12 @@ updates:
         # (ERESOLVE on every PR, see #11746). Same pattern as the protobuf/
         # websockets caps above. Unblock when the pinia 4 major is taken.
         versions: [">=2.0.0"]
+      - dependency-name: "oxlint"
+        # #11786: eslint-plugin-oxlint peer-pins oxlint@~1.73 (lockstep minor)
+        # and has no 1.74 release — grouped oxlint bump alone is unsatisfiable
+        # (ERESOLVE on every PR, see #11771). Unblock when eslint-plugin-oxlint
+        # ships the matching minor, then bump both together.
+        versions: [">=1.74.0"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-slm-frontend"
