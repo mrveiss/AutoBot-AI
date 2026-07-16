@@ -60032,6 +60032,17 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ChatSecretScope
+         * @description Scope enumeration for the legacy Redis chat-secrets store (api/secrets.py).
+         *
+         *     Distinct from the canonical authorization scope ``ScopeLevel``
+         *     (``autobot_shared.scoping.scope_level``, aliased as ``SecretScope`` in
+         *     ``models/secret.py``): this enum adds CHAT/GENERAL for chat-vs-global
+         *     secret pools and has no WORKFLOW member (#11759).
+         * @enum {string}
+         */
+        ChatSecretScope: "chat" | "general" | "user" | "session" | "shared" | "group" | "organization";
+        /**
          * ChatSecretsDeleteData
          * @description Response data for delete_chat_secrets.
          */
@@ -89918,7 +89929,7 @@ export interface components {
             /** Name */
             name: string;
             type: components["schemas"]["SecretType"];
-            scope: components["schemas"]["SecretScope"];
+            scope: components["schemas"]["ChatSecretScope"];
             /** Value */
             value: string;
             /** Chat Id */
@@ -90002,12 +90013,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * SecretScope
-         * @description Secret scope enumeration.
-         * @enum {string}
-         */
-        SecretScope: "chat" | "general" | "user" | "session" | "shared" | "group" | "organization";
         /** SecretSetRequest */
         SecretSetRequest: {
             /** Name */
@@ -90079,7 +90084,7 @@ export interface components {
         SecretTransferRequest: {
             /** Secret Ids */
             secret_ids: string[];
-            target_scope: components["schemas"]["SecretScope"];
+            target_scope: components["schemas"]["ChatSecretScope"];
             /** Target Chat Id */
             target_chat_id?: string | null;
         } & {
@@ -141430,7 +141435,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
-                scope?: components["schemas"]["SecretScope"] | null;
+                scope?: components["schemas"]["ChatSecretScope"] | null;
             };
             header?: never;
             path?: never;
