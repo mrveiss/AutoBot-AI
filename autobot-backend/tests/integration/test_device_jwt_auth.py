@@ -284,9 +284,7 @@ class TestDeviceScopeEnforcement:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
-    async def test_collection_non_get_still_excluded(
-        self, method, device_jwt_env, device_exists, real_auth_middleware
-    ):
+    async def test_collection_non_get_still_excluded(self, method, device_jwt_env, device_exists, real_auth_middleware):
         """#11792 widened ONLY GET on the exact collection path.
 
         Every other method on /api/devices (no trailing slash) keeps the
