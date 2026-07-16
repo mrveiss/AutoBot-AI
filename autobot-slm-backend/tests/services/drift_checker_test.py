@@ -36,18 +36,33 @@ if "services" not in sys.modules:
     _services_pkg = types.ModuleType("services")
     _services_pkg.__path__ = [str(_services_dir)]  # type: ignore[attr-defined]
     sys.modules["services"] = _services_pkg
-if "services.deploy_artifacts" not in sys.modules:
-    sys.modules["services.deploy_artifacts"] = _load_service_module("services.deploy_artifacts", "deploy_artifacts.py")
-if "services.git_tracker" not in sys.modules:
-    # git_tracker.py transitively imports models.database; drift_checker only
-    # needs its DEFAULT_REPO_PATH constant, so stub it to keep this load fully
-    # standalone (same template as test_deploy_artifacts_lockstep.py).
-    _git_tracker_stub = types.ModuleType("services.git_tracker")
-    _git_tracker_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
-    sys.modules["services.git_tracker"] = _git_tracker_stub
 
-# Load drift_checker without triggering services/__init__.py import chain.
-drift_checker = _load_service_module("drift_checker", "drift_checker.py")
+# The slm-backend root conftest pre-stubs ``services.deploy_artifacts`` and
+# ``services.git_tracker`` as MagicMocks (both are api/code_sync.py imports),
+# so ``if X not in sys.modules`` guards are no-ops and drift_checker would
+# bind _SKIP_DIR_SUFFIXES to a MagicMock — ``str.endswith(MagicMock)`` then
+# raises TypeError at walk time (#11737).  Force the REAL deploy_artifacts
+# (import-light constants) and a thin git_tracker shim (drift_checker only
+# needs DEFAULT_REPO_PATH; the real module pulls in models.database) into
+# sys.modules for the duration of the drift_checker load, then restore the
+# pre-existing entries so sibling test files are unaffected (#11478 pattern).
+_real_deploy_artifacts = _load_service_module("services.deploy_artifacts", "deploy_artifacts.py")
+_git_tracker_stub = types.ModuleType("services.git_tracker")
+_git_tracker_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
+
+_SWAPPED_KEYS = ("services.deploy_artifacts", "services.git_tracker")
+_orig_modules = {_key: sys.modules.get(_key) for _key in _SWAPPED_KEYS}
+sys.modules["services.deploy_artifacts"] = _real_deploy_artifacts
+sys.modules["services.git_tracker"] = _git_tracker_stub
+try:
+    # Load drift_checker without triggering services/__init__.py import chain.
+    drift_checker = _load_service_module("drift_checker", "drift_checker.py")
+finally:
+    for _key, _mod in _orig_modules.items():
+        if _mod is not None:
+            sys.modules[_key] = _mod
+        else:
+            sys.modules.pop(_key, None)
 
 _is_expected_drift = drift_checker._is_expected_drift
 compute_drift = drift_checker.compute_drift

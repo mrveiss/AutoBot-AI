@@ -29,13 +29,15 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import re
 import sys
 import threading
 from collections import defaultdict
 from datetime import datetime, timedelta
+from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,54 @@ import yaml
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.script_utils import ScriptFormatter  # noqa: E402
-from utils.service_registry import get_service_registry  # noqa: E402
+# --- Standalone replacements for backend-only modules (#11761) --------------
+# `utils/` exists only under autobot-backend/ and is not importable from this
+# directory; shared scripts stay standalone (#11759). Canonical source
+# mirrored below: autobot-backend/utils/service_registry.py (surface used
+# by this script: deployment_mode).
+
+
+class DeploymentMode(Enum):
+    """Deployment modes (mirrors backend utils/service_registry.py)."""
+
+    LOCAL = "local"
+    DOCKER_LOCAL = "docker_local"
+    DISTRIBUTED = "distributed"
+    KUBERNETES = "kubernetes"
+    CLOUD = "cloud"
+
+
+class ServiceRegistry:
+    """Env-driven standalone stand-in for the backend ServiceRegistry."""
+
+    def __init__(self):
+        """Initialize registry from environment."""
+        self.deployment_mode = self._detect_deployment_mode()
+
+    @staticmethod
+    def _detect_deployment_mode() -> DeploymentMode:
+        """Detect deployment mode from env, falling back to container heuristic."""
+        mode = os.environ.get("AUTOBOT_DEPLOYMENT_MODE", "").lower()
+        if mode:
+            try:
+                return DeploymentMode(mode)
+            except ValueError:
+                logger.warning("Invalid AUTOBOT_DEPLOYMENT_MODE: %s", mode)
+        return DeploymentMode.DOCKER_LOCAL if os.path.exists("/.dockerenv") else DeploymentMode.LOCAL
+
+
+_registry: Optional[ServiceRegistry] = None
+
+
+def get_service_registry() -> ServiceRegistry:
+    """Get the process-wide ServiceRegistry instance."""
+    global _registry
+    if _registry is None:
+        _registry = ServiceRegistry()
+    return _registry
+
+
+# --- end standalone replacements (#11761) -----------------------------------
 
 
 class LogLevel:
@@ -130,13 +178,26 @@ class LogAggregator:
         logger.info(f"   Logs Directory: {self.logs_dir}")
         logger.info(f"   Archive Directory: {self.archive_dir}")
 
-    def print_header(self, title: str):
+    # Standalone copies of ScriptFormatter.print_header/print_step
+    # (autobot-backend/utils/script_utils.py) — this script must not
+    # import backend modules (#11761).
+    def print_header(self, title: str, width: int = 60):
         """Print formatted header."""
-        ScriptFormatter.print_header(title)
+        print(f"\n{'=' * width}")  # noqa: print  # canonical: ignore py-print-smoke
+        print(f"  {title}")  # noqa: print  # canonical: ignore py-print-smoke
+        print("=" * width)  # noqa: print  # canonical: ignore py-print-smoke
 
     def print_step(self, step: str, status: str = "info"):
         """Print step with status."""
-        ScriptFormatter.print_step(step, status)
+        status_symbols = {
+            "info": "📋",
+            "success": "✅",
+            "warning": "⚠️",
+            "error": "❌",
+            "running": "🔄",
+        }
+        symbol = status_symbols.get(status, "📋")
+        print(f"{symbol} {step}")  # noqa: print  # canonical: ignore py-print-smoke
 
     def _configure_log_sources(self) -> Dict[str, Dict[str, Any]]:
         """Configure log sources based on deployment."""

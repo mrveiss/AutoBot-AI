@@ -56,8 +56,8 @@ async def test_checkpoint_failure_does_not_propagate_in_execute_step_with_agent(
     step: Dict[str, Any] = {"id": "step-1", "status": None, "result": None}
     successful_result = {"success": True, "output": "done"}
 
-    # Checkpoint storage raises a transient error.
-    executor._checkpoint_manager.save = MagicMock(side_effect=OSError("Redis unavailable"))
+    # Checkpoint storage (CheckpointResumer, #6827) raises a transient error.
+    executor._checkpoint_resumer.save = MagicMock(side_effect=OSError("Redis unavailable"))
 
     async def _fake_retry(s, ec, ctx):
         return successful_result
@@ -82,7 +82,7 @@ async def test_checkpoint_success_called_once_on_happy_path():
     successful_result = {"success": True, "output": "done"}
 
     save_spy = MagicMock()
-    executor._checkpoint_manager.save = save_spy
+    executor._checkpoint_resumer.save = save_spy
 
     async def _fake_retry(s, ec, ctx):
         return successful_result
@@ -104,7 +104,7 @@ async def test_checkpoint_not_called_when_step_fails():
     failed_result = {"success": False, "error": "agent error"}
 
     save_spy = MagicMock()
-    executor._checkpoint_manager.save = save_spy
+    executor._checkpoint_resumer.save = save_spy
 
     async def _fake_retry(s, ec, ctx):
         return failed_result

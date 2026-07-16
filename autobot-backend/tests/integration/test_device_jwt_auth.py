@@ -16,15 +16,27 @@ and ``type: device_token`` claim were replaced by GH#9493 —
   read-scoped tokens cannot use mutating HTTP methods
 """
 
+import sys
 import uuid
 from datetime import timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, Request
 
-from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode_jwt
-from services.device_jwt import VALID_SCOPES, mint_device_jwt, validate_device_jwt
+# Whole-dir suite runs: earlier-collected test modules stub or clobber
+# ``services`` in sys.modules (``__path__ = []``), which broke this file's
+# collection (#11791). Mirror the backend root-conftest repair so the real
+# ``services.device_jwt`` stays importable regardless of collection order.
+_services_mod = sys.modules.get("services")
+# NB: probe __dict__ directly — stub modules define a module-level __getattr__
+# that returns a truthy MagicMock for ANY attribute, including __path__.
+if _services_mod is not None and not _services_mod.__dict__.get("__path__"):
+    _services_mod.__path__ = [str(Path(__file__).resolve().parents[2] / "services")]
+
+from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, encode_jwt  # noqa: E402
+from services.device_jwt import VALID_SCOPES, mint_device_jwt, validate_device_jwt  # noqa: E402
 
 _DEVICE_SIGNING_KEY = "d" * 40  # deterministic test key ≥32 chars
 _AUDIENCE = "autobot:device"
@@ -231,7 +243,7 @@ class TestDeviceScopeEnforcement:
                 await real_auth_middleware.get_current_user(request)
 
         assert exc_info.value.status_code == 403
-        assert "Device JWT not permitted" in str(exc_info.value.detail)
+        assert "Device JWT not permitted on this endpoint" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
     async def test_device_jwt_allowed_on_devices_prefix(self, device_jwt_env, device_exists, real_auth_middleware):
@@ -246,6 +258,49 @@ class TestDeviceScopeEnforcement:
 
         assert user["auth_method"] == "device_jwt"
         assert user["device_id"] == device_id
+        assert user["user_id"] == "user123"
+        assert user["scope"] == "read"
+
+    @pytest.mark.asyncio
+    async def test_device_jwt_allowed_on_collection_get(self, device_jwt_env, device_exists, real_auth_middleware):
+        """#11792: GET /api/devices (no trailing slash) authenticates a read token.
+
+        Closes the GH#9493 read/write asymmetry — the list route is the one
+        /api/devices endpoint the trailing-slash prefix allow-list missed.
+        Response scoping to the caller's own device is enforced by the list
+        endpoint (see test_mobile_device_me.py).
+        """
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user123", scope="read")
+        request = _bearer_request(token, path="/api/devices", method="GET")
+
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            user = await real_auth_middleware.get_current_user(request)
+
+        assert user["auth_method"] == "device_jwt"
+        assert user["device_id"] == device_id
+        assert user["scope"] == "read"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
+    async def test_collection_non_get_still_excluded(self, method, device_jwt_env, device_exists, real_auth_middleware):
+        """#11792 widened ONLY GET on the exact collection path.
+
+        Every other method on /api/devices (no trailing slash) keeps the
+        pre-existing allow-list 403 — even for write-scoped tokens, proving
+        the change did not widen the mutating surface.
+        """
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="write")
+        request = _bearer_request(token, path="/api/devices", method=method)
+
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            with pytest.raises(HTTPException) as exc_info:
+                await real_auth_middleware.get_current_user(request)
+
+        assert exc_info.value.status_code == 403
+        assert "Device JWT not permitted on this endpoint" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
     async def test_read_scope_blocks_mutating_methods(self, device_jwt_env, device_exists, real_auth_middleware):
@@ -273,3 +328,230 @@ class TestDeviceScopeEnforcement:
 
         assert user["auth_method"] == "device_jwt"
         assert user["scope"] == "write"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method,should_allow",
+        [
+            ("GET", True),
+            ("HEAD", True),
+            ("OPTIONS", True),
+            ("POST", False),
+            ("PUT", False),
+            ("PATCH", False),
+            ("DELETE", False),
+        ],
+    )
+    async def test_read_scope_method_matrix(
+        self, method, should_allow, device_jwt_env, device_exists, real_auth_middleware
+    ):
+        """Full HTTP-method matrix for read-scoped device JWTs (GH#9493).
+
+        Folded in from tests/test_device_jwt_integration.py (#11791): only
+        safe methods (GET/HEAD/OPTIONS) pass; every mutating method is 403'd
+        with the exact per-method detail message.
+        """
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "test-user", scope="read")
+        request = _bearer_request(token, path="/api/devices/", method=method)
+
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            if should_allow:
+                user = await real_auth_middleware.get_current_user(request)
+                assert user["auth_method"] == "device_jwt"
+                assert user["device_id"] == device_id
+                assert user["scope"] == "read"
+            else:
+                with pytest.raises(HTTPException) as exc_info:
+                    await real_auth_middleware.get_current_user(request)
+                assert exc_info.value.status_code == 403
+                assert f"Read-only device JWT cannot use {method} method" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"])
+    async def test_write_scope_allows_all_methods(self, method, device_jwt_env, device_exists, real_auth_middleware):
+        """Write-scoped device JWTs may use every HTTP method on /api/devices/.
+
+        Folded in from tests/test_device_jwt_integration.py (#11791).
+        """
+        token = mint_device_jwt(str(uuid.uuid4()), "test-user", scope="write")
+        request = _bearer_request(token, path="/api/devices/", method=method)
+
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            user = await real_auth_middleware.get_current_user(request)
+
+        assert user["auth_method"] == "device_jwt"
+        assert user["scope"] == "write"
+
+    @pytest.mark.asyncio
+    async def test_revoked_device_rejected_via_get_current_user(
+        self, device_jwt_env, real_auth_middleware, monkeypatch
+    ):
+        """A JWT for an unpaired (deleted) device fails get_current_user (GH#9493).
+
+        Folded in from tests/test_device_jwt_integration.py (#11791): the
+        revocation check makes device-JWT extraction fail, so the fallback
+        chain ends in the generic authentication-required error.
+        """
+        monkeypatch.setattr(
+            "services.device_jwt._device_exists_cached",
+            AsyncMock(return_value=False),
+        )
+        token = mint_device_jwt(str(uuid.uuid4()), "test-user", scope="read")
+        request = _bearer_request(token, path="/api/devices/", method="GET")
+
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            with pytest.raises(HTTPException) as exc_info:
+                await real_auth_middleware.get_current_user(request)
+
+        assert exc_info.value.status_code in (401, 403)
+
+
+class TestRequireDeviceJwtDependency:
+    """require_device_jwt dependency factory — #11736 rot fix.
+
+    The pre-fix implementation never awaited the async extraction (a truthy
+    coroutine passed the guard, then ``.get()`` raised AttributeError) and
+    enforced the retired MVA-3237 "read-only"/"admin" scopes. These tests pin
+    the canonical GH#9493 behaviour.
+    """
+
+    @staticmethod
+    def _patched_factory(real_auth_middleware):
+        cls = real_auth_middleware.AuthenticationMiddleware
+        middleware = cls.__new__(cls)
+        return patch.object(real_auth_middleware, "get_auth_middleware", return_value=middleware)
+
+    def test_factory_rejects_legacy_scopes(self, real_auth_middleware):
+        """Retired MVA-3237 scopes fail fast at route-definition time."""
+        for legacy_scope in ("read-only", "admin"):
+            with pytest.raises(ValueError, match="Invalid min_scope"):
+                real_auth_middleware.require_device_jwt(legacy_scope)
+
+    @pytest.mark.asyncio
+    async def test_valid_token_authenticates(self, device_jwt_env, device_exists, real_auth_middleware):
+        """Await-rot regression: extraction is awaited and yields the device user."""
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user123", scope="read")
+
+        dependency = real_auth_middleware.require_device_jwt()
+        with self._patched_factory(real_auth_middleware):
+            user = await dependency(_bearer_request(token))
+
+        assert user["device_id"] == device_id
+        assert user["user_id"] == "user123"
+        assert user["auth_method"] == "device_jwt"
+
+    @pytest.mark.asyncio
+    async def test_missing_token_returns_401(self, device_jwt_env, real_auth_middleware):
+        """No Bearer token → 401."""
+        dependency = real_auth_middleware.require_device_jwt()
+        with self._patched_factory(real_auth_middleware):
+            with pytest.raises(HTTPException) as exc_info:
+                await dependency(_bearer_request(None))
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_invalid_token_returns_401(self, device_jwt_env, real_auth_middleware):
+        """Garbage Bearer token → 401."""
+        dependency = real_auth_middleware.require_device_jwt()
+        with self._patched_factory(real_auth_middleware):
+            with pytest.raises(HTTPException) as exc_info:
+                await dependency(_bearer_request("not-a-jwt"))
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_revoked_device_returns_401(self, device_jwt_env, real_auth_middleware, monkeypatch):
+        """Unpaired device fails the canonical revocation check → 401."""
+        monkeypatch.setattr(
+            "services.device_jwt._device_exists_cached",
+            AsyncMock(return_value=False),
+        )
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="write")
+
+        dependency = real_auth_middleware.require_device_jwt()
+        with self._patched_factory(real_auth_middleware):
+            with pytest.raises(HTTPException) as exc_info:
+                await dependency(_bearer_request(token))
+        assert exc_info.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_read_token_rejected_by_write_min_scope(self, device_jwt_env, device_exists, real_auth_middleware):
+        """Canonical scope enforcement: read token on a write dependency → 403."""
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="read")
+
+        dependency = real_auth_middleware.require_device_jwt("write")
+        with self._patched_factory(real_auth_middleware):
+            with pytest.raises(HTTPException) as exc_info:
+                await dependency(_bearer_request(token))
+
+        assert exc_info.value.status_code == 403
+        assert "write scope" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_write_token_passes_write_min_scope(self, device_jwt_env, device_exists, real_auth_middleware):
+        """Write-scoped token satisfies min_scope='write'."""
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="write")
+
+        dependency = real_auth_middleware.require_device_jwt("write")
+        with self._patched_factory(real_auth_middleware):
+            user = await dependency(_bearer_request(token))
+
+        assert user["scope"] == "write"
+
+
+class TestRequireDeviceJwtHTTPWiring:
+    """require_device_jwt exercised through real FastAPI routes (#11736)."""
+
+    @pytest.fixture
+    def http_client(self, real_auth_middleware):
+        """TestClient for an app with read- and write-guarded device routes."""
+        from fastapi import Depends, FastAPI
+        from fastapi.testclient import TestClient
+
+        app = FastAPI()
+        read_dep = real_auth_middleware.require_device_jwt()
+        write_dep = real_auth_middleware.require_device_jwt("write")
+
+        @app.get("/device-read")
+        async def device_read(user: dict = Depends(read_dep)):
+            return {"device_id": user["device_id"], "scope": user["scope"]}
+
+        @app.post("/device-write")
+        async def device_write(user: dict = Depends(write_dep)):
+            return {"device_id": user["device_id"], "scope": user["scope"]}
+
+        cls = real_auth_middleware.AuthenticationMiddleware
+        middleware = cls.__new__(cls)
+        with patch.object(real_auth_middleware, "get_auth_middleware", return_value=middleware):
+            yield TestClient(app)
+
+    def test_401_without_token(self, device_jwt_env, http_client):
+        response = http_client.get("/device-read")
+        assert response.status_code == 401
+
+    def test_401_with_user_style_garbage_token(self, device_jwt_env, http_client):
+        response = http_client.get("/device-read", headers={"Authorization": "Bearer not-a-device-jwt"})
+        assert response.status_code == 401
+
+    def test_403_read_token_on_write_route(self, device_jwt_env, device_exists, http_client):
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="read")
+        response = http_client.post("/device-write", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 403
+
+    def test_200_valid_read_token(self, device_jwt_env, device_exists, http_client):
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user123", scope="read")
+        response = http_client.get("/device-read", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.json() == {"device_id": device_id, "scope": "read"}
+
+    def test_200_valid_write_token_on_write_route(self, device_jwt_env, device_exists, http_client):
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user123", scope="write")
+        response = http_client.post("/device-write", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.json()["scope"] == "write"

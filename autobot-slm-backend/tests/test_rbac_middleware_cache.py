@@ -43,6 +43,14 @@ for _p in (str(_SLM_ROOT), str(_SHARED_ROOT)):
 
 # Stub out the modules that pull in pydantic settings or FastAPI's python_multipart.
 # Note: test_require_permission.py documents the same python_multipart env conflict.
+# #11794: snapshot sys.modules and FORCE the stubs below — in a whole-backend
+# sweep the real fastapi/autobot_shared are already imported, and the guarded
+# version of this bootstrap then mutated the REAL fastapi module's
+# HTTPException/Request/status attributes, breaking every later test file that
+# uses FastAPI at runtime (tests/test_redis_service_router.py).  Everything is
+# rolled back right after the module under test is loaded.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
 _MOCK_NAMES = [
     # fastapi pulls in starlette → multipart (broken in this env)
     "fastapi",
@@ -57,10 +65,12 @@ _MOCK_NAMES = [
     "user_management.services",
     "user_management.database",
     "user_management.config",
+    # audit model imported at module level by rbac_middleware (#11794)
+    "user_management.models",
+    "user_management.models.audit",
 ]
 for _name in _MOCK_NAMES:
-    if _name not in sys.modules:
-        sys.modules[_name] = MagicMock()
+    sys.modules[_name] = MagicMock()
 
 # fastapi.HTTPException, Request, status must be real enough for isinstance checks
 import http  # noqa: E402
@@ -82,6 +92,14 @@ _SPEC.loader.exec_module(_rbac_mod)
 _CACHE_TTL = _rbac_mod.CACHE_TTL_SECONDS
 _REDIS_PREFIX = _rbac_mod._REDIS_KEY_PREFIX
 _PUBSUB_CHANNEL = _rbac_mod._PUBSUB_CHANNEL
+
+# #11794: restore the pre-bootstrap sys.modules state (see snapshot above).
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
 
 
 # ---------------------------------------------------------------------------
