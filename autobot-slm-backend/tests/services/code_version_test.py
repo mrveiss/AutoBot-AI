@@ -2,30 +2,108 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for code version tracking (Issue #741)."""
+"""Tests for code version tracking (Issue #741).
 
-# Import from slm-server models
+The slm-backend root conftest stubs ``sqlalchemy`` / ``models.database`` /
+``models.schemas`` as MagicMocks for api/* tests, so a bare import here would
+assert against inert mock chains instead of the real ORM/schema contracts
+(#11737).  Following the established real-load pattern
+(tests/services/test_node_ansible_target_11717.py, #11224/#11478), this module
+swaps in the REAL sqlalchemy + models modules at import time, binds what it
+needs, then restores the stubs so sibling test files are unaffected.  The
+swap is re-activated around runtime work (in-memory engine creation,
+``api.nodes`` import) via ``_real_modules_swapped()`` — SQLAlchemy lazy-loads
+dialect machinery through ``sys.modules`` at ``create_engine()`` time, which
+would otherwise resolve into the restored MagicMock stubs.
+"""
+
+import contextlib
+import importlib
+import importlib.util
 import sys
+from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-sys.path.insert(0, "slm-server")
-from models.database import Base, CodeStatus, Node  # noqa: E402, F401
+_SLM_ROOT = Path(__file__).parent.parent.parent
+if str(_SLM_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SLM_ROOT))
+
+_SQLALCHEMY_MODULES = ("sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm")
+
+
+def _load_real_module(name: str, path: Path):
+    """Exec *path* under canonical *name* (registered so relative imports work)."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    sys.modules[name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+_orig_modules = {name: sys.modules.get(name) for name in [*_SQLALCHEMY_MODULES, "models.database", "models.schemas"]}
+for _name in _SQLALCHEMY_MODULES:
+    sys.modules.pop(_name, None)
+try:
+    for _name in _SQLALCHEMY_MODULES:
+        importlib.import_module(_name)
+    # The sqlite dialect is resolved lazily at create_engine() time; import it
+    # now while the real package tree is intact so the fixture below works at
+    # test runtime regardless of later sys.modules state.
+    importlib.import_module("sqlalchemy.dialects.sqlite")
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    _real_md = _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
+    _real_ms = _load_real_module("models.schemas", _SLM_ROOT / "models" / "schemas.py")
+
+    Base = _real_md.Base
+    CodeStatus = _real_md.CodeStatus
+    Node = _real_md.Node
+    HeartbeatRequest = _real_ms.HeartbeatRequest
+    HeartbeatResponse = _real_ms.HeartbeatResponse
+
+    _REAL_MODULES = {
+        **{name: sys.modules[name] for name in _SQLALCHEMY_MODULES},
+        "models.database": _real_md,
+        "models.schemas": _real_ms,
+    }
+finally:
+    for _name, _mod in _orig_modules.items():
+        if _mod is not None:
+            sys.modules[_name] = _mod
+        else:
+            sys.modules.pop(_name, None)
+
+
+@contextlib.contextmanager
+def _real_modules_swapped():
+    """Temporarily put the real sqlalchemy/models modules back into sys.modules."""
+    saved = {name: sys.modules.get(name) for name in _REAL_MODULES}
+    sys.modules.update(_REAL_MODULES)
+    try:
+        yield
+    finally:
+        for name, mod in saved.items():
+            if mod is not None:
+                sys.modules[name] = mod
+            else:
+                sys.modules.pop(name, None)
 
 
 @pytest.fixture(scope="function")
 def slm_db_session():
     """Create an in-memory SQLite database for SLM models."""
-    engine = create_engine("sqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine (test-local engine)
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine)  # canonical: ignore py-adhoc-db-engine (test-local session factory)
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+    with _real_modules_swapped():
+        engine = create_engine("sqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        Base.metadata.create_all(engine)
+        SessionLocal = sessionmaker(bind=engine)  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+        session = SessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
 
 
 class TestNodeCodeVersion:
@@ -121,8 +199,6 @@ class TestHeartbeatSchemas:
 
     def test_heartbeat_request_accepts_code_version(self):
         """HeartbeatRequest should accept code_version field."""
-        from models.schemas import HeartbeatRequest
-
         request = HeartbeatRequest(
             cpu_percent=25.0,
             memory_percent=50.0,
@@ -133,8 +209,6 @@ class TestHeartbeatSchemas:
 
     def test_heartbeat_request_code_version_optional(self):
         """HeartbeatRequest code_version should be optional."""
-        from models.schemas import HeartbeatRequest
-
         request = HeartbeatRequest(
             cpu_percent=10.0,
             memory_percent=20.0,
@@ -144,8 +218,6 @@ class TestHeartbeatSchemas:
 
     def test_heartbeat_response_includes_update_info(self):
         """HeartbeatResponse should include update availability info."""
-        from models.schemas import HeartbeatResponse
-
         response = HeartbeatResponse(
             status="ok",
             update_available=True,
@@ -156,8 +228,6 @@ class TestHeartbeatSchemas:
 
     def test_heartbeat_response_defaults(self):
         """HeartbeatResponse should have sensible defaults."""
-        from models.schemas import HeartbeatResponse
-
         response = HeartbeatResponse()
         assert response.status == "ok"
         assert response.update_available is False
@@ -166,8 +236,6 @@ class TestHeartbeatSchemas:
 
     def test_heartbeat_response_with_update_url(self):
         """HeartbeatResponse should support update_url field."""
-        from models.schemas import HeartbeatResponse
-
         response = HeartbeatResponse(
             status="ok",
             update_available=True,
@@ -227,8 +295,6 @@ class TestHeartbeatVersionTracking:
 
     def test_heartbeat_response_update_available_true(self):
         """Test HeartbeatResponse when update is available."""
-        from models.schemas import HeartbeatResponse
-
         # Simulate outdated node
         code_status = CodeStatus.OUTDATED.value
         latest_version = "def456"
@@ -249,8 +315,6 @@ class TestHeartbeatVersionTracking:
 
     def test_heartbeat_response_update_available_false(self):
         """Test HeartbeatResponse when no update is available."""
-        from models.schemas import HeartbeatResponse
-
         # Simulate up-to-date node
         code_status = CodeStatus.UP_TO_DATE.value
         latest_version = "abc123"
@@ -279,12 +343,14 @@ class TestHasFailedAutobotService:
 
     @staticmethod
     def _call(extra_data):
-        """Import and call the function under test."""
-        import importlib
-        import os
+        """Import and call the function under test.
 
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
-        module = importlib.import_module("api.nodes")
+        api/nodes.py imports sqlalchemy.exc and models.schemas at module
+        scope; import it inside the real-module swap so those resolve to the
+        real packages instead of the root-conftest MagicMock stubs (#11737).
+        """
+        with _real_modules_swapped():
+            module = importlib.import_module("api.nodes")
         return module._has_failed_autobot_service(extra_data)
 
     def test_returns_false_when_extra_data_is_none(self):
