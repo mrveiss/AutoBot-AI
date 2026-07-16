@@ -9,6 +9,7 @@ Endpoints:
   POST   /api/devices/pair          — complete pairing via QR challenge token
   GET    /api/devices/pair-qr       — get a time-limited QR challenge token
   GET    /api/devices               — list devices for the current user
+                                      (device-JWT callers: own device only, #11792)
   GET    /api/devices/me            — device-JWT-only identity + heartbeat (#11736)
   DELETE /api/devices/{device_id}   — unpair a device
 
@@ -106,6 +107,22 @@ def _prune_expired(devices: list[MobileDevice]) -> list[MobileDevice]:
     """Return devices active within the last 90 days."""
     cutoff = now_utc() - timedelta(days=_DEVICE_EXPIRY_DAYS)
     return [d for d in devices if d.last_seen_at is None or d.last_seen_at >= cutoff]
+
+
+def _own_device_id(current_user: dict) -> Optional[uuid.UUID]:
+    """Own-device scoping for device-JWT callers (#11792).
+
+    Returns the caller's device UUID when auth came via device JWT (the
+    ``auth_method``/``device_id`` markers get_current_user attaches), so the
+    list endpoint can filter to the device's own record. User-session
+    callers return None (no filtering — full list).
+    """
+    if current_user.get("auth_method") != "device_jwt":
+        return None
+    try:
+        return uuid.UUID(str(current_user.get("device_id")))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid device token required")
 
 
 # ---------------------------------------------------------------------------
@@ -218,10 +235,17 @@ async def list_devices(
 
     Devices inactive for more than 90 days are pruned from the DB on each
     call so storage stays clean without a separate background job.
+
+    #11792: device-JWT callers (read scope suffices) get the list scoped to
+    their own device record; user-session callers get the full list.
     """
     user_id: str = str(current_user.get("id") or current_user.get("user_id", ""))
 
-    result = await session.execute(select(MobileDevice).where(MobileDevice.user_id == user_id))
+    stmt = select(MobileDevice).where(MobileDevice.user_id == user_id)
+    own_id = _own_device_id(current_user)
+    if own_id is not None:
+        stmt = stmt.where(MobileDevice.id == own_id)
+    result = await session.execute(stmt)
     devices = list(result.scalars().all())
 
     active = _prune_expired(devices)

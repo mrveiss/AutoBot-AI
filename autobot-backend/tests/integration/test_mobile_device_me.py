@@ -4,11 +4,12 @@
 # Author: mrveiss
 """
 GET /api/devices/me — require_device_jwt wiring tests (#11736).
+GET /api/devices — device-JWT own-device response scoping tests (#11792).
 
 Separate from test_mobile_pairing.py on purpose: that module's autouse
 Redis-cleanup fixture skips the whole file when Redis is unavailable
 (CI included), and these tests need only the in-memory database. Keeping
-them here guarantees the #11736 wiring is always exercised.
+them here guarantees the #11736/#11792 wiring is always exercised.
 """
 
 import uuid
@@ -26,6 +27,7 @@ from sqlalchemy.pool import StaticPool
 from api.mobile_devices import _device_jwt_auth
 from api.mobile_devices import router as mobile_router
 from api.user_management.dependencies import get_db_session
+from auth_middleware import get_current_user
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
 from user_management.models.base import Base
@@ -75,8 +77,14 @@ async def paired_device(db_session, monkeypatch) -> MobileDevice:
     return device
 
 
-def _client(db_session, device_user: dict) -> TestClient:
-    """Client with the DB and device-JWT dependencies overridden."""
+def _client(db_session, device_user: dict | None = None, current_user: dict | None = None) -> TestClient:
+    """Client with the DB and device-JWT dependencies overridden.
+
+    ``device_user`` overrides require_device_jwt (the /me route);
+    ``current_user`` overrides get_current_user for the routes that accept
+    both principals (the #11792 list-scoping tests) — pass the device-user
+    dict (auth_method="device_jwt") or a plain user-session dict.
+    """
     app = FastAPI()
     app.include_router(mobile_router, prefix="/api/devices")
 
@@ -84,7 +92,10 @@ def _client(db_session, device_user: dict) -> TestClient:
         yield db_session
 
     app.dependency_overrides[get_db_session] = override_get_db
-    app.dependency_overrides[_device_jwt_auth] = lambda: device_user
+    if device_user is not None:
+        app.dependency_overrides[_device_jwt_auth] = lambda: device_user
+    if current_user is not None:
+        app.dependency_overrides[get_current_user] = lambda: current_user
     return TestClient(app)
 
 
@@ -157,4 +168,83 @@ async def test_device_me_malformed_device_id_returns_401(db_session):
     )
 
     response = client.get("/api/devices/me")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GET /api/devices — device-JWT own-device response scoping (#11792)
+# ---------------------------------------------------------------------------
+
+
+def _device_principal(device_id: str, scope: str = "read") -> dict:
+    """Synthetic device user as get_current_user attaches it (GH#9493)."""
+    return {
+        "device_id": device_id,
+        "user_id": _USER_ID,
+        "scope": scope,
+        "auth_method": "device_jwt",
+        "role": "device",
+        "username": f"device:{device_id}",
+    }
+
+
+async def _add_device(db_session, name: str, user_id: str = _USER_ID) -> MobileDevice:
+    """Seed an active sibling device (encryption stubbed by paired_device)."""
+    device = MobileDevice(
+        user_id=user_id,
+        device_name=name,
+        device_token=f"tok-{name}",
+        platform="android",
+        last_seen_at=now_utc(),
+    )
+    db_session.add(device)
+    await db_session.commit()
+    return device
+
+
+@pytest.mark.asyncio
+async def test_list_devices_device_jwt_scoped_to_own_device(db_session, paired_device):
+    """A device read token GETs /api/devices and sees EXACTLY its own record."""
+    sibling = await _add_device(db_session, "Sibling Tablet")
+    client = _client(db_session, current_user=_device_principal(str(paired_device.id)))
+
+    response = client.get("/api/devices")
+
+    assert response.status_code == 200
+    devices = response.json()["devices"]
+    assert [d["id"] for d in devices] == [str(paired_device.id)]
+    assert str(sibling.id) not in {d["id"] for d in devices}
+
+
+@pytest.mark.asyncio
+async def test_list_devices_write_device_token_also_own_scoped(db_session, paired_device):
+    """Own-device scoping keys off auth_method, not scope — write tokens too."""
+    await _add_device(db_session, "Sibling Tablet")
+    client = _client(db_session, current_user=_device_principal(str(paired_device.id), scope="write"))
+
+    response = client.get("/api/devices")
+
+    assert response.status_code == 200
+    assert [d["id"] for d in response.json()["devices"]] == [str(paired_device.id)]
+
+
+@pytest.mark.asyncio
+async def test_list_devices_user_session_gets_full_list(db_session, paired_device):
+    """Zero regression: user-session callers keep the unfiltered full list."""
+    sibling = await _add_device(db_session, "Sibling Tablet")
+    client = _client(db_session, current_user={"id": _USER_ID, "user_id": _USER_ID})
+
+    response = client.get("/api/devices")
+
+    assert response.status_code == 200
+    ids = {d["id"] for d in response.json()["devices"]}
+    assert ids == {str(paired_device.id), str(sibling.id)}
+
+
+@pytest.mark.asyncio
+async def test_list_devices_malformed_device_principal_returns_401(db_session, paired_device):
+    """A non-UUID device_id claim cannot reach the list query."""
+    client = _client(db_session, current_user=_device_principal("not-a-uuid"))
+
+    response = client.get("/api/devices")
     assert response.status_code == 401
