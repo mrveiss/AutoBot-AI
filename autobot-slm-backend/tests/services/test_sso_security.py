@@ -246,7 +246,7 @@ class TestSamlAssertionSecurity:
         """SAML relay state is single-use to prevent replay attacks."""
         # This is already tested in test_sso_service.py TestSamlRelayStateRedisRoundTrip
         # but we verify it here as part of the security suite
-        redis, store = {}, {}
+        store = {}
 
         async def _set(key, value, ex=None):
             store[key] = value
@@ -267,7 +267,7 @@ class TestSamlAssertionSecurity:
             {"headers": [("Location", "https://idp.example.com/sso")]},
         )
 
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis_mock):
+        with patch.object(_sso_mod, "get_async_redis_client", AsyncMock(return_value=redis_mock)):
             with patch.object(service, "_build_saml_client", return_value=mock_client):
                 _, relay_state = await service._generate_saml_authn_request(provider)
             # First use succeeds
@@ -348,7 +348,7 @@ class TestOauthSecurity:
         """OAuth state tokens are single-use (replay prevention)."""
         # Already tested in test_sso_service.py TestValidateOauthState.test_second_use_raises
         # but we verify it here as part of the security suite
-        redis, store = {}, {}
+        store = {}
 
         async def _set(key, value, ex=None):
             store[key] = value
@@ -362,7 +362,7 @@ class TestOauthSecurity:
 
         service = _make_service()
 
-        with patch.object(_sso_mod, "get_redis_client", return_value=redis_mock):
+        with patch.object(_sso_mod, "get_async_redis_client", AsyncMock(return_value=redis_mock)):
             state, _ = await service._generate_oauth_state(_PROVIDER_ID)
             # First use succeeds
             await service._validate_oauth_state(state)
@@ -379,40 +379,54 @@ class TestOauthSecurity:
 class TestClientSecretHandling:
     """Client secret encryption/decryption and logging prevention."""
 
-    def test_client_secret_never_logged(self, caplog):
+    @pytest.mark.asyncio
+    async def test_client_secret_never_logged(self, caplog):
         """Client secrets must never appear in application logs."""
         service = _make_service()
         provider = MagicMock()
+        provider.id = _PROVIDER_ID
         provider.config = {
             "client_id": "test-client-id",
             "client_secret": "super-secret-value-12345",
         }
 
-        # Mock AsyncOAuth2Client to avoid authlib dependency
-        with patch.object(_sso_mod, "AsyncOAuth2Client") as mock_client_cls:
+        # Mock AsyncOAuth2Client to avoid authlib dependency; the secret now
+        # comes from SSOSecretsManager (stubbed) so make retrieve_secret
+        # return it — the assertion below covers the whole build path.
+        _secrets_mgr = MagicMock()
+        _secrets_mgr.retrieve_secret = AsyncMock(return_value="super-secret-value-12345")
+        with (
+            patch.object(_sso_mod, "AsyncOAuth2Client") as mock_client_cls,
+            patch.object(_sso_mod, "SSOSecretsManager", return_value=_secrets_mgr),
+        ):
             mock_client_cls.return_value = MagicMock()
 
             with caplog.at_level(logging.DEBUG):
-                service._build_oauth_client(provider)
+                await service._build_oauth_client(provider)
 
         # Check all log records — secret must never appear
         log_text = " ".join(record.message for record in caplog.records)
         assert "super-secret-value-12345" not in log_text
         assert "client_secret" not in log_text or "***" in log_text  # Redacted is OK
 
-    def test_client_secret_not_in_exception_messages(self):
+    @pytest.mark.asyncio
+    async def test_client_secret_not_in_exception_messages(self):
         """Client secrets must not leak via exception messages."""
         service = _make_service()
         provider = MagicMock()
+        provider.id = _PROVIDER_ID
         provider.config = {
             "client_id": "test-client-id",
             "client_secret": "super-secret-value-12345",
             "token_url": "https://invalid-url-that-will-fail.example.com/token",
         }
 
+        _secrets_mgr = MagicMock()
+        _secrets_mgr.retrieve_secret = AsyncMock(return_value="super-secret-value-12345")
         try:
             # Trigger an error that might expose config
-            service._build_oauth_client(provider)
+            with patch.object(_sso_mod, "SSOSecretsManager", return_value=_secrets_mgr):
+                await service._build_oauth_client(provider)
         except Exception as e:
             error_msg = str(e)
             # Secret must not appear in error message
@@ -470,7 +484,7 @@ class TestSecurityIntegration:
         """OAuth state validation must fail hard if Redis is unavailable."""
         service = _make_service()
 
-        with patch.object(_sso_mod, "get_redis_client", return_value=None):
+        with patch.object(_sso_mod, "get_async_redis_client", AsyncMock(return_value=None)):
             with pytest.raises(SSOAuthenticationError, match="Redis unavailable"):
                 await service._validate_oauth_state("any-state-token")
 
@@ -492,7 +506,7 @@ class TestSecurityIntegration:
         )
 
         with (
-            patch.object(_sso_mod, "get_redis_client", return_value=None),
+            patch.object(_sso_mod, "get_async_redis_client", AsyncMock(return_value=None)),
             patch.object(service, "_build_saml_client", return_value=mock_client),
         ):
             redirect_url, relay_state = await service._generate_saml_authn_request(provider)
