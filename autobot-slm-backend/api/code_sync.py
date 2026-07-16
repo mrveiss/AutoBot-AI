@@ -74,6 +74,7 @@ from services.drift_checker import (
 from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
+from services.ssh_utils import _ssh_key_usable
 from services.sync_orchestrator import get_sync_orchestrator
 
 logger = logging.getLogger(__name__)
@@ -2547,8 +2548,8 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         logger.info("SLM self-sync: code source is local at %s, using direct rsync", repo_path)
     else:
         ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
-        if not Path(ssh_key).exists():
-            logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
+        if not _ssh_key_usable(ssh_key):
+            logger.error("SLM self-sync failed: SSH key not usable at %s", ssh_key)
             return
         logger.info("SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path)
 
