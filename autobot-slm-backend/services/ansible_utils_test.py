@@ -2,9 +2,24 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for ansible_utils._extract_failure_summary (Issue #9286)."""
+"""Tests for ansible_utils._extract_failure_summary (Issue #9286).
 
-from services.ansible_utils import _extract_failure_summary
+The slm-backend root conftest stubs ``services.ansible_utils`` as a MagicMock
+(it is imported at module level by api/setup_wizard.py, #11794), so a bare
+``from services.ansible_utils import ...`` here would bind the stub instead of
+the real parser.  Load the real file directly, like the sibling
+drift_checker_test.py does.
+"""
+
+import importlib.util
+from pathlib import Path
+
+_MODULE_PATH = Path(__file__).parent / "ansible_utils.py"
+_spec = importlib.util.spec_from_file_location("ansible_utils_under_test", _MODULE_PATH)
+_mod = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+_spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+
+_extract_failure_summary = _mod._extract_failure_summary
 
 
 def test_regular_task_failure():

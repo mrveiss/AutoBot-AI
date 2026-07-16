@@ -36,6 +36,14 @@ sys.path.insert(0, str(_ROOT))
 # ---------------------------------------------------------------------------
 # Module stubs — config first so auth.py loads with the right secret key
 # ---------------------------------------------------------------------------
+# #11478/#11794: snapshot sys.modules before the stub-heavy bootstrap.  The
+# stubs below MUST win even when the real modules are already imported (in a
+# whole-backend sweep an earlier test file legitimately imports the real
+# fastapi; exec'ing api/auth.py against real FastAPI decorators + MagicMock
+# response models raises FastAPIError at collection time).  Everything is
+# rolled back after the bootstrap so nothing leaks into later test files.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
 _SECRET_KEY = "test-logout-secret-key-32characters"
 _EXPIRE_MINUTES = 30
 
@@ -67,8 +75,7 @@ for _mod_name in [
     "models.database",
     "api.security",
 ]:
-    if _mod_name not in sys.modules:
-        sys.modules[_mod_name] = MagicMock()
+    sys.modules[_mod_name] = MagicMock()
 
 # Ensure real jwt_core is reachable (decode_jwt_no_verify_exp used in logout impl)
 from autobot_shared.auth.jwt_core import decode_jwt_or_none  # noqa: E402
@@ -115,6 +122,17 @@ exec(compile(_router_src, str(_AUTH_ROUTER_PY), "exec"), _router_ns)  # nosec B1
 
 _build_end_session_url = _router_ns["_build_end_session_url"]
 _get_user_sso_link = _router_ns["_get_user_sso_link"]
+
+# #11478/#11794: restore the pre-bootstrap sys.modules state (see snapshot
+# above).  Tests only use the module references extracted here (_dl_mod,
+# _auth_mod, _router_ns values), so none of the forced stubs may outlive this
+# module's import.
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
 
 
 # ---------------------------------------------------------------------------

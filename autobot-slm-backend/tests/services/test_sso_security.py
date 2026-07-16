@@ -22,6 +22,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# #11478/#11794: snapshot sys.modules before the stub-heavy bootstrap below.
+# Tests only use the module references extracted here (_sso_mod attributes),
+# so every stub this file installs — notably the bare
+# "user_management.services.base_service" ModuleType, which broke the real
+# user_management/services/__init__.py import chain for
+# user_management/services/sso_e2e_test.py later in a whole-backend sweep —
+# is rolled back after the module under test is loaded.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
 # ── Load sso_service.py directly, bypassing conftest stubs ───────────────────
 _MODELS_SSO = "user_management.models.sso"
 if _MODELS_SSO not in sys.modules:
@@ -59,6 +68,16 @@ _spec.loader.exec_module(_sso_mod)  # type: ignore[union-attr]
 
 SSOService = _sso_mod.SSOService
 SSOAuthenticationError = _sso_mod.SSOAuthenticationError
+
+# #11478/#11794: restore the pre-bootstrap sys.modules state (see snapshot
+# above) so the stubs installed for this file's exec-based bootstrap cannot
+# poison modules collected after it in a sweep.
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
 # ─────────────────────────────────────────────────────────────────────────────
 
 

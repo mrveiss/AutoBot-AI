@@ -53,6 +53,7 @@ _STUB_MODULE_NAMES = [
     "services.database",
     "services.encryption",
     "services.ansible_secrets",
+    "services.hf_token_validator",
     "services.playbook_executor",
     "autobot_shared",
     "autobot_shared.auth",

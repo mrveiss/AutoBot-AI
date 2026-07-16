@@ -250,18 +250,24 @@ class RBACMiddleware:
         else:
             # Clear entire fallback; Redis keys expire naturally.
             _permission_cache.clear()
-            asyncio.ensure_future(self._clear_all_redis_keys(None))
+        # #11794: awaited, for BOTH paths — the single-user path previously
+        # never touched Redis L2 / pub-sub at all (other uvicorn workers kept
+        # serving stale permissions after a role change), and the all-users
+        # path was fire-and-forget so callers could observe stale state right
+        # after clear_cache() returned.
+        await self._clear_all_redis_keys(user_id)
 
     async def _clear_all_redis_keys(self, user_id: "uuid.UUID | None") -> None:
         r = await get_async_redis_client()
         if r is None:
             return
-        try:
-            keys = await r.keys("slm:perm:*")
-            if keys:
-                await r.delete(*keys)
-        except Exception as exc:
-            logger.warning("RBAC: failed to clear all Redis permission keys: %s", exc)
+        if user_id is None:
+            try:
+                keys = await r.keys("slm:perm:*")
+                if keys:
+                    await r.delete(*keys)
+            except Exception as exc:
+                logger.warning("RBAC: failed to clear all Redis permission keys: %s", exc)
 
         # Clear Redis L2 and notify other workers
         redis = await get_async_redis_client()
