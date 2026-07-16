@@ -28,6 +28,31 @@ import pytest
 # Mirrors the approach in test_bi_dashboard.py.
 # ---------------------------------------------------------------------------
 
+
+# #11794: every sys.modules key this bootstrap writes.  Snapshotted here and
+# restored right after the module under test is loaded — the bare ModuleType
+# stand-ins (autobot_shared.redis_client has no get_async_redis_client, …)
+# otherwise leak into every later-collected test file in a sweep
+# (tests/test_rbac_*.py, tests/test_port_scanner_address.py).  Runtime tests
+# only use patch.object(_bid_mod, ...), never sys.modules lookups.
+_TOUCHED_KEYS = (
+    "matplotlib",
+    "matplotlib.pyplot",
+    "aiofiles",
+    "jinja2",
+    "performance_monitor",
+    "autobot_shared",
+    "autobot_shared.network_constants",
+    "autobot_shared.monitoring",
+    "autobot_shared.monitoring.prometheus_query",
+    "autobot_shared.redis_client",
+    "autobot_shared.http_client",
+    "autobot_shared.logging_manager",
+    "autobot_shared.ssot_config",
+    "business_intelligence_dashboard",
+)
+_PRE_BOOTSTRAP = {_k: sys.modules.get(_k) for _k in _TOUCHED_KEYS}
+
 _matplotlib = types.ModuleType("matplotlib")
 _matplotlib.use = lambda *a, **kw: None
 sys.modules.setdefault("matplotlib", _matplotlib)
@@ -147,6 +172,14 @@ BusinessIntelligenceDashboard = _bid_mod.BusinessIntelligenceDashboard
 _sum_prometheus_increase = _bid_mod._sum_prometheus_increase
 _get_network_utilization_percent = _bid_mod._get_network_utilization_percent
 _sample_net_bytes_per_sec = _bid_mod._sample_net_bytes_per_sec
+
+# #11794: restore the pre-bootstrap state of every touched key (see above).
+for _k, _v in _PRE_BOOTSTRAP.items():
+    if _v is None:
+        sys.modules.pop(_k, None)
+    else:
+        sys.modules[_k] = _v
+del _PRE_BOOTSTRAP
 
 
 # ---------------------------------------------------------------------------

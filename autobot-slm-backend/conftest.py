@@ -104,27 +104,29 @@ for _m in [
     _stub(_m)
 
 # ── services ──────────────────────────────────────────────────────────────────
-# The services.* modules api/code_sync.py imports are AST-derived from its
-# source (#11575) — a hand-maintained list rots the moment code_sync gains a
-# new `from services.X import ...` (exactly how #11481 broke, and the same
-# anti-pattern behind the #11461 schema-list rot).  Pattern mirrors the
-# schema-name derivation in tests/api/test_collect_outdated_node_ids.py.
-_code_sync_ast = ast.parse((Path(__file__).parent / "api" / "code_sync.py").read_text(encoding="utf-8"))
-_CODE_SYNC_SERVICE_MODULES = frozenset(
-    {
+# The services.* modules api/code_sync.py and api/setup_wizard.py import are
+# AST-derived from their sources (#11575, #11794) — a hand-maintained list rots
+# the moment either module gains a new `from services.X import ...` (exactly
+# how #11481 broke, and the same anti-pattern behind the #11461 schema-list
+# rot).  Pattern mirrors the schema-name derivation in
+# tests/api/test_collect_outdated_node_ids.py.  Both files are stubbed because
+# their test modules (tests/api/*, api/setup_wizard_sanitize_test.py,
+# tests/api/test_setup_wizard_node_roles.py) import them at collection time.
+_CODE_SYNC_SERVICE_MODULES: frozenset = frozenset()
+for _src in ("code_sync.py", "setup_wizard.py"):
+    _src_ast = ast.parse((Path(__file__).parent / "api" / _src).read_text(encoding="utf-8"))
+    _CODE_SYNC_SERVICE_MODULES |= {
         _node.module
-        for _node in ast.walk(_code_sync_ast)
+        for _node in ast.walk(_src_ast)
         if isinstance(_node, ast.ImportFrom) and _node.module and _node.module.startswith("services.")
-    }
-    | {
+    } | {
         _alias.name
-        for _node in ast.walk(_code_sync_ast)
+        for _node in ast.walk(_src_ast)
         if isinstance(_node, ast.Import)
         for _alias in _node.names
         if _alias.name.startswith("services.")
     }
-)
-del _code_sync_ast
+del _src_ast
 
 # services.* modules NOT imported by code_sync.py but stubbed for other api/*
 # modules under test.  These have their own consumers and are not exposed to
@@ -175,5 +177,12 @@ for _m in [
     "user_management.services.base_service",
     "user_management.services.mfa_service",
     "user_management.services.sso_service",
+    # user_management/services/__init__.py is executed for real when pytest
+    # imports test modules inside that package (user_management/services/
+    # sso_e2e_test.py, sso_secrets_test.py); its from-imports must resolve via
+    # sys.modules or the whole package fails to collect (#11794).
+    "user_management.services.organization_service",
+    "user_management.services.team_service",
+    "user_management.services.user_service",
 ]:
     _stub(_m)

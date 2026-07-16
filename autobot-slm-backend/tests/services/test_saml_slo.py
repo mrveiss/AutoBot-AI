@@ -114,6 +114,11 @@ if "config" not in sys.modules:
     _cfg_stub.settings.trusted_proxies = []
     sys.modules["config"] = _cfg_stub
 
+# #11794: forced, not guarded — in a whole-backend sweep the REAL fastapi is
+# legitimately imported by earlier directories, and exec'ing api/auth.py
+# against real FastAPI decorators + MagicMock response models raises
+# FastAPIError at collection time.  The pre-bootstrap snapshot above rolls
+# every forced stub back after the bootstrap.
 for _amod in [
     "models.schemas",
     "user_management",
@@ -134,8 +139,7 @@ for _amod in [
     "models.database",
     "api.security",
 ]:
-    if _amod not in sys.modules:
-        sys.modules[_amod] = MagicMock()
+    sys.modules[_amod] = MagicMock()
 
 # Provide real token_denylist
 _DENYLIST_PY = _BACKEND / "services" / "token_denylist.py"
