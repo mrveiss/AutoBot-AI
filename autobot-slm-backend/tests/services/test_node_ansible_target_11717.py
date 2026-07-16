@@ -31,9 +31,21 @@ if str(_slm_root) not in sys.path:
 
 _SQLALCHEMY_MODULES = ["sqlalchemy", "sqlalchemy.ext", "sqlalchemy.ext.asyncio", "sqlalchemy.orm"]
 
-_orig_modules = {name: sys.modules.get(name) for name in [*_SQLALCHEMY_MODULES, "models.database"]}
-for _name in _SQLALCHEMY_MODULES:
-    sys.modules.pop(_name, None)
+
+def _is_sqlalchemy_key(name: str) -> bool:
+    return name == "sqlalchemy" or name.startswith("sqlalchemy.")
+
+
+# Snapshot and clear EVERY sqlalchemy* key, not just the four the root
+# conftest stubs (#11737): in a whole-backend sweep, earlier-collected test
+# files (tests/api/test_scim.py, …) leave extra child stubs such as
+# ``sqlalchemy.exc`` in sys.modules, and a single cached MagicMock child
+# poisons the real package import below (relative imports inside sqlalchemy
+# resolve through sys.modules).
+_orig_modules = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
+_orig_modules["models.database"] = sys.modules.get("models.database")
+for _name in [name for name in sys.modules if _is_sqlalchemy_key(name)]:
+    del sys.modules[_name]
 try:
     for _name in _SQLALCHEMY_MODULES:
         importlib.import_module(_name)
@@ -44,6 +56,8 @@ try:
     _real_md_spec.loader.exec_module(_real_md)
     Node = _real_md.Node
 finally:
+    for _name in [name for name in sys.modules if _is_sqlalchemy_key(name)]:
+        del sys.modules[_name]
     for _name, _mod in _orig_modules.items():
         if _mod is not None:
             sys.modules[_name] = _mod
