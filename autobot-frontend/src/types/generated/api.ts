@@ -3629,6 +3629,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/devices/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Device Identity
+         * @description Device token introspection + activity heartbeat (GH#9493, #11736).
+         *
+         *     Accepts ONLY a device JWT (require_device_jwt); user sessions get 401.
+         *     Returns the calling device's identity claims and refreshes last_seen_at
+         *     so actively-used devices are not pruned by the 90-day inactivity sweep.
+         */
+        get: operations["get_device_identity_api_devices_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/devices/{device_id}": {
         parameters: {
             query?: never;
@@ -69444,6 +69468,28 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DeviceIdentityResponse */
+        DeviceIdentityResponse: {
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** User Id */
+            user_id: string;
+            /**
+             * Scope
+             * @description Device JWT scope: 'read' or 'write' (GH#9493)
+             */
+            scope: string;
+            /**
+             * Last Seen At
+             * @description Heartbeat timestamp refreshed by this call
+             */
+            last_seen_at: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** DeviceInitiateRequest */
         DeviceInitiateRequest: {
             /** Provider Name */
@@ -105970,6 +106016,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeviceListResponse"];
+                };
+            };
+        };
+    };
+    get_device_identity_api_devices_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceIdentityResponse"];
                 };
             };
         };
