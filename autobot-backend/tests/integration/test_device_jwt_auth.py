@@ -262,6 +262,49 @@ class TestDeviceScopeEnforcement:
         assert user["scope"] == "read"
 
     @pytest.mark.asyncio
+    async def test_device_jwt_allowed_on_collection_get(self, device_jwt_env, device_exists, real_auth_middleware):
+        """#11792: GET /api/devices (no trailing slash) authenticates a read token.
+
+        Closes the GH#9493 read/write asymmetry — the list route is the one
+        /api/devices endpoint the trailing-slash prefix allow-list missed.
+        Response scoping to the caller's own device is enforced by the list
+        endpoint (see test_mobile_device_me.py).
+        """
+        device_id = str(uuid.uuid4())
+        token = mint_device_jwt(device_id, "user123", scope="read")
+        request = _bearer_request(token, path="/api/devices", method="GET")
+
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            user = await real_auth_middleware.get_current_user(request)
+
+        assert user["auth_method"] == "device_jwt"
+        assert user["device_id"] == device_id
+        assert user["scope"] == "read"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
+    async def test_collection_non_get_still_excluded(
+        self, method, device_jwt_env, device_exists, real_auth_middleware
+    ):
+        """#11792 widened ONLY GET on the exact collection path.
+
+        Every other method on /api/devices (no trailing slash) keeps the
+        pre-existing allow-list 403 — even for write-scoped tokens, proving
+        the change did not widen the mutating surface.
+        """
+        token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="write")
+        request = _bearer_request(token, path="/api/devices", method=method)
+
+        middleware, p_factory, p_user = self._patched(real_auth_middleware)
+        with p_factory, p_user:
+            with pytest.raises(HTTPException) as exc_info:
+                await real_auth_middleware.get_current_user(request)
+
+        assert exc_info.value.status_code == 403
+        assert "Device JWT not permitted on this endpoint" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
     async def test_read_scope_blocks_mutating_methods(self, device_jwt_env, device_exists, real_auth_middleware):
         """Read-scoped device JWTs cannot use mutating HTTP methods."""
         token = mint_device_jwt(str(uuid.uuid4()), "user123", scope="read")

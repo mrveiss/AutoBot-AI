@@ -843,9 +843,10 @@ async def get_current_user(request: Request) -> Dict:
     full user session.  Scope enforcement is left to individual endpoints.
 
     GH#9493: Device JWTs authenticate ONLY on /api/devices/ endpoints
-    (path allow-list + read/write scope enforcement below). Device-only
-    endpoints use the require_device_jwt() dependency factory instead
-    (#11736).
+    (path allow-list + read/write scope enforcement below), plus the
+    GET-only collection route /api/devices whose response is own-device
+    scoped (#11792). Device-only endpoints use the require_device_jwt()
+    dependency factory instead (#11736).
 
     Raises HTTPException if authentication fails.
     """
@@ -884,10 +885,16 @@ async def get_current_user(request: Request) -> Dict:
     # Fallback: device-scoped JWT (GH#9493) — validates device still exists.
     # Device JWTs are valid ONLY on /api/devices/ endpoints. Read-scoped tokens
     # cannot use mutating HTTP methods (POST/PUT/PATCH/DELETE).
+    # #11792: the collection route GET /api/devices (no trailing slash) is also
+    # allowed — the list endpoint filters the response to the caller's own
+    # device. Non-GET methods on the exact collection path stay excluded.
     device_user = await middleware._extract_user_from_device_jwt(request)
     if device_user:
         _DEVICE_JWT_ALLOWED_PREFIXES = ("/api/devices/",)
-        if not any(request.url.path.startswith(p) for p in _DEVICE_JWT_ALLOWED_PREFIXES):
+        path_allowed = any(request.url.path.startswith(p) for p in _DEVICE_JWT_ALLOWED_PREFIXES) or (
+            request.url.path == "/api/devices" and request.method == "GET"
+        )
+        if not path_allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Device JWT not permitted on this endpoint",
