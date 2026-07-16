@@ -78,6 +78,15 @@ class ServiceRegistry:
     def __init__(self):
         """Initialize registry from environment."""
         self.deployment_mode = self._detect_deployment_mode()
+        self.services: Dict[str, str] = {}
+
+    def update_service_url(self, name: str, url: str) -> None:
+        """Point a service at a new base URL.
+
+        In-process only: this standalone stand-in has no persistent store —
+        the canonical registry lives in autobot-backend/utils/service_registry.py.
+        """
+        self.services[name] = url
 
     @staticmethod
     def _detect_deployment_mode() -> DeploymentMode:
@@ -128,6 +137,9 @@ class DeploymentStatus:
 
 class ZeroDowntimeDeployer:
     """Zero-downtime deployment orchestrator."""
+
+    # Core services managed by the blue-green and canary strategies
+    CORE_SERVICES = ("backend", "frontend")
 
     def __init__(self, deployment_dir: str = "deployments"):
         """Initialize zero-downtime deployer with service registry and backup manager."""
@@ -315,7 +327,7 @@ class ZeroDowntimeDeployer:
         """
         green_services = {}
 
-        for service_name in ["backend", "frontend"]:  # Core services for blue-green
+        for service_name in self.CORE_SERVICES:
             self.print_step(f"Deploying {service_name} to green environment", "deploy")
 
             # Get service config
@@ -508,7 +520,7 @@ class ZeroDowntimeDeployer:
         self.print_step("Phase 1: Deploying canary version", "deploy")
 
         canary_services = {}
-        for service_name in ["backend", "frontend"]:
+        for service_name in self.CORE_SERVICES:
             service_config = self.deployment_config["services"].get(service_name, {})
             canary_port = service_config["port"] + 2000  # Offset for canary
 
@@ -554,22 +566,30 @@ class ZeroDowntimeDeployer:
 
         # Finalize canary deployment
         self.print_step("Phase 5: Finalizing canary deployment", "deploy")
-        await self._finalize_canary_deployment(canary_services)
-
-        return True
+        return await self._finalize_canary_deployment(canary_services)
 
     async def _start_green_service(self, service_name: str, port: int, version: str, config: Dict[str, Any]) -> bool:
         """Start a service in green environment."""
+        return await self._start_env_service(service_name, port, version, config, "green")
+
+    async def _start_canary_service(self, service_name: str, port: int, version: str, config: Dict[str, Any]) -> bool:
+        """Start a service in canary environment."""
+        return await self._start_env_service(service_name, port, version, config, "canary")
+
+    async def _start_env_service(
+        self, service_name: str, port: int, version: str, config: Dict[str, Any], env: str
+    ) -> bool:
+        """Start a service in the given deployment environment (green/canary)."""
         try:
             # For Docker-based services
             if service_name in ["ai-stack", "npu-worker"]:
-                # Start Docker container with green suffix
+                # Start Docker container with environment suffix
                 cmd = [
                     "docker",
                     "run",
                     "-d",
                     "--name",
-                    f"autobot-{service_name}-green",
+                    f"autobot-{service_name}-{env}",
                     "-p",
                     f"{port}:{config['port']}",
                     f"autobot-{service_name}:{version or 'latest'}",
@@ -603,7 +623,7 @@ class ZeroDowntimeDeployer:
             return process.returncode is None  # Process still running
 
         except Exception as e:
-            self.print_step(f"Error starting green {service_name}: {e}", "error")
+            self.print_step(f"Error starting {env} {service_name}: {e}", "error")
             return False
 
     async def _wait_for_service_health(self, service_name: str, health_url: str, timeout: int) -> bool:
@@ -640,31 +660,77 @@ class ZeroDowntimeDeployer:
     async def _switch_nginx_to_green(self, green_services: Dict[str, Any], lb_config: Dict[str, Any]) -> bool:
         """Switch Nginx configuration to green environment."""
         try:
-            config_file = lb_config.get("config_file")
-            if not config_file:
-                return True
-
-            # Generate new Nginx config pointing to green services
             nginx_config = self._generate_nginx_config(green_services, "green")
-
-            # Write new config
-            with open(config_file, "w") as f:
-                f.write(nginx_config)
-
-            # Reload Nginx
-            reload_cmd = lb_config.get("reload_command", "sudo nginx -s reload")
-            process = await asyncio.create_subprocess_shell(reload_cmd)
-            await process.wait()
-
-            return process.returncode == 0
-
+            return await self._write_nginx_config_and_reload(nginx_config, lb_config)
         except Exception as e:
             self.print_step(f"Error switching Nginx to green: {e}", "error")
             return False
 
+    async def _write_nginx_config_and_reload(self, nginx_config: str, lb_config: Dict[str, Any]) -> bool:
+        """Write an Nginx config file and reload Nginx."""
+        config_file = lb_config.get("config_file")
+        if not config_file:
+            return True
+
+        with open(config_file, "w", encoding="utf-8") as f:
+            f.write(nginx_config)
+
+        reload_cmd = lb_config.get("reload_command", "sudo nginx -s reload")
+        process = await asyncio.create_subprocess_shell(reload_cmd)
+        await process.wait()
+
+        return process.returncode == 0
+
+    def _blue_services(self) -> Dict[str, Any]:
+        """Describe the blue (original) core services from the deployment config."""
+        services = {}
+        for service_name in self.CORE_SERVICES:
+            service_config = self.deployment_config["services"].get(service_name, {})
+            port = service_config.get("port")
+            services[service_name] = {
+                "port": port,
+                "health_url": f"http://localhost:{port}{service_config.get('health_endpoint', '/health')}",
+            }
+        return services
+
+    async def _switch_traffic_to_blue(self) -> bool:
+        """Switch load balancer traffic back to the blue (original) environment."""
+        lb_config = self.deployment_config.get("load_balancer", {})
+
+        if lb_config.get("type") == "nginx":
+            try:
+                nginx_config = self._generate_nginx_config(self._blue_services(), "blue")
+                return await self._write_nginx_config_and_reload(nginx_config, lb_config)
+            except Exception as e:
+                self.print_step(f"Error switching Nginx to blue: {e}", "error")
+                return False
+
+        # Simple port switching for development
+        self.print_step("Switching back to blue environment (development mode)", "switch")
+        return True
+
+    async def _update_service_registry(self, services: Dict[str, Any]) -> None:
+        """Re-point the in-process service registry at the given service set.
+
+        The standalone ServiceRegistry (#11761) is env-derived with no
+        persistent store, so this records the new service URLs in-process
+        and logs the switch; external consumers keep resolving via the
+        environment and the load balancer.
+        """
+        for service_name, service_info in services.items():
+            url = f"http://localhost:{service_info['port']}"
+            self.service_registry.update_service_url(service_name, url)
+            self.print_step(f"Registry updated: {service_name} -> {url}", "success")
+
+    async def _update_service_registry_for_green(self, green_services: Dict[str, Any]) -> None:
+        """Update the service registry to point at the green environment."""
+        await self._update_service_registry(green_services)
+
     def _generate_nginx_config(self, services: Dict[str, Any], env: str) -> str:
-        """Generate Nginx configuration for services."""
-        config = """
+        """Generate Nginx configuration routing all traffic to one environment."""
+        # f-string fix (#11779): this template previously had no f-prefix and
+        # emitted its placeholders literally.
+        config = f"""
 # AutoBot {env.capitalize()} Environment Configuration
 # Generated at: {datetime.now().isoformat()}
 
@@ -675,7 +741,12 @@ upstream autobot_backend_{env} {{
 upstream autobot_frontend_{env} {{
     server localhost:{services.get('frontend', {}).get('port', 5173)};
 }}
+{self._nginx_server_block(env)}"""
+        return config
 
+    def _nginx_server_block(self, env: str) -> str:
+        """Generate the Nginx server block proxying to the given env's upstreams."""
+        return f"""
 server {{
     listen 80;
     server_name autobot.local;
@@ -697,19 +768,106 @@ server {{
     }}
 }}
 """
-        return config
+
+    def _generate_canary_nginx_config(self, canary_services: Dict[str, Any], traffic_percent: int) -> str:
+        """Generate Nginx config splitting traffic between blue and canary upstreams."""
+        blue_services = self._blue_services()
+        upstreams = []
+
+        for service_name in self.CORE_SERVICES:
+            blue_port = blue_services[service_name]["port"]
+            canary_port = canary_services.get(service_name, {}).get("port")
+            if traffic_percent >= 100:
+                servers = f"    server localhost:{canary_port};"
+            else:
+                servers = (
+                    f"    server localhost:{blue_port} weight={100 - traffic_percent};\n"
+                    f"    server localhost:{canary_port} weight={max(traffic_percent, 1)};"
+                )
+            upstreams.append(f"upstream autobot_{service_name}_canary {{\n{servers}\n}}")
+
+        header = (
+            f"# AutoBot Canary Split Configuration ({traffic_percent}% canary)\n"
+            f"# Generated at: {datetime.now().isoformat()}\n"
+        )
+        return header + "\n" + "\n\n".join(upstreams) + "\n" + self._nginx_server_block("canary")
 
     async def _cleanup_green_environment(self, green_services: Dict[str, Any]) -> None:
         """Clean up green environment on failure."""
-        self.print_step("Cleaning up green environment", "deploy")
+        await self._cleanup_environment(green_services, "green")
 
-        for service_name in green_services:
+    async def _cleanup_canary_environment(self, canary_services: Dict[str, Any]) -> None:
+        """Clean up canary environment on failure."""
+        await self._cleanup_environment(canary_services, "canary")
+
+    async def _cleanup_environment(self, services: Dict[str, Any], env: str) -> None:
+        """Clean up a deployment environment's containers (best-effort)."""
+        self.print_step(f"Cleaning up {env} environment", "deploy")
+
+        for service_name in services:
             try:
                 # Stop Docker containers
-                await asyncio.create_subprocess_shell(f"docker stop autobot-{service_name}-green 2>/dev/null || true")
-                await asyncio.create_subprocess_shell(f"docker rm autobot-{service_name}-green 2>/dev/null || true")
+                await asyncio.create_subprocess_shell(f"docker stop autobot-{service_name}-{env} 2>/dev/null || true")
+                await asyncio.create_subprocess_shell(f"docker rm autobot-{service_name}-{env} 2>/dev/null || true")
             except Exception:
                 logger.debug("Suppressed exception in try block", exc_info=True)
+
+    async def _cleanup_blue_environment(self) -> None:
+        """Stop the blue (original) services after traffic has moved off them.
+
+        Best-effort: at this point the new environment is already serving
+        traffic, so a failure to stop an old blue service must not fail the
+        deployment.
+        """
+        self.print_step("Stopping blue environment services", "deploy")
+
+        for service_name in self.CORE_SERVICES:
+            try:
+                await self._stop_service(service_name)
+            except Exception:
+                logger.debug("Suppressed exception in try block", exc_info=True)
+
+    async def _configure_canary_traffic(self, canary_services: Dict[str, Any], traffic_percent: int) -> bool:
+        """Route the given percentage of traffic to the canary environment."""
+        lb_config = self.deployment_config.get("load_balancer", {})
+
+        if lb_config.get("type") != "nginx":
+            # Simple port switching for development
+            self.print_step(f"Routing {traffic_percent}% traffic to canary (development mode)", "switch")
+            return True
+
+        try:
+            nginx_config = self._generate_canary_nginx_config(canary_services, traffic_percent)
+            return await self._write_nginx_config_and_reload(nginx_config, lb_config)
+        except Exception as e:
+            self.print_step(f"Error configuring canary traffic: {e}", "error")
+            return False
+
+    async def _monitor_canary_health(self, canary_services: Dict[str, Any], duration: int = 300) -> bool:
+        """Monitor canary service health for the given duration."""
+        return await self._verify_green_under_load(canary_services, monitoring_duration=duration)
+
+    async def _rollback_canary_traffic(self) -> bool:
+        """Route all traffic back to the blue (stable) environment."""
+        self.print_step("Rolling canary traffic back to blue", "switch")
+        return await self._switch_traffic_to_blue()
+
+    async def _finalize_canary_deployment(self, canary_services: Dict[str, Any]) -> bool:
+        """Promote canary to primary: full traffic switch, blue teardown, registry update."""
+        lb_config = self.deployment_config.get("load_balancer", {})
+
+        if lb_config.get("type") == "nginx":
+            try:
+                nginx_config = self._generate_nginx_config(canary_services, "canary")
+                if not await self._write_nginx_config_and_reload(nginx_config, lb_config):
+                    return False
+            except Exception as e:
+                self.print_step(f"Error finalizing canary deployment: {e}", "error")
+                return False
+
+        await self._cleanup_blue_environment()
+        await self._update_service_registry(canary_services)
+        return True
 
     async def _rolling_update_service(self, service_name: str, version: str) -> bool:
         """Perform rolling update on a single service."""
