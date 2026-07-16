@@ -59,6 +59,11 @@ const _TTS_WS_IDLE_TIMEOUT = 30_000
 let _noVoicesNotifiedAt = 0
 const _NO_VOICES_NOTIFY_COOLDOWN = 30_000
 
+// #11802: shared in-flight voice-list fetch. useApiResource aborts the prior
+// request on every new load(), so concurrent voice checks must await ONE
+// fetch instead of racing and cancelling each other.
+let _voicesFetchInFlight: Promise<void> | null = null
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type VoiceMessage = Record<string, any>
 type VoiceMessageHandler = (msg: VoiceMessage) => void
@@ -88,14 +93,29 @@ function _notifyNoVoices(): void {
  * list once if it has not been loaded yet (it is normally only populated by
  * the settings panel), so an empty list reflects a genuine zero-voices
  * deployment rather than an unfetched cache.
+ *
+ * #11802: concurrent callers share ONE in-flight fetch. Per-sentence
+ * streaming calls speak() several times at once; each check used to call
+ * fetchVoices() independently, and useApiResource's `abortPrior` default
+ * cancels the previous in-flight request — so the checks aborted each other
+ * (nginx 499), left `voices` empty, and fired the "no voices" message on a
+ * deployment whose voices were fine.
  */
 async function _hasVoicesAvailable(): Promise<boolean> {
   const { voices, fetchVoices } = useVoiceProfiles()
   if (voices.value.length === 0) {
+    if (_voicesFetchInFlight === null) {
+      _voicesFetchInFlight = fetchVoices().finally(() => {
+        _voicesFetchInFlight = null
+      })
+    }
     try {
-      await fetchVoices()
+      await _voicesFetchInFlight
     } catch (e) {
+      // An aborted/failed fetch is NOT evidence of a zero-voice deployment,
+      // so stay quiet and let the next call re-check (#11802).
       logger.warn('fetchVoices failed during TTS voice check:', e)
+      return voices.value.length > 0
     }
   }
   if (voices.value.length === 0) {
