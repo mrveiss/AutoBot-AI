@@ -16,7 +16,7 @@ Key behavior under test (issue #10151 / M1): WS auth must use the **async**
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -27,6 +27,15 @@ def _fake_ws() -> AsyncMock:
     ws = AsyncMock()
     ws.accept = AsyncMock()
     ws.close = AsyncMock()
+    # _log_ws_reject_context (#10459, added after this test) reads synchronous
+    # request properties on the reject path; on a bare AsyncMock,
+    # ``headers.get(...)`` returns a coroutine which the logger then slices
+    # (TypeError, #11798).  Provide sync stand-ins.
+    ws.headers = MagicMock()
+    ws.headers.get = MagicMock(side_effect=lambda key, default=None: default)
+    ws.url = MagicMock()
+    ws.url.path = "/ws/test"
+    ws.client = ("127.0.0.1", 12345)
     return ws
 
 

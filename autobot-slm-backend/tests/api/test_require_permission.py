@@ -195,8 +195,12 @@ class TestRolePermissionsMapping:
 
     def test_services_auth_imports_shared_permission(self):
         """Verify services/auth.py imports Permission from autobot_shared."""
+        import re
+
         auth_src = (Path(__file__).parent.parent.parent / "services" / "auth.py").read_text()
-        assert "from autobot_shared.auth.permissions import Permission" in auth_src
+        # Robust to co-imports on the same line (the exact-literal grep rotted
+        # when the import gained ROLE_PERMISSIONS / Role, #11798).
+        assert re.search(r"from autobot_shared\.auth\.permissions import .*\bPermission\b", auth_src)
 
     def test_no_require_admin_in_api_routes(self):
         """Verify no API route file directly imports require_admin."""

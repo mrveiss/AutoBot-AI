@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sys
 import types
 from datetime import datetime, timezone
@@ -107,6 +108,24 @@ del _MODELS_SNAPSHOT
 
 def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
+
+
+@contextlib.contextmanager
+def _patched_db_service(mock_db_svc):
+    """setattr/restore replacement for patch(..., create=True) (#11798).
+
+    mock.patch with create=True delattr's the attribute on exit when it was
+    an auto-created MagicMock child (not in __dict__); Mock records that
+    deletion, so every LATER ``patch("services.database.db_service")`` in the
+    sweep raises AttributeError (tests/api/test_component_resolve_job.py).
+    """
+    mod = sys.modules["services.database"]
+    prev = getattr(mod, "db_service", None)
+    mod.db_service = mock_db_svc
+    try:
+        yield
+    finally:
+        mod.db_service = prev
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +319,7 @@ def test_sync_fleet_node_skips_degraded_node() -> None:
     mock_executor = MagicMock()
     mock_db_svc = _make_db_service_for_node(degraded)
 
-    with patch("services.database.db_service", mock_db_svc, create=True):
+    with _patched_db_service(mock_db_svc):
         cont = _run(_sync_fleet_node(mock_executor, "node-vnc", job, stage, "10.0.0.1"))
 
     assert cont is True, "loop must continue after skipping a non-operational node"
@@ -326,7 +345,7 @@ def test_sync_fleet_node_skips_never_heartbeated_node() -> None:
     mock_executor = MagicMock()
     mock_db_svc = _make_db_service_for_node(never_beat)
 
-    with patch("services.database.db_service", mock_db_svc, create=True):
+    with _patched_db_service(mock_db_svc):
         cont = _run(_sync_fleet_node(mock_executor, "node-new", job, stage, ""))
 
     assert cont is True

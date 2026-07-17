@@ -39,11 +39,43 @@ for _p in [str(_SLM_BACKEND), str(_SHARED)]:
 # ---------------------------------------------------------------------------
 
 
-def _stub_modules():
-    """Install lightweight stubs for modules the SCIM module imports."""
+# ---------------------------------------------------------------------------
+# Import only the pure-Python helpers from api.scim (no FastAPI dep needed)
+# ---------------------------------------------------------------------------
+from importlib.util import module_from_spec, spec_from_file_location
+
+_scim_spec = spec_from_file_location("api.scim", _SLM_BACKEND / "api" / "scim.py")
+_scim_mod = module_from_spec(_scim_spec)
+
+
+def _load_scim_module():
+    """Load the SCIM module with PRIVATE stubs, restoring sys.modules after.
+
+    #11798: the previous ``setdefault`` + attribute-mutation bootstrap was a
+    sweep polluter twice over: setdefault left the keys installed forever
+    (skipping tests/services/test_saml_slo.py's real-enum stand-in), and
+    ``sys.modules["fastapi.responses"].JSONResponse = …`` mutated the REAL
+    fastapi.responses when the sweep had already imported FastAPI — silently
+    corrupting every later runtime JSONResponse user
+    (tests/test_api_request_counter.py's 4xx route).  All stubs are now
+    private objects force-installed for the exec and rolled back in finally.
+    """
+    _user_service_stub = MagicMock()
+    _user_service_stub.DuplicateUserError = Exception
+    _user_service_stub.UserNotFoundError = Exception
+    _user_service_stub.UserService = MagicMock()
+
+    # JSONResponse stub: store content for assertions
+    def _json_response(content=None, status_code=200):
+        r = SimpleNamespace(status_code=status_code, content=content)
+        return r
+
+    _responses_stub = MagicMock()
+    _responses_stub.JSONResponse = _json_response
+
     stubs = {
         "fastapi": MagicMock(),
-        "fastapi.responses": MagicMock(),
+        "fastapi.responses": _responses_stub,
         "sqlalchemy": MagicMock(),
         "sqlalchemy.exc": MagicMock(),
         "sqlalchemy.ext.asyncio": MagicMock(),
@@ -56,37 +88,18 @@ def _stub_modules():
         "user_management.models.sso": MagicMock(),
         "user_management.services.base_service": MagicMock(),
         "user_management.services.sso_service": MagicMock(),
-        "user_management.services.user_service": MagicMock(),
+        "user_management.services.user_service": _user_service_stub,
     }
-    for mod, stub in stubs.items():
-        sys.modules.setdefault(mod, stub)
-
-
-_stub_modules()
-
-# ---------------------------------------------------------------------------
-# Import only the pure-Python helpers from api.scim (no FastAPI dep needed)
-# ---------------------------------------------------------------------------
-from importlib.util import module_from_spec, spec_from_file_location
-
-_scim_spec = spec_from_file_location("api.scim", _SLM_BACKEND / "api" / "scim.py")
-_scim_mod = module_from_spec(_scim_spec)
-
-
-def _load_scim_module():
-    """Load the SCIM module with stubs active."""
-    # Provide concrete exceptions that the module references at import time
-    sys.modules["user_management.services.user_service"].DuplicateUserError = Exception
-    sys.modules["user_management.services.user_service"].UserNotFoundError = Exception
-    sys.modules["user_management.services.user_service"].UserService = MagicMock()
-
-    # JSONResponse stub: store content for assertions
-    def _json_response(content=None, status_code=200):
-        r = SimpleNamespace(status_code=status_code, content=content)
-        return r
-
-    sys.modules["fastapi.responses"].JSONResponse = _json_response
-    _scim_spec.loader.exec_module(_scim_mod)
+    prev = {key: sys.modules.get(key) for key in stubs}
+    sys.modules.update(stubs)
+    try:
+        _scim_spec.loader.exec_module(_scim_mod)
+    finally:
+        for key, mod in prev.items():
+            if mod is None:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = mod
     return _scim_mod
 
 
