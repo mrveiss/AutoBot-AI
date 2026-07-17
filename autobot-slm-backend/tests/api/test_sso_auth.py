@@ -46,26 +46,50 @@ def _make_mock_request(scheme: str, netloc: str, headers: dict | None = None) ->
     return request
 
 
+_SSO_AUTH_PY = Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
+
+# Keys stubbed while exec'ing api/sso_auth.py under test.  These writes used
+# to happen INSIDE test functions with no restore, permanently replacing
+# sys.modules["fastapi"] (and 6 more keys) with MagicMocks for the rest of the
+# session — every later starlette TestClient user in the whole-backend sweep
+# failed (tests/test_prometheus_registry_endpoint.py,
+# tests/test_api_request_counter.py; #11798).  All loads now go through this
+# snapshot/restore helper (same pattern as _load_sso_auth_with_real_endpoints).
+_SSO_STUB_KEYS = (
+    "fastapi",
+    "fastapi.responses",
+    "user_management.database",
+    "user_management.models.sso",
+    "user_management.schemas.sso",
+    "user_management.services.base_service",
+    "user_management.services.sso_service",
+    "services.auth",
+)
+
+
+def _load_sso_auth_with_stubs(fastapi_stub: MagicMock | None = None):
+    """Exec a fresh api/sso_auth.py under stubbed deps; restore sys.modules after."""
+    stubs = {key: MagicMock() for key in _SSO_STUB_KEYS}
+    if fastapi_stub is not None:
+        stubs["fastapi"] = fastapi_stub
+    prev = {key: sys.modules.get(key) for key in stubs}
+    sys.modules.update(stubs)
+    try:
+        spec = importlib.util.spec_from_file_location("sso_auth_cb_" + uuid.uuid4().hex[:8], _SSO_AUTH_PY)
+        sso_auth = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sso_auth)
+    finally:
+        for key, mod in prev.items():
+            if mod is None:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = mod
+    return sso_auth
+
+
 def test_build_callback_url_valid_host_localhost():
     """Test callback URL construction with valid localhost host."""
-    # Import after path setup to avoid FastAPI import
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
-    )
-    sso_auth = importlib.util.module_from_spec(spec)
-
-    # Pre-stub FastAPI dependencies
-    sys.modules["fastapi"] = MagicMock()
-    sys.modules["fastapi.responses"] = MagicMock()
-    sys.modules["user_management.database"] = MagicMock()
-    sys.modules["user_management.schemas.sso"] = MagicMock()
-    sys.modules["user_management.services.base_service"] = MagicMock()
-    sys.modules["user_management.services.sso_service"] = MagicMock()
-    sys.modules["services.auth"] = MagicMock()
-
-    spec.loader.exec_module(sso_auth)
+    sso_auth = _load_sso_auth_with_stubs()
 
     request = _make_mock_request("http", "localhost", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost"})
 
@@ -75,22 +99,7 @@ def test_build_callback_url_valid_host_localhost():
 
 def test_build_callback_url_valid_host_127_0_0_1():
     """Test callback URL construction with valid 127.0.0.1 host."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
-    )
-    sso_auth = importlib.util.module_from_spec(spec)
-
-    sys.modules["fastapi"] = MagicMock()
-    sys.modules["fastapi.responses"] = MagicMock()
-    sys.modules["user_management.database"] = MagicMock()
-    sys.modules["user_management.schemas.sso"] = MagicMock()
-    sys.modules["user_management.services.base_service"] = MagicMock()
-    sys.modules["user_management.services.sso_service"] = MagicMock()
-    sys.modules["services.auth"] = MagicMock()
-
-    spec.loader.exec_module(sso_auth)
+    sso_auth = _load_sso_auth_with_stubs()
 
     request = _make_mock_request("http", "127.0.0.1", {"x-forwarded-proto": "http", "x-forwarded-host": "127.0.0.1"})
 
@@ -100,13 +109,6 @@ def test_build_callback_url_valid_host_127_0_0_1():
 
 def test_build_callback_url_invalid_host_rejected():
     """Test callback URL rejects host not in allowlist (phishing attempt)."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
-    )
-    sso_auth = importlib.util.module_from_spec(spec)
-
     # Mock HTTPException to avoid FastAPI import
     class MockHTTPException(Exception):
         def __init__(self, status_code, detail):
@@ -118,15 +120,7 @@ def test_build_callback_url_invalid_host_rejected():
     fastapi_mock.HTTPException = MockHTTPException
     fastapi_mock.status = SimpleNamespace(HTTP_400_BAD_REQUEST=400)
 
-    sys.modules["fastapi"] = fastapi_mock
-    sys.modules["fastapi.responses"] = MagicMock()
-    sys.modules["user_management.database"] = MagicMock()
-    sys.modules["user_management.schemas.sso"] = MagicMock()
-    sys.modules["user_management.services.base_service"] = MagicMock()
-    sys.modules["user_management.services.sso_service"] = MagicMock()
-    sys.modules["services.auth"] = MagicMock()
-
-    spec.loader.exec_module(sso_auth)
+    sso_auth = _load_sso_auth_with_stubs(fastapi_stub=fastapi_mock)
 
     request = _make_mock_request(
         "https", "attacker.com", {"x-forwarded-proto": "https", "x-forwarded-host": "attacker.com"}
@@ -141,22 +135,7 @@ def test_build_callback_url_invalid_host_rejected():
 
 def test_build_callback_url_host_with_port():
     """Test callback URL construction strips port for allowlist validation."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
-    )
-    sso_auth = importlib.util.module_from_spec(spec)
-
-    sys.modules["fastapi"] = MagicMock()
-    sys.modules["fastapi.responses"] = MagicMock()
-    sys.modules["user_management.database"] = MagicMock()
-    sys.modules["user_management.schemas.sso"] = MagicMock()
-    sys.modules["user_management.services.base_service"] = MagicMock()
-    sys.modules["user_management.services.sso_service"] = MagicMock()
-    sys.modules["services.auth"] = MagicMock()
-
-    spec.loader.exec_module(sso_auth)
+    sso_auth = _load_sso_auth_with_stubs()
 
     request = _make_mock_request(
         "http", "localhost:8000", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost:8000"}
@@ -170,22 +149,7 @@ def test_build_callback_url_host_with_port():
 
 def test_build_callback_url_case_insensitive():
     """Test callback URL validation is case-insensitive."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "sso_auth", Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
-    )
-    sso_auth = importlib.util.module_from_spec(spec)
-
-    sys.modules["fastapi"] = MagicMock()
-    sys.modules["fastapi.responses"] = MagicMock()
-    sys.modules["user_management.database"] = MagicMock()
-    sys.modules["user_management.schemas.sso"] = MagicMock()
-    sys.modules["user_management.services.base_service"] = MagicMock()
-    sys.modules["user_management.services.sso_service"] = MagicMock()
-    sys.modules["services.auth"] = MagicMock()
-
-    spec.loader.exec_module(sso_auth)
+    sso_auth = _load_sso_auth_with_stubs()
 
     request = _make_mock_request("http", "LOCALHOST", {"x-forwarded-proto": "http", "x-forwarded-host": "LOCALHOST"})
 
@@ -197,9 +161,6 @@ def test_build_callback_url_case_insensitive():
 # ---------------------------------------------------------------------------
 # Helpers for rate-limit tests (Issue #9611)
 # ---------------------------------------------------------------------------
-
-_SSO_AUTH_PY = Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
-
 
 class _FakeRateLimiter:
     """Stand-in RateLimiter whose limits are never hit (allows all requests).
@@ -294,6 +255,7 @@ def _load_sso_auth_with_real_endpoints() -> object:
         "fastapi.responses": MagicMock(),
         "services.database": services_database_stub,
         "user_management.database": MagicMock(),
+        "user_management.models.sso": MagicMock(),
         "user_management.schemas.sso": MagicMock(),
         "user_management.services.base_service": MagicMock(),
         "user_management.services.sso_service": MagicMock(),

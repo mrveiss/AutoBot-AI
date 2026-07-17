@@ -31,14 +31,25 @@ sys.path.insert(0, str(_slm_root))
 # `from monitoring.prometheus_metrics import get_metrics_manager` (inside
 # _record_request) resolves without the full manager; patch it there per-test.
 # ---------------------------------------------------------------------------
-_fake_prom_metrics = types.ModuleType("monitoring.prometheus_metrics")
-_stub_get_metrics_manager = MagicMock()
-_fake_prom_metrics.get_metrics_manager = _stub_get_metrics_manager
-sys.modules["monitoring.prometheus_metrics"] = _fake_prom_metrics
-sys.modules.setdefault("monitoring", types.ModuleType("monitoring"))
+# CONVERGE on any stub another sweep file already installed for this key —
+# a second, competing module object desynchronises patch() (which resolves
+# the attribute chain from the parent package) from the middleware's lazy
+# runtime import (which reads sys.modules), and the patched manager is then
+# never called (#11798).
+_fake_prom_metrics = sys.modules.get("monitoring.prometheus_metrics")
+if _fake_prom_metrics is None:
+    _fake_prom_metrics = types.ModuleType("monitoring.prometheus_metrics")
+    _fake_prom_metrics.get_metrics_manager = MagicMock()
+    sys.modules["monitoring.prometheus_metrics"] = _fake_prom_metrics
+# The parent package must be a hollow package with the REAL __path__, never a
+# bare (pathless) ModuleType: a pathless squat shadows the real package for
+# every later sweep file that imports monitoring.claude_api_monitor (#11798).
+_monitoring_pkg = sys.modules.setdefault("monitoring", types.ModuleType("monitoring"))
+if not hasattr(_monitoring_pkg, "__path__"):
+    _monitoring_pkg.__path__ = [str(_slm_root / "monitoring")]
 # Expose as an attribute too so patch("monitoring.prometheus_metrics.…") resolves
 # (mock.patch uses getattr on the package, not sys.modules).
-sys.modules["monitoring"].prometheus_metrics = _fake_prom_metrics
+_monitoring_pkg.prometheus_metrics = _fake_prom_metrics
 
 # ---------------------------------------------------------------------------
 # Stub autobot_shared before loading the shared recorder.
