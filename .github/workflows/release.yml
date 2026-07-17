@@ -61,16 +61,33 @@ jobs:
           if [[ ! "$NEXT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "No version bump needed (git-cliff returned: '$NEXT_VERSION')"
             echo "release_needed=false" >> "$GITHUB_OUTPUT"
-          elif git rev-parse -q --verify "refs/tags/$NEXT_VERSION" >/dev/null; then
-            # --bumped-version returns the CURRENT version when there is
-            # nothing to bump - never re-tag an existing release
-            echo "Tag $NEXT_VERSION already exists - no release needed"
-            echo "release_needed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Next version: $NEXT_VERSION"
-            echo "release_needed=true" >> "$GITHUB_OUTPUT"
-            echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          # --bumped-version returns the CURRENT version (latest tag reachable
+          # from HEAD) when there is nothing to bump — that, not "a tag with
+          # this name exists somewhere", is the no-release condition. A name
+          # collision with a NON-ancestor tag must not skip the release (#11826).
+          CURRENT_TAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          if [[ "$NEXT_VERSION" == "$CURRENT_TAG" ]]; then
+            echo "Nothing to release since ${CURRENT_TAG}"
+            echo "release_needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Monotonic guard (#11826): legacy tags can sit off the main history
+          # (they pointed at squashed-away changelog commits), so git-cliff may
+          # bump from an older ancestor tag and mint a version that regresses
+          # or collides. Never release a version <= any existing tag: fall back
+          # to patch-bump of the highest existing tag instead.
+          HIGHEST_TAG="$(git tag --list 'v[0-9]*' | sort -V | tail -1)"
+          if [[ -n "$HIGHEST_TAG" ]] && \
+             [[ "$(printf '%s\n%s\n' "$NEXT_VERSION" "$HIGHEST_TAG" | sort -V | tail -1)" == "$HIGHEST_TAG" ]]; then
+            IFS=. read -r MAJ MIN PAT <<<"${HIGHEST_TAG#v}"
+            NEXT_VERSION="v${MAJ}.${MIN}.$((PAT + 1))"
+            echo "Monotonic guard: git-cliff bump not above existing ${HIGHEST_TAG}; releasing ${NEXT_VERSION}"
+          fi
+          echo "Next version: $NEXT_VERSION"
+          echo "release_needed=true" >> "$GITHUB_OUTPUT"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes (git-cliff)
         if: steps.check.outputs.release_needed == 'true'
@@ -118,7 +135,12 @@ jobs:
             git commit -m "chore(release): changelog and fragments for ${VERSION}"
             echo "has_changelog=true" >> "$GITHUB_OUTPUT"
           fi
-          git tag -a "${VERSION}" -m "Release ${VERSION}"
+          # Tag the commit that was pushed to main (GITHUB_SHA) — NOT the
+          # changelog commit made above. That commit only reaches main via a
+          # squash-merged PR (different SHA), so tagging it strands every
+          # release tag off the main history: git-cliff then bumps from a
+          # stale ancestor tag and release notes cover the wrong range (#11826).
+          git tag -a "${VERSION}" -m "Release ${VERSION}" "${GITHUB_SHA}"
           # Push the tag first and on its own. Tags are not branch-protected, so
           # this always lands and guarantees the "Create GitHub Release" step
           # below has a ref to release from (#10608). The changelog commit lands
