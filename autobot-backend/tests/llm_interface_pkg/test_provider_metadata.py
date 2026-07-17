@@ -205,7 +205,9 @@ class TestGroqProviderMetadata:
     async def test_provider_metadata_none_on_error(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("rate limited"))
+        # #11796: neutral message — a rate-limit-shaped error now RAISES
+        # after retries (rate_limit_backoff) instead of returning a response.
+        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("simulated provider failure"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())
@@ -223,10 +225,15 @@ def _make_anthropic_response(text: str, model: str = "claude-sonnet-4-6") -> Mag
     text_block = MagicMock()
     text_block.type = "text"
     text_block.text = text
+    text_block.thinking = None
     resp = MagicMock()
     resp.model = model
     resp.content = [text_block]
+    resp.stop_reason = "end_turn"
     resp.usage = MagicMock(input_tokens=8, output_tokens=12)
+    # #11796: pin explicitly — an auto-minted MagicMock here makes the
+    # provider's `thinking_tokens > 0` check raise TypeError.
+    resp.usage.output_tokens_details = None
     return resp
 
 
@@ -291,7 +298,8 @@ class TestOpenAIProviderMetadata:
     async def test_provider_metadata_none_on_error(self):
         provider = OpenAIProvider(settings={"api_key": "sk-test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("quota exceeded"))
+        # #11796: neutral message — see note in TestGroqProviderMetadata.
+        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("simulated provider failure"))
         provider._client = mock_client
 
         response = await provider.chat_completion(_basic_request())

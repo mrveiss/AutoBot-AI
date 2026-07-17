@@ -9,6 +9,7 @@ Tests autonomous subagent spawning, parallel execution, failure isolation,
 conflict resolution, and constraint validation.
 """
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest

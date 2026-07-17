@@ -51,25 +51,26 @@ import pytest
 # isinstance() failures in later test files.
 # ---------------------------------------------------------------------------
 
-# The exact set of module names that conftest.py replaced with MagicMock stubs.
-# These are the ONLY entries we need to displace and restore.
+# The exact set of stubbed module names the real causal import chain needs
+# displaced (#11796): causal_error_analyzer only imports agent_loop.think_tool
+# and agent_loop.types (types is never stubbed).  The parent ``agent_loop``
+# entry must NOT be popped — the root-conftest stub (and tests/search's
+# conftest wiring) carries a real ``__path__``, so ``agent_loop.think_tool``
+# re-imports from disk underneath it, and popping the parent forced a full
+# real ``agent_loop/__init__`` re-import that replaced the package identity
+# mid-session for every later-collected test (tests/search lost its wired
+# ``agent_loop.search`` attribute).  Same for the old ``agent_loop.loop`` /
+# ``tools.parallel*`` / ``code_intelligence`` entries — nothing in this
+# module's chain imports them.
 _CONFTEST_STUB_NAMES: tuple = (
     "orchestration.causal_error_recovery",
     "orchestration.causal_error_analyzer",
     "orchestration.causal_validator",
-    "agent_loop",
-    "agent_loop.loop",
     "agent_loop.think_tool",
-    "tools.parallel",
-    "tools.parallel.executor",
-    "code_intelligence",
 )
 
 # Save the current (stub) entries for the specific names we will displace.
 _SAVED_STUBS: dict[str, object] = {name: sys.modules[name] for name in _CONFTEST_STUB_NAMES if name in sys.modules}
-
-# Record all keys present before our real imports so we can compute the delta.
-_KEYS_BEFORE_IMPORT: frozenset = frozenset(sys.modules)
 
 # Displace only the specific stub entries we identified above.
 for _name in _SAVED_STUBS:
@@ -89,31 +90,28 @@ from services.failure_pattern_detector import (  # noqa: E402
     FailurePatternDetector,
 )
 
-# Keys added ONLY by our real imports — these are safe to remove on teardown.
-# Keys that were already in _KEYS_BEFORE_IMPORT (real orchestration modules
-# imported by earlier test files) are excluded and left untouched.
-_KEYS_OUR_IMPORTS_ADDED: frozenset = frozenset(sys.modules) - _KEYS_BEFORE_IMPORT
-
 
 @pytest.fixture(scope="module", autouse=True)
 def _restore_conftest_stubs():
-    """Restore the parent-conftest MagicMock stubs after this module's tests.
+    """Restore the displaced parent-conftest stubs after this module's tests.
 
-    Keeps the real modules loaded for the duration of this file, then puts the
-    original stub objects back so sibling type-only orchestration tests (which
-    depend on the stubbed import chain) see the state they expect.
-
-    Only removes new transitive deps added by OUR imports and re-inserts the
-    specific stub entries we displaced — never touches orchestration modules
-    that were already real before this file's module-level code ran.
+    #11796: the old teardown also popped every key our module-scope imports
+    happened to add (``_KEYS_OUR_IMPORTS_ADDED``) — but this fixture tears
+    down at RUN time, long after collection finished, and by then those keys
+    are shared by every later-collected test module (e.g. popping
+    ``security.content_firewall`` split the module identity out from under
+    tests/test_content_firewall.py, making its monkeypatch inert).  Likewise
+    re-inserting the saved ``agent_loop``/``tools.parallel``/
+    ``code_intelligence`` stubs replaced REAL packages mid-run for every
+    later test (tests/search lost ``agent_loop.search``).  Teardown now
+    restores ONLY the displaced ``orchestration.*`` stub entries, which
+    sibling type-only orchestration tests patch by name; everything else
+    stays as the run left it.
     """
     yield
-    # Remove only the transitive deps that our real imports added.
-    for _name in _KEYS_OUR_IMPORTS_ADDED:
-        sys.modules.pop(_name, None)
-    # Restore the specific stub entries we displaced at import time.
     for _name, _mod in _SAVED_STUBS.items():
-        sys.modules[_name] = _mod  # type: ignore[assignment]
+        if _name.startswith("orchestration."):
+            sys.modules[_name] = _mod  # type: ignore[assignment]
 
 
 # =============================================================================

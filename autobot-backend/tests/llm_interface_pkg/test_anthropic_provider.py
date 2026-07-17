@@ -148,9 +148,13 @@ class TestBuildApiKwargs:
 
 class TestExtractTextContent:
     def _make_block(self, block_type: str, text: str = "") -> Any:
+        # #11796: pin .thinking explicitly — a bare MagicMock auto-mints a
+        # truthy .thinking attribute, which _extract_content_pair would then
+        # try to join as reasoning text (TypeError: expected str, MagicMock).
         block = MagicMock()
         block.type = block_type
         block.text = text
+        block.thinking = None
         return block
 
     def test_text_block_extracted(self):
@@ -290,7 +294,15 @@ class TestBuildRequestKwargs:
             ]
         )
         kwargs, _, _ = provider._build_request_kwargs("m", request)
-        assert kwargs["system"] == "You are a helpful assistant."
+        # #8171/#10597: with prompt caching enabled (the default) the system
+        # message is sent as a content-block list with cache_control.
+        assert kwargs["system"] == [
+            {
+                "type": "text",
+                "text": "You are a helpful assistant.",
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
         assert all(m["role"] != "system" for m in kwargs["messages"])
 
 
@@ -301,16 +313,24 @@ class TestBuildRequestKwargs:
 
 class TestChatCompletionWithThinking:
     def _make_block(self, block_type: str, text: str = "") -> Any:
+        # #11796: pin .thinking explicitly — a bare MagicMock auto-mints a
+        # truthy .thinking attribute, which _extract_content_pair would then
+        # try to join as reasoning text (TypeError: expected str, MagicMock).
         block = MagicMock()
         block.type = block_type
         block.text = text
+        block.thinking = None
         return block
 
     def _make_sdk_response(self, content_blocks):
         resp = MagicMock()
         resp.content = content_blocks
         resp.model = "claude-sonnet-4-6"
+        resp.stop_reason = "end_turn"
         resp.usage = MagicMock(input_tokens=100, output_tokens=200)
+        # #11796: pin explicitly — an auto-minted MagicMock here makes the
+        # provider's `thinking_tokens > 0` check raise TypeError.
+        resp.usage.output_tokens_details = None
         return resp
 
     @pytest.mark.asyncio
