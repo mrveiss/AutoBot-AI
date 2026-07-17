@@ -38,9 +38,11 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import client_get, client_getdel, client_setex, get_redis_client
 from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https
 from llm_shared.provider_auth import (
-    _vault_read,
+    _vault_read_dual,
     _vault_write,
     build_token_data,
+    org_vault_subject,
+    validate_token_response,
 )
 
 logger = get_logger(__name__)
@@ -67,14 +69,34 @@ def _validate_outbound_url(url: str) -> None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
+async def _pinned_connector(url: str):
+    """Resolve *url* once, assert it is public, and return an IP-pinned connector.
+
+    Finding #2 (#11497): the outbound token/device POST connects to the
+    pre-resolved public IP so DNS cannot be rebound to a private address between
+    the allowlist check and the socket connect. Translates an SSRF failure into
+    HTTP 400. Callers must pass the returned connector to their ClientSession /
+    ``exchange_code`` so the session owns and closes it.
+    """
+    from autobot_shared.security.ssrf_guard import SSRFError, pinned_connector  # noqa: PLC0415
+
+    try:
+        return await pinned_connector(url)
+    except SSRFError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 # The registry/app-factory prepends "/api" (see feature_routers.py), so this
 # router carries only "/llm-auth" → resolves to /api/llm-auth. A "/api/llm-auth"
 # prefix here would wrongly yield /api/api/llm-auth and 404 every OAuth call
 # (matches the #9864 budget-policies fix; the frontend calls /api/llm-auth/*). #11092
 router = APIRouter(prefix="/llm-auth", tags=["llm-auth"])
 
-# System vault string — provider-level tokens are scoped to the system vault so
-# all authenticated users can use the shared provider connection.
+# System vault string — provider-level tokens live in the system vault. Within it,
+# each token's SUBJECT is keyed to the caller's org/tenant (finding #1, #11497) so
+# an admin connects once and only that org shares the connection; orgs are isolated
+# from one another. A single-tenant deployment (no org_id) keeps the legacy
+# "global" subject, so its behaviour is unchanged.
 _SYSTEM_VAULT = "system"
 
 # OAuth authorize state is single-use and short-lived — a security window, not a
@@ -188,6 +210,26 @@ def _current_user_id(user: Any) -> str:
     return str(uid)
 
 
+def _current_org_id(user: Any) -> str | None:
+    """Return the caller's org/tenant id, or None when not multi-tenant.
+
+    ``get_current_user`` yields a dict principal carrying ``org_id`` when the JWT
+    was minted with an org claim (#11497 finding #1). Objects are supported too
+    so tests/other principals work. None → the token stays on the legacy
+    ``"global"`` subject (single-tenant: byte-identical to pre-#11497 behaviour).
+    """
+    if isinstance(user, dict):
+        org = user.get("org_id")
+    else:
+        org = getattr(user, "org_id", None) or getattr(user, "organization_id", None)
+    return str(org) if org is not None else None
+
+
+def _vault_subject(user: Any) -> str:
+    """Per-org vault subject for the calling principal (finding #1, #11497)."""
+    return org_vault_subject(_current_org_id(user))
+
+
 # ---------------------------------------------------------------------------
 # OAuth authorization-code callback (server-side code exchange)
 # ---------------------------------------------------------------------------
@@ -205,7 +247,7 @@ async def oauth_initiate(
     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
     the provider authorize URL. The client never supplies the verifier — the
     callback takes it from the stored state (#11297). Requires admin: the stored
-    credential is system-wide.
+    credential is shared by the admin's org (per-org scoped, #11497).
     """
     from knowledge.connectors.oauth_flow import (  # noqa: PLC0415
         OAuthProvider,
@@ -263,7 +305,7 @@ async def oauth_callback(
     provides. This closes the CSRF / code-injection hole where a lured admin could
     bind an attacker's account as the shared system credential (#11297).
 
-    Requires admin — stored credential is system-wide (shared by all users).
+    Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
     """
     from knowledge.connectors.oauth_flow import OAuthProvider, exchange_code  # noqa: PLC0415
 
@@ -285,6 +327,7 @@ async def oauth_callback(
 
     token_url = stored["token_url"]
     _validate_outbound_url(token_url)  # defensive re-check before the outbound call
+    connector = await _pinned_connector(token_url)  # finding #2: resolve-once + IP pin
 
     provider_cfg = OAuthProvider(
         name=stored["provider_name"],
@@ -303,17 +346,25 @@ async def oauth_callback(
             req.code,
             req.redirect_uri,
             stored["verifier"],
+            connector=connector,
         )
     except RuntimeError as exc:
         # Log provider name only — never log code or token values.
         logger.warning("OAuth code exchange failed for provider %s", stored.get("provider_name"))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    # Finding #3: reject a mismatched token_type / issuer / audience before persist.
+    try:
+        validate_token_response(resp, provider_name=stored["provider_name"], client_id=stored["client_id"])
+    except Exception as exc:
+        logger.warning("OAuth token validation failed for provider %s", stored.get("provider_name"))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     token_data = build_token_data(resp, created_by=_current_user_id(user))
     await _vault_write(
         session,
         provider_name=stored["provider_name"],
-        subject="global",
+        subject=_vault_subject(user),  # finding #1: per-org scoping
         owner_vault_str=_SYSTEM_VAULT,
         token_data=token_data,
         created_by_id=_current_user_id(user),
@@ -344,17 +395,18 @@ async def device_initiate(
     ``user_code`` + ``verification_uri`` for the user to complete on another device.
     The caller polls ``/device/poll`` until approval or expiry.
 
-    Requires admin — stored credential is system-wide (shared by all users).
+    Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
     """
     import aiohttp  # noqa: PLC0415
 
     # Validate outbound URL before any HTTP call — prevents SSRF via device_authorization_url.
     _validate_outbound_url(req.device_authorization_url)
+    connector = await _pinned_connector(req.device_authorization_url)  # finding #2: resolve-once + IP pin
 
     timeout = aiohttp.ClientTimeout(total=30.0)
     payload = {"client_id": req.client_id, "scope": req.scope}
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as http:
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http:
             async with http.post(
                 req.device_authorization_url,
                 data=payload,
@@ -392,7 +444,7 @@ async def device_poll(
     Returns ``stored=False`` when the grant is still pending (caller should
     retry after the ``interval`` from ``/device/initiate``).
 
-    Requires admin — stored credential is system-wide (shared by all users).
+    Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
     """
     import aiohttp  # noqa: PLC0415
 
@@ -425,9 +477,10 @@ async def device_poll(
         "device_code": req.device_code,
         "client_id": req.client_id,
     }
+    connector = await _pinned_connector(req.token_url)  # finding #2: resolve-once + IP pin
     timeout = aiohttp.ClientTimeout(total=30.0)
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as http:
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http:
             async with http.post(
                 req.token_url,
                 data=payload,
@@ -456,11 +509,18 @@ async def device_poll(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=data.get("error_description", error))
 
+    # Finding #3: reject a mismatched token_type / issuer / audience before persist.
+    try:
+        validate_token_response(data, provider_name=req.provider_name, client_id=req.client_id)
+    except Exception as exc:
+        logger.warning("Device-code token validation failed for provider %s", req.provider_name)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     token_data = build_token_data(data, created_by=_current_user_id(user))
     await _vault_write(
         session,
         provider_name=req.provider_name,
-        subject="global",
+        subject=_vault_subject(user),  # finding #1: per-org scoping
         owner_vault_str=_SYSTEM_VAULT,
         token_data=token_data,
         created_by_id=_current_user_id(user),
@@ -483,14 +543,19 @@ async def device_poll(
 async def provider_auth_status(
     provider_name: str,
     session: AsyncSession = Depends(get_db_session),
-    _: Any = Depends(get_current_user),
+    user: Any = Depends(get_current_user),
     _admin: bool = Depends(check_admin_permission),
 ) -> ProviderAuthStatus:
-    """Return the auth connection status for a provider."""
-    token_data = await _vault_read(
+    """Return the auth connection status for a provider.
+
+    Dual-read (finding #1, #11497): reports the caller's org-scoped token when
+    present, else the legacy ``"global"`` token — so orgs that connected before
+    the change still show connected with zero reconnect.
+    """
+    token_data = await _vault_read_dual(
         session,
         provider_name=provider_name,
-        subject="global",
+        subject=_vault_subject(user),
         owner_vault_str=_SYSTEM_VAULT,
     )
     if token_data is None:
@@ -515,14 +580,18 @@ async def revoke_provider_auth(
 ) -> None:
     """Revoke stored OAuth / device-code / session tokens for a provider.
 
-    Requires admin — credential is system-wide (shared by all users).
+    Requires admin — credential is per-org scoped (shared within the admin's org, #11497).
     """
     from sqlalchemy import delete  # noqa: PLC0415
 
     from llm_shared.provider_auth import _vault_secret_name  # noqa: PLC0415
     from models.secret import Secret  # noqa: PLC0415
 
-    name = _vault_secret_name(provider_name, "global")
+    # Finding #1 (#11497): revoke the caller's org-scoped token. In a single-tenant
+    # deployment (no org_id) the subject is the legacy "global" — identical to the
+    # pre-#11497 behaviour. Deleting only the org subject keeps other orgs' shared
+    # legacy credential intact.
+    name = _vault_secret_name(provider_name, _vault_subject(user))
     await session.execute(delete(Secret).where(Secret.name == name, Secret.owner_vault == _SYSTEM_VAULT))
     await session.commit()
     logger.info("Revoked provider auth tokens for %s (user=%s)", provider_name, _current_user_id(user))

@@ -25,6 +25,7 @@ Dependencies: stdlib + aiohttp only (no autobot-* imports).
 from __future__ import annotations
 
 import socket
+from urllib.parse import urlparse
 
 import aiohttp
 import aiohttp.abc
@@ -95,6 +96,31 @@ def safe_aiohttp_resolver(host: str, safe_ip: str, port: int) -> aiohttp.abc.Abs
             return None
 
     return _PinnedResolver()
+
+
+async def pinned_connector(url: str) -> aiohttp.TCPConnector:
+    """Return an aiohttp connector pinned to *url*'s pre-resolved public IP.
+
+    Resolves the host once via :func:`resolve_safe_ip` (asserting a public
+    address), then returns a :class:`aiohttp.TCPConnector` whose resolver always
+    maps the host to that IP. Callers pass the connector to a ``ClientSession``
+    for their outbound POST/GET so the TCP connection cannot be re-resolved to a
+    private address between the safety check and the socket connect
+    (DNS-rebind TOCTOU). The original hostname is preserved for TLS SNI.
+
+    Raises
+    ------
+    SSRFError
+        If the host is missing or resolves to a non-public address.
+    """
+    parsed = urlparse(url)
+    host = parsed.hostname
+    if not host:
+        raise SSRFError("URL has no hostname")
+    safe_ip = await resolve_safe_ip(host)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    resolver = safe_aiohttp_resolver(host, safe_ip, port)
+    return aiohttp.TCPConnector(resolver=resolver, use_dns_cache=False)
 
 
 async def fetch_safe_url(
@@ -171,4 +197,4 @@ async def fetch_safe_url(
     return status, body[:max_bytes], content_type
 
 
-__all__ = ["SSRFError", "resolve_safe_ip", "safe_aiohttp_resolver", "fetch_safe_url"]
+__all__ = ["SSRFError", "resolve_safe_ip", "safe_aiohttp_resolver", "pinned_connector", "fetch_safe_url"]

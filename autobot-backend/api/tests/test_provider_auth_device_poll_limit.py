@@ -66,6 +66,9 @@ def ctx(monkeypatch, single_use_fake_redis):
     monkeypatch.setattr(mod, "get_oauth_allowed_hosts", lambda: {"token.example.com"})
     monkeypatch.setattr(mod, "_vault_write", AsyncMock(return_value=None))
     monkeypatch.setattr(mod, "build_token_data", lambda data, created_by: {"expires_at": 1.0})
+    # #11497 finding #2: the outbound POST is now IP-pinned. Stub the resolve so the
+    # test never does real DNS on the fake token host.
+    monkeypatch.setattr(mod, "_pinned_connector", AsyncMock(return_value=None))
 
     app = FastAPI()
     app.include_router(mod.router, prefix="/api")
