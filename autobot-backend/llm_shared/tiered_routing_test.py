@@ -6,19 +6,62 @@
 Unit tests for tiered model routing.
 
 Issue #748: Tiered Model Distribution Implementation.
+
+Updated for the current contracts (issue #11840):
+- conftest.py stubs the llm_shared.tiered_routing package (and tier_router),
+  so imports go through the real submodules (tier_config, complexity_scorer,
+  complexity_router) which resolve on disk via the stub's real __path__.
+- The router class is imported under its canonical post-#6595 name
+  ComplexityRouter (TieredModelRouter is the backward-compat alias living in
+  the stubbed tier_router module).
+- GH#9050 added a "trivial" tier below "simple": ultra-short queries now
+  score < trivial_threshold and route to TRIVIAL_MODEL, so fixture messages
+  are tiered accordingly (same message set as tests/llm_interface_pkg/
+  test_routing_strategies.py, #11834).
 """
 
 import pytest
 
-from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
-from llm_shared.tiered_routing import (
+from autobot_shared.ssot_config import CLASSIFICATION_MODEL, DEFAULT_LLM_MODEL, TRIVIAL_MODEL
+from llm_shared.tiered_routing.complexity_router import ComplexityRouter as TieredModelRouter
+from llm_shared.tiered_routing.complexity_scorer import TaskComplexityScorer
+from llm_shared.tiered_routing.tier_config import (
     ComplexityResult,
-    TaskComplexityScorer,
     TierConfig,
-    TieredModelRouter,
     TierMetrics,
     TierModels,
 )
+
+# Scores ~1.9 → "simple" tier (between trivial_threshold=1.0 and
+# complexity_threshold=3.0 under the current factor weights).
+SIMPLE_MSG = [
+    {
+        "role": "user",
+        "content": (
+            "Can you compare the pros and cons of using Redis as a cache "
+            "for our api? Also mention performance considerations."
+        ),
+    }
+]
+
+# Scores ~8.6 → "complex" tier (code + technical + multistep + question factors).
+COMPLEX_MSG = [
+    {
+        "role": "user",
+        "content": (
+            "Design a distributed microservice architecture with authentication, "
+            "authorization, encryption, and cache layers backed by Redis and a sql "
+            "database. First analyze the trade-offs between optimistic and "
+            "pessimistic concurrency control, then implement a Python module for "
+            "the replication algorithm:\n"
+            "```python\nimport asyncio\n\nasync def replicate_log(entries):\n    ...\n```\n"
+            "Step 1: explain how leader election works. Step 2: implement an "
+            "error-handling strategy for network partitions. Finally, explain why "
+            "the design avoids deadlock and race condition issues, and optimize "
+            "the hot path for performance and scalability."
+        ),
+    }
+]
 
 
 class TestTierConfig:
@@ -28,8 +71,10 @@ class TestTierConfig:
         """Test default configuration values."""
         config = TierConfig()
         assert config.enabled is True
+        assert config.trivial_threshold == 1.0
         assert config.complexity_threshold == 3.0
-        assert config.models.simple == "gemma2:2b"
+        assert config.models.trivial == TRIVIAL_MODEL
+        assert config.models.simple == CLASSIFICATION_MODEL
         assert config.models.complex == DEFAULT_LLM_MODEL
         assert config.fallback_to_complex is True
 
@@ -128,12 +173,19 @@ class TestTaskComplexityScorer:
         assert result.score == 0.0
         assert result.tier == "simple"
 
-    def test_simple_question(self, scorer):
-        """Test scoring a simple question."""
+    def test_trivial_question(self, scorer):
+        """Ultra-simple questions score below trivial_threshold (GH#9050)."""
         messages = [{"role": "user", "content": "What is Python?"}]
         result = scorer.score(messages)
 
-        assert result.score < 3.0
+        assert result.score < 1.0
+        assert result.tier == "trivial"
+
+    def test_simple_question(self, scorer):
+        """Test scoring a simple (but non-trivial) question."""
+        result = scorer.score(SIMPLE_MSG)
+
+        assert 1.0 <= result.score < 3.0
         assert result.tier == "simple"
 
     def test_complex_code_request(self, scorer):
@@ -218,27 +270,25 @@ class TestTieredModelRouter:
         config = TierConfig()
         return TieredModelRouter(config)
 
-    def test_route_simple_request(self, router):
-        """Test routing a simple request."""
+    def test_route_trivial_request(self, router):
+        """Ultra-simple requests route to the trivial tier (GH#9050)."""
         messages = [{"role": "user", "content": "What time is it?"}]
 
         model, result = router.route(messages)
 
-        assert model == "gemma2:2b"
+        assert model == TRIVIAL_MODEL
+        assert result.tier == "trivial"
+
+    def test_route_simple_request(self, router):
+        """Test routing a simple request."""
+        model, result = router.route(SIMPLE_MSG)
+
+        assert model == CLASSIFICATION_MODEL
         assert result.tier == "simple"
 
     def test_route_complex_request(self, router):
         """Test routing a complex request."""
-        messages = [
-            {
-                "role": "user",
-                "content": "Design a microservices architecture with "
-                "Kubernetes deployment, Redis caching, and OAuth2 "
-                "authentication using JWT tokens.",
-            }
-        ]
-
-        model, result = router.route(messages)
+        model, result = router.route(COMPLEX_MSG)
 
         assert model == DEFAULT_LLM_MODEL
         assert result.tier == "complex"
@@ -267,7 +317,8 @@ class TestTieredModelRouter:
 
     def test_get_model_for_tier(self, router):
         """Test getting model for specific tier."""
-        assert router.get_model_for_tier("simple") == "gemma2:2b"
+        assert router.get_model_for_tier("trivial") == TRIVIAL_MODEL
+        assert router.get_model_for_tier("simple") == CLASSIFICATION_MODEL
         assert router.get_model_for_tier("complex") == DEFAULT_LLM_MODEL
         assert router.get_model_for_tier("long_context") == DEFAULT_LLM_MODEL
 
@@ -301,14 +352,19 @@ class TestLongContextTier:
         return TieredModelRouter(config)
 
     def _make_long_messages(self, token_count: int) -> list:
-        """Build a message list whose total char count implies ~token_count tokens."""
-        content = "word " * (token_count * 4)
+        """Build a message list whose char count implies exactly token_count tokens.
+
+        The scorer's fallback tokenizer estimates len(content) // 4, so
+        token_count * 4 chars ≡ token_count tokens.  (The old "word " * 4n
+        builder produced 5x the intended tokens, so the below-threshold case
+        still exceeded the threshold — #11840.)
+        """
+        content = "x" * (token_count * 4)
         return [{"role": "user", "content": content}]
 
     def test_short_low_complexity_routes_to_simple(self, router):
-        """Short input with low complexity → simple tier."""
-        messages = [{"role": "user", "content": "What time is it?"}]
-        model, result = router.route(messages)
+        """Short input with low (but non-trivial) complexity → simple tier."""
+        model, result = router.route(SIMPLE_MSG)
         assert result.tier == "simple"
         assert model == "gemma2:2b"
 
