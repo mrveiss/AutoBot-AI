@@ -425,6 +425,14 @@ if "llm_shared" not in sys.modules:
         "llm_shared.providers.ollama_provider",
         _llm_root / "providers" / "ollama_provider.py",
     )
+    # #11837: providers.ollama (the canonical Ollama provider, #11517) imports
+    # `from ..streaming import StreamingManager` at module level, but the
+    # llm_shared stub's empty __path__ can't resolve streaming.py on disk, so
+    # the colocated providers/ollama_test.py errored out of every collection.
+    # streaming.py is light (stdlib + autobot_shared.logging_manager); load it
+    # first, then the provider itself.
+    _real_load_and_bind("llm_shared.streaming", _llm_root / "streaming.py")
+    _real_load_and_bind("llm_shared.providers.ollama", _llm_root / "providers" / "ollama.py")
     _real_load_and_bind("llm_shared.optimization.profiler", _llm_root / "optimization" / "profiler.py")
     # Re-export the real classes onto the top-level stub so
     # `from llm_shared import ProviderRegistry, BaseProvider` resolves to the real
