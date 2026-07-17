@@ -14,6 +14,15 @@ name: Release
 on:
   push:
     branches: [main]
+    # The workflow's own "chore(release): changelog…" commit touches ONLY these
+    # paths. Ignoring pushes limited to them stops release.yml from re-triggering
+    # on its own changelog PR merge — otherwise git-cliff patch-bumps off the
+    # release range and mints a spurious release every time (infinite loop once
+    # the changelog PR can actually merge, #11855). A real promotion always
+    # touches other files too, so it still triggers exactly one release.
+    paths-ignore:
+      - CHANGELOG.md
+      - changelog/**
 
 permissions:
   contents: write
