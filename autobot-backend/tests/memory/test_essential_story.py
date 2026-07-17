@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # #11796: snapshot sys.modules before the stub bootstrap.  The stubs below
 # leaked (e.g. a bare "knowledge._composed" stub broke the real knowledge
 # package's lazy `from knowledge import KnowledgeBase` for every test module
