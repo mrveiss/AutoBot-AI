@@ -248,7 +248,10 @@ class TestPromptManagerTruncation:
 
     def test_prompt_manager_truncate_method(self):
         """PromptManager should expose truncation method."""
-        from prompt_manager import prompt_manager
+        # #5948 (dd3bda3c9): module-level singleton replaced by lazy_singleton
+        from prompt_manager import get_prompt_manager
+
+        prompt_manager = get_prompt_manager()
 
         content = "a" * 25000
         result = prompt_manager.truncate_large_file(content, max_chars=20000)
@@ -259,7 +262,10 @@ class TestPromptManagerTruncation:
 
     def test_prompt_manager_respects_threshold(self):
         """PromptManager method should respect threshold parameter."""
-        from prompt_manager import prompt_manager
+        # #5948 (dd3bda3c9): module-level singleton replaced by lazy_singleton
+        from prompt_manager import get_prompt_manager
+
+        prompt_manager = get_prompt_manager()
 
         content = "x" * 10000
         result = prompt_manager.truncate_large_file(content, max_chars=5000)
@@ -268,7 +274,10 @@ class TestPromptManagerTruncation:
 
     def test_prompt_manager_default_threshold(self):
         """PromptManager should use 20000 as default threshold."""
-        from prompt_manager import prompt_manager
+        # #5948 (dd3bda3c9): module-level singleton replaced by lazy_singleton
+        from prompt_manager import get_prompt_manager
+
+        prompt_manager = get_prompt_manager()
 
         # Just under 20k
         small_content = "y" * 19999

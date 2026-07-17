@@ -659,12 +659,26 @@ class TestProviderConcreteness:
         import ast
         from pathlib import Path
 
-        source = (Path(__file__).resolve().parents[1] / "llm_shared" / "providers" / filename).read_text(
-            encoding="utf-8"
-        )
-        methods = {n.name for n in ast.walk(ast.parse(source)) if isinstance(n, ast.AsyncFunctionDef)}
+        providers_dir = Path(__file__).resolve().parents[1] / "llm_shared" / "providers"
+        tree = ast.parse((providers_dir / filename).read_text(encoding="utf-8"))
+        own_methods = {n.name for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef)}
+
+        # #11517 (4c0eab9f5) consolidated groq/custom_openai onto
+        # OpenAICompatibleProvider — _chat_completion_impl may now be
+        # inherited from openai_compatible.py instead of defined in-file.
+        methods = set(own_methods)
+        base_names = {
+            base.id if isinstance(base, ast.Name) else getattr(base, "attr", "")
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ClassDef)
+            for base in node.bases
+        }
+        if "_chat_completion_impl" not in methods and "OpenAICompatibleProvider" in base_names:
+            base_tree = ast.parse((providers_dir / "openai_compatible.py").read_text(encoding="utf-8"))
+            methods |= {n.name for n in ast.walk(base_tree) if isinstance(n, ast.AsyncFunctionDef)}
+
         assert "_chat_completion_impl" in methods, f"{filename}: must implement _chat_completion_impl (#11249)"
-        assert "chat_completion" not in methods, (
+        assert "chat_completion" not in own_methods, (
             f"{filename}: must not override the concrete chat_completion wrapper — "
             f"that leaves the class abstract and it fails to register (#11249)"
         )

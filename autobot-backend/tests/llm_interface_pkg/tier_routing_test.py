@@ -20,14 +20,24 @@ from llm_shared.tiered_routing.tier_config import TierConfig, TierModels
 # Short, low-complexity: ~1 token, no technical indicators
 _SHORT_SIMPLE = [{"role": "user", "content": "hi"}]
 
-# Short, high-complexity: technical multi-step content, well under 16k tokens
+# Short, high-complexity: technical multi-step content, well under 16k tokens.
+# Issue #11834: the old message only reached ~1.9/10 under the current factor
+# weights (code/technical/multistep/question dominate) — score >= 3.0 needs
+# real code fences plus dense technical/multi-step/question indicators.
 _SHORT_COMPLEX = [
     {
         "role": "user",
         "content": (
-            "Write a multi-step algorithm in Python that implements "
-            "a distributed consensus protocol with fault tolerance, "
-            "including detailed code comments and error handling. " + "x" * 2000
+            "Design a distributed microservice architecture with authentication, "
+            "authorization, encryption, and cache layers backed by Redis and a sql "
+            "database. First analyze the trade-offs between optimistic and "
+            "pessimistic concurrency control, then implement a Python module for "
+            "the replication algorithm:\n"
+            "```python\nimport asyncio\n\nasync def replicate_log(entries):\n    ...\n```\n"
+            "Step 1: explain how leader election works. Step 2: implement an "
+            "error-handling strategy for network partitions. Finally, explain why "
+            "the design avoids deadlock and race condition issues, and optimize "
+            "the hot path for performance and scalability."
         ),
     }
 ]

@@ -154,7 +154,9 @@ class TestScoreIntegration:
         scorer = _make_scorer()
         result = scorer.score(_messages("Hello"))
         assert result.score >= 0.0
-        assert result.tier in ("simple", "complex")
+        # GH#9050 (76062f245) added a "trivial" tier below "simple";
+        # a bare "Hello" now scores 0.0 → trivial (issue #11834).
+        assert result.tier in ("trivial", "simple", "complex")
         assert "output_length" in result.factors
 
     def test_large_output_hint_bumps_simple_to_complex(self):

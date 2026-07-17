@@ -59,7 +59,10 @@ _VALID_CHART_RICH_PAYLOAD = {
 
 
 def _make_canvas(user_id: str = "user-alice") -> Canvas:
-    c = Canvas.__new__(Canvas)
+    # MagicMock(spec=...) instead of Canvas.__new__: bypassing __init__ skips
+    # SQLAlchemy instrumentation (_sa_instance_state), so attribute assignment
+    # on a __new__-built instance raises. Same pattern as tests/api/test_canvas.py.
+    c = MagicMock(spec=Canvas)
     c.id = _CANVAS_ID
     c.user_id = user_id
     c.title = "Test Canvas"
@@ -76,7 +79,7 @@ def _make_cell(
     state: str = CellState.complete,
     rich_payload: dict | None = None,
 ) -> CanvasCell:
-    cell = CanvasCell.__new__(CanvasCell)
+    cell = MagicMock(spec=CanvasCell)
     cell.id = _CELL_ID
     cell.canvas_id = _CANVAS_ID
     cell.user_id = "user-alice"
@@ -205,48 +208,56 @@ class TestValidateVegaliteSpec:
 
 
 class TestAddCellRichPayload:
-    def _make_committed_cell(self, rich_payload=None) -> CanvasCell:
-        cell = _make_cell(cell_type="chart", owner="user", state=CellState.committed, rich_payload=rich_payload)
-        return cell
-
     def test_chart_cell_with_valid_rich_payload_201(self, app):
         canvas = _make_canvas()
-        created_cell = self._make_committed_cell(rich_payload=_VALID_CHART_RICH_PAYLOAD)
 
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
         async def _refresh(obj):
-            # Simulate DB returning the created cell
-            obj.__dict__.update(created_cell.__dict__)
+            # Simulate the DB populating server-default timestamps on the
+            # real CanvasCell instance the route constructs.
+            obj.created_at = _NOW
+            obj.updated_at = _NOW
 
         session.refresh = AsyncMock(side_effect=_refresh)
 
+        from auth_middleware import get_current_user
         from user_management.database import get_async_session
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        # Depends(get_current_user) captured the function at decoration time,
+        # so patching api.canvas.get_current_user is inert — override the
+        # dependency instead (same pattern as tests/api/test_canvas.py).
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={
-                        "type": "chart",
-                        "content": "",
-                        "position": 0,
-                        "rich_payload": _VALID_CHART_RICH_PAYLOAD,
-                    },
-                )
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={
+                    "type": "chart",
+                    "content": "",
+                    "position": 0,
+                    "rich_payload": _VALID_CHART_RICH_PAYLOAD,
+                },
+            )
         assert resp.status_code == 201
+        assert resp.json()["rich_payload"]["spec"]["config"]["animation"]["duration"] == 0
 
     def test_chart_cell_data_url_rejected_422(self, app):
         canvas = _make_canvas()
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
+        from auth_middleware import get_current_user
         from user_management.database import get_async_session
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
 
         bad_spec = {
             **_VALID_VEGALITE_SPEC,
@@ -254,12 +265,11 @@ class TestAddCellRichPayload:
         }
         payload = {"payloadType": "vega-lite", "specVersion": "5", "spec": bad_spec}
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
-                )
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
+            )
         assert resp.status_code == 422
         assert "data.url" in resp.json()["detail"]
 
@@ -268,43 +278,49 @@ class TestAddCellRichPayload:
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
+        from auth_middleware import get_current_user
         from user_management.database import get_async_session
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
 
         payload = {**_VALID_CHART_RICH_PAYLOAD, "executable": True}
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
-                )
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "chart", "content": "", "position": 0, "rich_payload": payload},
+            )
         assert resp.status_code == 422
         assert "executable" in resp.json()["detail"]
 
     def test_text_cell_without_rich_payload_still_works(self, app):
         canvas = _make_canvas()
-        text_cell = _make_cell(cell_type="text", owner="user", state=CellState.committed)
 
         session = _mock_session()
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=canvas)
 
         async def _refresh(obj):
-            obj.__dict__.update(text_cell.__dict__)
+            obj.created_at = _NOW
+            obj.updated_at = _NOW
 
         session.refresh = AsyncMock(side_effect=_refresh)
 
+        from auth_middleware import get_current_user
         from user_management.database import get_async_session
 
-        app.dependency_overrides = {get_async_session: lambda: session}
+        app.dependency_overrides = {
+            get_async_session: lambda: session,
+            get_current_user: lambda: _USER_A,
+        }
 
-        with patch("api.canvas.get_current_user", return_value=_USER_A):
-            with TestClient(app) as client:
-                resp = client.post(
-                    f"/api/canvas/{_CANVAS_ID}/cells",
-                    json={"type": "text", "content": "Hello", "position": 0},
-                )
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/api/canvas/{_CANVAS_ID}/cells",
+                json={"type": "text", "content": "Hello", "position": 0},
+            )
         assert resp.status_code == 201
 
 

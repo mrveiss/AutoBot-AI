@@ -70,7 +70,9 @@ class LangSmithObserver:
         pass  # langsmith client flushes automatically
 
     def _evict_overflow(self) -> None:
-        if len(self._pending) > 1000:
+        # Called before insert: >= keeps the dict capped at 1000 entries.
+        # A strict > let it settle at 1001 (off-by-one, issue #11834).
+        if len(self._pending) >= 1000:
             logger.warning(
                 "LangSmithObserver: _pending overflow (%d entries) — evicting oldest",
                 len(self._pending),

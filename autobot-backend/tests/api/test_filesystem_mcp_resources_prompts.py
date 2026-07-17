@@ -10,7 +10,45 @@ ensuring proper URI handling, validation, and template rendering.
 """
 
 import pytest
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
+
+# Header/key pair the auth gate accepts, mirroring the trusted
+# internal-service key mechanism of check_admin_permission (Issue #1145).
+_TEST_INTERNAL_KEY = "test-internal-api-key-filesystem-mcp"
+
+
+@pytest.fixture
+def client():
+    """TestClient over a minimal app mounting the real filesystem_mcp router.
+
+    Auth seam: the repo conftest stubs the auth_middleware module (the real
+    one cannot import in the test venv), and its check_admin_permission stub
+    grants everyone.  So the admin gate is exercised via dependency_overrides
+    (established pattern: tests/api/test_onboarding_auth.py) with a
+    header-sensitive gate: requests carrying the internal-service API key are
+    admin, requests without credentials get 401 — matching the real
+    check_admin_permission contract (Issue #744 / #1145).
+    """
+    import api.filesystem_mcp as fs_mcp
+
+    def _admin_gate(request: Request) -> bool:
+        if request.headers.get("X-Internal-API-Key") == _TEST_INTERNAL_KEY:
+            return True
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    app = FastAPI()
+    app.include_router(fs_mcp.router, prefix="/api/filesystem")
+    # fs_mcp.check_admin_permission is the exact object Depends() captured.
+    app.dependency_overrides[fs_mcp.check_admin_permission] = _admin_gate
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def admin_headers():
+    """Headers granting admin via the trusted internal-service API key."""
+    return {"X-Internal-API-Key": _TEST_INTERNAL_KEY}
 
 
 @pytest.fixture

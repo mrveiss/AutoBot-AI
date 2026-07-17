@@ -20,32 +20,36 @@ from services.skill_management.skill_metrics import SkillMetrics
 
 @pytest.fixture
 def mock_redis():
-    """Create a mock Redis client."""
-    return MagicMock()
+    """Create a mock Redis client (async — see commit 2d22e8580, #5946)."""
+    return AsyncMock()
 
 
 @pytest.fixture
 async def skill_metrics():
-    """Create a SkillMetrics instance with mocked Redis."""
+    """Create a SkillMetrics instance with mocked async Redis.
+
+    SkillMetrics awaits every Redis call via AsyncRedisClientMixin
+    (commit 2d22e8580, #5946) — the mock must be an AsyncMock.
+    """
     metrics = SkillMetrics()
-    metrics._redis = MagicMock()
+    metrics._redis = AsyncMock()
     return metrics
 
 
 @pytest.fixture
 async def feedback_analyzer():
-    """Create a SkillFeedbackAnalyzer instance with mocked Redis."""
+    """Create a SkillFeedbackAnalyzer instance with mocked async Redis."""
     analyzer = SkillFeedbackAnalyzer()
-    analyzer._redis = MagicMock()
+    analyzer._redis = AsyncMock()
     return analyzer
 
 
 @pytest.mark.asyncio
 async def test_log_invocation_success(skill_metrics):
     """Test logging successful skill invocation."""
-    skill_metrics._redis.incr = MagicMock()
-    skill_metrics._redis.lpush = MagicMock()
-    skill_metrics._redis.expire = MagicMock()
+    skill_metrics._redis.incr = AsyncMock()
+    skill_metrics._redis.lpush = AsyncMock()
+    skill_metrics._redis.expire = AsyncMock()
 
     await skill_metrics.log_invocation(
         skill_id="test-skill",
@@ -62,8 +66,8 @@ async def test_log_invocation_success(skill_metrics):
 @pytest.mark.asyncio
 async def test_log_invocation_with_error(skill_metrics):
     """Test logging failed skill invocation with error type."""
-    skill_metrics._redis.incr = MagicMock()
-    skill_metrics._redis.expire = MagicMock()
+    skill_metrics._redis.incr = AsyncMock()
+    skill_metrics._redis.expire = AsyncMock()
 
     await skill_metrics.log_invocation(
         skill_id="test-skill",
@@ -80,9 +84,9 @@ async def test_log_invocation_with_error(skill_metrics):
 @pytest.mark.asyncio
 async def test_log_invocation_with_feedback(skill_metrics):
     """Test logging invocation with user feedback."""
-    skill_metrics._redis.incr = MagicMock()
-    skill_metrics._redis.lpush = MagicMock()
-    skill_metrics._redis.expire = MagicMock()
+    skill_metrics._redis.incr = AsyncMock()
+    skill_metrics._redis.lpush = AsyncMock()
+    skill_metrics._redis.expire = AsyncMock()
 
     await skill_metrics.log_invocation(
         skill_id="test-skill",
@@ -99,9 +103,9 @@ async def test_log_invocation_with_feedback(skill_metrics):
 @pytest.mark.asyncio
 async def test_get_metrics_empty(skill_metrics):
     """Test getting metrics when no data exists."""
-    skill_metrics._redis.get = MagicMock(return_value=None)
-    skill_metrics._redis.keys = MagicMock(return_value=[])
-    skill_metrics._redis.lrange = MagicMock(return_value=[])
+    skill_metrics._redis.get = AsyncMock(return_value=None)
+    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     metrics = await skill_metrics.get_metrics("test-skill", days=30)
 
@@ -123,9 +127,9 @@ async def test_get_metrics_with_data(skill_metrics):
             return b"8"
         return None
 
-    skill_metrics._redis.get = MagicMock(side_effect=mock_get)
-    skill_metrics._redis.keys = MagicMock(return_value=[])
-    skill_metrics._redis.lrange = MagicMock(return_value=[])
+    skill_metrics._redis.get = AsyncMock(side_effect=mock_get)
+    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     # Get metrics for 1 day only (so 10 invocations total)
     metrics = await skill_metrics.get_metrics("test-skill", days=1)
@@ -138,7 +142,9 @@ async def test_get_metrics_with_data(skill_metrics):
 @pytest.mark.asyncio
 async def test_health_score_untested(skill_metrics):
     """Test health score for untested skill."""
-    skill_metrics._redis = None
+    # Stub _get_redis directly: leaving _redis=None would make the mixin
+    # attempt a real Redis connection (slow retry loop in test envs).
+    skill_metrics._get_redis = AsyncMock(return_value=None)
 
     health_score = await skill_metrics.get_health_score("test-skill")
 
@@ -159,9 +165,9 @@ async def test_health_score_healthy(skill_metrics):
             return b"95"
         return None
 
-    skill_metrics._redis.get = MagicMock(side_effect=mock_get)
-    skill_metrics._redis.keys = MagicMock(return_value=[])
-    skill_metrics._redis.lrange = MagicMock(return_value=[])
+    skill_metrics._redis.get = AsyncMock(side_effect=mock_get)
+    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     health_score = await skill_metrics.get_health_score("test-skill", days=1)
 
@@ -181,9 +187,9 @@ async def test_health_score_degraded(skill_metrics):
             return b"60"
         return None
 
-    skill_metrics._redis.get = MagicMock(side_effect=mock_get)
-    skill_metrics._redis.keys = MagicMock(return_value=[])
-    skill_metrics._redis.lrange = MagicMock(return_value=[])
+    skill_metrics._redis.get = AsyncMock(side_effect=mock_get)
+    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     health_score = await skill_metrics.get_health_score("test-skill", days=1)
 
@@ -194,8 +200,8 @@ async def test_health_score_degraded(skill_metrics):
 @pytest.mark.asyncio
 async def test_mark_stale(skill_metrics):
     """Test marking skill as stale."""
-    skill_metrics._redis.get = MagicMock(return_value=None)
-    skill_metrics._redis.set = MagicMock()
+    skill_metrics._redis.get = AsyncMock(return_value=None)
+    skill_metrics._redis.set = AsyncMock()
 
     await skill_metrics.mark_stale("test-skill")
 
@@ -206,7 +212,7 @@ async def test_mark_stale(skill_metrics):
 @pytest.mark.asyncio
 async def test_get_stale_skills(skill_metrics):
     """Test retrieving list of stale skills."""
-    skill_metrics._redis.keys = MagicMock(
+    skill_metrics._redis.keys = AsyncMock(
         return_value=[
             b"skill_health:old-skill-1:stale",
             b"skill_health:old-skill-2:stale",
@@ -223,8 +229,8 @@ async def test_get_stale_skills(skill_metrics):
 @pytest.mark.asyncio
 async def test_submit_user_feedback(feedback_analyzer):
     """Test submitting user feedback."""
-    feedback_analyzer._redis.lpush = MagicMock()
-    feedback_analyzer._redis.expire = MagicMock()
+    feedback_analyzer._redis.lpush = AsyncMock()
+    feedback_analyzer._redis.expire = AsyncMock()
 
     await feedback_analyzer.log_user_feedback(
         skill_id="test-skill",
@@ -239,7 +245,7 @@ async def test_submit_user_feedback(feedback_analyzer):
 @pytest.mark.asyncio
 async def test_get_feedback_summary_empty(feedback_analyzer):
     """Test getting feedback summary when no data exists."""
-    feedback_analyzer._redis.lrange = MagicMock(return_value=[])
+    feedback_analyzer._redis.lrange = AsyncMock(return_value=[])
 
     summary = await feedback_analyzer.get_feedback_summary("test-skill", days=30)
 
@@ -282,7 +288,7 @@ async def test_get_feedback_summary_with_ratings(feedback_analyzer):
     ]
 
     # Mock to always return the entries for any lrange call
-    feedback_analyzer._redis.lrange = MagicMock(return_value=feedback_entries)
+    feedback_analyzer._redis.lrange = AsyncMock(return_value=feedback_entries)
 
     summary = await feedback_analyzer.get_feedback_summary("test-skill", days=1)
 

@@ -305,7 +305,10 @@ class TestGenerate:
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_cache_hit_skips_kb(self, tmp_path):
+    async def test_cache_hit_skips_regeneration(self, tmp_path):
+        # GH#9296: the cache key embeds a fingerprint of the fetched facts, so
+        # a cache hit still fetches facts (to compute the fingerprint) but
+        # skips formatting and never rewrites the cache.
         yaml_file = tmp_path / "cw.yaml"
         yaml_file.write_text(_YAML_CONTENT, encoding="utf-8")
 
@@ -314,8 +317,18 @@ class TestGenerate:
 
         with (
             patch.object(_es_mod, "_YAML_PATH", yaml_file),
+            patch.object(gen, "_fetch_top_facts", AsyncMock(return_value=_make_facts(2))),
             patch.object(gen, "_get_cached", AsyncMock(return_value=cached_story)),
-            patch.object(gen, "_fetch_top_facts", AsyncMock(side_effect=AssertionError("KB should not be called"))),
+            patch.object(
+                gen,
+                "_format_output",
+                AsyncMock(side_effect=AssertionError("format should not be called on cache hit")),
+            ),
+            patch.object(
+                gen,
+                "_set_cached",
+                AsyncMock(side_effect=AssertionError("cache should not be rewritten on cache hit")),
+            ),
         ):
             result = await gen.generate(model_name="big-model")
 

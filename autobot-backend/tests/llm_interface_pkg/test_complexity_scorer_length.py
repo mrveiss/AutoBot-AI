@@ -64,4 +64,6 @@ def test_score_method_still_works_end_to_end():
     messages = [{"role": "user", "content": "Hello"}]
     result = scorer.score(messages)
     assert result.score >= 0
-    assert result.tier in ("simple", "complex")
+    # GH#9050 (76062f245) added a "trivial" tier below "simple";
+    # a bare "Hello" now scores 0.0 → trivial (issue #11834).
+    assert result.tier in ("trivial", "simple", "complex")

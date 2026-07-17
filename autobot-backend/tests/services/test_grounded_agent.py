@@ -26,7 +26,7 @@ This module contains 40+ tests verifying:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -499,15 +499,21 @@ async def test_grounding_with_context(grounded_agent):
 @pytest.mark.asyncio
 async def test_resolve_conflict(grounded_agent):
     """Test conflict resolution."""
-    result = await grounded_agent.resolve_conflict(
-        "conflict-001",
-        "fact-001",
-        "Correct based on data",
-    )
+    mock_redis = AsyncMock()
+    with patch(
+        "services.grounded_agent.get_async_redis_client",
+        new=AsyncMock(return_value=mock_redis),
+    ):
+        result = await grounded_agent.resolve_conflict(
+            "conflict-001",
+            "fact-001",
+            "Correct based on data",
+        )
 
     assert result["status"] == "success"
     assert result["resolved"]
     assert result["chosen_fact"] == "fact-001"
+    mock_redis.hset.assert_awaited_once()
 
 
 # ===== EDGE CASES =====

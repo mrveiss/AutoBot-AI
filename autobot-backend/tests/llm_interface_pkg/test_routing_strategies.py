@@ -7,8 +7,14 @@ Unit tests for routing strategies introduced in issue #6595.
 
 Tests ComplexityRouter, CostRouter, LatencyRouter, and the strategy registry
 without hitting Redis or real LLM providers.
+
+Updated for the current scorer contract (issue #11834): GH#9050 (76062f245)
+added a "trivial" tier below "simple", and MVA-2022 (452ffd9ae) routes
+trivial/simple scores to the complex tier when no lower-tier model is
+configured.  Fixture messages are tiered accordingly.
 """
 
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -23,16 +29,42 @@ from llm_shared.tiered_routing.long_context_router import (
 )
 from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.tiered_routing.tier_config import TierConfig, TierModels
-from llm_shared.tiered_routing.tier_router import TieredModelRouter, get_tiered_router
 
-SIMPLE_MSG = [{"role": "user", "content": "hi"}]
+# NOTE: tier_router is intentionally NOT imported at module level — conftest.py
+# stubs llm_shared.tiered_routing.tier_router with a MagicMock (services need a
+# mock get_tiered_router).  test_backward_compat_alias real-loads it with
+# snapshot/restore.
+
+# Scores 0.0 → "trivial" tier (below trivial_threshold=1.0, GH#9050).
+TRIVIAL_MSG = [{"role": "user", "content": "hi"}]
+
+# Scores ~1.9 → "simple" tier (between trivial_threshold and complexity_threshold).
+SIMPLE_MSG = [
+    {
+        "role": "user",
+        "content": (
+            "Can you compare the pros and cons of using Redis as a cache "
+            "for our api? Also mention performance considerations."
+        ),
+    }
+]
+
+# Scores ~8.6 → "complex" tier (code + technical + multistep + question factors;
+# the pre-#9050 message only reached ~1.9 under the current factor weights).
 COMPLEX_MSG = [
     {
         "role": "user",
         "content": (
-            "Write a multi-step algorithm in Python that implements "
-            "a distributed consensus protocol with fault tolerance, "
-            "including detailed code comments and error handling. " + "x" * 2000
+            "Design a distributed microservice architecture with authentication, "
+            "authorization, encryption, and cache layers backed by Redis and a sql "
+            "database. First analyze the trade-offs between optimistic and "
+            "pessimistic concurrency control, then implement a Python module for "
+            "the replication algorithm:\n"
+            "```python\nimport asyncio\n\nasync def replicate_log(entries):\n    ...\n```\n"
+            "Step 1: explain how leader election works. Step 2: implement an "
+            "error-handling strategy for network partitions. Finally, explain why "
+            "the design avoids deadlock and race condition issues, and optimize "
+            "the hot path for performance and scalability."
         ),
     }
 ]
@@ -43,7 +75,7 @@ def config():
     return TierConfig(
         enabled=True,
         complexity_threshold=3.0,
-        models=TierModels(simple="cheap-model", complex="capable-model"),
+        models=TierModels(trivial="tiny-model", simple="cheap-model", complex="capable-model"),
     )
 
 
@@ -51,6 +83,22 @@ def config():
 
 
 class TestComplexityRouter:
+    def test_trivial_message_selects_trivial_model(self, config):
+        # GH#9050: ultra-simple queries route to the trivial tier.
+        router = ComplexityRouter(config)
+        model, result = router.route(TRIVIAL_MSG)
+        assert model == "tiny-model"
+        assert result.tier == "trivial"
+
+    def test_trivial_without_trivial_model_falls_back_to_complex(self, config):
+        # MVA-2022: with no trivial model configured, sub-simple scores route
+        # to the complex tier (not simple) and the tier field is rewritten.
+        config.models.trivial = ""
+        router = ComplexityRouter(config)
+        model, result = router.route(TRIVIAL_MSG)
+        assert model == "capable-model"
+        assert result.tier == "complex"
+
     def test_simple_message_selects_simple_model(self, config):
         router = ComplexityRouter(config)
         model, result = router.route(SIMPLE_MSG)
@@ -82,9 +130,26 @@ class TestComplexityRouter:
         assert isinstance(router, RoutingStrategy)
 
     def test_backward_compat_alias(self, config):
-        assert TieredModelRouter is ComplexityRouter
-        router = get_tiered_router(config, force_new=True)
-        assert isinstance(router, ComplexityRouter)
+        # conftest.py replaces llm_shared.tiered_routing.tier_router with a
+        # MagicMock stub (services import get_tiered_router).  Real-load the
+        # module here with snapshot/restore so we verify the real alias.
+        import importlib
+
+        mod_name = "llm_shared.tiered_routing.tier_router"
+        parent = sys.modules["llm_shared.tiered_routing"]
+        stub = sys.modules.pop(mod_name, None)
+        stub_attr = getattr(parent, "tier_router", None)
+        try:
+            real_tr = importlib.import_module(mod_name)
+            assert real_tr.TieredModelRouter is ComplexityRouter
+            router = real_tr.get_tiered_router(config, force_new=True)
+            assert isinstance(router, ComplexityRouter)
+        finally:
+            sys.modules.pop(mod_name, None)
+            if stub is not None:
+                sys.modules[mod_name] = stub
+            if stub_attr is not None:
+                parent.tier_router = stub_attr
 
 
 # ─── CostRouter ──────────────────────────────────────────────────────────────
@@ -98,6 +163,17 @@ class TestCostRouter:
         ):
             router = CostRouter(config)
             model, result = router.route(SIMPLE_MSG)
+            assert model == "cheap-model"
+
+    def test_trivial_request_still_eligible_for_cheap_model(self, config):
+        # Issue #11834: GH#9050's trivial tier must not push the easiest
+        # requests to the expensive complex-only candidate set.
+        with patch(
+            "llm_shared.tiered_routing.cost_router.MODEL_PRICING_PER_1M_TOKENS",
+            {"cheap-model": {"input": 0.1, "output": 0.4}, "capable-model": {"input": 3.0, "output": 15.0}},
+        ):
+            router = CostRouter(config)
+            model, _ = router.route(TRIVIAL_MSG)
             assert model == "cheap-model"
 
     def test_complex_request_uses_complex_model_regardless_of_cost(self, config):

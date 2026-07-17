@@ -28,7 +28,10 @@ from knowledge.search_components.reranking import (
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # #11834: get_event_loop() raises "no current event loop" once earlier
+    # async tests in a whole-dir run have torn down the implicit loop;
+    # asyncio.run creates a fresh loop per call.
+    return asyncio.run(coro)
 
 
 def _fact(content: str, path: str = "p") -> dict:

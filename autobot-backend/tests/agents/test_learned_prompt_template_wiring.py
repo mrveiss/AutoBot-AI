@@ -120,7 +120,7 @@ def test_build_learned_result_empty_template_omits_key(minimal_capabilities, moc
 
 
 @pytest.mark.asyncio
-async def test_check_learned_strategy_below_threshold_returns_none(minimal_capabilities, mock_llm):
+async def test_check_learned_strategy_below_threshold_returns_none(minimal_capabilities, mock_llm, monkeypatch):
     """Strategy below LEARNED_STRATEGY_CONFIDENCE threshold → _check_learned_strategy returns None."""
     import types as _types
 
@@ -137,7 +137,11 @@ async def test_check_learned_strategy_below_threshold_returns_none(minimal_capab
     _tpl_mod = _types.ModuleType("agents.task_pattern_learner")
     _tpl_mod.TaskPatternLearner = MagicMock(return_value=fake_learner_inst)  # type: ignore[attr-defined]
     _tpl_mod.LEARNED_STRATEGY_CONFIDENCE = 0.7  # type: ignore[attr-defined]
-    sys.modules["agents.task_pattern_learner"] = _tpl_mod
+    # #11834: monkeypatch.setitem restores the entry — the bare assignment
+    # leaked an attr-incomplete stub for the rest of the run, breaking
+    # ``from agents.task_pattern_learner import MIN_OUTCOMES_TO_LEARN`` in
+    # tests/orchestration/test_self_improvement_wiring.py.
+    monkeypatch.setitem(sys.modules, "agents.task_pattern_learner", _tpl_mod)
 
     router._strategy_cache.clear()
     result = await router._check_learned_strategy("hello", {"task_type": "chat"})
@@ -146,7 +150,7 @@ async def test_check_learned_strategy_below_threshold_returns_none(minimal_capab
 
 
 @pytest.mark.asyncio
-async def test_check_learned_strategy_above_threshold_has_template(minimal_capabilities, mock_llm):
+async def test_check_learned_strategy_above_threshold_has_template(minimal_capabilities, mock_llm, monkeypatch):
     """Strategy above threshold with template → result includes learned_prompt_template."""
     import types as _types
 
@@ -160,7 +164,11 @@ async def test_check_learned_strategy_above_threshold_has_template(minimal_capab
     _tpl_mod = _types.ModuleType("agents.task_pattern_learner")
     _tpl_mod.TaskPatternLearner = MagicMock(return_value=fake_learner_inst)  # type: ignore[attr-defined]
     _tpl_mod.LEARNED_STRATEGY_CONFIDENCE = 0.7  # type: ignore[attr-defined]
-    sys.modules["agents.task_pattern_learner"] = _tpl_mod
+    # #11834: monkeypatch.setitem restores the entry — the bare assignment
+    # leaked an attr-incomplete stub for the rest of the run, breaking
+    # ``from agents.task_pattern_learner import MIN_OUTCOMES_TO_LEARN`` in
+    # tests/orchestration/test_self_improvement_wiring.py.
+    monkeypatch.setitem(sys.modules, "agents.task_pattern_learner", _tpl_mod)
 
     router._strategy_cache.clear()
     result = await router._check_learned_strategy("hello", {"task_type": "chat"})

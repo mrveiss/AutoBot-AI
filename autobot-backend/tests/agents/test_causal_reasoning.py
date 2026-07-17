@@ -18,12 +18,37 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent_loop.think_tool import ThinkTool
-from agent_loop.types import ThinkCategory, ThinkResult
-from orchestration.causal_error_analyzer import (
+# ---------------------------------------------------------------------------
+# Real-module loading (#11834, same contract as
+# tests/orchestration/test_causal_error_recovery.py): the parent conftest stubs
+# ``orchestration.causal_error_analyzer`` (#7431) as a MagicMock package, so the
+# TestCausalErrorAnalyzer suite below was exercising a mock (``CausalErrorAnalyzer()``
+# returned MagicMocks).  Displace exactly that stub, import the real module, and
+# restore the displaced stub after this module's tests so sibling type-only tests
+# that patch it by name are unaffected.  Its import chain only needs
+# agent_loop.think_tool / agent_loop.types, which the conftest already real-loads.
+# ---------------------------------------------------------------------------
+_CONFTEST_STUB_NAMES: tuple = ("orchestration.causal_error_analyzer",)
+_SAVED_STUBS: dict[str, object] = {name: sys.modules[name] for name in _CONFTEST_STUB_NAMES if name in sys.modules}
+for _name in _SAVED_STUBS:
+    sys.modules.pop(_name, None)
+
+from agent_loop.think_tool import ThinkTool  # noqa: E402
+from agent_loop.types import ThinkCategory, ThinkResult  # noqa: E402
+from orchestration.causal_error_analyzer import (  # noqa: E402
     CausalErrorAnalysis,
     CausalErrorAnalyzer,
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_conftest_stubs():
+    """Restore the displaced parent-conftest stub after this module's tests."""
+    yield
+    for _sname, _smod in _SAVED_STUBS.items():
+        sys.modules[_sname] = _smod  # type: ignore[assignment]
+
+
 from reasoning.causal_reasoning import (
     CausalChain,
     CausalReasoningContext,
@@ -89,9 +114,14 @@ The database became the bottleneck.
     @pytest.mark.asyncio
     async def test_causal_analysis_prompt_includes_mechanism(self):
         """Verify causal analysis prompt emphasizes WHY not just WHAT."""
-        from agent_loop.think_tool import THINK_PROMPTS
+        # #11834: resolve the enum through the SAME module that built the dict.
+        # In whole-dir order agent_loop.think_tool can be re-loaded after this
+        # module was collected (real-load displacements elsewhere), splitting
+        # the ThinkCategory identity: the module-level import here then keys a
+        # dict built with a different enum class → KeyError.
+        import agent_loop.think_tool as think_tool_mod
 
-        prompt = THINK_PROMPTS[ThinkCategory.CAUSAL_ANALYSIS]
+        prompt = think_tool_mod.THINK_PROMPTS[think_tool_mod.ThinkCategory.CAUSAL_ANALYSIS]
 
         # Check that prompt emphasizes causal reasoning
         assert "CAUSES" in prompt or "causal" in prompt.lower()
@@ -278,45 +308,57 @@ class TestCausalReasoningIntegration:
         are stubbed inline here (using sys.modules.setdefault so any already-
         imported real modules are kept) to avoid xfail — see issue #4749.
         """
-        # Stub only the modules that are not importable in the test environment.
-        # setdefault preserves any real module already registered by conftest.
-        _make_module_stub(
-            "intelligence.streaming_executor",
-            ChunkType=MagicMock(),
-            StreamChunk=MagicMock,
-            StreamingCommandExecutor=MagicMock,
-        )
-        _make_module_stub("intelligence.goal_processor", GoalProcessor=MagicMock, ProcessedGoal=MagicMock)
-        _make_module_stub(
-            "intelligence.os_detector", OSDetector=MagicMock, OSInfo=MagicMock, get_os_detector=AsyncMock()
-        )
-        _make_module_stub("intelligence.tool_selector", OSAwareToolSelector=MagicMock)
-        _make_module_stub("knowledge_base", KnowledgeBase=MagicMock)
-        _make_module_stub("llm_interface", LLMInterface=MagicMock)
-        _make_module_stub("worker_node", WorkerNode=MagicMock)
+        # #11834: snapshot sys.modules — the stubs below (setdefault) used to
+        # PERSIST for the whole run whenever the real module had not been
+        # imported yet.  The attr-incomplete ``intelligence.os_detector`` stub
+        # (no LinuxDistro/OSType) then broke later whole-dir imports of
+        # agents.machine_aware_system_knowledge_manager in
+        # tests/test_startup_imports.py.  Restore by popping only the keys this
+        # test ADDED, so real modules loaded earlier are left untouched.
+        _keys_before = set(sys.modules)
+        try:
+            # Stub only the modules that are not importable in the test environment.
+            # setdefault preserves any real module already registered by conftest.
+            _make_module_stub(
+                "intelligence.streaming_executor",
+                ChunkType=MagicMock(),
+                StreamChunk=MagicMock,
+                StreamingCommandExecutor=MagicMock,
+            )
+            _make_module_stub("intelligence.goal_processor", GoalProcessor=MagicMock, ProcessedGoal=MagicMock)
+            _make_module_stub(
+                "intelligence.os_detector", OSDetector=MagicMock, OSInfo=MagicMock, get_os_detector=AsyncMock()
+            )
+            _make_module_stub("intelligence.tool_selector", OSAwareToolSelector=MagicMock)
+            _make_module_stub("knowledge_base", KnowledgeBase=MagicMock)
+            _make_module_stub("llm_interface", LLMInterface=MagicMock)
+            _make_module_stub("worker_node", WorkerNode=MagicMock)
 
-        from intelligence.intelligent_agent import IntelligentAgent
+            from intelligence.intelligent_agent import IntelligentAgent
 
-        agent = IntelligentAgent(MagicMock(), MagicMock(), MagicMock(), MagicMock())
+            agent = IntelligentAgent(MagicMock(), MagicMock(), MagicMock(), MagicMock())
 
-        # Provide a minimal os_info stub so _build_llm_system_prompt can render
-        # without a real initialized agent.
-        _os_info = MagicMock()
-        _os_info.os_type.value = "linux"
-        _os_info.distro = None
-        _os_info.version = "22.04"
-        _os_info.architecture = "x86_64"
-        _os_info.user = "test"
-        _os_info.is_root = False
-        _os_info.package_manager = "apt"
-        _os_info.capabilities = []
-        agent.state.os_info = _os_info
+            # Provide a minimal os_info stub so _build_llm_system_prompt can render
+            # without a real initialized agent.
+            _os_info = MagicMock()
+            _os_info.os_type.value = "linux"
+            _os_info.distro = None
+            _os_info.version = "22.04"
+            _os_info.architecture = "x86_64"
+            _os_info.user = "test"
+            _os_info.is_root = False
+            _os_info.package_manager = "apt"
+            _os_info.capabilities = []
+            agent.state.os_info = _os_info
 
-        prompt = agent._build_llm_system_prompt("diagnose slow query")
+            prompt = agent._build_llm_system_prompt("diagnose slow query")
 
-        # Verify CAUSAL_REASONING_SNIPPET is embedded in the system prompt
-        assert "causal" in prompt.lower(), "Expected causal reasoning snippet in system prompt"
-        assert "mechanism" in prompt.lower() or "BECAUSE" in prompt or "cause" in prompt.lower()
+            # Verify CAUSAL_REASONING_SNIPPET is embedded in the system prompt
+            assert "causal" in prompt.lower(), "Expected causal reasoning snippet in system prompt"
+            assert "mechanism" in prompt.lower() or "BECAUSE" in prompt or "cause" in prompt.lower()
+        finally:
+            for _added in set(sys.modules) - _keys_before:
+                sys.modules.pop(_added, None)
 
 
 # =============================================================================
