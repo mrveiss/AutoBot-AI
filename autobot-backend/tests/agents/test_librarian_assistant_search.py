@@ -13,6 +13,7 @@ Verifies:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 import types
@@ -27,6 +28,16 @@ import pytest
 # ---------------------------------------------------------------------------
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _AGENTS_DIR = _BACKEND_DIR / "agents"
+
+# #11796: snapshot sys.modules before the stub-heavy bootstrap below.  The
+# _make_stub() helper unconditionally assigns into sys.modules (the
+# setdefault(default=...) is evaluated eagerly), replacing the REAL
+# ``services``/``utils`` packages with __path__ = [] stubs for every test
+# module collected after this one in a whole-dir run.  Everything is rolled
+# back right after the module under test is loaded; tests only use the
+# references extracted at load time (_mod, _fake_config) plus per-test
+# patch()/patch.dict overrides.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
 
 # Plant a minimal 'agents' package so relative imports in the module work.
 if "agents" not in sys.modules:
@@ -137,6 +148,23 @@ _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
 
 LibrarianAssistant = _mod.LibrarianAssistant
 
+# #11796: capture the (stub or real) agent_loop.search modules planted above —
+# _patch_registry() re-inserts them per-test via patch.dict so search_web's
+# lazy import resolves deterministically even after the restore below.
+_AL_SEARCH_MODULES = {
+    "agent_loop.search": sys.modules["agent_loop.search"],
+    "agent_loop.search.registry": sys.modules["agent_loop.search.registry"],
+}
+
+# #11796: restore the pre-bootstrap sys.modules state (see snapshot above) so
+# none of the stubs leak into later-collected test modules.
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -176,13 +204,23 @@ def _sr(n: int) -> MagicMock:
 
 
 def _patch_registry(mock_registry: MagicMock):
-    """Patch get_search_registry in the module currently in sys.modules.
+    """Patch get_search_registry for the duration of one test.
 
-    Uses patch.object on the live module entry so the patch always targets the
-    right module, regardless of which conftest loaded it first.
+    #11796: the module-scope bootstrap no longer leaves its stubs in
+    sys.modules, so re-insert the captured agent_loop.search modules via
+    patch.dict and patch get_search_registry on that same module object —
+    search_web's lazy import then resolves to exactly the patched module.
     """
-    reg_mod = sys.modules["agent_loop.search.registry"]
-    return patch.object(reg_mod, "get_search_registry", return_value=mock_registry)
+    stack = contextlib.ExitStack()
+    stack.enter_context(patch.dict(sys.modules, _AL_SEARCH_MODULES))
+    stack.enter_context(
+        patch.object(
+            _AL_SEARCH_MODULES["agent_loop.search.registry"],
+            "get_search_registry",
+            return_value=mock_registry,
+        )
+    )
+    return stack
 
 
 @pytest.mark.asyncio

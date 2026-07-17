@@ -32,6 +32,16 @@ import pytest
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _AGENTS_DIR = _BACKEND_DIR / "agents"
 
+# #11796: snapshot sys.modules before the stub-heavy bootstrap below.  The
+# _make_stub() helper unconditionally assigns into sys.modules (the
+# setdefault(default=...) is evaluated eagerly), replacing the REAL
+# ``services``/``utils`` packages with __path__ = [] stubs for every test
+# module collected after this one in a whole-dir run.  Everything is rolled
+# back right after the module under test is loaded; tests only use the
+# references extracted at load time (_mod, _fake_config) plus per-test
+# patch.dict overrides.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
 # Plant a minimal 'agents' package so relative imports in the module work.
 if "agents" not in sys.modules:
     _agents_pkg = types.ModuleType("agents")
@@ -134,6 +144,15 @@ _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
 
 LibrarianAssistant = _mod.LibrarianAssistant
 _source_for_url = _mod._source_for_url
+
+# #11796: restore the pre-bootstrap sys.modules state (see snapshot above) so
+# none of the stubs leak into later-collected test modules.
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
 
 
 # ---------------------------------------------------------------------------
