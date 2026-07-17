@@ -81,10 +81,24 @@ async def async_db_session():
     )
 
     async with engine.begin() as conn:
-        # Import and run migrations
+        # #11834: scope create_all to the heartbeat tables under test —
+        # whole-metadata create_all breaks under whole-dir order when earlier
+        # tests import llc models whose Postgres '::jsonb' server_defaults
+        # sqlite rejects.
+        from models.heartbeat import HeartbeatRun, HeartbeatRunEvent
         from user_management.models.base import Base
 
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(
+            lambda sync_conn: Base.metadata.create_all(
+                sync_conn,
+                tables=[
+                    AgentRuntimeState.__table__,
+                    HeartbeatRun.__table__,
+                    HeartbeatRunEvent.__table__,
+                    AgentWakeupRequest.__table__,
+                ],
+            )
+        )
 
     factory = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
         engine, class_=AsyncSession, expire_on_commit=False
