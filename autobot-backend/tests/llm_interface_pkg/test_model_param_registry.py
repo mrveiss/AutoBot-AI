@@ -50,7 +50,6 @@ if "xxhash" not in sys.modules:
 # commit 0af9875cd / #6941), so tests must patch the config attribute, not
 # os.environ (issue #11834).
 from autobot_shared.ssot_config import config as ssot_config  # noqa: E402
-
 from llm_shared.model_param_registry import (  # noqa: E402
     _FALLBACK_KWARGS,
     ArchitectureFamily,
