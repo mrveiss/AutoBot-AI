@@ -29836,7 +29836,7 @@ export interface paths {
          *     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
          *     the provider authorize URL. The client never supplies the verifier — the
          *     callback takes it from the stored state (#11297). Requires admin: the stored
-         *     credential is system-wide.
+         *     credential is shared by the admin's org (per-org scoped, #11497).
          */
         post: operations["oauth_initiate_api_llm_auth_oauth_initiate_post"];
         delete?: never;
@@ -29864,7 +29864,7 @@ export interface paths {
          *     provides. This closes the CSRF / code-injection hole where a lured admin could
          *     bind an attacker's account as the shared system credential (#11297).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
         delete?: never;
@@ -29890,7 +29890,7 @@ export interface paths {
          *     ``user_code`` + ``verification_uri`` for the user to complete on another device.
          *     The caller polls ``/device/poll`` until approval or expiry.
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_initiate_api_llm_auth_device_initiate_post"];
         delete?: never;
@@ -29915,7 +29915,7 @@ export interface paths {
          *     Returns ``stored=False`` when the grant is still pending (caller should
          *     retry after the ``interval`` from ``/device/initiate``).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_poll_api_llm_auth_device_poll_post"];
         delete?: never;
@@ -29934,6 +29934,10 @@ export interface paths {
         /**
          * Provider Auth Status
          * @description Return the auth connection status for a provider.
+         *
+         *     Dual-read (finding #1, #11497): reports the caller's org-scoped token when
+         *     present, else the legacy ``"global"`` token — so orgs that connected before
+         *     the change still show connected with zero reconnect.
          */
         get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
         put?: never;
@@ -29958,7 +29962,7 @@ export interface paths {
          * Revoke Provider Auth
          * @description Revoke stored OAuth / device-code / session tokens for a provider.
          *
-         *     Requires admin — credential is system-wide (shared by all users).
+         *     Requires admin — credential is per-org scoped (shared within the admin's org, #11497).
          */
         delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
         options?: never;
