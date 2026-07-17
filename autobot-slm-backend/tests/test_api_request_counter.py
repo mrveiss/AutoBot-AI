@@ -52,10 +52,17 @@ if not hasattr(_monitoring_pkg, "__path__"):
 _monitoring_pkg.prometheus_metrics = _fake_prom_metrics
 
 # ---------------------------------------------------------------------------
-# Stub autobot_shared before loading the shared recorder.
+# autobot_shared before loading the shared recorder — prefer the REAL package
+# (#11798: a bare pathless ModuleType squat broke every later
+# ``autobot_shared.<submodule>`` import in subset runs; the real package is
+# importable from the repo root).
 # ---------------------------------------------------------------------------
-_shared = types.ModuleType("autobot_shared")
-sys.modules.setdefault("autobot_shared", _shared)
+if str(_slm_root.parent) not in sys.path:
+    sys.path.insert(0, str(_slm_root.parent))
+try:
+    import autobot_shared  # noqa: F401  (real package keeps submodule imports working)
+except ImportError:
+    sys.modules.setdefault("autobot_shared", types.ModuleType("autobot_shared"))
 for _name in [
     "autobot_shared.monitoring",
     "autobot_shared.monitoring.metrics",

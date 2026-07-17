@@ -77,6 +77,20 @@ def _cache_key(token: str) -> str:
     return f"{_CACHE_KEY_PREFIX}{digest[:40]}"
 
 
+async def _redis_or_none():
+    """Return the async Redis client, or None when it cannot be obtained.
+
+    #11798: ``get_async_redis_client()`` itself can raise (e.g. the shared
+    connection manager's circuit-breaker path) — a cache-layer failure must
+    degrade to a cache miss, never break token verification/logout.
+    """
+    try:
+        return await get_async_redis_client()
+    except Exception as exc:
+        logger.warning("oidc_token_cache: redis client unavailable: %s", exc)
+        return None
+
+
 async def get_cached_claims(token: str) -> Optional[Dict[str, Any]]:
     """Return cached normalized claims for *token*, or None on cache miss/error.
 
@@ -88,7 +102,7 @@ async def get_cached_claims(token: str) -> Optional[Dict[str, Any]]:
     """
     if OIDC_TOKEN_CACHE_TTL == 0:
         return None
-    redis = await get_async_redis_client()
+    redis = await _redis_or_none()
     if redis is None:
         return None
     try:
@@ -112,7 +126,7 @@ async def cache_claims(token: str, claims: Dict[str, Any]) -> None:
     """
     if OIDC_TOKEN_CACHE_TTL == 0:
         return
-    redis = await get_async_redis_client()
+    redis = await _redis_or_none()
     if redis is None:
         return
     try:
@@ -130,7 +144,7 @@ async def invalidate_token_cache(token: str) -> None:
 
     Called by the A2 logout path (coordinate with jti-denylist).
     """
-    redis = await get_async_redis_client()
+    redis = await _redis_or_none()
     if redis is None:
         logger.warning("oidc_token_cache: invalidate skipped — Redis unavailable")
         return

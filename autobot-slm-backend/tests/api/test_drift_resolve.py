@@ -125,6 +125,7 @@ def _pin_private_code_sync():
             else:
                 setattr(_pkg, _child, _prev_attr)
 
+
 # Stub user — endpoint only checks authentication via Depends(get_current_user)
 _FAKE_USER = {"username": "tester", "is_admin": True}
 
@@ -164,7 +165,6 @@ def _noop_post_sync():
         "api.code_sync._run_post_sync_steps",
         side_effect=lambda comp, src, dep: (False, [], True),
     )
-
 
 
 def test_invalid_component_raises_400(stub_user):
@@ -461,7 +461,6 @@ def test_shared_lib_post_steps():
     assert len(symlink_calls) == 2, "both backends' symlinks must be restored"
     restart_dep.assert_awaited_once()
     assert not any("pip:" in s or "npm" in s for s in steps)
-
 
 
 def test_autobot_shared_is_syncable_and_restarts_dependents():

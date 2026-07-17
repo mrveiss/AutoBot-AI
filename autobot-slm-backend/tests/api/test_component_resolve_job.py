@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sys
 import types
 from pathlib import Path
@@ -370,6 +371,25 @@ def _make_reconcile_db_mock(rows):
     return db_service_mock
 
 
+@contextlib.contextmanager
+def _patched_db_service(db_service_mock):
+    """setattr/restore on the sys.modules entry (#11798).
+
+    ``patch("services.database.db_service")`` resolves the target via getattr
+    on the PARENT ``services`` module — which in a whole-backend sweep can be
+    a hollow package without a ``database`` attribute — while the code under
+    test resolves ``from services.database import db_service`` through
+    sys.modules (#9780 divergence).  Patch the sys.modules entry directly.
+    """
+    mod = sys.modules["services.database"]
+    prev = getattr(mod, "db_service", None)
+    mod.db_service = db_service_mock
+    try:
+        yield
+    finally:
+        mod.db_service = prev
+
+
 def test_reconcile_requeues_first_interruption() -> None:
     """A job interrupted by a racing restart is re-queued, not failed (#11437)."""
     import api.code_sync as code_sync_mod
@@ -380,7 +400,7 @@ def test_reconcile_requeues_first_interruption() -> None:
     row.job_id = "job-1"
     row.component = "autobot-backend"
 
-    with patch("services.database.db_service", _make_reconcile_db_mock([row])):
+    with _patched_db_service(_make_reconcile_db_mock([row])):
         count, requeued = _run(code_sync_mod.reconcile_stale_component_sync_jobs())
 
     assert count == 1
@@ -399,7 +419,7 @@ def test_reconcile_fails_second_interruption() -> None:
     row.job_id = "job-2"
     row.component = "autobot-backend"
 
-    with patch("services.database.db_service", _make_reconcile_db_mock([row])):
+    with _patched_db_service(_make_reconcile_db_mock([row])):
         count, requeued = _run(code_sync_mod.reconcile_stale_component_sync_jobs())
 
     assert count == 1

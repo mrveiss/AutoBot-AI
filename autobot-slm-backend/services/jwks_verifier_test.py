@@ -75,7 +75,10 @@ for _name in [
         _mod.__spec__ = None
         sys.modules[_name] = _mod
 
-# Stub config before jwks_verifier imports it
+# config stub — jwks_verifier defers ``from config import settings`` to CALL
+# time, so the stub must be pinned into sys.modules per-test (autouse fixture
+# below), not just at import: other sweep files (tests/services/
+# test_token_denylist.py) overwrite the "config" key at module scope (#11798).
 _config_stub = _types.ModuleType("config")
 _settings_stub = MagicMock()
 _settings_stub.authority_base_url = (
@@ -87,13 +90,43 @@ _settings_stub.jwks_fetch_timeout_seconds = 10.0
 _settings_stub.secret_key = "test-hs256-secret-for-unit-tests-only-32ch"
 _settings_stub.algorithm = "HS256"
 _config_stub.settings = _settings_stub
-sys.modules["config"] = _config_stub
 
 # ---------------------------------------------------------------------------
-# Now import the modules under test
-# ---------------------------------------------------------------------------
+# Now import the modules under test.
+# #11798: jwks_verifier must be spec-loaded from its file — in a whole-backend
+# sweep ``from services import jwks_verifier`` resolves through the root
+# conftest's MagicMock "services" parent, whose auto-created attribute
+# silently replaces the real module and every ``await`` in the tests dies on
+# a MagicMock.  All tests use the module object directly (patch.object), so
+# no sys.modules registration is needed.
 from autobot_shared.auth.jwt_core import JWTDecodeError, encode_jwt  # noqa: E402
-from services import jwks_verifier  # noqa: E402
+
+import importlib.util as _ilu  # noqa: E402
+
+_jwks_spec = _ilu.spec_from_file_location("_jwks_verifier_under_test", _SLM_ROOT / "services" / "jwks_verifier.py")
+jwks_verifier = _ilu.module_from_spec(_jwks_spec)  # type: ignore[arg-type]
+_jwks_spec.loader.exec_module(jwks_verifier)  # type: ignore[union-attr]
+
+
+# services.oidc_token_cache stub — verify_authority_token defers
+# ``from services.oidc_token_cache import cache_claims, get_cached_claims`` to
+# call time; the real module talks to Redis (a unit test must not, and in a
+# whole-backend sweep the shared connection manager may be poisoned by earlier
+# files' config stubs).  Always miss; store is a no-op.
+_oidc_cache_stub = _types.ModuleType("services.oidc_token_cache")
+_oidc_cache_stub.get_cached_claims = AsyncMock(return_value=None)
+_oidc_cache_stub.cache_claims = AsyncMock(return_value=None)
+
+
+@pytest.fixture(autouse=True)
+def _pin_deferred_import_stubs():
+    """Pin stubs for the deferred (call-time) imports of the module under test."""
+    with patch.dict(
+        sys.modules,
+        {"config": _config_stub, "services.oidc_token_cache": _oidc_cache_stub},
+    ):
+        yield
+
 
 # ---------------------------------------------------------------------------
 # RSA keypair fixtures
