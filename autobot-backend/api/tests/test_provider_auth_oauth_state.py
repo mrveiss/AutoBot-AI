@@ -57,6 +57,9 @@ def ctx(monkeypatch):
     # Persist step is exercised elsewhere; isolate the state/PKCE/admin logic.
     monkeypatch.setattr(mod, "_vault_write", AsyncMock(return_value=None))
     monkeypatch.setattr(mod, "build_token_data", lambda resp, created_by: {"expires_at": 111.0})
+    # #11497 finding #2: the outbound POST is now IP-pinned. Stub the resolve so the
+    # test never does real DNS on the fake token host.
+    monkeypatch.setattr(mod, "_pinned_connector", AsyncMock(return_value=None))
 
     app = FastAPI()
     app.include_router(mod.router, prefix="/api")
@@ -119,7 +122,7 @@ def test_callback_happy_path_uses_stored_verifier(ctx, monkeypatch):
     tc, fake_redis, _ = ctx
     captured = {}
 
-    async def fake_exchange(provider, client_id, client_secret, code, redirect_uri, code_verifier):
+    async def fake_exchange(provider, client_id, client_secret, code, redirect_uri, code_verifier, connector=None):
         captured.update(client_id=client_id, client_secret=client_secret, code=code, verifier=code_verifier)
         return {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}
 
@@ -156,6 +159,45 @@ def test_callback_replayed_state_400(ctx, monkeypatch):
     # Replay the same (now-consumed) state → rejected.
     replay = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
     assert replay.status_code == 400
+
+
+def test_callback_persists_under_org_subject(ctx, monkeypatch):
+    """#11497 finding #1: an org-carrying admin persists the token under org:<id>."""
+    tc, fake_redis, app = ctx
+    write = AsyncMock(return_value=None)
+    monkeypatch.setattr(mod, "_vault_write", write)
+
+    async def fake_exchange(*a, connector=None, **k):
+        return {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}
+
+    monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
+    # Principal carrying an org claim. get_current_user yields a dict; the admin
+    # binding compares _current_user_id(user), which for a dict is the zero-UUID,
+    # so the prestored state's admin_id must match that.
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1", "org_id": "acme-42"}
+    state = _prestore_state(fake_redis, admin_id="00000000-0000-0000-0000-000000000000")
+
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    assert resp.status_code == 200, resp.text
+    assert write.await_args.kwargs["subject"] == "org:acme-42"
+
+
+def test_callback_no_org_uses_legacy_global_subject(ctx, monkeypatch):
+    """Single-tenant (no org_id) keeps the legacy global subject — byte-identical."""
+    tc, fake_redis, app = ctx
+    write = AsyncMock(return_value=None)
+    monkeypatch.setattr(mod, "_vault_write", write)
+
+    async def fake_exchange(*a, connector=None, **k):
+        return {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}
+
+    monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1"}  # no org_id
+    state = _prestore_state(fake_redis, admin_id="00000000-0000-0000-0000-000000000000")
+
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    assert resp.status_code == 200, resp.text
+    assert write.await_args.kwargs["subject"] == "global"
 
 
 def test_callback_admin_mismatch_403(ctx):

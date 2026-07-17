@@ -25,6 +25,7 @@ import pytest
 from autobot_shared.security.ssrf_guard import (
     SSRFError,
     fetch_safe_url,
+    pinned_connector,
     resolve_safe_ip,
     safe_aiohttp_resolver,
 )
@@ -144,6 +145,39 @@ async def test_safe_aiohttp_resolver_ignores_dns_on_resolve() -> None:
 async def test_safe_aiohttp_resolver_close_is_noop() -> None:
     resolver = safe_aiohttp_resolver("example.com", "1.2.3.4", 80)
     await resolver.close()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# pinned_connector — resolve-once + IP pin for a caller-owned ClientSession (#11497)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pinned_connector_pins_resolved_public_ip() -> None:
+    fake_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        connector = await pinned_connector("https://token.example.com/token")
+    try:
+        results = await connector._resolver.resolve("token.example.com", 443)
+        assert results[0]["host"] == "93.184.216.34"
+        assert results[0]["hostname"] == "token.example.com"
+        assert results[0]["port"] == 443
+    finally:
+        await connector.close()
+
+
+@pytest.mark.asyncio
+async def test_pinned_connector_rejects_private_ip() -> None:
+    fake_infos = [(2, 1, 6, "", ("10.0.0.1", 0))]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        with pytest.raises(SSRFError):
+            await pinned_connector("https://internal.example/token")
+
+
+@pytest.mark.asyncio
+async def test_pinned_connector_rejects_no_host() -> None:
+    with pytest.raises(SSRFError, match="no hostname"):
+        await pinned_connector("https://")
 
 
 # ---------------------------------------------------------------------------
