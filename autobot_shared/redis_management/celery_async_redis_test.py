@@ -79,7 +79,11 @@ def test_reset_async_pools_replaces_lock():
     assert isinstance(mgr._async_lock, asyncio.Lock)
 
 
-def test_reset_async_pools_calls_disconnect_on_stale_pools():
+def test_reset_async_pools_does_not_disconnect_stale_pools():
+    """reset_async_pools deliberately does NOT call pool.disconnect(): it runs
+    at a loop boundary where the backing event loop is already closed, so the
+    async disconnect() coroutine could never be awaited — references are
+    dropped for GC instead (see reset_async_pools docstring, #10936/#11830)."""
     mgr = _make_fresh_manager()
     fake_pool = MagicMock()
     fake_pool.disconnect = MagicMock()
@@ -87,7 +91,8 @@ def test_reset_async_pools_calls_disconnect_on_stale_pools():
 
     mgr.reset_async_pools()
 
-    fake_pool.disconnect.assert_called_once()
+    fake_pool.disconnect.assert_not_called()
+    assert mgr._async_pools == {}
 
 
 def test_reset_async_pools_idempotent_on_empty():
@@ -100,8 +105,9 @@ def test_reset_async_pools_idempotent_on_empty():
     assert mgr._async_pools == {}
 
 
-def test_reset_async_pools_swallows_disconnect_errors():
-    """Errors during stale pool disconnect must not propagate."""
+def test_reset_async_pools_safe_with_undisconnectable_pool():
+    """A stale pool whose disconnect() would raise (dead loop) is simply
+    dropped — reset never touches disconnect, so it cannot propagate."""
     mgr = _make_fresh_manager()
     bad_pool = MagicMock()
     bad_pool.disconnect.side_effect = RuntimeError("loop is closed")
