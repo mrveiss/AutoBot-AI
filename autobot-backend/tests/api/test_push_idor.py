@@ -25,8 +25,11 @@ async def test_subscribe_ignores_user_id_in_request_body():
     current_user = {"user_id": "legitimate_user_id"}
     session = AsyncMock(spec=AsyncSession)
 
-    # Mock the select query to return None (new subscription)
-    mock_query = AsyncMock()
+    # Mock the select query to return None (new subscription).
+    # Result object is a MagicMock: scalar_one_or_none() is SYNC in SQLAlchemy
+    # (async/sync fixed in product by 6e784d67d, #9071/#9093) — an AsyncMock
+    # here would hand the endpoint a coroutine instead of the row.
+    mock_query = MagicMock()
     mock_query.scalar_one_or_none.return_value = None
     session.execute.return_value = mock_query
 
@@ -59,7 +62,7 @@ async def test_subscribe_accepts_user_id_matching_authenticated_user():
     current_user = {"user_id": "legitimate_user_id"}
     session = AsyncMock(spec=AsyncSession)
 
-    mock_query = AsyncMock()
+    mock_query = MagicMock()
     mock_query.scalar_one_or_none.return_value = None
     session.execute.return_value = mock_query
 
@@ -81,8 +84,8 @@ async def test_unsubscribe_ignores_user_id_in_request_body():
     current_user = {"user_id": "legitimate_user_id"}
     session = AsyncMock(spec=AsyncSession)
 
-    # Mock the delete query
-    mock_query = AsyncMock()
+    # Mock the delete query (result is sync; only .rowcount is read)
+    mock_query = MagicMock()
     mock_query.rowcount = 1
     session.execute.return_value = mock_query
 
@@ -96,10 +99,13 @@ async def test_unsubscribe_ignores_user_id_in_request_body():
         assert "attacker_user_id" in str(warning_call[0])
         assert "legitimate_user_id" in str(warning_call[0])
 
-        # Verify delete query used legitimate user's ID
+        # Verify delete query used legitimate user's ID.
+        # str(stmt) renders bind placeholders (:user_id_1), never values —
+        # compile with literal_binds to see the bound user id.
         delete_call = session.execute.call_args[0][0]
-        # The delete statement should filter by legitimate user_id
-        assert "legitimate_user_id" in str(delete_call)
+        compiled = str(delete_call.compile(compile_kwargs={"literal_binds": True}))
+        assert "legitimate_user_id" in compiled
+        assert "attacker_user_id" not in compiled
 
 
 @pytest.mark.asyncio
@@ -121,7 +127,7 @@ async def test_subscribe_endpoint_hijacking_returns_409():
     # Simulate: endpoint already owned by user_a
     existing = MagicMock()
     existing.user_id = "user_a_victim"
-    mock_query = AsyncMock()
+    mock_query = MagicMock()
     mock_query.scalar_one_or_none.return_value = existing
     session.execute.return_value = mock_query
 
@@ -145,7 +151,7 @@ async def test_subscribe_own_endpoint_refresh_succeeds():
 
     existing = MagicMock()
     existing.user_id = "user_a"
-    mock_query = AsyncMock()
+    mock_query = MagicMock()
     mock_query.scalar_one_or_none.return_value = existing
     session.execute.return_value = mock_query
 

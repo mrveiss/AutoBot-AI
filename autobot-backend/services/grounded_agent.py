@@ -273,7 +273,11 @@ class GroundedAgent:
 
         for claim in claims:
             verified = await self._classify_and_verify_claim(claim)
-            if verified.kb_status == ClaimStatus.UNVERIFIABLE:
+            # UNKNOWN = not found in KB / needs research — it must count as
+            # unverified, not verified (#11834: _classify_and_verify_claim
+            # returns UNKNOWN, never UNVERIFIABLE, so unknown claims were
+            # silently reported as verified with confidence 0.0).
+            if verified.kb_status in (ClaimStatus.UNVERIFIABLE, ClaimStatus.UNKNOWN):
                 unverified_claims.append(claim)
             elif verified.kb_status == ClaimStatus.CONTRADICTS:
                 conflicts.append(
@@ -618,8 +622,13 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
         """
         logger.info("Resolving conflict %s to fact %s", conflict_id, chosen_fact_id)
 
-        # Store resolution in Redis
+        # Store resolution in Redis. get_async_redis_client is typed
+        # Redis | None (None when Redis is disabled or the circuit breaker is
+        # open) — a human's resolution must never be silently dropped, so fail
+        # explicitly instead of crashing with AttributeError on None (#11834).
         redis = await get_async_redis_client()
+        if redis is None:
+            raise RuntimeError(f"Cannot persist resolution for conflict {conflict_id}: Redis unavailable")
         await redis.hset(
             f"conflict:{conflict_id}",
             mapping={

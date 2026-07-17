@@ -31,7 +31,9 @@ def _make_db(recording: dict | None) -> AsyncMock:
     return db
 
 
-DEFAULT_RECORDING = {"id": 456, "user_id": "default", "status": "complete"}
+# Owned by the calling user: since 130df54d9 (#9968) can_access enforces strict
+# ownership — legacy DEFAULT_USER ("default") rows are NOT visible to real users.
+DEFAULT_RECORDING = {"id": 456, "user_id": "test-user", "status": "complete"}
 
 
 @pytest.mark.asyncio
@@ -260,7 +262,7 @@ async def test_load_transcript_content_incomplete_400():
     """Test analysis of an untranscribed recording is rejected."""
     from api.transcripts import _load_transcript_content
 
-    pending = {"id": 456, "user_id": "default", "status": "processing"}
+    pending = {"id": 456, "user_id": "test-user", "status": "processing"}
     state = SimpleNamespace(transcriber_db=_make_db(pending))
 
     with pytest.raises(HTTPException) as exc_info:
