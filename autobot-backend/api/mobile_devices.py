@@ -9,6 +9,8 @@ Endpoints:
   POST   /api/devices/pair          — complete pairing via QR challenge token
   GET    /api/devices/pair-qr       — get a time-limited QR challenge token
   GET    /api/devices               — list devices for the current user
+                                      (device-JWT callers: own device only, #11792)
+  GET    /api/devices/me            — device-JWT-only identity + heartbeat (#11736)
   DELETE /api/devices/{device_id}   — unpair a device
 
 Device tokens expire after 90 days of inactivity; the GET list endpoint
@@ -26,7 +28,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_current_user
+from auth_middleware import get_current_user, require_device_jwt
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.prometheus_metrics import get_metrics_manager
@@ -37,6 +39,10 @@ from models.mobile_device import DevicePlatform, MobileDevice
 logger = get_logger(__name__)
 metrics = get_metrics_manager()
 router = APIRouter()
+
+# GH#9493/#11736: device-JWT-only auth (read scope suffices for GET /me).
+# Module-level so tests can target it with app.dependency_overrides.
+_device_jwt_auth = require_device_jwt()
 
 # QR challenge TTL — 5 minutes is ample for a human to scan
 _QR_CHALLENGE_TTL_SECONDS = 300
@@ -81,6 +87,13 @@ class PairSuccessResponse(BaseModel):
     message: str = "Device paired successfully"
 
 
+class DeviceIdentityResponse(BaseModel):
+    device_id: uuid.UUID
+    user_id: str
+    scope: str = Field(description="Device JWT scope: 'read' or 'write' (GH#9493)")
+    last_seen_at: str = Field(description="Heartbeat timestamp refreshed by this call")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -94,6 +107,22 @@ def _prune_expired(devices: list[MobileDevice]) -> list[MobileDevice]:
     """Return devices active within the last 90 days."""
     cutoff = now_utc() - timedelta(days=_DEVICE_EXPIRY_DAYS)
     return [d for d in devices if d.last_seen_at is None or d.last_seen_at >= cutoff]
+
+
+def _own_device_id(current_user: dict) -> Optional[uuid.UUID]:
+    """Own-device scoping for device-JWT callers (#11792).
+
+    Returns the caller's device UUID when auth came via device JWT (the
+    ``auth_method``/``device_id`` markers get_current_user attaches), so the
+    list endpoint can filter to the device's own record. User-session
+    callers return None (no filtering — full list).
+    """
+    if current_user.get("auth_method") != "device_jwt":
+        return None
+    try:
+        return uuid.UUID(str(current_user.get("device_id")))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid device token required")
 
 
 # ---------------------------------------------------------------------------
@@ -206,10 +235,17 @@ async def list_devices(
 
     Devices inactive for more than 90 days are pruned from the DB on each
     call so storage stays clean without a separate background job.
+
+    #11792: device-JWT callers (read scope suffices) get the list scoped to
+    their own device record; user-session callers get the full list.
     """
     user_id: str = str(current_user.get("id") or current_user.get("user_id", ""))
 
-    result = await session.execute(select(MobileDevice).where(MobileDevice.user_id == user_id))
+    stmt = select(MobileDevice).where(MobileDevice.user_id == user_id)
+    own_id = _own_device_id(current_user)
+    if own_id is not None:
+        stmt = stmt.where(MobileDevice.id == own_id)
+    result = await session.execute(stmt)
     devices = list(result.scalars().all())
 
     active = _prune_expired(devices)
@@ -230,6 +266,45 @@ async def list_devices(
             )
             for d in active
         ]
+    )
+
+
+@router.get("/me", response_model=DeviceIdentityResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_device_identity",
+    error_code_prefix="MOBILE_DEVICE",
+)
+async def get_device_identity(
+    device_user: dict = Depends(_device_jwt_auth),
+    session: AsyncSession = Depends(get_db_session),
+) -> DeviceIdentityResponse:
+    """Device token introspection + activity heartbeat (GH#9493, #11736).
+
+    Accepts ONLY a device JWT (require_device_jwt); user sessions get 401.
+    Returns the calling device's identity claims and refreshes last_seen_at
+    so actively-used devices are not pruned by the 90-day inactivity sweep.
+    """
+    try:
+        device_uuid = uuid.UUID(str(device_user["device_id"]))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Valid device token required")
+
+    result = await session.execute(select(MobileDevice).where(MobileDevice.id == device_uuid))
+    device = result.scalar_one_or_none()
+    if device is None:
+        # validate_device_jwt caches device existence for up to 60 s — the
+        # row can vanish between the cached check and this fresh read.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Device has been revoked")
+
+    device.last_seen_at = now_utc()
+    await session.commit()
+
+    return DeviceIdentityResponse(
+        device_id=device.id,
+        user_id=str(device_user["user_id"]),
+        scope=str(device_user.get("scope", "read")),
+        last_seen_at=device.last_seen_at.isoformat(),
     )
 
 

@@ -3619,8 +3619,35 @@ export interface paths {
          *
          *     Devices inactive for more than 90 days are pruned from the DB on each
          *     call so storage stays clean without a separate background job.
+         *
+         *     #11792: device-JWT callers (read scope suffices) get the list scoped to
+         *     their own device record; user-session callers get the full list.
          */
         get: operations["list_devices_api_devices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/devices/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Device Identity
+         * @description Device token introspection + activity heartbeat (GH#9493, #11736).
+         *
+         *     Accepts ONLY a device JWT (require_device_jwt); user sessions get 401.
+         *     Returns the calling device's identity claims and refreshes last_seen_at
+         *     so actively-used devices are not pruned by the 90-day inactivity sweep.
+         */
+        get: operations["get_device_identity_api_devices_me_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -60032,6 +60059,17 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ChatSecretScope
+         * @description Scope enumeration for the legacy Redis chat-secrets store (api/secrets.py).
+         *
+         *     Distinct from the canonical authorization scope ``ScopeLevel``
+         *     (``autobot_shared.scoping.scope_level``, aliased as ``SecretScope`` in
+         *     ``models/secret.py``): this enum adds CHAT/GENERAL for chat-vs-global
+         *     secret pools and has no WORKFLOW member (#11759).
+         * @enum {string}
+         */
+        ChatSecretScope: "chat" | "general" | "user" | "session" | "shared" | "group" | "organization";
+        /**
          * ChatSecretsDeleteData
          * @description Response data for delete_chat_secrets.
          */
@@ -69430,6 +69468,28 @@ export interface components {
             analysis_type?: string | null;
             /** Summary */
             summary?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DeviceIdentityResponse */
+        DeviceIdentityResponse: {
+            /**
+             * Device Id
+             * Format: uuid
+             */
+            device_id: string;
+            /** User Id */
+            user_id: string;
+            /**
+             * Scope
+             * @description Device JWT scope: 'read' or 'write' (GH#9493)
+             */
+            scope: string;
+            /**
+             * Last Seen At
+             * @description Heartbeat timestamp refreshed by this call
+             */
+            last_seen_at: string;
         } & {
             [key: string]: unknown;
         };
@@ -89918,7 +89978,7 @@ export interface components {
             /** Name */
             name: string;
             type: components["schemas"]["SecretType"];
-            scope: components["schemas"]["SecretScope"];
+            scope: components["schemas"]["ChatSecretScope"];
             /** Value */
             value: string;
             /** Chat Id */
@@ -90002,12 +90062,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /**
-         * SecretScope
-         * @description Secret scope enumeration.
-         * @enum {string}
-         */
-        SecretScope: "chat" | "general" | "user" | "session" | "shared" | "group" | "organization";
         /** SecretSetRequest */
         SecretSetRequest: {
             /** Name */
@@ -90079,7 +90133,7 @@ export interface components {
         SecretTransferRequest: {
             /** Secret Ids */
             secret_ids: string[];
-            target_scope: components["schemas"]["SecretScope"];
+            target_scope: components["schemas"]["ChatSecretScope"];
             /** Target Chat Id */
             target_chat_id?: string | null;
         } & {
@@ -105965,6 +106019,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeviceListResponse"];
+                };
+            };
+        };
+    };
+    get_device_identity_api_devices_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceIdentityResponse"];
                 };
             };
         };
@@ -141430,7 +141504,7 @@ export interface operations {
         parameters: {
             query?: {
                 chat_id?: string | null;
-                scope?: components["schemas"]["SecretScope"] | null;
+                scope?: components["schemas"]["ChatSecretScope"] | null;
             };
             header?: never;
             path?: never;

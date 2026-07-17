@@ -72,6 +72,7 @@ from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
+from services.ssh_utils import _ssh_key_usable
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -2736,9 +2737,8 @@ def _build_node_ssh_cmd(ip_address: str, ssh_user: str, ssh_port: int) -> list:
         "-p",
         str(ssh_port),
     ]
-    key_path = Path(_DEFAULT_SSH_KEY)
-    if key_path.exists():
-        cmd.extend(["-i", str(key_path)])
+    if _ssh_key_usable(_DEFAULT_SSH_KEY):
+        cmd.extend(["-i", _DEFAULT_SSH_KEY])
     cmd.append(f"{ssh_user}@{ip_address}")
     return cmd
 

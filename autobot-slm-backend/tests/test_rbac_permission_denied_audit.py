@@ -35,6 +35,14 @@ for _p in (str(_SLM_ROOT), str(_SHARED_ROOT)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+# #11794: snapshot sys.modules and FORCE the stubs below — in a whole-backend
+# sweep the real fastapi/autobot_shared are already imported, and the guarded
+# version of this bootstrap then mutated the REAL fastapi module's
+# HTTPException/Request/status attributes, breaking every later test file that
+# uses FastAPI at runtime (tests/test_redis_service_router.py).  Everything is
+# rolled back right after the module under test is loaded.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
 _MOCK_NAMES = [
     "fastapi",
     "fastapi.exceptions",
@@ -52,8 +60,7 @@ _MOCK_NAMES = [
     "user_management.models.base",
 ]
 for _name in _MOCK_NAMES:
-    if _name not in sys.modules:
-        sys.modules[_name] = MagicMock()
+    sys.modules[_name] = MagicMock()
 
 import http  # noqa: E402
 
@@ -93,6 +100,14 @@ _SPEC = importlib.util.spec_from_file_location(
 )
 _rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
 _SPEC.loader.exec_module(_rbac_mod)
+
+# #11794: restore the pre-bootstrap sys.modules state (see snapshot above).
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
 
 
 # ---------------------------------------------------------------------------

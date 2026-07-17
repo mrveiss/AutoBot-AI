@@ -393,8 +393,11 @@ async def _run_role_migration(role: Role, target_node_id: str) -> dict:
     try:
         result = await executor.execute_playbook(
             playbook_name=role.ansible_playbook,
+            # deploy_role.yml requires `role_name` and derives deploy_role from
+            # it; passing `deploy_role` alone tripped its role_name-undefined
+            # guard so every Migrate/Redeploy failed validation (#11782).
             limit=[target_node_id],
-            extra_vars={"deploy_role": role.name},
+            extra_vars={"role_name": role.name},
         )
     except FileNotFoundError as exc:
         logger.exception("Playbook not found: %s", role.ansible_playbook)

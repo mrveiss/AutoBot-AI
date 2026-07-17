@@ -22,6 +22,7 @@ from sqlalchemy import select
 
 from models.database import Setting
 from services.database import db_service
+from services.ssh_utils import _ssh_key_usable
 
 logger = logging.getLogger(__name__)
 
@@ -142,12 +143,11 @@ class CodeDistributor:
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
-            "-o",
             "ConnectTimeout=30",
             "-p",
             str(ssh_port),
         ]
-        if Path(SSH_KEY_PATH).exists():
+        if _ssh_key_usable(SSH_KEY_PATH):
             cmd.extend(["-i", SSH_KEY_PATH])
         return cmd
 
@@ -388,7 +388,7 @@ class CodeDistributor:
     def _build_ssh_opts(self, ssh_port: int) -> str:
         """Helper for trigger_node_sync. Ref: #1088."""
         ssh_opts = f"ssh -o StrictHostKeyChecking=accept-new " f"-o ConnectTimeout=30 -p {ssh_port}"
-        if Path(SSH_KEY_PATH).exists():
+        if _ssh_key_usable(SSH_KEY_PATH):
             ssh_opts += f" -i {SSH_KEY_PATH}"
         return ssh_opts
 

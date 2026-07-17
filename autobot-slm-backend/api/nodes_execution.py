@@ -40,6 +40,7 @@ from autobot_shared.auth.permissions import Permission
 from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
+from services.ssh_utils import _ssh_key_usable
 
 logger = logging.getLogger(__name__)
 
@@ -585,7 +586,7 @@ async def _run_via_ssh(
         "-o",
         f"ConnectTimeout={min(timeout, 30)}",
     ]
-    if Path(_SSH_KEY_PATH).exists():
+    if _ssh_key_usable(_SSH_KEY_PATH):
         cmd.extend(["-i", _SSH_KEY_PATH])
     cmd.append(f"{ssh_user}@{ip}")
     # Pass the command tokens as individual arguments to avoid any shell

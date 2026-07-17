@@ -104,27 +104,29 @@ for _m in [
     _stub(_m)
 
 # ── services ──────────────────────────────────────────────────────────────────
-# The services.* modules api/code_sync.py imports are AST-derived from its
-# source (#11575) — a hand-maintained list rots the moment code_sync gains a
-# new `from services.X import ...` (exactly how #11481 broke, and the same
-# anti-pattern behind the #11461 schema-list rot).  Pattern mirrors the
-# schema-name derivation in tests/api/test_collect_outdated_node_ids.py.
-_code_sync_ast = ast.parse((Path(__file__).parent / "api" / "code_sync.py").read_text(encoding="utf-8"))
-_CODE_SYNC_SERVICE_MODULES = frozenset(
-    {
+# The services.* modules api/code_sync.py and api/setup_wizard.py import are
+# AST-derived from their sources (#11575, #11794) — a hand-maintained list rots
+# the moment either module gains a new `from services.X import ...` (exactly
+# how #11481 broke, and the same anti-pattern behind the #11461 schema-list
+# rot).  Pattern mirrors the schema-name derivation in
+# tests/api/test_collect_outdated_node_ids.py.  Both files are stubbed because
+# their test modules (tests/api/*, api/setup_wizard_sanitize_test.py,
+# tests/api/test_setup_wizard_node_roles.py) import them at collection time.
+_CODE_SYNC_SERVICE_MODULES: frozenset = frozenset()
+for _src in ("code_sync.py", "setup_wizard.py"):
+    _src_ast = ast.parse((Path(__file__).parent / "api" / _src).read_text(encoding="utf-8"))
+    _CODE_SYNC_SERVICE_MODULES |= {
         _node.module
-        for _node in ast.walk(_code_sync_ast)
+        for _node in ast.walk(_src_ast)
         if isinstance(_node, ast.ImportFrom) and _node.module and _node.module.startswith("services.")
-    }
-    | {
+    } | {
         _alias.name
-        for _node in ast.walk(_code_sync_ast)
+        for _node in ast.walk(_src_ast)
         if isinstance(_node, ast.Import)
         for _alias in _node.names
         if _alias.name.startswith("services.")
     }
-)
-del _code_sync_ast
+del _src_ast
 
 # services.* modules NOT imported by code_sync.py but stubbed for other api/*
 # modules under test.  These have their own consumers and are not exposed to
@@ -145,6 +147,24 @@ _EXTRA_SERVICE_MODULES = (
 # Parent package first so each child stub binds onto it (see _stub docstring).
 for _m in ("services", *sorted(_CODE_SYNC_SERVICE_MODULES | set(_EXTRA_SERVICE_MODULES))):
     _stub(_m)
+
+# ── services.ssh_utils — REAL module, not a stub (#11793) ─────────────────────
+# api/code_sync.py imports it, so the AST-derived loop above just stubbed it —
+# but its ``_ssh_key_usable()`` gate must stay real under test: a MagicMock is
+# truthy, which would silently re-add ``-i <key>`` at every migrated ssh build
+# site.  The module is dependency-light (os/logging/pathlib only), so real-load
+# it via its file spec (the ``services`` parent is a MagicMock, not a package,
+# so a normal import cannot traverse it) and re-bind it onto the parent stub
+# so ``patch("services.ssh_utils.X")`` resolves to the same object.
+import importlib.util as _importlib_util  # noqa: E402
+
+_ssh_utils_spec = _importlib_util.spec_from_file_location(
+    "services.ssh_utils", Path(__file__).parent / "services" / "ssh_utils.py"
+)
+_ssh_utils_mod = _importlib_util.module_from_spec(_ssh_utils_spec)
+sys.modules["services.ssh_utils"] = _ssh_utils_mod
+_ssh_utils_spec.loader.exec_module(_ssh_utils_mod)
+setattr(sys.modules["services"], "ssh_utils", _ssh_utils_mod)
 
 # ── python-multipart ─────────────────────────────────────────────────────────
 # FastAPI's ensure_multipart_is_installed() is called when any route uses
@@ -175,5 +195,12 @@ for _m in [
     "user_management.services.base_service",
     "user_management.services.mfa_service",
     "user_management.services.sso_service",
+    # user_management/services/__init__.py is executed for real when pytest
+    # imports test modules inside that package (user_management/services/
+    # sso_e2e_test.py, sso_secrets_test.py); its from-imports must resolve via
+    # sys.modules or the whole package fails to collect (#11794).
+    "user_management.services.organization_service",
+    "user_management.services.team_service",
+    "user_management.services.user_service",
 ]:
     _stub(_m)
