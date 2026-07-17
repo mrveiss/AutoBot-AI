@@ -444,19 +444,20 @@ if "llm_shared" not in sys.modules:
     if _bp_mod is not None and hasattr(_bp_mod, "BaseProvider"):
         _llm_stub.BaseProvider = _bp_mod.BaseProvider  # type: ignore[attr-defined]
 
-    # Stub llm_shared.optimization.model_inspector so complexity_router.py can
-    # load without the full optimization stack (inspect_model is only called in
-    # model_fits_in_vram which tests don't exercise).
-    if "llm_shared.optimization.model_inspector" not in sys.modules:
-        _mi_stub = _make_pkg_stub("llm_shared.optimization.model_inspector")
-        _mi_stub.inspect_model = MagicMock(return_value=None)  # type: ignore[attr-defined]
-        _mi_stub.ModelInfo = MagicMock()  # type: ignore[attr-defined]
-        sys.modules["llm_shared.optimization.model_inspector"] = _mi_stub
+    # #11840: Real-load llm_shared.optimization.model_inspector — it is light
+    # (transformers/accelerate are lazily imported inside functions, so the
+    # bare env just gets the formula/None fallbacks).  It was previously
+    # stubbed here, which silently fed MagicMocks to its own colocated
+    # optimization/model_inspector_test.py (never-run-test-files pattern).
+    _real_load_and_bind(
+        "llm_shared.optimization.model_inspector",
+        _llm_root / "optimization" / "model_inspector.py",
+    )
 
     # #11618: Real-load llm_shared.hardware so patch("llm_shared.hardware.X") in
     # test_hardware.py targets the real module globals instead of the MagicMock
     # package stub.  Deps: autobot_shared.logging_manager (already patched) and
-    # llm_shared.optimization.model_inspector (stubbed just above).
+    # llm_shared.optimization.model_inspector (real-loaded just above).
     _real_load_and_bind("llm_shared.hardware", _llm_root / "hardware.py")
     _hw_mod = sys.modules.get("llm_shared.hardware")
     if _hw_mod is not None:

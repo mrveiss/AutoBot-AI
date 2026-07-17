@@ -163,7 +163,11 @@ class TestBaseProviderAuthIntegration:
 
 
 class TestOAuthAuth:
-    _TOKEN_URL = "https://example.com/oauth/token"
+    # #11061 added an SSRF allowlist to OAuthAuth._refresh (require_allowlisted_https
+    # + get_oauth_allowed_hosts).  The token_url must be a default-allowlisted host
+    # or the refresh path raises ProviderAuthError before hitting the mocked
+    # token endpoint (the old "https://example.com/oauth/token" is blocked).
+    _TOKEN_URL = "https://github.com/login/oauth/access_token"
 
     def _make_auth(self, **kwargs):
         return OAuthAuth(
@@ -418,10 +422,17 @@ class TestTokenHelpers:
 
 
 def _sync(coro):
-    """Run a coroutine synchronously in a new event loop."""
+    """Run a coroutine synchronously in a new event loop.
+
+    #11840: asyncio.run() creates (and closes) a fresh loop per call.  The
+    previous ``asyncio.get_event_loop().run_until_complete`` relied on the
+    deprecated implicit current loop, which no longer exists after any
+    pytest-asyncio test file has run earlier in the session — every _sync
+    caller then failed with "There is no current event loop".
+    """
     import asyncio
 
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def _sync_resolve(strategy, session=None):
