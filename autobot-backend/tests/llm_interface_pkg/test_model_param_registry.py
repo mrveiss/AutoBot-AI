@@ -45,6 +45,12 @@ if "xxhash" not in sys.modules:
 # Now safe to import the registry
 # ---------------------------------------------------------------------------
 
+# _yaml_path() reads config.llm_models_yaml from the SSOT config singleton
+# (env alias AUTOBOT_LLM_MODELS_YAML is only read at config construction —
+# commit 0af9875cd / #6941), so tests must patch the config attribute, not
+# os.environ (issue #11834).
+from autobot_shared.ssot_config import config as ssot_config  # noqa: E402
+
 from llm_shared.model_param_registry import (  # noqa: E402
     _FALLBACK_KWARGS,
     ArchitectureFamily,
@@ -140,7 +146,7 @@ class TestGetModelKwargs:
         """)
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             kwargs = get_model_kwargs("test-model", provider="myprovider")
         assert kwargs["temperature"] == 0.5  # from default
@@ -241,7 +247,7 @@ class TestApplyModelDefaults:
 class TestMissingYaml:
     def test_missing_yaml_returns_fallback(self, tmp_path):
         yaml_file = tmp_path / "nonexistent.yaml"
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             kwargs = get_model_kwargs("gpt-4o")
         assert kwargs == dict(_FALLBACK_KWARGS)
@@ -249,7 +255,7 @@ class TestMissingYaml:
     def test_empty_models_section_returns_fallback(self, tmp_path):
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text("models: []\n", encoding="utf-8")
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             kwargs = get_model_kwargs("gpt-4o")
         assert kwargs == dict(_FALLBACK_KWARGS)
@@ -276,7 +282,7 @@ class TestGetPromptPrefix:
         """)
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             prefix = get_prompt_prefix("prefixed-model")
         assert prefix == "Think step by step before answering."
@@ -305,7 +311,7 @@ class TestGetPromptPrefix:
         """)
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             prefix = get_prompt_prefix("my-alias")
         assert prefix == "Answer concisely."
@@ -325,7 +331,7 @@ class TestGetPromptPrefix:
         """)
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             prefix = get_prompt_prefix("empty-prefix-model")
         assert prefix is None
@@ -362,7 +368,7 @@ class TestApplyPromptPrefix:
             {"role": "system", "content": "You are a helper."},
             {"role": "user", "content": "What is 2+2?"},
         ]
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             result = apply_prompt_prefix("cot-model", messages)
         assert result[1]["content"] == "Think carefully.\nWhat is 2+2?"
@@ -390,7 +396,7 @@ class TestApplyPromptPrefix:
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
         messages = [{"role": "user", "content": "Hi"}]
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             result = apply_prompt_prefix("cot-model2", messages)
         assert result is messages
@@ -415,7 +421,7 @@ class TestApplyPromptPrefix:
             {"role": "assistant", "content": "Answer"},
             {"role": "user", "content": "Second question"},
         ]
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             apply_prompt_prefix("multi-turn-model", messages)
         assert messages[0]["content"] == "Step by step:\nFirst question"
@@ -437,7 +443,7 @@ class TestApplyPromptPrefix:
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
         messages = [{"role": "system", "content": "Only a system message"}]
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             result = apply_prompt_prefix("system-only-model", messages)
         assert result[0]["content"] == "Only a system message"
@@ -508,7 +514,7 @@ class TestGetArchitectureFamily:
         """)
         yaml_file = tmp_path / "llm_models.yaml"
         yaml_file.write_text(yaml_content, encoding="utf-8")
-        with patch.dict("os.environ", {"AUTOBOT_LLM_MODELS_YAML": str(yaml_file)}):
+        with patch.object(ssot_config, "llm_models_yaml", str(yaml_file)):
             _clear_cache()
             # config.json says transformer but YAML says ssm — YAML wins
             fam = get_architecture_family(
