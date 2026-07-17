@@ -108,17 +108,20 @@ class _FakeExtractor:
 
 @contextmanager
 def _registry(mapping: dict):
-    import sys
+    # #11834: import the module instead of peeking sys.modules — the old
+    # sys.modules.get() silently SKIPPED patching whenever an earlier test had
+    # displaced "agent_loop.extractors", while BeliefStateUpdater.update()
+    # imports it at call time, so the real registry leaked in and the fake
+    # extractor was never found.
+    import importlib
 
-    ext_mod = sys.modules.get("agent_loop.extractors")
-    original = getattr(ext_mod, "EXTRACTOR_REGISTRY", {}) if ext_mod else {}
-    if ext_mod is not None:
-        ext_mod.EXTRACTOR_REGISTRY = mapping
+    ext_mod = importlib.import_module("agent_loop.extractors")
+    original = getattr(ext_mod, "EXTRACTOR_REGISTRY", {})
+    ext_mod.EXTRACTOR_REGISTRY = mapping
     try:
         yield
     finally:
-        if ext_mod is not None:
-            ext_mod.EXTRACTOR_REGISTRY = original
+        ext_mod.EXTRACTOR_REGISTRY = original
 
 
 # ---------------------------------------------------------------------------

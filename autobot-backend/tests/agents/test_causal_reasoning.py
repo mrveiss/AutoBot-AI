@@ -303,45 +303,57 @@ class TestCausalReasoningIntegration:
         are stubbed inline here (using sys.modules.setdefault so any already-
         imported real modules are kept) to avoid xfail — see issue #4749.
         """
-        # Stub only the modules that are not importable in the test environment.
-        # setdefault preserves any real module already registered by conftest.
-        _make_module_stub(
-            "intelligence.streaming_executor",
-            ChunkType=MagicMock(),
-            StreamChunk=MagicMock,
-            StreamingCommandExecutor=MagicMock,
-        )
-        _make_module_stub("intelligence.goal_processor", GoalProcessor=MagicMock, ProcessedGoal=MagicMock)
-        _make_module_stub(
-            "intelligence.os_detector", OSDetector=MagicMock, OSInfo=MagicMock, get_os_detector=AsyncMock()
-        )
-        _make_module_stub("intelligence.tool_selector", OSAwareToolSelector=MagicMock)
-        _make_module_stub("knowledge_base", KnowledgeBase=MagicMock)
-        _make_module_stub("llm_interface", LLMInterface=MagicMock)
-        _make_module_stub("worker_node", WorkerNode=MagicMock)
+        # #11834: snapshot sys.modules — the stubs below (setdefault) used to
+        # PERSIST for the whole run whenever the real module had not been
+        # imported yet.  The attr-incomplete ``intelligence.os_detector`` stub
+        # (no LinuxDistro/OSType) then broke later whole-dir imports of
+        # agents.machine_aware_system_knowledge_manager in
+        # tests/test_startup_imports.py.  Restore by popping only the keys this
+        # test ADDED, so real modules loaded earlier are left untouched.
+        _keys_before = set(sys.modules)
+        try:
+            # Stub only the modules that are not importable in the test environment.
+            # setdefault preserves any real module already registered by conftest.
+            _make_module_stub(
+                "intelligence.streaming_executor",
+                ChunkType=MagicMock(),
+                StreamChunk=MagicMock,
+                StreamingCommandExecutor=MagicMock,
+            )
+            _make_module_stub("intelligence.goal_processor", GoalProcessor=MagicMock, ProcessedGoal=MagicMock)
+            _make_module_stub(
+                "intelligence.os_detector", OSDetector=MagicMock, OSInfo=MagicMock, get_os_detector=AsyncMock()
+            )
+            _make_module_stub("intelligence.tool_selector", OSAwareToolSelector=MagicMock)
+            _make_module_stub("knowledge_base", KnowledgeBase=MagicMock)
+            _make_module_stub("llm_interface", LLMInterface=MagicMock)
+            _make_module_stub("worker_node", WorkerNode=MagicMock)
 
-        from intelligence.intelligent_agent import IntelligentAgent
+            from intelligence.intelligent_agent import IntelligentAgent
 
-        agent = IntelligentAgent(MagicMock(), MagicMock(), MagicMock(), MagicMock())
+            agent = IntelligentAgent(MagicMock(), MagicMock(), MagicMock(), MagicMock())
 
-        # Provide a minimal os_info stub so _build_llm_system_prompt can render
-        # without a real initialized agent.
-        _os_info = MagicMock()
-        _os_info.os_type.value = "linux"
-        _os_info.distro = None
-        _os_info.version = "22.04"
-        _os_info.architecture = "x86_64"
-        _os_info.user = "test"
-        _os_info.is_root = False
-        _os_info.package_manager = "apt"
-        _os_info.capabilities = []
-        agent.state.os_info = _os_info
+            # Provide a minimal os_info stub so _build_llm_system_prompt can render
+            # without a real initialized agent.
+            _os_info = MagicMock()
+            _os_info.os_type.value = "linux"
+            _os_info.distro = None
+            _os_info.version = "22.04"
+            _os_info.architecture = "x86_64"
+            _os_info.user = "test"
+            _os_info.is_root = False
+            _os_info.package_manager = "apt"
+            _os_info.capabilities = []
+            agent.state.os_info = _os_info
 
-        prompt = agent._build_llm_system_prompt("diagnose slow query")
+            prompt = agent._build_llm_system_prompt("diagnose slow query")
 
-        # Verify CAUSAL_REASONING_SNIPPET is embedded in the system prompt
-        assert "causal" in prompt.lower(), "Expected causal reasoning snippet in system prompt"
-        assert "mechanism" in prompt.lower() or "BECAUSE" in prompt or "cause" in prompt.lower()
+            # Verify CAUSAL_REASONING_SNIPPET is embedded in the system prompt
+            assert "causal" in prompt.lower(), "Expected causal reasoning snippet in system prompt"
+            assert "mechanism" in prompt.lower() or "BECAUSE" in prompt or "cause" in prompt.lower()
+        finally:
+            for _added in set(sys.modules) - _keys_before:
+                sys.modules.pop(_added, None)
 
 
 # =============================================================================
