@@ -3619,6 +3619,9 @@ export interface paths {
          *
          *     Devices inactive for more than 90 days are pruned from the DB on each
          *     call so storage stays clean without a separate background job.
+         *
+         *     #11792: device-JWT callers (read scope suffices) get the list scoped to
+         *     their own device record; user-session callers get the full list.
          */
         get: operations["list_devices_api_devices_get"];
         put?: never;
