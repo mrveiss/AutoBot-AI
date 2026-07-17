@@ -445,9 +445,7 @@ def test_shared_lib_post_steps():
         stack.enter_context(patch("api.code_sync._compute_deps_changed", return_value=False))
         stack.enter_context(patch("api.code_sync._snapshot_component", return_value=None))
         stack.enter_context(patch("api.code_sync._ensure_autobot_shared_symlink", side_effect=fake_symlink))
-        restart_dep = stack.enter_context(
-            patch("api.code_sync._restart_dependents_with_health", return_value=True)
-        )
+        restart_dep = stack.enter_context(patch("api.code_sync._restart_dependents_with_health", return_value=True))
         deps_changed, steps, pip_ok = _run(
             _run_post_sync_steps(
                 "autobot_shared",

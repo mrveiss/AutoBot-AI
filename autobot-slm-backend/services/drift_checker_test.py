@@ -39,9 +39,7 @@ sys.modules.setdefault("services.git_tracker", _gt_stub)
 # at import time — a MagicMock suffix tuple makes every str.endswith() in
 # _collect_checksums raise TypeError (#11798).  The module is dependency-free,
 # so real-load it and restore the previous sys.modules entry afterwards.
-_da_spec = importlib.util.spec_from_file_location(
-    "services.deploy_artifacts", _SERVICES_DIR / "deploy_artifacts.py"
-)
+_da_spec = importlib.util.spec_from_file_location("services.deploy_artifacts", _SERVICES_DIR / "deploy_artifacts.py")
 _da = importlib.util.module_from_spec(_da_spec)  # type: ignore[arg-type]
 _da_spec.loader.exec_module(_da)  # type: ignore[union-attr]
 _prev_da = sys.modules.get("services.deploy_artifacts")

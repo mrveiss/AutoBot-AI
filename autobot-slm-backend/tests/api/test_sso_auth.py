@@ -109,6 +109,7 @@ def test_build_callback_url_valid_host_127_0_0_1():
 
 def test_build_callback_url_invalid_host_rejected():
     """Test callback URL rejects host not in allowlist (phishing attempt)."""
+
     # Mock HTTPException to avoid FastAPI import
     class MockHTTPException(Exception):
         def __init__(self, status_code, detail):
@@ -161,6 +162,7 @@ def test_build_callback_url_case_insensitive():
 # ---------------------------------------------------------------------------
 # Helpers for rate-limit tests (Issue #9611)
 # ---------------------------------------------------------------------------
+
 
 class _FakeRateLimiter:
     """Stand-in RateLimiter whose limits are never hit (allows all requests).

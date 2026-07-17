@@ -326,7 +326,10 @@ class TestEnsureLocalNode:
         mock_db.session = MagicMock(return_value=_ctx(session))
 
         # URL includes port — regex must not capture the port as part of IP
-        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://172.16.0.10:8443"}):
+        with (
+            _patched_seams(self._mod, mock_db),
+            patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://172.16.0.10:8443"}),
+        ):
             await self._fn()
 
         node_obj = added_objects[0]
