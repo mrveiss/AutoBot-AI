@@ -138,9 +138,23 @@ def deep_merge(
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = deep_merge(result[key], value, max_depth=max_depth, current_depth=current_depth + 1)
         else:
+            # #11834: the DoS guard (#3931) only fired on overlapping-key
+            # recursion — a deeply nested override inserted under a new key
+            # bypassed it entirely. Validate inserted dicts too.
+            if isinstance(value, dict):
+                _validate_depth(value, max_depth, current_depth + 1)
             result[key] = value
 
     return result
+
+
+def _validate_depth(value: Dict[str, Any], max_depth: int, current_depth: int) -> None:
+    """Raise ValueError when a nested dict exceeds max_depth (#3931 DoS guard)."""
+    if current_depth > max_depth:
+        raise ValueError(f"Config nesting depth exceeds maximum of {max_depth}")
+    for child in value.values():
+        if isinstance(child, dict):
+            _validate_depth(child, max_depth, current_depth + 1)
 
 
 def _convert_env_value(env_value: str) -> Any:

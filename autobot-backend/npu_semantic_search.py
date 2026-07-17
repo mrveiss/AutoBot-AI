@@ -534,7 +534,10 @@ class NPUSemanticSearch:
 
     async def _l2_cache_get(self, text: str) -> "np.ndarray | None":
         """Check Redis L2 embedding cache. Issue #8159."""
-        redis = get_async_redis_client()
+        # #11834: get_async_redis_client is async — the un-awaited call stored a
+        # coroutine, every redis.get raised AttributeError (swallowed below),
+        # and the L2 cache was silently inert.
+        redis = await get_async_redis_client()
         if redis is None:
             return None
         try:
@@ -548,7 +551,8 @@ class NPUSemanticSearch:
 
     async def _l2_cache_set(self, text: str, embedding: np.ndarray) -> None:
         """Store embedding in Redis L2 cache. Issue #8159."""
-        redis = get_async_redis_client()
+        # #11834: see _l2_cache_get — must be awaited.
+        redis = await get_async_redis_client()
         if redis is None:
             return
         try:

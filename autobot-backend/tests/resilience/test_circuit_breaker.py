@@ -194,7 +194,9 @@ class TestCircuitBreakerManager:
         # Open circuit
         config = CircuitBreakerConfig(failure_threshold=1)
         breaker.config = config
-        with pytest.raises(ValueError):
+        # #11834: call() propagates the original exception (ZeroDivisionError),
+        # matching the colocated circuit_breaker_test.py contract.
+        with pytest.raises(ZeroDivisionError):
             breaker.call(lambda: 1 / 0)
 
         assert breaker.state == CircuitBreakerState.OPEN
@@ -210,7 +212,9 @@ class TestCircuitBreakerManager:
 
         # Make some calls
         breaker.call(lambda: "success")
-        with pytest.raises(ValueError):
+        # #11834: call() propagates the original exception (ZeroDivisionError),
+        # matching the colocated circuit_breaker_test.py contract.
+        with pytest.raises(ZeroDivisionError):
             breaker.call(lambda: 1 / 0)
 
         status = manager.get_status()

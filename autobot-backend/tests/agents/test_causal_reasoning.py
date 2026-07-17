@@ -18,12 +18,37 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent_loop.think_tool import ThinkTool
-from agent_loop.types import ThinkCategory, ThinkResult
-from orchestration.causal_error_analyzer import (
+# ---------------------------------------------------------------------------
+# Real-module loading (#11834, same contract as
+# tests/orchestration/test_causal_error_recovery.py): the parent conftest stubs
+# ``orchestration.causal_error_analyzer`` (#7431) as a MagicMock package, so the
+# TestCausalErrorAnalyzer suite below was exercising a mock (``CausalErrorAnalyzer()``
+# returned MagicMocks).  Displace exactly that stub, import the real module, and
+# restore the displaced stub after this module's tests so sibling type-only tests
+# that patch it by name are unaffected.  Its import chain only needs
+# agent_loop.think_tool / agent_loop.types, which the conftest already real-loads.
+# ---------------------------------------------------------------------------
+_CONFTEST_STUB_NAMES: tuple = ("orchestration.causal_error_analyzer",)
+_SAVED_STUBS: dict[str, object] = {name: sys.modules[name] for name in _CONFTEST_STUB_NAMES if name in sys.modules}
+for _name in _SAVED_STUBS:
+    sys.modules.pop(_name, None)
+
+from agent_loop.think_tool import ThinkTool  # noqa: E402
+from agent_loop.types import ThinkCategory, ThinkResult  # noqa: E402
+from orchestration.causal_error_analyzer import (  # noqa: E402
     CausalErrorAnalysis,
     CausalErrorAnalyzer,
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_conftest_stubs():
+    """Restore the displaced parent-conftest stub after this module's tests."""
+    yield
+    for _sname, _smod in _SAVED_STUBS.items():
+        sys.modules[_sname] = _smod  # type: ignore[assignment]
+
+
 from reasoning.causal_reasoning import (
     CausalChain,
     CausalReasoningContext,
