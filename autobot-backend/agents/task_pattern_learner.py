@@ -10,8 +10,10 @@ Persists learned patterns to Redis for orchestrator routing decisions.
 """
 
 import json
+import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from functools import lru_cache
+from typing import Any, Dict, FrozenSet, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -24,6 +26,100 @@ logger = get_logger(__name__)
 # (retrieval/persistence is skipped) rather than falling back to a shared bucket.
 REDIS_PATTERNS_KEY = "task:patterns:{tenant_id}:{task_type}"
 REDIS_PATTERNS_TTL = 60 * 60 * 24 * 7  # 7 days
+
+# GH#11534: single bucket for any task_type outside the known vocabulary, so
+# free-form caller strings can never mint unbounded Redis keys (learner + judge).
+OTHER_TASK_TYPE = "other"
+
+# GH#11534: per-tenant cap on distinct task_type keys — a backstop beyond the
+# allowlist. Never hard-coded (repo idiom, see chat_history/cache.py): overridable
+# via env so a runaway integration can't blow past it silently.
+MAX_TASK_TYPE_KEYS_PER_TENANT = int(os.environ.get("AUTOBOT_MAX_TASK_TYPE_KEYS_PER_TENANT", "64"))
+
+# GH#11534: bounded per-key revision history so a single bad synthesized/imported
+# strategy can be rolled back without wiping all learned state (clear_strategy).
+REDIS_PATTERNS_HISTORY_KEY = "task:patterns:{tenant_id}:{task_type}:history"
+STRATEGY_HISTORY_MAX = int(os.environ.get("AUTOBOT_STRATEGY_HISTORY_MAX", "10"))
+
+
+@lru_cache(maxsize=1)
+def _canonical_task_types() -> FrozenSet[str]:
+    """Bounded allowlist of legitimate task_type values (GH#11534).
+
+    Built from the canonical ``AgentType`` routing vocabulary plus the plan-level
+    ``ExecutionStrategy`` values and the explicit literals the self-improvement
+    write paths emit that are not in either enum:
+      - ``planning``      → orchestrator._score_plan
+      - ``chat_turn``     → chat_workflow.trajectory_context
+      - ``llc_heartbeat`` → llc.kb.diary_writer default snapshot
+
+    Imported lazily and cached so module import stays light and the set is
+    computed once. Any task_type outside this set collapses to ``OTHER_TASK_TYPE``.
+    """
+    from agents.agent_orchestration.types import AgentType
+    from autobot_shared.workflow import ExecutionStrategy
+
+    vocab = {t.value for t in AgentType}
+    vocab |= {s.value for s in ExecutionStrategy}
+    vocab |= {"planning", "chat_turn", "llc_heartbeat"}
+    return frozenset(vocab)
+
+
+def normalize_task_type(task_type: str) -> str:
+    """Canonicalise + allowlist a task_type to the bounded vocabulary (GH#11534).
+
+    Format-canonicalises (lowercase, strip, ``-``/space → ``_``) then restricts to
+    :func:`_canonical_task_types`; anything unknown (or empty) buckets to
+    ``OTHER_TASK_TYPE``. Learner and judge both route through this single function
+    so their Redis keys always agree for the same input.
+    """
+    canon = (task_type or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not canon:
+        return OTHER_TASK_TYPE
+    return canon if canon in _canonical_task_types() else OTHER_TASK_TYPE
+
+
+async def enforce_key_cap(redis: Any, prefix: str, task_type: str) -> str:
+    """Return *task_type*, or ``OTHER_TASK_TYPE`` when the tenant is at the key cap.
+
+    GH#11534 backstop beyond the allowlist: counts the tenant's existing distinct
+    task_type keys under *prefix* (e.g. ``task:outcomes:{tid}:``) and, if adding a
+    NEW key would exceed :data:`MAX_TASK_TYPE_KEYS_PER_TENANT`, diverts the write
+    into the shared ``other`` bucket. Existing keys and the ``other`` bucket itself
+    are always allowed. Revision-history sub-keys never count toward the cap.
+    Any Redis error fails open (returns *task_type*) — the cap must never drop data.
+    """
+    if task_type == OTHER_TASK_TYPE:
+        return task_type
+    try:
+        existing: set[str] = set()
+        cursor = 0
+        pattern = f"{prefix}*"
+        while True:
+            cursor, keys = await redis.scan(cursor, match=pattern, count=100)
+            for k in keys:
+                key = k.decode() if isinstance(k, bytes) else k
+                suffix = key[len(prefix) :]
+                if suffix.endswith(":history"):
+                    continue
+                existing.add(suffix)
+            if cursor == 0:
+                break
+        if task_type in existing:
+            return task_type
+        if len(existing) >= MAX_TASK_TYPE_KEYS_PER_TENANT:
+            logger.warning(
+                "Task-type key cap (%d) reached for prefix %s — bucketing %r into %r (GH#11534)",
+                MAX_TASK_TYPE_KEYS_PER_TENANT,
+                prefix,
+                task_type,
+                OTHER_TASK_TYPE,
+            )
+            return OTHER_TASK_TYPE
+        return task_type
+    except Exception as exc:
+        logger.warning("Key-cap check failed for prefix %s (failing open): %s", prefix, exc)
+        return task_type
 
 
 def _scoped_tenant(tenant_id: str, op: str) -> str | None:
@@ -64,6 +160,13 @@ class LearnedStrategy:
     confidence: float
     failure_patterns: List[str] = field(default_factory=list)
     timestamp: str = field(default_factory=utc_timestamp)
+    # GH#11534 provenance + rollback: ``version`` increments on each overwrite,
+    # ``tenant_id`` records the owning org, and ``source_outcome_ids`` records the
+    # outcomes this revision was synthesized from — so a single bad revision can be
+    # traced and reverted (rollback_strategy) instead of wiping all learned state.
+    version: int = 1
+    tenant_id: str = ""
+    source_outcome_ids: List[str] = field(default_factory=list)
 
 
 class TaskPatternLearner(AsyncRedisClientMixin):
@@ -85,12 +188,14 @@ class TaskPatternLearner(AsyncRedisClientMixin):
 
     @staticmethod
     def normalize_task_type(task_type: str) -> str:
-        """Canonicalise task_type to AgentType.value vocabulary (#2208).
+        """Canonicalise + allowlist task_type to the bounded vocabulary (#2208, GH#11534).
 
-        Lowercases, strips whitespace, and replaces spaces/hyphens with
-        underscores so free-form caller strings match AgentType enum values.
+        Delegates to the module-level :func:`normalize_task_type` so learner, judge,
+        and every caller share one source of truth: format-canonicalise, then
+        restrict to the known ``AgentType``/``ExecutionStrategy`` vocabulary,
+        bucketing anything unknown into ``OTHER_TASK_TYPE``.
         """
-        return task_type.strip().lower().replace("-", "_").replace(" ", "_")
+        return normalize_task_type(task_type)
 
     async def learn_from_outcomes(
         self, task_type: str, outcomes: List[Dict], tenant_id: str = ""
@@ -106,7 +211,8 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         Returns:
             LearnedStrategy if enough data, else None
         """
-        if _scoped_tenant(tenant_id, "learn_from_outcomes") is None:
+        tid = _scoped_tenant(tenant_id, "learn_from_outcomes")
+        if tid is None:
             return None
         task_type = self.normalize_task_type(task_type)
         if len(outcomes) < MIN_OUTCOMES_TO_LEARN:
@@ -116,6 +222,11 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         best_outcome = max(recent, key=lambda o: o.get("score", 0.0))
         strategy = await self._synthesize_strategy(task_type, recent, best_outcome)
         if strategy:
+            # GH#11534: stamp provenance so a bad revision is traceable + revertible.
+            strategy.tenant_id = tid
+            strategy.source_outcome_ids = [
+                str(o.get("timestamp") or o.get("id") or idx) for idx, o in enumerate(recent)
+            ]
             await self._persist_strategy(task_type, strategy, tenant_id)
         return strategy
 
@@ -206,16 +317,69 @@ class TaskPatternLearner(AsyncRedisClientMixin):
         )
 
     async def _persist_strategy(self, task_type: str, strategy: LearnedStrategy, tenant_id: str = "") -> None:
-        """Persist learned strategy to Redis, scoped to *tenant_id* (GH#11071)."""
+        """Persist learned strategy to Redis, scoped to *tenant_id* (GH#11071).
+
+        GH#11534: before overwriting, the current revision is archived to a bounded
+        per-key history list and the new revision's ``version`` is incremented, so a
+        bad synthesized/imported strategy can be reverted (rollback_strategy) without
+        wiping learned state. A per-tenant key cap bounds distinct task_type keys.
+        """
         tid = _scoped_tenant(tenant_id, "_persist_strategy")
         if tid is None:
             return
         try:
             redis = await self._get_redis()
+            task_type = await enforce_key_cap(redis, f"task:patterns:{tid}:", task_type)
             key = REDIS_PATTERNS_KEY.format(tenant_id=tid, task_type=task_type)
+            prev_raw = await redis.get(key)
+            if prev_raw:
+                try:
+                    strategy.version = int(json.loads(prev_raw).get("version", 1)) + 1
+                except Exception:
+                    strategy.version = strategy.version + 1
+                hist_key = REDIS_PATTERNS_HISTORY_KEY.format(tenant_id=tid, task_type=task_type)
+                await redis.lpush(hist_key, prev_raw)
+                await redis.ltrim(hist_key, 0, STRATEGY_HISTORY_MAX - 1)
+                await redis.expire(hist_key, REDIS_PATTERNS_TTL)
+            strategy.tenant_id = tid
+            strategy.task_type = task_type
             await redis.set(key, json.dumps(strategy.__dict__), ex=REDIS_PATTERNS_TTL)
         except Exception as exc:
             logger.warning("Failed to persist learned strategy: %s", exc)
+
+    async def rollback_strategy(self, task_type: str, tenant_id: str = "") -> LearnedStrategy | None:
+        """Revert a task type's learned strategy to its previous revision (GH#11534).
+
+        Pops the most recent archived revision from the per-key history list and
+        restores it as current, so a single bad synthesized/imported strategy can be
+        undone without wiping all learned state (unlike clear_strategy). Scoped to
+        *tenant_id*; empty fails closed. Returns the restored strategy, or None when
+        there is no prior revision to roll back to.
+        """
+        tid = _scoped_tenant(tenant_id, "rollback_strategy")
+        if tid is None:
+            return None
+        task_type = self.normalize_task_type(task_type)
+        try:
+            redis = await self._get_redis()
+            hist_key = REDIS_PATTERNS_HISTORY_KEY.format(tenant_id=tid, task_type=task_type)
+            prev_raw = await redis.lpop(hist_key)
+            if not prev_raw:
+                logger.info("rollback_strategy: no prior revision for %s (tenant=%s)", task_type, tid)
+                return None
+            restored = LearnedStrategy(**json.loads(prev_raw))
+            key = REDIS_PATTERNS_KEY.format(tenant_id=tid, task_type=task_type)
+            await redis.set(key, json.dumps(restored.__dict__), ex=REDIS_PATTERNS_TTL)
+            logger.info(
+                "rollback_strategy: restored %s to version %s (tenant=%s)",
+                task_type,
+                getattr(restored, "version", "?"),
+                tid,
+            )
+            return restored
+        except Exception as exc:
+            logger.warning("Failed to roll back learned strategy: %s", exc)
+            return None
 
     async def get_learned_strategy(self, task_type: str, tenant_id: str = "") -> LearnedStrategy | None:
         """Retrieve persisted learned strategy for a task type, scoped to *tenant_id* (#2208, GH#11071)."""

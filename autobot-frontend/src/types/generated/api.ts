@@ -36848,6 +36848,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{agent_id}/rollback-strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll back a learned strategy to its previous revision
+         * @description Revert a task type's learned strategy to its previous revision (GH#11534).
+         *
+         *     Undoes a single bad synthesized/imported strategy without wiping all learned
+         *     state (unlike reset-learning). Admin-gated and tenant-scoped. Returns the
+         *     restored strategy, or None when there is no prior revision to roll back to.
+         */
+        post: operations["rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{agent_id}/knowledge-export": {
         parameters: {
             query?: never;
@@ -149061,6 +149085,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetLearningResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post: {
+        parameters: {
+            query?: {
+                /** @description Task type to roll back */
+                task_type?: string | null;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedStrategyResponse"] | null;
                 };
             };
             /** @description Validation Error */
