@@ -108,9 +108,13 @@ _fake_config.get_nested = MagicMock(side_effect=lambda key, default=None: defaul
 sys.modules.setdefault("config", types.SimpleNamespace(config=_fake_config))
 
 # Patch autobot_shared stubs if not already real modules.
+# #11796: get_logger is set ONLY on a freshly created stub — assigning it on
+# the REAL logging_manager module is an in-place attribute mutation that the
+# sys.modules restore below cannot undo (it broke get_llm_logger's 2-arg
+# get_logger(name, "llm") call for every later-collected test module).
 for _shared in ["autobot_shared.logging_manager"]:
     if _shared not in sys.modules:
-        _make_stub(_shared)
+        _make_stub(_shared).get_logger = logging.getLogger  # type: ignore[attr-defined]
 
 # lazy_singleton: if the real module is loaded, use it (don't overwrite its implementation).
 # If not loaded, plant a stub that maps lazy_singleton(cls) -> cls so LibrarianAssistant
@@ -118,11 +122,6 @@ for _shared in ["autobot_shared.logging_manager"]:
 if "autobot_shared.singleton_factory" not in sys.modules:
     _singleton_stub = _make_stub("autobot_shared.singleton_factory")
     _singleton_stub.lazy_singleton = lambda cls: cls  # type: ignore[attr-defined]
-
-# get_logger must return a real logger so log calls don't blow up.
-_logging_mod = sys.modules.get("autobot_shared.logging_manager")
-if _logging_mod is not None:
-    _logging_mod.get_logger = logging.getLogger  # type: ignore[attr-defined]
 
 # get_llm_service can return a mock.
 _llm_mod = sys.modules.get("services.llm_service")

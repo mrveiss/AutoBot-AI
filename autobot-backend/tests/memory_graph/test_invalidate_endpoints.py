@@ -22,29 +22,50 @@ from autobot_shared.time_utils import now_utc
 # ---------------------------------------------------------------------------
 # Stub heavy dependencies so api/memory.py imports without a real Redis
 # ---------------------------------------------------------------------------
+# #11796: snapshot sys.modules before the stub bootstrap.  The previous
+# _register_stub reused already-imported REAL packages and clobbered their
+# ``__path__`` to [] in place (autobot_shared/utils/type_defs), which broke
+# `import autobot_shared.scoping` for THIS file's own api.memory import and
+# for every test module collected afterwards in a whole-dir run.  Stubs are
+# now always fresh modules (never in-place mutation), parent packages keep a
+# REAL ``__path__`` so genuine submodule imports still resolve, and the whole
+# mapping is rolled back right after the router import below.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
+from pathlib import Path as _FsPath  # noqa: E402
+
+_BACKEND_ROOT = _FsPath(__file__).resolve().parents[2]
+# Real autobot_shared is guaranteed imported (time_utils import above).
+_AUTOBOT_SHARED_DIR = _FsPath(sys.modules["autobot_shared"].__path__[0])
 
 
-def _register_stub(name: str, attrs: dict | None = None) -> types.ModuleType:
-    mod = sys.modules.get(name)
-    if mod is None:
-        mod = types.ModuleType(name)
-    if attrs:
-        for k, v in attrs.items():
-            setattr(mod, k, v)
+def _register_stub(
+    name: str,
+    attrs: dict | None = None,
+    path: list[str] | None = None,
+) -> types.ModuleType:
+    mod = types.ModuleType(name)
+    if path is not None:
+        mod.__path__ = path
+    for k, v in (attrs or {}).items():
+        setattr(mod, k, v)
     sys.modules[name] = mod
     return mod
 
 
-# autobot_shared package stubs
-_autobot_shared = _register_stub("autobot_shared")
-_autobot_shared.__path__ = []
-
 _register_stub(
     "autobot_shared.redis_client",
-    {"get_redis_client": MagicMock(return_value=None)},
+    {
+        "get_redis_client": MagicMock(return_value=None),
+        # services.audit.audit_log (pulled in via the real
+        # autobot_shared.scoping import chain) needs this name too.
+        "get_async_redis_client": AsyncMock(return_value=None),
+    },
 )
-_redis_mgmt = _register_stub("autobot_shared.redis_management")
-_redis_mgmt.__path__ = []
+_register_stub(
+    "autobot_shared.redis_management",
+    path=[str(_AUTOBOT_SHARED_DIR / "redis_management")],
+)
 _register_stub(
     "autobot_shared.redis_management.types",
     {"DATABASE_MAPPING": {"knowledge": 2}},
@@ -74,13 +95,11 @@ _eb_mod = _register_stub(
 _auth_mod = _register_stub("auth_middleware", {"check_admin_permission": MagicMock(return_value=True)})
 
 # type_defs.common stub
-_type_defs = _register_stub("type_defs")
-_type_defs.__path__ = []
+_register_stub("type_defs", path=[str(_BACKEND_ROOT / "type_defs")])
 _register_stub("type_defs.common", {"Metadata": dict})
 
 # utils.request_utils stub
-_utils = _register_stub("utils")
-_utils.__path__ = []
+_register_stub("utils", path=[str(_BACKEND_ROOT / "utils")])
 _utils_req = _register_stub("utils.request_utils")
 
 _req_counter = 0
@@ -95,8 +114,10 @@ def _generate_request_id() -> str:
 _utils_req.generate_request_id = _generate_request_id
 
 # autobot_memory_graph stub — provide a minimal AutoBotMemoryGraph class
-_mg_pkg = _register_stub("autobot_memory_graph")
-_mg_pkg.__path__ = []
+_mg_pkg = _register_stub(
+    "autobot_memory_graph",
+    path=[str(_BACKEND_ROOT / "autobot_memory_graph")],
+)
 
 
 class _FakeMemoryGraph:
@@ -110,7 +131,19 @@ _mg_pkg.AutoBotMemoryGraph = _FakeMemoryGraph
 # ---------------------------------------------------------------------------
 # Import the router under test AFTER stubs are registered
 # ---------------------------------------------------------------------------
-from api.memory import router  # noqa: E402
+from api.memory import get_memory_graph, router  # noqa: E402
+
+# #11796: capture the exact dependency objects api.memory bound at import
+# time (used by _make_client after the restore below), then roll back the
+# pre-bootstrap sys.modules state so no stub leaks into later test modules.
+_check_admin_permission = sys.modules["auth_middleware"].check_admin_permission
+
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
 
 # ---------------------------------------------------------------------------
 # FastAPI test app
@@ -126,14 +159,11 @@ def _make_client(fake_graph: _FakeMemoryGraph) -> TestClient:
     async def override_memory_graph():
         return fake_graph
 
-    from api.memory import get_memory_graph
-
     app.dependency_overrides[get_memory_graph] = override_memory_graph
 
-    # Bypass admin check
-    from auth_middleware import check_admin_permission
-
-    app.dependency_overrides[check_admin_permission] = lambda: True
+    # Bypass admin check — use the exact object api.memory bound at import
+    # time (#11796: the bootstrap stubs are no longer in sys.modules here).
+    app.dependency_overrides[_check_admin_permission] = lambda: True
 
     return TestClient(app)
 
