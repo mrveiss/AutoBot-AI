@@ -60,8 +60,19 @@ def _vault_id_config_key(field: str) -> str:
     return f"{field}_vault_id"
 
 
-async def _legacy_retrieve(session: AsyncSession, provider_id: uuid.UUID, field: str) -> str | None:
-    """Read from the legacy SystemSecret table (fallback during migration window)."""
+async def _legacy_retrieve(
+    session: AsyncSession, provider_id: uuid.UUID, field: str, *, strict: bool = False
+) -> str | None:
+    """Read from the legacy SystemSecret table.
+
+    ``strict=True`` (vault not configured — the legacy table IS the primary
+    store): failures propagate, and a decryption failure raises
+    ``ValueError('Failed to decrypt secret <field>')`` so a corrupted secret
+    surfaces instead of masquerading as "no secret stored" (#11798).
+    ``strict=False`` (migration-window fallback behind the vault): all
+    failures are logged and swallowed so the fallback never breaks the
+    vault path.
+    """
     try:
         from models.database import SystemSecret
         from services.encryption import decrypt_data
@@ -71,8 +82,13 @@ async def _legacy_retrieve(session: AsyncSession, provider_id: uuid.UUID, field:
         secret = result.scalar_one_or_none()
         if secret is None:
             return None
-        return decrypt_data(secret.encrypted_value)
+        try:
+            return decrypt_data(secret.encrypted_value)
+        except Exception as exc:
+            raise ValueError(f"Failed to decrypt secret {field}") from exc
     except Exception as exc:
+        if strict:
+            raise
         logger.warning("legacy SSO secret fallback failed for field %s: %s", field, type(exc).__name__)
         return None
 
@@ -186,8 +202,9 @@ class SSOSecretsManager:
         )
 
         # Rollout fallback: vault not provisioned → read straight from legacy.
+        # strict: legacy is the PRIMARY store here, so corruption must raise.
         if not is_configured():
-            return await _legacy_retrieve(self._session, provider_id, field)
+            return await _legacy_retrieve(self._session, provider_id, field, strict=True)
 
         # Try to resolve vault_id from the provider's stored config.
         vault_id = await self._resolve_vault_id(provider_id, field)
