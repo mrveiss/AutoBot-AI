@@ -8,6 +8,8 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from .token_optimizer import (
     CompactionEntry,
     ContextFingerprinter,
@@ -300,34 +302,48 @@ class TestL1ToL2Fallback:
 
 
 class TestGetTokenOptimizerSingleton:
-    """Tests for the get_token_optimizer module-level singleton."""
+    """Tests for the get_token_optimizer module-level singleton.
 
-    @patch("llm_shared.optimization.token_optimizer._optimizer", None)
+    #11635 replaced the hand-rolled ``_optimizer`` module global with the
+    canonical ``lazy_singleton`` factory: reset via ``get_token_optimizer.reset()``
+    (the old ``patch(..._optimizer, None)`` seam no longer exists), and a
+    repeat call with *different* args now raises RuntimeError instead of
+    silently ignoring the new config.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _fresh_singleton(self):
+        get_token_optimizer.reset()
+        yield
+        get_token_optimizer.reset()
+
     def test_returns_token_optimizer_instance(self):
         """get_token_optimizer should return a TokenOptimizer."""
         result = get_token_optimizer()
         assert isinstance(result, TokenOptimizer)
 
-    @patch("llm_shared.optimization.token_optimizer._optimizer", None)
     def test_returns_same_instance_on_repeated_calls(self):
         """get_token_optimizer should return the same singleton instance."""
         first = get_token_optimizer()
         second = get_token_optimizer()
         assert first is second
 
-    @patch("llm_shared.optimization.token_optimizer._optimizer", None)
     def test_accepts_custom_config(self):
         """get_token_optimizer should accept a custom config on first call."""
         config = TokenOptimizerConfig(enabled=False, min_repeat_threshold=5)
         result = get_token_optimizer(config)
         assert result.enabled is False
 
-    @patch("llm_shared.optimization.token_optimizer._optimizer", None)
-    def test_ignores_config_on_subsequent_calls(self):
-        """Once created, get_token_optimizer ignores new config args."""
+    def test_no_arg_call_returns_cached_instance(self):
+        """After construction, a no-arg call returns the cached singleton."""
         config1 = TokenOptimizerConfig(enabled=True)
         first = get_token_optimizer(config1)
-        config2 = TokenOptimizerConfig(enabled=False)
-        second = get_token_optimizer(config2)
+        second = get_token_optimizer()
         assert first is second
         assert second.enabled is True
+
+    def test_different_config_after_first_call_raises(self):
+        """lazy_singleton rejects re-configuration after first construction."""
+        get_token_optimizer(TokenOptimizerConfig(enabled=True))
+        with pytest.raises(RuntimeError, match="different args"):
+            get_token_optimizer(TokenOptimizerConfig(enabled=False))
