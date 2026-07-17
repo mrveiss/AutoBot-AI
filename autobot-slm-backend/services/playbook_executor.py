@@ -474,12 +474,38 @@ class PlaybookExecutor:
         inv = build_registry_inventory(nodes, is_local_ip)
         validate_inventory(inv)
         tmp_path = write_temp_inventory(inv, uid_tmp_dir=ANSIBLE_LOCAL_TMP)
+        self._link_group_vars(tmp_path)
         logger.info(
             "_build_dynamic_inventory: wrote inventory for %d node(s) to %s",
             len(nodes),
             tmp_path,
         )
         return tmp_path
+
+    def _link_group_vars(self, inventory_path: Path) -> None:
+        """Expose the static group_vars beside the dynamic inventory (#11781).
+
+        Ansible resolves ``group_vars/`` relative to the inventory SOURCE
+        directory. The dynamic inventory is written to a uid-scoped /tmp dir,
+        so none of ``inventory/group_vars/*.yml`` (24 vars in all.yml alone,
+        e.g. ``slm_manager_node_id``) loaded — playbooks referencing them hit
+        "undefined variable" (the self-update pre-flight "Notify SLM of new
+        commit" task failed exactly this way). Symlink the real group_vars dir
+        next to the temp inventory so dynamic runs get the same vars as static
+        ones. Best-effort: a link failure must not block the deploy.
+        """
+        src = self.ansible_dir / "inventory" / "group_vars"
+        if not src.is_dir():
+            return
+        link = inventory_path.parent / "group_vars"
+        try:
+            if link.is_symlink() or link.exists():
+                if link.is_symlink() and link.resolve() == src.resolve():
+                    return
+                link.unlink()
+            link.symlink_to(src, target_is_directory=True)
+        except OSError as exc:
+            logger.warning("Could not link group_vars for dynamic inventory: %s", exc)
 
     async def execute_playbook(
         self,
