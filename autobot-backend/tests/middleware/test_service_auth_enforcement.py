@@ -17,12 +17,13 @@ Covers:
   - enforcement mode gating: logging vs enforcement mode behavior
 """
 
-import os
+import contextlib
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from middleware import service_auth_enforcement as _sae_mod
 from middleware.service_auth_enforcement import (
     EXEMPT_PATHS,
     SERVICE_ONLY_PATHS,
@@ -94,36 +95,51 @@ class TestRequiresServiceAuth:
 # ---------------------------------------------------------------------------
 
 
+def _cfg(**overrides):
+    """Patch SSOT config values for the duration of one test (#11796).
+
+    The middleware reads ``config.service_auth_*`` from autobot_shared's SSOT
+    config object, which is populated from the environment ONCE at
+    instantiation — so the old env-dict patches never influenced it, and on
+    hosts whose real environment sets these variables the tests asserted
+    stale expectations.  Patch the config attributes the code actually reads
+    instead.
+    """
+    stack = contextlib.ExitStack()
+    for _attr, _value in overrides.items():
+        stack.enter_context(patch.object(_sae_mod.config, _attr, _value))
+    return stack
+
+
 class TestGetEnforcementMode:
     def test_false_by_default(self):
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SERVICE_AUTH_ENFORCEMENT_MODE", None)
+        with _cfg(service_auth_enforcement_mode=""):
             assert get_enforcement_mode() is False
 
     def test_true_when_set(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}):
+        with _cfg(service_auth_enforcement_mode="true"):
             assert get_enforcement_mode() is True
 
     def test_case_insensitive_true(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "TRUE"}):
+        with _cfg(service_auth_enforcement_mode="TRUE"):
             assert get_enforcement_mode() is True
 
     def test_false_for_other_values(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "1"}):
+        with _cfg(service_auth_enforcement_mode="1"):
             assert get_enforcement_mode() is False
 
 
 class TestCircuitBreaker:
     def test_full_enforcement_at_100_percent(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "100"}):
+        with _cfg(service_auth_circuit_breaker_percentage=100.0):
             assert _should_enforce_by_circuit_breaker() is True
 
     def test_no_enforcement_at_0_percent(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "0"}):
+        with _cfg(service_auth_circuit_breaker_percentage=0.0):
             assert _should_enforce_by_circuit_breaker() is False
 
     def test_probabilistic_at_50_percent(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE": "50"}):
+        with _cfg(service_auth_circuit_breaker_percentage=50.0):
             results = {_should_enforce_by_circuit_breaker() for _ in range(200)}
             assert True in results and False in results
 
@@ -139,39 +155,22 @@ class TestRateLimiting:
         _failed_auth_tracker.clear()
 
     def test_not_rate_limited_initially(self):
-        assert _is_rate_limited("1.2.3.4") is False
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=3):
+            assert _is_rate_limited("1.2.3.4") is False
 
     def test_rate_limited_after_max_failures(self):
-        with patch.dict(
-            os.environ,
-            {
-                "SERVICE_AUTH_RATE_LIMIT_WINDOW": "300",
-                "SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES": "3",
-            },
-        ):
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=3):
             for _ in range(3):
                 _record_failed_auth("10.0.0.1")
             assert _is_rate_limited("10.0.0.1") is True
 
     def test_expired_failures_pruned(self):
-        with patch.dict(
-            os.environ,
-            {
-                "SERVICE_AUTH_RATE_LIMIT_WINDOW": "1",
-                "SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES": "2",
-            },
-        ):
+        with _cfg(service_auth_rate_limit_window=1, service_auth_rate_limit_max_failures=2):
             _failed_auth_tracker["5.5.5.5"] = [time.time() - 10]  # expired
             assert _is_rate_limited("5.5.5.5") is False
 
     def test_different_ips_tracked_independently(self):
-        with patch.dict(
-            os.environ,
-            {
-                "SERVICE_AUTH_RATE_LIMIT_WINDOW": "300",
-                "SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES": "2",
-            },
-        ):
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=2):
             for _ in range(2):
                 _record_failed_auth("192.168.1.1")
             assert _is_rate_limited("192.168.1.1") is True
@@ -190,26 +189,26 @@ class TestHasOverrideToken:
         return req
 
     def test_correct_token_returns_true(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}):
+        with _cfg(service_auth_override_token="super-secret-token"):
             req = self._make_request("super-secret-token")
             assert _has_override_token(req) is True
 
     def test_wrong_token_returns_false(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}):
+        with _cfg(service_auth_override_token="super-secret-token"):
             req = self._make_request("wrong-token")
             assert _has_override_token(req) is False
 
     def test_no_env_token_returns_false(self):
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SERVICE_AUTH_OVERRIDE_TOKEN", None)
+        with _cfg(service_auth_override_token=""):
             req = self._make_request("anything")
             assert _has_override_token(req) is False
 
     def test_missing_header_returns_false(self):
-        with patch.dict(os.environ, {"SERVICE_AUTH_OVERRIDE_TOKEN": "super-secret-token"}):
+        with _cfg(service_auth_override_token="super-secret-token"):
             req = MagicMock()
+            # #11796: a plain dict already provides .get — assigning to
+            # dict.get raised AttributeError and the test never ran green.
             req.headers = {}
-            req.headers.get = lambda k, d=None: d
             assert _has_override_token(req) is False
 
 
@@ -245,8 +244,9 @@ def _make_request(path: str, ip: str = "10.0.0.99") -> MagicMock:
     req.method = "GET"
     req.client = MagicMock()
     req.client.host = ip
+    # #11796: a plain dict already provides .get — assigning to dict.get
+    # raised AttributeError and every test using this helper never ran green.
     req.headers = {}
-    req.headers.get = lambda k, d=None: d
     req.state = MagicMock()
     return req
 
@@ -254,7 +254,7 @@ def _make_request(path: str, ip: str = "10.0.0.99") -> MagicMock:
 class TestEnforceServiceAuth:
     """Integration-level tests for the enforce_service_auth middleware function.
 
-    All tests that check blocking behavior explicitly set SERVICE_AUTH_ENFORCEMENT_MODE=true.
+    All tests that check blocking behavior explicitly set service_auth_enforcement_mode="true".
     See TestEnforcementModeGating for logging-vs-enforcement mode tests.
     """
 
@@ -284,7 +284,7 @@ class TestEnforceServiceAuth:
         call_next = AsyncMock(return_value="should-not-reach")
 
         with (
-            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
+            _cfg(service_auth_enforcement_mode="true"),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=True,
@@ -311,7 +311,7 @@ class TestEnforceServiceAuth:
         call_next = AsyncMock(return_value="auth-ok-response")
 
         with (
-            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
+            _cfg(service_auth_enforcement_mode="true"),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=True,
@@ -337,7 +337,7 @@ class TestEnforceServiceAuth:
         call_next = AsyncMock(return_value="circuit-bypass")
 
         with (
-            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
+            _cfg(service_auth_enforcement_mode="true"),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=False,
@@ -354,12 +354,9 @@ class TestEnforceServiceAuth:
         call_next = AsyncMock(return_value="override-ok")
 
         with (
-            patch.dict(
-                os.environ,
-                {
-                    "SERVICE_AUTH_OVERRIDE_TOKEN": "emergency-token",
-                    "SERVICE_AUTH_ENFORCEMENT_MODE": "true",
-                },
+            _cfg(
+                service_auth_override_token="emergency-token",
+                service_auth_enforcement_mode="true",
             ),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
@@ -372,7 +369,6 @@ class TestEnforceServiceAuth:
         ):
             req = _make_request("/api/npu/heartbeat")
             req.headers = {"X-Override-Token": "emergency-token"}
-            req.headers.get = lambda k, d=None: {"X-Override-Token": "emergency-token"}.get(k, d)
 
             await enforce_service_auth(req, call_next)
 
@@ -386,7 +382,7 @@ class TestEnforceServiceAuth:
         call_next = AsyncMock(return_value="should-not-reach")
 
         with (
-            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
+            _cfg(service_auth_enforcement_mode="true"),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=True,
@@ -405,12 +401,12 @@ class TestEnforceServiceAuth:
 
 
 # ---------------------------------------------------------------------------
-# Enforcement mode gating (SERVICE_AUTH_ENFORCEMENT_MODE env var)
+# Enforcement mode gating (config.service_auth_enforcement_mode)
 # ---------------------------------------------------------------------------
 
 
 class TestEnforcementModeGating:
-    """Verify that SERVICE_AUTH_ENFORCEMENT_MODE controls enforce-vs-log behaviour."""
+    """Verify that config.service_auth_enforcement_mode controls enforce-vs-log behaviour."""
 
     @pytest.mark.asyncio
     async def test_logging_mode_allows_request_with_invalid_auth(self):
@@ -420,7 +416,7 @@ class TestEnforcementModeGating:
         call_next = AsyncMock(return_value="logging-mode-response")
 
         with (
-            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "false"}),
+            _cfg(service_auth_enforcement_mode="false"),
             patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
                 side_effect=HTTPException(status_code=401, detail="Missing required headers"),
@@ -441,7 +437,7 @@ class TestEnforcementModeGating:
         call_next = AsyncMock(return_value="should-not-reach")
 
         with (
-            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "true"}),
+            _cfg(service_auth_enforcement_mode="true"),
             patch(
                 "middleware.service_auth_enforcement._should_enforce_by_circuit_breaker",
                 return_value=True,
@@ -468,7 +464,7 @@ class TestEnforcementModeGating:
         call_next = AsyncMock(return_value="ok")
 
         with (
-            patch.dict(os.environ, {"SERVICE_AUTH_ENFORCEMENT_MODE": "false"}),
+            _cfg(service_auth_enforcement_mode="false"),
             patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
                 return_value={"service_id": "npu-worker", "authenticated": True},
@@ -484,13 +480,12 @@ class TestEnforcementModeGating:
 
     @pytest.mark.asyncio
     async def test_enforcement_mode_default_is_false(self):
-        """Without SERVICE_AUTH_ENFORCEMENT_MODE set, enforcement is disabled."""
+        """Without service_auth_enforcement_mode set, enforcement is disabled."""
         from fastapi import HTTPException
 
         call_next = AsyncMock(return_value="default-mode-ok")
 
-        with patch.dict(os.environ, {}, clear=False) as env:
-            env.pop("SERVICE_AUTH_ENFORCEMENT_MODE", None)
+        with _cfg(service_auth_enforcement_mode=""):
             with patch(
                 "middleware.service_auth_enforcement.validate_service_auth",
                 side_effect=HTTPException(status_code=401, detail="Missing required headers"),

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from autobot_shared.ssot_config import config
+from constants.model_constants import ANTHROPIC_CLAUDE_SONNET4_6
 
 
 @dataclass
@@ -62,7 +63,12 @@ class AutoResearchConfig:
 
     # Meta-agent settings (issue #3224)
     meta_agent_max_module_lines: int = field(default_factory=lambda: int(config.meta_agent_max_module_lines))
-    meta_agent_llm_model: str = field(default_factory=lambda: config.meta_agent_llm_model)
+    meta_agent_llm_model: str = field(
+        # #11834: restore pre-#7437 fallback — SSOT default is "" because the
+        # model constant lives in backend constants, not autobot_shared.
+        default_factory=lambda: config.meta_agent_llm_model
+        or ANTHROPIC_CLAUDE_SONNET4_6
+    )
     meta_agent_test_timeout: int = field(default_factory=lambda: int(config.meta_agent_test_timeout))
     meta_agent_approval_threshold: float = field(default_factory=lambda: float(config.meta_agent_approval_threshold))
 

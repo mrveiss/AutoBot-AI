@@ -128,9 +128,12 @@ def _validate_and_sanitize_rich_payload(rich_payload: dict | None, cell_type: st
         try:
             sanitized_spec = validate_vegalite_spec(rich_payload.get("spec"))
         except ValueError as exc:
+            # 422 = client-input validation error; the message is crafted by
+            # validate_vegalite_spec and reflects only the caller's own spec,
+            # so returning it leaks no internal state (unlike 500 paths).
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Internal server error",
+                detail=str(exc),
             ) from exc
         return {**rich_payload, "spec": sanitized_spec, "executable": False}
 

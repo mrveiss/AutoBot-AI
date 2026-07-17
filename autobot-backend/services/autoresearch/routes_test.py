@@ -453,7 +453,9 @@ class TestCancelExperiment:
         response = client.post("/autoresearch/cancel")
 
         assert response.status_code == 409
-        assert "not currently running" in response.json()["detail"].lower()
+        # #11834: match the actual product message ("No experiment is currently
+        # running", routes.py) — the old substring never appeared in it.
+        assert "currently running" in response.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------

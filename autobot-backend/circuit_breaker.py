@@ -86,8 +86,13 @@ class CircuitBreakerOpenError(Exception):
         )
 
 
-class CircuitBreakerTimeout(Exception):
-    """Raised when an async call exceeds the circuit breaker timeout."""
+class CircuitBreakerTimeout(TimeoutError):
+    """Raised when an async call exceeds the circuit breaker timeout.
+
+    #11834: subclasses TimeoutError so existing ``except TimeoutError`` callers
+    keep working — call_async previously raised a bare TimeoutError and this
+    exported class was never raised at all.
+    """
 
 
 @dataclass
@@ -319,7 +324,7 @@ class CircuitBreaker:
 
         except asyncio.TimeoutError:
             duration = time.time() - start_time
-            timeout_error = TimeoutError(f"Call to {self.name} timed out after {self.config.timeout}s")
+            timeout_error = CircuitBreakerTimeout(f"Call to {self.name} timed out after {self.config.timeout}s")
             self._record_failure(duration, timeout_error)
             raise timeout_error
 

@@ -84,14 +84,16 @@ class TestGroqProviderChatCompletion:
     async def test_error_returned_in_response(self):
         provider = GroqProvider(settings={"api_key": "gsk_test"})
         mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("rate limit exceeded"))
+        # #11796: neutral message — a rate-limit-shaped error now RAISES
+        # after retries (rate_limit_backoff) instead of returning a response.
+        mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("simulated provider failure"))
         provider._client = mock_client
 
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
         response = await provider.chat_completion(request)
 
         assert response.error is not None
-        assert "rate limit" in response.error
+        assert "simulated provider failure" in response.error
         assert response.content == ""
 
     @pytest.mark.asyncio

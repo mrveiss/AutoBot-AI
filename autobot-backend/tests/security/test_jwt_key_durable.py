@@ -8,43 +8,24 @@ Root-cause tested: previously config.set_nested() stored the auto-generated key
 in-memory only; after the fix the key is written to / read from a file outside
 the code directory so it survives process restarts and code-sync rsyncs.
 
-Strategy: import the real auth_middleware module (not the conftest stub) by
-removing the stub entry from sys.modules before import, then call the
-_get_rs256_keypair() / _jwt_key_file() methods directly on a minimal stub object
-that bypasses the expensive __init__ side-effects (Redis, SecurityLayer, etc.).
+Strategy: load the real auth_middleware module (not the conftest stub) under
+the shared ALIAS key via tests/conftest.py::load_real_auth_middleware
+(#11648/#11791/#11796 — the canonical "auth_middleware" stub entry in
+sys.modules stays untouched, so nothing leaks into later-collected test
+files), then call the _get_rs256_keypair() / _jwt_key_file() methods directly
+on a minimal stub object that bypasses the expensive __init__ side-effects
+(Redis, SecurityLayer, etc.).
 """
 
 from __future__ import annotations
 
-import importlib
 import os
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch  # noqa: F401 — patch used via patch.object
 
-# ---------------------------------------------------------------------------
-# Import the real auth_middleware module, bypassing the conftest stub.
-# conftest.py guards with ``if "auth_middleware" not in sys.modules``, so we
-# pop the stub, import the real module, then restore it after this module is
-# collected so other tests keep their stub.
-# ---------------------------------------------------------------------------
+from tests.conftest import load_real_auth_middleware
 
-
-def _load_real_auth_middleware():
-    """Return the real auth_middleware module, side-stepping the conftest stub."""
-    sys.modules.pop("auth_middleware", None)
-    try:
-        mod = importlib.import_module("auth_middleware")
-        return mod
-    finally:
-        # Restore: put the real module back so subsequent imports in THIS test
-        # file also get the real one, not the stub.
-        # Other test files that want the stub are unaffected because each
-        # pytest process collects once and conftest guards with `if not in sys.modules`.
-        sys.modules["auth_middleware"] = mod  # real module stays
-
-
-_real_auth = _load_real_auth_middleware()
+_real_auth = load_real_auth_middleware()
 _RealAuthMW = _real_auth.AuthenticationMiddleware
 
 

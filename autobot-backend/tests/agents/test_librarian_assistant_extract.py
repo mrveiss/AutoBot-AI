@@ -32,6 +32,16 @@ import pytest
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
 _AGENTS_DIR = _BACKEND_DIR / "agents"
 
+# #11796: snapshot sys.modules before the stub-heavy bootstrap below.  The
+# _make_stub() helper unconditionally assigns into sys.modules (the
+# setdefault(default=...) is evaluated eagerly), replacing the REAL
+# ``services``/``utils`` packages with __path__ = [] stubs for every test
+# module collected after this one in a whole-dir run.  Everything is rolled
+# back right after the module under test is loaded; tests only use the
+# references extracted at load time (_mod, _fake_config) plus per-test
+# patch.dict overrides.
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+
 # Plant a minimal 'agents' package so relative imports in the module work.
 if "agents" not in sys.modules:
     _agents_pkg = types.ModuleType("agents")
@@ -98,17 +108,17 @@ _fake_config.get_nested = MagicMock(side_effect=lambda key, default=None: defaul
 sys.modules.setdefault("config", types.SimpleNamespace(config=_fake_config))
 
 # Patch autobot_shared stubs if not already real modules.
+# #11796: get_logger is set ONLY on a freshly created stub — assigning it on
+# the REAL logging_manager module is an in-place attribute mutation that the
+# sys.modules restore below cannot undo (it broke get_llm_logger's 2-arg
+# get_logger(name, "llm") call for every later-collected test module).
 for _shared in ["autobot_shared.logging_manager"]:
     if _shared not in sys.modules:
-        _make_stub(_shared)
+        _make_stub(_shared).get_logger = logging.getLogger  # type: ignore[attr-defined]
 
 if "autobot_shared.singleton_factory" not in sys.modules:
     _singleton_stub = _make_stub("autobot_shared.singleton_factory")
     _singleton_stub.lazy_singleton = lambda cls: cls  # type: ignore[attr-defined]
-
-_logging_mod = sys.modules.get("autobot_shared.logging_manager")
-if _logging_mod is not None:
-    _logging_mod.get_logger = logging.getLogger  # type: ignore[attr-defined]
 
 _llm_mod = sys.modules.get("services.llm_service")
 if _llm_mod is not None:
@@ -134,6 +144,28 @@ _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
 
 LibrarianAssistant = _mod.LibrarianAssistant
 _source_for_url = _mod._source_for_url
+
+# #11796: restore the pre-bootstrap sys.modules state (see snapshot above) so
+# none of the stubs leak into later-collected test modules.
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
+
+# #11796: the bootstrap may have set ``agent_loop.search`` as an ATTRIBUTE on
+# a real, already-imported ``agent_loop`` package (attribute mutations survive
+# the sys.modules restore above).  Re-sync the attribute with whatever the
+# restored sys.modules now holds so mock.patch's getattr-based dotted-name
+# walk cannot land on a stale stub.
+_al_parent = sys.modules.get("agent_loop")
+if _al_parent is not None:
+    _al_real_child = sys.modules.get("agent_loop.search")
+    if _al_real_child is not None:
+        _al_parent.search = _al_real_child  # type: ignore[attr-defined]
+    elif getattr(_al_parent, "search", None) is _al_search_pkg:
+        del _al_parent.search
 
 
 # ---------------------------------------------------------------------------

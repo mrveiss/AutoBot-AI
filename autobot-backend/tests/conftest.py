@@ -64,9 +64,16 @@ def _repair_stubbed_packages() -> None:
             mod.__path__ = [str(_BACKEND_ROOT / pkg)]
 
 
-@pytest.fixture(scope="session")
-def real_auth_middleware():
-    """The REAL ``auth_middleware`` module, loaded under an alias key."""
+def load_real_auth_middleware():
+    """The REAL ``auth_middleware`` module, loaded once under an alias key.
+
+    Plain-function seam (#11796) so test modules that need the real module at
+    MODULE scope (e.g. tests/security/test_jwt_key_durable.py subclasses
+    AuthenticationMiddleware at class-definition time) can share the fixture's
+    alias-key cache instead of swapping the canonical ``auth_middleware``
+    stub in ``sys.modules`` — a swap leaks the real module into every
+    later-collected test file.
+    """
     if _REAL_AM_KEY in sys.modules:
         return sys.modules[_REAL_AM_KEY]
     _repair_stubbed_packages()
@@ -79,3 +86,9 @@ def real_auth_middleware():
         sys.modules.pop(_REAL_AM_KEY, None)
         raise
     return module
+
+
+@pytest.fixture(scope="session")
+def real_auth_middleware():
+    """The REAL ``auth_middleware`` module, loaded under an alias key."""
+    return load_real_auth_middleware()

@@ -1332,19 +1332,22 @@ class MiscConfig(BaseSettings):
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
     ast_cache_max_size: int = Field(default=1000, alias="AST_CACHE_MAX_SIZE")
     audit_log_file: str = Field(default="/opt/autobot/logs/audit.log", alias="AUTOBOT_AUDIT_LOG_FILE")
-    autoresearch_docker_cpus: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
+    # #11834: restore pre-#7437 autoresearch defaults — ""/0 defaults made
+    # AutoResearchConfig() crash on int("")/float("") and silently zeroed
+    # timeouts/thresholds (same class as #11681).
+    autoresearch_docker_cpus: float = Field(default=2.0, alias="AUTOBOT_AUTORESEARCH_DOCKER_CPUS")
     autoresearch_data_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DATA_DIR")
     autoresearch_dir: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DIR")
     autoresearch_docker_enabled: bool = Field(default=False, alias="AUTOBOT_AUTORESEARCH_DOCKER_ENABLED")
     autoresearch_docker_image: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_IMAGE")
-    autoresearch_docker_memory: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_DOCKER_MEMORY")
-    autoresearch_docker_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT")
-    autoresearch_improvement_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD")
-    autoresearch_max_steps: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_MAX_STEPS")
-    autoresearch_significant_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD")
-    autoresearch_staged_eval_fraction: str = Field(default="", alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
-    autoresearch_staged_eval_threshold: float = Field(default=0.0, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
-    autoresearch_timeout: int = Field(default=0, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
+    autoresearch_docker_memory: str = Field(default="4g", alias="AUTOBOT_AUTORESEARCH_DOCKER_MEMORY")
+    autoresearch_docker_timeout: int = Field(default=300, alias="AUTOBOT_AUTORESEARCH_DOCKER_TIMEOUT")
+    autoresearch_improvement_threshold: float = Field(default=0.01, alias="AUTOBOT_AUTORESEARCH_IMPROVEMENT_THRESHOLD")
+    autoresearch_max_steps: int = Field(default=5000, alias="AUTOBOT_AUTORESEARCH_MAX_STEPS")
+    autoresearch_significant_threshold: float = Field(default=0.05, alias="AUTOBOT_AUTORESEARCH_SIGNIFICANT_THRESHOLD")
+    autoresearch_staged_eval_fraction: float = Field(default=0.3, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_FRACTION")
+    autoresearch_staged_eval_threshold: float = Field(default=0.5, alias="AUTOBOT_AUTORESEARCH_STAGED_EVAL_THRESHOLD")
+    autoresearch_timeout: int = Field(default=600, alias="AUTOBOT_AUTORESEARCH_TIMEOUT")
     ai_stack_enabled: bool = Field(default=True, alias="AUTOBOT_AI_STACK_ENABLED")
     allow_unapproved_sudo: bool = Field(
         default=False,
@@ -1392,7 +1395,9 @@ class MiscConfig(BaseSettings):
     cloud_retry_base_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_BASE_DELAY")
     cloud_retry_max_attempts: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS")
     cloud_retry_max_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_DELAY")
-    concurrent_limiter_timeout: int = Field(default=0, alias="AUTOBOT_CONCURRENT_LIMITER_TIMEOUT")
+    # 300 s pre-#7437 default (os.getenv fallback lost in the migration, #11834);
+    # matches ansible backend.env.j2 default(300)
+    concurrent_limiter_timeout: int = Field(default=300, alias="AUTOBOT_CONCURRENT_LIMITER_TIMEOUT")
     coqui_model: str = Field(default="", alias="AUTOBOT_COQUI_MODEL")
     database_url: str = Field(default="", alias="AUTOBOT_DATABASE_URL")
     data_db: str = Field(default="", alias="AUTOBOT_DATA_DB")
@@ -1509,10 +1514,12 @@ class MiscConfig(BaseSettings):
     memory_log_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=0, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=0, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
-    meta_agent_approval_threshold: float = Field(default=0.0, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
+    # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
+    # llm_model default stays "" — backend falls back to its model constant.
+    meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
     meta_agent_llm_model: str = Field(default="", alias="AUTOBOT_META_AGENT_LLM_MODEL")
-    meta_agent_max_module_lines: str = Field(default="", alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
-    meta_agent_test_timeout: int = Field(default=0, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
+    meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
+    meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
     postgres_db: str = Field(default="", alias="AUTOBOT_POSTGRES_DB")
     postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
@@ -1528,8 +1535,10 @@ class MiscConfig(BaseSettings):
     redis_memory_db: str = Field(default="", alias="AUTOBOT_REDIS_MEMORY_DB")
     redis_task_db: str = Field(default="", alias="AUTOBOT_REDIS_TASK_DB")
     redis_url: str = Field(default="", alias="AUTOBOT_REDIS_URL")
-    research_checkpoints_enabled: bool = Field(default=False, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED")
-    research_checkpoint_timeout: int = Field(default=0, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT")
+    # #11834: restore pre-#7437 defaults — checkpoints were enabled by default
+    # ("true") with a 300s timeout; False/0 silently disabled HITL checkpoints.
+    research_checkpoints_enabled: bool = Field(default=True, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED")
+    research_checkpoint_timeout: int = Field(default=300, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT")
     routing_model: str = Field(default="", alias="AUTOBOT_ROUTING_MODEL")
     run_jwt: str = Field(default="", alias="AUTOBOT_RUN_JWT")
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")

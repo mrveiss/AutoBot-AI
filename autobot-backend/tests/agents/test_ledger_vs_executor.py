@@ -73,32 +73,31 @@ class TestLedgerVsExecutorInjection:
         assert "LEDGER_VS_EXECUTOR_RULE" in method_source
 
     def test_orchestrator_imports_rule_via_source(self):
-        """Verify orchestrator source code imports the rule constant"""
-        # Read the orchestrator source directly
-        orch_path = Path(__file__).parent.parent.parent / "orchestrator.py"
-        source = orch_path.read_text()
+        """Verify the orchestrator prompt module imports the rule constant.
 
-        # Check that it imports LEDGER_VS_EXECUTOR_RULE
+        #11834: prompt rendering was extracted from orchestrator.py into
+        orchestration/orchestrator_prompts.py (#5060/#10666) — the rule import
+        moved with it; orchestrator.py delegates to build_planning_prompt.
+        """
+        prompts_path = Path(__file__).parent.parent.parent / "orchestration" / "orchestrator_prompts.py"
+        source = prompts_path.read_text(encoding="utf-8")
         assert "LEDGER_VS_EXECUTOR_RULE" in source
         assert "from autobot_shared.prompt_rules import" in source
 
-    def test_orchestrator_planning_prompt_includes_rule_via_source(self):
-        """Verify orchestrator's planning prompt method references the rule"""
-        # Read the orchestrator source directly
-        orch_path = Path(__file__).parent.parent.parent / "orchestrator.py"
-        source = orch_path.read_text()
+        orch_source = (Path(__file__).parent.parent.parent / "orchestrator.py").read_text(encoding="utf-8")
+        assert "build_planning_prompt" in orch_source
 
-        # Find the _build_planning_prompt method
-        match = re.search(
-            r"def _build_planning_prompt\(self.*?\):\s*.*?(?=\n    def |\n\nclass |\Z)",
-            source,
-            re.DOTALL,
-        )
-        assert match is not None, "_build_planning_prompt method not found"
+    def test_orchestrator_planning_prompt_includes_rule(self):
+        """Verify the rendered planning prompt contains the rule.
 
-        method_source = match.group(0)
-        # Check that the method references LEDGER_VS_EXECUTOR_RULE
-        assert "LEDGER_VS_EXECUTOR_RULE" in method_source
+        #11834: exercises the real build_planning_prompt (stronger than the old
+        source-grep, which broke when the method body moved to
+        orchestration/orchestrator_prompts.py).
+        """
+        from orchestration.orchestrator_prompts import build_planning_prompt
+
+        prompt = build_planning_prompt("test goal", "{}")
+        assert LEDGER_VS_EXECUTOR_RULE in prompt
 
     def test_token_budget_reasonable(self):
         """Verify rule is reasonably sized (~130 tokens is acceptable for clarity)"""

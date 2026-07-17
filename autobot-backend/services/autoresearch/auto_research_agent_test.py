@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -799,10 +799,14 @@ class TestAutoResearchAgentCheckpoints:
         )
         agent._redis = AsyncMock()
 
-        session = await agent.run_experiment_loop(topic="original topic", max_iterations=1)
+        # #11834: a QUERY_PLAN redirect replaces the SEARCH QUERY (step 1a);
+        # only SOURCE_SELECTION / DRAFT_CONCLUSIONS redirects annotate the
+        # hypothesis statement. Assert on the real seam: the redirected query
+        # must be what _web_search receives.
+        with patch.object(agent, "_web_search", AsyncMock(wraps=agent._web_search)) as web_search_spy:
+            session = await agent.run_experiment_loop(topic="original topic", max_iterations=1)
         assert session.status == SessionStatus.COMPLETED
-        # The hypothesis statement should mention the user's redirect
-        assert any("learning rate schedule" in h.statement for h in session.hypotheses)
+        assert web_search_spy.call_args.kwargs["query"] == "learning rate schedule"
 
     @pytest.mark.asyncio
     async def test_checkpoint_timeout_auto_proceeds(self) -> None:

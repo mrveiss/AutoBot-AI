@@ -279,8 +279,10 @@ class TestIndexInChromadb:
         mock_client = AsyncMock()
         mock_client.get_or_create_collection = AsyncMock(return_value=mock_collection)
 
+        # #11834: _get_chromadb migrated to knowledge.backends.get_async_default_client
+        # — the old utils.chromadb_client seam is no longer imported by store.py.
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
+            "knowledge.backends.get_async_default_client",
             new_callable=AsyncMock,
             return_value=mock_client,
         ) as mock_get_client:

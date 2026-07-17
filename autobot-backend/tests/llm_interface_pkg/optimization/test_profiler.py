@@ -8,12 +8,27 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+import llm_shared.optimization.profiler as _profiler_mod
 from llm_shared.optimization.profiler import (
     INFERENCE_STAGES,
     LayeredProfiler,
     _StageAccumulator,
     _VRAMTracker,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_cuda(monkeypatch):
+    """Force the no-GPU path for every test (#11796).
+
+    The backend root conftest stubs ``torch`` with a MagicMock, so
+    ``torch.cuda.is_available()`` is truthy and ``stage()`` would try to
+    unpack a MagicMock from ``torch.cuda.mem_get_info()``.  Tests that
+    exercise the CUDA path re-patch ``_check_cuda`` explicitly.
+    """
+    monkeypatch.setattr(_VRAMTracker, "_check_cuda", lambda self: False)
 
 
 class TestStageAccumulator:
@@ -58,15 +73,18 @@ class TestVRAMTracker:
         tracker.sample()
         assert tracker.peak_allocated_bytes == 0
 
-    @patch(
-        "llm_shared.optimization.profiler._VRAMTracker._check_cuda",
-        return_value=True,
-    )
-    def test_cuda_sampling(self, mock_check):
+    def test_cuda_sampling(self):
+        # #11796: patch.object on the imported class — the string form
+        # ("llm_shared.optimization.profiler._VRAMTracker...") resolves a
+        # different module instance under the conftest's real-load seam, so
+        # the patch would miss the class this test actually instantiates.
         tracker = _VRAMTracker()
-        with patch(
-            "torch.cuda.mem_get_info",
-            return_value=(2_000_000_000, 8_000_000_000),
+        with (
+            patch.object(_VRAMTracker, "_check_cuda", return_value=True),
+            patch(
+                "torch.cuda.mem_get_info",
+                return_value=(2_000_000_000, 8_000_000_000),
+            ),
         ):
             tracker.sample()
         assert tracker.peak_allocated_bytes == 6_000_000_000
@@ -188,20 +206,26 @@ class TestLayeredProfilerEnabled:
 
 
 class TestLayeredProfilerEnvironment:
-    """Test environment-based enable/disable."""
+    """Test config-based enable/disable.
 
-    @patch.dict("os.environ", {"AUTOBOT_INFERENCE_PROFILING": "1"})
-    def test_enabled_via_env(self):
+    #11796: _is_profiling_enabled() reads ``config.inference_profiling``
+    (SSOT config, populated from AUTOBOT_INFERENCE_PROFILING at config
+    instantiation) — patching os.environ after import has no effect, so
+    these tests patch the config attribute the code actually reads.
+    """
+
+    def test_enabled_via_env(self, monkeypatch):
+        monkeypatch.setattr(_profiler_mod.config, "inference_profiling", "1")
         profiler = LayeredProfiler("test-model")
         assert profiler.enabled
 
-    @patch.dict("os.environ", {"AUTOBOT_INFERENCE_PROFILING": "true"})
-    def test_enabled_via_env_true(self):
+    def test_enabled_via_env_true(self, monkeypatch):
+        monkeypatch.setattr(_profiler_mod.config, "inference_profiling", "true")
         profiler = LayeredProfiler("test-model")
         assert profiler.enabled
 
-    @patch.dict("os.environ", {"AUTOBOT_INFERENCE_PROFILING": "0"})
-    def test_disabled_via_env(self):
+    def test_disabled_via_env(self, monkeypatch):
+        monkeypatch.setattr(_profiler_mod.config, "inference_profiling", "0")
         profiler = LayeredProfiler("test-model")
         assert not profiler.enabled
 

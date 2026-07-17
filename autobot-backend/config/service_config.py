@@ -255,13 +255,27 @@ class ServiceConfigMixin:
     def get_cors_origins(self) -> list:
         """Generate CORS origins from ALL infrastructure machines (#815).
 
-        Iterates every VM in ``NetworkConstants.get_host_configs()`` so
-        that adding a new machine automatically allows CORS from it.
-        ``security.cors_origins`` in the config file still overrides.
+        Precedence:
+          1. ``security.cors_origins`` in the config file (explicit override).
+          2. ``CORS_ORIGINS`` env — comma-separated; rendered by the backend
+             Ansible role (roles/backend/templates/backend.env.j2) and the
+             single source of truth for a deployed fleet (#11805).
+          3. Generated per-host defaults from ``NetworkConstants`` so that
+             adding a new machine automatically allows CORS from it.
+
+        #11805: the env var was rendered by every deploy but never read here,
+        so real deployments fell through to the generated defaults. Those are
+        ``http://{ip}:{port}`` only — a TLS browser origin (``https://<host>``,
+        no port) could never match, and api/ws_security.py rejected EVERY
+        WebSocket handshake with 403 (live events, voice streaming).
         """
         explicit_origins = self.get_nested("security.cors_origins", [])
         if explicit_origins:
             return explicit_origins
+
+        env_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+        if env_origins:
+            return env_origins
 
         origins: set[str] = set()
 

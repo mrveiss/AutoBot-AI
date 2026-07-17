@@ -32,12 +32,22 @@ sys.path.insert(0, str(_slm_root))
 # Stub the heavy monitoring package so main.py's deferred import inside the
 # endpoint handler can be patched per-test without pulling the full dep tree.
 # ---------------------------------------------------------------------------
-_fake_monitoring_pkg = types.ModuleType("monitoring")
-_fake_prom_metrics_mod = types.ModuleType("monitoring.prometheus_metrics")
-_fake_prom_metrics_mod.get_metrics_manager = MagicMock()
-_fake_monitoring_pkg.prometheus_metrics = _fake_prom_metrics_mod
-sys.modules.setdefault("monitoring", _fake_monitoring_pkg)
-sys.modules["monitoring.prometheus_metrics"] = _fake_prom_metrics_mod
+# CONVERGE on any stub another sweep file already installed for this key —
+# a second, competing module object desynchronises patch() (attribute chain
+# from the parent package) from the endpoint's lazy runtime import
+# (sys.modules), so the patched manager is never the one called (#11798).
+_fake_prom_metrics_mod = sys.modules.get("monitoring.prometheus_metrics")
+if _fake_prom_metrics_mod is None:
+    _fake_prom_metrics_mod = types.ModuleType("monitoring.prometheus_metrics")
+    _fake_prom_metrics_mod.get_metrics_manager = MagicMock()
+    sys.modules["monitoring.prometheus_metrics"] = _fake_prom_metrics_mod
+# The parent stub is a hollow package with the REAL __path__, never a bare
+# (pathless) ModuleType: a pathless squat shadows the real package for every
+# later sweep file that imports monitoring.claude_api_monitor (#11798).
+_monitoring_pkg = sys.modules.setdefault("monitoring", types.ModuleType("monitoring"))
+if not hasattr(_monitoring_pkg, "__path__"):
+    _monitoring_pkg.__path__ = [str(_slm_root / "monitoring")]
+_monitoring_pkg.prometheus_metrics = _fake_prom_metrics_mod
 
 
 # ---------------------------------------------------------------------------

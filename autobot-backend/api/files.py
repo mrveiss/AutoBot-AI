@@ -243,6 +243,13 @@ def validate_and_resolve_path(path: str) -> Path:
     # Remove leading/trailing slashes and normalize
     clean_path = path.strip("/")
 
+    # "/" (and "//") address the sandbox root itself — after stripping they
+    # collapse to "", which validate_relative_path rejects as an empty
+    # segment, surfacing a misleading "outside sandbox" 400 and making the
+    # root unlistable for every caller of this helper (#11823).
+    if not clean_path:
+        return SANDBOXED_ROOT
+
     # Enhanced path traversal checks
     if (
         ".." in clean_path

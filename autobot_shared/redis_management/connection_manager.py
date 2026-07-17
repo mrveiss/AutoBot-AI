@@ -170,9 +170,17 @@ class RedisConnectionManager:
         Test seam only (#11681 — uniform reset seams across singletons).
         Does NOT close pools on the old instance; call ``close_all()`` first
         if pools were created.
+
+        #11830: also drops the lazily-cached backend config manager — a
+        singleton constructed under test-stubbed config caches the stub in
+        ``_config_manager``, so the next construction must re-resolve config
+        instead of reusing the poisoned import.
         """
+        global _config_manager
         with cls._lock:
             cls._instance = None
+        with _config_manager_lock:
+            _config_manager = None
 
     def __init__(self) -> None:
         """

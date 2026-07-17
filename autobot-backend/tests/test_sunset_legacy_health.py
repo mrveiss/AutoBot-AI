@@ -189,6 +189,10 @@ def test_missing_user_agent_defaults_to_unknown():
     mock_counter.labels.return_value = MagicMock()
 
     client = _build_app()
+    # #11834: TestClient (httpx) always injects a default "user-agent:
+    # testclient" header — passing headers={} does NOT suppress it. Delete the
+    # client-level default so the request truly has no User-Agent.
+    del client.headers["user-agent"]
     with patch.object(mw, "autobot_legacy_health_hits_total", mock_counter):
         client.get("/api/redis/health", headers={})
 

@@ -53,6 +53,10 @@ def _load_sso_module():
         "services": MagicMock(),
         "services.auth": MagicMock(),
         "services.database": MagicMock(),
+        # api/sso.py gained `from services.step_up_auth import require_step_up`
+        # (#10693) after this loader's stub list was written; without the key
+        # the MagicMock "services" parent cannot resolve it (#11798).
+        "services.step_up_auth": MagicMock(),
         "user_management": MagicMock(),
         "user_management.database": MagicMock(),
         "user_management.schemas": MagicMock(),

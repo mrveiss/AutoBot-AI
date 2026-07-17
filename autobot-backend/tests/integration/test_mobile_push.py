@@ -63,7 +63,10 @@ async def test_db_engine():
     )
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # #11834: scope create_all to the tables under test — whole-metadata
+        # create_all breaks under whole-dir order when earlier tests import
+        # llc models whose Postgres '::jsonb' server_defaults sqlite rejects.
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=[MobileDevice.__table__]))
 
     yield engine
 

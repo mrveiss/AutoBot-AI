@@ -11,39 +11,149 @@ Tests SSOSecretsManager for:
 - Deleting provider secrets
 - Migrating plaintext to encrypted storage
 - Handling decryption failures gracefully
+
+The slm-backend root conftest stubs ``sqlalchemy`` / ``models.database`` /
+``services.encryption`` as MagicMocks for api/* tests, so bare imports here
+would run against inert mock chains (``create_async_engine`` returning a
+MagicMock that cannot be awaited — the exact never-run failure #11798 fixed).
+Following the established real-load pattern (tests/services/code_version_test.py,
+#11737/#11794), this module swaps in the REAL sqlalchemy + product modules at
+import time, binds what it needs, then restores the stubs so sibling test
+files are unaffected.  The swap is re-activated for each test via the
+``async_session`` fixture (``_real_modules_swapped()``) because
+SSOSecretsManager resolves ``models.database`` / ``services.encryption`` /
+``user_management.services.vault_client`` through sys.modules at call time.
 """
 
+import contextlib
+import importlib
+import importlib.util
+import os
+import sys
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
-from models.database import Base, SystemSecret
-from services.encryption import decrypt_data
+_SLM_ROOT = Path(__file__).parent.parent.parent
+for _p in (str(_SLM_ROOT), str(_SLM_ROOT.parent)):  # slm root + repo root (autobot_shared)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+# The real EncryptionService requires a master key at first use; provide a
+# deterministic test-only default without clobbering a real environment.
+os.environ.setdefault("SLM_ENCRYPTION_KEY", "unit-test-encryption-key-0123456789abcdef")
+
+_SWAP_PREFIXES = ("sqlalchemy", "aiosqlite")
+_SWAP_KEYS = (
+    "models.database",
+    "services.encryption",
+    "user_management.services.vault_client",
+    "user_management.services.sso_secrets",
+)
+
+
+def _is_swap_key(name: str) -> bool:
+    return name in _SWAP_KEYS or any(name == p or name.startswith(p + ".") for p in _SWAP_PREFIXES)
+
+
+def _load_real_module(name: str, path: Path):
+    """Exec *path* under canonical *name* (registered so runtime imports resolve)."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    sys.modules[name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+# Snapshot and clear EVERY swapped key (not just the ones the root conftest
+# stubs): earlier-collected files leave extra child stubs such as
+# ``sqlalchemy.exc`` in sys.modules, and one cached MagicMock child poisons
+# the real package import (see code_version_test.py, #11737).
+_orig_modules = {name: mod for name, mod in sys.modules.items() if _is_swap_key(name)}
+for _name in list(_orig_modules):
+    del sys.modules[_name]
+try:
+    for _name in (
+        "sqlalchemy",
+        "sqlalchemy.ext.asyncio",
+        "sqlalchemy.orm",
+        # The aiosqlite dialect is resolved lazily at create_async_engine()
+        # time; import it now while the real package tree is intact.
+        "sqlalchemy.dialects.sqlite.aiosqlite",
+    ):
+        importlib.import_module(_name)
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.orm import sessionmaker
+
+    _real_md = _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
+    _real_enc = _load_real_module("services.encryption", _SLM_ROOT / "services" / "encryption.py")
+    _real_vc = _load_real_module(
+        "user_management.services.vault_client",
+        _SLM_ROOT / "user_management" / "services" / "vault_client.py",
+    )
+    # Force the legacy SystemSecret code path deterministically: an env with
+    # AUTOBOT_INTERNAL_API_KEY / SLM_SERVICE_KEY set would flip is_configured()
+    # and route store/retrieve to live HTTP vault calls.  This mutates only our
+    # private real-loaded instance, never the conftest stub other files see.
+    _real_vc._INTERNAL_API_KEY = ""
+    _real_vc._SERVICE_KEY = ""
+    _real_sso = _load_real_module(
+        "user_management.services.sso_secrets",
+        _SLM_ROOT / "user_management" / "services" / "sso_secrets.py",
+    )
+
+    Base = _real_md.Base
+    SystemSecret = _real_md.SystemSecret
+    decrypt_data = _real_enc.decrypt_data
+    SSOSecretsManager = _real_sso.SSOSecretsManager
+
+    _REAL_MODULES = {name: mod for name, mod in sys.modules.items() if _is_swap_key(name)}
+finally:
+    for _name in [name for name in sys.modules if _is_swap_key(name)]:
+        del sys.modules[_name]
+    for _name, _mod in _orig_modules.items():
+        sys.modules[_name] = _mod
+
+
+@contextlib.contextmanager
+def _real_modules_swapped():
+    """Temporarily put the real sqlalchemy/product modules back into sys.modules."""
+    saved = {name: sys.modules.get(name) for name in _REAL_MODULES}
+    sys.modules.update(_REAL_MODULES)
+    try:
+        yield
+    finally:
+        for name, mod in saved.items():
+            if mod is not None:
+                sys.modules[name] = mod
+            else:
+                sys.modules.pop(name, None)
 
 
 # Test fixtures setup
 @pytest.fixture
 async def async_session():
-    """Create an async test database session."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine
+    """Create an async test database session (real modules swapped in)."""
+    with _real_modules_swapped():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine
 
-    # Create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # Create tables
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    # Create session factory
-    async_session_maker = sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+        # Create session factory
+        async_session_maker = sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
 
-    async with async_session_maker() as session:
-        yield session
+        async with async_session_maker() as session:
+            yield session
 
-    await engine.dispose()
+        await engine.dispose()
 
 
 @pytest.fixture
@@ -83,8 +193,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_store_secrets_creates_encrypted_secrets(self, async_session, provider_id, oauth_config):
         """Test that store_secrets extracts and encrypts sensitive fields."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Store secrets
@@ -117,8 +225,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_store_secrets_handles_multiple_sensitive_fields(self, async_session, provider_id, ldap_config):
         """Test storing config with bind_password field."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Store LDAP config with bind_password
@@ -142,8 +248,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_store_secrets_updates_existing_secret(self, async_session, provider_id, oauth_config):
         """Test that updating provider updates the encrypted secret."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Store initial secret
@@ -169,8 +273,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_retrieve_secret_decrypts_successfully(self, async_session, provider_id, oauth_config):
         """Test retrieving and decrypting a stored secret."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Store secret first
@@ -184,8 +286,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_retrieve_secret_returns_none_for_missing(self, async_session, provider_id):
         """Test that retrieve_secret returns None for non-existent secret."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Try to retrieve non-existent secret
@@ -195,8 +295,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_retrieve_secret_handles_decryption_failure(self, async_session, provider_id):
         """Test graceful handling of decryption failures."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Store a secret with corrupted encryption
@@ -216,8 +314,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_delete_secrets_removes_all_provider_secrets(self, async_session, provider_id, oauth_config):
         """Test that delete_secrets removes all associated secrets."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Store secrets
@@ -243,8 +339,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_has_plaintext_secrets_detects_plaintext(self, oauth_config):
         """Test detection of plaintext secrets in config."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(AsyncMock())
 
         # Config with plaintext secret
@@ -257,8 +351,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_migrate_plaintext_to_secrets_converts_successfully(self, async_session, provider_id, oauth_config):
         """Test migration from plaintext to encrypted storage."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Migrate plaintext config
@@ -276,8 +368,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_migrate_plaintext_skips_already_migrated(self, async_session, provider_id):
         """Test that migration skips configs without plaintext secrets."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Config already migrated (has references)
@@ -293,8 +383,6 @@ class TestSSOSecretsManagerIntegration:
     @pytest.mark.asyncio
     async def test_store_secrets_handles_empty_secret_values(self, async_session, provider_id):
         """Test that empty/null secret values are not stored."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Config with empty client_secret
@@ -323,8 +411,6 @@ class TestSSOSecretsManagerEdgeCases:
     @pytest.mark.asyncio
     async def test_concurrent_updates_to_same_secret(self, async_session, provider_id, oauth_config):
         """Test that concurrent updates don't corrupt secrets."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Store initial secret
@@ -351,8 +437,6 @@ class TestSSOSecretsManagerEdgeCases:
     @pytest.mark.asyncio
     async def test_unicode_secrets_handled_correctly(self, async_session, provider_id):
         """Test that Unicode characters in secrets are preserved."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Config with Unicode secret
@@ -372,8 +456,6 @@ class TestSSOSecretsManagerEdgeCases:
     @pytest.mark.asyncio
     async def test_very_long_secret_values(self, async_session, provider_id):
         """Test handling of very long secret values (e.g., long API keys)."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Generate a 2KB secret

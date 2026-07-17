@@ -389,11 +389,14 @@ class TestListCatalog:
 
 
 class TestGetCatalogEntry:
+    # #6524 (e3f7bcd97) made the detail endpoint source-aware: source_id is a
+    # Query param, so direct calls must pass it explicitly or the raw Query
+    # FieldInfo default leaks in as the source id (same as sibling tests).
     @pytest.mark.asyncio
     async def test_returns_known_entry(self):
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            entry = await get_catalog_entry("hello-plugin")
+            entry = await get_catalog_entry("hello-plugin", source_id="builtin")
         assert isinstance(entry, MarketplaceEntry)
         assert entry.name == "hello-plugin"
 
@@ -402,7 +405,7 @@ class TestGetCatalogEntry:
         redis = _make_redis(catalog=None)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
             with pytest.raises(HTTPException) as exc_info:
-                await get_catalog_entry("no-such-plugin")
+                await get_catalog_entry("no-such-plugin", source_id="builtin")
         assert exc_info.value.status_code == 404
         assert "no-such-plugin" in exc_info.value.detail
 
@@ -427,7 +430,7 @@ class TestGetCatalogEntry:
         ]
         redis = _make_redis(catalog=custom_catalog)
         with patch("api.marketplace.get_async_redis_client", new=AsyncMock(return_value=redis)):
-            entry = await get_catalog_entry("custom-plugin")
+            entry = await get_catalog_entry("custom-plugin", source_id="builtin")
         assert entry.name == "custom-plugin"
         assert entry.version == "2.0.0"
 

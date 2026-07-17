@@ -31,15 +31,35 @@ code_source_path = Path(__file__).parent / "code_source.py"
 spec = __import__("importlib.util").util.spec_from_file_location("code_source_module", code_source_path)
 code_source_module = __import__("importlib.util").util.module_from_spec(spec)
 
-# Mock dependencies before loading the module
-sys.modules["services.auth"] = MagicMock()
-sys.modules["services.database"] = MagicMock()
-sys.modules["models.database"] = MagicMock()
+# Mock dependencies before loading the module — snapshot/restore (#11798):
+# the previous unconditional sys.modules writes permanently replaced the root
+# conftest stubs WITHOUT rebinding the parent-package attributes, so
+# mock.patch("services.database.…") in later sweep files (tests/api/
+# test_fleet_node_update_11511.py) patched the old module object while
+# runtime imports resolved the new one (#9780 divergence).
 _mock_config = MagicMock()
 _mock_config.settings.external_url = "http://10.0.0.9:8080"
-sys.modules["config"] = _mock_config
+_STUBS = {
+    "services.auth": MagicMock(),
+    "services.database": MagicMock(),
+    "models.database": MagicMock(),
+    "config": _mock_config,
+}
+_prev_modules = {name: sys.modules.get(name) for name in _STUBS}
+sys.modules.update(_STUBS)
+try:
+    spec.loader.exec_module(code_source_module)
+finally:
+    for _name, _prev in _prev_modules.items():
+        if _prev is None:
+            sys.modules.pop(_name, None)
+        else:
+            sys.modules[_name] = _prev
 
-spec.loader.exec_module(code_source_module)
+# Register under the spec name so patch("code_source_module.…") can resolve the
+# target — mock.patch imports the path, and an unregistered exec'd module raises
+# ModuleNotFoundError for every test using _LOCAL_NODE_PATCH (#11798).
+sys.modules["code_source_module"] = code_source_module
 
 _find_similar_paths = code_source_module._find_similar_paths
 _validate_repo_path = code_source_module._validate_repo_path
@@ -156,7 +176,10 @@ class TestCodeSourceValidation:
 
             result = await _find_similar_paths(mock_node, "/home/${USER:-autobot}/Desktop/autobot")
 
-            assert result == "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+            # The helper returns parent-dir + the case-corrected entry from the
+            # mocked ls output ("AutoBot"), NOT a fallback root (#11798 — a
+            # mechanical path-literal sweep had rotted this expectation).
+            assert result == "/home/${USER:-autobot}/Desktop/AutoBot"
 
     @pytest.mark.asyncio
     async def test_find_similar_paths_no_match(self, mock_node):

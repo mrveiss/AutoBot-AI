@@ -321,6 +321,15 @@ if "llm_shared" not in sys.modules:
     ]:
         if _llm_sub not in sys.modules:
             sys.modules[_llm_sub] = _make_pkg_stub(_llm_sub)
+        # #11796: bind each sub-package stub as an attribute on its parent.
+        # Without this, unittest.mock's dotted-name resolution (and
+        # ``import llm_shared.X.Y as m``) walks getattr() through the parent
+        # stub's catch-all __getattr__, gets the mock singleton instead of
+        # the stub/real module in sys.modules, and string-form patch()
+        # silently patches the wrong object (same trap _real_load_and_bind's
+        # parent bind guards against).
+        _llm_parent, _, _llm_child = _llm_sub.rpartition(".")
+        setattr(sys.modules[_llm_parent], _llm_child, sys.modules[_llm_sub])
 
     # Give llm_shared.tiered_routing the real __path__ so submodule imports
     # (e.g. from llm_shared.tiered_routing.complexity_router import ...) can
@@ -328,6 +337,16 @@ if "llm_shared" not in sys.modules:
     # autobot_shared.logging_manager and lightweight config — no heavy deps.
     _tr_real_path = str(backend_root / "llm_shared" / "tiered_routing")
     sys.modules["llm_shared.tiered_routing"].__path__ = [_tr_real_path]  # type: ignore[attr-defined]
+
+    # #11796: same for providers/ and optimization/ — submodules not stubbed
+    # or real-loaded below stay importable from disk (and importlib.reload()
+    # of a real-loaded provider can re-find its spec via the parent __path__).
+    sys.modules["llm_shared.providers"].__path__ = [  # type: ignore[attr-defined]
+        str(backend_root / "llm_shared" / "providers")
+    ]
+    sys.modules["llm_shared.optimization"].__path__ = [  # type: ignore[attr-defined]
+        str(backend_root / "llm_shared" / "optimization")
+    ]
 
     # GH#8998: Register real fallback_chain and model_fallback_coordinator modules
     # so tests inside llm_shared/ can import them without the full heavy __init__.py chain.
@@ -379,6 +398,42 @@ if "llm_shared" not in sys.modules:
     _real_load_and_bind("llm_shared.base_provider", _llm_root / "base_provider.py")
     _real_load_and_bind("llm_shared.model_param_registry", _llm_root / "model_param_registry.py")
     _real_load_and_bind("llm_shared.provider_registry", _llm_root / "provider_registry.py")
+    # #11796: concrete provider modules + profiler — their test modules
+    # (tests/llm_interface_pkg/*) import them at collection time, but the
+    # llm_shared.providers / llm_shared.optimization pkg stubs have an empty
+    # __path__, so without explicit real-loads those imports fail and the
+    # files error out of every whole-dir collection.  All are light imports
+    # (stdlib + the llm_shared seams real-loaded above + jinja2).
+    # Dependency order: cache_utils → openai_compatible → concrete providers.
+    _real_load_and_bind("llm_shared.providers.cache_utils", _llm_root / "providers" / "cache_utils.py")
+    _real_load_and_bind(
+        "llm_shared.providers.openai_compatible",
+        _llm_root / "providers" / "openai_compatible.py",
+    )
+    _real_load_and_bind("llm_shared.providers.anthropic", _llm_root / "providers" / "anthropic.py")
+    _real_load_and_bind("llm_shared.providers.groq", _llm_root / "providers" / "groq.py")
+    _real_load_and_bind("llm_shared.providers.openai", _llm_root / "providers" / "openai.py")
+    _real_load_and_bind("llm_shared.providers.custom_openai", _llm_root / "providers" / "custom_openai.py")
+    _real_load_and_bind(
+        "llm_shared.providers.chat_template_loader",
+        _llm_root / "providers" / "chat_template_loader.py",
+    )
+    # vllm.py guards its heavy `from vllm import ...` in try/except, and
+    # ollama_provider only needs aiohttp + light autobot_shared seams.
+    _real_load_and_bind("llm_shared.providers.vllm", _llm_root / "providers" / "vllm.py")
+    _real_load_and_bind(
+        "llm_shared.providers.ollama_provider",
+        _llm_root / "providers" / "ollama_provider.py",
+    )
+    # #11837: providers.ollama (the canonical Ollama provider, #11517) imports
+    # `from ..streaming import StreamingManager` at module level, but the
+    # llm_shared stub's empty __path__ can't resolve streaming.py on disk, so
+    # the colocated providers/ollama_test.py errored out of every collection.
+    # streaming.py is light (stdlib + autobot_shared.logging_manager); load it
+    # first, then the provider itself.
+    _real_load_and_bind("llm_shared.streaming", _llm_root / "streaming.py")
+    _real_load_and_bind("llm_shared.providers.ollama", _llm_root / "providers" / "ollama.py")
+    _real_load_and_bind("llm_shared.optimization.profiler", _llm_root / "optimization" / "profiler.py")
     # Re-export the real classes onto the top-level stub so
     # `from llm_shared import ProviderRegistry, BaseProvider` resolves to the real
     # ones for tests that exercise them (tests/test_provider_registry.py, #10917).
@@ -389,19 +444,20 @@ if "llm_shared" not in sys.modules:
     if _bp_mod is not None and hasattr(_bp_mod, "BaseProvider"):
         _llm_stub.BaseProvider = _bp_mod.BaseProvider  # type: ignore[attr-defined]
 
-    # Stub llm_shared.optimization.model_inspector so complexity_router.py can
-    # load without the full optimization stack (inspect_model is only called in
-    # model_fits_in_vram which tests don't exercise).
-    if "llm_shared.optimization.model_inspector" not in sys.modules:
-        _mi_stub = _make_pkg_stub("llm_shared.optimization.model_inspector")
-        _mi_stub.inspect_model = MagicMock(return_value=None)  # type: ignore[attr-defined]
-        _mi_stub.ModelInfo = MagicMock()  # type: ignore[attr-defined]
-        sys.modules["llm_shared.optimization.model_inspector"] = _mi_stub
+    # #11840: Real-load llm_shared.optimization.model_inspector — it is light
+    # (transformers/accelerate are lazily imported inside functions, so the
+    # bare env just gets the formula/None fallbacks).  It was previously
+    # stubbed here, which silently fed MagicMocks to its own colocated
+    # optimization/model_inspector_test.py (never-run-test-files pattern).
+    _real_load_and_bind(
+        "llm_shared.optimization.model_inspector",
+        _llm_root / "optimization" / "model_inspector.py",
+    )
 
     # #11618: Real-load llm_shared.hardware so patch("llm_shared.hardware.X") in
     # test_hardware.py targets the real module globals instead of the MagicMock
     # package stub.  Deps: autobot_shared.logging_manager (already patched) and
-    # llm_shared.optimization.model_inspector (stubbed just above).
+    # llm_shared.optimization.model_inspector (real-loaded just above).
     _real_load_and_bind("llm_shared.hardware", _llm_root / "hardware.py")
     _hw_mod = sys.modules.get("llm_shared.hardware")
     if _hw_mod is not None:

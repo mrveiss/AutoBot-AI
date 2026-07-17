@@ -264,8 +264,10 @@ async def test_reconstruct_response_with_annotations(grounded_agent):
 
     reconstructed = await grounded_agent._reconstruct_response(original, [verified])
 
-    assert "Latency increased" in reconstructed
-    assert "[KB source" in reconstructed or "Latency increased" in reconstructed
+    # #11248 (99b5e8544): annotation matches the claim case-insensitively but
+    # preserves the response's original casing, so "latency" stays lowercase.
+    assert "latency increased [KB source, 95% confidence]" in reconstructed
+    assert reconstructed.startswith("The system latency increased")
 
 
 @pytest.mark.asyncio
@@ -532,16 +534,50 @@ async def test_respond_with_grounding_with_conflicts(grounded_agent, mock_app):
 
 @pytest.mark.asyncio
 async def test_resolve_conflict_success(grounded_agent):
-    """Test successful conflict resolution."""
-    result = await grounded_agent.resolve_conflict(
-        conflict_id="conflict-001",
-        chosen_fact_id="fact-001",
-        reasoning="This fact is correct based on monitoring data",
-    )
+    """Test successful conflict resolution persists to Redis."""
+    from unittest.mock import patch
+
+    mock_redis = AsyncMock()
+    with patch(
+        "services.grounded_agent.get_async_redis_client",
+        AsyncMock(return_value=mock_redis),
+    ):
+        result = await grounded_agent.resolve_conflict(
+            conflict_id="conflict-001",
+            chosen_fact_id="fact-001",
+            reasoning="This fact is correct based on monitoring data",
+        )
 
     assert result["status"] == "success"
     assert result["resolved"]
     assert result["chosen_fact"] == "fact-001"
+
+    # Resolution must be persisted
+    mock_redis.hset.assert_awaited_once()
+    args, kwargs = mock_redis.hset.await_args
+    assert args[0] == "conflict:conflict-001"
+    assert kwargs["mapping"]["chosen_fact"] == "fact-001"
+
+
+@pytest.mark.asyncio
+async def test_resolve_conflict_redis_unavailable_raises(grounded_agent):
+    """Redis down must raise, never silently drop a human's resolution (#11834).
+
+    get_async_redis_client is typed Redis | None — None when Redis is disabled
+    or the circuit breaker is open.
+    """
+    from unittest.mock import patch
+
+    with patch(
+        "services.grounded_agent.get_async_redis_client",
+        AsyncMock(return_value=None),
+    ):
+        with pytest.raises(RuntimeError, match="Redis unavailable"):
+            await grounded_agent.resolve_conflict(
+                conflict_id="conflict-002",
+                chosen_fact_id="fact-002",
+                reasoning="reasoning",
+            )
 
 
 # ===== API ENDPOINT TESTS =====
@@ -550,11 +586,24 @@ async def test_resolve_conflict_success(grounded_agent):
 @pytest.mark.asyncio
 async def test_api_ground_response_endpoint(mock_app):
     """Test POST /api/ground-response endpoint."""
+    import importlib
+    import importlib.util
+    from pathlib import Path
+
     from fastapi.testclient import TestClient
 
-    from main import app
+    backend_main = importlib.import_module("main")
+    if not hasattr(backend_main, "app"):
+        # "main" is ambiguous in whole-dir runs: the repo root carries a
+        # deprecated main.py shim (#781) with no `app`, and import order set
+        # by earlier test files can make it win resolution.  Load the
+        # backend's main.py explicitly (no sys.modules mutation).
+        backend_root = Path(__file__).resolve().parents[2]
+        spec = importlib.util.spec_from_file_location("autobot_backend_main", backend_root / "main.py")
+        backend_main = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(backend_main)
 
-    client = TestClient(app)
+    client = TestClient(backend_main.app)
 
     # This would be a full integration test
     # Simplified here for the test structure

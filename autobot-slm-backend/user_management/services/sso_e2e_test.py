@@ -9,36 +9,148 @@ End-to-end tests for SSO authentication flows with encrypted credentials (MVA-38
 Tests OAuth and LDAP flows using encrypted secrets:
 - OAuth: authorization, token exchange, userinfo retrieval
 - LDAP: connection, authentication, user search
+
+The slm-backend root conftest stubs ``sqlalchemy`` / ``models.database`` /
+``services.encryption`` as MagicMocks for api/* tests, so bare imports here
+would run against inert mock chains (``create_async_engine`` returning a
+MagicMock that cannot be awaited — the exact never-run failure #11798 fixed).
+Same real-load prologue as the sibling ``sso_secrets_test.py`` (pattern:
+tests/services/code_version_test.py, #11737/#11794): swap in the REAL
+sqlalchemy + product modules at import time, bind what the tests need,
+restore the stubs, and re-activate the swap per-test via ``async_session``.
 """
 
+import contextlib
+import importlib
+import importlib.util
+import os
+import sys
 import uuid
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
-from models.database import Base, SystemSecret
-from services.encryption import encrypt_data
+_SLM_ROOT = Path(__file__).parent.parent.parent
+for _p in (str(_SLM_ROOT), str(_SLM_ROOT.parent)):  # slm root + repo root (autobot_shared)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+# The real EncryptionService requires a master key at first use; provide a
+# deterministic test-only default without clobbering a real environment.
+os.environ.setdefault("SLM_ENCRYPTION_KEY", "unit-test-encryption-key-0123456789abcdef")
+
+# ldap3 is a declared dependency (requirements.txt) but not always installed
+# in dev environments; the LDAP-mocking tests are env-bound on it.
+requires_ldap3 = pytest.mark.skipif(
+    importlib.util.find_spec("ldap3") is None,
+    reason="ldap3 not installed (declared in requirements.txt; env-bound)",
+)
+
+_SWAP_PREFIXES = ("sqlalchemy", "aiosqlite")
+_SWAP_KEYS = (
+    "models.database",
+    "services.encryption",
+    "user_management.services.vault_client",
+    "user_management.services.sso_secrets",
+)
+
+
+def _is_swap_key(name: str) -> bool:
+    return name in _SWAP_KEYS or any(name == p or name.startswith(p + ".") for p in _SWAP_PREFIXES)
+
+
+def _load_real_module(name: str, path: Path):
+    """Exec *path* under canonical *name* (registered so runtime imports resolve)."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    sys.modules[name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+# Snapshot and clear EVERY swapped key — one cached MagicMock child poisons
+# the real package import (see code_version_test.py, #11737).
+_orig_modules = {name: mod for name, mod in sys.modules.items() if _is_swap_key(name)}
+for _name in list(_orig_modules):
+    del sys.modules[_name]
+try:
+    for _name in (
+        "sqlalchemy",
+        "sqlalchemy.ext.asyncio",
+        "sqlalchemy.orm",
+        # The aiosqlite dialect is resolved lazily at create_async_engine()
+        # time; import it now while the real package tree is intact.
+        "sqlalchemy.dialects.sqlite.aiosqlite",
+    ):
+        importlib.import_module(_name)
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.orm import sessionmaker
+
+    _real_md = _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
+    _real_enc = _load_real_module("services.encryption", _SLM_ROOT / "services" / "encryption.py")
+    _real_vc = _load_real_module(
+        "user_management.services.vault_client",
+        _SLM_ROOT / "user_management" / "services" / "vault_client.py",
+    )
+    # Force the legacy SystemSecret code path deterministically: an env with
+    # AUTOBOT_INTERNAL_API_KEY / SLM_SERVICE_KEY set would flip is_configured()
+    # and route store/retrieve to live HTTP vault calls.  This mutates only our
+    # private real-loaded instance, never the conftest stub other files see.
+    _real_vc._INTERNAL_API_KEY = ""
+    _real_vc._SERVICE_KEY = ""
+    _real_sso = _load_real_module(
+        "user_management.services.sso_secrets",
+        _SLM_ROOT / "user_management" / "services" / "sso_secrets.py",
+    )
+
+    Base = _real_md.Base
+    SystemSecret = _real_md.SystemSecret
+    encrypt_data = _real_enc.encrypt_data
+    SSOSecretsManager = _real_sso.SSOSecretsManager
+
+    _REAL_MODULES = {name: mod for name, mod in sys.modules.items() if _is_swap_key(name)}
+finally:
+    for _name in [name for name in sys.modules if _is_swap_key(name)]:
+        del sys.modules[_name]
+    for _name, _mod in _orig_modules.items():
+        sys.modules[_name] = _mod
+
+
+@contextlib.contextmanager
+def _real_modules_swapped():
+    """Temporarily put the real sqlalchemy/product modules back into sys.modules."""
+    saved = {name: sys.modules.get(name) for name in _REAL_MODULES}
+    sys.modules.update(_REAL_MODULES)
+    try:
+        yield
+    finally:
+        for name, mod in saved.items():
+            if mod is not None:
+                sys.modules[name] = mod
+            else:
+                sys.modules.pop(name, None)
 
 
 # Test fixtures
 @pytest.fixture
 async def async_session():
-    """Create an async test database session."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine
+    """Create an async test database session (real modules swapped in)."""
+    with _real_modules_swapped():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)  # canonical: ignore py-adhoc-db-engine
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    async_session_maker = sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+        async_session_maker = sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local session factory)
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
 
-    async with async_session_maker() as session:
-        yield session
+        async with async_session_maker() as session:
+            yield session
 
-    await engine.dispose()
+        await engine.dispose()
 
 
 @pytest.fixture
@@ -106,8 +218,6 @@ class TestOAuthFlowWithEncryptedCredentials:
     @pytest.mark.asyncio
     async def test_oauth_authorization_url_generation(self, async_session, oauth_provider_with_encrypted_secret):
         """Test OAuth authorization URL generation with encrypted credentials."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
         provider_id = oauth_provider_with_encrypted_secret["provider_id"]
 
@@ -136,8 +246,6 @@ class TestOAuthFlowWithEncryptedCredentials:
         self, mock_post, async_session, oauth_provider_with_encrypted_secret
     ):
         """Test OAuth token exchange using decrypted client_secret."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
         provider_id = oauth_provider_with_encrypted_secret["provider_id"]
 
@@ -206,8 +314,6 @@ class TestOAuthFlowWithEncryptedCredentials:
     @pytest.mark.asyncio
     async def test_oauth_flow_handles_missing_secret_gracefully(self, async_session, provider_id):
         """Test OAuth flow error handling when secret not found."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Try to retrieve non-existent secret
@@ -219,8 +325,6 @@ class TestOAuthFlowWithEncryptedCredentials:
     @pytest.mark.asyncio
     async def test_oauth_flow_handles_decryption_error(self, async_session, provider_id):
         """Test OAuth flow when secret decryption fails."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         # Store corrupted secret
         secret_key = f"sso:provider:{provider_id}:client_secret"
         secret = SystemSecret(
@@ -245,8 +349,6 @@ class TestLDAPFlowWithEncryptedCredentials:
     @pytest.mark.asyncio
     async def test_ldap_connection_with_encrypted_password(self, async_session, ldap_provider_with_encrypted_password):
         """Test LDAP connection using decrypted bind_password."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
         provider_id = ldap_provider_with_encrypted_password["provider_id"]
 
@@ -265,6 +367,7 @@ class TestLDAPFlowWithEncryptedCredentials:
         assert ldap_params["bind_password"] == "ldap_bind_password_456"
         assert ldap_params["bind_dn"] == "cn=admin,dc=example,dc=com"
 
+    @requires_ldap3
     @pytest.mark.asyncio
     @patch("ldap3.Connection")
     @patch("ldap3.Server")
@@ -272,8 +375,6 @@ class TestLDAPFlowWithEncryptedCredentials:
         self, mock_server, mock_connection, async_session, ldap_provider_with_encrypted_password
     ):
         """Test full LDAP authentication with encrypted credentials."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         # Mock LDAP server and connection
         mock_server_instance = MagicMock()
         mock_server.return_value = mock_server_instance
@@ -325,8 +426,6 @@ class TestLDAPFlowWithEncryptedCredentials:
     @pytest.mark.asyncio
     async def test_ldap_connection_handles_missing_password(self, async_session, provider_id):
         """Test LDAP connection error handling when bind_password missing."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Try to retrieve non-existent password
@@ -335,6 +434,7 @@ class TestLDAPFlowWithEncryptedCredentials:
         # Should return None, allowing caller to handle error
         assert bind_password is None
 
+    @requires_ldap3
     @pytest.mark.asyncio
     @patch("ldap3.Connection")
     @patch("ldap3.Server")
@@ -342,8 +442,6 @@ class TestLDAPFlowWithEncryptedCredentials:
         self, mock_server, mock_connection, async_session, ldap_provider_with_encrypted_password
     ):
         """Test LDAP user authentication flow."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         # Mock successful bind
         mock_conn_instance = MagicMock()
         mock_conn_instance.bind.return_value = True
@@ -369,8 +467,6 @@ class TestLDAPFlowWithEncryptedCredentials:
     @pytest.mark.asyncio
     async def test_ldap_handles_special_characters_in_password(self, async_session, provider_id):
         """Test LDAP with special characters in bind_password."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         # Store password with special chars
         special_password = 'p@ssw0rd!"#$%&*()[]{}:;<>?'
         secret_key = f"sso:provider:{provider_id}:bind_password"
@@ -396,8 +492,6 @@ class TestSSOIntegrationScenarios:
     @pytest.mark.asyncio
     async def test_full_oauth_sso_provider_lifecycle(self, async_session, provider_id):
         """Test complete lifecycle: create, use, update, delete."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # 1. Create provider with encrypted secret
@@ -441,8 +535,6 @@ class TestSSOIntegrationScenarios:
     @pytest.mark.asyncio
     async def test_multiple_providers_with_encrypted_secrets(self, async_session):
         """Test managing secrets for multiple SSO providers simultaneously."""
-        from user_management.services.sso_secrets import SSOSecretsManager
-
         manager = SSOSecretsManager(async_session)
 
         # Create three different providers

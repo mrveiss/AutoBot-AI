@@ -150,7 +150,11 @@ class LatencyRouter:
     # ------------------------------------------------------------------ #
 
     def _candidates(self, complexity: ComplexityResult) -> List[str]:
-        if complexity.is_simple:
+        # GH#9050 added a "trivial" tier below "simple"; requests scoring
+        # below the simple floor must remain eligible for the cheap model —
+        # before this check they fell through to the complex-only branch
+        # (issue #11834).
+        if complexity.is_trivial or complexity.is_simple:
             return [self.config.models.simple, self.config.models.complex]
         return [self.config.models.complex]
 

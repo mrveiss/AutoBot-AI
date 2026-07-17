@@ -63,10 +63,14 @@ class _SSOProviderType(str, enum.Enum):
     SAML = "saml"
 
 
-if _MODELS_SSO not in sys.modules:
-    _sso_stub = MagicMock()
-    _sso_stub.SSOProviderType = _SSOProviderType
-    sys.modules[_MODELS_SSO] = _sso_stub
+# #11798: forced, not guarded — tests/api/test_scim.py leaves a plain
+# MagicMock squatting this key, and the old `not in sys.modules` guard then
+# skipped this real-enum stand-in, so SSOProviderType comparisons inside
+# sso_service silently mismatched in a whole-backend sweep.  The
+# pre-bootstrap snapshot above rolls the forced stub back after bootstrap.
+_sso_stub = MagicMock()
+_sso_stub.SSOProviderType = _SSOProviderType
+sys.modules[_MODELS_SSO] = _sso_stub
 
 for _mod in [
     "user_management.services.sso_secrets",
