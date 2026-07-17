@@ -258,6 +258,22 @@ class RedisConfigLoader:
             }
 
 
+# Documented per-field defaults for PoolConfig — the fallback used by
+# __post_init__ when a caller passes a non-numeric value (#11830).
+_POOL_CONFIG_FIELD_DEFAULTS: Dict[str, Any] = {
+    "max_connections": _MAX_CONNECTIONS_POOL,
+    "min_connections": _MIN_CONNECTIONS_POOL,
+    "socket_timeout": float(_SOCKET_TIMEOUT),
+    "socket_connect_timeout": float(_SOCKET_TIMEOUT),
+    "retry_on_timeout": _RETRY_ON_TIMEOUT,
+    "max_retries": _DEFAULT_RETRIES,
+    "backoff_factor": _BACKOFF_BASE,
+    "health_check_interval": float(_HEALTH_CHECK_INTERVAL),
+    "circuit_breaker_threshold": _CIRCUIT_BREAKER_THRESHOLD,
+    "circuit_breaker_timeout": _CIRCUIT_BREAKER_TIMEOUT,
+}
+
+
 @dataclass
 class PoolConfig:
     """
@@ -280,3 +296,33 @@ class PoolConfig:
     health_check_interval: float = float(_HEALTH_CHECK_INTERVAL)
     circuit_breaker_threshold: int = _CIRCUIT_BREAKER_THRESHOLD
     circuit_breaker_timeout: int = _CIRCUIT_BREAKER_TIMEOUT
+
+    def __post_init__(self) -> None:
+        """Coerce every field to a real value of its documented type (#11830).
+
+        This is shared startup-path code (must-not-crash): a value sourced from
+        a test-stubbed config module (MagicMock/None/str) falls back to the
+        documented default with a single WARNING instead of raising — a
+        MagicMock ``circuit_breaker_threshold`` otherwise survives until
+        ``RedisConnectionManager._record_failure`` and TypeErrors there.
+        """
+        invalid: list[str] = []
+        for field_name, default in _POOL_CONFIG_FIELD_DEFAULTS.items():
+            value = getattr(self, field_name)
+            if isinstance(default, bool):
+                valid = isinstance(value, bool)
+            else:
+                valid = isinstance(value, (int, float)) and not isinstance(value, bool)
+            if valid:
+                if not isinstance(default, bool):
+                    # Normalize to the field's documented type (int fields must
+                    # stay int — redis-py rejects float max_connections).
+                    setattr(self, field_name, type(default)(value))
+                continue
+            invalid.append(f"{field_name}={value!r}")
+            setattr(self, field_name, default)
+        if invalid:
+            logger.warning(
+                "PoolConfig received non-numeric value(s) — falling back to defaults: %s",
+                ", ".join(invalid),
+            )
