@@ -9,12 +9,14 @@ a stale IP when SLM_EXTERNAL_URL has been corrected, without importing the
 full FastAPI application stack.
 """
 
+import contextlib
 import importlib
 import importlib.util
 import os
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -22,22 +24,41 @@ import pytest
 # ---------------------------------------------------------------------------
 # Path bootstrap
 # ---------------------------------------------------------------------------
-_SLM_ROOT = Path(__file__).parent.parent
+# This file sits directly in autobot-slm-backend/, so the SLM root is
+# .parent — .parent.parent resolved to the REPO root, whose (different)
+# main.py has no _ensure_local_node, erroring every test at setup (#11798).
+_SLM_ROOT = Path(__file__).parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
 
 # ---------------------------------------------------------------------------
-# Stub models.database before any module load so that the lazy import inside
-# _ensure_local_node() resolves at function-call time.  Python looks up
-# "models" and "models.database" as separate sys.modules keys; both must be
-# present or the submodule lookup raises ImportError.
+# models.database stand-ins for the lazy import inside _ensure_local_node().
+# #11798: the old MagicMock Node/NodeRole never carried constructor kwargs as
+# attributes, so none of the created-row assertions could hold; and the old
+# ``sys.modules.setdefault`` never installed anything because the root
+# conftest already stubs "models.database".  Kwargs-to-attributes factories
+# are swapped in per-test via the autouse fixture below (patch.dict restores).
 # ---------------------------------------------------------------------------
+
+
+class _ColumnMeta(type):
+    """Class-level attribute access (Node.node_id in select().where()) → mock column."""
+
+    def __getattr__(cls, name):
+        return MagicMock(name=f"{cls.__name__}.{name}")
+
+
+class _AttrObj(metaclass=_ColumnMeta):
+    """Minimal ORM-row stand-in: constructor kwargs become attributes."""
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
 _models_db_stub = MagicMock()
-_models_db_stub.Node = MagicMock()
-_models_db_stub.NodeRole = MagicMock()
-_models_db_stub.NodeStatus = MagicMock()
-sys.modules.setdefault("models", MagicMock())
-sys.modules.setdefault("models.database", _models_db_stub)
+_models_db_stub.Node = type("Node", (_AttrObj,), {})
+_models_db_stub.NodeRole = type("NodeRole", (_AttrObj,), {})
+_models_db_stub.NodeStatus = SimpleNamespace(ONLINE=SimpleNamespace(value="online"))
 
 # ---------------------------------------------------------------------------
 # Constants that must match main.py
@@ -89,19 +110,26 @@ def _load_module():
     stubs = {
         "fastapi": MagicMock(),
         "fastapi.middleware.cors": MagicMock(),
+        # main.py imports grown since this list was written (#11798):
+        "fastapi.responses": MagicMock(),
         "api": MagicMock(),
         "api.code_source": MagicMock(),
         "api.performance": MagicMock(),
         "api.personality_proxy": MagicMock(),
         "api.roles": MagicMock(),
         "api.voice_proxy": MagicMock(),
+        "autobot_shared.integrity_manifest": MagicMock(),
         "config": MagicMock(),
         "middleware": MagicMock(),
         "services.a2a_card_fetcher": MagicMock(),
+        "services.auth": MagicMock(),
+        "services.compose_fleet": MagicMock(),
         "services.database": MagicMock(),
         "services.git_tracker": MagicMock(),
+        "services.node_seeder": MagicMock(),
         "services.reconciler": MagicMock(),
         "services.schedule_executor": MagicMock(),
+        "services.security_posture_auditor": MagicMock(),
     }
     with patch.dict(sys.modules, stubs):
         spec = importlib.util.spec_from_file_location("isolated_main", _SLM_ROOT / "main.py")
@@ -110,6 +138,31 @@ def _load_module():
 
     _MODULE_CACHE["isolated_main"] = mod
     return mod
+
+
+@pytest.fixture(autouse=True)
+def _models_db_active():
+    """Swap the attribute-bearing models.database stand-in in per test."""
+    with patch.dict(sys.modules, {"models": MagicMock(), "models.database": _models_db_stub}):
+        yield
+
+
+def _patched_seams(mod, mock_db):
+    """ExitStack patching the module seams every test needs (#11798).
+
+    - ``settings.slm_node_id``: env-driven since #9956 — pin the sentinel.
+    - ``_compose_nodes_enabled``: the stubbed compose_fleet returns a truthy
+      MagicMock, which would route every test into the compose static-IP branch.
+    - ``sync_slm_node_roles``: the stub module attribute is not awaitable.
+    """
+    stack = contextlib.ExitStack()
+    stack.enter_context(patch.object(mod, "db_service", mock_db))
+    _settings = MagicMock()
+    _settings.slm_node_id = _NODE_ID
+    stack.enter_context(patch.object(mod, "settings", _settings))
+    stack.enter_context(patch.object(mod, "_compose_nodes_enabled", MagicMock(return_value=False)))
+    stack.enter_context(patch.object(mod, "sync_slm_node_roles", AsyncMock()))
+    return stack
 
 
 # ---------------------------------------------------------------------------
@@ -135,10 +188,7 @@ class TestEnsureLocalNode:
         mock_db = MagicMock()
         mock_db.session = MagicMock(return_value=_ctx(session))
 
-        with (
-            patch.object(self._mod, "db_service", mock_db),
-            patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://192.168.1.50"}),
-        ):
+        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://192.168.1.50"}):
             await self._fn()
 
         # 1 Node + 4 NodeRole = 5 objects
@@ -168,14 +218,14 @@ class TestEnsureLocalNode:
         mock_db = MagicMock()
         mock_db.session = MagicMock(return_value=_ctx(session))
 
-        with (
-            patch.object(self._mod, "db_service", mock_db),
-            patch.dict(os.environ, {"SLM_EXTERNAL_URL": f"https://{current_ip}"}),
-        ):
+        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, {"SLM_EXTERNAL_URL": f"https://{current_ip}"}):
             await self._fn()
 
         session.add.assert_not_called()
-        session.commit.assert_not_awaited()
+        # #11798: the existing-node path now also heals detected_roles and
+        # syncs role rows, committing unconditionally — "idempotent" means no
+        # NEW rows, not no commit.
+        session.commit.assert_awaited_once()
 
     # ------------------------------------------------------------------
     # Node present, IP stale — updates IP field only
@@ -191,10 +241,7 @@ class TestEnsureLocalNode:
         mock_db = MagicMock()
         mock_db.session = MagicMock(return_value=_ctx(session))
 
-        with (
-            patch.object(self._mod, "db_service", mock_db),
-            patch.dict(os.environ, {"SLM_EXTERNAL_URL": f"https://{new_ip}"}),
-        ):
+        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, {"SLM_EXTERNAL_URL": f"https://{new_ip}"}):
             await self._fn()
 
         assert existing.ip_address == new_ip
@@ -216,10 +263,7 @@ class TestEnsureLocalNode:
 
         env_without_url = {k: v for k, v in os.environ.items() if k != "SLM_EXTERNAL_URL"}
 
-        with (
-            patch.object(self._mod, "db_service", mock_db),
-            patch.dict(os.environ, env_without_url, clear=True),
-        ):
+        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, env_without_url, clear=True):
             await self._fn()
 
         node_obj = added_objects[0]
@@ -238,10 +282,7 @@ class TestEnsureLocalNode:
         mock_db = MagicMock()
         mock_db.session = MagicMock(return_value=_ctx(session))
 
-        with (
-            patch.object(self._mod, "db_service", mock_db),
-            patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://10.10.10.1"}),
-        ):
+        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://10.10.10.1"}):
             await self._fn()
 
         node_obj = added_objects[0]
@@ -261,10 +302,7 @@ class TestEnsureLocalNode:
         mock_db = MagicMock()
         mock_db.session = MagicMock(return_value=_ctx(session))
 
-        with (
-            patch.object(self._mod, "db_service", mock_db),
-            patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://10.10.10.1"}),
-        ):
+        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://10.10.10.1"}):
             await self._fn()
 
         role_objs = added_objects[1:]
@@ -288,10 +326,7 @@ class TestEnsureLocalNode:
         mock_db.session = MagicMock(return_value=_ctx(session))
 
         # URL includes port — regex must not capture the port as part of IP
-        with (
-            patch.object(self._mod, "db_service", mock_db),
-            patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://172.16.0.10:8443"}),
-        ):
+        with _patched_seams(self._mod, mock_db), patch.dict(os.environ, {"SLM_EXTERNAL_URL": "https://172.16.0.10:8443"}):
             await self._fn()
 
         node_obj = added_objects[0]

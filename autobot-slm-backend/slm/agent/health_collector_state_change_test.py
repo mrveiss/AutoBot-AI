@@ -5,7 +5,11 @@
 """Unit tests for HealthCollector state-change pub/sub logic (#3404)."""
 
 import json
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from slm.agent.health_collector import _STATE_CHANGE_CHANNEL_TEMPLATE, HealthCollector
 
@@ -151,19 +155,58 @@ class TestPublishStateChange:
 # NotificationEvent.SERVICE_FAILED round-trip (import smoke test)
 # ---------------------------------------------------------------------------
 
+# The consumer of the published event is autobot-backend's NotificationService
+# (the OTHER backend) — "services.notification_service" does not exist in the
+# slm-backend tree, so the bare import could never resolve here (#11798).
+# Spec-load the real module from the repo checkout under a private name, with
+# its environment-bound deps stubbed (ssot_config reads /etc/autobot).  Skip
+# when the sibling checkout is not present (deployment layouts).  Resolved by
+# upward search so the slm/agent and ansible copies (drift-checked identical)
+# both find the repo root from their different depths.
+
+
+def _find_backend_notif_path():
+    for _parent in Path(__file__).resolve().parents:
+        _cand = _parent / "autobot-backend" / "services" / "notification_service.py"
+        if _cand.exists():
+            return _cand
+    return None
+
+
+_BACKEND_NOTIF_PATH = _find_backend_notif_path()
+
+
+def _load_backend_notification_service():
+    import importlib.util
+
+    stubs = {
+        "constants": MagicMock(),
+        "constants.ttl_constants": MagicMock(TTL_7_DAYS=7 * 24 * 3600),
+        "autobot_shared.ssot_config": MagicMock(config=MagicMock()),
+        "autobot_shared.redis_client": MagicMock(),
+        "autobot_shared.logging_manager": MagicMock(get_logger=MagicMock(return_value=MagicMock())),
+    }
+    with patch.dict(sys.modules, stubs):
+        spec = importlib.util.spec_from_file_location("_backend_notification_service", _BACKEND_NOTIF_PATH)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+    return mod
+
 
 class TestServiceFailedEvent:
+    @pytest.mark.skipif(_BACKEND_NOTIF_PATH is None, reason="autobot-backend checkout not present (env-bound)")
     def test_service_failed_enum_value(self):
-        from services.notification_service import NotificationEvent
+        mod = _load_backend_notification_service()
 
-        assert NotificationEvent.SERVICE_FAILED.value == "service_failed"
+        assert mod.NotificationEvent.SERVICE_FAILED.value == "service_failed"
 
+    @pytest.mark.skipif(_BACKEND_NOTIF_PATH is None, reason="autobot-backend checkout not present (env-bound)")
     def test_service_failed_template_renders(self):
-        from services.notification_service import NotificationEvent, NotificationService
+        mod = _load_backend_notification_service()
 
-        svc = NotificationService()
+        svc = mod.NotificationService()
         result = svc.render_template(
-            NotificationEvent.SERVICE_FAILED.value,
+            mod.NotificationEvent.SERVICE_FAILED.value,
             {
                 "service": "nginx",
                 "hostname": "node-01",
