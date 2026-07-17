@@ -33,9 +33,28 @@ _gt_stub = types.ModuleType("services.git_tracker")
 _gt_stub.DEFAULT_REPO_PATH = "/opt/autobot/code_source"  # type: ignore[attr-defined]
 sys.modules.setdefault("services.git_tracker", _gt_stub)
 
-_spec = importlib.util.spec_from_file_location("drift_checker", _MODULE_PATH)
-_dc = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
-_spec.loader.exec_module(_dc)  # type: ignore[union-attr]
+# services.deploy_artifacts must be REAL while drift_checker.py executes: the
+# root conftest stubs it as a MagicMock, and drift_checker derives
+# _SKIP_DIRS / _SKIP_DIR_SUFFIXES from its ARTIFACT_DIRS / ARTIFACT_DIR_SUFFIXES
+# at import time — a MagicMock suffix tuple makes every str.endswith() in
+# _collect_checksums raise TypeError (#11798).  The module is dependency-free,
+# so real-load it and restore the previous sys.modules entry afterwards.
+_da_spec = importlib.util.spec_from_file_location(
+    "services.deploy_artifacts", _SERVICES_DIR / "deploy_artifacts.py"
+)
+_da = importlib.util.module_from_spec(_da_spec)  # type: ignore[arg-type]
+_da_spec.loader.exec_module(_da)  # type: ignore[union-attr]
+_prev_da = sys.modules.get("services.deploy_artifacts")
+sys.modules["services.deploy_artifacts"] = _da
+try:
+    _spec = importlib.util.spec_from_file_location("drift_checker", _MODULE_PATH)
+    _dc = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+    _spec.loader.exec_module(_dc)  # type: ignore[union-attr]
+finally:
+    if _prev_da is None:
+        sys.modules.pop("services.deploy_artifacts", None)
+    else:
+        sys.modules["services.deploy_artifacts"] = _prev_da
 
 # Convenience aliases.
 _file_checksum = _dc._file_checksum
@@ -460,12 +479,14 @@ class TestGetDefaultSourceDir:
 
 class TestAllowedComponents:
     def test_allowlist_contains_expected_components(self):
-        """The allowlist must contain all four expected component names."""
+        """The allowlist must contain exactly the expected component names."""
         expected = {
             "autobot-slm-backend",
             "autobot-slm-frontend",
             "autobot-backend",
             "autobot-frontend",
+            # #10248: the shared library is its own syncable component.
+            "autobot_shared",
         }
         assert expected == set(ALLOWED_COMPONENTS)
 

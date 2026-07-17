@@ -6,11 +6,25 @@
 
 Calls the route handler directly with mocked rsync + dir helpers so we
 don't need a running app, DB, or actual filesystem operations.
+
+Real-load prologue (#11798, pattern: tests/services/code_version_test.py):
+the root conftest stubs ``models.schemas`` / ``services.drift_checker`` as
+MagicMocks, so the shared in-sweep ``api.code_sync`` module holds a
+MagicMock ``DriftResolveRequest``/``DriftResolveResponse`` and an
+empty-iterating ``ALLOWED_COMPONENTS`` — every request 400s with
+"Must be one of: []" and no response field is assertable.  This module
+instead swaps in the REAL sqlalchemy/models/drift modules, execs a PRIVATE
+copy of api/code_sync.py against them, restores the stubs, and pins that
+private module into ``sys.modules["api.code_sync"]`` per-test (autouse
+fixture) so the existing ``patch("api.code_sync.…")`` targets resolve to it.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import importlib
+import importlib.util
 
 # Add autobot-slm-backend to path so api.code_sync imports resolve.
 import sys
@@ -22,10 +36,94 @@ import pytest
 from fastapi import HTTPException
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_BACKEND_ROOT))
+for _p in (str(_BACKEND_ROOT), str(_BACKEND_ROOT.parent)):  # + repo root (autobot_shared)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-from api.code_sync import resolve_drift  # noqa: E402
-from models.schemas import DriftResolveRequest  # noqa: E402
+_SWAP_KEYS = (
+    "models.database",
+    "models.schemas",
+    "services.deploy_artifacts",
+    "services.drift_checker",
+)
+
+
+def _is_swap_key(name: str) -> bool:
+    return name in _SWAP_KEYS or name == "sqlalchemy" or name.startswith("sqlalchemy.")
+
+
+def _load_real_module(name: str, path: Path):
+    """Exec *path* under canonical *name* (registered so relative imports work)."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    sys.modules[name] = module
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+_orig_modules = {name: mod for name, mod in sys.modules.items() if _is_swap_key(name)}
+for _name in list(_orig_modules):
+    del sys.modules[_name]
+try:
+    for _name in ("sqlalchemy", "sqlalchemy.ext.asyncio", "sqlalchemy.orm"):
+        importlib.import_module(_name)
+
+    _load_real_module("models.database", _BACKEND_ROOT / "models" / "database.py")
+    _real_schemas = _load_real_module("models.schemas", _BACKEND_ROOT / "models" / "schemas.py")
+    _load_real_module("services.deploy_artifacts", _BACKEND_ROOT / "services" / "deploy_artifacts.py")
+    # services.git_tracker stays the conftest stub — drift_checker only reads
+    # DEFAULT_REPO_PATH from it, and the dir helpers are patched per-test.
+    _real_dc = _load_real_module("services.drift_checker", _BACKEND_ROOT / "services" / "drift_checker.py")
+
+    # Private exec of api/code_sync.py against the REAL modules above (all its
+    # other services.* imports resolve to the root-conftest stubs, as designed).
+    _cs_spec = importlib.util.spec_from_file_location("_code_sync_drift_test", _BACKEND_ROOT / "api" / "code_sync.py")
+    _CS = importlib.util.module_from_spec(_cs_spec)  # type: ignore[arg-type]
+    _cs_spec.loader.exec_module(_CS)  # type: ignore[union-attr]
+
+    DriftResolveRequest = _real_schemas.DriftResolveRequest
+    resolve_drift = _CS.resolve_drift
+finally:
+    for _name in [name for name in sys.modules if _is_swap_key(name)]:
+        del sys.modules[_name]
+    for _name, _mod in _orig_modules.items():
+        sys.modules[_name] = _mod
+
+
+@pytest.fixture(autouse=True)
+def _pin_private_code_sync():
+    """Resolve patch("api.code_sync.…") / in-test imports to the private module."""
+    saved = {
+        "api.code_sync": sys.modules.get("api.code_sync"),
+        "services.drift_checker": sys.modules.get("services.drift_checker"),
+    }
+    sys.modules["api.code_sync"] = _CS
+    sys.modules["services.drift_checker"] = _real_dc
+    # #9780: mock.patch resolves the target via getattr on the PARENT package,
+    # so the parent attribute must point at the same module as sys.modules.
+    saved_attrs = {}
+    for _parent, _child, _mod in (("api", "code_sync", _CS), ("services", "drift_checker", _real_dc)):
+        _pkg = sys.modules.get(_parent)
+        if _pkg is not None:
+            saved_attrs[(_parent, _child)] = getattr(_pkg, _child, None)
+            setattr(_pkg, _child, _mod)
+    try:
+        yield
+    finally:
+        for _k, _m in saved.items():
+            if _m is None:
+                sys.modules.pop(_k, None)
+            else:
+                sys.modules[_k] = _m
+        for (_parent, _child), _prev_attr in saved_attrs.items():
+            _pkg = sys.modules.get(_parent)
+            if _pkg is None:
+                continue
+            if _prev_attr is None:
+                with contextlib.suppress(AttributeError):
+                    delattr(_pkg, _child)
+            else:
+                setattr(_pkg, _child, _prev_attr)
 
 # Stub user — endpoint only checks authentication via Depends(get_current_user)
 _FAKE_USER = {"username": "tester", "is_admin": True}
@@ -56,20 +154,17 @@ def _setup_dir_mocks(component="autobot-slm-backend"):
 
 
 def _noop_post_sync():
-    """Patch _run_post_sync_steps to do nothing (deps_changed=False, no steps)."""
+    """Patch _run_post_sync_steps to do nothing (deps_changed=False, no steps).
+
+    The patch targets are real coroutine functions now (#11798), so patch()
+    selects AsyncMock — plain values / sync side_effects become the awaited
+    result (the old ``_async_return`` coroutine wrapper would double-wrap).
+    """
     return patch(
         "api.code_sync._run_post_sync_steps",
-        side_effect=lambda comp, src, dep: _async_return((False, [])),
+        side_effect=lambda comp, src, dep: (False, [], True),
     )
 
-
-def _async_return(value):
-    """Build an awaitable that resolves to the given value."""
-
-    async def _awaitable():
-        return value
-
-    return _awaitable()
 
 
 def test_invalid_component_raises_400(stub_user):
@@ -94,7 +189,7 @@ def test_happy_path_returns_success(stub_user):
     src_patch, dep_patch = _setup_dir_mocks()
     rsync_patch = patch(
         "api.code_sync._rsync_component_local",
-        return_value=_async_return((True, "")),
+        return_value=(True, ""),
     )
     with src_patch, dep_patch, rsync_patch, _noop_post_sync():
         req = DriftResolveRequest(component="autobot-slm-backend")
@@ -114,13 +209,13 @@ def test_rsync_failure_returns_success_false(stub_user):
     src_patch, dep_patch = _setup_dir_mocks()
     rsync_patch = patch(
         "api.code_sync._rsync_component_local",
-        return_value=_async_return((False, "local rsync failed: permission denied")),
+        return_value=(False, "local rsync failed: permission denied"),
     )
     post_sync_calls: List[str] = []
 
     async def spy_post_sync(comp, src, dep):
         post_sync_calls.append(comp)
-        return False, []
+        return False, [], True
 
     post_patch = patch("api.code_sync._run_post_sync_steps", side_effect=spy_post_sync)
     with src_patch, dep_patch, rsync_patch, post_patch:
@@ -145,7 +240,13 @@ def test_source_dir_value_error_raises_500(stub_user):
 
 
 def test_excludes_for_known_component(stub_user):
-    """rsync receives the per-component exclude list from _SLM_COMPONENTS."""
+    """rsync receives the per-component exclude list from _SLM_COMPONENTS.
+
+    #11798: since #11459 standard artifacts (venv, __pycache__, …) are merged
+    universally at the rsync chokepoint (_rsync_exclude_args), so the handler
+    passes only the component-specific list.  Assert both halves of that
+    contract instead of the pre-#11459 combined list.
+    """
     src_patch, dep_patch = _setup_dir_mocks()
     captured_excludes: List[List[str]] = []
 
@@ -160,9 +261,13 @@ def test_excludes_for_known_component(stub_user):
 
     assert len(captured_excludes) == 1
     excludes = captured_excludes[0]
-    # autobot-slm-backend's excludes from _SLM_COMPONENTS should include venv
-    assert "venv" in excludes
-    assert "__pycache__" in excludes
+    # The handler passes exactly the component's _SLM_COMPONENTS entry …
+    expected = {comp: excl for comp, excl in _CS._SLM_COMPONENTS}["autobot-slm-backend"]
+    assert excludes == expected
+    # … and the rsync chokepoint injects the canonical artifact excludes.
+    chokepoint_args = _CS._rsync_exclude_args(excludes)
+    assert "--exclude=venv" in chokepoint_args
+    assert "--exclude=__pycache__" in chokepoint_args
 
 
 # =============================================================================
@@ -175,12 +280,14 @@ def test_happy_path_includes_post_steps(stub_user):
     src_patch, dep_patch = _setup_dir_mocks()
     rsync_patch = patch(
         "api.code_sync._rsync_component_local",
-        return_value=_async_return((True, "")),
+        return_value=(True, ""),
     )
     post_patch = patch(
         "api.code_sync._run_post_sync_steps",
-        side_effect=lambda comp, src, dep: _async_return(
-            (True, ["pip: install succeeded", "restart autobot-slm-backend: ok"])
+        side_effect=lambda comp, src, dep: (
+            True,
+            ["pip: install succeeded", "restart autobot-slm-backend: ok"],
+            True,
         ),
     )
     with src_patch, dep_patch, rsync_patch, post_patch:
@@ -198,13 +305,13 @@ def test_post_sync_called_with_correct_args(stub_user):
     src_patch, dep_patch = _setup_dir_mocks(component)
     rsync_patch = patch(
         "api.code_sync._rsync_component_local",
-        return_value=_async_return((True, "")),
+        return_value=(True, ""),
     )
     captured: List[tuple] = []
 
     async def spy(comp, src, dep):
         captured.append((comp, src, dep))
-        return False, []
+        return False, [], True
 
     post_patch = patch("api.code_sync._run_post_sync_steps", side_effect=spy)
     with src_patch, dep_patch, rsync_patch, post_patch:
@@ -218,7 +325,12 @@ def test_post_sync_called_with_correct_args(stub_user):
 
 
 def test_python_backend_post_steps(stub_user):
-    """autobot-backend resolve triggers pip install + service restart (#9982)."""
+    """autobot-backend resolve triggers pip install + service restart (#9982).
+
+    #11798: _run_post_sync_steps grew snapshot/constraints/venv/alembic/health
+    stages (#11322/#11323/#11377/#11378) and returns (deps_changed, steps,
+    pip_ok) — every filesystem/service stage is patched so nothing real runs.
+    """
     from api.code_sync import _run_post_sync_steps
 
     pip_calls: List[str] = []
@@ -228,6 +340,7 @@ def test_python_backend_post_steps(stub_user):
     async def fake_pip(comp, steps):
         pip_calls.append(comp)
         steps.append("pip: install succeeded")
+        return True
 
     async def fake_restart(comp, steps):
         restart_calls.append(comp)
@@ -235,14 +348,22 @@ def test_python_backend_post_steps(stub_user):
 
     async def fake_frontend(comp, steps):
         frontend_calls.append(comp)
+        return True
 
-    deps_patch = patch("api.code_sync._compute_deps_changed", return_value=_async_return(True))
-    pip_patch = patch("api.code_sync._install_pip_deps_for_component", side_effect=fake_pip)
-    restart_patch = patch("api.code_sync._restart_component_services", side_effect=fake_restart)
-    frontend_patch = patch("api.code_sync._build_npm_frontend_for_component", side_effect=fake_frontend)
-
-    with deps_patch, pip_patch, restart_patch, frontend_patch:
-        deps_changed, steps = _run(
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("api.code_sync._compute_deps_changed", return_value=True))
+        stack.enter_context(patch("api.code_sync._snapshot_component", return_value=None))
+        stack.enter_context(patch("api.code_sync._deploy_constraints_dir"))
+        stack.enter_context(patch("api.code_sync._deploy_repo_root_requirements"))
+        stack.enter_context(patch("api.code_sync._ensure_target_python_installed"))
+        stack.enter_context(patch("api.code_sync._ensure_venv_python", return_value=False))
+        stack.enter_context(patch("api.code_sync._install_pip_deps_for_component", side_effect=fake_pip))
+        stack.enter_context(patch("api.code_sync._run_alembic_migrations", return_value=True))
+        stack.enter_context(patch("api.code_sync._ensure_autobot_shared_symlink"))
+        stack.enter_context(patch("api.code_sync._restart_component_services", side_effect=fake_restart))
+        stack.enter_context(patch("api.code_sync._wait_component_healthy", return_value=True))
+        stack.enter_context(patch("api.code_sync._build_npm_frontend_for_component", side_effect=fake_frontend))
+        deps_changed, steps, pip_ok = _run(
             _run_post_sync_steps(
                 "autobot-backend",
                 "/opt/autobot/code_source/autobot-backend",
@@ -251,6 +372,7 @@ def test_python_backend_post_steps(stub_user):
         )
 
     assert deps_changed is True
+    assert pip_ok is True
     assert pip_calls == ["autobot-backend"]
     assert restart_calls == ["autobot-backend"]
     assert frontend_calls == [], "npm build must not be called for a Python backend"
@@ -258,7 +380,11 @@ def test_python_backend_post_steps(stub_user):
 
 
 def test_frontend_post_steps(stub_user):
-    """autobot-frontend resolve triggers npm build + nginx restart — no pip (#9982)."""
+    """autobot-frontend resolve triggers npm build + nginx restart — no pip (#9982).
+
+    #11798: patched for the snapshot/health stages and 3-tuple return (see
+    test_python_backend_post_steps).
+    """
     from api.code_sync import _run_post_sync_steps
 
     pip_calls: List[str] = []
@@ -267,22 +393,25 @@ def test_frontend_post_steps(stub_user):
 
     async def fake_pip(comp, steps):
         pip_calls.append(comp)
+        return True
 
     async def fake_frontend(comp, steps):
         frontend_calls.append(comp)
         steps.append("npm build: succeeded")
+        return True
 
     async def fake_restart(comp, steps):
         restart_calls.append(comp)
         steps.append("restart nginx: ok")
 
-    deps_patch = patch("api.code_sync._compute_deps_changed", return_value=_async_return(False))
-    pip_patch = patch("api.code_sync._install_pip_deps_for_component", side_effect=fake_pip)
-    frontend_patch = patch("api.code_sync._build_npm_frontend_for_component", side_effect=fake_frontend)
-    restart_patch = patch("api.code_sync._restart_component_services", side_effect=fake_restart)
-
-    with deps_patch, pip_patch, frontend_patch, restart_patch:
-        deps_changed, steps = _run(
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("api.code_sync._compute_deps_changed", return_value=False))
+        stack.enter_context(patch("api.code_sync._snapshot_component", return_value=None))
+        stack.enter_context(patch("api.code_sync._install_pip_deps_for_component", side_effect=fake_pip))
+        stack.enter_context(patch("api.code_sync._build_npm_frontend_for_component", side_effect=fake_frontend))
+        stack.enter_context(patch("api.code_sync._restart_component_services", side_effect=fake_restart))
+        stack.enter_context(patch("api.code_sync._wait_component_healthy", return_value=True))
+        deps_changed, steps, pip_ok = _run(
             _run_post_sync_steps(
                 "autobot-frontend",
                 "/opt/autobot/code_source/autobot-frontend",
@@ -291,19 +420,35 @@ def test_frontend_post_steps(stub_user):
         )
 
     assert deps_changed is False
+    assert pip_ok is True
     assert pip_calls == [], "pip install must not run for a frontend component"
     assert frontend_calls == ["autobot-frontend"]
     assert restart_calls == ["autobot-frontend"]
     assert any("npm" in s for s in steps)
 
 
-def test_shared_lib_post_steps_noop():
-    """autobot_shared resolve runs no service or build steps (#9982)."""
+def test_shared_lib_post_steps():
+    """autobot_shared resolve runs no pip/npm step but restarts dependents.
+
+    #11798: the original "noop" premise rotted — since #10248/#11496 the
+    shared lib restores both backends' symlinks and restarts every dependent
+    service with a health gate.  Assert the current contract instead.
+    """
     from api.code_sync import _run_post_sync_steps
 
-    deps_patch = patch("api.code_sync._compute_deps_changed", return_value=_async_return(False))
-    with deps_patch:
-        deps_changed, steps = _run(
+    symlink_calls: List[str] = []
+
+    async def fake_symlink(comp, steps):
+        symlink_calls.append(comp)
+
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("api.code_sync._compute_deps_changed", return_value=False))
+        stack.enter_context(patch("api.code_sync._snapshot_component", return_value=None))
+        stack.enter_context(patch("api.code_sync._ensure_autobot_shared_symlink", side_effect=fake_symlink))
+        restart_dep = stack.enter_context(
+            patch("api.code_sync._restart_dependents_with_health", return_value=True)
+        )
+        deps_changed, steps, pip_ok = _run(
             _run_post_sync_steps(
                 "autobot_shared",
                 "/opt/autobot/code_source/autobot_shared",
@@ -312,12 +457,11 @@ def test_shared_lib_post_steps_noop():
         )
 
     assert deps_changed is False
-    assert any("no service" in s for s in steps)
+    assert pip_ok is True
+    assert len(symlink_calls) == 2, "both backends' symlinks must be restored"
+    restart_dep.assert_awaited_once()
+    assert not any("pip:" in s or "npm" in s for s in steps)
 
-
-def _run_async_return(value):
-    """Backward-compat alias for _async_return."""
-    return _async_return(value)
 
 
 def test_autobot_shared_is_syncable_and_restarts_dependents():

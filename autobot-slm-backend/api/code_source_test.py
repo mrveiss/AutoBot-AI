@@ -41,6 +41,11 @@ sys.modules["config"] = _mock_config
 
 spec.loader.exec_module(code_source_module)
 
+# Register under the spec name so patch("code_source_module.…") can resolve the
+# target — mock.patch imports the path, and an unregistered exec'd module raises
+# ModuleNotFoundError for every test using _LOCAL_NODE_PATCH (#11798).
+sys.modules["code_source_module"] = code_source_module
+
 _find_similar_paths = code_source_module._find_similar_paths
 _validate_repo_path = code_source_module._validate_repo_path
 _is_local_node = code_source_module._is_local_node
@@ -156,7 +161,10 @@ class TestCodeSourceValidation:
 
             result = await _find_similar_paths(mock_node, "/home/${USER:-autobot}/Desktop/autobot")
 
-            assert result == "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}"
+            # The helper returns parent-dir + the case-corrected entry from the
+            # mocked ls output ("AutoBot"), NOT a fallback root (#11798 — a
+            # mechanical path-literal sweep had rotted this expectation).
+            assert result == "/home/${USER:-autobot}/Desktop/AutoBot"
 
     @pytest.mark.asyncio
     async def test_find_similar_paths_no_match(self, mock_node):
