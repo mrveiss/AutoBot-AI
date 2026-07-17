@@ -61,6 +61,11 @@ def _validate_path(path: str) -> Path:
 
     clean_path = path.strip("/")
 
+    # "/" collapses to "" after stripping; that is the root, not an escape
+    # attempt — validate_relative_path rejects empty segments (#11823).
+    if not clean_path:
+        return SANDBOX_FILES_ROOT
+
     if (
         ".." in clean_path
         or clean_path.startswith("/")
