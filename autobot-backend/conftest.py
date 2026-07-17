@@ -906,6 +906,37 @@ def mock_llm():
     return AsyncMock()
 
 
+@pytest.fixture
+def single_use_fake_redis():
+    """Synchronous in-memory Redis stub for single-use OAuth-state tests (#11699).
+
+    Backs ``set(ex=)`` / ``get`` / ``getdel`` / ``delete`` with an
+    introspectable ``.store`` dict.  Consolidates the byte-identical
+    ``_FakeRedis`` copies that lived in the connector- and provider-auth OAuth
+    endpoint tests (they exercise the ``client_setex`` / ``client_getdel`` /
+    ``client_get`` single-use-state helpers now in autobot_shared.redis_client).
+    """
+
+    class _SingleUseFakeRedis:
+        def __init__(self) -> None:
+            self.store: dict = {}
+
+        def set(self, key, value, ex=None):
+            self.store[key] = value
+            return True
+
+        def get(self, key):
+            return self.store.get(key)
+
+        def getdel(self, key):
+            return self.store.pop(key, None)
+
+        def delete(self, key):
+            return 1 if self.store.pop(key, None) is not None else 0
+
+    return _SingleUseFakeRedis()
+
+
 @pytest.fixture(autouse=True)
 def set_test_environment():
     """

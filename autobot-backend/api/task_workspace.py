@@ -20,7 +20,7 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
 from models.heartbeat import AgentRuntimeState
-from services.task_workspace import _SAFE_TASK_ID_RE
+from services.task_workspace_common import SAFE_TASK_ID_RE as _SAFE_TASK_ID_RE
 
 logger = get_logger(__name__)
 router = APIRouter()

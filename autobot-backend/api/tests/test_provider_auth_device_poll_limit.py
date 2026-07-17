@@ -22,24 +22,6 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
 
 
-class _FakeRedis:
-    def __init__(self):
-        self.store = {}
-
-    def set(self, key, value, ex=None):
-        self.store[key] = value
-        return True
-
-    def get(self, key):
-        return self.store.get(key)
-
-    def getdel(self, key):
-        return self.store.pop(key, None)
-
-    def delete(self, key):
-        return 1 if self.store.pop(key, None) is not None else 0
-
-
 class _FakeResp:
     def __init__(self, data):
         self._data = data
@@ -77,8 +59,9 @@ _POLL = "/api/llm-auth/device/poll"
 
 
 @pytest.fixture
-def ctx(monkeypatch):
-    fake_redis = _FakeRedis()
+def ctx(monkeypatch, single_use_fake_redis):
+    # Shared single-use-state Redis stub (conftest fixture — #11699).
+    fake_redis = single_use_fake_redis
     monkeypatch.setattr(mod, "get_redis_client", lambda database="main": fake_redis)
     monkeypatch.setattr(mod, "get_oauth_allowed_hosts", lambda: {"token.example.com"})
     monkeypatch.setattr(mod, "_vault_write", AsyncMock(return_value=None))

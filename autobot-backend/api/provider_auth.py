@@ -32,11 +32,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.knowledge_connector_oauth import _redis_getdel, _redis_setex
 from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import client_get, client_getdel, client_setex, get_redis_client
 from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https
 from llm_shared.provider_auth import (
     _vault_read,
@@ -103,12 +102,8 @@ def _device_poll_key(device_code: str) -> str:
     return "%s%s" % (_DEVICE_POLL_PREFIX, hashlib.sha256(device_code.encode("utf-8")).hexdigest())
 
 
-async def _redis_get(redis, key: str):
-    """Read a key without deleting it (sync- or async-client tolerant)."""
-    value = redis.get(key)
-    if hasattr(value, "__await__"):
-        value = await value
-    return value
+# Redis single-use-state helpers (client_setex / client_getdel / client_get)
+# now live in autobot_shared.redis_client — see Issue #11699.
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +241,7 @@ async def oauth_initiate(
         "token_url": req.token_url,
         "client_id": req.client_id,
     }
-    await _redis_setex(redis, _state_key(state), _OAUTH_STATE_TTL_SECONDS, json.dumps(payload, ensure_ascii=False))
+    await client_setex(redis, _state_key(state), _OAUTH_STATE_TTL_SECONDS, json.dumps(payload, ensure_ascii=False))
 
     authorize_url = build_authorize_url(provider_cfg, req.client_id, req.redirect_uri, state, challenge, scopes)
     logger.info("OAuth authorize initiated for provider %s", req.provider_name)
@@ -277,7 +272,7 @@ async def oauth_callback(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth state store unavailable")
 
     # Single-use: atomically fetch-and-delete. Missing/expired/replayed → 400.
-    raw = await _redis_getdel(redis, _state_key(req.state))
+    raw = await client_getdel(redis, _state_key(req.state))
     if raw is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid or expired OAuth state")
     stored = json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
@@ -412,7 +407,7 @@ async def device_poll(
     now = time.time()
     poll_state = {"interval": _DEVICE_POLL_MIN_INTERVAL, "count": 0, "last_ts": 0.0}
     if redis is not None:
-        raw = await _redis_get(redis, poll_key)
+        raw = await client_get(redis, poll_key)
         if raw:
             poll_state = json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
         if poll_state["count"] >= _DEVICE_POLL_MAX_ATTEMPTS:
@@ -452,9 +447,9 @@ async def device_poll(
         poll_state["count"] += 1
         poll_state["last_ts"] = now
         if error in ("authorization_pending", "slow_down"):
-            await _redis_setex(redis, poll_key, _DEVICE_POLL_WINDOW, json.dumps(poll_state))
+            await client_setex(redis, poll_key, _DEVICE_POLL_WINDOW, json.dumps(poll_state))
         else:
-            await _redis_getdel(redis, poll_key)
+            await client_getdel(redis, poll_key)
 
     if error in ("authorization_pending", "slow_down"):
         return OAuthInitiateResponse(provider_name=req.provider_name, stored=False)
