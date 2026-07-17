@@ -154,6 +154,19 @@ for _k in list(sys.modules):
         sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
 del _PRE_BOOTSTRAP_MODULES
 
+# #11796: the bootstrap may have set ``agent_loop.search`` as an ATTRIBUTE on
+# a real, already-imported ``agent_loop`` package (attribute mutations survive
+# the sys.modules restore above).  Re-sync the attribute with whatever the
+# restored sys.modules now holds so mock.patch's getattr-based dotted-name
+# walk cannot land on a stale stub.
+_al_parent = sys.modules.get("agent_loop")
+if _al_parent is not None:
+    _al_real_child = sys.modules.get("agent_loop.search")
+    if _al_real_child is not None:
+        _al_parent.search = _al_real_child  # type: ignore[attr-defined]
+    elif getattr(_al_parent, "search", None) is _al_search_pkg:
+        del _al_parent.search
+
 
 # ---------------------------------------------------------------------------
 # Helpers
