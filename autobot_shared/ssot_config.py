@@ -1395,7 +1395,9 @@ class MiscConfig(BaseSettings):
     cloud_retry_base_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_BASE_DELAY")
     cloud_retry_max_attempts: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_ATTEMPTS")
     cloud_retry_max_delay: str = Field(default="", alias="AUTOBOT_CLOUD_RETRY_MAX_DELAY")
-    concurrent_limiter_timeout: int = Field(default=0, alias="AUTOBOT_CONCURRENT_LIMITER_TIMEOUT")
+    # 300 s pre-#7437 default (os.getenv fallback lost in the migration, #11834);
+    # matches ansible backend.env.j2 default(300)
+    concurrent_limiter_timeout: int = Field(default=300, alias="AUTOBOT_CONCURRENT_LIMITER_TIMEOUT")
     coqui_model: str = Field(default="", alias="AUTOBOT_COQUI_MODEL")
     database_url: str = Field(default="", alias="AUTOBOT_DATABASE_URL")
     data_db: str = Field(default="", alias="AUTOBOT_DATA_DB")

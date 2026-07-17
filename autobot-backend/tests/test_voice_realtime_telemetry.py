@@ -72,6 +72,27 @@ def _fake_prom():
     return m
 
 
+def _bare_telemetry(fake_redis, prom=None, max_seconds=1800, max_cost=5.0):
+    """Construct VoiceRealtimeTelemetry via __new__ with all attrs __init__ sets.
+
+    Mirrors __init__ including _config/_in_memory_sessions added by the
+    telemetry opt-out feature (commit 50b5e13d3, Issue #9035); telemetry is
+    enabled so the Redis persistence path is exercised.
+    """
+    from services.voice_realtime_telemetry import VoiceRealtimeTelemetry
+
+    t = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
+    t._redis = fake_redis
+    t._model = "gpt-realtime-2"
+    t._max_seconds = max_seconds
+    t._max_cost_usd = max_cost
+    t._prom = prom if prom is not None else MagicMock()
+    t._config = MagicMock()
+    t._config.telemetry.enabled = True
+    t._in_memory_sessions = {}
+    return t
+
+
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 
@@ -120,8 +141,6 @@ class TestRedisShape:
 
     @pytest.mark.asyncio
     async def test_save_and_load_round_trip(self):
-        from services.voice_realtime_telemetry import VoiceRealtimeTelemetry
-
         stored: dict[str, str] = {}
 
         async def fake_set(key, value, ex=None):
@@ -134,12 +153,7 @@ class TestRedisShape:
         fake_redis.set = fake_set
         fake_redis.get = fake_get
 
-        telemetry = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
-        telemetry._redis = fake_redis
-        telemetry._model = "gpt-realtime-2"
-        telemetry._max_seconds = 1800
-        telemetry._max_cost_usd = 5.0
-        telemetry._prom = MagicMock()
+        telemetry = _bare_telemetry(fake_redis)
         telemetry._prom._voice_realtime = _fake_prom()
 
         rec = _make_record(session_id="abc-123", user_id="u1")
@@ -153,14 +167,10 @@ class TestRedisShape:
 
     @pytest.mark.asyncio
     async def test_load_returns_none_for_missing_key(self):
-        from services.voice_realtime_telemetry import VoiceRealtimeTelemetry
-
         fake_redis = AsyncMock()
         fake_redis.get = AsyncMock(return_value=None)
 
-        telemetry = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
-        telemetry._redis = fake_redis
-        telemetry._prom = MagicMock()
+        telemetry = _bare_telemetry(fake_redis)
 
         result = await telemetry._load_record("nonexistent")
         assert result is None
@@ -170,15 +180,7 @@ class TestMetricIncrements:
     """Verify Prometheus metric increments on session lifecycle calls."""
 
     def _make_telemetry(self, fake_redis, prom_mock):
-        from services.voice_realtime_telemetry import VoiceRealtimeTelemetry
-
-        t = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
-        t._redis = fake_redis
-        t._model = "gpt-realtime-2"
-        t._max_seconds = 1800
-        t._max_cost_usd = 5.0
-        t._prom = prom_mock
-        return t
+        return _bare_telemetry(fake_redis, prom=prom_mock)
 
     @pytest.mark.asyncio
     async def test_session_start_increments_counter(self):
@@ -273,19 +275,11 @@ class TestCapBreachDisconnect:
     """Verify CapBreachError is raised on threshold breach."""
 
     def _make_telemetry_with_record(self, record, max_seconds=1800, max_cost=5.0):
-        from services.voice_realtime_telemetry import VoiceRealtimeTelemetry
-
         stored = {f"voice_realtime_session:{record.session_id}": json.dumps(record.to_dict())}
         fake_redis = AsyncMock()
         fake_redis.get = AsyncMock(side_effect=lambda k: stored.get(k))
 
-        t = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
-        t._redis = fake_redis
-        t._model = "gpt-realtime-2"
-        t._max_seconds = max_seconds
-        t._max_cost_usd = max_cost
-        t._prom = MagicMock()
-        return t
+        return _bare_telemetry(fake_redis, max_seconds=max_seconds, max_cost=max_cost)
 
     @pytest.mark.asyncio
     async def test_duration_cap_raises(self):
@@ -367,7 +361,7 @@ class TestSessionTTL:
 
     @pytest.mark.asyncio
     async def test_save_record_passes_ttl_to_redis(self):
-        from services.voice_realtime_telemetry import _SESSION_TTL, VoiceRealtimeTelemetry
+        from services.voice_realtime_telemetry import _SESSION_TTL
 
         captured: list[int] = []
 
@@ -377,8 +371,7 @@ class TestSessionTTL:
         fake_redis = AsyncMock()
         fake_redis.set = fake_set
 
-        t = VoiceRealtimeTelemetry.__new__(VoiceRealtimeTelemetry)
-        t._redis = fake_redis
+        t = _bare_telemetry(fake_redis)
 
         rec = _make_record(session_id="ttl-test")
         await t._save_record(rec)

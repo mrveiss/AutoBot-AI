@@ -46,15 +46,15 @@ class TestConflictResolverInit:
     def test_init_lazy_loads_redis(self):
         """ConflictResolver should lazy-load Redis on first use."""
         resolver = ConflictResolver()
-        assert resolver._redis_client is None
+        assert resolver._redis is None
 
     def test_multiple_instances_independent(self):
         """Multiple ConflictResolver instances should be independent."""
         r1 = ConflictResolver()
         r2 = ConflictResolver()
         assert r1 is not r2
-        assert r1._redis_client is None
-        assert r2._redis_client is None
+        assert r1._redis is None
+        assert r2._redis is None
 
 
 class TestAgeDayCalculation:
@@ -584,15 +584,15 @@ class TestKBUpdate:
         )
 
         # Mock Redis
-        resolver._redis_client = AsyncMock()
-        resolver._redis_client.lpush = AsyncMock()
-        resolver._redis_client.expire = AsyncMock()
+        resolver._redis = AsyncMock()
+        resolver._redis.lpush = AsyncMock()
+        resolver._redis.expire = AsyncMock()
 
         result = await resolver.update_kb_if_stale(kb, research)
 
         assert result is True
-        resolver._redis_client.lpush.assert_called_once()
-        resolver._redis_client.expire.assert_called_once()
+        resolver._redis.lpush.assert_called_once()
+        resolver._redis.expire.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_skip_update_kb_not_stale(self):
@@ -661,9 +661,9 @@ class TestHumanReviewEscalation:
         )
 
         # Mock Redis
-        resolver._redis_client = AsyncMock()
-        resolver._redis_client.set = AsyncMock()
-        resolver._redis_client.lpush = AsyncMock()
+        resolver._redis = AsyncMock()
+        resolver._redis.set = AsyncMock()
+        resolver._redis.lpush = AsyncMock()
 
         result_ticket = await resolver.flag_for_human_review(conflict)
 
@@ -689,9 +689,9 @@ class TestHumanReviewEscalation:
             agent_confidence=0.77,  # Gap 0.03
         )
 
-        resolver._redis_client = AsyncMock()
-        resolver._redis_client.set = AsyncMock()
-        resolver._redis_client.lpush = AsyncMock()
+        resolver._redis = AsyncMock()
+        resolver._redis.set = AsyncMock()
+        resolver._redis.lpush = AsyncMock()
 
         ticket = await resolver.flag_for_human_review(conflict)
 
@@ -717,9 +717,9 @@ class TestHumanReviewEscalation:
             agent_confidence=0.73,  # Gap 0.07
         )
 
-        resolver._redis_client = AsyncMock()
-        resolver._redis_client.set = AsyncMock()
-        resolver._redis_client.lpush = AsyncMock()
+        resolver._redis = AsyncMock()
+        resolver._redis.set = AsyncMock()
+        resolver._redis.lpush = AsyncMock()
 
         ticket = await resolver.flag_for_human_review(conflict)
 
@@ -745,19 +745,19 @@ class TestHumanReviewEscalation:
             agent_confidence=0.7,
         )
 
-        resolver._redis_client = AsyncMock()
-        resolver._redis_client.set = AsyncMock()
-        resolver._redis_client.lpush = AsyncMock()
+        resolver._redis = AsyncMock()
+        resolver._redis.set = AsyncMock()
+        resolver._redis.lpush = AsyncMock()
 
         await resolver.flag_for_human_review(conflict)
 
         # Should call Redis set with ticket key
-        resolver._redis_client.set.assert_called_once()
-        call_args = resolver._redis_client.set.call_args
+        resolver._redis.set.assert_called_once()
+        call_args = resolver._redis.set.call_args
         assert "review_ticket:" in call_args[0][0]
 
         # Should add to review queue
-        resolver._redis_client.lpush.assert_called_once()
+        resolver._redis.lpush.assert_called_once()
 
 
 class TestEdgeCases:

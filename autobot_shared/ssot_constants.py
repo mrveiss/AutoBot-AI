@@ -826,7 +826,9 @@ TTL_7_DAYS = 86_400 * 7
 TTL_30_DAYS = 86_400 * 30
 TTL_90_DAYS = 86_400 * 90
 TTL_365_DAYS = 86_400 * 365
-TTL_WORKING_MEMORY_DEFAULT = TTL_24_HOURS
+# 1 hour — session-scoped working memory (#3768; value drifted to TTL_24_HOURS
+# during the #7440 constants consolidation, restored in #11834)
+TTL_WORKING_MEMORY_DEFAULT = TTL_1_HOUR
 
 TIMEOUT_HTTP_DEFAULT: float = 60.0
 TIMEOUT_HTTP_LONG: float = 120.0
