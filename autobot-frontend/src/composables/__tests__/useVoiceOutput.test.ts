@@ -116,3 +116,51 @@ describe('useVoiceOutput — zero-voices UX (#9999)', () => {
     expect(mockShowToast).not.toHaveBeenCalled()
   })
 })
+
+// #11802: per-sentence streaming fires several speak() calls at once. Each
+// voice check used to call fetchVoices() independently and useApiResource's
+// `abortPrior` default cancelled the previous in-flight request, so the checks
+// aborted each other (nginx 499), left `voices` empty, and surfaced the "no
+// voices" toast on a deployment whose voices were fine.
+describe('useVoiceOutput — concurrent voice checks (#11802)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    voicesRef.value = []
+    _clock += 60_000
+    vi.spyOn(Date, 'now').mockImplementation(() => _clock)
+  })
+
+  it('concurrent speak() calls share ONE voices fetch (no self-aborting race)', async () => {
+    let resolveFetch: () => void = () => {}
+    mockFetchVoices.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFetch = () => {
+            voicesRef.value = [{ id: 'v1' }]
+            resolve()
+          }
+        }),
+    )
+    ;(fetchWithAuth as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 500,
+    })
+
+    const { speak } = useVoiceOutput()
+    const inFlight = [speak('one', true), speak('two', true), speak('three', true)]
+    resolveFetch()
+    await Promise.all(inFlight)
+
+    expect(mockFetchVoices).toHaveBeenCalledTimes(1)
+    expect(mockShowToast).not.toHaveBeenCalled()
+  })
+
+  it('does not claim "no voices" when the fetch itself fails', async () => {
+    mockFetchVoices.mockRejectedValue(new Error('aborted'))
+
+    const { speak } = useVoiceOutput()
+    await speak('hello', true)
+
+    expect(mockShowToast).not.toHaveBeenCalled()
+  })
+})
