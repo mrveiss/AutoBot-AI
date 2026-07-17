@@ -245,7 +245,14 @@ async def _vault_write(
     plaintext = json.dumps(token_data, separators=(",", ":")).encode("utf-8")
 
     if isinstance(created_by_id, str):
-        created_by_id = uuid.UUID(created_by_id)
+        # The JWT ``user_id`` claim is NOT guaranteed to be a UUID (e.g. the
+        # auth-disabled "admin" principal, or an empty device-JWT claim), so a
+        # malformed id must never break token persistence (#11849). Fall back to
+        # the zero-UUID audit sentinel rather than raising on the write path.
+        try:
+            created_by_id = uuid.UUID(created_by_id)
+        except ValueError:
+            created_by_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
     svc = EnvelopeSecretsService()
     await svc.create(

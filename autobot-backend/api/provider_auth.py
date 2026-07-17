@@ -204,7 +204,19 @@ class ProviderAuthStatus(BaseModel):
 
 
 def _current_user_id(user: Any) -> str:
-    uid = getattr(user, "id", None) or getattr(user, "user_id", None)
+    """Return the calling principal's id as a string, or the zero-UUID when absent.
+
+    ``get_current_user`` yields a **dict** principal in every production branch
+    (``user_id`` is the canonical claim key, #11849), so read dict keys first;
+    an object principal (tests / other callers) still resolves via ``getattr``.
+    The zero-UUID is returned only for a genuinely id-less principal — otherwise
+    the #11297 admin-binding would collapse every real admin to the same id and
+    let a lured admin B complete admin A's minted OAuth state.
+    """
+    if isinstance(user, dict):
+        uid = user.get("user_id") or user.get("id")
+    else:
+        uid = getattr(user, "user_id", None) or getattr(user, "id", None)
     if uid is None:
         return "00000000-0000-0000-0000-000000000000"
     return str(uid)

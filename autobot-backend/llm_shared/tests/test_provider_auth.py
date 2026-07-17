@@ -1003,3 +1003,51 @@ class TestOAuthRefreshSsrfGuard:
 
         assert result == "at-new"
         mock_post.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# _vault_write created_by guard (#11849)
+# ---------------------------------------------------------------------------
+
+
+class TestVaultWriteCreatedByGuard:
+    """The JWT ``user_id`` claim is not guaranteed to be a UUID; a malformed id
+    must fall back to the zero-UUID sentinel rather than raise on the write path."""
+
+    def _run(self, created_by_id):
+        import uuid as _uuid
+
+        captured = {}
+
+        class _FakeSvc:
+            async def create(self, session, *, owner_vault, name, secret_type, plaintext, created_by):
+                captured["created_by"] = created_by
+
+        import services.envelope_secrets_service as _ess
+
+        with patch.object(_ess, "EnvelopeSecretsService", _FakeSvc):
+            session = AsyncMock()
+            _sync(
+                _PA_MOD._vault_write(
+                    session,
+                    provider_name="acme",
+                    subject=LEGACY_SUBJECT,
+                    owner_vault_str="system",
+                    token_data={"access_token": "at"},
+                    created_by_id=created_by_id,
+                )
+            )
+        return captured["created_by"], _uuid
+
+    def test_non_uuid_created_by_falls_back_without_raising(self):
+        created_by, _uuid = self._run("admin")  # NOT a valid UUID
+        assert created_by == _uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+    def test_empty_created_by_falls_back_without_raising(self):
+        created_by, _uuid = self._run("")  # empty device-JWT claim
+        assert created_by == _uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+    def test_valid_uuid_created_by_preserved(self):
+        real = "11111111-2222-3333-4444-555555555555"
+        created_by, _uuid = self._run(real)
+        assert created_by == _uuid.UUID(real)
