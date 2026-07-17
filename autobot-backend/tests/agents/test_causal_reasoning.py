@@ -114,9 +114,14 @@ The database became the bottleneck.
     @pytest.mark.asyncio
     async def test_causal_analysis_prompt_includes_mechanism(self):
         """Verify causal analysis prompt emphasizes WHY not just WHAT."""
-        from agent_loop.think_tool import THINK_PROMPTS
+        # #11834: resolve the enum through the SAME module that built the dict.
+        # In whole-dir order agent_loop.think_tool can be re-loaded after this
+        # module was collected (real-load displacements elsewhere), splitting
+        # the ThinkCategory identity: the module-level import here then keys a
+        # dict built with a different enum class → KeyError.
+        import agent_loop.think_tool as think_tool_mod
 
-        prompt = THINK_PROMPTS[ThinkCategory.CAUSAL_ANALYSIS]
+        prompt = think_tool_mod.THINK_PROMPTS[think_tool_mod.ThinkCategory.CAUSAL_ANALYSIS]
 
         # Check that prompt emphasizes causal reasoning
         assert "CAUSES" in prompt or "causal" in prompt.lower()
