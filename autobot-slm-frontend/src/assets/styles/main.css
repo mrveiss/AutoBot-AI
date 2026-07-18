@@ -41,7 +41,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: var(--slm-gray-200, currentcolor);
   }
 
   body {
@@ -238,6 +238,21 @@
   --color-log-warning: #fbbf24;
   --color-log-phase: #a78bfa;
   --color-log-current-task: #93c5fd;
+  /* Neutral gray-scale literals for scoped component chrome (AgentsView, …)
+   * that must stay a fixed shade regardless of the active theme — unlike the
+   * theme-adaptive --a11y-* set. Tailwind gray-scale values, captured verbatim. */
+  --slm-gray-50: #f9fafb;
+  --slm-gray-100: #f3f4f6;
+  --slm-gray-200: #e5e7eb;
+  --slm-gray-300: #d1d5db;
+  --slm-gray-700: #374151;
+  /* Indigo action shades (agent badges / edit button / focused endpoint input). */
+  --slm-indigo-100: #e0e7ff;
+  --slm-indigo-500: #6366f1;
+  /* Emerald save-action + red error-banner tints. */
+  --slm-emerald-500: #10b981;
+  --slm-red-100: #fee2e2;
+  --slm-red-700: #b91c1c;
 }
 
 /* ─── High Contrast Mode (Issue #754) ────────────────────────── */
