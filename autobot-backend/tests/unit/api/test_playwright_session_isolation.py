@@ -119,9 +119,7 @@ async def test_worker_screenshot_threads_session_id():
 async def test_interact_threads_session_id():
     calls: list = []
     with patch("api.playwright.get_http_client", return_value=fake_http_client(calls)):
-        await interact_with_page(
-            PlaywrightInteractRequest(action="click", x=1, y=2, session_id="conversation-A")
-        )
+        await interact_with_page(PlaywrightInteractRequest(action="click", x=1, y=2, session_id="conversation-A"))
 
     assert calls[0]["url"].endswith("/click")
     assert calls[0]["payload"]["session_id"] == "conversation-A"
