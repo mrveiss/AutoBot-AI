@@ -2503,6 +2503,11 @@ before summarizing.
         Run a single loop iteration. Yields (llm_response, should_continue) at end.
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
+        Issue #11612: Sets the lightweight_mode_used ContextVar here — the single
+        seam both the legacy continuation loop (_run_llm_iterations) and the
+        LangGraph path (graph.py::_run_llm_iteration) call through — instead of
+        in the outer _execute_llm_continuation_loop wrapper, which the graph
+        path bypasses entirely (causing the cost badge to always read False).
         """
         logger.info(
             "[ChatWorkflowManager] Continuation iteration %d/%d",
@@ -2510,16 +2515,23 @@ before summarizing.
             self.MAX_CONTINUATION_ITERATIONS,
         )
 
-        llm_response = None
-        should_continue = False
+        # MVA-1993 / #11216 / #11612: store lightweight_mode_used in a task-local
+        # ContextVar (not on the shared singleton) for the response-metadata badge.
+        _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
+        try:
+            llm_response = None
+            should_continue = False
 
-        async for item in self._run_continuation_iteration(http_client, current_prompt, iteration, ctx):
-            if isinstance(item, tuple) and len(item) == 3:
-                llm_response, _, should_continue = item
-            else:
-                yield item
+            async for item in self._run_continuation_iteration(http_client, current_prompt, iteration, ctx):
+                if isinstance(item, tuple) and len(item) == 3:
+                    llm_response, _, should_continue = item
+                else:
+                    yield item
 
-        yield (llm_response, should_continue)
+            yield (llm_response, should_continue)
+        finally:
+            # MVA-1993 / #11216: restore the caller's task-local value (token reset).
+            _current_lightweight_mode.reset(_lw_token)
 
     def _log_iteration_start(self, ctx: LLMIterationContext) -> None:
         """Issue #665: Extracted from _run_llm_iterations to reduce function length.
@@ -2664,15 +2676,13 @@ before summarizing.
         Execute the multi-step LLM continuation loop.
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 10 to 1.
-        Issue MVA-1993: Sets lightweight_mode_used flag for response metadata.
+        Issue MVA-1993 / #11612: lightweight_mode_used ContextVar is now set inside
+        _run_continuation_loop_iteration (the shared seam both this loop and the
+        LangGraph path call through), not here — see that method's docstring.
         """
         import aiohttp
 
         from autobot_shared.http_client import get_http_client
-
-        # MVA-1993 / #11216: store lightweight_mode_used in a task-local ContextVar
-        # (not on the shared singleton) for the response-metadata badge.
-        _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
 
         try:
             http_client = get_http_client()
@@ -2688,10 +2698,6 @@ before summarizing.
             error_msg = self._create_llm_error_message(error, ctx.workflow_messages)
             yield error_msg
             yield ([], [], error_msg)
-
-        finally:
-            # MVA-1993 / #11216: restore the caller's task-local value (token reset).
-            _current_lightweight_mode.reset(_lw_token)
 
     async def _persist_workflow_messages(
         self,
