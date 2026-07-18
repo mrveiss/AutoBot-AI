@@ -1989,8 +1989,8 @@ watch(viewMode, async (newMode) => {
 }
 
 .graph-info.warning {
-  background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
-  color: var(--color-warning, #f59e0b);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .orphaned-controls {
@@ -2066,7 +2066,7 @@ watch(viewMode, async (newMode) => {
   padding: var(--spacing-0-5) var(--spacing-1-5);
   font-size: var(--text-xs);
   background: var(--color-secondary-bg, rgba(139, 92, 246, 0.1));
-  color: var(--color-secondary, #8b5cf6);
+  color: var(--color-secondary);
   border-radius: var(--radius-sm);
 }
 
@@ -2127,11 +2127,11 @@ watch(viewMode, async (newMode) => {
 
 .stat-orphaned:hover,
 .stat-orphaned.active {
-  background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+  background: var(--color-warning-bg);
 }
 
 .stat-orphaned .stat-value {
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
 }
 
 /* Issue #711: Virtual scroll container for orphaned functions */
