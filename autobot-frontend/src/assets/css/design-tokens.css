@@ -689,6 +689,19 @@
   --voiceoverlay-muted-text: #94a3b8;         /* cert-warning fallback note */
 
   /* ============================================
+   * FAILURE ANALYSIS DASHBOARD TOKENS
+   * Issue #11916 (umbrella #11515). Scoped to views/FailureAnalysisDashboard.vue.
+   * The primary-button label, spinner highlight and causal-chain index badge
+   * render pure white on the blue accent. There is no plain-white design token
+   * (--text-on-primary carries an OKLCH override), so the literal is preserved
+   * here as hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded #fff across all browsers. All
+   * other colors in the view already resolve to emitted Tailwind --color-*
+   * tokens; their dead hex fallbacks were dropped.
+   * ============================================ */
+  --faildash-on-accent: #fff;   /* white label/highlight on blue accent surfaces */
+
+  /* ============================================
    * COST DASHBOARD TOKENS
    * Issue #11917 (umbrella #11515). Scoped to llc/CostDashboard.vue.
    * The budget-mode badges render a soft blue ("dollars") and amber ("tokens")
