@@ -1739,7 +1739,7 @@ class BrowserNavigateRequest(BaseModel):
     timeout: int | None = Field(30000, description="Timeout in milliseconds")
     session_id: str | None = Field(
         None,
-        description="Conversation/session id for isolated browser-context routing (#11539); omitted = shared default session",
+        description="Session id for isolated browser-context routing (#11539); omitted uses shared default",
     )
 
 

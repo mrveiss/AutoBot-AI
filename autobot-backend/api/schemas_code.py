@@ -2269,7 +2269,7 @@ class PlaywrightNavigateRequest(BaseModel):
     timeout: int = 30000
     session_id: str | None = Field(
         None,
-        description="Conversation/session id for isolated browser-context routing (#11539); omitted = shared default session",
+        description="Session id for isolated browser-context routing (#11539); omitted uses shared default",
     )
 
 
