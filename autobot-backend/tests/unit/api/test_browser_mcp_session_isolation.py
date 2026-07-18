@@ -21,43 +21,12 @@ runtime).
 
 from __future__ import annotations
 
-import json
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
-
-
-class _FakeResponse:
-    """Minimal async-context-manager stand-in for aiohttp.ClientResponse."""
-
-    def __init__(self, status: int = 200, payload: dict | None = None):
-        self.status = status
-        self._payload = payload if payload is not None else {"success": True}
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-    async def json(self):
-        return self._payload
-
-    async def text(self):
-        return json.dumps(self._payload)
-
-
-def _fake_http_client(recorder: list) -> SimpleNamespace:
-    """Build a fake HTTPClientManager whose .post() records the JSON payload."""
-
-    async def _post(url, json: dict, timeout=None):  # noqa: A002 - match call signature
-        recorder.append({"url": url, "payload": json})
-        return _FakeResponse()
-
-    return SimpleNamespace(post=_post)
+from tests.unit.api._fake_http_client import fake_http_client as _fake_http_client
 
 
 @pytest.mark.asyncio

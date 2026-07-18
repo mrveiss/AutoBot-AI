@@ -368,18 +368,21 @@ app.post('/hover', async (req, res) => {
 
 app.post('/search', async (req, res) => {
   logger.info('Received search request:', req.body);
+  const { query, search_engine = 'duckduckgo' } = req.body;
+
+  if (!query) {
+    return res.status(400).json({
+      success: false,
+      error: 'Query parameter is required'
+    });
+  }
+
+  // Declared outside the try so the finally block can always close it,
+  // even if browser.newPage()/goto() throws before the inner try runs.
+  let page = null;
   try {
-    const { query, search_engine = 'duckduckgo' } = req.body;
-
-    if (!query) {
-      return res.status(400).json({
-        success: false,
-        error: 'Query parameter is required'
-      });
-    }
-
     const browser = await initBrowser();
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
     await page.setExtraHTTPHeaders({
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -446,8 +449,6 @@ app.post('/search', async (req, res) => {
       logger.error('Error with search:', e.message);
     }
 
-    await page.close();
-
     res.json({
       success: true,
       query: query,
@@ -461,6 +462,14 @@ app.post('/search', async (req, res) => {
       success: false,
       error: error.message
     });
+  } finally {
+    if (page && !page.isClosed()) {
+      try {
+        await page.close();
+      } catch (e) {
+        logger.warn('Search: page close failed: %s', e.message);
+      }
+    }
   }
 });
 

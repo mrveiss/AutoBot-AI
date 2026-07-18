@@ -2260,16 +2260,22 @@ class PlaywrightScreenshotRequest(BaseModel):
     url: str
     full_page: bool = True
     wait_timeout: int = 5000
+    session_id: str | None = None
 
 
 class PlaywrightNavigateRequest(BaseModel):
     url: str
     wait_until: str = "networkidle"
     timeout: int = 30000
+    session_id: str | None = Field(
+        None,
+        description="Conversation/session id for isolated browser-context routing (#11539); omitted = shared default session",
+    )
 
 
 class PlaywrightReloadRequest(BaseModel):
     wait_until: str = "networkidle"
+    session_id: str | None = None
 
 
 class PlaywrightInteractRequest(BaseModel):
@@ -2279,6 +2285,15 @@ class PlaywrightInteractRequest(BaseModel):
     deltaX: float = 0
     deltaY: float = 0
     text: str | None = None
+    session_id: str | None = None
+
+
+class PlaywrightSessionRequest(BaseModel):
+    """Optional body for worker proxy calls with no other payload (#11539):
+    /back, /forward, /worker-screenshot. GET /status takes the same id as a
+    query param instead (no request body on GET)."""
+
+    session_id: str | None = None
 
 
 # ---------------------------------------------------------------------------

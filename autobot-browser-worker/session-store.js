@@ -99,17 +99,26 @@ class SessionStore {
    */
   async gcIdle(closeFn, onError) {
     const cutoff = this._now() - this._idleTimeoutMs;
-    const evicted = [];
+    const candidateIds = [];
     for (const [sessionId, entry] of this._entries.entries()) {
       if (entry.lastActivity < cutoff) {
-        evicted.push(sessionId);
+        candidateIds.push(sessionId);
       }
     }
-    for (const sessionId of evicted) {
+    const evicted = [];
+    for (const sessionId of candidateIds) {
+      // Re-check right before evicting: a live request may have touched (or
+      // recreated) this session between the scan above and here, or while
+      // this loop was awaiting an earlier entry's closeFn — don't close a
+      // session out from under it.
       const entry = this._entries.get(sessionId);
+      if (!entry || !(entry.lastActivity < cutoff)) {
+        continue;
+      }
       this._entries.delete(sessionId);
+      evicted.push(sessionId);
       try {
-        if (entry) await closeFn(entry.value, sessionId);
+        await closeFn(entry.value, sessionId);
       } catch (err) {
         if (onError) {
           onError(sessionId, err);

@@ -121,6 +121,33 @@ test('gcIdle evicts only entries idle past the timeout, closing them via closeFn
   assert.equal(store.has('fresh'), true);
 });
 
+test("gcIdle re-checks lastActivity before evicting — a session touched during an earlier entry's closeFn await survives (review fix)", async () => {
+  let now = 0;
+  const store = new SessionStore({ idleTimeoutMs: 100, now: () => now });
+
+  await store.getOrCreate('first', async () => ({}));
+  await store.getOrCreate('second', async () => ({}));
+  now += 200; // both idle past the 100ms timeout at gcIdle-call time
+
+  const closed = [];
+  const closeFn = async (_value, sessionId) => {
+    if (sessionId === 'first') {
+      // Simulate a live request arriving for `second` while `first`'s close
+      // is still in flight — it must not be evicted out from under it.
+      now += 10;
+      store.touch('second');
+    }
+    closed.push(sessionId);
+  };
+
+  const evicted = await store.gcIdle(closeFn);
+
+  assert.deepEqual(evicted, ['first']);
+  assert.deepEqual(closed, ['first']);
+  assert.equal(store.has('first'), false);
+  assert.equal(store.has('second'), true, 'second must survive — it was touched mid-GC');
+});
+
 test('gcIdle surfaces close failures via onError instead of swallowing them or aborting other evictions', async () => {
   let now = 0;
   const store = new SessionStore({ idleTimeoutMs: 10, now: () => now });

@@ -703,7 +703,7 @@ export default {
           return null
         }
 
-        return await browserApi.navigateBack()
+        return await browserApi.navigateBack(props.sessionId)
       },
       {
         onSuccess: (result) => {
@@ -737,7 +737,7 @@ export default {
           return null
         }
 
-        return await browserApi.navigateForward()
+        return await browserApi.navigateForward(props.sessionId)
       },
       {
         onSuccess: (result) => {
@@ -770,7 +770,7 @@ export default {
           return 'navigate-fallback'
         }
 
-        return await browserApi.reloadPage()
+        return await browserApi.reloadPage(props.sessionId)
       },
       {
         onSuccess: async (result) => {
