@@ -152,10 +152,10 @@ def test_callback_persists_under_org_subject(ctx, monkeypatch):
 
     monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
     # Principal carrying an org claim. get_current_user yields a dict; the admin
-    # binding compares _current_user_id(user), which for a dict is the zero-UUID,
-    # so the prestored state's admin_id must match that.
+    # binding compares _current_user_id(user), which now reads the dict's
+    # ``user_id`` (#11849), so the prestored state's admin_id must be that real id.
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1", "org_id": "acme-42"}
-    state = _prestore_state(fake_redis, admin_id="00000000-0000-0000-0000-000000000000")
+    state = _prestore_state(fake_redis, admin_id="admin-1")
 
     resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
     assert resp.status_code == 200, resp.text
@@ -173,7 +173,7 @@ def test_callback_no_org_uses_legacy_global_subject(ctx, monkeypatch):
 
     monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1"}  # no org_id
-    state = _prestore_state(fake_redis, admin_id="00000000-0000-0000-0000-000000000000")
+    state = _prestore_state(fake_redis, admin_id="admin-1")
 
     resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
     assert resp.status_code == 200, resp.text
@@ -188,3 +188,71 @@ def test_callback_admin_mismatch_403(ctx):
     assert resp.status_code == 403
     # A rejected mismatch still consumed the single-use state (no reuse window).
     assert mod._state_key(state) not in fake_redis.store
+
+
+def test_callback_dict_admin_mismatch_rejected(ctx):
+    """#11849 SECURITY PROOF: a dict principal must NOT collapse to the zero-UUID.
+
+    Models the CSRF hole the #11297 binding was meant to close. Under the buggy
+    ``_current_user_id`` (object-only getattr), a **dict** principal always
+    resolved to the zero-UUID, so a state minted with that zero-UUID admin_id
+    (exactly what buggy /oauth/initiate stored) was completable by ANY other
+    admin — a lured admin B could complete admin A's state. Post-fix the
+    completing admin resolves to its real ``user_id`` (``admin-B``), which does
+    not match the stored id, so the callback is rejected 403.
+
+    This assertion returns 200 against the pre-fix code (binding inert) and 403
+    after the fix.
+    """
+    tc, fake_redis, app = ctx
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-B"}
+    state = _prestore_state(fake_redis, admin_id="00000000-0000-0000-0000-000000000000")
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    assert resp.status_code == 403, resp.text
+    # The rejected single-use state is still consumed (no reuse window).
+    assert mod._state_key(state) not in fake_redis.store
+
+
+def test_callback_persists_real_created_by(ctx, monkeypatch):
+    """#11849: the persisted token's ``created_by`` is the caller's real id, not zero-UUID."""
+    tc, fake_redis, app = ctx
+    write = AsyncMock(return_value=None)
+    monkeypatch.setattr(mod, "_vault_write", write)
+    # build_token_data must receive the real created_by so the audit trail is populated.
+    captured_created_by = {}
+
+    def _capture_build(resp, created_by):
+        captured_created_by["v"] = created_by
+        return {"expires_at": 1.0}
+
+    monkeypatch.setattr(mod, "build_token_data", _capture_build)
+
+    async def fake_exchange(*a, connector=None, **k):
+        return {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}
+
+    monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1"}
+    state = _prestore_state(fake_redis, admin_id="admin-1")
+
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    assert resp.status_code == 200, resp.text
+    assert captured_created_by["v"] == "admin-1"
+    assert write.await_args.kwargs["created_by_id"] == "admin-1"
+
+
+def test_current_user_id_reads_dict_principal():
+    """#11849: a dict principal yields its real ``user_id`` (falling back to ``id``)."""
+    assert mod._current_user_id({"user_id": "u-42"}) == "u-42"
+    assert mod._current_user_id({"id": "u-99"}) == "u-99"
+
+
+def test_current_user_id_reads_object_principal():
+    """Object principals still resolve via getattr (tests / non-dict callers)."""
+    assert mod._current_user_id(types.SimpleNamespace(user_id="obj-1")) == "obj-1"
+    assert mod._current_user_id(types.SimpleNamespace(id="obj-2")) == "obj-2"
+
+
+def test_current_user_id_absent_id_is_zero_uuid():
+    """Only a genuinely id-less principal falls back to the zero-UUID sentinel."""
+    assert mod._current_user_id({}) == "00000000-0000-0000-0000-000000000000"
+    assert mod._current_user_id(types.SimpleNamespace()) == "00000000-0000-0000-0000-000000000000"
