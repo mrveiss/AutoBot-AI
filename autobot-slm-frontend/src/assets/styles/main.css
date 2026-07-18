@@ -216,6 +216,30 @@
   --z-toast: 1300;
 }
 
+/* ─── Component literal captures (#11858 / #11515 Task 4) ─────────────
+ * Exact-value tokens for hardcoded colors migrated out of SLM components
+ * (SetupWizardView.vue first). Each value is byte-identical to the original
+ * literal, so the migration is a pure rename with zero pixel change. Grouped
+ * here for later consolidation into the semantic scale. */
+:root {
+  /* Neutral constant (white text on coloured surfaces). */
+  --color-white: #ffffff;
+  /* Blue action shades used by the setup wizard's buttons/badges — distinct
+   * from the sky --color-primary; captured verbatim pending palette
+   * consolidation (#11515). */
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  /* Console / provision-log semantics for terminal-style output panels. */
+  --color-log-bg: #0d0d0d;
+  --color-log-info: #a0d0a0;
+  --color-log-success: #4ade80;
+  --color-log-error: #f87171;
+  --color-log-warning: #fbbf24;
+  --color-log-phase: #a78bfa;
+  --color-log-current-task: #93c5fd;
+}
+
 /* ─── High Contrast Mode (Issue #754) ────────────────────────── */
 
 :root[data-theme='high-contrast'] {
