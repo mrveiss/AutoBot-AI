@@ -11,6 +11,9 @@
 # scripts/install-git-hooks.sh. The enforcement logic mirrors the canonical
 # pre-commit-target-branch-guard (Issue #4113) — kept identical on purpose.
 #
+# Sync source (keep IDENTICAL to avoid drift):
+#   autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard
+#
 # PROTECTED (commits forbidden): main, master
 # ALLOWED: Dev_new_gui, issue-*, hotfix-*, and any other feature branch
 #
