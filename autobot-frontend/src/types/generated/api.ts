@@ -33260,6 +33260,7 @@ export interface paths {
          *
          *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_back_api_playwright_back_post"];
         delete?: never;
@@ -33283,6 +33284,7 @@ export interface paths {
          *
          *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_forward_api_playwright_forward_post"];
         delete?: never;
@@ -33302,7 +33304,9 @@ export interface paths {
          * Get Worker Status
          * @description Get browser worker connectivity status from Browser VM (#1130)
          *
-         *     Proxies to Browser VM /status endpoint which checks the persistent navPage.
+         *     Proxies to Browser VM /status endpoint which checks the persistent navPage
+         *     for this caller's session (#11539 — session_id selects which isolated
+         *     context's navPage is inspected; omitted = shared default session).
          */
         get: operations["get_worker_status_api_playwright_worker_status_get"];
         put?: never;
@@ -33327,7 +33331,8 @@ export interface paths {
          * @description Take screenshot of the persistent navigation page on Browser VM (#1130)
          *
          *     Unlike /screenshot which takes a fresh-page screenshot for a given URL,
-         *     this returns a screenshot of the current state of the persistent navPage.
+         *     this returns a screenshot of the current state of the persistent navPage
+         *     for this caller's session (#11539).
          */
         post: operations["take_worker_screenshot_api_playwright_worker_screenshot_post"];
         delete?: never;
@@ -57929,6 +57934,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57954,6 +57964,11 @@ export interface components {
              * @description JavaScript code to execute
              */
             script: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57990,6 +58005,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58022,6 +58042,11 @@ export interface components {
              * @description Attribute name to retrieve
              */
             attribute: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58049,6 +58074,11 @@ export interface components {
              * @description CSS selector for element
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58074,6 +58104,11 @@ export interface components {
              * @description CSS selector for element to hover
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58194,6 +58229,11 @@ export interface components {
              * @default 30000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58267,6 +58307,11 @@ export interface components {
              * @default false
              */
             full_page: boolean | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58301,6 +58346,11 @@ export interface components {
              * @description Value to select
              */
             value: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58449,6 +58499,11 @@ export interface components {
              * @default visible
              */
             state: string | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85236,6 +85291,8 @@ export interface components {
             deltaY: number;
             /** Text */
             text?: string | null;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85253,6 +85310,11 @@ export interface components {
              * @default 30000
              */
             timeout: number;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85279,6 +85341,8 @@ export interface components {
              * @default networkidle
              */
             wait_until: string;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85296,6 +85360,8 @@ export interface components {
              * @default 5000
              */
             wait_timeout: number;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85313,6 +85379,18 @@ export interface components {
              * @default 5
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PlaywrightSessionRequest
+         * @description Optional body for worker proxy calls with no other payload (#11539):
+         *     /back, /forward, /worker-screenshot. GET /status takes the same id as a
+         *     query param instead (no request body on GET).
+         */
+        PlaywrightSessionRequest: {
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -144357,7 +144435,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144366,6 +144448,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -144377,7 +144468,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144388,11 +144483,22 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_worker_status_api_playwright_worker_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                session_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -144408,6 +144514,15 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightWorkerStatusResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     take_worker_screenshot_api_playwright_worker_screenshot_post: {
@@ -144417,7 +144532,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144426,6 +144545,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

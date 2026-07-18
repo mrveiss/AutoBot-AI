@@ -28,6 +28,14 @@ import Icon from '@/components/ui/Icon.vue'
 const { t } = useI18n()
 const logger = createLogger('VisualBrowserPanel')
 
+// #11539: the browser-worker keys one isolated context (own cookie jar) per
+// session_id. This panel is mounted per chat conversation (see
+// ChatTabContent.vue), so threading the conversation's id here — instead of
+// omitting it — keeps two concurrent conversations from sharing a browser
+// session/cookie jar. No prop = falls back to the worker's shared default
+// bucket (unchanged single-conversation behavior).
+const props = defineProps<{ sessionId?: string | null }>()
+
 const loading = ref(false)
 const error = ref<string | null>(null)
 const url = ref('https://www.google.com')
@@ -67,7 +75,10 @@ function toggleAutomation(): void {
 
 async function checkStatus(): Promise<void> {
   try {
-    const data = await ApiClient.get<Record<string, unknown>>(`${getApiBase()}/playwright/worker-status`)
+    const statusUrl = props.sessionId
+      ? `${getApiBase()}/playwright/worker-status?session_id=${encodeURIComponent(props.sessionId)}`
+      : `${getApiBase()}/playwright/worker-status`
+    const data = await ApiClient.get<Record<string, unknown>>(statusUrl)
     isConnected.value = data.status === 'connected' || data.browser_connected === true
   } catch (e) {
     logger.warn('Browser status check failed:', e)
@@ -87,7 +98,10 @@ async function navigate(): Promise<void> {
   url.value = targetUrl
 
   try {
-    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/navigate`, { url: targetUrl })
+    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/navigate`, {
+      url: targetUrl,
+      session_id: props.sessionId || undefined
+    })
     currentUrl.value = (nav.url as string) || targetUrl
     pageTitle.value = (nav.title as string) || null
     isConnected.value = true
@@ -105,7 +119,9 @@ async function navigate(): Promise<void> {
 
 async function captureScreenshot(): Promise<void> {
   try {
-    const data = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/worker-screenshot`, {})
+    const data = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/worker-screenshot`, {
+      session_id: props.sessionId || undefined
+    })
     screenshot.value = (data.screenshot as string) || null
   } catch (e) {
     logger.warn('Screenshot failed:', e)
@@ -117,7 +133,9 @@ async function goBack(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/back`, {})
+    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/back`, {
+      session_id: props.sessionId || undefined
+    })
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
     if (nav.screenshot) screenshot.value = nav.screenshot as string
@@ -133,7 +151,9 @@ async function goForward(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/forward`, {})
+    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/forward`, {
+      session_id: props.sessionId || undefined
+    })
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
     if (nav.screenshot) screenshot.value = nav.screenshot as string
@@ -149,7 +169,9 @@ async function reload(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/reload`, {})
+    const nav = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/reload`, {
+      session_id: props.sessionId || undefined
+    })
     if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('chat.visualBrowser.reloadFailed')
@@ -165,6 +187,7 @@ async function handleInteract(payload: { action: string; params: Record<string, 
     const result = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/interact`, {
       action: payload.action,
       ...payload.params,
+      session_id: props.sessionId || undefined,
     })
     if (result.screenshot) screenshot.value = result.screenshot as string
     if (result.url) { currentUrl.value = result.url as string; url.value = result.url as string }
