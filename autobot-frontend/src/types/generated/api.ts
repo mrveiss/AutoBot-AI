@@ -58231,7 +58231,7 @@ export interface components {
             timeout: number | null;
             /**
              * Session Id
-             * @description Conversation/session id for isolated browser-context routing (#11539); omitted = shared default session
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
              */
             session_id?: string | null;
         } & {
@@ -85312,7 +85312,7 @@ export interface components {
             timeout: number;
             /**
              * Session Id
-             * @description Conversation/session id for isolated browser-context routing (#11539); omitted = shared default session
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
              */
             session_id?: string | null;
         } & {
