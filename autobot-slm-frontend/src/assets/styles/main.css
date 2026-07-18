@@ -266,6 +266,10 @@
   --slm-emerald-600: #059669;
   --slm-orange-100: #ffedd5;
   --slm-orange-600: #ea580c;
+  /* Amber confirm-action + slate terminal-panel shades (ProcessMonitorTab #11899). */
+  --slm-amber-500: #f59e0b;
+  --slm-slate-200: #e2e8f0;
+  --slm-slate-800: #1e293b;
 }
 
 /* ─── High Contrast Mode (Issue #754) ────────────────────────── */
