@@ -700,6 +700,20 @@
    * tokens; their dead hex fallbacks were dropped.
    * ============================================ */
   --faildash-on-accent: #fff;   /* white label/highlight on blue accent surfaces */
+
+  /* ============================================
+   * COST DASHBOARD TOKENS
+   * Issue #11917 (umbrella #11515). Scoped to llc/CostDashboard.vue.
+   * The budget-mode badges render a soft blue ("dollars") and amber ("tokens")
+   * palette. The nearest --color-*/--chart-* tokens carry OKLCH overrides that
+   * would shift the rendered pixels, so these are captured here as hex-only
+   * (deliberately NO OKLCH override) so the badges render pixel-identical to
+   * their previous hardcoded values across all browsers.
+   * ============================================ */
+  --costdash-mode-dollars-bg: #dbeafe;    /* "dollars" budget-mode badge fill */
+  --costdash-mode-dollars-text: #1d4ed8;  /* "dollars" budget-mode badge text */
+  --costdash-mode-tokens-bg: #fef3c7;     /* "tokens" budget-mode badge fill */
+  --costdash-mode-tokens-text: #92400e;   /* "tokens" budget-mode badge text */
 }
 
 /* ============================================
