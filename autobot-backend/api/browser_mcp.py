@@ -94,6 +94,12 @@ ALLOWED_URL_SCHEMES = {"http", "https"}
 # Security Configuration
 BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
 
+# #11539: the browser-worker keys one isolated BrowserContext per session_id
+# (cookies/localStorage/auth state never cross conversations). Every call
+# without an explicit session_id maps to this bucket, preserving prior
+# single-session behavior for a lone conversation.
+DEFAULT_BROWSER_SESSION_ID = "default"
+
 # URL Whitelist - Only these domains are allowed
 ALLOWED_URL_PATTERNS = [
     r"^https?://localhost",
@@ -540,16 +546,28 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
-async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
+async def send_to_browser_vm(
+    action: str,
+    params: Metadata,
+    session_id: str = DEFAULT_BROWSER_SESSION_ID,
+) -> Metadata:
     """
     Send automation command to Browser VM
 
     This is the core communication layer with the Playwright server
     running on the Browser VM (NetworkConstants.BROWSER_VM_IP)
+
+    Issue #11539: ``session_id`` is threaded on every call so the worker
+    routes to the BrowserContext dedicated to that conversation instead of a
+    single context shared (and its cookies leaked) across every caller.
     """
     try:
         http_client = get_http_client()
-        payload = {"action": action, "params": params}
+        payload = {
+            "action": action,
+            "params": params,
+            "session_id": session_id or DEFAULT_BROWSER_SESSION_ID,
+        }
         async with await http_client.post(
             f"{BROWSER_VM_URL}/automation",
             json=payload,
@@ -609,6 +627,7 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
             "wait_until": request.wait_until,
             "timeout": request.timeout,
         },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -636,6 +655,7 @@ async def click_mcp(request: BrowserClickRequest) -> Metadata:
     result = await send_to_browser_vm(
         "click",
         {"selector": request.selector, "timeout": request.timeout},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -667,6 +687,7 @@ async def fill_mcp(request: BrowserFillRequest) -> Metadata:
             "value": request.value,
             "timeout": request.timeout,
         },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -695,6 +716,7 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     result = await send_to_browser_vm(
         "screenshot",
         {"selector": request.selector, "full_page": request.full_page},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -727,7 +749,11 @@ async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
 
     logger.info("Browser evaluate: %s...", request.script[:100])
 
-    result = await send_to_browser_vm("evaluate", {"script": request.script})
+    result = await send_to_browser_vm(
+        "evaluate",
+        {"script": request.script},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
 
     return {
         "success": True,
@@ -758,6 +784,7 @@ async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metad
             "timeout": request.timeout,
             "state": request.state,
         },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -783,7 +810,11 @@ async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
 
     logger.info("Browser get_text: %s", request.selector)
 
-    result = await send_to_browser_vm("get_text", {"selector": request.selector})
+    result = await send_to_browser_vm(
+        "get_text",
+        {"selector": request.selector},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
 
     return {
         "success": True,
@@ -810,6 +841,7 @@ async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
     result = await send_to_browser_vm(
         "get_attribute",
         {"selector": request.selector, "attribute": request.attribute},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -838,6 +870,7 @@ async def select_mcp(request: BrowserSelectRequest) -> Metadata:
     result = await send_to_browser_vm(
         "select",
         {"selector": request.selector, "value": request.value},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -863,7 +896,11 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
 
     logger.info("Browser hover: %s", request.selector)
 
-    result = await send_to_browser_vm("hover", {"selector": request.selector})
+    result = await send_to_browser_vm(
+        "hover",
+        {"selector": request.selector},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
 
     return {
         "success": True,
