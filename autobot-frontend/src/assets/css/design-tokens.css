@@ -611,6 +611,28 @@
   --onboarding-banner-warning-text: #fde68a; /* soft (warning) banner foreground */
 
   /* ============================================
+   * VISION AUTOMATION VIEW TOKENS
+   * Issue #11885 (umbrella #11515). Scoped to VisionAutomationView.vue.
+   * Hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * The light status-badge/alert palette and light surface fills have no
+   * existing exact semantic token (mapping to OKLCH tokens would drift).
+   * --vision-surface-secondary/-badge-neutral-bg/-chip-bg are the literal
+   * fallbacks the view rendered because --color-surface-secondary is never
+   * defined in any theme; preserved behind that intended token name.
+   * ============================================ */
+  --vision-surface-secondary: #f9fafb;   /* card/header/stat/ocr/opportunity surface fill */
+  --vision-badge-neutral-bg: #f3f4f6;    /* neutral badge fill */
+  --vision-chip-bg: #e5e7eb;             /* interaction chip fill */
+  --vision-badge-success-bg: #dcfce7;    /* operational/online status badge fill */
+  --vision-badge-success-text: #15803d;  /* operational/online status badge text */
+  --vision-badge-warning-bg: #fef9c3;    /* degraded status badge fill */
+  --vision-badge-warning-text: #a16207;  /* degraded status badge text */
+  --vision-error-bg: #fee2e2;            /* error badge + error alert background */
+  --vision-error-text: #b91c1c;          /* error badge + error alert foreground */
+  --vision-alert-error-border: #fca5a5;  /* error alert border */
+
+  /* ============================================
    * WORK ITEM DETAIL TOKENS
    * Issue #11880 (umbrella #11515). Scoped to llc/WorkItemDetail.vue.
    * The "AGENT" comment chip renders a soft-violet badge with no existing
