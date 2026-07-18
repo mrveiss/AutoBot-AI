@@ -642,6 +642,31 @@
    * ============================================ */
   --workitem-agent-chip-bg: #ddd6fe;    /* AGENT comment chip background */
   --workitem-agent-chip-text: #5b21b6;  /* AGENT comment chip text */
+
+  /* ============================================
+   * ROUTINES CONSOLE TOKENS
+   * Issue #11891 (umbrella #11515). Scoped to llc/RoutinesView.vue.
+   * Hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * These are the literal fallbacks the view rendered because their intended
+   * Ember semantic tokens (--color-accent, --bg-code, --bg-muted,
+   * --color-success/warning/info/danger-*) are undefined in non-ember themes;
+   * preserved behind those intended token names via nested var() so ember
+   * still wins where it defines them.
+   * ============================================ */
+  --routines-accent: #c4651a;              /* primary-button accent fill (non-ember) */
+  --routines-on-accent: #fff;              /* primary-button label on accent */
+  --routines-bg-code: #f3f4f6;             /* cron code chip fill */
+  --routines-badge-neutral-bg: #f3f4f6;    /* neutral status-badge / queued run fill */
+  --routines-status-archived-bg: #e5e7eb;  /* archived status-badge fill */
+  --routines-success-bg: #dcfce7;          /* active / succeeded status fill */
+  --routines-success-text: #15803d;        /* active / succeeded status text */
+  --routines-warning-bg: #fef3c7;          /* paused status fill */
+  --routines-warning-text: #b45309;        /* paused status text */
+  --routines-danger-border: #fecaca;       /* danger button border */
+  --routines-run-failed-bg: #fee2e2;       /* failed run status fill */
+  --routines-info-bg: #dbeafe;             /* running run status fill */
+  --routines-info-text: #1d4ed8;           /* running run status text */
 }
 
 /* ============================================
