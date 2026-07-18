@@ -1746,54 +1746,72 @@ class BrowserNavigateRequest(BaseModel):
 class BrowserClickRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element to click")
     timeout: int | None = Field(5000, description="Timeout in milliseconds")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserFillRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for input field")
     value: str = Field(..., description="Value to fill")
     timeout: int | None = Field(5000, description="Timeout in milliseconds")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserScreenshotRequest(BaseModel):
     selector: str | None = Field(None, description="CSS selector for element (full page if omitted)")
     full_page: bool | None = Field(False, description="Capture full scrollable page")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserEvaluateRequest(BaseModel):
     script: str = Field(..., description="JavaScript code to execute")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserWaitForSelectorRequest(BaseModel):
     selector: str = Field(..., description="CSS selector to wait for")
     timeout: int | None = Field(30000, description="Timeout in milliseconds")
     state: str | None = Field("visible", description="State: 'attached', 'detached', 'visible', 'hidden'")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserGetTextRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserGetAttributeRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element")
     attribute: str = Field(..., description="Attribute name to retrieve")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserSelectRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for select element")
     value: str = Field(..., description="Value to select")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserHoverRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element to hover")
-    session_id: str | None = Field(None, description="Conversation/session id for isolated browser-context routing (#11539)")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserNavigateResponse(BaseModel):
