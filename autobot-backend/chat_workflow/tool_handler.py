@@ -24,6 +24,7 @@ from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
+from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -479,23 +480,11 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     return None
 
 
-# Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
-# Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
-# #11545: the closing `>` is optional — some chat models emit `</TOOL_CALL`
-# (newline/prose after) without it.
-# #11552: the closing tag itself is often TRUNCATED to `</TOOL` (the model drops
-# `_CALL`) or spaced (`</TOOL_ CALL>`), then a hallucinated success line follows.
-# Both previously left the tool call unparsed → raw tag leaked, tool never ran
-# (0 work items, CEO chat). The close now tolerates `</TOOL[_[ ]CALL][>]`: the
-# `_CALL` and trailing `>` are both optional. The close requires a word boundary
-# after `tool` (either the proper `_call\b` continuation, or `\b` when `_CALL` is
-# dropped) so `</tool_callable…`/`</toolbox…` never match; the opening tag
-# (`<TOOL_CALL name=… params=…>`) is still required, so a bare `</tool>` in prose
-# can never match on its own.
-_TOOL_CALL_PATTERN = re.compile(
-    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool(?:_?\s*call\b|\b)\s*>?',
-    re.IGNORECASE | re.DOTALL,
-)
+# Issue #11693: the tool-call grammar (parse pattern + close-variant
+# tolerance for #11545/#11552) is now the single canonical source of truth
+# in tool_call_grammar.py, shared with chat_workflow/manager.py. Kept as a
+# module-level alias here for backwards-compatible imports.
+_TOOL_CALL_PATTERN = TOOL_CALL_PATTERN
 
 # Issue #260: Security tool detection pattern for auto-parsing
 _SECURITY_TOOL_PATTERN = re.compile(r"(nmap|nikto|gobuster|ffuf|masscan|nuclei|searchsploit)\b", re.IGNORECASE)
