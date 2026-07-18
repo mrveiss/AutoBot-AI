@@ -317,5 +317,17 @@ describe('useChatStore', () => {
 
       expect(store.currentMessages).toHaveLength(2)
     })
+
+    it('does NOT dedup replies that carry NEITHER id NOR message_id (no server identity)', () => {
+      const store = useChatStore()
+      store.createNewSession('Dedup Session')
+
+      // Two distinct replies with no stable server id must stay separate bubbles.
+      // Guards against over-dedupping the no-server-id path onto a single message.
+      store.addOrUpdateMessage({ content: 'First reply.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({ content: 'Second reply.', sender: 'assistant', type: 'response' })
+
+      expect(store.currentMessages).toHaveLength(2)
+    })
   })
 })
