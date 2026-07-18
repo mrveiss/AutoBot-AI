@@ -551,6 +551,47 @@
   --color-agent-draft-border: #3B82F6;
   --color-agent-draft-bg: #EFF6FF;
   --color-user-edit-cursor: #059669;
+
+  /* ============================================
+   * TERMINAL COMPONENT TOKENS
+   * Issue #11859 (umbrella #11515). Shared by the terminal component family
+   * (TerminalWindow, CompletionSuggestions, BaseXTerminal, TerminalOutput, …).
+   * The terminal renders a distinct dark-chrome palette plus a literal ANSI
+   * content palette. ANSI content colors are INTENTIONALLY literal (they carry
+   * terminal semantics) and are NOT mapped to semantic UI tokens.
+   * Hex/rgba only — deliberately NO OKLCH override — so terminal output renders
+   * pixel-identical across all browsers.
+   * ============================================ */
+
+  /* Chrome / frame surfaces (dark toolbar, footer, modals) */
+  --terminal-chrome-bg: #2d2d2d;          /* header, footer, modal surface */
+  --terminal-chrome-bg-alt: #1e1e1e;      /* status bar, previews, wells */
+  --terminal-chrome-bg-actions: #252525;  /* modal action footer */
+  --terminal-border: #444444;             /* control / modal borders */
+  --terminal-border-subtle: #333333;      /* status/footer separators */
+  --terminal-border-strong: #666666;      /* button outlines */
+  --terminal-btn-hover-bg: #555555;       /* button + scrollbar-thumb base */
+  --terminal-scrollbar-thumb-hover: #777777;
+
+  /* Chrome text */
+  --terminal-text: #ffffff;               /* bright foreground */
+  --terminal-text-muted: #888888;         /* metadata labels */
+  --terminal-text-dim: #cccccc;           /* secondary body text */
+  --terminal-text-dim-strong: #dddddd;    /* emphasis body text */
+
+  /* ANSI content palette — literal, do NOT remap to semantic tokens */
+  --terminal-ansi-green: #00ff00;         /* prompt + cursor */
+  --terminal-ansi-red: #ff6b6b;           /* error output */
+  --terminal-ansi-cyan: #87ceeb;          /* command output */
+  --terminal-ansi-purple: #9370db;        /* system messages */
+  --terminal-ansi-violet: #6f42c1;        /* workflow info */
+  --terminal-ansi-red-bg: rgba(255, 107, 107, 0.2);
+  --terminal-ansi-violet-bg: rgba(111, 66, 193, 0.1);
+
+  /* Overlay + danger-pulse shadow (bootstrap red #dc3545, distinct from --color-danger) */
+  --terminal-overlay: rgba(0, 0, 0, 0.7);
+  --terminal-shadow-danger: rgba(220, 53, 69, 0.4);
+  --terminal-shadow-danger-fade: rgba(220, 53, 69, 0);
 }
 
 /* ============================================
