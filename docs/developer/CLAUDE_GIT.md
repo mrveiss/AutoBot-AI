@@ -67,6 +67,8 @@ git add -A && git commit -m "..."
 
 ## Hook Scripts
 
+**Install/refresh git hooks (one-time per clone, idempotent):** `bash scripts/install-git-hooks.sh` — copies real `pre-commit` (blocks commits to `main`/`master`) and `pre-push` files into the repo's hooks dir, normalises a bad `core.hooksPath`, and replaces any dangling symlink. Never symlinks into a worktree (#11598).
+
 Before committing any change to `.claude/hooks/block-dangerous-commands.sh`, run:
 ```bash
 bash .claude/hooks/block-dangerous-commands_test.sh

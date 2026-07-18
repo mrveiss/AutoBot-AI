@@ -17,11 +17,21 @@ incidents this session that the rules were supposed to prevent:
 ## Setup (one-time per developer)
 
 ```bash
-tools/git-hooks/install_hooks.sh
+bash scripts/install-git-hooks.sh
 ```
 
-Symlinks each hook into `.git/hooks/`. Idempotent: safe to re-run. Existing
-hooks are backed up to `*.bak.<timestamp>` before being replaced.
+Copies each hook (`pre-commit`, `pre-push`) into the repo's hooks dir as a
+**real file** — never a worktree symlink (those dangle when the worktree is
+deleted, silently disabling enforcement — #11598). The installer is idempotent
+(a second run is a no-op), normalises a bad absolute `core.hooksPath` back to
+git's default, and detects/replaces any dangling symlink left by the old
+`install_hooks.sh` (now a shim that delegates here).
+
+## What the pre-commit hook does
+
+Blocks direct commits to the protected branches `main` / `master` (Issue
+#4113) and points you at the correct `issue-*` → `Dev_new_gui` PR workflow.
+Commits on any other branch pass straight through.
 
 ## What the pre-push hook does
 
