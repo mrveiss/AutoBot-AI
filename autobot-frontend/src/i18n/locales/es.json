@@ -7810,22 +7810,7 @@
       "createFailed": "No se pudo crear la empresa"
     },
     "ceoChat": {
-      "threads": "Hilos",
-      "newThread": "+ Nuevo",
-      "selectCompany": "Seleccione una empresa para ver los hilos.",
-      "loading": "Cargando...",
-      "noThreads": "Aún no hay hilos.",
-      "emptyState": "Seleccione un hilo o cree uno nuevo.",
-      "loadingMessages": "Cargando mensajes...",
-      "noMessages": "Aún no hay mensajes.",
-      "messagePlaceholder": "Escriba un mensaje...",
-      "send": "Enviar",
-      "newThreadTitle": "Nuevo hilo",
-      "titleLabel": "Título",
-      "titlePlaceholder": "Título del hilo...",
-      "cancel": "Cancelar",
-      "create": "Crear",
-      "creating": "Creando..."
+      "selectCompany": "Seleccione una empresa para ver los hilos."
     },
     "dashboard": {
       "title": "Panel de la empresa",
@@ -8523,9 +8508,6 @@
     },
     "approvals": {
       "decideError": "No se pudo registrar tu decisión. Inténtalo de nuevo."
-    },
-    "ceoChat": {
-      "sendError": "No se pudo enviar tu mensaje. Se ha restaurado para que puedas reintentarlo."
     },
     "timeline": {
       "rescheduleError": "No se pudo guardar la nueva planificación. El cambio se revirtió."
