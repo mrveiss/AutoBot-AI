@@ -1260,7 +1260,7 @@ onMounted(async () => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-blue-600);
+  background: var(--slm-blue-600);
 }
 
 .btn-primary:disabled {
@@ -1343,7 +1343,7 @@ onMounted(async () => {
 
 .status-badge.enrolling {
   background: rgba(59, 130, 246, 0.15);
-  color: var(--color-blue-500);
+  color: var(--slm-blue-500);
 }
 
 .empty-state {
@@ -1587,7 +1587,7 @@ input.full-width {
 }
 
 .log-task {
-  color: var(--color-blue-400);
+  color: var(--slm-blue-400);
   font-weight: 600;
 }
 
@@ -1616,7 +1616,7 @@ input.full-width {
 }
 
 .provision-stage {
-  color: var(--color-blue-400);
+  color: var(--slm-blue-400);
   font-weight: 600;
 }
 
@@ -1642,7 +1642,7 @@ input.full-width {
 
 .phase-active {
   border-color: rgba(96, 165, 250, 0.5);
-  color: var(--color-blue-400);
+  color: var(--slm-blue-400);
   font-weight: 600;
 }
 
