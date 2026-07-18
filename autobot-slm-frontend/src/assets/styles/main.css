@@ -266,8 +266,9 @@
   --slm-emerald-600: #059669;
   --slm-orange-100: #ffedd5;
   --slm-orange-600: #ea580c;
-  /* Amber confirm-action + slate terminal-panel shades (ProcessMonitorTab #11899). */
+  /* Amber action shades + slate terminal-panel shades (ProcessMonitorTab #11899, ConfigHistoryTab #11900). */
   --slm-amber-500: #f59e0b;
+  --slm-amber-600: #d97706;
   --slm-slate-200: #e2e8f0;
   --slm-slate-800: #1e293b;
 }
