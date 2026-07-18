@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ChatController } from '../ChatController'
 import * as chatRepository from '@/models/repositories'
+import { useChatStore } from '@/stores/useChatStore'
 
 // Mock the repositories
 vi.mock('@/models/repositories', () => ({
@@ -49,6 +50,20 @@ vi.mock('@/stores/useAppStore', () => ({
   useAppStore: vi.fn(() => ({
     setGlobalError: vi.fn()
   }))
+}))
+
+// Mock the request queue so send flows run the enqueued fn synchronously
+vi.mock('@/composables/useRequestQueue', () => ({
+  requestQueue: {
+    enqueue: vi.fn(({ fn }: { fn: () => unknown }) => fn())
+  }
+}))
+
+// Mock ApiClient (cache invalidation is a no-op side effect on send)
+vi.mock('@/utils/ApiClient', () => ({
+  default: {
+    invalidateCache: vi.fn()
+  }
 }))
 
 describe('ChatController', () => {
@@ -100,6 +115,75 @@ describe('ChatController', () => {
       // Get the store to verify the call
       const store = controller['chatStore']
       expect(store.createNewSession).toHaveBeenCalledWith('Test Chat', sessionId)
+    })
+  })
+
+  describe('sendMessage activeChatContext merge (#11690)', () => {
+    // Build a store whose activeChatContext scopes sends to a company, with an
+    // existing session so the send path never has to mint a new one.
+    function scopedStore(context: Record<string, unknown>) {
+      return {
+        createNewSession: vi.fn((title: string, sessionId: string) => sessionId),
+        switchToSession: vi.fn(),
+        addMessage: vi.fn(() => 'user-msg-1'),
+        updateMessage: vi.fn(),
+        setTyping: vi.fn(),
+        sessions: [],
+        currentSessionId: 'session-1',
+        activeChatContext: context,
+        settings: { autoSave: false, persistHistory: true }
+      }
+    }
+
+    it('merges activeChatContext into the send options', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        scopedStore({ company_id: 'company-42' }) as unknown as ReturnType<typeof useChatStore>
+      )
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockResolvedValue({
+        type: 'json',
+        data: {}
+      } as never)
+
+      await controller.sendMessage('hello CEO')
+
+      expect(chatRepository.chatRepository.sendMessage).toHaveBeenCalledWith(
+        'hello CEO',
+        'session-1',
+        expect.objectContaining({ company_id: 'company-42' })
+      )
+    })
+
+    it('lets explicit call-site options win over activeChatContext', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        scopedStore({ company_id: 'company-42' }) as unknown as ReturnType<typeof useChatStore>
+      )
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockResolvedValue({
+        type: 'json',
+        data: {}
+      } as never)
+
+      await controller.sendMessage('hello CEO', { company_id: 'override-7', extra: true })
+
+      expect(chatRepository.chatRepository.sendMessage).toHaveBeenCalledWith(
+        'hello CEO',
+        'session-1',
+        expect.objectContaining({ company_id: 'override-7', extra: true })
+      )
+    })
+
+    it('leaves send options untouched when no context is active', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        scopedStore({}) as unknown as ReturnType<typeof useChatStore>
+      )
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockResolvedValue({
+        type: 'json',
+        data: {}
+      } as never)
+
+      await controller.sendMessage('hi there')
+
+      const [, , sentOptions] = vi.mocked(chatRepository.chatRepository.sendMessage).mock.calls[0]
+      expect(sentOptions).not.toHaveProperty('company_id')
     })
   })
 

@@ -7810,22 +7810,7 @@
       "createFailed": "Échec de la création de l'entreprise"
     },
     "ceoChat": {
-      "threads": "Fils",
-      "newThread": "+ Nouveau",
-      "selectCompany": "Sélectionnez une entreprise pour afficher les fils.",
-      "loading": "Chargement...",
-      "noThreads": "Aucun fil pour le moment.",
-      "emptyState": "Sélectionnez un fil ou créez-en un nouveau.",
-      "loadingMessages": "Chargement des messages...",
-      "noMessages": "Aucun message pour le moment.",
-      "messagePlaceholder": "Saisissez un message...",
-      "send": "Envoyer",
-      "newThreadTitle": "Nouveau fil",
-      "titleLabel": "Titre",
-      "titlePlaceholder": "Titre du fil...",
-      "cancel": "Annuler",
-      "create": "Créer",
-      "creating": "Création..."
+      "selectCompany": "Sélectionnez une entreprise pour afficher les fils."
     },
     "dashboard": {
       "title": "Tableau de bord de l'entreprise",
@@ -8523,9 +8508,6 @@
     },
     "approvals": {
       "decideError": "Échec de l'enregistrement de votre décision. Veuillez réessayer."
-    },
-    "ceoChat": {
-      "sendError": "Échec de l'envoi de votre message. Il a été restauré pour que vous puissiez réessayer."
     },
     "timeline": {
       "rescheduleError": "Échec de l'enregistrement du nouveau planning. La modification a été annulée."

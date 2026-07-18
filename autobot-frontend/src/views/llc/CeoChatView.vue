@@ -31,8 +31,7 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CeoChatView')
 const route = useRoute()
-const props = defineProps<{ companyId?: string }>()
-const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
+const companyId = computed(() => (route.params.companyId as string) ?? '')
 
 const chatStore = useChatStore()
 const controller = useChatController()

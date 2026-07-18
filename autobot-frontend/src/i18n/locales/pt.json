@@ -7810,22 +7810,7 @@
       "createFailed": "Falha ao criar a empresa"
     },
     "ceoChat": {
-      "threads": "Tópicos",
-      "newThread": "+ Novo",
-      "selectCompany": "Selecione uma empresa para ver os tópicos.",
-      "loading": "Carregando...",
-      "noThreads": "Ainda não há tópicos.",
-      "emptyState": "Selecione um tópico ou crie um novo.",
-      "loadingMessages": "Carregando mensagens...",
-      "noMessages": "Ainda não há mensagens.",
-      "messagePlaceholder": "Digite uma mensagem...",
-      "send": "Enviar",
-      "newThreadTitle": "Novo tópico",
-      "titleLabel": "Título",
-      "titlePlaceholder": "Título do tópico...",
-      "cancel": "Cancelar",
-      "create": "Criar",
-      "creating": "Criando..."
+      "selectCompany": "Selecione uma empresa para ver os tópicos."
     },
     "dashboard": {
       "title": "Painel da empresa",
@@ -8523,9 +8508,6 @@
     },
     "approvals": {
       "decideError": "Falha ao registrar sua decisão. Tente novamente."
-    },
-    "ceoChat": {
-      "sendError": "Falha ao enviar sua mensagem. Ela foi restaurada para que você possa tentar novamente."
     },
     "timeline": {
       "rescheduleError": "Falha ao salvar o novo cronograma. A alteração foi revertida."

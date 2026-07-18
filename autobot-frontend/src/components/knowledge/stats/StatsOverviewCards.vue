@@ -8,7 +8,7 @@
         <h4 id="analytics-documents-title">{{ $t('knowledge.stats.totalDocuments') }}</h4>
         <p class="stat-value" aria-live="polite">{{ documentCount }}</p>
         <p class="stat-change">
-          {{ $t('knowledge.stats.avgDocsPerCategoryValue', { count: avgDocsPerCategory }) }}
+          {{ $t('knowledge.stats.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
         </p>
       </div>
     </BasePanel>
