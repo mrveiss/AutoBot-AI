@@ -689,6 +689,24 @@
   --voiceoverlay-muted-text: #94a3b8;         /* cert-warning fallback note */
 
   /* ============================================
+   * SERVICE MESSAGE TIMELINE TOKENS
+   * Issue #11918 (umbrella #11515). Scoped to
+   * visualizations/ServiceMessageTimeline.vue.
+   * Per-message-type data-viz palette (dot markers + type badges) — these are
+   * a semantic data series, NOT chrome, so they are preserved verbatim rather
+   * than collapsed into semantic UI tokens. Captured hex-only (deliberately NO
+   * OKLCH/theme override) so the timeline renders pixel-identical to its
+   * previous hardcoded values across all browsers.
+   * ============================================ */
+  --timeline-task: #4a90d9;             /* task */
+  --timeline-result: #4caf50;           /* result */
+  --timeline-error: #f44336;            /* error */
+  --timeline-health: #8bc34a;           /* health */
+  --timeline-deploy: #ff9800;           /* deploy */
+  --timeline-workflow-step: #9c27b0;    /* workflow_step */
+  --timeline-notification: #00bcd4;     /* notification */
+
+  /* ============================================
    * FAILURE ANALYSIS DASHBOARD TOKENS
    * Issue #11916 (umbrella #11515). Scoped to views/FailureAnalysisDashboard.vue.
    * The primary-button label, spinner highlight and causal-chain index badge
