@@ -631,6 +631,17 @@
   --vision-error-bg: #fee2e2;            /* error badge + error alert background */
   --vision-error-text: #b91c1c;          /* error badge + error alert foreground */
   --vision-alert-error-border: #fca5a5;  /* error alert border */
+
+  /* ============================================
+   * WORK ITEM DETAIL TOKENS
+   * Issue #11880 (umbrella #11515). Scoped to llc/WorkItemDetail.vue.
+   * The "AGENT" comment chip renders a soft-violet badge with no existing
+   * exact semantic token. Hex-only (deliberately NO OKLCH override) so the
+   * chip renders pixel-identical to its previous hardcoded values across all
+   * browsers.
+   * ============================================ */
+  --workitem-agent-chip-bg: #ddd6fe;    /* AGENT comment chip background */
+  --workitem-agent-chip-text: #5b21b6;  /* AGENT comment chip text */
 }
 
 /* ============================================
