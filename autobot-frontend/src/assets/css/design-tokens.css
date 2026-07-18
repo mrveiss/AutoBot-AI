@@ -592,6 +592,23 @@
   --terminal-overlay: rgba(0, 0, 0, 0.7);
   --terminal-shadow-danger: rgba(220, 53, 69, 0.4);
   --terminal-shadow-danger-fade: rgba(220, 53, 69, 0);
+
+  /* ============================================
+   * ONBOARDING WIZARD TOKENS
+   * Issue #11875 (umbrella #11515). Scoped to OnboardingWizard.vue.
+   * Hex-only (deliberately NO OKLCH override) so the wizard renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * The tier + banner text colors have no existing exact semantic token.
+   * --onboarding-accent is the indigo accent the wizard shows when the active
+   * theme sets no --color-accent (base / dark / light); the ember variant
+   * overrides --color-accent to its marigold, so it is never used there.
+   * ============================================ */
+  --onboarding-accent: #6366f1;              /* default accent (non-ember themes) */
+  --onboarding-tier-powerful: #c084fc;       /* "powerful" tier badge text */
+  --onboarding-tier-balanced: #818cf8;       /* "balanced" tier badge text */
+  --onboarding-tier-fast: #4ade80;           /* "fast" tier badge text */
+  --onboarding-banner-error-text: #fca5a5;   /* error banner foreground */
+  --onboarding-banner-warning-text: #fde68a; /* soft (warning) banner foreground */
 }
 
 /* ============================================
