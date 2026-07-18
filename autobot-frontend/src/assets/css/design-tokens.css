@@ -667,6 +667,26 @@
   --routines-run-failed-bg: #fee2e2;       /* failed run status fill */
   --routines-info-bg: #dbeafe;             /* running run status fill */
   --routines-info-text: #1d4ed8;           /* running run status text */
+
+  /* ============================================
+   * VOICE CONVERSATION OVERLAY TOKENS
+   * Issue #11901 (umbrella #11515). Scoped to chat/VoiceConversationOverlay.vue.
+   * The overlay renders an electric-glow comm-station palette (accent blues,
+   * status green/red, soft warning yellows). Each hue matches a --color-*-light
+   * base value, but those semantic tokens carry OKLCH overrides that would shift
+   * the rendered pixels, so they are captured here as hex-only (deliberately NO
+   * OKLCH override) so the overlay renders pixel-identical to its previous
+   * hardcoded values across all browsers.
+   * ============================================ */
+  --voiceoverlay-accent-blue: #60a5fa;        /* icon, user-bubble/mic accent, meter start */
+  --voiceoverlay-accent-blue-light: #93c5fd;  /* lang badge, transcript, processing, threshold value */
+  --voiceoverlay-accent-indigo: #818cf8;      /* amplitude-meter gradient end */
+  --voiceoverlay-accent-green: #34d399;       /* assistant bubble + speaking-state glow */
+  --voiceoverlay-accent-red: #f87171;         /* listening-state glow */
+  --voiceoverlay-error-text: #fca5a5;         /* error banner foreground */
+  --voiceoverlay-warning-text: #fcd34d;       /* cert-warning title/foreground */
+  --voiceoverlay-warning-body-text: #fde68a;  /* cert-warning body */
+  --voiceoverlay-muted-text: #94a3b8;         /* cert-warning fallback note */
 }
 
 /* ============================================
