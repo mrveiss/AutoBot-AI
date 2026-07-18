@@ -609,6 +609,17 @@
   --onboarding-tier-fast: #4ade80;           /* "fast" tier badge text */
   --onboarding-banner-error-text: #fca5a5;   /* error banner foreground */
   --onboarding-banner-warning-text: #fde68a; /* soft (warning) banner foreground */
+
+  /* ============================================
+   * WORK ITEM DETAIL TOKENS
+   * Issue #11880 (umbrella #11515). Scoped to llc/WorkItemDetail.vue.
+   * The "AGENT" comment chip renders a soft-violet badge with no existing
+   * exact semantic token. Hex-only (deliberately NO OKLCH override) so the
+   * chip renders pixel-identical to its previous hardcoded values across all
+   * browsers.
+   * ============================================ */
+  --workitem-agent-chip-bg: #ddd6fe;    /* AGENT comment chip background */
+  --workitem-agent-chip-text: #5b21b6;  /* AGENT comment chip text */
 }
 
 /* ============================================
