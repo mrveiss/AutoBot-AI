@@ -32,7 +32,7 @@ python-pptx>=0.6.23 # PowerPoint file parsing for OneDrive connector (GH#9004)
 # AI/ML
 openai>=2.46.0
 anthropic>=0.117.0
-boto3>=1.43.50                       # GH#9010: AWS Bedrock provider
+boto3>=1.43.51                       # GH#9010: AWS Bedrock provider
 chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
 protobuf>=7.35.1,<8.0.0           # capped <7.0: opentelemetry-proto (otel 1.42) requires protobuf<7.0; Dependabot's 7.35.1 is unsatisfiable. 6.33.6 = latest installable (#4061)
 sentence-transformers>=5.6.0
