@@ -95,6 +95,8 @@ The themed tables below break down the capabilities inside the core and these mo
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
 | Session takeover & control | Shipped | [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | [#9878][i-auto] | Pause/resume, approval gate, risk triggers (`takeover_manager`, `/takeover/*`) |
+| Visual workflow builder | Shipped | [visual-workflow-parallel-execution](../guides/visual-workflow-parallel-execution.md) | [#585](https://github.com/mrveiss/AutoBot-AI/issues/585) | Drag-and-drop workflow canvas for composing multi-step agent workflows, with a code view (`WorkflowBuilderView.vue`, `WorkflowCanvas.vue`, route `/automation`) |
+| Chat approval-gate interrupt | Partial | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | LangGraph human-in-the-loop interrupt in the chat workflow: pauses on a proposed plan and resumes after confirmation. Opt-in per session via `AUTOBOT_CHAT_APPROVAL_GATE` (`chat_workflow/graph.py`, `session_role.CHAT_APPROVAL_GATE_ENABLED`); distinct from session takeover |
 | Terminal safety | Shipped | [TERMINAL_SAFETY_IMPLEMENTATION](TERMINAL_SAFETY_IMPLEMENTATION.md) | [#9878][i-auto] | Command risk assessment + dangerous-command confirmation gate (`command_patterns`, `security_risk_judge`) |
 | Skills system | Shipped | [skills-system](../archives/plans/2026-02-18-skills-system.md) | [#9878][i-auto] | Skill discovery + 3-phase routing (`skill_router`, `/skills`) |
 

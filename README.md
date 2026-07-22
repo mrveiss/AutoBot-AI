@@ -291,7 +291,6 @@ All configuration uses environment variables in `.env`. See `.env.example` for a
 Key settings:
 - `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`
 - `AUTOBOT_LLM_PROVIDER` — `ollama` (default) or others
-- `AUTOBOT_SINGLE_USER_MODE` — `true` (development) or `false` (multi-user)
 
 ### LLM Providers and Fallback
 
@@ -404,8 +403,10 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 
 ## Roadmap
 
+### Shipped
+- [x] Multi-user authentication and RBAC (single-user mode retired)
+
 ### Upcoming
-- [ ] Multi-user authentication and RBAC
 - [ ] Kubernetes orchestration support
 - [ ] Advanced analytics dashboards
 - [ ] Module ecosystem and registry
