@@ -24,7 +24,16 @@ backend_deploy_from_git: true
 backend_host: "127.0.0.1"   # uvicorn: localhost only (nginx proxies from LAN)
 backend_port: 8001           # uvicorn: plain HTTP port (internal)
 backend_nginx_port: 8443     # nginx: external TLS port (LAN-facing)
+# #11670: worker count is owned by the canonical unit (autobot-backend.service.j2),
+# not by hand-placed .service.d/ drop-ins. Constrained/co-located single-box
+# installs may lower this per-inventory (e.g. backend_workers: 1) — the retired
+# fix-backend-worker-deadlock scripts used to force that via single-worker.conf.
 backend_workers: 4
+# #11670: systemd start/stop timeouts owned by the canonical unit. First boot
+# imports torch/sentence-transformers/chromadb (5-6 min) so the start window is
+# generous; the stop window stays short (#11668) to avoid the 15-min restart hang.
+backend_start_timeout_sec: 900
+backend_stop_timeout_sec: 45
 
 # Celery worker settings (Issue #863)
 celery_concurrency: 4  # Number of worker processes
