@@ -350,21 +350,21 @@ watch(saveSuccess, (val) => {
 .field-label {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
 }
 
 .field-input {
   padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--border-default, #374151);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  background: var(--color-bg-secondary, #1e293b);
-  color: var(--text-primary, #e2e8f0);
+  background: var(--color-bg-secondary, var(--wfnotif-input-bg));
+  color: var(--text-primary);
   font-size: var(--text-sm);
   transition: border-color var(--duration-150);
 }
 .field-input:focus {
   outline: none;
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 .field-input:focus-visible {
@@ -374,7 +374,7 @@ watch(saveSuccess, (val) => {
 
 .field-hint {
   font-size: var(--text-xs);
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
 }
 
 .toggle-section {
@@ -393,13 +393,13 @@ watch(saveSuccess, (val) => {
 .toggle-input {
   width: 1.125rem;
   height: 1.125rem;
-  accent-color: var(--color-primary, #3b82f6);
+  accent-color: var(--color-primary);
 }
 
 .toggle-text {
   font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
 }
 
 .config-fieldset {
@@ -418,7 +418,7 @@ watch(saveSuccess, (val) => {
 .section-heading {
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
   margin: var(--spacing-0);
 }
 
@@ -426,7 +426,7 @@ watch(saveSuccess, (val) => {
 .routing-matrix {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border-default, #374151);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   overflow: hidden;
   margin-top: var(--spacing-2);
@@ -438,16 +438,16 @@ watch(saveSuccess, (val) => {
 }
 
 .matrix-row:not(:last-child) {
-  border-bottom: 1px solid var(--border-default, #374151);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .matrix-header {
-  background: var(--color-bg-tertiary, #0f172a);
+  background: var(--color-bg-tertiary, var(--wfnotif-header-bg));
   font-weight: 600;
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
 }
 
 .matrix-cell {
@@ -461,17 +461,17 @@ watch(saveSuccess, (val) => {
   flex: 2;
   text-align: left;
   font-weight: 500;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
 }
 
 .matrix-channel-header {
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
 }
 
 .matrix-checkbox {
   width: 1rem;
   height: 1rem;
-  accent-color: var(--color-primary, #3b82f6);
+  accent-color: var(--color-primary);
   cursor: pointer;
 }
 
@@ -490,15 +490,15 @@ watch(saveSuccess, (val) => {
   padding: var(--spacing-2) var(--spacing-5);
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-primary, #3b82f6);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--wfnotif-on-accent);
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background var(--duration-150);
 }
 .btn-save:hover:not(:disabled) {
-  background: var(--color-primary-hover, #2563eb);
+  background: var(--color-primary-hover);
 }
 .btn-save:disabled {
   opacity: 0.6;
@@ -507,7 +507,7 @@ watch(saveSuccess, (val) => {
 
 .save-success {
   font-size: 0.8125rem;
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
   font-weight: 500;
 }
 
@@ -517,7 +517,7 @@ watch(saveSuccess, (val) => {
   align-items: center;
   gap: var(--spacing-2);
   font-size: var(--text-sm);
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   padding: var(--spacing-3) var(--spacing-0);
 }
 
@@ -541,7 +541,7 @@ watch(saveSuccess, (val) => {
   border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  color: var(--wfnotif-error-text);
   font-size: 0.8125rem;
 }
 </style>

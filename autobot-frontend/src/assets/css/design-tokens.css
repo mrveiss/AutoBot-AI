@@ -865,6 +865,64 @@
   --backlogview-sprint-tag-text: #0369a1;  /* sprint tag badge text */
 
   /* ============================================
+   * MULTI MODEL CHAT TOKENS
+   * Issue #12025 (umbrella #11515). Scoped to chat/MultiModelChat.vue.
+   * Hex-only (deliberately NO OKLCH override) so the panel renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * The surface fills are the literal fallbacks the panel rendered because
+   * --color-bg-card, --color-bg-tertiary, --color-bg-input and
+   * --color-bg-secondary are never defined in any theme; the badge palette
+   * fills are the literal fallbacks rendered because --color-success-900,
+   * --color-success-300, --color-error-900 and --color-error-300 are never
+   * defined either. All preserved behind those intended token names via
+   * nested var(). --mmchat-on-accent is the white send-button label on the
+   * electric accent (--text-on-primary carries an OKLCH override that would
+   * drift). Per-model swatch colors in the component script are DATA, not
+   * chrome, and stay in the component.
+   * ============================================ */
+  --mmchat-card-bg: #1e1e2e;           /* panel surface (undefined --color-bg-card fallback) */
+  --mmchat-surface-tertiary: #1a1a2e;  /* context chip + response header fill (undefined --color-bg-tertiary fallback) */
+  --mmchat-input-bg: #2a2a3e;          /* prompt textarea fill (undefined --color-bg-input fallback) */
+  --mmchat-response-bg: #13131f;       /* response card fill (undefined --color-bg-secondary fallback) */
+  --mmchat-on-accent: #fff;            /* send-button label on electric accent */
+  --mmchat-badge-done-bg: #14532d;     /* "done" badge fill (undefined --color-success-900 fallback) */
+  --mmchat-badge-done-text: #86efac;   /* "done" badge text (undefined --color-success-300 fallback) */
+  --mmchat-badge-error-bg: #450a0a;    /* "error" badge fill (undefined --color-error-900 fallback) */
+  --mmchat-badge-error-text: #fca5a5;  /* "error" badge text (undefined --color-error-300 fallback) */
+
+  /* ============================================
+   * WORKFLOW NOTIFICATION CONFIG TOKENS
+   * Issue #12026 (umbrella #11515). Scoped to
+   * workflow/WorkflowNotificationConfig.vue.
+   * Hex-only (deliberately NO OKLCH override) so the form renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * --wfnotif-input-bg and --wfnotif-header-bg are the literal fallbacks the
+   * form rendered because --color-bg-secondary and --color-bg-tertiary are
+   * never defined in any theme; preserved behind those intended token names
+   * via nested var(). --wfnotif-on-accent is the white save-button label on
+   * the primary accent (--text-on-primary carries an OKLCH override that
+   * would drift); --wfnotif-error-text matches the soft error-banner
+   * foreground with no existing exact semantic token.
+   * ============================================ */
+  --wfnotif-input-bg: #1e293b;    /* field input fill (undefined --color-bg-secondary fallback) */
+  --wfnotif-header-bg: #0f172a;   /* routing-matrix header fill (undefined --color-bg-tertiary fallback) */
+  --wfnotif-on-accent: #fff;      /* save-button label on primary accent */
+  --wfnotif-error-text: #fca5a5;  /* error banner foreground */
+
+  /* ============================================
+   * GANTT TIMELINE VIEW TOKENS
+   * Issue #12027 (umbrella #11515). Scoped to llc/GanttTimelineView.vue.
+   * Hex-only (deliberately NO OKLCH override) so the timeline renders
+   * pixel-identical to its previous hardcoded value across all browsers.
+   * --gantt-dep-arrow is the literal fallback the dependency arrows rendered
+   * because --gantt-arrow is never defined in any theme; preserved behind
+   * that intended token name via nested var(). Gantt bar, status and
+   * priority colors in the view script are DATA, not chrome, and stay in
+   * the component.
+   * ============================================ */
+  --gantt-dep-arrow: #94a3b8;  /* dependency arrow stroke (undefined --gantt-arrow fallback) */
+
+  /* ============================================
    * KNOWLEDGE RESEARCH PANEL TOKENS
    * Issues #12021, #12022, #12023 (umbrella #11515), batch 14:
    * CompanyCreationWizard.vue, ImportTreeChart.vue,
