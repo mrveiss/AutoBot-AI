@@ -442,9 +442,10 @@
 
         <!-- Templates Section -->
         <section v-if="activeSection === 'templates'" class="section-templates">
+          <!-- #12105: gallery owns its own API fetch (useApi defaults true) and
+               ignores :templates/:loading in that mode -- do not pass them, it's
+               a dead-code trap that also causes a redundant fetch instance. -->
           <WorkflowTemplateGallery
-            :templates="templates"
-            :loading="loading"
             @select-template="handleTemplateSelected"
             @run-template="handleRunTemplate"
           />
