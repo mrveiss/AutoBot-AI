@@ -13,7 +13,6 @@ from .approval import ApprovalService
 from .base import LLCServiceBase
 from .board import BoardService
 from .budget import BudgetService
-from .ceo_chat import CeoChatService
 from .goal import GoalService
 from .handoff import HandoffError, HandoffService
 from .portability import PortabilityService
@@ -31,7 +30,6 @@ __all__ = [
     "AgentBudgetState",
     "AgentBudgetTracker",
     "ApprovalService",
-    "CeoChatService",
     "BoardService",
     "BudgetService",
     "GoalService",

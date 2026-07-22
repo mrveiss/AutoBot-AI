@@ -11,7 +11,7 @@ from llc.services.findings_policy import FindingsPolicy, get_findings_policy
 
 @pytest.mark.asyncio
 async def test_defaults_when_no_slm_client():
-    with patch("llc.services.findings_policy.get_slm_client", return_value=None):
+    with patch("llc.services.slm_policy.get_slm_client", return_value=None):
         policy = await get_findings_policy()
     assert policy == FindingsPolicy(
         enabled=False,

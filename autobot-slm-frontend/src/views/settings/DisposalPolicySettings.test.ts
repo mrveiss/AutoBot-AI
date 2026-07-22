@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 import DisposalPolicySettings from './DisposalPolicySettings.vue'
+import en from '@/locales/en.json'
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
@@ -10,6 +12,10 @@ vi.mock('@/stores/auth', () => ({
     getAuthHeaders: () => ({}),
   }),
 }))
+
+// vue-i18n 11 requires app.use(); install a real i18n plugin since the
+// template uses the global $t (#11359).
+const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 describe('DisposalPolicySettings', () => {
   beforeEach(() => {
@@ -21,14 +27,14 @@ describe('DisposalPolicySettings', () => {
   })
 
   it('loads the current policy on mount', async () => {
-    const wrapper = mount(DisposalPolicySettings)
+    const wrapper = mount(DisposalPolicySettings, { global: { plugins: [i18n] } })
     await flushPromises()
     const number = wrapper.find('input[type="number"]').element as HTMLInputElement
     expect(number.value).toBe('14')
   })
 
   it('PUTs the policy as JSON on save', async () => {
-    const wrapper = mount(DisposalPolicySettings)
+    const wrapper = mount(DisposalPolicySettings, { global: { plugins: [i18n] } })
     await flushPromises()
     await wrapper.find('button[data-test="save-policy"]').trigger('click')
     await flushPromises()

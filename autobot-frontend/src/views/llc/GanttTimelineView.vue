@@ -11,8 +11,13 @@
   <div class="gantt-view">
     <header class="gantt-toolbar">
       <h2 class="gantt-title">{{ $t('llc.gantt.title') }}</h2>
+      <!-- #11701: board/sprint scope banner — shown when opened from a sprint board -->
+      <div v-if="scopeLabel" class="gantt-scope">
+        <span class="gantt-scope-label">{{ $t('llc.gantt.scopedTo', { name: scopeLabel }) }}</span>
+        <button class="gantt-scope-clear" @click="clearScope">{{ $t('llc.gantt.showAll') }}</button>
+      </div>
       <div class="gantt-controls">
-        <label class="gantt-field">
+        <label v-if="!scopeLabel" class="gantt-field">
           <span class="gantt-field-label">{{ $t('llc.gantt.project') }}</span>
           <select v-model="selectedProjectId" class="gantt-select" @change="loadTimeline">
             <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -134,7 +139,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -143,6 +148,7 @@ import { useNotificationBus } from '@/composables/useNotificationBus'
 const logger = createLogger('GanttTimelineView')
 const api = useApiClient()
 const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
 const { showToast } = useNotificationBus()
 
@@ -183,6 +189,12 @@ interface Timeline {
 const companyId = computed(() => route.params.companyId as string)
 const projects = ref<Project[]>([])
 const selectedProjectId = ref<string>('')
+// #11701: board/sprint scope. When the Gantt is opened from a sprint board the
+// `board` query param filters the timeline to that board's work items; without
+// it the company-wide roadmap renders unchanged.
+const scopeBoardId = computed(() => (route.query.board as string) || '')
+const scopedItemIds = ref<Set<string> | null>(null)
+const scopeLabel = ref<string>('')
 const items = ref<TimelineItem[]>([])
 const edges = ref<TimelineEdge[]>([])
 const zoom = ref<'day' | 'week' | 'month' | 'quarter'>('week')
@@ -393,13 +405,55 @@ async function loadProjects() {
   }
 }
 
+// #11701: resolve the board query param into the set of work item ids that
+// belong to that sprint board, and pre-select the board's project so the
+// filtered timeline targets the right project.
+async function loadBoardScope() {
+  if (!scopeBoardId.value) {
+    scopedItemIds.value = null
+    scopeLabel.value = ''
+    return
+  }
+  try {
+    const [board, boardItems] = await Promise.all([
+      api.get<{ project_id: string | null; name: string }>(`/api/llc/boards/${scopeBoardId.value}`),
+      api.get<{ items: { id: string }[] }>(`/api/llc/boards/${scopeBoardId.value}/items`),
+    ])
+    scopedItemIds.value = new Set((boardItems.items ?? []).map((i) => i.id))
+    scopeLabel.value = board.name
+    if (board.project_id) selectedProjectId.value = board.project_id
+  } catch (err) {
+    logger.error('Failed to load board scope', err)
+    scopedItemIds.value = null
+    scopeLabel.value = ''
+  }
+}
+
+// Drop the board/sprint filter and return to the company-wide roadmap.
+async function clearScope() {
+  scopedItemIds.value = null
+  scopeLabel.value = ''
+  await router.replace({ name: 'llc-timeline', params: { companyId: companyId.value } })
+  await loadTimeline()
+}
+
 async function loadTimeline() {
   if (!selectedProjectId.value) return
   loading.value = true
   try {
     const data = await api.get<Timeline>(`/api/llc/projects/${selectedProjectId.value}/timeline`)
-    items.value = data.items
-    edges.value = data.edges
+    if (scopedItemIds.value) {
+      // #11701: restrict to the originating board/sprint's work items and keep
+      // only edges whose endpoints both survive the filter.
+      const members = scopedItemIds.value
+      const visible = data.items.filter((it) => members.has(it.id))
+      const visibleIds = new Set(visible.map((it) => it.id))
+      items.value = visible
+      edges.value = data.edges.filter((e) => visibleIds.has(e.from_id) && visibleIds.has(e.to_id))
+    } else {
+      items.value = data.items
+      edges.value = data.edges
+    }
   } catch (err) {
     logger.error('Failed to load timeline', err)
     items.value = []
@@ -411,6 +465,7 @@ async function loadTimeline() {
 
 onMounted(async () => {
   loading.value = true
+  await loadBoardScope()
   await loadProjects()
   await loadTimeline()
 })
@@ -448,6 +503,37 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-end;
   gap: 0.75rem;
+}
+
+.gantt-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+  border: 1px solid var(--border-default, #d1d5db);
+  border-radius: 9999px;
+  background: var(--bg-elevated, #f3f4f6);
+  font-size: 0.8rem;
+}
+
+.gantt-scope-label {
+  color: var(--text-primary, #111827);
+  font-weight: 500;
+}
+
+.gantt-scope-clear {
+  border: none;
+  background: transparent;
+  color: var(--color-primary, #3b82f6);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+}
+
+.gantt-scope-clear:hover {
+  background: var(--bg-surface, #fff);
 }
 
 .gantt-field {

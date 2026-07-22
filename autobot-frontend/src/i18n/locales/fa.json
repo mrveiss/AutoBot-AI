@@ -7981,7 +7981,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "محدود به {name}",
+      "showAll": "نمایش کل شرکت"
     },
     "backlog": {
       "title": "Backlog",
