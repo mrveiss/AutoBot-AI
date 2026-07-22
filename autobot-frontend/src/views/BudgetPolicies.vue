@@ -573,9 +573,9 @@ onMounted(loadPolicies)
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-error, #dc2626);
-  border: 1px solid var(--color-danger-border, #fca5a5);
+  background: var(--color-danger-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-danger-border, var(--budgetpol-danger-border));
   border-radius: var(--radius-md);
   padding: var(--spacing-3) var(--spacing-4);
   margin-bottom: var(--spacing-4);
@@ -703,21 +703,21 @@ onMounted(loadPolicies)
 
 .badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 9999px;
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .badge-scope {
-  background: var(--color-info-bg, #dbeafe);
-  color: var(--color-info, #1d4ed8);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .badge-active {
-  background: var(--color-success-bg, #dcfce7);
-  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .badge-inactive {
@@ -726,18 +726,18 @@ onMounted(loadPolicies)
 }
 
 .badge-danger {
-  background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-error, #dc2626);
+  background: var(--color-danger-bg);
+  color: var(--color-error);
 }
 
 .badge-warning {
-  background: var(--color-warning-bg, #fef9c3);
-  color: var(--color-warning, #a16207);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .badge-info {
-  background: var(--color-info-bg, #dbeafe);
-  color: var(--color-info, #1d4ed8);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .actions-cell {
@@ -790,7 +790,7 @@ onMounted(loadPolicies)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error, #dc2626);
+  background: var(--color-error);
   color: white;
   border: none;
   border-radius: var(--radius-md);
@@ -824,13 +824,13 @@ onMounted(loadPolicies)
 }
 
 .btn-icon.btn-primary:hover {
-  background: var(--color-info-bg, #dbeafe);
-  color: var(--color-info, #1d4ed8);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .btn-icon.btn-danger:hover {
-  background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-error, #dc2626);
+  background: var(--color-danger-bg);
+  color: var(--color-error);
 }
 
 /* Agent pause status section */
@@ -884,8 +884,8 @@ onMounted(loadPolicies)
   min-width: 70px;
 }
 
-.text-danger { color: var(--color-error, #dc2626); font-weight: 500; }
-.text-success { color: var(--color-success, #16a34a); font-weight: 500; }
+.text-danger { color: var(--color-error); font-weight: 500; }
+.text-success { color: var(--color-success); font-weight: 500; }
 
 .mt-2 { margin-top: var(--spacing-2); }
 .mt-6 { margin-top: var(--spacing-6); }
@@ -917,7 +917,7 @@ onMounted(loadPolicies)
 }
 
 .required {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 .checkbox-label {
@@ -929,8 +929,8 @@ onMounted(loadPolicies)
 }
 
 .checkbox-input {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   cursor: pointer;
 }
 

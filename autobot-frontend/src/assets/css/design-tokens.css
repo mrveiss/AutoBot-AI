@@ -863,6 +863,49 @@
   --backlogview-selected-row-bg: #eff6ff;  /* selected row fill (undefined --color-primary-subtle fallback) */
   --backlogview-sprint-tag-bg: #e0f2fe;    /* sprint tag badge fill */
   --backlogview-sprint-tag-text: #0369a1;  /* sprint tag badge text */
+
+  /* ============================================
+   * ACTIVITY FEED VIEW TOKENS (#12014, umbrella #11515)
+   * Scoped to llc/ActivityFeedView.vue. Hex-only (deliberately NO OKLCH
+   * override) so the actor badges render pixel-identical to their previous
+   * hardcoded values across all browsers. These are the literal fallbacks the
+   * badges rendered because their intended Ember semantic tokens (--bg-muted,
+   * --color-info-subtle, --color-info-text — undefined in any theme — and
+   * --color-accent-subtle, --color-accent-text — defined only by the ember
+   * theme) do not resolve elsewhere; preserved behind those intended token
+   * names via nested var() so ember still wins where it defines them.
+   * ============================================ */
+  --actfeed-badge-neutral-bg: #f3f4f6;  /* default actor badge fill (undefined --bg-muted fallback) */
+  --actfeed-system-badge-bg: #e5e7eb;   /* system actor badge fill (undefined --bg-muted fallback) */
+  --actfeed-accent-subtle: #fcefe0;     /* agent actor badge fill (non-ember --color-accent-subtle fallback) */
+  --actfeed-accent-text: #c4651a;       /* agent badge + ghost-button text (non-ember --color-accent-text fallback) */
+  --actfeed-info-subtle: #dbeafe;       /* user actor badge fill (undefined --color-info-subtle fallback) */
+  --actfeed-info-text: #1d4ed8;         /* user actor badge text (undefined --color-info-text fallback) */
+
+  /* ============================================
+   * BUDGET POLICIES TOKENS (#12015, umbrella #11515)
+   * Scoped to views/BudgetPolicies.vue. The error-banner border renders the
+   * soft-red fallback because --color-danger-border is never defined in any
+   * theme; preserved hex-only (deliberately NO OKLCH override) behind that
+   * intended token name via nested var() so the banner renders pixel-identical
+   * to its previous hardcoded value across all browsers.
+   * ============================================ */
+  --budgetpol-danger-border: #fca5a5;  /* error-banner border (undefined --color-danger-border fallback) */
+
+  /* ============================================
+   * COMPANY PORTABILITY VIEW TOKENS (#12016, umbrella #11515)
+   * Scoped to llc/CompanyPortabilityView.vue. Hex-only (deliberately NO OKLCH
+   * override) so the view renders pixel-identical to its previous hardcoded
+   * values across all browsers. The error/success result-banner foregrounds
+   * are the literal fallbacks that rendered because --color-error-text and
+   * --color-success-text are never defined in any theme; preserved behind
+   * those intended token names via nested var(). --coportability-on-accent is
+   * the pure-white button label and spinner highlight on accent surfaces
+   * (--text-on-primary carries an OKLCH override that would drift).
+   * ============================================ */
+  --coportability-error-text: #991b1b;    /* error banner + failed-result foreground */
+  --coportability-success-text: #166534;  /* success-result foreground */
+  --coportability-on-accent: #fff;        /* white button label + spinner highlight on accent */
 }
 
 /* ============================================
