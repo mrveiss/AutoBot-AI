@@ -885,14 +885,14 @@ onBeforeUnmount(() => {
 }
 .voice-overlay-enter-from .voice-overlay__panel {
   opacity: 0;
-  transform: translateY(24px) scale(0.96);
+  transform: translateY(var(--spacing-6)) scale(0.96);
 }
 .voice-overlay-leave-to {
   opacity: 0;
 }
 .voice-overlay-leave-to .voice-overlay__panel {
   opacity: 0;
-  transform: translateY(12px) scale(0.98);
+  transform: translateY(var(--spacing-3)) scale(0.98);
 }
 
 /* Bubble enter */
@@ -901,7 +901,7 @@ onBeforeUnmount(() => {
 }
 .bubble-enter-from {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(var(--spacing-2));
 }
 
 /* Fade */
