@@ -18,7 +18,7 @@
  *
  * Usage:
  * ```typescript
- * import { usePagination } from '@/composables/usePagination'
+ * import { usePagination } from '@autobot/ui'
  *
  * const documents = ref([...100 items...])
  *
@@ -45,7 +45,7 @@
  */
 
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '../utils/logger'
 
 // Create scoped logger for usePagination
 const logger = createLogger('usePagination')

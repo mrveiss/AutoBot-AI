@@ -20,7 +20,7 @@ import {
   usePagination,
   useSimplePagination,
   useShowAllToggle
-} from '../usePagination'
+} from '@autobot/ui'
 
 // ========================================
 // Test Data
