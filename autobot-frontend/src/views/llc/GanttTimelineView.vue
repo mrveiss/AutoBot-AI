@@ -510,30 +510,30 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.5rem 0.25rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
-  border-radius: 9999px;
-  background: var(--bg-elevated, #f3f4f6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
   font-size: 0.8rem;
 }
 
 .gantt-scope-label {
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .gantt-scope-clear {
   border: none;
   background: transparent;
-  color: var(--color-primary, #3b82f6);
+  color: var(--color-primary);
   cursor: pointer;
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.1rem 0.35rem;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .gantt-scope-clear:hover {
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
 }
 
 .gantt-field {
@@ -546,22 +546,22 @@ onBeforeUnmount(() => {
   font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .gantt-select {
   padding: 0.3rem 0.5rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-surface, #fff);
-  color: var(--text-primary, #111827);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .gantt-btn {
   padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-surface, #fff);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
   cursor: pointer;
   font-size: 0.8rem;
 }
@@ -574,7 +574,7 @@ onBeforeUnmount(() => {
 .gantt-state {
   padding: 2rem;
   text-align: center;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .gantt-scroll {
@@ -582,34 +582,34 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  border: 1px solid var(--border-default, #e5e7eb);
-  border-radius: 8px;
-  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
 }
 
 .gantt-gridline {
-  stroke: var(--border-default, #e5e7eb);
+  stroke: var(--border-default);
   stroke-width: 1;
 }
 
 .gantt-axis-label {
   font-size: 10px;
-  fill: var(--text-secondary, #9ca3af);
+  fill: var(--text-secondary);
 }
 
 .gantt-row-label {
   font-size: 10px;
   font-family: monospace;
-  fill: var(--text-secondary, #6b7280);
+  fill: var(--text-secondary);
 }
 
 .gantt-bar {
-  fill: var(--color-primary, #3b82f6);
+  fill: var(--color-primary);
   cursor: grab;
 }
 
 .gantt-bar--critical {
-  fill: var(--color-error, #ef4444);
+  fill: var(--color-error);
 }
 
 .gantt-handle {
@@ -618,14 +618,14 @@ onBeforeUnmount(() => {
 }
 
 .gantt-dep {
-  stroke: var(--gantt-arrow, #94a3b8);
+  stroke: var(--gantt-arrow, var(--gantt-dep-arrow));
   stroke-width: 1.5;
   stroke-dasharray: 3 2;
 }
 
 .gantt-unscheduled {
   font-size: 10px;
-  fill: var(--text-secondary, #9ca3af);
+  fill: var(--text-secondary);
   font-style: italic;
 }
 </style>
