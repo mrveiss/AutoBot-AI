@@ -737,7 +737,7 @@
    * INTERACTIVE SCREENSHOT TOKENS
    * Issue #11967 (umbrella #11515). Scoped to browser/InteractiveScreenshot.vue.
    * The region-marking popup (#5136) renders a dark-slate palette; each hue
-   * matches a --bg-*/--text-*/--border-* base value, but those semantic tokens
+   * matches a --bg, --text or --border base value, but those semantic tokens
    * carry OKLCH overrides that would shift the rendered pixels, so they are
    * captured here as hex-only (deliberately NO OKLCH override) so the popup
    * renders pixel-identical to its previous hardcoded values across all
