@@ -1081,8 +1081,8 @@ watch(selectedPeriod, () => {
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-2);
+  height: var(--spacing-2);
   border-radius: var(--radius-full);
   background: currentColor;
   animation: pulse 2s infinite;
@@ -1302,7 +1302,7 @@ watch(selectedPeriod, () => {
 
 .metric-card:hover {
   border-color: var(--color-info);
-  transform: translateY(-2px);
+  transform: translateY(var(--spacing-neg-2px));
 }
 
 .metric-card.low-score {
@@ -1343,7 +1343,7 @@ watch(selectedPeriod, () => {
 }
 
 .metric-bar {
-  height: 4px;
+  height: var(--spacing-1);
   background: var(--border-subtle);
   border-radius: var(--radius-xs);
   overflow: hidden;
@@ -1487,7 +1487,7 @@ watch(selectedPeriod, () => {
 
 .bar-container {
   flex: 1;
-  height: 8px;
+  height: var(--spacing-2);
   background: var(--bg-surface);
   border-radius: var(--radius-default);
   overflow: hidden;
@@ -1583,8 +1583,8 @@ watch(selectedPeriod, () => {
 }
 
 .hotspot-rank {
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1650,8 +1650,8 @@ watch(selectedPeriod, () => {
 }
 
 .threshold-color {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: var(--radius-xs);
 }
 
