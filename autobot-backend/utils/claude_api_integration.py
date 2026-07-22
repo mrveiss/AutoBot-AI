@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
@@ -41,6 +41,13 @@ from .request_batcher import (
 )
 from .todowrite_optimizer import get_todowrite_optimizer
 from .tool_pattern_analyzer import get_tool_pattern_analyzer
+
+if TYPE_CHECKING:
+    # Import-time only (#10945): ``llm_shared`` eagerly imports every cloud
+    # provider module, which this lightweight utils module must not force on
+    # every caller (lifespan, tests). Runtime code below is duck-typed on
+    # ``request.messages`` instead.
+    from llm_shared.models import LLMRequest
 
 logger = get_logger(__name__)
 
@@ -270,15 +277,60 @@ class ClaudeAPIBatchManager:
         return False
 
     async def _optimize_payload_if_enabled(self, content: str) -> str:
-        """Return payload-optimized content string when optimizer is enabled."""
+        """Return payload-optimized content string when optimizer is enabled.
+
+        Bugfix (#10945): ``OptimizationResult`` has no ``optimized``/
+        ``optimized_content``/``size_reduction`` attributes (its real fields are
+        ``optimization_type``, ``chunks``, ``savings_percent``) — the previous
+        implementation raised ``AttributeError`` on every call where the
+        optimizer actually had work to do, silently swallowed by callers'
+        fail-safe try/except, so payload optimization never took effect.
+        Chunking results (``needs_chunking``) can't collapse to a single string
+        without losing chunk boundaries, so those are passed through unchanged.
+        """
         if not self.payload_optimizer:
             return content
-        optimization_result = self.payload_optimizer.optimize_payload(content)
-        if not optimization_result.optimized:
+        result = self.payload_optimizer.optimize_payload(content)
+        if result.optimization_type == "none" or result.needs_chunking:
             return content
         await self._increment_metric("payload_optimizations")
-        logger.debug("Payload optimized: %s%% reduction", optimization_result.size_reduction)
-        return optimization_result.optimized_content
+        logger.debug("Payload optimized: %.1f%% reduction", result.savings_percent)
+        return "".join(str(chunk) for chunk in result.chunks)
+
+    async def _optimize_messages_if_enabled(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Apply payload optimization per-message on structured messages (#10945).
+
+        Structured counterpart to ``_optimize_payload_if_enabled``: operates on
+        the message list AutoBot's providers actually send (``LLMRequest.messages``)
+        instead of a joined flat string, so optimized content can be written
+        back onto the request without losing per-message role/structure.
+        Reuses ``_optimize_payload_if_enabled`` for each message — no separate
+        optimization logic is duplicated.
+        """
+        if not self.payload_optimizer:
+            return messages
+        optimized_messages: List[Dict[str, Any]] = []
+        for message in messages:
+            if not isinstance(message, dict) or not message.get("content"):
+                optimized_messages.append(message)
+                continue
+            optimized_content = await self._optimize_payload_if_enabled(message["content"])
+            optimized_messages.append({**message, "content": optimized_content})
+        return optimized_messages
+
+    async def _optimize_content_via_llm_request(self, content: str, context_type: str) -> str:
+        """Route flat-string payload optimization through the structured path (#10945).
+
+        Wraps ``content`` in an ``LLMRequest.messages``-shaped list and
+        optimizes it via ``_optimize_messages_if_enabled`` — the same
+        structured helper the Anthropic provider's live send path uses — then
+        unwraps the optimized content back to a string so existing
+        string-based callers (``submit_request`` and its batching machinery)
+        are unaffected.
+        """
+        logger.debug("Optimizing content via structured messages path for context=%s", context_type)
+        messages = await self._optimize_messages_if_enabled([{"role": "user", "content": content}])
+        return messages[0].get("content", content)
 
     # ------------------------------------------------------------------
     # Public request API
@@ -308,7 +360,10 @@ class ClaudeAPIBatchManager:
                         return str(fallback.response)
                 raise Exception("Rate limit exceeded")
 
-            optimized_content = await self._optimize_payload_if_enabled(content)
+            # Issue #10945: route through the structured LLMRequest path so
+            # payload-mutation and (below) the batcher operate on the same
+            # representation the live provider send path uses.
+            optimized_content = await self._optimize_content_via_llm_request(content, context_type)
 
             response = await self._process_with_fallback(
                 optimized_content, priority, context_type, timeout, metadata or {}
@@ -668,6 +723,34 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
         await self.ensure_initialized()
         return await self.manager.submit_todowrite(todos)
 
+    async def _rate_limit_gate(self, content_for_degradation: str, context_type: str) -> bool:
+        """Return True if the send may proceed; apply degradation + warn when blocked.
+
+        Shared by ``optimize_for_send`` and ``optimize_request`` (#10945) so the
+        rate-limit-check + graceful-degradation flow isn't duplicated between
+        the flat-string and structured entrypoints.
+        """
+        await self.manager._increment_metric("total_requests")
+        if await self.manager._check_and_apply_rate_limit():
+            return True
+        if self.manager.degradation_manager:
+            try:
+                fallback = await self.manager.degradation_manager.handle_request(
+                    content_for_degradation, {"type": context_type}
+                )
+                if fallback.success:
+                    logger.debug(
+                        "Claude adapter: graceful degradation applied for context=%s",
+                        context_type,
+                    )
+            except Exception as _deg_err:
+                logger.debug("Degradation manager error (ignored): %s", _deg_err)
+        logger.warning(
+            "Claude adapter: rate limit exceeded for context=%s; " "proceeding with original payload (fail-safe)",
+            context_type,
+        )
+        return False
+
     async def optimize_for_send(
         self,
         content: str,
@@ -683,31 +766,45 @@ class AutoBotClaudeAPIAdapter(AsyncInitializable):
 
         Issue #10849: wires live outbound Claude requests through the adapter's
         optimization pipeline (rate-limiter, payload optimizer, metric recording).
+        Issue #10945: prefer ``optimize_request`` for structured ``LLMRequest``
+        callers — this flat-string variant is retained for callers (e.g.
+        ``process_chat_request``) that only have a joined string available.
         """
         await self.ensure_initialized()
         if not self.manager or not self.manager.is_running:
             return content
-        await self.manager._increment_metric("total_requests")
-        if not await self.manager._check_and_apply_rate_limit():
-            if self.manager.degradation_manager:
-                try:
-                    fallback = await self.manager.degradation_manager.handle_request(content, {"type": context_type})
-                    if fallback.success:
-                        logger.debug(
-                            "Claude adapter: graceful degradation applied for context=%s",
-                            context_type,
-                        )
-                except Exception as _deg_err:
-                    logger.debug("Degradation manager error (ignored): %s", _deg_err)
-            logger.warning(
-                "Claude adapter: rate limit exceeded for context=%s; " "proceeding with original payload (fail-safe)",
-                context_type,
-            )
+        if not await self._rate_limit_gate(content, context_type):
             return content
         optimized = await self.manager._optimize_payload_if_enabled(content)
         if self.manager.rate_limiter:
             self.manager.rate_limiter.record_request(len(content))
         return optimized
+
+    async def optimize_request(
+        self,
+        request: "LLMRequest",
+        context_type: str = "general",
+    ) -> "LLMRequest":
+        """Apply rate-limit check and payload optimization to a structured LLMRequest.
+
+        Structured counterpart to ``optimize_for_send`` (#10945): mutates and
+        returns ``request`` with each message's content optimized in place
+        (via ``_optimize_messages_if_enabled``), so the payload-mutation
+        machinery actually reaches the outbound API payload instead of only
+        informing side-effect metrics. Called by provider implementations
+        (e.g. AnthropicProvider) before building the SDK call kwargs.
+        Fail-safe: returns ``request`` unchanged on rate-limit or any error.
+        """
+        await self.ensure_initialized()
+        if not self.manager or not self.manager.is_running:
+            return request
+        combined = " ".join(m.get("content", "") for m in request.messages if isinstance(m, dict))
+        if not await self._rate_limit_gate(combined, context_type):
+            return request
+        request.messages = await self.manager._optimize_messages_if_enabled(request.messages)
+        if self.manager.rate_limiter:
+            self.manager.rate_limiter.record_request(len(combined))
+        return request
 
     async def record_send_result(
         self,

@@ -55,6 +55,25 @@ def _get_adapter_sync():
         return None
 
 
+async def _apply_adapter_pre_send(request: LLMRequest, context_type: str) -> None:
+    """Route the outbound payload through the adapter's structured pre-send hook.
+
+    Issue #10849 added the hook; Issue #10945 switched it from the flat-string
+    ``optimize_for_send`` (whose optimized result was discarded) to the
+    structured ``optimize_request``, which mutates ``request.messages`` in
+    place so payload-mutation and batching machinery actually reach the
+    payload sent to the Anthropic API. Fail-safe: adapter absent, not
+    initialized, or raising leaves ``request`` unchanged.
+    """
+    adapter = _get_adapter_sync()
+    if adapter is None or not adapter.is_initialized:
+        return
+    try:
+        await adapter.optimize_request(request, context_type=context_type)
+    except Exception as exc:
+        logger.debug("Claude adapter pre-send optimization skipped (fail-safe): %s", exc)
+
+
 from autobot_shared.ssot_config import config
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
@@ -300,30 +319,18 @@ class AnthropicProvider(BaseProvider):
         pre-send pipeline (rate-limit check, payload optimization, metric recording)
         before being dispatched to the Anthropic API.  The adapter is accessed via
         its module-level singleton; when absent the call proceeds unchanged (fail-safe).
+        Issue #10945: the pre-send hook now mutates ``request.messages`` through the
+        structured ``optimize_request`` path, so payload optimization actually
+        reaches the messages sent below (previously the optimized string was
+        computed and discarded).
         """
         self._total_requests += 1
         start = time.time()
         model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
 
-        # --- Adapter pre-send: rate-limit + payload optimization (#10849) ----------
-        # Serialize the user-visible content for the adapter pipeline.
-        # The adapter operates on the text content; the full structured payload
-        # (tools, extra_headers, etc.) flows unchanged to the Anthropic SDK.
         _adapter = _get_adapter_sync()
         _context_type: str = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
-        if _adapter is not None and _adapter.is_initialized:
-            try:
-                _raw_content = " ".join(m.get("content", "") for m in request.messages if isinstance(m, dict))
-                await _adapter.optimize_for_send(
-                    content=_raw_content,
-                    context_type=_context_type,
-                )
-            except Exception as _adapt_err:
-                logger.debug(
-                    "Claude adapter pre-send optimization skipped (fail-safe): %s",
-                    _adapt_err,
-                )
-        # --------------------------------------------------------------------------
+        await _apply_adapter_pre_send(request, _context_type)
 
         try:
             client = self._ensure_client()
@@ -430,26 +437,16 @@ class AnthropicProvider(BaseProvider):
         is not applied per-chunk; the adapter records the stream open as a single
         individual request.  Streaming cannot be routed through submit_request()
         which is non-streaming by design.
+        Issue #10945: the pre-send hook mutates ``request.messages`` through the
+        structured ``optimize_request`` path so optimization reaches the streamed
+        payload instead of only computing (and discarding) an optimized string.
         """
         self._total_requests += 1
         model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
 
-        # --- Adapter pre-send: rate-limit + payload optimization (#10849) ----------
         _stream_adapter = _get_adapter_sync()
         _stream_context_type = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
-        if _stream_adapter is not None and _stream_adapter.is_initialized:
-            try:
-                _stream_raw = " ".join(m.get("content", "") for m in request.messages if isinstance(m, dict))
-                await _stream_adapter.optimize_for_send(
-                    content=_stream_raw,
-                    context_type=_stream_context_type,
-                )
-            except Exception as _sadapt_err:
-                logger.debug(
-                    "Claude adapter stream pre-send optimization skipped (fail-safe): %s",
-                    _sadapt_err,
-                )
-        # --------------------------------------------------------------------------
+        await _apply_adapter_pre_send(request, _stream_context_type)
 
         _stream_start = time.time()
         try:
