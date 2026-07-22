@@ -114,6 +114,27 @@ class TestCanonicalDisplayConvergence:
             assert gui_controller_module.CANONICAL_DISPLAY in joined
 
 
+class TestScreenSizeStartupRaceGuarded:
+    """pyautogui.size() can hard-raise if the canonical display isn't up yet (startup race)."""
+
+    def test_size_failure_does_not_crash_construction(self, gui_controller_module, display_inactive):
+        gui_controller_module.pyautogui.size.side_effect = Exception("no X connection")
+        try:
+            controller = gui_controller_module.GUIController()
+        finally:
+            gui_controller_module.pyautogui.size.side_effect = None
+
+        assert controller.screen_width is None
+        assert controller.screen_height is None
+
+    def test_size_success_still_sets_dimensions(self, gui_controller_module, display_active):
+        gui_controller_module.pyautogui.size.return_value = (1920, 1080)
+        controller = gui_controller_module.GUIController()
+
+        assert controller.screen_width == 1920
+        assert controller.screen_height == 1080
+
+
 class TestReadTextFromRegionPreserved:
     """OCR region-read has no xdotool/vnc_manager equivalent — must keep working."""
 

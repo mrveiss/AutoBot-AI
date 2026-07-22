@@ -51,7 +51,22 @@ class GUIController:
         # canonical display's X server is owned by
         # api.vnc_manager.start_vnc_server() (Issue #74).
         self.attach_to_canonical_display()
-        self.screen_width, self.screen_height = pyautogui.size()
+        # Issue #11579: pyautogui.size() hard-raises if the canonical
+        # display's X server (owned by api.vnc_manager) isn't up yet — a
+        # real startup race if this worker constructs before
+        # start_vnc_server() runs. Guard it: log and defer rather than
+        # crash construction; screen_width/height stay None until a later
+        # call succeeds (e.g. the next GUIController() on this worker).
+        try:
+            self.screen_width, self.screen_height = pyautogui.size()
+        except Exception as e:
+            self.screen_width, self.screen_height = None, None
+            logger.warning(
+                "Could not determine screen size on canonical display %s (%s). "
+                "Is the VNC/X server started yet? (see api.vnc_manager.start_vnc_server)",
+                CANONICAL_DISPLAY,
+                e,
+            )
 
     def __del__(self):
         """Destructor to clean up resources."""
