@@ -742,6 +742,65 @@
    * all browsers.
    * ============================================ */
   --wfbuilder-offline-text: #6b7280;   /* offline health-indicator text */
+
+  /* ============================================
+   * ERROR MONITORING VIEW TOKENS
+   * Issue #11978 (umbrella #11515). Scoped to views/ErrorMonitoringView.vue.
+   * The view references palette tokens (--color-blue-100, --color-red-700, …)
+   * and --color-error-text that are NOT defined in this SSOT, so their hex
+   * fallbacks are what actually renders. Those rendered hexes are captured
+   * here as hex-only (deliberately NO OKLCH override) and kept as nested
+   * fallbacks — var(--color-x, var(--errmon-y)) — so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * ============================================ */
+  --errmon-error-text: #dc2626;            /* error-banner foreground */
+  --errmon-badge-category-bg: #dbeafe;     /* category badge fill (soft blue) */
+  --errmon-badge-category-text: #1d4ed8;   /* category badge text */
+  --errmon-badge-component-bg: #ede9fe;    /* component badge fill (soft violet) */
+  --errmon-badge-component-text: #6d28d9;  /* component badge text */
+  --errmon-badge-resolved-bg: #dcfce7;     /* resolved badge fill (soft green) */
+  --errmon-badge-resolved-text: #15803d;   /* resolved badge text */
+  --errmon-sev-critical-bg: #fee2e2;       /* critical severity badge fill */
+  --errmon-sev-critical-text: #b91c1c;     /* critical severity badge text */
+  --errmon-sev-high-bg: #ffedd5;           /* high severity badge fill */
+  --errmon-sev-high-text: #c2410c;         /* high severity badge text */
+  --errmon-sev-warning-bg: #fef9c3;        /* warning severity badge fill */
+  --errmon-sev-warning-text: #a16207;      /* warning severity badge text */
+  --errmon-bar-component: #7c3aed;         /* component breakdown bar fill */
+
+  /* ============================================
+   * WORKFLOW CANVAS TOKENS
+   * Issue #11977 (umbrella #11515). Scoped to workflow/WorkflowCanvas.vue.
+   * Hex-only (deliberately NO OKLCH override) so the canvas renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * --wfcanvas-on-warning: black label on the warning-colored experimental
+   * badge (--text-on-warning carries an OKLCH override that would drift).
+   * --wfcanvas-node-switch: cyan header fill for the "switch" node type —
+   * no existing exact token (--chart-cyan is a different cyan).
+   * ============================================ */
+  --wfcanvas-on-warning: #000;      /* experimental badge text on warning bg */
+  --wfcanvas-node-switch: #0891b2;  /* "switch" node-type header fill */
+
+  /* ============================================
+   * INTERACTIVE SCREENSHOT TOKENS
+   * Issue #11967 (umbrella #11515). Scoped to browser/InteractiveScreenshot.vue.
+   * The region-marking popup (#5136) renders a dark-slate palette; each hue
+   * matches a --bg, --text or --border base value, but those semantic tokens
+   * carry OKLCH overrides that would shift the rendered pixels, so they are
+   * captured here as hex-only (deliberately NO OKLCH override) so the popup
+   * renders pixel-identical to its previous hardcoded values across all
+   * browsers. --intscreenshot-input-bg is the literal fallback the type-input
+   * rendered because --color-bg is never defined in any theme; preserved behind
+   * that intended token name.
+   * ============================================ */
+  --intscreenshot-input-bg: #121212;           /* type-input fill (undefined --color-bg fallback) */
+  --intscreenshot-popup-bg: #1e293b;           /* region popup surface */
+  --intscreenshot-popup-border: #334155;       /* region popup border */
+  --intscreenshot-popup-muted-text: #94a3b8;   /* popup selector + cancel-button text */
+  --intscreenshot-popup-input-bg: #0f172a;     /* popup input fill */
+  --intscreenshot-popup-input-border: #475569; /* popup input + cancel-button border */
+  --intscreenshot-popup-input-text: #e2e8f0;   /* popup input text */
+  --intscreenshot-popup-save-bg: #3b82f6;      /* popup save-button fill */
 }
 
 /* ============================================

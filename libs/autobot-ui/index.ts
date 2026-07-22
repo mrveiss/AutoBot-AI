@@ -11,6 +11,11 @@
 //
 // See README.md for the token contract and authoring rules.
 
+// Shared semantic vocabulary (#10885) — the single presentational colour
+// type (neutral|primary|success|warning|danger|info) that Badge/Alert/status
+// pills across both apps map onto. Domain-status enums keep their own types.
+export type { SemanticVariant, SemanticColor } from './src/types/semantic'
+
 export { default as BaseButton } from './src/components/BaseButton.vue'
 export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 

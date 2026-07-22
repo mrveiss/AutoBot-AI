@@ -1257,16 +1257,16 @@ watch(layoutMode, () => {
 }
 
 .action-btn.view-mode-btn {
-  border-color: var(--chart-purple, #8b5cf6);
-  color: var(--chart-purple, #8b5cf6);
+  border-color: var(--chart-purple);
+  color: var(--chart-purple);
 }
 
 .action-btn.view-mode-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--chart-purple, #8b5cf6) 15%, transparent);
+  background: color-mix(in srgb, var(--chart-purple) 15%, transparent);
 }
 
 .action-btn.view-mode-btn.active {
-  background: var(--chart-purple, #8b5cf6);
+  background: var(--chart-purple);
   color: white;
 }
 
@@ -1469,8 +1469,8 @@ watch(layoutMode, () => {
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
+  width: var(--spacing-20);
+  height: var(--spacing-20);
   border-radius: 50%;
   background: var(--color-primary-bg);
   display: flex;
@@ -1537,8 +1537,8 @@ watch(layoutMode, () => {
 }
 
 .loading-spinner {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 3px solid var(--border-default, var(--border-subtle));
   border-top-color: var(--color-primary);
   border-radius: 50%;
@@ -1549,10 +1549,10 @@ watch(layoutMode, () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: var(--color-error-bg, rgba(239, 68, 68, 0.12));
-  color: var(--color-error, #ef4444);
+  width: var(--spacing-10);
+  height: var(--spacing-10);
+  background: var(--color-error-bg);
+  color: var(--color-error);
   border-radius: 50%;
   font-weight: bold;
   font-size: var(--text-xl);
@@ -1584,8 +1584,8 @@ watch(layoutMode, () => {
 }
 
 .zoom-controls button {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   border-radius: var(--radius-sm);
@@ -1605,7 +1605,7 @@ watch(layoutMode, () => {
 .zoom-level {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  min-width: 40px;
+  min-width: var(--spacing-10);
   text-align: center;
 }
 
@@ -1643,8 +1643,8 @@ watch(layoutMode, () => {
 }
 
 .entity-icon {
-  width: 28px;
-  height: 28px;
+  width: var(--spacing-7);
+  height: var(--spacing-7);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1869,8 +1869,8 @@ watch(layoutMode, () => {
 }
 
 .legend-color {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: 50%;
 }
 

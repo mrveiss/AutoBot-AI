@@ -247,6 +247,24 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
             deployed_dir,
         )
 
+        # #11611: autobot_shared-first — sync the shared library BEFORE this
+        # component's own rsync + restart so a newly-added `from autobot_shared.X`
+        # import resolves at startup and the control plane cannot crash-loop on a
+        # half-deployed shared tree. Fail the job if it cannot be synced.
+        shared_ok, shared_msg = await _ensure_autobot_shared_synced(component)
+        if not shared_ok:
+            async with db_service.session() as db:
+                result = await db.execute(select(ComponentSyncJobModel).where(ComponentSyncJobModel.job_id == job_id))
+                job_row = result.scalar_one_or_none()
+                if job_row:
+                    job_row.status = "failed"
+                    job_row.success = False
+                    job_row.message = shared_msg
+                    job_row.completed_at = datetime.now(timezone.utc)
+                    await db.commit()
+            logger.error("component resolve job %s: %s", job_id, shared_msg)
+            return
+
         ok, msg = await _rsync_component_local(source_root, component, excludes)
 
         if not ok:
@@ -681,6 +699,20 @@ async def resolve_drift(
         request.component,
         deployed_dir,
     )
+
+    # #11611: autobot_shared-first — sync the shared library BEFORE this
+    # component's own rsync + restart so a newly-added `from autobot_shared.X`
+    # import resolves at startup and the control plane cannot crash-loop on a
+    # half-deployed shared tree. Fail the resolve if it cannot be synced.
+    shared_ok, shared_msg = await _ensure_autobot_shared_synced(request.component)
+    if not shared_ok:
+        return DriftResolveResponse(
+            success=False,
+            component=request.component,
+            message=shared_msg,
+            source_dir=source_dir,
+            deployed_dir=deployed_dir,
+        )
 
     ok, msg = await _rsync_component_local(source_root, request.component, excludes)
 
@@ -2222,6 +2254,46 @@ async def _ensure_autobot_shared_symlink(component: str, steps: List[str]) -> No
         steps.append(f"symlink: restore failed for {component}: {exc}")
 
 
+async def _ensure_autobot_shared_synced(component: str) -> Tuple[bool, str]:
+    """Resync autobot_shared from code_source BEFORE a dependent backend deploys (#11611).
+
+    #11611 root cause: autobot_shared is a component deployed by its OWN
+    drift/resolve — it is NOT pulled in when a dependent (autobot-slm-backend /
+    autobot-backend) is resolved. When a resync of a backend deployed new code
+    that imports a freshly-added shared module (e.g. `from autobot_shared.db_url
+    import assemble_postgres_url`, #11583) and then restarted the service while
+    /opt/autobot/autobot_shared still held the OLD tree, the import failed at
+    startup and the control plane crash-looped (taking the code-sync API offline —
+    a chicken-and-egg that needed a manual recovery).
+
+    Enforce autobot_shared-first ordering at the per-component deploy sites: for a
+    Python backend component, rsync the shared library from code_source ahead of
+    the component's own rsync + restart so every new shared import resolves. No-op
+    (returns success) for autobot_shared itself and for frontends — they either ARE
+    the shared component or do not import it at start.
+
+    Returns (ok, message). On rsync failure the caller must fail-safe (do NOT
+    restart the backend onto a half-deployed shared tree).
+    """
+    if component not in _BACKEND_COMPONENTS:
+        return True, ""
+    try:
+        shared_source = get_default_source_dir("autobot_shared")
+    except ValueError:
+        # code_source layout unavailable — leave the existing tree in place rather
+        # than blocking the resolve; the symlink restore still runs downstream.
+        return True, "autobot_shared source path unavailable — left as-is"
+    source_root = str(Path(shared_source).parent)
+    excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
+    excludes = excludes_map.get("autobot_shared", [])
+    ok, msg = await _rsync_component_local(source_root, "autobot_shared", excludes)
+    if ok:
+        logger.info("autobot_shared-first: resynced ahead of %s (#11611)", component)
+        return True, f"autobot_shared-first: resynced ahead of {component} (#11611)"
+    logger.error("autobot_shared-first: resync FAILED before %s: %s (#11611)", component, msg)
+    return False, f"autobot_shared-first: resync failed before {component}: {msg} (#11611)"
+
+
 async def _run_post_sync_steps(
     component: str,
     source_dir: str,
@@ -2722,8 +2794,11 @@ async def _ansible_self_update(node_id: str) -> None:
 
     Covers every role Ansible knows about (backend, frontend, shared, agent,
     plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
-    Fire-and-forget: the SLM service restarts mid-run so this coroutine dies;
-    callers must poll health rather than await a result.
+    Fire-and-forget: the SLM service restarts mid-run so this coroutine dies.
+    ``detach=True`` runs the ansible-playbook process in its own systemd
+    transient scope (#11492) so it — unlike this coroutine — survives that
+    restart and completes Play 1's tail plus Play 2/3; callers must poll
+    health rather than await a result.
 
     Issue #9224: Update node version in DB after successful sync.
     C2-a: Clear the resume plan on playbook failure (before restart) so stale
@@ -2735,6 +2810,7 @@ async def _ansible_self_update(node_id: str) -> None:
         result = await executor.execute_playbook(
             playbook_name="update-all-nodes.yml",
             limit=limit,
+            detach=True,
         )
         if not result["success"]:
             logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
@@ -4120,6 +4196,86 @@ async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
         return None
 
 
+# Managed application services that run co-located on the SLM-Manager node in a
+# single-box install. update-all's slm_self_update stage covers only the SLM
+# control plane and the fleet stage skips the self-node, so these were updated by
+# NEITHER stage whenever the SLM commit was already current — the one-click update
+# reported success while autobot-backend/-frontend stayed stale (#11605). They are
+# resolved via the SAME per-component drift/resolve path as the manual
+# "Resync from Source" button (rsync + _run_post_sync_steps).
+_COLOCATED_MANAGED_COMPONENTS: Tuple[str, ...] = ("autobot-backend", "autobot-frontend")
+
+
+async def _component_has_file_drift(component: str) -> bool:
+    """Return True when *component* is deployed on this host AND drifts from code_source.
+
+    A missing deployed dir means the component is not co-located here (e.g. a pure
+    SLM control-plane box) — treated as "no drift" so we never try to resolve a
+    component that does not run on this node.
+    """
+    try:
+        source_dir = get_default_source_dir(component)
+    except ValueError:
+        return False
+    deployed_dir = get_default_deployed_dir(component)
+    if not Path(deployed_dir).exists():
+        return False
+    report = await asyncio.get_running_loop().run_in_executor(
+        None,
+        functools.partial(build_drift_report, source_dir, deployed_dir, component),
+    )
+    return len(report.get("drifted_files", [])) > 0
+
+
+async def _resolve_colocated_managed_services(stage: UpdateAllStage) -> None:
+    """Resolve co-located managed services on the SLM-Manager node (#11605).
+
+    Runs the per-component drift/resolve path (rsync + _run_post_sync_steps, which
+    handles pip/build/migrate/restart + health + rollback) for each co-located
+    managed component that (a) is actually deployed on this host and (b) has file
+    drift.
+
+    #11611: autobot_shared-first ordering is enforced HERE explicitly — this loop
+    is a THIRD deploy site (alongside resolve_drift and _run_component_resolve_job).
+    _run_post_sync_steps only recreates the autobot_shared SYMLINK; it does NOT
+    sync the shared tree CONTENT, so without an explicit _ensure_autobot_shared_synced
+    call this path could rsync + restart autobot-backend onto a STALE autobot_shared
+    and crash-loop it (the exact #11611 failure, on the one-click co-located update).
+    So we call _ensure_autobot_shared_synced BEFORE the component rsync and skip the
+    component (fail-safe, no restart) when the shared tree cannot be synced.
+
+    Per-component failures are logged and do not abort the pipeline.
+    """
+    for component in _COLOCATED_MANAGED_COMPONENTS:
+        if component not in ALLOWED_COMPONENTS:
+            continue
+        try:
+            if not await _component_has_file_drift(component):
+                _stage_log(stage, f"co-located {component}: no drift — skipped (#11605)")
+                continue
+            _stage_log(stage, f"co-located {component}: drift detected — resolving (#11605)")
+            # #11611: sync autobot_shared BEFORE this component's rsync + restart so
+            # a newly-added `from autobot_shared.X` import resolves at startup. Skip
+            # the component (no restart) if the shared tree cannot be synced.
+            shared_ok, shared_msg = await _ensure_autobot_shared_synced(component)
+            if not shared_ok:
+                _stage_log(stage, f"co-located {component}: {shared_msg} — skipped (#11611)")
+                continue
+            source_dir = get_default_source_dir(component)
+            deployed_dir = get_default_deployed_dir(component)
+            source_root = str(Path(source_dir).parent)
+            excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
+            excludes = excludes_map.get(component, [])
+            ok, msg = await _rsync_component_local(source_root, component, excludes)
+            if not ok:
+                _stage_log(stage, f"co-located {component}: rsync failed: {msg} (#11605)")
+                continue
+            _, _post_steps, pip_ok = await _run_post_sync_steps(component, source_dir, deployed_dir)
+            _stage_log(stage, f"co-located {component}: resolved (ok={pip_ok}) (#11605)")
+        except Exception as exc:
+            _stage_log(stage, f"co-located {component}: resolve error: {exc} (#11605)")
+
+
 async def _run_slm_stage(
     job: UpdateAllJob,
     remote_commit: str,
@@ -4157,6 +4313,13 @@ async def _run_slm_stage(
             stage.status = _StageStatus.CURRENT
             stage.sha = _short_sha(remote_commit)
             stage.message = f"SLM already at {_short_sha(remote_commit)} — no restart needed"
+            # #11605: the SLM control plane is current, so no Ansible self-update
+            # fires — but co-located managed services (autobot-backend/-frontend)
+            # can still carry file drift that neither this stage nor the self-node-
+            # skipping fleet stage would otherwise resolve. Resolve them here via
+            # the per-component drift/resolve path so the one-click update actually
+            # brings the whole co-located box current.
+            await _resolve_colocated_managed_services(stage)
             stage.completed_at = _now_iso()
             _stage_log(stage, stage.message)
             return False

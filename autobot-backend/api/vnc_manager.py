@@ -76,11 +76,11 @@ _settings_lock = asyncio.Lock()
 
 
 def is_vnc_running() -> bool:
-    """Check if VNC server is running on display :1"""
+    """Check if VNC server is running on the canonical desktop display."""
     try:
-        # Check for Xtigervnc process on display :1
+        # Check for Xtigervnc process on the canonical display (Issue #11579)
         result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
-            ["pgrep", "-f", "Xtigervnc :1"],
+            ["pgrep", "-f", f"Xtigervnc {NetworkConstants.DESKTOP_DISPLAY}"],
             capture_output=True,
             timeout=5,
         )
@@ -112,7 +112,12 @@ def _launch_websockify() -> None:
 
 
 def start_vnc_server() -> Dict[str, str]:
-    """Start VNC server on display :1 with full XFCE desktop"""
+    """Start VNC server on the canonical desktop display with full XFCE desktop.
+
+    Issue #11579: this is the single owner of the canonical display's X
+    server — gui_controller.GUIController attaches to it, never spawns its
+    own.
+    """
     # Pre-check: VncAuth requires ~/.vnc/passwd to exist
     vnc_passwd = Path.home() / ".vnc" / "passwd"
     if not vnc_passwd.exists():
@@ -129,7 +134,7 @@ def start_vnc_server() -> Dict[str, str]:
         result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             [
                 "/usr/bin/vncserver",
-                ":1",
+                NetworkConstants.DESKTOP_DISPLAY,
                 "-localhost",
                 "no",
                 "-SecurityTypes",
@@ -217,7 +222,7 @@ async def restart_vnc_server(
             proc = await asyncio.create_subprocess_exec(
                 "vncserver",
                 "-kill",
-                ":1",
+                NetworkConstants.DESKTOP_DISPLAY,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -312,7 +317,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
                 encoding="utf-8",
                 timeout=timeout,
                 shell=False,
-                env={"DISPLAY": ":1"},
+                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
             )
         )
         if result.returncode != 0:
@@ -513,7 +518,7 @@ async def vnc_screenshot(
             capture_output=True,
             text=True,
             timeout=10,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
 
         if result.returncode != 0:
@@ -523,7 +528,7 @@ async def vnc_screenshot(
                 capture_output=True,
                 text=True,
                 timeout=10,
-                env={"DISPLAY": ":1"},
+                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
             )
 
         if result.returncode != 0:
@@ -574,7 +579,7 @@ async def vnc_clipboard_sync(
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         stdout, stderr = proc.communicate(input=request.content.encode("utf-8"), timeout=5)
 
@@ -769,7 +774,7 @@ def _get_desktop_info() -> Dict[str, str]:
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             for line in result.stdout.split("\n"):
@@ -788,7 +793,7 @@ def _get_desktop_info() -> Dict[str, str]:
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             info["active_window"] = result.stdout.strip()
@@ -802,7 +807,7 @@ def _get_desktop_info() -> Dict[str, str]:
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             window_count = len([line for line in result.stdout.split("\n") if line.strip()])

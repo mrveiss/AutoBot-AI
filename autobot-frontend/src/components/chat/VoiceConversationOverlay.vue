@@ -459,8 +459,8 @@ onBeforeUnmount(() => {
 
 /* WS connection indicator (full-duplex) */
 .voice-overlay__ws-indicator {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-2);
+  height: var(--spacing-2);
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.6);
   transition: background var(--duration-200);
@@ -663,8 +663,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 96px;
-  height: 96px;
+  width: var(--spacing-24);
+  height: var(--spacing-24);
 }
 
 /* Pulse rings */
@@ -695,8 +695,8 @@ onBeforeUnmount(() => {
 .voice-overlay__mic-btn {
   position: relative;
   z-index: 1;
-  width: 64px;
-  height: 64px;
+  width: var(--spacing-16);
+  height: var(--spacing-16);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -779,7 +779,7 @@ onBeforeUnmount(() => {
 
 /* Amplitude meter */
 .voice-overlay__amplitude {
-  height: 4px;
+  height: var(--spacing-1);
   border-radius: var(--radius-xs);
   background: rgba(148, 163, 184, 0.1);
   overflow: hidden;
@@ -808,7 +808,7 @@ onBeforeUnmount(() => {
 
 .voice-overlay__threshold-slider {
   flex: 1;
-  height: 4px;
+  height: var(--spacing-1);
   appearance: none;
   background: rgba(148, 163, 184, 0.15);
   border-radius: var(--radius-xs);
@@ -823,8 +823,8 @@ onBeforeUnmount(() => {
 
 .voice-overlay__threshold-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: 50%;
   background: var(--color-primary);
   border: 2px solid var(--bg-card);
@@ -832,8 +832,8 @@ onBeforeUnmount(() => {
 }
 
 .voice-overlay__threshold-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: 50%;
   background: var(--color-primary);
   border: 2px solid var(--bg-card);

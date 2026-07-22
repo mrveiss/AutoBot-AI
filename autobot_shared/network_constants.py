@@ -138,6 +138,15 @@ class NetworkConstants:
     NPU_WORKER_WINDOWS_PORT: int = int(_get_config_value("port.npu_windows", "8081"))
     CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port (static)
 
+    # Issue #11579: Canonical desktop-control display. SINGLE source of truth
+    # shared by gui_controller.py (pyautogui) and api/vnc_manager.py + api/
+    # vnc_mcp.py (xdotool/x11vnc). Both stacks MUST act on this same X
+    # display so the human observer (noVNC) always sees what the agent does.
+    # Override via env var AUTOBOT_DESKTOP_DISPLAY (ConfigRegistry convention).
+    # #11506 T1 (control-lock) will arbitrate simultaneous agent/human access
+    # to this shared display — not implemented here.
+    DESKTOP_DISPLAY: str = _get_config_value("desktop.display", ":1")
+
     # Issue #474: Monitoring stack ports (from ConfigRegistry)
     PROMETHEUS_PORT: int = int(_get_config_value("port.prometheus", "9090"))
     ALERTMANAGER_PORT: int = 9093  # Not in ConfigRegistry currently

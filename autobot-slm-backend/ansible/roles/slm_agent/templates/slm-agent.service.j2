@@ -34,7 +34,12 @@ WorkingDirectory={{ slm_agent_dir }}
 # Environment variables
 Environment=SLM_NODE_ID={{ slm_node_id }}
 Environment=SLM_ADMIN_URL={{ effective_admin_url }}
-Environment=PYTHONPATH={{ slm_agent_dir }}
+# #11508: PYTHONPATH must let the SYSTEM interpreter (ExecStart below) import
+# autobot_shared on its own — the agent no longer borrows it from the SLM backend
+# venv. `{{ slm_agent_dir }}` resolves `slm.agent.*`; `{{ slm_agent_dir | dirname }}`
+# is the install base (/opt/autobot) so `import autobot_shared` finds
+# /opt/autobot/autobot_shared directly, independent of the per-dir symlink.
+Environment=PYTHONPATH={{ slm_agent_dir }}:{{ slm_agent_dir | dirname }}
 Environment=PYTHONUNBUFFERED=1
 # Issue #9226: Redis connection for autobot_shared imports
 Environment=REDIS_HOST={{ slm_agent_redis_host }}
@@ -46,6 +51,10 @@ EnvironmentFile=-{{ slm_agent_data_dir }}/agent-secrets.env
 
 # Agent execution — admin_url resolved from SLM_ADMIN_URL env var above,
 # not baked into CLI args, so re-provisioning updates it (#2833).
+# #11508: the interpreter is the system python3, which the role provisions with
+# ALL agent deps (aiohttp + psutil + redis). A stale drop-in that repointed this
+# at the backend venv (which lacks aiohttp) is removed by the role's clean tasks
+# so this ExecStart stays authoritative.
 ExecStart=/usr/bin/python3 -m slm.agent.agent \
     --node-id {{ slm_node_id }} \
     --interval {{ slm_heartbeat_interval }}{% if slm_services_to_monitor | length > 0 %} \

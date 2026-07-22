@@ -27,10 +27,19 @@ slm_agent_group: autobot
 slm_agent_dir: /opt/autobot/autobot-slm-agent
 slm_agent_data_dir: /var/lib/slm-agent
 
-# Python dependencies for the agent
+# Python dependencies for the agent (#11508)
+# The agent runs on the system interpreter (/usr/bin/python3, see the service
+# unit's ExecStart) and MUST have every module it + autobot_shared import on ONE
+# interpreter — it can no longer borrow modules from the SLM backend venv.
+#   - aiohttp: agent.py HTTP client/server
+#   - psutil:  health_collector resource metrics
+#   - redis:   autobot_shared.redis_client (health_collector.py imports it at
+#              module load) — was MISSING here, so a fresh restart on the system
+#              python crash-looped with ModuleNotFoundError: No module named 'redis'.
 slm_agent_python_packages:
   - aiohttp
   - psutil
+  - redis
 
 # Services to monitor (systemd service names)
 # Override per-host in inventory, e.g.:
