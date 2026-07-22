@@ -8,6 +8,13 @@
 # drifted and was removed). Required vars: backend_user, backend_group,
 # backend_install_dir, backend_code_dir, backend_host, backend_port,
 # backend_workers, backend_log_dir.
+#
+# #11670: This unit is authoritative. Worker count (backend_workers), the
+# start/stop timeouts (backend_start_timeout_sec / backend_stop_timeout_sec) and
+# the graceful-shutdown flag are ALL owned here — folding in what the legacy
+# one-off deadlock scripts force via hand-placed .service.d/ drop-ins
+# (single-worker.conf, timeout.conf). The backend role removes those stale manual
+# drop-ins on every deploy so nothing can shadow this rendered unit.
 [Unit]
 Description=AutoBot Backend API
 After=network-online.target redis-stack-server.service
@@ -35,6 +42,12 @@ Restart=always
 # code-sync restart never blocks on a hung shutdown. Mirrors autobot-celery.
 KillMode=mixed
 TimeoutStopSec={{ backend_stop_timeout_sec | default(45) }}
+# #11670: folds the legacy timeout.conf drop-in's TimeoutStartSec into the
+# canonical unit. First boot imports torch/sentence-transformers/chromadb which
+# take 5-6 min, so the default start window is generous. NOTE: the stale drop-in
+# also set TimeoutStopSec=900 (the 15-min stop hang) — that is intentionally NOT
+# restored; #11668's 45s stop + KillMode=mixed is the correct behavior.
+TimeoutStartSec={{ backend_start_timeout_sec | default(900) }}
 # Issue #957: nginx holds port {{ backend_nginx_port | default(8443) }}; WDF rule tied to nginx not uvicorn
 RestartSec=5
 StartLimitInterval=120
