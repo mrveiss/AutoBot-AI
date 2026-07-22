@@ -1089,6 +1089,26 @@
   --kanban-wip-warn-text: #713f12;      /* WIP-limit warning column-header text */
   --kanban-wip-exceeded-bg: #fee2e2;    /* WIP-limit exceeded column-header fill */
   --kanban-wip-exceeded-text: #991b1b;  /* WIP-limit exceeded column-header text */
+
+  /* ============================================
+   * OPERATION DETAIL TOKENS (#12052, umbrella #11515)
+   * Scoped to operations/OperationDetail.vue. Hex-only (deliberately NO
+   * OKLCH override) so the error section and the cancel and resume action
+   * buttons render pixel-identical to their previous hardcoded values across
+   * all browsers. The soft red and green action palettes have no existing
+   * exact semantic token (--color-danger-dark matches the danger text hex
+   * but carries an OKLCH override that would drift). Operation status, state
+   * and type colors in the component script are DATA, not chrome, and stay
+   * in the component.
+   * ============================================ */
+  --opdetail-error-bg: #fef2f2;            /* error-section fill */
+  --opdetail-danger-soft: #fecaca;         /* error-section and cancel-button border, cancel hover fill */
+  --opdetail-danger-text: #991b1b;         /* error-title and cancel-button text */
+  --opdetail-error-message-text: #7f1d1d;  /* error-message monospace text */
+  --opdetail-cancel-bg: #fee2e2;           /* cancel-button fill */
+  --opdetail-resume-bg: #dcfce7;           /* resume-button fill */
+  --opdetail-resume-text: #166534;         /* resume-button text */
+  --opdetail-success-soft: #bbf7d0;        /* resume-button border and hover fill */
 }
 
 /* ============================================
