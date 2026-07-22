@@ -709,8 +709,8 @@ onUnmounted(() => {
 }
 
 .query-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -742,7 +742,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   padding: var(--spacing-2) var(--spacing-3);
   background: var(--color-info);
-  color: #fff;
+  color: var(--kresearch-on-accent);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -781,7 +781,7 @@ onUnmounted(() => {
 
 .btn-stop:hover {
   background: var(--color-error);
-  color: #fff;
+  color: var(--kresearch-on-accent);
 }
 
 /* ── Error banner ────────────────────────────────────────────────────────── */
@@ -984,7 +984,7 @@ onUnmounted(() => {
 
 .btn-accept:hover {
   background: var(--color-success);
-  color: #fff;
+  color: var(--kresearch-on-accent);
 }
 
 .btn-reject {
@@ -995,7 +995,7 @@ onUnmounted(() => {
 
 .btn-reject:hover {
   background: var(--color-error);
-  color: #fff;
+  color: var(--kresearch-on-accent);
 }
 
 .card-decision {
@@ -1043,8 +1043,8 @@ onUnmounted(() => {
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-2);
+  height: var(--spacing-2);
   border-radius: 50%;
   flex-shrink: 0;
 }
