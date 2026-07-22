@@ -863,6 +863,22 @@
   --backlogview-selected-row-bg: #eff6ff;  /* selected row fill (undefined --color-primary-subtle fallback) */
   --backlogview-sprint-tag-bg: #e0f2fe;    /* sprint tag badge fill */
   --backlogview-sprint-tag-text: #0369a1;  /* sprint tag badge text */
+
+  /* ============================================
+   * KNOWLEDGE RESEARCH PANEL TOKENS
+   * Issues #12021, #12022, #12023 (umbrella #11515), batch 14:
+   * CompanyCreationWizard.vue, ImportTreeChart.vue,
+   * knowledge/KnowledgeResearchPanel.vue.
+   * Only KnowledgeResearchPanel needed a scoped token: its buttons render a
+   * pure-white label on the info, success and error accent fills, and there
+   * is no plain-white design token (--text-on-primary carries an OKLCH
+   * override that would drift). Hex-only (deliberately NO OKLCH override) so
+   * the labels render pixel-identical to the previous hardcoded #fff across
+   * all browsers. CompanyCreationWizard's hexes are category-icon gradient
+   * stops (intentionally literal); ImportTreeChart's style hexes were all
+   * dead fallbacks of defined tokens and were dropped.
+   * ============================================ */
+  --kresearch-on-accent: #fff;  /* white button label on info, success and error fills */
 }
 
 /* ============================================

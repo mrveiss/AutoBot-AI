@@ -857,8 +857,8 @@ onUnmounted(() => {
 }
 
 .loading-spinner {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 3px solid var(--border-color);
   border-top-color: var(--color-primary);
   border-radius: 50%;
@@ -871,7 +871,7 @@ onUnmounted(() => {
 
 .chart-error {
   background: var(--bg-error, rgba(239, 68, 68, 0.1));
-  border: 1px solid var(--border-error, #ef4444);
+  border: 1px solid var(--border-error);
   border-radius: var(--radius-md);
   padding: var(--spacing-3);
   gap: var(--spacing-2);
@@ -880,7 +880,7 @@ onUnmounted(() => {
 .error-icon {
   font-weight: bold;
   font-size: var(--text-xl);
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .btn-link {
@@ -995,26 +995,26 @@ onUnmounted(() => {
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-2);
+  height: var(--spacing-2);
   border-radius: 50%;
   display: inline-block;
 }
 
 .legend-item.importer .dot {
-  background: var(--color-success, #10b981);
+  background: var(--color-success);
 }
 
 .legend-item.imported .dot {
-  background: var(--chart-purple, #8b5cf6);
+  background: var(--chart-purple);
 }
 
 .legend-item.hub .dot {
-  background: var(--color-warning, #f59e0b);
+  background: var(--color-warning);
 }
 
 .legend-item.external .dot {
-  background: var(--text-tertiary, #6b7280);
+  background: var(--text-tertiary);
 }
 
 .cytoscape-container {
@@ -1089,7 +1089,7 @@ onUnmounted(() => {
 
 .detail-icon {
   font-size: var(--text-2xl);
-  min-width: 24px;
+  min-width: var(--spacing-6);
 }
 
 .detail-name {
@@ -1107,8 +1107,8 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: var(--text-lg);
   padding: var(--spacing-0);
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1155,22 +1155,22 @@ onUnmounted(() => {
 }
 
 .detail-value.node-type-hub {
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
   font-weight: var(--font-semibold);
 }
 
 .detail-value.node-type-importer {
-  color: var(--color-success, #10b981);
+  color: var(--color-success);
   font-weight: var(--font-semibold);
 }
 
 .detail-value.node-type-imported {
-  color: var(--chart-purple, #8b5cf6);
+  color: var(--chart-purple);
   font-weight: var(--font-semibold);
 }
 
 .detail-value.node-type-isolated {
-  color: var(--text-tertiary, #6b7280);
+  color: var(--text-tertiary);
   font-weight: var(--font-semibold);
 }
 
@@ -1211,7 +1211,7 @@ onUnmounted(() => {
 }
 
 .expand-icon {
-  width: 20px;
+  width: var(--spacing-5);
   text-align: center;
   font-size: 0.8rem;
   color: var(--text-tertiary);
@@ -1241,12 +1241,12 @@ onUnmounted(() => {
 }
 
 .imports-out {
-  color: var(--color-success, #10b981);
+  color: var(--color-success);
   font-weight: var(--font-medium);
 }
 
 .imports-in {
-  color: var(--chart-purple, #8b5cf6);
+  color: var(--chart-purple);
   font-weight: var(--font-medium);
 }
 
