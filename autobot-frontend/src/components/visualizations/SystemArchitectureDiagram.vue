@@ -1473,8 +1473,8 @@ watch(() => currentView.value, () => {
 }
 
 .zoom-controls button {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   background: var(--bg-primary);
   border: 1px solid var(--bg-tertiary);
   border-radius: var(--radius-md);
@@ -1500,7 +1500,7 @@ watch(() => currentView.value, () => {
 .zoom-level {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  min-width: 40px;
+  min-width: var(--spacing-10);
   text-align: center;
 }
 
@@ -1561,8 +1561,8 @@ watch(() => currentView.value, () => {
 }
 
 .component-icon-badge {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -1773,7 +1773,7 @@ watch(() => currentView.value, () => {
 .legend-title {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  min-width: 80px;
+  min-width: var(--spacing-20);
 }
 
 .legend-items {
@@ -1791,8 +1791,8 @@ watch(() => currentView.value, () => {
 }
 
 .legend-color {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: var(--radius-xs);
 }
 
@@ -1818,7 +1818,7 @@ watch(() => currentView.value, () => {
 }
 
 .legend-line {
-  width: 20px;
+  width: var(--spacing-5);
   height: 3px;
   border-radius: 1px;
 }
@@ -1849,7 +1849,7 @@ watch(() => currentView.value, () => {
 .slide-enter-from,
 .slide-leave-to {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateX(var(--spacing-5));
 }
 
 /* Responsive */
