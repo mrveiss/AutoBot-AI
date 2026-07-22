@@ -19,7 +19,7 @@ Comprehensive migration guide and examples for the `usePagination` composable.
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 interface Document {
   id: string
@@ -166,7 +166,7 @@ watch([searchQuery, filterCategory, filterType], () => {
 ```vue
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 // All pagination logic in one composable
 const {
@@ -260,7 +260,7 @@ const visibleIssues = computed(() => activeIssues.value.slice(0, 3))
 
 ```vue
 <script setup lang="ts">
-import { useSimplePagination } from '@/composables/usePagination'
+import { useSimplePagination } from '@autobot/ui'
 
 const activeIssues = ref([...])
 
@@ -305,7 +305,7 @@ const recentNotifications = computed(() =>
 
 ```vue
 <script setup lang="ts">
-import { useSimplePagination } from '@/composables/usePagination'
+import { useSimplePagination } from '@autobot/ui'
 
 const notifications = ref([...])
 
@@ -364,7 +364,7 @@ const visibleProblems = computed(() =>
 
 ```vue
 <script setup lang="ts">
-import { useShowAllToggle } from '@/composables/usePagination'
+import { useShowAllToggle } from '@autobot/ui'
 
 const showAllProblems = ref(false)
 const problemsReport = ref([...])
@@ -392,7 +392,7 @@ const visibleProblems = useShowAllToggle(
 
 ```vue
 <script setup lang="ts">
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 const problemsReport = ref([...])
 
@@ -438,7 +438,7 @@ const {
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 interface ApiResponse {
   data: Document[]
@@ -526,7 +526,7 @@ await fetchDocuments(1, 20)
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 const items = ref([...])
 
@@ -574,7 +574,7 @@ const handlePageSizeChange = (size: number) => {
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 const items = ref([...])
 const pagination = usePagination(items, { itemsPerPage: 20 })
@@ -650,7 +650,7 @@ watch(() => pagination.currentPage.value, (newPage) => {
 ```vue
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 const items = ref([...])
 const pagination = usePagination(items, { itemsPerPage: 20 })
@@ -727,7 +727,7 @@ const pageNumbers = computed(() => {
 ```vue
 <script setup lang="ts">
 import { ref, shallowRef } from 'vue'
-import { usePagination } from '@/composables/usePagination'
+import { usePagination } from '@autobot/ui'
 
 // Use shallowRef for large arrays to avoid deep reactivity
 const largeDataset = shallowRef<Item[]>([...])

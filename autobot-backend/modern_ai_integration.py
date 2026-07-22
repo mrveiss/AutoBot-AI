@@ -236,8 +236,14 @@ class OpenAIGPT4VProvider(BaseAIProvider):
             logger.error("OpenAI GPT-4 text generation failed: %s", e)
             return self._create_error_response(request, "AI provider request failed")
 
-    def _build_openai_image_content(self, prompt: str, images: List[str]) -> List[Dict[str, Any]]:
-        """Build content list with text and images for OpenAI API. Issue #620."""
+    @staticmethod
+    def _build_openai_image_content(prompt: str, images: List[str]) -> List[Dict[str, Any]]:
+        """Build content list with text and images for OpenAI API. Issue #620.
+
+        Issue #11538: static (no ``self`` usage) so chat_workflow/manager.py can
+        reuse it to thread browser/VNC screenshots into the continuation payload
+        without instantiating a provider (which needs an API key/client).
+        """
         content = [{"type": "text", "text": prompt}]
         for image_b64 in images:
             content.append(

@@ -24,6 +24,7 @@ from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
+from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -336,6 +337,98 @@ WAIT_FOR_SELECTOR_SCHEMA: dict = {
     "required": ["selector"],
 }
 
+# Issue #11537: indexed interactive-element schemas. OpenManus numbers every
+# interactive element on the page so the model clicks/fills by index instead
+# of inventing a CSS selector — the index below is resolved to a concrete
+# element server-side (autobot-browser-worker/element-index.js).
+#
+# `expected_element_count` (optional, from a prior browser_state's
+# `element_count`) is the stale-index guard: if the live element count no
+# longer matches, the worker rejects the call instead of silently acting on
+# whatever now sits at that index (review #11538 MINOR 3).
+_EXPECTED_ELEMENT_COUNT_FIELD = {
+    "type": "integer",
+    "description": (
+        "Optional: element_count from the browser_state call this index was chosen against. "
+        "If the live page's element count no longer matches, the action is rejected instead of "
+        "silently acting on the wrong element — re-fetch browser_state and retry."
+    ),
+}
+
+CLICK_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Click an interactive element by its numbered index from the page's element menu.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index"],
+}
+
+FILL_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Fill an interactive element by its numbered index from the page's element menu.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "value": {"type": "string", "description": "Value to fill into the element."},
+        "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index", "value"],
+}
+
+SELECT_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Select a dropdown option on an element identified by its numbered index.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "value": {"type": "string", "description": "Value to select."},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index", "value"],
+}
+
+HOVER_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Hover over an interactive element by its numbered index.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index"],
+}
+
+BROWSER_STATE_SCHEMA: dict = {
+    "type": "object",
+    "description": (
+        "Get the current page state: URL, title, scroll info, and a numbered menu "
+        "of interactive elements for use with click_index/fill_index/select_index/hover_index."
+    ),
+    "properties": {},
+}
+
+# Issue #11537: how many numbered elements to render in the LLM-visible state
+# block per browser tool result (the browser-worker itself caps the raw list
+# via BROWSER_STATE_MAX_ELEMENTS; this bounds the prompt-text rendering).
+BROWSER_STATE_PROMPT_MAX_ELEMENTS = env_int("AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS", default=30)
+
+# Issue #11537: text formatters for the four indexed-element tool results,
+# keyed by tool name so _format_browser_action_text stays a flat dispatch.
+_INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
+    "click_index": lambda params, inner: (
+        f"Clicked element [{params.get('index')}]: "
+        f"{(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}"
+    ),
+    "fill_index": lambda params, inner: (
+        f"Filled element [{params.get('index')}] "
+        f"({(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}) "
+        "with value"
+    ),
+    "select_index": lambda params, inner: (f"Selected '{params.get('value', '')}' in element [{params.get('index')}]"),
+    "hover_index": lambda params, inner: f"Hovered over element [{params.get('index')}]",
+}
+
 # Issue #4529: JSON Schema definitions for built-in tools dispatched directly
 # (not via MCP).  Used by _validate_builtin_tool_arguments() so every dispatch
 # path passes through validate_tool_arguments() before execution.
@@ -354,6 +447,12 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "get_text": GET_TEXT_SCHEMA,
     "get_attribute": GET_ATTRIBUTE_SCHEMA,
     "wait_for_selector": WAIT_FOR_SELECTOR_SCHEMA,
+    # Issue #11537: indexed interactive-element actions.
+    "click_index": CLICK_INDEX_SCHEMA,
+    "fill_index": FILL_INDEX_SCHEMA,
+    "select_index": SELECT_INDEX_SCHEMA,
+    "hover_index": HOVER_INDEX_SCHEMA,
+    "browser_state": BROWSER_STATE_SCHEMA,
     # Imported from tools.code_interpreter — single source of truth for the schema.
     # Issue #4561: was missing, causing code_interpreter args to bypass validation
     # (Issue #4562).  All future built-in tool schemas should follow this pattern:
@@ -444,6 +543,12 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
         "get_text",
         "get_attribute",
         "wait_for_selector",
+        # Issue #11537: indexed interactive-element actions.
+        "click_index",
+        "fill_index",
+        "select_index",
+        "hover_index",
+        "browser_state",
     }
 )
 
@@ -479,23 +584,11 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     return None
 
 
-# Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
-# Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
-# #11545: the closing `>` is optional — some chat models emit `</TOOL_CALL`
-# (newline/prose after) without it.
-# #11552: the closing tag itself is often TRUNCATED to `</TOOL` (the model drops
-# `_CALL`) or spaced (`</TOOL_ CALL>`), then a hallucinated success line follows.
-# Both previously left the tool call unparsed → raw tag leaked, tool never ran
-# (0 work items, CEO chat). The close now tolerates `</TOOL[_[ ]CALL][>]`: the
-# `_CALL` and trailing `>` are both optional. The close requires a word boundary
-# after `tool` (either the proper `_call\b` continuation, or `\b` when `_CALL` is
-# dropped) so `</tool_callable…`/`</toolbox…` never match; the opening tag
-# (`<TOOL_CALL name=… params=…>`) is still required, so a bare `</tool>` in prose
-# can never match on its own.
-_TOOL_CALL_PATTERN = re.compile(
-    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool(?:_?\s*call\b|\b)\s*>?',
-    re.IGNORECASE | re.DOTALL,
-)
+# Issue #11693: the tool-call grammar (parse pattern + close-variant
+# tolerance for #11545/#11552) is now the single canonical source of truth
+# in tool_call_grammar.py, shared with chat_workflow/manager.py. Kept as a
+# module-level alias here for backwards-compatible imports.
+_TOOL_CALL_PATTERN = TOOL_CALL_PATTERN
 
 # Issue #260: Security tool detection pattern for auto-parsing
 _SECURITY_TOOL_PATTERN = re.compile(r"(nmap|nikto|gobuster|ffuf|masscan|nuclei|searchsploit)\b", re.IGNORECASE)
@@ -2034,9 +2127,15 @@ class ToolHandlerMixin:
                 )
                 return
 
-            from api.browser_mcp import send_to_browser_vm
+            from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
 
-            result = await send_to_browser_vm(tool_name, params)
+            # #11539: route this call to the BrowserContext dedicated to this
+            # conversation so cookies/login state never bleed into another one.
+            result = await send_to_browser_vm(
+                tool_name,
+                params,
+                session_id=session_id or DEFAULT_BROWSER_SESSION_ID,
+            )
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for browser tools
             result_text = str(result)
@@ -2071,9 +2170,15 @@ class ToolHandlerMixin:
         """Record a successful browser tool execution and return its WorkflowMessage. Issue #2735.
 
         Extracted from _handle_browser_tool to keep parent under 65 lines.
+        Issue #11538: also carries the raw screenshot (if any) into
+        execution_results so the vision-in-the-loop continuation can find it.
         """
         summary = self._format_browser_result(tool_name, params, result)
-        execution_results.append({"tool": tool_name, "status": "success", "output": summary})
+        entry: dict[str, Any] = {"tool": tool_name, "status": "success", "output": summary}
+        base64_image = self._extract_browser_image(result)
+        if base64_image:
+            entry["base64_image"] = base64_image
+        execution_results.append(entry)
         return WorkflowMessage(
             type="command_output",
             content=summary,
@@ -2085,6 +2190,36 @@ class ToolHandlerMixin:
             },
         )
 
+    def _extract_browser_image(self, result: dict[str, Any]) -> str | None:
+        """Pull the base64 PNG out of a browser tool result, if present. Issue #11538.
+
+        Only the ``screenshot`` action returns image bytes today; kept
+        tool-name-agnostic (checks common keys) so a future browser/VNC
+        action that starts returning images is picked up automatically.
+        """
+        inner = result.get("result", result)
+        return inner.get("image") or inner.get("screenshot")
+
+    def _format_page_state_block(self, page_state: dict[str, Any] | None) -> str:
+        """Render the numbered interactive-element menu for LLM consumption. Issue #11537.
+
+        OpenManus-style: the model picks click_index/fill_index targets from
+        this menu instead of guessing a CSS selector. Appended to every
+        browser tool result so the menu is always current (task 4).
+        """
+        if not page_state:
+            return ""
+        elements = page_state.get("elements") or []
+        if not elements:
+            return ""
+        lines = [f"\nInteractive elements ({len(elements)}):"]
+        for el in elements[:BROWSER_STATE_PROMPT_MAX_ELEMENTS]:
+            role = el.get("role", el.get("tag", "element"))
+            name = (el.get("name") or "").strip()
+            label = f' "{name}"' if name else ""
+            lines.append(f"  [{el.get('index')}] {role}{label}")
+        return "\n".join(lines)
+
     def _format_browser_result(
         self,
         tool_name: str,
@@ -2094,10 +2229,25 @@ class ToolHandlerMixin:
         """Format browser tool result as text for LLM context. Issue #1368.
 
         Browser VM returns: {"success": bool, "action": str, "result": {...}}
-        The inner 'result' dict contains tool-specific data.
+        The inner 'result' dict contains tool-specific data. Issue #11537:
+        appends the numbered interactive-element menu when present.
         """
         inner = result.get("result", result)
+        summary = self._format_browser_action_text(tool_name, params, inner, result)
+        # browser_state's payload *is* the page state; every other action
+        # carries it nested under "page_state" (attached post-action).
+        page_state = inner if tool_name == "browser_state" else inner.get("page_state")
+        state_block = self._format_page_state_block(page_state)
+        return summary + state_block if state_block else summary
 
+    def _format_browser_action_text(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        inner: dict[str, Any],
+        result: dict[str, Any],
+    ) -> str:
+        """Build the tool-specific summary line for _format_browser_result. Issue #1368/#11537."""
         if tool_name == "navigate":
             url = inner.get("url", params.get("url", ""))
             title = inner.get("title", "")
@@ -2142,6 +2292,13 @@ class ToolHandlerMixin:
         if tool_name == "wait_for_selector":
             sel = params.get("selector", "")
             return f"Element found: {sel}"
+
+        if tool_name in _INDEXED_ELEMENT_TOOL_TEXT:
+            return _INDEXED_ELEMENT_TOOL_TEXT[tool_name](params, inner)
+
+        if tool_name == "browser_state":
+            elements = inner.get("elements") or []
+            return f"Page state: {inner.get('url', '')} — {len(elements)} interactive element(s)"
 
         return json.dumps(result, default=str)[:1000]
 
@@ -2197,12 +2354,12 @@ class ToolHandlerMixin:
 
         try:
             if fetch_full:
-                results = await self._execute_web_search_full(query, max_pages)
+                results = await self._execute_web_search_full(query, max_pages, session_id)
             else:
                 # #7479: snippet path now honors max_pages too (was hardcoded
                 # to 5, ignoring caller's choice — confusingly inconsistent
                 # with fetch_full mode).
-                results = await self._execute_web_search(query, max_pages)
+                results = await self._execute_web_search(query, max_pages, session_id)
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
             results = await _emit_after_tool_execute("web_search", results, session_id, {})
@@ -2384,7 +2541,7 @@ class ToolHandlerMixin:
         json_str = json.dumps(result["data"], indent=2, ensure_ascii=False)
         return f"## Extracted data from {url}\n\n```json\n{json_str}\n```"
 
-    async def _execute_web_search(self, query: str, max_pages: int = 5) -> str:
+    async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.
 
         Tries the existing Playwright search service first (structured results),
@@ -2393,6 +2550,9 @@ class ToolHandlerMixin:
         ``max_pages`` (#7479) — caller-requested result count. Threaded into
         ``_web_search_via_playwright`` so the snippet path returns the same
         number of results that the fetch_full path would.
+
+        ``session_id`` (#11539) — threaded into the browser-VM fallback so it
+        reuses this conversation's isolated browser context.
         """
         # Primary: use existing search_web_embedded (Rule 2: reuse existing code)
         try:
@@ -2403,9 +2563,9 @@ class ToolHandlerMixin:
             logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
 
         # Fallback: browser VM with DuckDuckGo HTML
-        return await self._web_search_final_fallback(query)
+        return await self._web_search_final_fallback(query, session_id)
 
-    async def _execute_web_search_full(self, query: str, max_pages: int) -> str:
+    async def _execute_web_search_full(self, query: str, max_pages: int, session_id: str = "") -> str:
         """Search + full-page fetch mode. Issue #7404.
 
         Gets structured entries from Playwright, fans out WebFetcher.fetch
@@ -2418,10 +2578,12 @@ class ToolHandlerMixin:
         call via ``_web_search_via_playwright`` — wasteful when
         ``_web_search_structured_entries`` already determined Playwright
         unavailable (#7478).
+
+        ``session_id`` (#11539) — threaded into the browser-VM fallback.
         """
         entries = await self._web_search_structured_entries(query, max_pages)
         if not entries:
-            return await self._web_search_final_fallback(query)
+            return await self._web_search_final_fallback(query, session_id)
         enriched = await _fetch_pages_concurrent(entries, max_pages)
         return _format_full_search_results(query, enriched)
 
@@ -2478,7 +2640,7 @@ class ToolHandlerMixin:
             lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
         return "\n".join(lines)
 
-    async def _web_search_final_fallback(self, query: str) -> str:
+    async def _web_search_final_fallback(self, query: str, session_id: str = "") -> str:
         """Browser-VM last resort with actionable guidance instead of silence (#11665).
 
         When the registry and Playwright yielded nothing and even the browser
@@ -2487,30 +2649,39 @@ class ToolHandlerMixin:
         configuration that unlocks topic search.
         """
         try:
-            result = await self._web_search_via_browser_vm(query)
+            result = await self._web_search_via_browser_vm(query, session_id)
             if result:
                 return result
         except Exception as exc:
             logger.debug("[#11665] Browser VM search fallback unavailable: %s", exc)
         return _search_unavailable_message(query)
 
-    async def _web_search_via_browser_vm(self, query: str) -> str:
+    async def _web_search_via_browser_vm(self, query: str, session_id: str = "") -> str:
         """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
         from urllib.parse import (  # stdlib — lazy to match surrounding pattern
             quote_plus,
         )
 
-        from api.browser_mcp import send_to_browser_vm  # lazy to avoid circular import
+        from api.browser_mcp import (  # lazy to avoid circular import
+            DEFAULT_BROWSER_SESSION_ID,
+            send_to_browser_vm,
+        )
 
         search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+        # #11539: route through this conversation's isolated browser context.
+        vm_session_id = session_id or DEFAULT_BROWSER_SESSION_ID
 
-        nav_result = await send_to_browser_vm("navigate", {"url": search_url})
+        nav_result = await send_to_browser_vm("navigate", {"url": search_url}, session_id=vm_session_id)
         if not nav_result.get("success", True):
             raise RuntimeError(f"Failed to navigate to search page: {nav_result.get('error', 'unknown')}")
 
         # Try results div first, then fall back to body
         for selector in ("div.results", "body"):
-            text_result = await send_to_browser_vm("get_text", {"selector": selector})
+            text_result = await send_to_browser_vm(
+                "get_text",
+                {"selector": selector},
+                session_id=vm_session_id,
+            )
             inner = text_result.get("result", text_result)
             raw_text = inner.get("text", "")
             if raw_text:

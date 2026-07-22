@@ -6,6 +6,14 @@
 /**
  * VNC Desktop Interaction Controls Composable
  * Issue #74: Full desktop control and session integration
+ *
+ * Issue #12002 (#11506 T1): the backend's desktop control-lock gates these
+ * calls by session_id (owner-aware -- the lock owner's own toolbar keeps
+ * working; a different human is muted). DesktopInterface.vue has no real
+ * per-session context of its own (single canonical shared desktop, no chat
+ * session/route param) -- `sessionId` defaults to "default" to explicitly
+ * match useDesktopControlLock's default rather than relying on both sides
+ * coincidentally matching the backend schema's own default.
  */
 
 import { ref } from 'vue'
@@ -45,14 +53,14 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return fallback
 }
 
-export function useVncControls() {
+export function useVncControls(sessionId: string = 'default') {
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
   async function mouseClick(params: MouseClickParams): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/click', params))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/click', { ...params, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Mouse click failed:', err)
       error.value = extractErrorMessage(err, 'Mouse click failed')
@@ -63,7 +71,7 @@ export function useVncControls() {
   async function keyboardType(text: string): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/type', { text }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/type', { text, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Keyboard type failed:', err)
       error.value = extractErrorMessage(err, 'Keyboard type failed')
@@ -74,7 +82,7 @@ export function useVncControls() {
   async function specialKey(key: string): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/key', { key }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/key', { key, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Special key failed:', err)
       error.value = extractErrorMessage(err, 'Special key failed')
@@ -85,7 +93,7 @@ export function useVncControls() {
   async function mouseScroll(params: MouseScrollParams): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/scroll', params))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/scroll', { ...params, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Mouse scroll failed:', err)
       error.value = extractErrorMessage(err, 'Mouse scroll failed')
@@ -96,7 +104,7 @@ export function useVncControls() {
   async function mouseDrag(params: MouseDragParams): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/drag', params))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/drag', { ...params, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Mouse drag failed:', err)
       error.value = extractErrorMessage(err, 'Mouse drag failed')

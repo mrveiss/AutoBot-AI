@@ -1,4 +1,7 @@
 {
+  "ignoreFiles": [
+    "**/assets/styles/main.css"
+  ],
   "overrides": [
     {
       "files": ["**/*.vue"],

@@ -13,7 +13,7 @@
  * Issue #1256: Observable Research Panel (Live Browser Collaboration).
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
@@ -27,6 +27,17 @@ const logger = createLogger('KnowledgeResearchPanel')
 const userStore = useUserStore()
 
 const { t } = useI18n()
+
+// #11925: the browser-worker keys one isolated context (own cookie jar) per
+// session_id (see #11539). This panel has no conversation id to thread, but
+// it does require an authenticated admin (router dependency), so derive a
+// stable per-user bucket from the current user id — two admins running this
+// panel concurrently then get separate cookie jars instead of colliding on
+// the worker's shared default session.
+const researchSessionId = computed<string | undefined>(() => {
+  const userId = userStore.currentUser?.id
+  return userId ? `knowledge-research-${userId}` : undefined
+})
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -109,7 +120,10 @@ const sources = ref<SourceCard[]>([])
 
 async function checkBrowserStatus(): Promise<void> {
   try {
-    const data = await ApiClient.get<Record<string, unknown>>(`${getApiBase()}/playwright/worker-status`)
+    const statusUrl = researchSessionId.value
+      ? `${getApiBase()}/playwright/worker-status?session_id=${encodeURIComponent(researchSessionId.value)}`
+      : `${getApiBase()}/playwright/worker-status`
+    const data = await ApiClient.get<Record<string, unknown>>(statusUrl)
     browserConnected.value = data.status === 'connected' || data.browser_connected === true
   } catch (e) {
     logger.warn('Browser status check failed:', e)
@@ -122,7 +136,9 @@ const { start: _startScreenshotPolling, stop: stopScreenshotPolling } = usePolli
     if (screenshotLoading.value) return
     screenshotLoading.value = true
     try {
-      const data = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/worker-screenshot`, {})
+      const data = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/worker-screenshot`, {
+        session_id: researchSessionId.value,
+      })
       if (data.screenshot) {
         screenshot.value = data.screenshot as string
         browserConnected.value = true
@@ -142,7 +158,9 @@ async function fetchScreenshot(): Promise<void> {
   if (screenshotLoading.value) return
   screenshotLoading.value = true
   try {
-    const data = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/worker-screenshot`, {})
+    const data = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/worker-screenshot`, {
+      session_id: researchSessionId.value,
+    })
     if (data.screenshot) {
       screenshot.value = data.screenshot as string
       browserConnected.value = true
@@ -321,6 +339,7 @@ async function handleInteract(payload: { action: string; params: Record<string, 
     const result = await ApiClient.post<Record<string, unknown>>(`${getApiBase()}/playwright/interact`, {
       action: payload.action,
       ...payload.params,
+      session_id: researchSessionId.value,
     })
     if (result.screenshot) screenshot.value = result.screenshot as string
   } catch (e) {
@@ -690,8 +709,8 @@ onUnmounted(() => {
 }
 
 .query-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -723,7 +742,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   padding: var(--spacing-2) var(--spacing-3);
   background: var(--color-info);
-  color: #fff;
+  color: var(--kresearch-on-accent);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -762,7 +781,7 @@ onUnmounted(() => {
 
 .btn-stop:hover {
   background: var(--color-error);
-  color: #fff;
+  color: var(--kresearch-on-accent);
 }
 
 /* ── Error banner ────────────────────────────────────────────────────────── */
@@ -965,7 +984,7 @@ onUnmounted(() => {
 
 .btn-accept:hover {
   background: var(--color-success);
-  color: #fff;
+  color: var(--kresearch-on-accent);
 }
 
 .btn-reject {
@@ -976,7 +995,7 @@ onUnmounted(() => {
 
 .btn-reject:hover {
   background: var(--color-error);
-  color: #fff;
+  color: var(--kresearch-on-accent);
 }
 
 .card-decision {
@@ -1024,8 +1043,8 @@ onUnmounted(() => {
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-2);
+  height: var(--spacing-2);
   border-radius: 50%;
   flex-shrink: 0;
 }

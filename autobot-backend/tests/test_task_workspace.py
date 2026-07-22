@@ -36,9 +36,9 @@ from services.docker_task_workspace import (
     _serialize_info,
     _snapshot_image_tag,
     _validate_checkpoint_name,
-    _validate_task_id,
     validate_exec_command,
 )
+from services.task_workspace_common import validate_task_id
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -153,22 +153,22 @@ def _store_info(redis, info: WorkspaceInfo) -> None:
 
 
 def test_validate_task_id_accepts_uuid():
-    _validate_task_id("task-1234-abcd")  # must not raise
+    validate_task_id("task-1234-abcd")  # must not raise
 
 
 def test_validate_task_id_rejects_traversal():
     with pytest.raises(ValueError):
-        _validate_task_id("../../etc/passwd")
+        validate_task_id("../../etc/passwd")
 
 
 def test_validate_task_id_rejects_empty():
     with pytest.raises(ValueError):
-        _validate_task_id("")
+        validate_task_id("")
 
 
 def test_validate_task_id_rejects_too_long():
     with pytest.raises(ValueError):
-        _validate_task_id("a" * 129)
+        validate_task_id("a" * 129)
 
 
 # ---------------------------------------------------------------------------

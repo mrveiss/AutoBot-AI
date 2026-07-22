@@ -20,7 +20,7 @@
  *
  * Usage:
  * ```typescript
- * import { useFormValidation } from '@/composables/useFormValidation'
+ * import { useFormValidation } from '@autobot/ui'
  *
  * const { fields, errors, isValid, validate, validateField, touch, reset } = useFormValidation({
  *   username: {
@@ -47,7 +47,7 @@
  */
 
 import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
+import { createLogger } from '../utils/logger'
 
 // Create scoped logger for useFormValidation
 const logger = createLogger('useFormValidation')

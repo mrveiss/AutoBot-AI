@@ -41,7 +41,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: var(--slm-gray-200, currentcolor);
   }
 
   body {
@@ -214,6 +214,63 @@
   --z-popover: 1100;
   --z-tooltip: 1200;
   --z-toast: 1300;
+}
+
+/* ─── Component literal captures (#11858 / #11896 / #11515 Task 4) ─────
+   * Scoped --slm-* namespace (NOT Tailwind --color-* palette names) so these
+   * fixed hexes do NOT override Tailwind v4's oklch palette globally (#11896).
+ * Exact-value tokens for hardcoded colors migrated out of SLM components
+ * (SetupWizardView.vue first). Each value is byte-identical to the original
+ * literal, so the migration is a pure rename with zero pixel change. Grouped
+ * here for later consolidation into the semantic scale. */
+:root {
+  /* Neutral constant (white text on coloured surfaces). */
+  --color-white: #ffffff;
+  /* Blue action shades used by the setup wizard's buttons/badges — distinct
+   * from the sky --color-primary; captured verbatim pending palette
+   * consolidation (#11515). */
+  --slm-blue-400: #60a5fa;
+  --slm-blue-500: #3b82f6;
+  --slm-blue-600: #2563eb;
+  /* Console / provision-log semantics for terminal-style output panels. */
+  --color-log-bg: #0d0d0d;
+  --color-log-info: #a0d0a0;
+  --color-log-success: #4ade80;
+  --color-log-error: #f87171;
+  --color-log-warning: #fbbf24;
+  --color-log-phase: #a78bfa;
+  --color-log-current-task: #93c5fd;
+  /* Scoped fixed-shade component-chrome captures (AgentsView #11892, OrgChartTab
+   * #11893, …) that must stay a fixed shade regardless of the active theme —
+   * unlike the theme-adaptive --a11y-* set. Tailwind-scale values, captured
+   * verbatim (byte-identical, zero pixel change) pending semantic consolidation
+   * (#11515). */
+  --slm-gray-50: #f9fafb;
+  --slm-gray-100: #f3f4f6;
+  --slm-gray-200: #e5e7eb;
+  --slm-gray-300: #d1d5db;
+  --slm-gray-500: #6b7280;
+  --slm-gray-700: #374151;
+  --slm-red-100: #fee2e2;
+  --slm-red-700: #b91c1c;
+  --slm-blue-100: #dbeafe;
+  /* Indigo action shades (agent badges / edit button / focused endpoint input). */
+  --slm-indigo-100: #e0e7ff;
+  --slm-indigo-500: #6366f1;
+  --slm-indigo-600: #4f46e5;
+  --slm-violet-100: #ede9fe;
+  --slm-violet-600: #7c3aed;
+  /* Emerald save-action + red error-banner tints. */
+  --slm-emerald-100: #d1fae5;
+  --slm-emerald-500: #10b981;
+  --slm-emerald-600: #059669;
+  --slm-orange-100: #ffedd5;
+  --slm-orange-600: #ea580c;
+  /* Amber action shades + slate terminal-panel shades (ProcessMonitorTab #11899, ConfigHistoryTab #11900). */
+  --slm-amber-500: #f59e0b;
+  --slm-amber-600: #d97706;
+  --slm-slate-200: #e2e8f0;
+  --slm-slate-800: #1e293b;
 }
 
 /* ─── High Contrast Mode (Issue #754) ────────────────────────── */

@@ -14,6 +14,8 @@ import pytest
 
 from autobot_shared.security.path_validator import (
     _DEFAULT_ALLOWED_ROOTS,
+    SandboxPathError,
+    resolve_within_sandbox,
     validate_path,
     validate_relative_path,
 )
@@ -202,3 +204,50 @@ class TestValidateRelativePath:
         """'./file.txt' resolves within base."""
         result = validate_relative_path("./file.txt", tmp_path)
         assert result == (tmp_path / "file.txt").resolve()
+
+
+# =============================================================================
+# resolve_within_sandbox (shared sandbox resolver, #11844 / #11823)
+# =============================================================================
+
+
+class TestResolveWithinSandbox:
+    """Tests for the shared sandbox resolver behind files.py + sandbox_files.py."""
+
+    @pytest.mark.parametrize("root_path", ["", "/", "//"])
+    def test_root_addressing_returns_root(self, tmp_path, root_path) -> None:
+        """'' and '/' (and '//') address the sandbox root itself (#11823)."""
+        assert resolve_within_sandbox(root_path, tmp_path) == tmp_path
+
+    def test_normal_relative_path_resolves_under_root(self, tmp_path) -> None:
+        """A simple relative sub-path resolves within the root."""
+        result = resolve_within_sandbox("subdir/file.txt", tmp_path)
+        assert result == (tmp_path / "subdir" / "file.txt").resolve()
+
+    def test_leading_slash_stripped_then_resolved(self, tmp_path) -> None:
+        """Leading/trailing slashes are stripped, not treated as escape."""
+        result = resolve_within_sandbox("/subdir/file.txt/", tmp_path)
+        assert result == (tmp_path / "subdir" / "file.txt").resolve()
+
+    @pytest.mark.parametrize(
+        "evil",
+        ["../etc/passwd", "foo/../../etc", "~/secrets", "a<b", 'a"b', "a|b", "a?b", "a*b"],
+    )
+    def test_traversal_rejected(self, tmp_path, evil) -> None:
+        """Traversal / invalid-character inputs raise SandboxPathError."""
+        with pytest.raises(SandboxPathError, match="path traversal not allowed"):
+            resolve_within_sandbox(evil, tmp_path)
+
+    def test_encoded_traversal_rejected(self, tmp_path) -> None:
+        """URL-encoded traversal is caught after decoding."""
+        with pytest.raises(SandboxPathError, match="encoded traversal not allowed"):
+            resolve_within_sandbox("%2e%2e/etc", tmp_path)
+
+    def test_null_byte_rejected_as_outside_sandbox(self, tmp_path) -> None:
+        """A null byte reaches validate_relative_path and surfaces as outside-sandbox."""
+        with pytest.raises(SandboxPathError, match="outside sandbox not allowed"):
+            resolve_within_sandbox("file\x00.txt", tmp_path)
+
+    def test_error_is_valueerror_subclass(self) -> None:
+        """SandboxPathError remains a ValueError for compatibility."""
+        assert issubclass(SandboxPathError, ValueError)

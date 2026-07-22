@@ -45,3 +45,21 @@
     state: absent
   become: true
   tags: ['clean']
+
+# #11508: a stale, hand-created systemd drop-in repointed the agent's ExecStart
+# interpreter at the SLM backend venv (/opt/autobot/autobot-slm-backend/venv/bin/
+# python). That venv has no aiohttp, so a fresh restart crash-looped
+# (ModuleNotFoundError: No module named 'aiohttp'). The role owns the agent
+# runtime on the SYSTEM interpreter (see slm-agent.service.j2 + the redis dep in
+# defaults) — remove the override so the base unit's ExecStart is authoritative.
+# Ansible manages this on-box artifact (it is NOT tracked in the repo); the
+# systemd reload/restart later in main.yml picks up the change.
+- name: "SLM Agent | Clean: remove stale pythonpath.conf systemd drop-in (#11508)"
+  ansible.builtin.file:
+    path: /etc/systemd/system/slm-agent.service.d/pythonpath.conf
+    state: absent
+  become: true
+  notify:
+    - Reload systemd
+    - Restart SLM agent
+  tags: ['clean', 'systemd']

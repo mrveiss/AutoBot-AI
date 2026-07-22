@@ -461,9 +461,9 @@ async function onResolve(errorId: string): Promise<void> {
   gap: var(--spacing-2, 0.5rem);
   padding: var(--spacing-3, 0.75rem) var(--spacing-4, 1rem);
   border-radius: var(--radius-md, 0.375rem);
-  background: var(--color-error-bg, #fef2f2);
-  border: 1px solid var(--color-error-border, #fecaca);
-  color: var(--color-error-text, #dc2626);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text, var(--errmon-error-text));
   font-size: var(--text-sm, 0.875rem);
 }
 
@@ -518,14 +518,14 @@ async function onResolve(errorId: string): Promise<void> {
 
 /* Health / severity colouring */
 .em-health-excellent .em-card-status,
-.em-health-healthy .em-card-status { color: var(--color-success, #16a34a); }
-.em-health-warning .em-card-status  { color: var(--color-warning, #d97706); }
-.em-health-degraded .em-card-status { color: var(--color-warning, #d97706); }
-.em-health-critical .em-card-status { color: var(--color-error, #dc2626); }
+.em-health-healthy .em-card-status { color: var(--color-success); }
+.em-health-warning .em-card-status  { color: var(--color-warning); }
+.em-health-degraded .em-card-status { color: var(--color-warning); }
+.em-health-critical .em-card-status { color: var(--color-error); }
 
-.em-sev-critical { border-color: var(--color-error, #dc2626); }
-.em-sev-critical .em-card-value { color: var(--color-error, #dc2626); }
-.em-sev-high .em-card-value { color: var(--color-warning, #d97706); }
+.em-sev-critical { border-color: var(--color-error); }
+.em-sev-critical .em-card-value { color: var(--color-error); }
+.em-sev-high .em-card-value { color: var(--color-warning); }
 
 /* Metrics summary strip */
 .em-summary-strip {
@@ -564,12 +564,12 @@ async function onResolve(errorId: string): Promise<void> {
 .em-prom-dot {
   width: 0.5rem;
   height: 0.5rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   display: inline-block;
 }
 
-.em-prom-on { background: var(--color-success, #16a34a); }
-.em-prom-off { background: var(--text-tertiary, #9ca3af); }
+.em-prom-on { background: var(--color-success); }
+.em-prom-off { background: var(--text-tertiary); }
 
 /* Metrics row (timeline + top errors) */
 .em-metrics-row {
@@ -598,7 +598,7 @@ async function onResolve(errorId: string): Promise<void> {
 
 .em-sparkline-line {
   fill: none;
-  stroke: var(--color-primary, #2563eb);
+  stroke: var(--color-primary);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
@@ -752,23 +752,23 @@ async function onResolve(errorId: string): Promise<void> {
 .em-badge {
   font-size: var(--text-xs, 0.75rem);
   padding: 0.125rem var(--spacing-2, 0.5rem);
-  border-radius: 9999px;
-  background: var(--bg-tertiary, var(--bg-hover, #e5e7eb));
+  border-radius: var(--radius-full);
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
 }
 
-.em-badge-category { background: var(--color-blue-100, #dbeafe); color: var(--color-blue-700, #1d4ed8); }
-.em-badge-component { background: var(--color-purple-100, #ede9fe); color: var(--color-purple-700, #6d28d9); }
+.em-badge-category { background: var(--color-blue-100, var(--errmon-badge-category-bg)); color: var(--color-blue-700, var(--errmon-badge-category-text)); }
+.em-badge-component { background: var(--color-purple-100, var(--errmon-badge-component-bg)); color: var(--color-purple-700, var(--errmon-badge-component-text)); }
 .em-badge-resolved {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  background: var(--color-green-100, #dcfce7);
-  color: var(--color-green-700, #15803d);
+  background: var(--color-green-100, var(--errmon-badge-resolved-bg));
+  color: var(--color-green-700, var(--errmon-badge-resolved-text));
 }
-.em-sev-critical { background: var(--color-red-100, #fee2e2); color: var(--color-red-700, #b91c1c); }
-.em-sev-high { background: var(--color-orange-100, #ffedd5); color: var(--color-orange-700, #c2410c); }
-.em-sev-warning { background: var(--color-yellow-100, #fef9c3); color: var(--color-yellow-700, #a16207); }
+.em-sev-critical { background: var(--color-red-100, var(--errmon-sev-critical-bg)); color: var(--color-red-700, var(--errmon-sev-critical-text)); }
+.em-sev-high { background: var(--color-orange-100, var(--errmon-sev-high-bg)); color: var(--color-orange-700, var(--errmon-sev-high-text)); }
+.em-sev-warning { background: var(--color-yellow-100, var(--errmon-sev-warning-bg)); color: var(--color-yellow-700, var(--errmon-sev-warning-text)); }
 
 .em-error-message {
   font-size: var(--text-sm, 0.875rem);
@@ -841,20 +841,20 @@ async function onResolve(errorId: string): Promise<void> {
 .em-breakdown-bar-wrap {
   flex: 1;
   height: 0.5rem;
-  background: var(--bg-tertiary, #e5e7eb);
-  border-radius: 9999px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .em-breakdown-bar {
   height: 100%;
-  border-radius: 9999px;
-  background: var(--color-primary, #2563eb);
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
   transition: width 0.3s ease;
 }
 
 .em-bar-component {
-  background: var(--color-purple-500, #7c3aed);
+  background: var(--color-purple-500, var(--errmon-bar-component));
 }
 
 .em-breakdown-count {

@@ -18,7 +18,7 @@
  *
  * Usage:
  * ```typescript
- * import { usePagination } from '@/composables/usePagination'
+ * import { usePagination } from '@autobot/ui'
  *
  * const documents = ref([...100 items...])
  *
@@ -44,8 +44,8 @@
  * ```
  */
 
-import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
-import { createLogger } from '@/utils/debugUtils'
+import { ref, computed, watch, unref, type Ref, type ComputedRef } from 'vue'
+import { createLogger } from '../utils/logger'
 
 // Create scoped logger for usePagination
 const logger = createLogger('usePagination')
@@ -73,9 +73,11 @@ export interface PaginationOptions {
 
   /**
    * For server-side pagination: total number of items
-   * If provided, switches to server-side pagination mode
+   * If provided, switches to server-side pagination mode.
+   * Accepts a plain number or a reactive Ref so the page-count
+   * stays in sync when the server total is fetched asynchronously.
    */
-  serverTotalItems?: number
+  serverTotalItems?: number | Ref<number>
 
   /**
    * For server-side pagination: current page data
@@ -248,7 +250,7 @@ export function usePagination<T = unknown>(
   // Computed: Total items
   const totalItems = computed(() => {
     if (isServerSide) {
-      return serverTotalItems || 0
+      return unref(serverTotalItems) || 0
     }
     return data.value?.length || 0
   })

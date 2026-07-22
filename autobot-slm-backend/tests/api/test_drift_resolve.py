@@ -30,7 +30,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from typing import List
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -246,12 +246,16 @@ def test_excludes_for_known_component(stub_user):
     universally at the rsync chokepoint (_rsync_exclude_args), so the handler
     passes only the component-specific list.  Assert both halves of that
     contract instead of the pre-#11459 combined list.
+
+    #11611: resolving a Python backend now rsyncs autobot_shared FIRST (shared-
+    first ordering) and then the component — two rsync calls. The component call
+    (the last one) still carries its _SLM_COMPONENTS exclude list.
     """
     src_patch, dep_patch = _setup_dir_mocks()
-    captured_excludes: List[List[str]] = []
+    captured: List[tuple] = []
 
     async def fake_rsync(src, comp, excludes):
-        captured_excludes.append(excludes)
+        captured.append((comp, excludes))
         return True, ""
 
     rsync_patch = patch("api.code_sync._rsync_component_local", side_effect=fake_rsync)
@@ -259,15 +263,39 @@ def test_excludes_for_known_component(stub_user):
         req = DriftResolveRequest(component="autobot-slm-backend")
         _run(resolve_drift(req, stub_user))
 
-    assert len(captured_excludes) == 1
-    excludes = captured_excludes[0]
+    # #11611: autobot_shared is synced ahead of the backend.
+    assert len(captured) == 2
+    assert captured[0][0] == "autobot_shared"
+    assert captured[1][0] == "autobot-slm-backend"
     # The handler passes exactly the component's _SLM_COMPONENTS entry …
+    excludes = captured[1][1]
     expected = {comp: excl for comp, excl in _CS._SLM_COMPONENTS}["autobot-slm-backend"]
     assert excludes == expected
     # … and the rsync chokepoint injects the canonical artifact excludes.
     chokepoint_args = _CS._rsync_exclude_args(excludes)
     assert "--exclude=venv" in chokepoint_args
     assert "--exclude=__pycache__" in chokepoint_args
+
+
+def test_shared_sync_failure_fails_resolve_and_skips_component_rsync(stub_user):
+    """#11611 fail-safe: a failed autobot_shared sync fails the resolve BEFORE the
+    component rsync — the component is NOT rsynced/restarted onto a stale shared tree.
+    """
+    src_patch, dep_patch = _setup_dir_mocks()
+    rsync_mock = AsyncMock(return_value=(True, ""))
+    shared_patch = patch(
+        "api.code_sync._ensure_autobot_shared_synced",
+        AsyncMock(return_value=(False, "autobot_shared-first: resync failed")),
+    )
+    rsync_patch = patch("api.code_sync._rsync_component_local", rsync_mock)
+    with src_patch, dep_patch, shared_patch, rsync_patch, _noop_post_sync():
+        req = DriftResolveRequest(component="autobot-slm-backend")
+        resp = _run(resolve_drift(req, stub_user))
+
+    assert resp.success is False
+    assert "autobot_shared" in resp.message
+    # Fail-safe: the component's own rsync must NOT run after a shared-sync failure.
+    rsync_mock.assert_not_called()
 
 
 # =============================================================================

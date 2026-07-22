@@ -303,17 +303,17 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 .wizard-steps {
   display: flex;
   justify-content: center;
-  gap: var(--spacing-lg, 24px);
-  margin-bottom: var(--spacing-lg, 24px);
-  padding-bottom: var(--spacing-md, 16px);
-  border-bottom: 1px solid var(--border-default, #333);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .step-dot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--spacing-xs, 4px);
+  gap: var(--spacing-xs);
   opacity: 0.5;
   transition: opacity var(--duration-200);
 }
@@ -327,7 +327,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--border-default, #444);
+  background: var(--border-default);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -336,18 +336,18 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .step-dot.active .step-number {
-  background: var(--color-primary, #3b82f6);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .step-dot.completed .step-number {
-  background: var(--color-success, #22c55e);
-  color: #fff;
+  background: var(--color-success);
+  color: var(--text-on-success);
 }
 
 .step-label {
   font-size: var(--text-xs);
-  color: var(--text-secondary, #999);
+  color: var(--text-secondary);
 }
 
 .step-content {
@@ -355,34 +355,34 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .step-description {
-  color: var(--text-secondary, #999);
-  margin-bottom: var(--spacing-md, 16px);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
 }
 
 .role-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm, 8px);
+  gap: var(--spacing-sm);
 }
 
 .role-card {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md, 16px);
-  padding: var(--spacing-md, 16px);
-  border: 1px solid var(--border-default, #333);
-  border-radius: var(--radius-md, 8px);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: border-color var(--duration-200);
 }
 
 .role-card:hover {
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary);
 }
 
 .role-card.selected {
-  border-color: var(--color-primary, #3b82f6);
-  background: var(--bg-tertiary, rgba(59, 130, 246, 0.08));
+  border-color: var(--color-primary);
+  background: var(--bg-tertiary);
 }
 
 .role-checkbox {
@@ -391,7 +391,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .role-card i {
   font-size: var(--text-2xl);
-  color: var(--color-primary, #3b82f6);
+  color: var(--color-primary);
   width: 32px;
   text-align: center;
 }
@@ -407,18 +407,18 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .role-desc {
   font-size: 0.85rem;
-  color: var(--text-secondary, #999);
+  color: var(--text-secondary);
 }
 
 .key-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md, 16px);
+  gap: var(--spacing-md);
 }
 
 .key-card {
-  border: 1px solid var(--border-default, #333);
-  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -426,26 +426,26 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
-  background: var(--bg-secondary, #1a1a2e);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
 }
 
 .key-status {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm, 8px);
+  gap: var(--spacing-sm);
 }
 
 .status-ok {
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
 }
 
 .status-missing {
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .status-warning {
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
 }
 
 .key-name {
@@ -461,36 +461,36 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .key-badge.required {
-  background: var(--color-error, #ef4444);
-  color: #fff;
+  background: var(--color-error);
+  color: var(--text-on-error);
 }
 
 .key-badge.optional {
-  background: var(--border-default, #444);
-  color: var(--text-secondary, #999);
+  background: var(--border-default);
+  color: var(--text-secondary);
 }
 
 .key-role {
   font-size: 0.8rem;
-  color: var(--text-secondary, #999);
+  color: var(--text-secondary);
 }
 
 .key-body {
-  padding: var(--spacing-md, 16px);
+  padding: var(--spacing-md);
 }
 
 .key-desc {
-  margin-bottom: var(--spacing-sm, 8px);
+  margin-bottom: var(--spacing-sm);
   font-size: 0.9rem;
-  color: var(--text-secondary, #999);
+  color: var(--text-secondary);
 }
 
 .license-link {
-  margin-bottom: var(--spacing-sm, 8px);
+  margin-bottom: var(--spacing-sm);
 }
 
 .license-link a {
-  color: var(--color-primary, #3b82f6);
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -499,48 +499,48 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .license-link i {
-  margin-right: var(--spacing-xs, 4px);
+  margin-right: var(--spacing-xs);
   font-size: 0.8rem;
 }
 
 .key-input-row {
   display: flex;
-  gap: var(--spacing-xs, 4px);
+  gap: var(--spacing-xs);
 }
 
 .key-input {
   flex: 1;
-  padding: var(--spacing-sm, 8px);
-  border: 1px solid var(--border-default, #333);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--bg-primary, #0f0f23);
-  color: var(--text-primary, #e0e0e0);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-family: monospace;
 }
 
 .toggle-visibility {
-  padding: var(--spacing-sm, 8px);
-  border: 1px solid var(--border-default, #333);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--bg-secondary, #1a1a2e);
-  color: var(--text-secondary, #999);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
 .summary-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm, 8px);
-  margin-bottom: var(--spacing-lg, 24px);
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
 }
 
 .summary-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm, 8px);
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
-  border: 1px solid var(--border-default, #333);
-  border-radius: var(--radius-sm, 4px);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
 }
 
 .summary-name {
@@ -551,16 +551,16 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .summary-status {
   font-size: 0.85rem;
-  color: var(--text-secondary, #999);
+  color: var(--text-secondary);
 }
 
 .secrets-link {
   text-align: center;
-  padding: var(--spacing-md, 16px);
+  padding: var(--spacing-md);
 }
 
 .secrets-link a {
-  color: var(--color-primary, #3b82f6);
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -570,14 +570,14 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .empty-state {
   text-align: center;
-  padding: var(--spacing-xl, 32px);
-  color: var(--text-secondary, #999);
+  padding: var(--spacing-xl);
+  color: var(--text-secondary);
 }
 
 .empty-state i {
   font-size: 2rem;
-  color: var(--color-success, #22c55e);
-  margin-bottom: var(--spacing-sm, 8px);
+  color: var(--color-success);
+  margin-bottom: var(--spacing-sm);
   display: block;
 }
 
@@ -587,18 +587,18 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .btn-primary,
 .btn-secondary {
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
-  border-radius: var(--radius-md, 8px);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs, 4px);
+  gap: var(--spacing-xs);
 }
 
 .btn-primary {
-  background: var(--color-primary, #3b82f6);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
 }
 
@@ -609,7 +609,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 
 .btn-secondary {
   background: transparent;
-  border: 1px solid var(--border-default, #333);
-  color: var(--text-primary, #e0e0e0);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
 }
 </style>

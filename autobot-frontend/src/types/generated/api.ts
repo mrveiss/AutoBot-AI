@@ -11787,12 +11787,14 @@ export interface paths {
          * Vnc Mouse Click
          * @description Perform mouse click at specified coordinates with human-like behavior.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseClickRequest with x, y coordinates and button type
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_click_api_vnc_click_post"];
         delete?: never;
@@ -11814,12 +11816,14 @@ export interface paths {
          * Vnc Keyboard Type
          * @description Type text via keyboard with human-like speed and pauses.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: KeyboardTypeRequest with text to type
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_keyboard_type_api_vnc_type_post"];
         delete?: never;
@@ -11841,12 +11845,14 @@ export interface paths {
          * Vnc Special Key
          * @description Send special key or key combination.
          *     Issue #74: Desktop interaction controls.
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: SpecialKeyRequest with key name (e.g., "Return", "ctrl+c")
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_special_key_api_vnc_key_post"];
         delete?: never;
@@ -11868,12 +11874,14 @@ export interface paths {
          * Vnc Mouse Scroll
          * @description Scroll mouse wheel.
          *     Issue #74: Desktop interaction controls.
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseScrollRequest with direction and amount
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_scroll_api_vnc_scroll_post"];
         delete?: never;
@@ -11895,12 +11903,14 @@ export interface paths {
          * Vnc Mouse Drag
          * @description Perform mouse drag operation with curved, human-like movement.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseDragRequest with start and end coordinates
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_drag_api_vnc_drag_post"];
         delete?: never;
@@ -12510,6 +12520,71 @@ export interface paths {
          *         {"status": "success", "message": "..."}
          */
         delete: operations["clear_session_state_api_vnc_session_clear_state_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/acquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acquire Desktop Control
+         * @description Human takeover: acquire the desktop control-lock (#12002, #11506 T1).
+         *
+         *     Muting the agent's actuation calls (api.vnc_manager / api.vnc_mcp) until
+         *     this is released or its idle-TTL expires.
+         */
+        post: operations["acquire_desktop_control_api_vnc_proxy__vnc_type__control_acquire_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Desktop Control
+         * @description Human handback: release the desktop control-lock (#12002, #11506 T1).
+         *
+         *     The agent resumes actuation immediately once released.
+         */
+        post: operations["release_desktop_control_api_vnc_proxy__vnc_type__control_release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Desktop Control Status
+         * @description Get current desktop control-lock owner/state (#12002, #11506 T1).
+         */
+        get: operations["get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -13204,6 +13279,7 @@ export interface paths {
          * Desktop Mouse Click Mcp
          * @description MCP tool: Click mouse at coordinates on desktop.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_mouse_click_mcp_api_vnc_mcp_desktop_mouse_click_post"];
         delete?: never;
@@ -13225,6 +13301,7 @@ export interface paths {
          * Desktop Keyboard Type Mcp
          * @description MCP tool: Type text on desktop keyboard.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_keyboard_type_mcp_api_vnc_mcp_desktop_keyboard_type_post"];
         delete?: never;
@@ -13246,6 +13323,7 @@ export interface paths {
          * Desktop Special Key Mcp
          * @description MCP tool: Send special key or key combination.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_special_key_mcp_api_vnc_mcp_desktop_special_key_post"];
         delete?: never;
@@ -13288,8 +13366,35 @@ export interface paths {
          * Desktop Observe State Mcp
          * @description MCP tool: Observe current desktop state with metadata.
          *     Issue #74: Agent desktop observation.
+         *     Issue #12002 (#11506 T1): includes control-lock state so the agent knows
+         *     to pause actuation when a human is active.
          */
         post: operations["desktop_observe_state_mcp_api_vnc_mcp_desktop_observe_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc/mcp/desktop_control_status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desktop Control Status Mcp
+         * @description MCP tool: Check whether a human currently holds the desktop control-lock.
+         *
+         *     Issue #12002 (#11506 T1): agents should call this (or read human_active
+         *     from desktop_observe_state) before actuation and pause while a human is
+         *     active -- desktop_mouse_click/keyboard_type/special_key are muted
+         *     automatically, but polling this lets the agent avoid wasted calls.
+         */
+        post: operations["desktop_control_status_mcp_api_vnc_mcp_desktop_control_status_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14502,6 +14607,106 @@ export interface paths {
          * @description Hover mouse over element
          */
         post: operations["hover_mcp_api_browser_mcp_hover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Browser State Mcp
+         * @description Get the current page state: URL, title, scroll info, numbered elements.
+         */
+        post: operations["browser_state_mcp_api_browser_mcp_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/click_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Click Index Mcp
+         * @description Click an element by its numbered index, resolved server-side.
+         */
+        post: operations["click_index_mcp_api_browser_mcp_click_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/fill_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill Index Mcp
+         * @description Fill an element by its numbered index, resolved server-side.
+         */
+        post: operations["fill_index_mcp_api_browser_mcp_fill_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/select_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Index Mcp
+         * @description Select a dropdown option on an element by its numbered index.
+         */
+        post: operations["select_index_mcp_api_browser_mcp_select_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/hover_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hover Index Mcp
+         * @description Hover over an element by its numbered index, resolved server-side.
+         */
+        post: operations["hover_index_mcp_api_browser_mcp_hover_index_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -29836,7 +30041,7 @@ export interface paths {
          *     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
          *     the provider authorize URL. The client never supplies the verifier — the
          *     callback takes it from the stored state (#11297). Requires admin: the stored
-         *     credential is system-wide.
+         *     credential is shared by the admin's org (per-org scoped, #11497).
          */
         post: operations["oauth_initiate_api_llm_auth_oauth_initiate_post"];
         delete?: never;
@@ -29864,7 +30069,7 @@ export interface paths {
          *     provides. This closes the CSRF / code-injection hole where a lured admin could
          *     bind an attacker's account as the shared system credential (#11297).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
         delete?: never;
@@ -29890,7 +30095,7 @@ export interface paths {
          *     ``user_code`` + ``verification_uri`` for the user to complete on another device.
          *     The caller polls ``/device/poll`` until approval or expiry.
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_initiate_api_llm_auth_device_initiate_post"];
         delete?: never;
@@ -29915,7 +30120,7 @@ export interface paths {
          *     Returns ``stored=False`` when the grant is still pending (caller should
          *     retry after the ``interval`` from ``/device/initiate``).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_poll_api_llm_auth_device_poll_post"];
         delete?: never;
@@ -29934,6 +30139,10 @@ export interface paths {
         /**
          * Provider Auth Status
          * @description Return the auth connection status for a provider.
+         *
+         *     Dual-read (finding #1, #11497): reports the caller's org-scoped token when
+         *     present, else the legacy ``"global"`` token — so orgs that connected before
+         *     the change still show connected with zero reconnect.
          */
         get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
         put?: never;
@@ -29958,7 +30167,7 @@ export interface paths {
          * Revoke Provider Auth
          * @description Revoke stored OAuth / device-code / session tokens for a provider.
          *
-         *     Requires admin — credential is system-wide (shared by all users).
+         *     Requires admin — credential is per-org scoped (shared within the admin's org, #11497).
          */
         delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
         options?: never;
@@ -33256,6 +33465,7 @@ export interface paths {
          *
          *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_back_api_playwright_back_post"];
         delete?: never;
@@ -33279,6 +33489,7 @@ export interface paths {
          *
          *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_forward_api_playwright_forward_post"];
         delete?: never;
@@ -33298,7 +33509,9 @@ export interface paths {
          * Get Worker Status
          * @description Get browser worker connectivity status from Browser VM (#1130)
          *
-         *     Proxies to Browser VM /status endpoint which checks the persistent navPage.
+         *     Proxies to Browser VM /status endpoint which checks the persistent navPage
+         *     for this caller's session (#11539 — session_id selects which isolated
+         *     context's navPage is inspected; omitted = shared default session).
          */
         get: operations["get_worker_status_api_playwright_worker_status_get"];
         put?: never;
@@ -33323,7 +33536,8 @@ export interface paths {
          * @description Take screenshot of the persistent navigation page on Browser VM (#1130)
          *
          *     Unlike /screenshot which takes a fresh-page screenshot for a given URL,
-         *     this returns a screenshot of the current state of the persistent navPage.
+         *     this returns a screenshot of the current state of the persistent navPage
+         *     for this caller's session (#11539).
          */
         post: operations["take_worker_screenshot_api_playwright_worker_screenshot_post"];
         delete?: never;
@@ -36842,6 +37056,30 @@ export interface paths {
          * @description Clear all learned outcomes and strategies for an agent or task type.
          */
         post: operations["reset_agent_learning_api_agents__agent_id__reset_learning_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/rollback-strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll back a learned strategy to its previous revision
+         * @description Revert a task type's learned strategy to its previous revision (GH#11534).
+         *
+         *     Undoes a single bad synthesized/imported strategy without wiping all learned
+         *     state (unlike reset-learning). Admin-gated and tenant-scoped. Returns the
+         *     restored strategy, or None when there is no prior revision to roll back to.
+         */
+        post: operations["rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -57888,6 +58126,50 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserClickIndexRequest
+         * @description Request for POST /browser/mcp/click_index (#11537).
+         */
+        BrowserClickIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Timeout
+             * @description Timeout in milliseconds
+             * @default 10000
+             */
+            timeout: number | null;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserClickIndexResponse */
+        BrowserClickIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserClickRequest */
         BrowserClickRequest: {
             /**
@@ -57901,6 +58183,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57926,6 +58213,11 @@ export interface components {
              * @description JavaScript code to execute
              */
             script: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57937,6 +58229,57 @@ export interface components {
             action: string;
             /** Script Preview */
             script_preview: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BrowserFillIndexRequest
+         * @description Request for POST /browser/mcp/fill_index (#11537).
+         */
+        BrowserFillIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Value
+             * @description Value to fill into the element
+             */
+            value: string;
+            /**
+             * Timeout
+             * @description Timeout in milliseconds
+             * @default 10000
+             */
+            timeout: number | null;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserFillIndexResponse */
+        BrowserFillIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Value Length */
+            value_length: number;
             /** Result */
             result?: unknown | null;
             /** Timestamp */
@@ -57962,6 +58305,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57994,6 +58342,11 @@ export interface components {
              * @description Attribute name to retrieve
              */
             attribute: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58021,6 +58374,11 @@ export interface components {
              * @description CSS selector for element
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58039,6 +58397,44 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserHoverIndexRequest
+         * @description Request for POST /browser/mcp/hover_index (#11537).
+         */
+        BrowserHoverIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserHoverIndexResponse */
+        BrowserHoverIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserHoverRequest */
         BrowserHoverRequest: {
             /**
@@ -58046,6 +58442,11 @@ export interface components {
              * @description CSS selector for element to hover
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58166,6 +58567,11 @@ export interface components {
              * @default 30000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58239,6 +58645,11 @@ export interface components {
              * @default false
              */
             full_page: boolean | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58261,6 +58672,51 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserSelectIndexRequest
+         * @description Request for POST /browser/mcp/select_index (#11537).
+         */
+        BrowserSelectIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Value
+             * @description Value to select
+             */
+            value: string;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserSelectIndexResponse */
+        BrowserSelectIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Value */
+            value: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserSelectRequest */
         BrowserSelectRequest: {
             /**
@@ -58273,6 +58729,11 @@ export interface components {
              * @description Value to select
              */
             value: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58385,6 +58846,32 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserStateRequest
+         * @description Request for POST /browser/mcp/state (#11537).
+         */
+        BrowserStateRequest: {
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserStateResponse */
+        BrowserStateResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserVncContextResponse */
         BrowserVncContextResponse: {
             /** Success */
@@ -58421,6 +58908,11 @@ export interface components {
              * @default visible
              */
             state: string | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -68873,6 +69365,85 @@ export interface components {
             };
             /** Button */
             button: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlAcquireRequest
+         * @description Request for POST /vnc-proxy/{vnc_type}/control/acquire (#12002).
+         */
+        DesktopControlAcquireRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlLockResponse
+         * @description Response for the desktop control-lock acquire/release/status endpoints (#12002).
+         */
+        DesktopControlLockResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Owner */
+            owner?: string | null;
+            /** Human Active */
+            human_active: boolean;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlReleaseRequest
+         * @description Request for POST /vnc-proxy/{vnc_type}/control/release (#12002).
+         */
+        DesktopControlReleaseRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DesktopControlStatusMcpResponse */
+        DesktopControlStatusMcpResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Human Active */
+            human_active: boolean;
+            /** Owner */
+            owner?: string | null;
+            /** Acquired At */
+            acquired_at?: string | null;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DesktopControlStatusRequest */
+        DesktopControlStatusRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -68886,6 +69457,11 @@ export interface components {
             action: string;
             /** Text Length */
             text_length: number;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -68893,6 +69469,12 @@ export interface components {
         DesktopKeyboardTypeRequest: {
             /** Text */
             text: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -68907,6 +69489,12 @@ export interface components {
              * @default left
              */
             button: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -68926,6 +69514,13 @@ export interface components {
             screenshot?: string | null;
             /** Screenshot Format */
             screenshot_format?: string | null;
+            /**
+             * Human Active
+             * @default false
+             */
+            human_active: boolean;
+            /** Control Owner */
+            control_owner?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -68964,6 +69559,11 @@ export interface components {
             action: string;
             /** Key */
             key: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -68971,6 +69571,12 @@ export interface components {
         DesktopSpecialKeyRequest: {
             /** Key */
             key: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -75503,6 +76109,12 @@ export interface components {
              * @description Text to type
              */
             text: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -81906,6 +82518,12 @@ export interface components {
              * @default left
              */
             button: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -81931,6 +82549,12 @@ export interface components {
              * @description End Y coordinate
              */
             y2: number;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -81947,6 +82571,12 @@ export interface components {
              * @default 3
              */
             amount: number;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -85208,6 +85838,8 @@ export interface components {
             deltaY: number;
             /** Text */
             text?: string | null;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85225,6 +85857,11 @@ export interface components {
              * @default 30000
              */
             timeout: number;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85251,6 +85888,8 @@ export interface components {
              * @default networkidle
              */
             wait_until: string;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85268,6 +85907,8 @@ export interface components {
              * @default 5000
              */
             wait_timeout: number;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85285,6 +85926,18 @@ export interface components {
              * @default 5
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PlaywrightSessionRequest
+         * @description Optional body for worker proxy calls with no other payload (#11539):
+         *     /back, /forward, /worker-screenshot. GET /status takes the same id as a
+         *     query param instead (no request body on GET).
+         */
+        PlaywrightSessionRequest: {
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -92455,6 +93108,12 @@ export interface components {
              * @description Special key name (e.g., Return, Escape, ctrl+c)
              */
             key: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -98097,6 +98756,11 @@ export interface components {
             status: string;
             /** Message */
             message: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -117003,6 +117667,109 @@ export interface operations {
             };
         };
     };
+    acquire_desktop_control_api_vnc_proxy__vnc_type__control_acquire_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlAcquireRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_desktop_control_api_vnc_proxy__vnc_type__control_release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get: {
+        parameters: {
+            query?: {
+                session_id?: string;
+            };
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_vnc_client_api_vnc_proxy__vnc_type__vnc_html_get: {
         parameters: {
             query?: never;
@@ -117998,6 +118765,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DesktopObserveStateMcpResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desktop_control_status_mcp_api_vnc_mcp_desktop_control_status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlStatusMcpResponse"];
                 };
             };
             /** @description Validation Error */
@@ -119526,6 +120326,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserHoverResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    browser_state_mcp_api_browser_mcp_state_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    click_index_mcp_api_browser_mcp_click_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserClickIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserClickIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fill_index_mcp_api_browser_mcp_fill_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserFillIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserFillIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_index_mcp_api_browser_mcp_select_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserSelectIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserSelectIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hover_index_mcp_api_browser_mcp_hover_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserHoverIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserHoverIndexResponse"];
                 };
             };
             /** @description Validation Error */
@@ -144329,7 +145294,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144338,6 +145307,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -144349,7 +145327,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144360,11 +145342,22 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_worker_status_api_playwright_worker_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                session_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -144380,6 +145373,15 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightWorkerStatusResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     take_worker_screenshot_api_playwright_worker_screenshot_post: {
@@ -144389,7 +145391,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144398,6 +145404,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -149061,6 +150076,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetLearningResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post: {
+        parameters: {
+            query?: {
+                /** @description Task type to roll back */
+                task_type?: string | null;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedStrategyResponse"] | null;
                 };
             };
             /** @description Validation Error */

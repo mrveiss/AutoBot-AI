@@ -328,13 +328,13 @@ onUnmounted(() => {
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
 }
 
 .header-tabs {
   display: flex;
   gap: 0.25rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   overflow: hidden;
 }
@@ -350,7 +350,7 @@ onUnmounted(() => {
 }
 
 .tab-btn.active {
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
 }
 
@@ -363,9 +363,9 @@ onUnmounted(() => {
 .filter-select,
 .filter-search {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
 }
@@ -386,14 +386,14 @@ onUnmounted(() => {
 .state-msg {
   text-align: center;
   padding: 3rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .approval-card {
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   padding: 1rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -412,14 +412,14 @@ onUnmounted(() => {
 
 .card-meta {
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .type-badge,
 .status-badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 500;
 }
@@ -441,15 +441,15 @@ onUnmounted(() => {
 .toggle-payload {
   font-size: 0.8rem;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   cursor: pointer;
 }
 
 .payload-json {
-  background: var(--bg-elevated, #f9fafb);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -491,15 +491,15 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  border-top: 1px solid var(--border-default, #e5e7eb);
+  border-top: 1px solid var(--border-default);
   padding-top: 0.75rem;
 }
 
 .note-textarea {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
@@ -513,7 +513,7 @@ onUnmounted(() => {
 
 .btn-primary {
   padding: 0.4rem 1rem;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 0.375rem;
@@ -529,9 +529,9 @@ onUnmounted(() => {
 
 .btn-secondary {
   padding: 0.4rem 1rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;

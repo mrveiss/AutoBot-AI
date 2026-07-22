@@ -45,6 +45,13 @@ def test_reset_learning_requires_admin():
     assert check_admin_permission in calls, "destructive reset must require admin"
 
 
+def test_rollback_strategy_requires_admin():
+    # GH#11534: rolling a learned strategy back to a prior revision mutates
+    # learned state, so it must be admin-gated like reset-learning.
+    calls = _dependency_calls(_route("/rollback-strategy"))
+    assert check_admin_permission in calls, "rollback must require admin"
+
+
 def test_no_endpoint_is_unauthenticated():
     from api.agents_self_improvement import router
 

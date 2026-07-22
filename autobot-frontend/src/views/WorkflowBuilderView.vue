@@ -1312,7 +1312,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .health-indicator.offline {
-  color: #6b7280;
+  color: var(--wfbuilder-offline-text);
   background: rgba(107, 114, 128, 0.1);
 }
 
@@ -1364,8 +1364,8 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: var(--spacing-3);
   margin: var(--spacing-3);
   padding: var(--spacing-3) var(--spacing-4);
-  background: var(--color-warning-bg, rgba(234, 179, 8, 0.12));
-  border: 1px solid var(--color-warning, #eab308);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -1378,7 +1378,7 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-secondary);
   cursor: pointer;
   padding: var(--spacing-1);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -1455,8 +1455,8 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .refresh-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 .refresh-icon.spinning {
@@ -1693,8 +1693,8 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .quick-action svg {
   font-size: var(--text-xl);
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
 }
 
 .quick-action span {
@@ -1869,8 +1869,8 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .checkbox-option input {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 .strategy-select {

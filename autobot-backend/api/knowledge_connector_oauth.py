@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import client_getdel, client_setex, get_redis_client
 from autobot_shared.ssot_config import config
 from knowledge.connectors import oauth_flow
 from knowledge.connectors.credential_store import get_credential_store
@@ -110,7 +110,7 @@ async def start_oauth(
         "scopes": list(scopes) if scopes else [],
     }
     redis = get_redis_client(database="knowledge")
-    await _redis_setex(redis, _state_key(state), _OAUTH_STATE_TTL_SECONDS, json.dumps(payload, ensure_ascii=False))
+    await client_setex(redis, _state_key(state), _OAUTH_STATE_TTL_SECONDS, json.dumps(payload, ensure_ascii=False))
 
     # Bind the completing browser to this one: the callback requires this cookie
     # to match the returned state (defends against OAuth CSRF / token attachment).
@@ -144,7 +144,7 @@ async def oauth_callback(
         return _clear_cookie(_result_page(error="state_binding_mismatch"))
 
     redis = get_redis_client(database="knowledge")
-    raw = await _redis_getdel(redis, _state_key(state))
+    raw = await client_getdel(redis, _state_key(state))
     if raw is None:
         return _clear_cookie(_result_page(error="invalid_or_expired_state"))
     payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
@@ -237,30 +237,5 @@ def _clear_cookie(response: HTMLResponse) -> HTMLResponse:
     return response
 
 
-# ---------------------------------------------------------------------------
-# Redis helpers (sync client → thread; tolerate async client too)
-# ---------------------------------------------------------------------------
-
-
-async def _redis_setex(redis, key: str, ttl: int, value: str) -> None:
-    result = redis.set(key, value, ex=ttl)
-    if hasattr(result, "__await__"):
-        await result
-
-
-async def _redis_getdel(redis, key: str):
-    """Atomically fetch and delete a key (single-use state)."""
-    getdel = getattr(redis, "getdel", None)
-    if getdel is not None:
-        result = getdel(key)
-        if hasattr(result, "__await__"):
-            result = await result
-        return result
-    # Fallback for clients without GETDEL.
-    value = redis.get(key)
-    if hasattr(value, "__await__"):
-        value = await value
-    deleted = redis.delete(key)
-    if hasattr(deleted, "__await__"):
-        await deleted
-    return value
+# Redis single-use-state helpers now live in autobot_shared.redis_client
+# (client_setex / client_getdel / client_get) — see Issue #11699.

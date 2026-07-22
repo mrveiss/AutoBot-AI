@@ -41,7 +41,10 @@
 
     <!-- Browser Tab Content (Issue #1130: screenshot-based visual browser) -->
     <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col min-h-0">
-      <VisualBrowserPanel class="flex-1" />
+      <!-- #11539: thread the chat conversation id through so this conversation's
+           browser actions land in an isolated worker context (own cookie jar),
+           never the shared default one another conversation might be using. -->
+      <VisualBrowserPanel class="flex-1" :session-id="currentSessionId" />
     </div>
 
     <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config, Issue #4977: DesktopInterface) -->

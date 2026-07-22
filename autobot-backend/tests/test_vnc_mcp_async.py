@@ -102,12 +102,36 @@ def _install_stubs() -> dict:
 
     _stub("api.vnc_manager", _run_xdotool_cmd=_run_xdotool_cmd)
 
+    # api.desktop_control_lock (#12002, #11506 T1) — stub the control-lock
+    # gate as "always unmuted" so pre-existing actuation tests keep exercising
+    # the real xdotool dispatch path unchanged.
+    async def _is_human_active_stub(session_id):  # pragma: no cover
+        return False
+
+    async def _get_control_lock_state_stub(session_id):  # pragma: no cover
+        return {
+            "session_id": session_id,
+            "human_active": False,
+            "owner": None,
+            "acquired_at": None,
+            "redis_available": True,
+        }
+
+    _stub(
+        "api.desktop_control_lock",
+        is_human_active=_is_human_active_stub,
+        get_control_lock_state=_get_control_lock_state_stub,
+        DEFAULT_DESKTOP_SESSION_ID="default",
+    )
+
     # api.schemas_system — exact names imported by vnc_mcp.py lines 28-45
     _schema_attrs = {
         n: MagicMock
         for n in (
             "BrowserVncContextResponse",
             "DesktopClickMcpResponse",
+            "DesktopControlStatusMcpResponse",
+            "DesktopControlStatusRequest",
             "DesktopKeyboardTypeMcpResponse",
             "DesktopKeyboardTypeRequest",
             "DesktopMouseClickRequest",
@@ -155,6 +179,8 @@ def _install_stubs() -> dict:
     nc = MagicMock()
     nc.VNC_HOST = "localhost"
     nc.VNC_PORT = 5900
+    # Issue #11579: canonical desktop display shared with gui_controller.py
+    nc.DESKTOP_DISPLAY = ":1"
     _stub("constants.network_constants", NetworkConstants=nc)
     _stub("type_defs")
     _stub("type_defs.common", Metadata=dict)
@@ -362,3 +388,144 @@ class TestXdotoolMcpDispatchedViaToThread:
         first_positional = mock_tt.call_args_list[0].args
         assert callable(first_positional[0]), "First arg to asyncio.to_thread must be callable (_run_xdotool_cmd)"
         assert first_positional[0].__name__ == "_run_xdotool_cmd"
+
+
+class TestControlLockGating:
+    """
+    Issue #12002 (#11506 T1): verify desktop_mouse_click_mcp /
+    desktop_keyboard_type_mcp / desktop_special_key_mcp are muted (no
+    xdotool dispatch) while a human holds the control-lock, and that
+    desktop_control_status_mcp / desktop_observe_state_mcp surface lock
+    state to the agent.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mouse_click_muted_when_human_active(self, vnc_mcp_module):
+        request_mock = MagicMock()
+        request_mock.x = 100
+        request_mock.y = 200
+        request_mock.button = "left"
+        request_mock.session_id = "default"
+
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)),
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt,
+        ):
+            result = await vnc_mcp_module.desktop_mouse_click_mcp(request_mock)
+
+        assert result["success"] is False
+        assert result["muted"] is True
+        mock_tt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_keyboard_type_muted_when_human_active(self, vnc_mcp_module):
+        request_mock = MagicMock()
+        request_mock.text = "hello world"
+        request_mock.session_id = "default"
+
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)),
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt,
+        ):
+            result = await vnc_mcp_module.desktop_keyboard_type_mcp(request_mock)
+
+        assert result["success"] is False
+        assert result["muted"] is True
+        mock_tt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_special_key_muted_when_human_active(self, vnc_mcp_module):
+        request_mock = MagicMock()
+        request_mock.key = "Return"
+        request_mock.session_id = "default"
+
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)),
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt,
+        ):
+            result = await vnc_mcp_module.desktop_special_key_mcp(request_mock)
+
+        assert result["success"] is False
+        assert result["muted"] is True
+        mock_tt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_mouse_click_dispatches_when_human_inactive(self, vnc_mcp_module):
+        request_mock = MagicMock()
+        request_mock.x = 100
+        request_mock.y = 200
+        request_mock.button = "left"
+        request_mock.session_id = "default"
+        fake_result = {"status": "success", "message": "Action completed"}
+
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=False)),
+            patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_result) as mock_tt,
+        ):
+            result = await vnc_mcp_module.desktop_mouse_click_mcp(request_mock)
+
+        assert result["success"] is True
+        mock_tt.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_control_status_reports_human_owner(self, vnc_mcp_module):
+        request_mock = MagicMock()
+        request_mock.session_id = "default"
+        fake_state = {
+            "session_id": "default",
+            "human_active": True,
+            "owner": "alice",
+            "acquired_at": "2026-07-22T00:00:00+00:00",
+            "redis_available": True,
+        }
+
+        with patch.object(vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)):
+            result = await vnc_mcp_module.desktop_control_status_mcp(request_mock)
+
+        assert result["success"] is True
+        assert result["human_active"] is True
+        assert result["owner"] == "alice"
+        assert "alice" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_control_status_reports_agent_control(self, vnc_mcp_module):
+        request_mock = MagicMock()
+        request_mock.session_id = "default"
+        fake_state = {
+            "session_id": "default",
+            "human_active": False,
+            "owner": None,
+            "acquired_at": None,
+            "redis_available": True,
+        }
+
+        with patch.object(vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)):
+            result = await vnc_mcp_module.desktop_control_status_mcp(request_mock)
+
+        assert result["success"] is True
+        assert result["human_active"] is False
+        assert result["owner"] is None
+
+    @pytest.mark.asyncio
+    async def test_observe_state_includes_lock_state(self, vnc_mcp_module):
+        request_mock = MagicMock()
+        request_mock.include_screenshot = False
+        fake_state = {
+            "session_id": "default",
+            "human_active": True,
+            "owner": "bob",
+            "acquired_at": "2026-07-22T00:00:00+00:00",
+            "redis_available": True,
+        }
+        fake_ok = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="dimensions:  1920x1080 pixels\n", stderr=""
+        )
+
+        with (
+            patch.object(vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)),
+            patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_ok),
+        ):
+            result = await vnc_mcp_module.desktop_observe_state_mcp(request_mock)
+
+        assert result["human_active"] is True
+        assert result["control_owner"] == "bob"

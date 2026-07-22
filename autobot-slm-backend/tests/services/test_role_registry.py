@@ -15,6 +15,7 @@ implementation, so it removes the stub from sys.modules before importing.
 """
 
 import importlib
+import subprocess as _subprocess
 import sys
 
 # ---------------------------------------------------------------------------
@@ -316,16 +317,47 @@ def test_seed_default_roles_no_write_when_existing_rows_match_registry():
     db.add.assert_not_called()
 
 
-def test_backend_post_sync_rewrites_root_requirements_not_strips_it():
-    """The backend post_sync_cmd must REWRITE `-r ../requirements.txt` to the
-    code_source path (so the root runtime deps install on deploy), not strip it
-    like the old `grep -Ev '...|^-r'` did — #11135."""
+def test_backend_post_sync_delegates_to_canonical_filter_script():
+    """The backend post_sync_cmd must delegate the filter+rewrite to the
+    canonical scripts/build-filtered-requirements.sh (#11134) — not re-inline
+    its own grep|sed copy, which is what let it drift from the ansible role's
+    copy (that dropped `-r` lines entirely instead of rewriting them — #11135)."""
     backend = next(r for r in DEFAULT_ROLES if r["name"] == "backend")
     cmd = backend["post_sync_cmd"]
-    # rewrite present (sed maps the sibling include to code_source)
-    assert "s|^-r \\.\\./requirements.txt|-r " in cmd
-    assert "/code_source/requirements.txt|" in cmd
-    # and the grep no longer drops -r lines
-    assert "^-r" not in cmd.split("| sed")[0]
-    # the -c constraints rewrite (#11117) is preserved
-    assert "s|^-c \\.\\./constraints/|-c " in cmd
+    assert "scripts/build-filtered-requirements.sh" in cmd
+    assert "requirements.txt" in cmd
+    assert "/code_source" in cmd
+    # no re-inlined grep|sed pipeline duplicating the script's logic
+    assert "grep -Ev" not in cmd
+    assert "sed 's|" not in cmd
+
+
+def test_build_filtered_requirements_script_rewrites_root_requirements_not_strips_it(tmp_path):
+    """Behavioral-equivalence check for scripts/build-filtered-requirements.sh
+    (#11134): must REWRITE `-r ../requirements.txt` and `-c ../constraints/...`
+    to the code_source path, not strip `-r` like the old ansible-role copy did
+    — #11135, #11117."""
+    script = _Path(__file__).parent.parent.parent.parent / "scripts" / "build-filtered-requirements.sh"
+    assert script.is_file(), f"canonical script missing: {script}"
+
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text(
+        "-e ../autobot_shared\n"
+        "-c ../constraints/shared.txt  # comment\n"
+        "fastapi>=0.139.2\n"
+        "-r ../requirements.txt\n",
+        encoding="utf-8",
+    )
+
+    result = _subprocess.run(
+        ["bash", str(script), str(requirements), "/opt/autobot/code_source"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    output = result.stdout
+
+    assert "-e ../autobot_shared" not in output
+    assert "-c /opt/autobot/code_source/constraints/shared.txt" in output
+    assert "-r /opt/autobot/code_source/requirements.txt" in output
+    assert "fastapi>=0.139.2" in output

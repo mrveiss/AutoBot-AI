@@ -434,18 +434,18 @@ onUnmounted(() => {
 
 .refresh-note {
   font-size: 0.8rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .state-msg {
   text-align: center;
   padding: 3rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .agent-grid-wrapper {
   overflow: auto;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   flex: 1;
 }
@@ -460,19 +460,19 @@ onUnmounted(() => {
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--bg-elevated, #f9fafb);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
   white-space: nowrap;
 }
 
 .agent-row {
-  border-bottom: 1px solid var(--border-default, #f3f4f6);
+  border-bottom: 1px solid var(--border-default);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .agent-row:hover {
-  background: var(--bg-hover, #f9fafb);
+  background: var(--bg-hover);
 }
 
 .agent-grid td {
@@ -499,25 +499,25 @@ onUnmounted(() => {
 }
 
 /* #11457: functional-status colors map to the semantic tokens so they adapt to
-   dark/ember instead of being hardcoded light hexes. The fallbacks equal the base
-   (light) token values, so light/dark render identically and ember picks up its
-   own palette (success/info are themed; error resolves via the ember alias). */
-.status-succeeded { color: var(--color-success, #10b981); }
-.status-succeeded.status-dot { background: var(--color-success, #10b981); }
-.status-running { color: var(--color-info, #3b82f6); }
-.status-running.status-dot { background: var(--color-info, #3b82f6); }
-.status-queued { color: var(--color-warning, #f59e0b); }
-.status-queued.status-dot { background: var(--color-warning, #f59e0b); }
-.status-failed { color: var(--color-error, #ef4444); }
-.status-failed.status-dot { background: var(--color-error, #ef4444); }
-.status-timed_out { color: var(--color-error, #ef4444); }
-.status-timed_out.status-dot { background: var(--color-error, #ef4444); }
-.status-unknown { color: var(--text-secondary, #9ca3af); }
-.status-unknown.status-dot { background: var(--border-default, #d1d5db); }
+   dark/ember instead of being hardcoded light hexes (success/info are themed;
+   error resolves via the ember alias). #11976: dead hex fallbacks dropped —
+   every token is defined in design-tokens.css, so the fallbacks never applied. */
+.status-succeeded { color: var(--color-success); }
+.status-succeeded.status-dot { background: var(--color-success); }
+.status-running { color: var(--color-info); }
+.status-running.status-dot { background: var(--color-info); }
+.status-queued { color: var(--color-warning); }
+.status-queued.status-dot { background: var(--color-warning); }
+.status-failed { color: var(--color-error); }
+.status-failed.status-dot { background: var(--color-error); }
+.status-timed_out { color: var(--color-error); }
+.status-timed_out.status-dot { background: var(--color-error); }
+.status-unknown { color: var(--text-secondary); }
+.status-unknown.status-dot { background: var(--border-default); }
 
 .btn-trigger {
   padding: 0.3rem 0.75rem;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 0.375rem;
@@ -544,7 +544,7 @@ onUnmounted(() => {
   width: 480px;
   max-width: 100%;
   height: 100%;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -555,7 +555,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .drawer-header h3 {
@@ -569,7 +569,7 @@ onUnmounted(() => {
   border: none;
   font-size: 1.125rem;
   cursor: pointer;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .run-list {
@@ -582,7 +582,7 @@ onUnmounted(() => {
 }
 
 .run-item {
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.75rem;
   display: flex;
@@ -600,22 +600,22 @@ onUnmounted(() => {
 .run-date,
 .run-duration {
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .toggle-payload {
   font-size: 0.8rem;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   cursor: pointer;
   align-self: flex-start;
 }
 
 .run-context {
-  background: var(--bg-elevated, #f9fafb);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -635,16 +635,16 @@ onUnmounted(() => {
 .btn-replay,
 .btn-replay-log {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   cursor: pointer;
   font-size: 0.8rem;
 }
 
 .btn-replay:hover,
 .btn-replay-log:hover {
-  background: var(--bg-hover, #f3f4f6);
+  background: var(--bg-hover);
 }
 
 .btn-replay:disabled {
@@ -654,12 +654,12 @@ onUnmounted(() => {
 
 .btn-fixture {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   font-size: 0.8rem;
   text-decoration: none;
-  color: var(--text-primary, #374151);
+  color: var(--text-primary);
 }
 
 .replay-panel {
@@ -697,7 +697,7 @@ onUnmounted(() => {
 }
 
 .meta-item {
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .event-browser {
@@ -715,9 +715,9 @@ onUnmounted(() => {
 
 .event-nav button {
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   cursor: pointer;
   font-size: 0.8rem;
 }
@@ -728,8 +728,8 @@ onUnmounted(() => {
 }
 
 .event-detail {
-  background: var(--bg-elevated, #f9fafb);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.8rem;
@@ -756,8 +756,8 @@ onUnmounted(() => {
 }
 
 .diff-content {
-  background: var(--bg-elevated, #f9fafb);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.75rem;
   font-size: 0.75rem;
@@ -769,6 +769,6 @@ onUnmounted(() => {
 }
 
 .diff-identical {
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 </style>

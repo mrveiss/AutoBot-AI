@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ref } from 'vue'
-import { useInitialFocus } from '../useInitialFocus'
+import { useInitialFocus } from '@autobot/ui'
 
 describe('useInitialFocus', () => {
   beforeEach(() => {

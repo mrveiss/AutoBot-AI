@@ -1,4 +1,13 @@
 {
+  "ignoreFiles": [
+    "**/design-tokens.css",
+    "**/themes/*.css",
+    "**/aui-theme.css",
+    "**/styles/theme.css",
+    "**/tailwind.css",
+    "**/vue-notus.css",
+    "**/tokens/contract.css"
+  ],
   "overrides": [
     {
       "files": ["**/*.vue"],

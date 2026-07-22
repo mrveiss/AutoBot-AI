@@ -165,19 +165,14 @@
     </div>
 
     <!-- Detail Modal -->
-    <div v-if="selectedEntry" class="modal-overlay" @click="closeDetails">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ $t('audit.logTable.entryDetails') }}</h3>
-          <button
-            class="btn btn-icon"
-            :aria-label="$t('common.close')"
-            @click="closeDetails"
-          >
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :model-value="!!selectedEntry"
+      :title="$t('audit.logTable.entryDetails')"
+      :close-label="$t('common.close')"
+      :width="700"
+      @close="closeDetails"
+    >
+      <div v-if="selectedEntry" class="modal-body">
           <div class="detail-grid">
             <div class="detail-item">
               <label>{{ $t('audit.logTable.id') }}</label>
@@ -228,8 +223,7 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </BaseModal>
 
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
@@ -242,6 +236,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
@@ -664,48 +659,7 @@ th span {
 }
 
 /* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal-backdrop);
-  padding: var(--spacing-4);
-}
-
-.modal-content {
-  background: var(--bg-card);
-  border-radius: var(--radius-default);
-  max-width: 700px;
-  width: 100%;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border-default);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-header h3 {
-  margin: var(--spacing-0);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-}
-
-.modal-body {
-  padding: var(--spacing-4);
-  overflow-y: auto;
-}
-
+/* #10882: overlay/header chrome now provided by @autobot/ui BaseModal. */
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

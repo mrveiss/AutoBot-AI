@@ -19,6 +19,8 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+# Issue #12002 (#11506 T1): agent<->human input arbitration
+from api.desktop_control_lock import is_actuation_muted
 from api.schemas_system import (
     ClipboardSyncRequest,
     ConnectionSettings,
@@ -60,7 +62,7 @@ from api.vnc_humanization import (
     should_add_human_pause,
     simulate_mouse_curve,
 )
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
@@ -76,11 +78,11 @@ _settings_lock = asyncio.Lock()
 
 
 def is_vnc_running() -> bool:
-    """Check if VNC server is running on display :1"""
+    """Check if VNC server is running on the canonical desktop display."""
     try:
-        # Check for Xtigervnc process on display :1
+        # Check for Xtigervnc process on the canonical display (Issue #11579)
         result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
-            ["pgrep", "-f", "Xtigervnc :1"],
+            ["pgrep", "-f", f"Xtigervnc {NetworkConstants.DESKTOP_DISPLAY}"],
             capture_output=True,
             timeout=5,
         )
@@ -112,7 +114,12 @@ def _launch_websockify() -> None:
 
 
 def start_vnc_server() -> Dict[str, str]:
-    """Start VNC server on display :1 with full XFCE desktop"""
+    """Start VNC server on the canonical desktop display with full XFCE desktop.
+
+    Issue #11579: this is the single owner of the canonical display's X
+    server — gui_controller.GUIController attaches to it, never spawns its
+    own.
+    """
     # Pre-check: VncAuth requires ~/.vnc/passwd to exist
     vnc_passwd = Path.home() / ".vnc" / "passwd"
     if not vnc_passwd.exists():
@@ -129,7 +136,7 @@ def start_vnc_server() -> Dict[str, str]:
         result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
             [
                 "/usr/bin/vncserver",
-                ":1",
+                NetworkConstants.DESKTOP_DISPLAY,
                 "-localhost",
                 "no",
                 "-SecurityTypes",
@@ -217,7 +224,7 @@ async def restart_vnc_server(
             proc = await asyncio.create_subprocess_exec(
                 "vncserver",
                 "-kill",
-                ":1",
+                NetworkConstants.DESKTOP_DISPLAY,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -312,7 +319,7 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
                 encoding="utf-8",
                 timeout=timeout,
                 shell=False,
-                env={"DISPLAY": ":1"},
+                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
             )
         )
         if result.returncode != 0:
@@ -327,22 +334,55 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
         return {"status": "error", "message": "Internal server error"}
 
 
+def _muted_result() -> Dict[str, object]:
+    """Standard no-op result when the human control-lock is held (#12002).
+
+    The agent actuation caller must NOT run the xdotool command in this
+    case -- the human is currently driving the same X input queue.
+    """
+    return {
+        "status": "muted",
+        "message": "Muted: human is in control of the desktop session.",
+        "muted": True,
+    }
+
+
+def _caller_username(current_user: object) -> str | None:
+    """Extract a username for owner-aware gating (#12002).
+
+    playback_macro() calls vnc_mouse_click/etc. directly (Python function
+    call, not an HTTP request), so `current_user` there is still the
+    unresolved fastapi.params.Depends sentinel rather than a dict. Treat
+    that -- and any other non-dict value -- as "unknown caller": is_actuation_muted
+    then falls back to unconditional gating (safe default) instead of raising.
+    """
+    if isinstance(current_user, dict):
+        return current_user.get("username")
+    return None
+
+
 @router.post("/click", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLICK")
 async def vnc_mouse_click(
     request: MouseClickRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, object]:
     """
     Perform mouse click at specified coordinates with human-like behavior.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: MouseClickRequest with x, y coordinates and button type
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+        return _muted_result()
+
     # Add human-like randomness to click position (Issue #74 - Area 5)
     humanized_x, humanized_y = humanize_click_position(request.x, request.y)
 
@@ -361,17 +401,23 @@ async def vnc_mouse_click(
 async def vnc_keyboard_type(
     request: KeyboardTypeRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, object]:
     """
     Type text via keyboard with human-like speed and pauses.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: KeyboardTypeRequest with text to type
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+        return _muted_result()
+
     # Get humanized typing delay in milliseconds for xdotool
     delay_seconds = humanize_typing_speed()
     delay_ms = int(delay_seconds * 1000)
@@ -408,17 +454,23 @@ async def vnc_keyboard_type(
 async def vnc_special_key(
     request: SpecialKeyRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, object]:
     """
     Send special key or key combination.
     Issue #74: Desktop interaction controls.
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: SpecialKeyRequest with key name (e.g., "Return", "ctrl+c")
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+        return _muted_result()
+
     return _run_xdotool_cmd(["key", request.key])
 
 
@@ -427,17 +479,23 @@ async def vnc_special_key(
 async def vnc_mouse_scroll(
     request: MouseScrollRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, object]:
     """
     Scroll mouse wheel.
     Issue #74: Desktop interaction controls.
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: MouseScrollRequest with direction and amount
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+        return _muted_result()
+
     # Mouse buttons: 4 = scroll up, 5 = scroll down
     button = "4" if request.direction == "up" else "5"
 
@@ -454,17 +512,23 @@ async def vnc_mouse_scroll(
 async def vnc_mouse_drag(
     request: MouseDragRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, object]:
     """
     Perform mouse drag operation with curved, human-like movement.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: MouseDragRequest with start and end coordinates
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
+        return _muted_result()
+
     # Add realistic delay before starting drag
     pre_delay = humanize_action_delay()
     await asyncio.sleep(pre_delay)
@@ -513,7 +577,7 @@ async def vnc_screenshot(
             capture_output=True,
             text=True,
             timeout=10,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
 
         if result.returncode != 0:
@@ -523,7 +587,7 @@ async def vnc_screenshot(
                 capture_output=True,
                 text=True,
                 timeout=10,
-                env={"DISPLAY": ":1"},
+                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
             )
 
         if result.returncode != 0:
@@ -574,7 +638,7 @@ async def vnc_clipboard_sync(
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         stdout, stderr = proc.communicate(input=request.content.encode("utf-8"), timeout=5)
 
@@ -769,7 +833,7 @@ def _get_desktop_info() -> Dict[str, str]:
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             for line in result.stdout.split("\n"):
@@ -788,7 +852,7 @@ def _get_desktop_info() -> Dict[str, str]:
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             info["active_window"] = result.stdout.strip()
@@ -802,7 +866,7 @@ def _get_desktop_info() -> Dict[str, str]:
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             window_count = len([line for line in result.stdout.split("\n") if line.strip()])

@@ -286,7 +286,7 @@ function getThemeIcon(themeOption: Theme): IconName {
 
 .preset-preview {
   display: flex;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   height: 48px;
   border-radius: var(--radius-sm);
   overflow: hidden;

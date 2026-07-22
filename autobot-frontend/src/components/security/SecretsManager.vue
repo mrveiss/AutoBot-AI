@@ -1790,7 +1790,7 @@ watch(selectedScope, () => {
 }
 
 .category-item i {
-  width: 20px;
+  width: var(--spacing-5);
   text-align: center;
   font-size: var(--text-sm);
 }
@@ -1884,8 +1884,8 @@ watch(selectedScope, () => {
 }
 
 .btn-icon {
-  width: 36px;
-  height: 36px;
+  width: var(--spacing-9);
+  height: var(--spacing-9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2003,9 +2003,9 @@ watch(selectedScope, () => {
 }
 
 .card-icon {
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
+  min-width: var(--spacing-12);
   border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
@@ -2181,8 +2181,8 @@ watch(selectedScope, () => {
 }
 
 .action-btn {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2253,8 +2253,8 @@ watch(selectedScope, () => {
 }
 
 .template-icon {
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -2342,8 +2342,8 @@ watch(selectedScope, () => {
 }
 
 .selected-type .type-icon {
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -2447,8 +2447,8 @@ watch(selectedScope, () => {
   background: var(--bg-tertiary);
   border: none;
   border-radius: var(--radius-md);
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2528,8 +2528,8 @@ watch(selectedScope, () => {
 }
 
 .view-icon {
-  width: 56px;
-  height: 56px;
+  width: var(--spacing-14);
+  height: var(--spacing-14);
   border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
@@ -2639,9 +2639,9 @@ watch(selectedScope, () => {
 
 .transfer-icon,
 .delete-icon {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 16px;
+  width: var(--spacing-16);
+  height: var(--spacing-16);
+  margin: 0 auto var(--spacing-4);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2786,8 +2786,8 @@ watch(selectedScope, () => {
 }
 
 .checkbox-option input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   cursor: pointer;
   accent-color: var(--color-primary);
 }

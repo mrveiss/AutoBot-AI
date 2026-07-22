@@ -5,17 +5,17 @@
   <div class="budget-policies-view view-container">
     <div class="page-header">
       <div class="page-header-content">
-        <h2 class="page-title">Budget Policies</h2>
-        <p class="page-subtitle">Manage spend thresholds and auto-pause rules for agents</p>
+        <h2 class="page-title">{{ t('budgetPolicies.title') }}</h2>
+        <p class="page-subtitle">{{ t('budgetPolicies.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="btn-action-primary" @click="openCreate">
           <Icon name="plus" />
-          New Policy
+          {{ t('budgetPolicies.newPolicy') }}
         </button>
         <button class="btn-action-secondary" :disabled="loading" @click="loadPolicies">
           <Icon name="sync-alt" :spin="loading" />
-          Refresh
+          {{ t('common.refresh') }}
         </button>
       </div>
     </div>
@@ -23,7 +23,7 @@
     <div v-if="error" class="error-banner">
       <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button class="btn-dismiss" aria-label="Dismiss" @click="error = null">
+      <button class="btn-dismiss" :aria-label="t('common.dismiss')" @click="error = null">
         <Icon name="times" />
       </button>
     </div>
@@ -31,13 +31,13 @@
     <!-- Scope filter bar -->
     <div class="filter-bar">
       <div class="filter-group">
-        <label class="filter-label">Scope</label>
+        <label class="filter-label">{{ t('budgetPolicies.scope') }}</label>
         <select v-model="filterScope" class="filter-select" @change="loadPolicies">
-          <option value="">All</option>
-          <option value="agent">Agent</option>
-          <option value="project">Project</option>
-          <option value="task">Task</option>
-          <option value="tenant">Tenant</option>
+          <option value="">{{ t('budgetPolicies.scopeAll') }}</option>
+          <option value="agent">{{ t('budgetPolicies.scopeAgent') }}</option>
+          <option value="project">{{ t('budgetPolicies.scopeProject') }}</option>
+          <option value="task">{{ t('budgetPolicies.scopeTask') }}</option>
+          <option value="tenant">{{ t('budgetPolicies.scopeTenant') }}</option>
         </select>
       </div>
     </div>
@@ -45,26 +45,26 @@
     <!-- Policies table -->
     <div class="table-section">
       <div v-if="loading && policies.length === 0" class="loading-state">
-        <Icon name="sync-alt" :spin="true" /> Loading policies…
+        <Icon name="sync-alt" :spin="true" /> {{ t('budgetPolicies.loading') }}
       </div>
 
       <div v-else-if="!loading && policies.length === 0" class="empty-state">
         <Icon name="shield-alt" class="empty-icon" />
-        <p>No budget policies found. Create one to enforce spend limits.</p>
+        <p>{{ t('budgetPolicies.empty') }}</p>
       </div>
 
       <table v-else class="data-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Scope</th>
-            <th>Scope ID</th>
-            <th>Period</th>
-            <th>Threshold</th>
-            <th>Warning</th>
-            <th>Action</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{{ t('budgetPolicies.colName') }}</th>
+            <th>{{ t('budgetPolicies.colScope') }}</th>
+            <th>{{ t('budgetPolicies.colScopeId') }}</th>
+            <th>{{ t('budgetPolicies.colPeriod') }}</th>
+            <th>{{ t('budgetPolicies.colThreshold') }}</th>
+            <th>{{ t('budgetPolicies.colWarning') }}</th>
+            <th>{{ t('budgetPolicies.colAction') }}</th>
+            <th>{{ t('budgetPolicies.colStatus') }}</th>
+            <th>{{ t('budgetPolicies.colActions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -87,20 +87,20 @@
             </td>
             <td>
               <span class="badge" :class="policy.enabled ? 'badge-active' : 'badge-inactive'">
-                {{ policy.enabled ? 'enabled' : 'disabled' }}
+                {{ policy.enabled ? t('budgetPolicies.statusEnabled') : t('budgetPolicies.statusDisabled') }}
               </span>
             </td>
             <td class="actions-cell">
               <button
                 class="btn-icon btn-primary"
-                title="Edit"
+                :title="t('common.edit')"
                 @click="openEdit(policy)"
               >
                 <Icon name="edit" />
               </button>
               <button
                 class="btn-icon btn-danger"
-                title="Delete"
+                :title="t('common.delete')"
                 @click="confirmDelete(policy)"
               >
                 <Icon name="trash" />
@@ -113,37 +113,37 @@
 
     <!-- Agent Pause Status section (admin only) -->
     <div v-if="isAdmin" class="section-card mt-6">
-      <h3 class="section-title">Check Agent Pause Status</h3>
+      <h3 class="section-title">{{ t('budgetPolicies.checkPauseTitle') }}</h3>
       <div class="agent-status-form">
         <input
           v-model="agentIdQuery"
           type="text"
           class="text-input"
-          placeholder="Agent ID…"
+:placeholder="t('budgetPolicies.agentIdPlaceholder')"
           @keydown.enter="checkAgentStatus"
         />
         <button class="btn-action-secondary" :disabled="!agentIdQuery.trim()" @click="checkAgentStatus">
-          Check Status
+          {{ t('budgetPolicies.checkStatus') }}
         </button>
       </div>
 
       <div v-if="agentStatus" class="agent-status-result">
         <div class="status-row">
-          <span class="status-label">Agent:</span>
+          <span class="status-label">{{ t('budgetPolicies.labelAgent') }}</span>
           <span class="monospace">{{ agentStatus.agent_id }}</span>
         </div>
         <div class="status-row">
-          <span class="status-label">Paused:</span>
+          <span class="status-label">{{ t('budgetPolicies.labelPaused') }}</span>
           <span :class="agentStatus.is_paused ? 'text-danger' : 'text-success'">
-            {{ agentStatus.is_paused ? 'Yes' : 'No' }}
+            {{ agentStatus.is_paused ? t('common.yes') : t('common.no') }}
           </span>
         </div>
         <div v-if="agentStatus.is_paused" class="status-row">
-          <span class="status-label">Reason:</span>
+          <span class="status-label">{{ t('budgetPolicies.labelReason') }}</span>
           <span>{{ agentStatus.paused_reason || '—' }}</span>
         </div>
         <div v-if="agentStatus.is_paused && agentStatus.paused_at" class="status-row">
-          <span class="status-label">Since:</span>
+          <span class="status-label">{{ t('budgetPolicies.labelSince') }}</span>
           <span>{{ new Date(agentStatus.paused_at).toLocaleString() }}</span>
         </div>
         <button
@@ -153,61 +153,59 @@
           @click="resumeAgent(agentStatus.agent_id)"
         >
           <Icon name="play" :spin="resuming" />
-          Resume Agent
+          {{ t('budgetPolicies.resumeAgent') }}
         </button>
       </div>
     </div>
 
     <!-- Create / Edit Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-card" role="dialog" :aria-label="editTarget ? 'Edit Policy' : 'New Policy'">
-        <div class="modal-header">
-          <h3>{{ editTarget ? 'Edit Policy' : 'New Budget Policy' }}</h3>
-          <button class="btn-icon" aria-label="Close" @click="closeModal">
-            <Icon name="times" />
-          </button>
-        </div>
+    <BaseModal
+      :model-value="showModal"
+      :title="editTarget ? t('budgetPolicies.modalEditTitle') : t('budgetPolicies.modalNewTitle')"
+      :close-label="t('common.close')"
+      :width="560"
+      @close="closeModal"
+    >
+      <div v-if="modalError" class="error-banner">
+        <Icon name="exclamation-circle" />
+        <span>{{ modalError }}</span>
+      </div>
 
-        <div v-if="modalError" class="error-banner">
-          <Icon name="exclamation-circle" />
-          <span>{{ modalError }}</span>
-        </div>
-
-        <form class="modal-form" @submit.prevent="submitForm">
+      <form id="budget-policy-form" class="modal-form" @submit.prevent="submitForm">
           <div class="form-row">
-            <label class="form-label">Name</label>
-            <input v-model="form.name" type="text" class="text-input" placeholder="My policy" />
+            <label class="form-label">{{ t('budgetPolicies.fieldName') }}</label>
+            <input v-model="form.name" type="text" class="text-input" :placeholder="t('budgetPolicies.fieldNamePlaceholder')" />
           </div>
           <div class="form-row">
-            <label class="form-label">Description</label>
-            <input v-model="form.description" type="text" class="text-input" placeholder="Optional" />
+            <label class="form-label">{{ t('budgetPolicies.fieldDescription') }}</label>
+            <input v-model="form.description" type="text" class="text-input" :placeholder="t('budgetPolicies.fieldDescriptionPlaceholder')" />
           </div>
           <div class="form-row two-col">
             <div>
-              <label class="form-label">Scope <span class="required">*</span></label>
+              <label class="form-label">{{ t('budgetPolicies.fieldScope') }} <span class="required">*</span></label>
               <select v-model="form.scope" class="filter-select" required>
-                <option value="agent">Agent</option>
-                <option value="project">Project</option>
-                <option value="task">Task</option>
-                <option value="tenant">Tenant</option>
+                <option value="agent">{{ t('budgetPolicies.scopeAgent') }}</option>
+                <option value="project">{{ t('budgetPolicies.scopeProject') }}</option>
+                <option value="task">{{ t('budgetPolicies.scopeTask') }}</option>
+                <option value="tenant">{{ t('budgetPolicies.scopeTenant') }}</option>
               </select>
             </div>
             <div>
-              <label class="form-label">Scope ID <span class="required">*</span></label>
-              <input v-model="form.scope_id" type="text" class="text-input" placeholder="e.g. agent-uuid" required />
+              <label class="form-label">{{ t('budgetPolicies.fieldScopeId') }} <span class="required">*</span></label>
+              <input v-model="form.scope_id" type="text" class="text-input" :placeholder="t('budgetPolicies.fieldScopeIdPlaceholder')" required />
             </div>
           </div>
           <div class="form-row two-col">
             <div>
-              <label class="form-label">Period <span class="required">*</span></label>
+              <label class="form-label">{{ t('budgetPolicies.fieldPeriod') }} <span class="required">*</span></label>
               <select v-model="form.period" class="filter-select" required>
-                <option value="hour">Hour</option>
-                <option value="day">Day</option>
-                <option value="month">Month</option>
+                <option value="hour">{{ t('budgetPolicies.periodHour') }}</option>
+                <option value="day">{{ t('budgetPolicies.periodDay') }}</option>
+                <option value="month">{{ t('budgetPolicies.periodMonth') }}</option>
               </select>
             </div>
             <div>
-              <label class="form-label">Threshold USD <span class="required">*</span></label>
+              <label class="form-label">{{ t('budgetPolicies.fieldThreshold') }} <span class="required">*</span></label>
               <input
                 v-model.number="form.threshold_usd"
                 type="number"
@@ -220,7 +218,7 @@
           </div>
           <div class="form-row two-col">
             <div>
-              <label class="form-label">Warning % (0–100)</label>
+              <label class="form-label">{{ t('budgetPolicies.fieldWarning') }}</label>
               <input
                 v-model.number="warningPct"
                 type="number"
@@ -232,54 +230,58 @@
               />
             </div>
             <div>
-              <label class="form-label">Action <span class="required">*</span></label>
+              <label class="form-label">{{ t('budgetPolicies.fieldAction') }} <span class="required">*</span></label>
               <select v-model="form.action" class="filter-select" required>
-                <option value="alert">Alert only</option>
-                <option value="pause">Pause</option>
-                <option value="alert_then_pause">Alert then Pause</option>
+                <option value="alert">{{ t('budgetPolicies.actionAlert') }}</option>
+                <option value="pause">{{ t('budgetPolicies.actionPause') }}</option>
+                <option value="alert_then_pause">{{ t('budgetPolicies.actionAlertThenPause') }}</option>
               </select>
             </div>
           </div>
           <div class="form-row">
             <label class="checkbox-label">
               <input v-model="form.enabled" type="checkbox" class="checkbox-input" />
-              Enabled
+              {{ t('budgetPolicies.fieldEnabled') }}
             </label>
           </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-action-secondary" @click="closeModal">Cancel</button>
-            <button type="submit" class="btn-action-primary" :disabled="saving">
-              <Icon v-if="saving" name="sync-alt" :spin="true" />
-              {{ editTarget ? 'Save Changes' : 'Create Policy' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+
+      <template #actions>
+        <button type="button" class="btn-action-secondary" @click="closeModal">{{ t('common.cancel') }}</button>
+        <button
+          type="submit"
+          form="budget-policy-form"
+          class="btn-action-primary"
+          :disabled="saving"
+        >
+          <Icon v-if="saving" name="sync-alt" :spin="true" />
+          {{ editTarget ? t('budgetPolicies.saveChanges') : t('budgetPolicies.createPolicy') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete confirm dialog -->
-    <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
-      <div class="modal-card modal-card-sm" role="dialog" aria-label="Confirm Delete">
-        <div class="modal-header">
-          <h3>Delete Policy</h3>
-          <button class="btn-icon" aria-label="Close" @click="deleteTarget = null">
-            <Icon name="times" />
-          </button>
-        </div>
-        <p class="modal-body-text">
-          Are you sure you want to delete
-          <strong>{{ deleteTarget.name || deleteTarget.id }}</strong>?
-          This cannot be undone.
-        </p>
-        <div class="modal-actions">
-          <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
-          <button class="btn-action-danger" :disabled="deleting" @click="doDelete">
-            <Icon v-if="deleting" name="sync-alt" :spin="true" />
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      :model-value="!!deleteTarget"
+:title="t('budgetPolicies.deleteTitle')"
+      :close-label="t('common.close')"
+      :width="420"
+      @close="deleteTarget = null"
+    >
+      <p v-if="deleteTarget" class="modal-body-text">
+        {{ t('budgetPolicies.deleteConfirm') }}
+        <strong>{{ deleteTarget.name || deleteTarget.id }}</strong>?
+        {{ t('budgetPolicies.deleteUndone') }}
+      </p>
+
+      <template #actions>
+        <button class="btn-action-secondary" @click="deleteTarget = null">{{ t('common.cancel') }}</button>
+        <button class="btn-action-danger" :disabled="deleting" @click="doDelete">
+          <Icon v-if="deleting" name="sync-alt" :spin="true" />
+          {{ t('common.delete') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -290,7 +292,10 @@ import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const logger = createLogger('BudgetPolicies')
 
 // --- Types ---
@@ -568,9 +573,9 @@ onMounted(loadPolicies)
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
-  background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-error, #dc2626);
-  border: 1px solid var(--color-danger-border, #fca5a5);
+  background: var(--color-danger-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-danger-border, var(--budgetpol-danger-border));
   border-radius: var(--radius-md);
   padding: var(--spacing-3) var(--spacing-4);
   margin-bottom: var(--spacing-4);
@@ -698,21 +703,21 @@ onMounted(loadPolicies)
 
 .badge {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 9999px;
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .badge-scope {
-  background: var(--color-info-bg, #dbeafe);
-  color: var(--color-info, #1d4ed8);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .badge-active {
-  background: var(--color-success-bg, #dcfce7);
-  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .badge-inactive {
@@ -721,18 +726,18 @@ onMounted(loadPolicies)
 }
 
 .badge-danger {
-  background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-error, #dc2626);
+  background: var(--color-danger-bg);
+  color: var(--color-error);
 }
 
 .badge-warning {
-  background: var(--color-warning-bg, #fef9c3);
-  color: var(--color-warning, #a16207);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .badge-info {
-  background: var(--color-info-bg, #dbeafe);
-  color: var(--color-info, #1d4ed8);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .actions-cell {
@@ -785,7 +790,7 @@ onMounted(loadPolicies)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error, #dc2626);
+  background: var(--color-error);
   color: white;
   border: none;
   border-radius: var(--radius-md);
@@ -819,13 +824,13 @@ onMounted(loadPolicies)
 }
 
 .btn-icon.btn-primary:hover {
-  background: var(--color-info-bg, #dbeafe);
-  color: var(--color-info, #1d4ed8);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .btn-icon.btn-danger:hover {
-  background: var(--color-danger-bg, #fee2e2);
-  color: var(--color-error, #dc2626);
+  background: var(--color-danger-bg);
+  color: var(--color-error);
 }
 
 /* Agent pause status section */
@@ -879,63 +884,18 @@ onMounted(loadPolicies)
   min-width: 70px;
 }
 
-.text-danger { color: var(--color-error, #dc2626); font-weight: 500; }
-.text-success { color: var(--color-success, #16a34a); font-weight: 500; }
+.text-danger { color: var(--color-error); font-weight: 500; }
+.text-success { color: var(--color-success); font-weight: 500; }
 
 .mt-2 { margin-top: var(--spacing-2); }
 .mt-6 { margin-top: var(--spacing-6); }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--spacing-4);
-}
-
-.modal-card {
-  background: var(--color-bg);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  /* #10750 C2: keep header fixed; scroll only the form body (below) */
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-card-sm {
-  max-width: 420px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-5) var(--spacing-6);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-header h3 {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  margin: 0;
-}
-
+/* #10882: overlay/header/actions chrome now provided by @autobot/ui BaseModal. */
 .modal-form {
-  padding: var(--spacing-6);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
-  /* #10750 C2: single scroll region beneath the fixed header */
-  overflow-y: auto;
-  min-height: 0;
 }
 
 .form-row {
@@ -957,7 +917,7 @@ onMounted(loadPolicies)
 }
 
 .required {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 .checkbox-label {
@@ -969,21 +929,12 @@ onMounted(loadPolicies)
 }
 
 .checkbox-input {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   cursor: pointer;
 }
 
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-2);
-  padding-top: var(--spacing-2);
-  border-top: 1px solid var(--border-default);
-}
-
 .modal-body-text {
-  padding: var(--spacing-5) var(--spacing-6);
   font-size: var(--text-sm);
   color: var(--text-primary);
   margin: 0;
