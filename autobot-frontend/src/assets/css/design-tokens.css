@@ -906,6 +906,51 @@
   --coportability-error-text: #991b1b;    /* error banner + failed-result foreground */
   --coportability-success-text: #166534;  /* success-result foreground */
   --coportability-on-accent: #fff;        /* white button label + spinner highlight on accent */
+
+  /* ============================================
+   * AI DOCUMENT EDITOR TOKENS (#12029, umbrella #11515)
+   * Scoped to documents/AIDocumentEditor.vue. Hex-only (deliberately NO OKLCH
+   * override) so the editor renders pixel-identical to its previous hardcoded
+   * values across all browsers. These are the literal fallbacks the editor
+   * rendered because --color-background-hover, --color-background-input and
+   * --color-background-secondary are never defined in any theme; preserved
+   * behind those intended token names via nested var().
+   * ============================================ */
+  --aidoc-hover-bg: #2a2a2a;   /* title hover fill (undefined --color-background-hover fallback) */
+  --aidoc-input-bg: #2a2a2a;   /* title/refine input fill (undefined --color-background-input fallback) */
+  --aidoc-panel-bg: #252525;   /* refine panel fill (undefined --color-background-secondary fallback) */
+
+  /* ============================================
+   * PROJECT BROWSER VIEW TOKENS (#12030, umbrella #11515)
+   * Scoped to llc/ProjectBrowserView.vue. The action/repo links render the
+   * ember-orange fallback because --color-accent-text and --color-accent are
+   * defined only by the ember theme; preserved hex-only (deliberately NO OKLCH
+   * override) behind those intended token names via nested var() so ember
+   * still wins where it defines them and the links render pixel-identical to
+   * their previous hardcoded value everywhere else.
+   * ============================================ */
+  --projbrowser-accent-text: #c4651a;  /* action/repo link text (non-ember --color-accent-text fallback) */
+
+  /* ============================================
+   * TEMPLATE BROWSER TOKENS (#12031, umbrella #11515)
+   * Scoped to llc/TemplateBrowser.vue. Per-category icon gradient stops — a
+   * decorative category palette, NOT semantic chrome, so each stop is
+   * preserved verbatim rather than mapped to semantic tokens. Hex-only
+   * (deliberately NO OKLCH override) so the category icons render
+   * pixel-identical to their previous hardcoded gradients across all browsers.
+   * ============================================ */
+  --tmplbrowser-cat-software-start: #667eea;    /* software-team icon gradient start */
+  --tmplbrowser-cat-software-end: #764ba2;      /* software-team icon gradient end */
+  --tmplbrowser-cat-marketing-start: #f093fb;   /* marketing-agency icon gradient start */
+  --tmplbrowser-cat-marketing-end: #f5576c;     /* marketing-agency icon gradient end */
+  --tmplbrowser-cat-consulting-start: #4facfe;  /* consulting-firm icon gradient start */
+  --tmplbrowser-cat-consulting-end: #00f2fe;    /* consulting-firm icon gradient end */
+  --tmplbrowser-cat-research-start: #43e97b;    /* research-lab icon gradient start */
+  --tmplbrowser-cat-research-end: #38f9d7;      /* research-lab icon gradient end */
+  --tmplbrowser-cat-startup-start: #fa709a;     /* startup icon gradient start */
+  --tmplbrowser-cat-startup-end: #fee140;       /* startup icon gradient end */
+  --tmplbrowser-cat-custom-start: #a8edea;      /* custom icon gradient start */
+  --tmplbrowser-cat-custom-end: #fed6e3;        /* custom icon gradient end */
 }
 
 /* ============================================
