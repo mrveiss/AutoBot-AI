@@ -263,8 +263,8 @@ const formattedUpdatedAt = computed(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-primary, #1e1e1e);
-  color: var(--text-primary, #e0e0e0);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
@@ -274,7 +274,7 @@ const formattedUpdatedAt = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--border-default, #333);
+  border-bottom: 1px solid var(--border-default);
   gap: var(--spacing-3);
 }
 
@@ -302,14 +302,14 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .document-title:hover {
-  background: var(--color-background-hover, #2a2a2a);
+  background: var(--color-background-hover, var(--aidoc-hover-bg));
 }
 
 .title-input {
   width: 100%;
-  background: var(--color-background-input, #2a2a2a);
+  background: var(--color-background-input, var(--aidoc-input-bg));
   color: inherit;
-  border: 1px solid var(--color-primary, #4caf50);
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-default);
   font-size: 1.1rem;
   font-weight: 600;
@@ -328,17 +328,17 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .error-banner {
-  background: var(--color-error-bg, #3c1515);
-  color: var(--color-error, #f87171);
+  background: var(--color-error-bg);
+  color: var(--color-error);
   padding: var(--spacing-2) var(--spacing-4);
   font-size: 0.85rem;
-  border-bottom: 1px solid var(--color-error, #f87171);
+  border-bottom: 1px solid var(--color-error);
 }
 
 .refine-panel {
   padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--border-default, #333);
-  background: var(--color-background-secondary, #252525);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--color-background-secondary, var(--aidoc-panel-bg));
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
@@ -347,9 +347,9 @@ const formattedUpdatedAt = computed(() => {
 .refine-textarea {
   width: 100%;
   resize: vertical;
-  background: var(--color-background-input, #2a2a2a);
+  background: var(--color-background-input, var(--aidoc-input-bg));
   color: inherit;
-  border: 1px solid var(--border-default, #444);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
   padding: var(--spacing-2);
   font-size: 0.9rem;
@@ -359,7 +359,7 @@ const formattedUpdatedAt = computed(() => {
 }
 
 .refine-textarea:focus {
-  border-color: var(--color-primary, #4caf50);
+  border-color: var(--color-primary);
 }
 .refine-textarea:focus-visible {
   outline: 2px solid var(--color-primary);
@@ -402,8 +402,8 @@ const formattedUpdatedAt = computed(() => {
   gap: var(--spacing-4);
   padding: var(--spacing-1-5) var(--spacing-4);
   font-size: var(--text-xs);
-  color: var(--text-muted, #888);
-  border-top: 1px solid var(--border-default, #333);
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-default);
 }
 
 .source-facts-count {
