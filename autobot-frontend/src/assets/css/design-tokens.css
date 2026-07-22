@@ -803,6 +803,54 @@
   --intscreenshot-popup-save-bg: #3b82f6;      /* popup save-button fill */
 
   /* ============================================
+   * HEARTBEAT PANEL TOKENS
+   * Issue #12004 (umbrella #11515). Scoped to agents/HeartbeatPanel.vue.
+   * Hex-only (deliberately NO OKLCH override) so the panel renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * --hbpanel-border, --hbpanel-btn-bg, --hbpanel-btn-border,
+   * --hbpanel-btn-hover-bg are the literal fallbacks the panel rendered
+   * because --border, --bg-btn, --bg-btn-hover are never defined in any
+   * theme; preserved behind those intended token names via nested var().
+   * The badge/button text hues each match a --color-x-light or
+   * --text-secondary base value, but those semantic tokens carry OKLCH
+   * overrides that would shift the rendered pixels, so they are captured
+   * here verbatim.
+   * ============================================ */
+  --hbpanel-border: #334155;        /* card, input and divider borders (undefined --border fallback) */
+  --hbpanel-btn-bg: #334155;        /* default button fill (undefined --bg-btn fallback) */
+  --hbpanel-btn-border: #475569;    /* default button border (undefined --border fallback) */
+  --hbpanel-btn-hover-bg: #475569;  /* default button hover fill (undefined --bg-btn-hover fallback) */
+  --hbpanel-error-text: #fca5a5;    /* error banner and inline error-message text */
+  --hbpanel-success-text: #34d399;  /* green status badge and resume-button text */
+  --hbpanel-neutral-text: #94a3b8;  /* gray status badge text */
+  --hbpanel-info-text: #60a5fa;     /* blue status badge text */
+  --hbpanel-warning-text: #facc15;  /* yellow status badge text */
+  --hbpanel-danger-text: #f87171;   /* red status badge text */
+  --hbpanel-orange-text: #fb923c;   /* orange status badge and pause-button text */
+
+  /* ============================================
+   * SECRETS VIEW TOKENS
+   * Issue #12005 (umbrella #11515). Scoped to llc/SecretsView.vue.
+   * Hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * These are the literal fallbacks the view rendered because their intended
+   * Ember semantic tokens (--color-accent, --bg-code, --bg-muted,
+   * --color-success-subtle, --color-success-text, --color-danger-subtle) are
+   * undefined in non-ember themes; preserved behind those intended token
+   * names via nested var() so ember still wins where it defines them.
+   * --secretsview-on-accent is the white primary-button label on the accent
+   * fill (--text-on-primary carries an OKLCH override that would drift).
+   * ============================================ */
+  --secretsview-accent: #c4651a;             /* primary-button accent fill (non-ember) */
+  --secretsview-on-accent: #fff;             /* primary-button label on accent */
+  --secretsview-bg-code: #f3f4f6;            /* secret-name code chip fill */
+  --secretsview-success-bg: #dcfce7;         /* active status-badge fill */
+  --secretsview-success-text: #15803d;       /* active status-badge text */
+  --secretsview-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
+  --secretsview-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
+  --secretsview-danger-border: #fecaca;      /* danger button border */
+
+  /* ============================================
    * BACKLOG VIEW TOKENS
    * Issue #12006 (umbrella #11515). Scoped to llc/BacklogView.vue.
    * Hex-only (deliberately NO OKLCH override) so the view renders
