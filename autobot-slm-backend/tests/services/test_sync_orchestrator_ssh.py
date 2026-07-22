@@ -55,7 +55,7 @@ def _orchestrator() -> SyncOrchestrator:
 
 
 # The ssh builders check Path(SSH_KEY_PATH).exists() for the optional `-i`
-# flag.  The default key path lives under /home/autobot/.ssh — unreadable on
+# flag.  The default key path lives under the autobot ssh dir — unreadable on
 # dev boxes, where Path.exists() propagates PermissionError (EACCES is not in
 # pathlib's ignored-errno set).  Pin the module global to a guaranteed-absent
 # path so the check is a deterministic False in every environment; the argv
@@ -94,5 +94,5 @@ async def test_get_current_git_commit_argv_is_wellformed():
             new=AsyncMock(return_value=proc),
         ) as mock_exec,
     ):
-        await _orchestrator()._get_current_git_commit("10.0.0.5", "autobot", "/home/autobot/code")
+        await _orchestrator()._get_current_git_commit("10.0.0.5", "autobot", "/home/autobot/code")  # noqa: ssot-path
     _assert_ssh_argv_wellformed(list(mock_exec.call_args[0]))
