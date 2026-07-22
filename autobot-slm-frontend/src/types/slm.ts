@@ -171,6 +171,37 @@ export interface UpdateInfo {
 }
 
 /**
+ * Raw per-package update record as returned by the backend's
+ * UpdateInfoResponse (models/schemas.py) — field names mirror the wire
+ * format exactly (#11964).
+ */
+export interface NodeUpdateRecord {
+  update_id: string
+  node_id: string | null
+  package_name: string
+  current_version: string | null
+  available_version: string
+  severity: string
+  description: string | null
+  is_applied: boolean
+  applied_at: string | null
+  created_at: string
+}
+
+/**
+ * Response from GET /nodes/{node_id}/updates — the live "Check for updates"
+ * scan (#11964). code_update_available/code_status mirror the SAME
+ * node.code_status field NodeUpdateSummary reads, so the live scan and the
+ * fleet-summary badge can never disagree.
+ */
+export interface NodeUpdateCheckResponse {
+  updates: NodeUpdateRecord[]
+  total: number
+  code_update_available: boolean
+  code_status: string
+}
+
+/**
  * Role category for grouping
  */
 export type RoleCategory = 'core' | 'data' | 'application' | 'ai' | 'automation' | 'observability' | 'remote-access' | 'infrastructure'

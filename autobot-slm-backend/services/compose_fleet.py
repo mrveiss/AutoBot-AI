@@ -151,6 +151,19 @@ def _compose_nodes_enabled() -> bool:
     return os.getenv("SLM_COMPOSE_NODES", "false").strip().lower() in ("1", "true", "yes")
 
 
+def is_manager_node(node_id: str) -> bool:
+    """True when node_id is the SLM's own (manager/self) node (#11963).
+
+    The manager node's status is derived solely from
+    ``_heartbeat_self_managed_nodes`` — real-time psutil metrics of this very
+    process — so the reconciler's ICMP-ping reachability fallback in
+    ``_check_node_health`` (designed for externally-agent-heartbeating VM
+    nodes) must never override it. Ping is an unreliable/redundant signal for
+    a node that is, by definition, up while it is serving the health check.
+    """
+    return node_id == settings.slm_node_id
+
+
 async def _probe_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
     """Return True if a TCP connection to host:port succeeds within timeout."""
     try:
