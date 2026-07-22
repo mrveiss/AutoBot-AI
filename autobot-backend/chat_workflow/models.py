@@ -9,6 +9,8 @@ Issue #656: Implements Agent Zero's LogItem pattern with StreamingMessage class
 for stable message identity and distinct stream/update operations.
 """
 
+import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -17,6 +19,61 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from async_chat_workflow import WorkflowMessage
+
+logger = logging.getLogger(__name__)
+
+
+# Issue #716 / #11867: Canonical patterns for internal continuation prompts that
+# the LLM sometimes echoes back verbatim. These are never legitimate user-facing
+# content and must be stripped from the final message. This is the single source
+# of truth — chat_workflow.manager imports from here (no duplicate list).
+_INTERNAL_PROMPT_PATTERNS = [
+    re.compile(
+        r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
+        re.DOTALL | re.IGNORECASE,
+    ),
+    re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
+    re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
+    re.compile(
+        r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
+        re.DOTALL | re.IGNORECASE,
+    ),
+    re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
+    re.compile(r"---\s*\n\*\*CRITICAL MULTI-STEP.*?---", re.DOTALL | re.IGNORECASE),
+]
+
+
+def filter_internal_prompts(text: str) -> str:
+    """Strip internal continuation prompts the LLM echoes back (Issue #716).
+
+    Canonical implementation (Issue #11867 consolidation): the union of the two
+    previously-duplicated filters. Behaviour is deliberately conservative — if no
+    internal-prompt pattern matched, the input is returned byte-for-byte unchanged
+    so legitimate assistant output (including its own whitespace) is never touched.
+    Newline collapsing + strip run ONLY when an echo was actually removed.
+
+    Args:
+        text: LLM response text that may contain echoed internal prompts
+
+    Returns:
+        Text with internal prompts removed, or the original text if none present
+    """
+    filtered = text
+    for pattern in _INTERNAL_PROMPT_PATTERNS:
+        filtered = pattern.sub("", filtered)
+
+    if filtered == text:
+        # No internal-prompt echo present — return untouched.
+        return text
+
+    # An echo was stripped; clean up the blank runs it left behind.
+    filtered = re.sub(r"\n{3,}", "\n\n", filtered)
+    logger.debug(
+        "[Issue #716] Filtered internal prompts from response (original: %d chars, filtered: %d chars)",
+        len(text),
+        len(filtered),
+    )
+    return filtered.strip()
 
 
 class StreamingOperation(Enum):
@@ -198,8 +255,9 @@ class StreamingMessage:
     def _filter_internal_prompts(self, text: str) -> str:
         """Filter out internal continuation prompts that LLM echoes back (Issue #716).
 
-        The LLM sometimes echoes the continuation instructions we send it, which
-        should never be shown to the user.
+        Delegates to the canonical module-level :func:`filter_internal_prompts`
+        (Issue #11867 consolidation) so there is a single source of truth for the
+        patterns and behaviour.
 
         Args:
             text: Content that may contain echoed internal prompts
@@ -207,32 +265,7 @@ class StreamingMessage:
         Returns:
             Text with internal prompts removed
         """
-        import re
-
-        # Patterns for internal prompts that should not be shown to users
-        patterns = [
-            re.compile(
-                r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
-                re.DOTALL | re.IGNORECASE,
-            ),
-            re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
-            re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
-            re.compile(
-                r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
-                re.DOTALL | re.IGNORECASE,
-            ),
-            re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
-            re.compile(r"---\s*\n\*\*CRITICAL MULTI-STEP.*?---", re.DOTALL | re.IGNORECASE),
-        ]
-
-        filtered = text
-        for pattern in patterns:
-            filtered = pattern.sub("", filtered)
-
-        # Clean up multiple newlines
-        filtered = re.sub(r"\n{3,}", "\n\n", filtered)
-
-        return filtered.strip() if filtered != text else text
+        return filter_internal_prompts(text)
 
     def to_dict(self) -> Dict[str, Any]:
         """
