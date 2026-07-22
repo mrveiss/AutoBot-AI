@@ -1124,7 +1124,7 @@
               <div class="icon-wrap"><svg class="icon"><use href="#i-sliders"/></svg></div>
               <div>
                 <strong>Setup wizard</strong>
-                <p>Open the web interface at <code style="font-family:var(--font-mono);font-size:.85em">https://autobot.local</code> and follow the fleet configuration wizard.</p>
+                <p>Open the SLM at <code style="font-family:var(--font-mono);font-size:.85em">https://&lt;server-ip&gt;/slm/</code> and log in with the admin credentials the installer prints, then follow the fleet configuration wizard.</p>
               </div>
             </div>
             <div class="deploy-point">
@@ -1158,8 +1158,9 @@
 <span class="c-dim"># 2. Bootstrap control plane (~10 min)</span>
 <span class="c-cmd">sudo</span> ./install.sh
 
-<span class="c-dim"># 3. Open setup wizard</span>
-<span class="c-dim">#    https://&lt;your-server-ip&gt;</span>
+<span class="c-dim"># 3. Open the SLM setup wizard (URL + admin</span>
+<span class="c-dim">#    login are printed by the installer)</span>
+<span class="c-dim">#    https://&lt;your-server-ip&gt;/slm/</span>
 
 <span class="c-dim"># 4. Add fleet VMs in the wizard</span>
 <span class="c-dim">#    NPU worker · Redis · AI stack · Browser</span>
