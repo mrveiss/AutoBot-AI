@@ -688,6 +688,8 @@ class TakeoverManager:
         Record takeover request in memory system.
 
         Issue #665: Extracted from request_takeover to reduce function length.
+        Issue #11680: Synchronous SQLite MemoryManager calls (called via
+        asyncio.to_thread by request_takeover) — must NOT be awaited directly.
         """
         task_id = self.memory_manager.create_task_record(
             task_name="Takeover Request",
@@ -703,6 +705,30 @@ class TakeoverManager:
         )
         self.memory_manager.start_task(task_id)
         return task_id
+
+    def _record_completion_in_memory(
+        self,
+        session_id: str,
+        resolution: str,
+        request: TakeoverRequest,
+        completion_data: Dict[str, Any],
+    ) -> None:
+        """Record takeover-session completion in memory system (sync).
+
+        Issue #11680: extracted so complete_takeover_session can offload the
+        create->start->complete sequence via a single asyncio.to_thread call
+        instead of three separate event-loop-blocking sync calls.
+        """
+        completion_task_id = self.memory_manager.create_task_record(
+            task_name="Takeover Session Completion",
+            description=f"Takeover session completed: {resolution}",
+            priority=request.priority,
+            agent_type="takeover_manager",
+            inputs={"session_id": session_id},
+            metadata={"original_request": asdict(request)},
+        )
+        self.memory_manager.start_task(completion_task_id)
+        self.memory_manager.complete_task(completion_task_id, outputs=completion_data)
 
     def _is_critical_trigger(self, trigger: TakeoverTrigger) -> bool:
         """Check if trigger requires immediate task pause. Issue #620."""
@@ -755,7 +781,11 @@ class TakeoverManager:
             auto_approve,
         )
 
-        memory_task_id = self._record_takeover_in_memory(trigger, reason, priority, requesting_agent, affected_tasks)
+        # Issue #11680: offload sync SQLite MemoryManager writes to a worker
+        # thread so they never block the event loop.
+        memory_task_id = await asyncio.to_thread(
+            self._record_takeover_in_memory, trigger, reason, priority, requesting_agent, affected_tasks
+        )
         await self._req_task_set(request_id, memory_task_id)
         # M3: pass per-request timeout so TTL matches the request's own expiry.
         timeout_secs = int(timeout_minutes * 60) if timeout_minutes else None
@@ -820,7 +850,9 @@ class TakeoverManager:
 
         task_id = await self._req_task_get(request_id)
         if task_id:
-            self.memory_manager.complete_task(
+            # Issue #11680: offload sync SQLite MemoryManager write.
+            await asyncio.to_thread(
+                self.memory_manager.complete_task,
                 task_id,
                 outputs={
                     "session_id": session.session_id,
@@ -1048,16 +1080,11 @@ class TakeoverManager:
             "handback_notes": handback_notes,
         }
 
-        completion_task_id = self.memory_manager.create_task_record(
-            task_name="Takeover Session Completion",
-            description=f"Takeover session completed: {resolution}",
-            priority=updated.request.priority,
-            agent_type="takeover_manager",
-            inputs={"session_id": session_id},
-            metadata={"original_request": asdict(updated.request)},
+        # Issue #11680: offload the create->start->complete sync SQLite
+        # MemoryManager sequence to a single worker-thread hop.
+        await asyncio.to_thread(
+            self._record_completion_in_memory, session_id, resolution, updated.request, completion_data
         )
-        self.memory_manager.start_task(completion_task_id)
-        self.memory_manager.complete_task(completion_task_id, outputs=completion_data)
 
         logger.info("Takeover session completed: %s - %s", session_id, resolution)
         await self._notify_state_change("session_completed", session_id)
@@ -1156,7 +1183,8 @@ class TakeoverManager:
 
         task_id = await self._req_task_get(request_id)
         if task_id:
-            self.memory_manager.fail_task(task_id, "Takeover request expired")
+            # Issue #11680: offload sync SQLite MemoryManager write.
+            await asyncio.to_thread(self.memory_manager.fail_task, task_id, "Takeover request expired")
             await self._req_task_delete(request_id)
 
         if existed:
