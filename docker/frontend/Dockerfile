@@ -42,6 +42,10 @@ WORKDIR /app
 # autobot-plugins/ must be at /autobot-plugins/ because package-lock.json
 # references file:../autobot-plugins/terminal and ../vnc (resolved from /app/)
 COPY autobot-plugins/ /autobot-plugins/
+# libs/ must be present at /libs/ before npm ci because package-lock.json now
+# references file:../libs/autobot-ui (@autobot/ui shared kit, #12019), resolved
+# from /app/ — same requirement as the main-frontend builder stage above.
+COPY libs/ /libs/
 COPY autobot-slm-frontend/package.json autobot-slm-frontend/package-lock.json ./
 # Copy shared module (referenced by @shared alias)
 COPY autobot_shared/ /autobot_shared/
