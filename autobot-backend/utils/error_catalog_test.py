@@ -10,8 +10,8 @@ import pytest
 
 from utils.error_boundaries import ErrorCategory
 from utils.error_catalog import (
-    ErrorCatalog,
     get_error,
+    get_error_catalog_instance,
     get_error_message,
     validate_error_code,
 )
@@ -22,7 +22,7 @@ class TestErrorCatalog:
 
     def test_catalog_loads_successfully(self):
         """Test that catalog loads from default path"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
         catalog.reload_catalog()  # Force reload
 
         stats = catalog.get_catalog_stats()
@@ -31,7 +31,7 @@ class TestErrorCatalog:
 
     def test_get_error_by_code(self):
         """Test retrieving error by code"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
 
         # Test knowledge base error
         kb_error = catalog.get_error("KB_0001")
@@ -57,14 +57,14 @@ class TestErrorCatalog:
 
     def test_get_nonexistent_error(self):
         """Test retrieving error that doesn't exist"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
 
         error = catalog.get_error("INVALID_9999")
         assert error is None, "Nonexistent error should return None"
 
     def test_get_error_message(self):
         """Test error message retrieval"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
 
         # Test with existing code
         message = catalog.get_error_message("KB_0001")
@@ -76,7 +76,7 @@ class TestErrorCatalog:
 
     def test_validate_error_code(self):
         """Test error code validation"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
 
         # Valid codes
         assert catalog.validate_code("KB_0001") is True
@@ -89,7 +89,7 @@ class TestErrorCatalog:
 
     def test_list_codes_by_component(self):
         """Test listing error codes by component"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
 
         # Test knowledge base codes
         kb_codes = catalog.list_codes_by_component("KB")
@@ -108,7 +108,7 @@ class TestErrorCatalog:
 
     def test_catalog_stats(self):
         """Test catalog statistics"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
         stats = catalog.get_catalog_stats()
 
         # Check required fields
@@ -132,7 +132,7 @@ class TestErrorCatalog:
 
     def test_error_definition_to_dict(self):
         """Test ErrorDefinition to_dict conversion"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
         error = catalog.get_error("KB_0001")
 
         error_dict = error.to_dict()
@@ -169,14 +169,14 @@ class TestErrorCatalog:
 
     def test_singleton_pattern(self):
         """Test that ErrorCatalog is a singleton"""
-        catalog1 = ErrorCatalog.get_instance()
-        catalog2 = ErrorCatalog.get_instance()
+        catalog1 = get_error_catalog_instance()
+        catalog2 = get_error_catalog_instance()
 
         assert catalog1 is catalog2, "Should return same instance"
 
     def test_all_defined_error_codes(self):
         """Test that all expected error codes are defined"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
 
         # Knowledge base errors
         expected_kb_codes = [
@@ -211,7 +211,7 @@ class TestErrorCatalog:
 
     def test_error_categories_valid(self):
         """Test that all error categories map to valid ErrorCategory enums"""
-        catalog = ErrorCatalog.get_instance()
+        catalog = get_error_catalog_instance()
 
         valid_categories = {cat.value for cat in ErrorCategory}
 

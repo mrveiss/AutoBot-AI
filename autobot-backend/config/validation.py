@@ -198,8 +198,15 @@ class ValidationMixin:
     """Mixin providing configuration validation"""
 
     def is_feature_enabled(self, feature: str) -> bool:
-        """Check if a feature is enabled"""
-        return self.get_nested(f"features.{feature}", False)
+        """Check if a feature is enabled.
+
+        ``feature`` is a dot-path into the config with an "enabled" leaf,
+        e.g. "multimodal.vision" -> multimodal.vision.enabled, "npu" ->
+        npu.enabled (#11954: was reading a "features.<feature>" namespace
+        that no default config section ever populated, so every feature
+        silently evaluated to False).
+        """
+        return self.get_nested(f"{feature}.enabled", False)
 
     def get_security_config(self) -> Dict[str, Any]:
         """Get security configuration"""

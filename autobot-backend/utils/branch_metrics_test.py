@@ -90,11 +90,14 @@ class TestBranchMetricsCollector:
     async def test_get_branch_divergence_success(self, collector):
         """Test successful divergence calculation."""
         with patch.object(collector, "_run_git_cmd") as mock_run:
-            # Mock git responses
+            # Mock git responses. get_branch_divergence issues two rev-list
+            # --count calls: "{base}..{branch}" (ahead) then "{branch}..{base}"
+            # (behind) — discriminate on the commit-range ordering (#11954).
             async def mock_git_cmd(*args):
-                if "ahead" in str(args):
+                commit_range = args[-1] if args else ""
+                if commit_range.startswith(f"{collector.base_branch}.."):
                     return "5", 0
-                elif "behind" in str(args):
+                elif commit_range.startswith("feature/test.."):
                     return "3", 0
                 return "", 1
 
@@ -205,7 +208,7 @@ class TestModuleFunctions:
             )
             mock_collector.analyze_all_branches.return_value = [metrics1, metrics2]
 
-            result = await get_unhealthy_branches(threshold=50.0)
+            result = await get_unhealthy_branches(health_threshold=50.0)
 
             assert len(result) == 1
             assert result[0].branch == "bad"

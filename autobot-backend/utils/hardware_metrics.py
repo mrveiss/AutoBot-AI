@@ -106,8 +106,6 @@ class SystemPerformanceMetrics:
     cpu_load_1m: float
     cpu_load_5m: float
     cpu_load_15m: float
-    cpu_temperature_celsius: float | None = None
-    per_core_usage: List[float] = field(default_factory=list)
 
     # Memory Performance
     memory_total_gb: float
@@ -115,20 +113,24 @@ class SystemPerformanceMetrics:
     memory_available_gb: float
     memory_usage_percent: float
     swap_usage_percent: float
-    memory_bandwidth_gb_s: float | None = None
 
     # Storage I/O Performance
     disk_read_mb_s: float
     disk_write_mb_s: float
     disk_usage_percent: float
     disk_queue_depth: float
-    nvme_temperature_celsius: float | None = None
 
     # Network Performance
     network_upload_mb_s: float
     network_download_mb_s: float
     network_latency_ms: float
     network_packet_loss_percent: float
+
+    # Optional / defaulted fields must follow all required fields (dataclass ordering)
+    cpu_temperature_celsius: float | None = None
+    per_core_usage: List[float] = field(default_factory=list)
+    memory_bandwidth_gb_s: float | None = None
+    nvme_temperature_celsius: float | None = None
 
     # AutoBot Process Performance
     autobot_processes: List[Dict[str, Any]] = field(default_factory=list)

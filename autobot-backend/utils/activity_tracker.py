@@ -114,6 +114,7 @@ async def track_terminal_activity(
         secrets_used = detect_secret_usage(command)
 
     activity = TerminalActivityModel(
+        id=uuid.uuid4(),
         user_id=user_id,
         session_id=session_id,
         command=command,
@@ -167,6 +168,7 @@ async def track_file_activity(
         Activity ID
     """
     activity = FileActivityModel(
+        id=uuid.uuid4(),
         user_id=user_id,
         session_id=session_id,
         operation=operation,
@@ -219,6 +221,7 @@ async def track_browser_activity(
         secrets_used = detect_secret_usage(input_value)
 
     activity = BrowserActivityModel(
+        id=uuid.uuid4(),
         user_id=user_id,
         session_id=session_id,
         url=url,
@@ -275,6 +278,7 @@ async def track_desktop_activity(
         Activity ID
     """
     activity = DesktopActivityModel(
+        id=uuid.uuid4(),
         user_id=user_id,
         session_id=session_id,
         action=action,
