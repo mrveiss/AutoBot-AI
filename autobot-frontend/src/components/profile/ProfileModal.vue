@@ -233,10 +233,7 @@ import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
-import { useFocusTrap } from '@/composables/useFocusTrap'
-import { useFocusRestore } from '@/composables/useFocusRestore'
-import { useInitialFocus } from '@/composables/useInitialFocus'
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
 import { useTabs } from '@/composables/useTabs'
 
 const props = defineProps<{

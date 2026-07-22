@@ -45,7 +45,7 @@
 <script setup lang="ts">
 import { ref, watch, useId } from 'vue'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusTrap } from '@autobot/ui'
 
 const { dialogVisible, dialogOptions, _resolve } = useConfirmDialog()
 

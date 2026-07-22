@@ -134,10 +134,7 @@ import {
   type NotificationEvent,
   type NotificationChannel,
 } from '@/composables/useNotificationConfig';
-import { useFocusTrap } from '@/composables/useFocusTrap';
-import { useFocusRestore } from '@/composables/useFocusRestore';
-import { useInitialFocus } from '@/composables/useInitialFocus';
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock';
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui';
 
 const props = defineProps<{
   visible: boolean;
