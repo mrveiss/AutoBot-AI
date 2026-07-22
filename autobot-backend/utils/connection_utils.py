@@ -17,7 +17,13 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
 from autobot_shared.ssot_config import get_ollama_url
-from config import config as global_config_manager
+
+# NOTE: must be `config_manager` (config/manager.py's ConfigManager, backed by
+# config.yaml + defaults.py), not `config` (the SSOT AutoBotConfig proxy from
+# autobot_shared/ssot_config.py, attribute-access only). The `.get()`/
+# `.get_nested()` lookups below require `config_manager`. Using `config` here
+# previously raised AttributeError (#12069, same root cause as #11971).
+from config import config_manager as global_config_manager
 from constants.api_constants import PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS
 from constants.model_constants import ModelConstants
 from type_defs.common import Metadata
