@@ -65,10 +65,17 @@ EXCLUDE_PATTERNS=(
     # SSOT definition files (they ARE the config source)
     "registry_defaults.py"
     "ssot_mappings.py"
-    # Test files (assertions verify known config values)
+    # Test files (assertions verify known config values) — cover both pytest
+    # conventions (test_*.py prefix AND *_test.py suffix) and both TS conventions
+    # (*.spec.ts AND *.test.ts). NOTE: this deliberately stops the design-value
+    # scanner from flagging test files; hardcoded prod values in tests (e.g. an
+    # IP address, GH#11589) are a separate concern for a dedicated check, not a
+    # side-effect of this design-token scanner.
     "*_test.py"
+    "test_*.py"
     "*.spec.ts"
     "*_test.ts"
+    "*.test.ts"
 )
 
 build_exclude_args() {

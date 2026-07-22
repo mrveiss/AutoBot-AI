@@ -1395,8 +1395,8 @@ watch(viewMode, async (newMode) => {
 }
 
 .loading-spinner {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 3px solid var(--border-default);
   border-top-color: var(--color-primary);
   border-radius: 50%;
@@ -1411,8 +1411,8 @@ watch(viewMode, async (newMode) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   background: var(--color-error-bg);
   color: var(--color-error);
   border-radius: 50%;
@@ -1582,8 +1582,8 @@ watch(viewMode, async (newMode) => {
 }
 
 .network-controls button {
-  width: 28px;
-  height: 28px;
+  width: var(--spacing-7);
+  height: var(--spacing-7);
   border: 1px solid var(--border-default);
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
@@ -1604,7 +1604,7 @@ watch(viewMode, async (newMode) => {
 .zoom-level {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  min-width: 36px;
+  min-width: var(--spacing-9);
   text-align: center;
 }
 
@@ -1644,7 +1644,7 @@ watch(viewMode, async (newMode) => {
 }
 
 .expand-icon {
-  width: 16px;
+  width: var(--spacing-4);
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
@@ -1756,7 +1756,7 @@ watch(viewMode, async (newMode) => {
 
 .unresolved-badge {
   font-size: 9px;
-  padding: 1px var(--spacing-1);
+  padding: var(--spacing-px) var(--spacing-1);
   background: var(--color-warning-bg);
   color: var(--color-warning);
   border-radius: var(--radius-default);
@@ -1807,8 +1807,8 @@ watch(viewMode, async (newMode) => {
 }
 
 .legend-item .dot {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: 50%;
 }
 
@@ -1852,7 +1852,7 @@ watch(viewMode, async (newMode) => {
   top: var(--spacing-3);
   left: var(--spacing-3);
   width: 320px;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - var(--spacing-6));
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
