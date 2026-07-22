@@ -899,6 +899,71 @@ async def test_drain_lines_script_print_is_not_a_bogus_tool_call():
     assert script_out == ["hello from the script", json.dumps({"tool": "", "id": 0})]
 
 
+# ---------------------------------------------------------------------------
+# GH#11663: pump EOF flushes a newline-less final result line
+# ---------------------------------------------------------------------------
+
+
+def _stdout_frame(payload: bytes) -> bytes:
+    """Build one Docker-multiplexed stdout frame wrapping *payload*."""
+    return bytes([1, 0, 0, 0]) + len(payload).to_bytes(4, "big") + payload
+
+
+class _FakeAttachSocket:
+    """Minimal fake ``attach_socket`` result exposing only ``.recv`` (GH#11663).
+
+    Deliberately a plain object (not a ``MagicMock``): a ``MagicMock`` would
+    auto-vivify a ``._sock`` attribute on access, defeating the production
+    code's ``getattr(sock, "_sock", sock)`` fallback and hanging the pump on a
+    bottomless mock stream.
+    """
+
+    def __init__(self, chunks: list[bytes]):
+        self._chunks = list(chunks)
+
+    def recv(self, _size: int) -> bytes:
+        return self._chunks.pop(0) if self._chunks else b""
+
+
+@pytest.mark.asyncio
+async def test_pump_broker_io_flushes_residual_line_without_trailing_newline():
+    """A final result written without a trailing '\\n' must reach script_out on EOF."""
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    broker = MagicMock()
+    broker.handle_line = AsyncMock()
+    broker.budget_exhausted = False
+
+    container = MagicMock()
+    container.attach_socket.return_value = _FakeAttachSocket([_stdout_frame(b'{"answer": 42}')])
+
+    script_out: list[str] = []
+    await ex._pump_broker_io(container, broker, script_out)
+
+    assert script_out == ['{"answer": 42}']
+    broker.handle_line.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_pump_broker_io_normal_newline_terminated_stream_unchanged():
+    """A properly newline-terminated stream is captured once, with no duplicate/empty line."""
+    from secure_sandbox_executor import SecureSandboxExecutor
+
+    ex = object.__new__(SecureSandboxExecutor)
+    broker = MagicMock()
+    broker.handle_line = AsyncMock()
+    broker.budget_exhausted = False
+
+    container = MagicMock()
+    container.attach_socket.return_value = _FakeAttachSocket([_stdout_frame(b'{"answer": 42}\n')])
+
+    script_out: list[str] = []
+    await ex._pump_broker_io(container, broker, script_out)
+
+    assert script_out == ['{"answer": 42}']
+
+
 @pytest.mark.asyncio
 async def test_collect_broker_results_uses_script_stdout_not_rpc_logs():
     """#11613: result.stdout is the captured script output, not container.logs()."""
