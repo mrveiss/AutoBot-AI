@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import shutil
+import time
 from pathlib import Path
 from typing import Callable, Dict, List
 
@@ -35,6 +36,32 @@ logger = logging.getLogger(__name__)
 # PrivateTmp=true /tmp is namespaced anyway; the uid suffix protects runs
 # outside systemd (dev mode, manual uvicorn).
 ANSIBLE_LOCAL_TMP = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
+
+# #11492: the self-update ansible-playbook run (update-all-nodes.yml against
+# the SLM's own node) restarts autobot-slm-backend mid-run. The service is
+# KillMode=control-group, so systemd SIGTERMs the whole cgroup on restart —
+# including the ansible-playbook child — killing the run before Play 1's tail
+# and all of Play 2/3 execute. Detaching that one run into its own transient
+# systemd scope (a separate cgroup) lets it survive the restart.
+SELF_UPDATE_DETACH_UNIT_PREFIX = os.getenv("SLM_SELF_UPDATE_UNIT_PREFIX", "autobot-selfupdate")
+
+# Env vars forwarded to the detached scope via explicit --setenv=NAME=VALUE.
+# `sudo` (env_reset, see setup-passwordless-sudo.yml) strips the environment
+# before systemd-run ever sees it, and systemd-run does not forward the
+# caller's process environment to the unit it starts — each var must be
+# passed explicitly. Only a narrow allowlist (never secrets) is forwarded;
+# ansible receives its stored secrets via `-e @file` (#11735 pattern), not env.
+SYSTEMD_RUN_ENV_ALLOWLIST_EXACT = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "SSH_AUTH_SOCK")
+SYSTEMD_RUN_ENV_ALLOWLIST_PREFIXES = ("ANSIBLE_",)
+
+# Durable ansible-native log for detached self-update runs (#11492). A pipe's
+# read end is owned by this backend process, so once the Play 1 restart task
+# kills it, the pipe read side closes — a subsequent write from the (now
+# detached, still running) ansible-playbook process would raise
+# BrokenPipeError. ANSIBLE_LOG_PATH gives Play 1's tail and Play 2/3 a durable
+# record on disk independent of that pipe, mirroring the existing
+# /var/log/autobot/provision-wizard.log precedent (api/setup_wizard.py).
+SELF_UPDATE_LOG_PATH = Path(os.getenv("SLM_SELF_UPDATE_LOG_PATH", "/var/log/autobot/self-update-ansible.log"))
 
 
 class PlaybookExecutor:
@@ -425,19 +452,106 @@ class PlaybookExecutor:
             "ANSIBLE_LOCAL_TEMP": ANSIBLE_LOCAL_TMP,
         }
 
+    @staticmethod
+    def _self_update_detach_available() -> bool:
+        """Whether the self-update run can be detached into its own scope (#11492).
+
+        Both must hold:
+          - ``systemd-run`` is on PATH (creates the transient scope)
+          - this process is itself managed by systemd — ``INVOCATION_ID`` is set
+            only for units systemd starts, so it precisely answers "are we
+            running as a systemd service" (as opposed to `sd_booted()`-style
+            checks, which are true on any systemd host regardless of how this
+            process was launched). Without it there is no same-cgroup restart
+            to survive: dev ``uvicorn``, tests, containers without systemd as
+            PID 1 all fall back to the direct exec unchanged.
+        """
+        return shutil.which("systemd-run") is not None and "INVOCATION_ID" in os.environ
+
+    @staticmethod
+    def _ensure_self_update_log_path(env: Dict[str, str]) -> None:
+        """Point ansible at a durable on-disk log for detached runs (#11492).
+
+        Best-effort: a failure to create the log dir must not block the run —
+        it only means the pipe (while attached) remains the sole output.
+        """
+        try:
+            SELF_UPDATE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            env["ANSIBLE_LOG_PATH"] = str(SELF_UPDATE_LOG_PATH)
+        except OSError as exc:
+            logger.warning("Could not prepare self-update log path %s: %s", SELF_UPDATE_LOG_PATH, exc)
+
+    @staticmethod
+    def _systemd_run_env_args(env: Dict[str, str]) -> List[str]:
+        """Build explicit --setenv=NAME=VALUE args for the detached scope (#11492)."""
+        args = []
+        for key, value in env.items():
+            if key in SYSTEMD_RUN_ENV_ALLOWLIST_EXACT or key.startswith(SYSTEMD_RUN_ENV_ALLOWLIST_PREFIXES):
+                args.append(f"--setenv={key}={value}")
+        return args
+
+    def _wrap_with_systemd_scope(self, cmd: List[str], env: Dict[str, str]) -> List[str]:
+        """Wrap an ansible-playbook cmd to run in its own transient systemd scope.
+
+        A separate scope = a separate cgroup, so ``systemctl restart
+        autobot-slm-backend`` (KillMode=control-group) no longer SIGTERMs this
+        run. ``sudo`` mirrors the existing privilege pattern already used for
+        service restarts (_restart_slm_service) — the passwordless-sudo
+        sudoers rule this service already relies on. ``--uid``/``--gid`` drop
+        back to the caller's own identity so ansible-playbook still runs as
+        the SLM service user, not root; ``--working-directory`` replaces the
+        ``cwd=`` kwarg systemd-run does not inherit.
+        """
+        unit_name = f"{SELF_UPDATE_DETACH_UNIT_PREFIX}-{os.getpid()}-{int(time.time())}"
+        return [
+            "sudo",
+            "systemd-run",
+            "--scope",
+            "--collect",
+            f"--unit={unit_name}",
+            f"--uid={os.getuid()}",
+            f"--gid={os.getgid()}",
+            f"--working-directory={self.ansible_dir}",
+            *self._systemd_run_env_args(env),
+            "--",
+            *cmd,
+        ]
+
     async def _run_subprocess(
         self,
         cmd: List[str],
         env: Dict[str, str],
         progress_callback: Callable | None,
+        detach: bool = False,
     ) -> Dict[str, any]:
         """
         Launch ansible-playbook subprocess and collect output. Ref: #1088.
 
         Helper for execute_playbook.
+
+        Args:
+            detach: When True AND the runtime supports it (#11492), wrap the
+                command in ``systemd-run --scope --collect`` so it survives a
+                same-process ``systemctl restart autobot-slm-backend`` mid-run
+                (the self-update path). Falls back to the direct exec when
+                systemd-run/systemd-service context is unavailable (dev mode,
+                tests, containers).
         """
+        effective_cmd = cmd
+        if detach:
+            self._ensure_self_update_log_path(env)
+            if self._self_update_detach_available():
+                effective_cmd = self._wrap_with_systemd_scope(cmd, env)
+                logger.info("Self-update run detached into transient systemd scope")
+            else:
+                logger.warning(
+                    "Self-update detach requested but systemd-run/service context "
+                    "unavailable — running attached (this run will die if the "
+                    "backend restarts mid-flight)"
+                )
+
         process = await asyncio.create_subprocess_exec(
-            *cmd,
+            *effective_cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(self.ansible_dir),
@@ -516,6 +630,7 @@ class PlaybookExecutor:
         check_mode: bool = False,
         progress_callback: Callable | None = None,
         inventory_path: Path | None = None,
+        detach: bool = False,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -534,6 +649,10 @@ class PlaybookExecutor:
             check_mode: Run in check mode (dry run)
             progress_callback: Async function to call with progress updates
             inventory_path: Override inventory file (Issue #1294, wizard provisioning)
+            detach: Run detached in its own systemd scope (#11492). Only pass
+                True for the SLM self-update path (the run that restarts
+                autobot-slm-backend); ordinary per-role/per-node deploys leave
+                this False, since they don't kill their own process.
 
         Returns:
             Dict with keys: success (bool), output (str), returncode (int)
@@ -591,7 +710,7 @@ class PlaybookExecutor:
             # Override ansible.cfg default inventory to prevent merging
             # with production.yml when wizard passes a temp inventory (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
-            proc_result = await self._run_subprocess(cmd, env, progress_callback)
+            proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach)
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
