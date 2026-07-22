@@ -287,7 +287,7 @@ class TestLinkPipelineJina:
         pipe = LinkPipeline()
         mock_session = self._make_jina_mock_session(status=200, content="Title\n\nSome content text here.")
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)):
             result = await pipe._try_jina("https://example.com")
 
         assert result == "Title\n\nSome content text here."
@@ -348,7 +348,7 @@ class TestLinkPipelineJina:
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
 
         with (
-            patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)),
+            patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
         ):
             # _try_jina returns None on non-200, triggering BS4 fallback
@@ -563,10 +563,10 @@ class TestJinaCircuitBreaker:
         pipe = LinkPipeline()
 
         # First N calls raise → circuit opens
-        async def _always_raise(*args, **kwargs):
+        def _always_raise(*args, **kwargs):
             raise RuntimeError("simulated Jina outage")
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(side_effect=_always_raise)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(side_effect=_always_raise)):
             for _ in range(pl._JINA_FAILURE_THRESHOLD):
                 result = await pipe._try_jina("https://example.com/a")
                 assert result is None
@@ -576,11 +576,11 @@ class TestJinaCircuitBreaker:
         assert pl._jina_cooldown_until > __import__("time").monotonic()
 
         # Subsequent call must NOT invoke _get_jina_session (short-circuit)
-        called = AsyncMock()
+        called = MagicMock()
         with patch("media.link.pipeline._get_jina_session", new=called):
             result = await pipe._try_jina("https://example.com/b")
         assert result is None
-        called.assert_not_awaited()
+        called.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_circuit_expires_after_cooldown(self, _reset_jina_state):
@@ -603,8 +603,10 @@ class TestJinaCircuitBreaker:
 
         mock_session = MagicMock()
         mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)):
             result = await pipe._try_jina("https://example.com/c")
 
         assert result == "Title: Foo\n\nBody"
@@ -617,10 +619,10 @@ class TestJinaCircuitBreaker:
         pipe = LinkPipeline()
 
         # Two failures (below threshold)
-        async def _raise(*args, **kwargs):
+        def _raise(*args, **kwargs):
             raise RuntimeError("boom")
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(side_effect=_raise)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(side_effect=_raise)):
             await pipe._try_jina("https://example.com/x")
             await pipe._try_jina("https://example.com/y")
 
@@ -634,8 +636,10 @@ class TestJinaCircuitBreaker:
         mock_response.__aexit__ = AsyncMock(return_value=False)
         mock_session = MagicMock()
         mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)):
             await pipe._try_jina("https://example.com/z")
 
         assert len(pl._jina_failures_in_window) == 0
@@ -646,22 +650,30 @@ class TestJinaPooledSession:
 
     @pytest.mark.asyncio
     async def test_delegates_to_shared_http_client(self, _reset_jina_state):
-        """_get_jina_session returns the canonical shared session."""
+        """_get_jina_session yields the canonical shared session via tracked_session().
+
+        Issue #11656: uses the real HTTPClientManager singleton (only
+        ``get_session`` patched) so the real ``tracked_session()`` delegation
+        path — including active-request tracking — is exercised, not
+        reimplemented in the test.
+        """
+        from autobot_shared.http_client import get_http_client
         from media.link import pipeline as pl
 
-        sentinel_session = MagicMock()
-        mock_manager = MagicMock()
-        mock_manager.get_session = AsyncMock(return_value=sentinel_session)
+        manager = get_http_client()
+        sentinel_session = MagicMock(closed=False)
 
-        with patch("autobot_shared.http_client.get_http_client", return_value=mock_manager):
-            session = await pl._get_jina_session()
+        with patch.object(manager, "get_session", new=AsyncMock(return_value=sentinel_session)):
+            async with pl._get_jina_session() as session:
+                assert session is sentinel_session
 
-        assert session is sentinel_session
-        mock_manager.get_session.assert_awaited_once()
+        assert manager._active_requests == 0, "counter must be back to 0 after the CM exits"
 
     @pytest.mark.asyncio
     async def test_shared_session_reused_across_calls(self, _reset_jina_state):
         """Sequential _try_jina calls fetch through the same shared session."""
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
 
         mock_response = AsyncMock()
@@ -670,12 +682,11 @@ class TestJinaPooledSession:
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
 
-        shared_session = MagicMock()
+        shared_session = MagicMock(closed=False)
         shared_session.get = MagicMock(return_value=mock_response)
-        mock_manager = MagicMock()
-        mock_manager.get_session = AsyncMock(return_value=shared_session)
 
-        with patch("autobot_shared.http_client.get_http_client", return_value=mock_manager):
+        manager = get_http_client()
+        with patch.object(manager, "get_session", new=AsyncMock(return_value=shared_session)):
             await pipe._try_jina("https://example.com/1")
             await pipe._try_jina("https://example.com/2")
 

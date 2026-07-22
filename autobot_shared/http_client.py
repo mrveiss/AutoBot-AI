@@ -15,7 +15,8 @@ import hmac
 import logging
 import threading
 import time
-from typing import Any, Dict
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
@@ -222,9 +223,7 @@ class HTTPClientManager:
         session = await self.get_session()
 
         # Track active requests for utilization calculation
-        async with self._counter_lock:
-            self._request_count += 1
-            self._active_requests += 1
+        await self.increment_active()
 
         # Issue #697: Inject W3C trace context into outgoing headers
         try:
@@ -252,6 +251,48 @@ class HTTPClientManager:
             else:
                 logger.error("HTTP request failed: %s", e)
             raise
+
+    async def increment_active(self) -> None:
+        """
+        Increment the active-request counter (thread-safe).
+
+        Issue #11656: extracted from ``request()`` so both ``request()`` and
+        ``tracked_session()`` share the SAME counter-increment mechanism
+        instead of duplicating the lock/increment logic.
+        """
+        async with self._counter_lock:
+            self._request_count += 1
+            self._active_requests += 1
+
+    @asynccontextmanager
+    async def tracked_session(self) -> AsyncIterator[ClientSession]:
+        """
+        Async context manager for raw-session access that participates in
+        active-request tracking.
+
+        Issue #11656: callers using the raw ``get_session()`` (e.g. the Jina
+        fetch in ``media/link/pipeline.py``) were invisible to the
+        pool-recreation guard in ``_handle_pool_recreation()`` — a resize
+        driven by concurrent ``request()`` traffic could close the shared
+        session mid-flight. This helper increments/decrements the SAME
+        ``_active_requests`` counter that ``request()`` uses (via
+        ``increment_active()``/``decrement_active()``), so deferred pool
+        recreation now also accounts for in-flight raw-session users.
+
+        Usage:
+            async with http_client.tracked_session() as session:
+                async with session.get(url) as response:
+                    ...
+
+        Exception-safe: the counter is always decremented, even if the
+        caller raises.
+        """
+        await self.increment_active()
+        try:
+            session = await self.get_session()
+            yield session
+        finally:
+            await self.decrement_active()
 
     async def decrement_active(self) -> None:
         """
