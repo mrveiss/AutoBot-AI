@@ -22,9 +22,7 @@ from chat_workflow.models import StreamingMessage, filter_internal_prompts
 # A representative internal continuation prompt the LLM echoes back. Contains
 # markers matching multiple canonical patterns.
 ECHO = (
-    "**CRITICAL MULTI-STEP TASK INSTRUCTIONS**\n"
-    "You must keep going until the task is done.\n"
-    "**YOUR RESPONSE:**"
+    "**CRITICAL MULTI-STEP TASK INSTRUCTIONS**\n" "You must keep going until the task is done.\n" "**YOUR RESPONSE:**"
 )
 
 # The genuine, user-facing answer the model produced after the echo.
