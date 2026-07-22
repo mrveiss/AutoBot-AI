@@ -112,4 +112,7 @@ def test_get_redis_checkpointer_raises_when_unavailable():
     with pytest.raises(RuntimeError, match="AsyncRedisSaver"):
         import asyncio
 
-        asyncio.get_event_loop().run_until_complete(mod.get_redis_checkpointer())
+        # Use asyncio.run() instead of get_event_loop(): Python 3.14 no longer
+        # implicitly creates an event loop for a non-running thread, so
+        # get_event_loop() raises RuntimeError before the coroutine runs.
+        asyncio.run(mod.get_redis_checkpointer())
