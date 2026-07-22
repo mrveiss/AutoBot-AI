@@ -182,7 +182,7 @@ onMounted(() => {
 .filter-input {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-size: 0.875rem;
@@ -198,7 +198,7 @@ onMounted(() => {
   padding: 0.5rem;
   background: none;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-secondary);
   transition: all 0.2s;
@@ -216,8 +216,8 @@ onMounted(() => {
 }
 
 .refresh-icon {
-  width: 20px;
-  height: 20px;
+  width: var(--spacing-5);
+  height: var(--spacing-5);
 }
 
 .refresh-icon.spinning {
@@ -239,8 +239,8 @@ onMounted(() => {
 }
 
 .spinner {
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   animation: spin 1s linear infinite;
 }
 
@@ -251,13 +251,13 @@ onMounted(() => {
   padding: 1rem;
   background-color: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: #ef4444;
 }
 
 .error-banner svg {
-  width: 20px;
-  height: 20px;
+  width: var(--spacing-5);
+  height: var(--spacing-5);
   flex-shrink: 0;
 }
 
@@ -271,8 +271,8 @@ onMounted(() => {
 }
 
 .empty-icon {
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   margin-bottom: 1rem;
   opacity: 0.5;
 }
@@ -280,7 +280,7 @@ onMounted(() => {
 .audit-table-container {
   overflow-x: auto;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .audit-table {
@@ -336,7 +336,7 @@ onMounted(() => {
 .capability code {
   background-color: var(--color-background-secondary);
   padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   font-size: 0.8125rem;
   font-family: monospace;
 }
@@ -348,7 +348,7 @@ onMounted(() => {
 .status-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
