@@ -19,6 +19,8 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+# Issue #12002 (#11506 T1): agent<->human input arbitration
+from api.desktop_control_lock import is_actuation_muted
 from api.schemas_system import (
     ClipboardSyncRequest,
     ConnectionSettings,
@@ -60,9 +62,6 @@ from api.vnc_humanization import (
     should_add_human_pause,
     simulate_mouse_curve,
 )
-
-# Issue #12002 (#11506 T1): agent<->human input arbitration
-from api.desktop_control_lock import is_actuation_muted
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
