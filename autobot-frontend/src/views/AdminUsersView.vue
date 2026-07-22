@@ -5,17 +5,17 @@
   <div class="admin-users-view view-container">
     <div class="page-header">
       <div class="page-header-content">
-        <h2 class="page-title">User Management</h2>
-        <p class="page-subtitle">Manage users, roles, and account status</p>
+        <h2 class="page-title">{{ t('adminUsers.title') }}</h2>
+        <p class="page-subtitle">{{ t('adminUsers.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="btn-action-primary" @click="showCreateModal = true">
           <Icon name="user-plus" />
-          Add User
+          {{ t('adminUsers.addUser') }}
         </button>
         <button class="btn-action-secondary" :disabled="loading" @click="loadUsers">
           <Icon name="sync-alt" :spin="loading" />
-          Refresh
+          {{ t('common.refresh') }}
         </button>
       </div>
     </div>
@@ -33,7 +33,7 @@
         v-model="searchQuery"
         type="text"
         class="search-input"
-        placeholder="Search by username, email, or name…"
+:placeholder="t('adminUsers.searchPlaceholder')"
         @input="debouncedSearch"
       />
     </div>
@@ -41,26 +41,26 @@
     <!-- Users table -->
     <div class="table-section">
       <div v-if="loading && users.length === 0" class="loading-state">
-        <Icon name="sync-alt" :spin="true" /> Loading users…
+        <Icon name="sync-alt" :spin="true" /> {{ t('adminUsers.loading') }}
       </div>
 
       <table v-else class="data-table">
         <thead>
           <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Display Name</th>
-            <th>Role</th>
-            <th>Voice Bundle</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{{ t('adminUsers.colUsername') }}</th>
+            <th>{{ t('adminUsers.colEmail') }}</th>
+            <th>{{ t('adminUsers.colDisplayName') }}</th>
+            <th>{{ t('adminUsers.colRole') }}</th>
+            <th>{{ t('adminUsers.colVoiceBundle') }}</th>
+            <th>{{ t('adminUsers.colStatus') }}</th>
+            <th>{{ t('adminUsers.colActions') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="user in users" :key="user.id">
             <td class="username-cell">
               <span class="username">{{ user.username }}</span>
-              <span v-if="user.is_platform_admin" class="badge badge-admin">admin</span>
+              <span v-if="user.is_platform_admin" class="badge badge-admin">{{ t('adminUsers.roleAdmin') }}</span>
             </td>
             <td>{{ user.email }}</td>
             <td>{{ user.display_name || '—' }}</td>
@@ -70,9 +70,9 @@
                 :value="primaryRole(user)"
                 @change="onRoleChange(user, ($event.target as HTMLSelectElement).value)"
               >
-                <option value="admin">admin</option>
-                <option value="user">user</option>
-                <option value="readonly">readonly</option>
+                <option value="admin">{{ t('adminUsers.roleAdmin') }}</option>
+                <option value="user">{{ t('adminUsers.roleUser') }}</option>
+                <option value="readonly">{{ t('adminUsers.roleReadonly') }}</option>
               </select>
             </td>
             <td class="bundle-cell">
@@ -83,14 +83,14 @@
             </td>
             <td>
               <span class="badge" :class="user.is_active ? 'badge-active' : 'badge-inactive'">
-                {{ user.is_active ? 'active' : 'inactive' }}
+                {{ user.is_active ? t('adminUsers.statusActive') : t('adminUsers.statusInactive') }}
               </span>
             </td>
             <td class="actions-cell">
               <button
                 v-if="user.is_active"
                 class="btn-icon btn-warning"
-                title="Deactivate"
+:title="t('adminUsers.titleDeactivate')"
                 @click="toggleActive(user, false)"
               >
                 <Icon name="ban" />
@@ -98,21 +98,21 @@
               <button
                 v-else
                 class="btn-icon btn-success"
-                title="Activate"
+:title="t('adminUsers.titleActivate')"
                 @click="toggleActive(user, true)"
               >
                 <Icon name="check-circle" />
               </button>
               <button
                 class="btn-icon btn-info"
-                title="Assign Voice Bundle"
+:title="t('adminUsers.titleAssignBundle')"
                 @click="openBundleModal(user)"
               >
                 <Icon name="microphone" />
               </button>
               <button
                 class="btn-icon btn-danger"
-                title="Delete"
+:title="t('common.delete')"
                 @click="confirmDelete(user)"
               >
                 <Icon name="trash" />
@@ -120,7 +120,7 @@
             </td>
           </tr>
           <tr v-if="!loading && users.length === 0">
-            <td colspan="7" class="empty-row">No users found.</td>
+            <td colspan="7" class="empty-row">{{ t('adminUsers.empty') }}</td>
           </tr>
         </tbody>
       </table>
@@ -151,24 +151,24 @@
     <BaseModal
       :close-label="t('ui.modal.closeDialog')"
       v-model="showCreateModal"
-      title="Add User"
+:title="t('adminUsers.addUser')"
       size="sm"
     >
       <form @submit.prevent="createUser">
         <div class="form-group">
-          <label>Email</label>
+          <label>{{ t('adminUsers.fieldEmail') }}</label>
           <input v-model="newUser.email" type="email" class="form-input" required />
         </div>
         <div class="form-group">
-          <label>Username</label>
+          <label>{{ t('adminUsers.fieldUsername') }}</label>
           <input v-model="newUser.username" type="text" class="form-input" required minlength="3" />
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label>{{ t('adminUsers.fieldPassword') }}</label>
           <input v-model="newUser.password" type="password" class="form-input" required minlength="8" />
         </div>
         <div class="form-group">
-          <label>Display Name</label>
+          <label>{{ t('adminUsers.fieldDisplayName') }}</label>
           <input v-model="newUser.display_name" type="text" class="form-input" />
         </div>
         <div v-if="createError" class="error-inline">{{ createError }}</div>
@@ -176,10 +176,10 @@
         <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true"></button>
       </form>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
+        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
         <button type="button" class="btn-action-primary" :disabled="creating" @click="createUser">
           <Icon v-if="creating" name="sync-alt" :spin="true" />
-          Create User
+          {{ t('adminUsers.createUser') }}
         </button>
       </template>
     </BaseModal>
@@ -188,18 +188,18 @@
     <BaseModal
       :close-label="t('ui.modal.closeDialog')"
       :model-value="!!bundleTarget"
-      title="Assign Voice Bundle"
+:title="t('adminUsers.titleAssignBundle')"
       size="sm"
       @close="closeBundleModal"
     >
       <template v-if="bundleTarget">
         <p class="bundle-user-name">
-          User: <strong>{{ bundleTarget.username }}</strong>
+          {{ t('adminUsers.userLabel') }} <strong>{{ bundleTarget.username }}</strong>
         </p>
         <div class="form-group">
-          <label>Voice Bundle</label>
+          <label>{{ t('adminUsers.fieldVoiceBundle') }}</label>
           <select v-model="newBundleName" class="form-input" :disabled="bundleModalLoading">
-            <option :value="null">— Use role default —</option>
+            <option :value="null">{{ t('adminUsers.useRoleDefault') }}</option>
             <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
               {{ VOICE_BUNDLE_LABELS[name] }}
             </option>
@@ -208,7 +208,7 @@
         <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
       </template>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="closeBundleModal">Cancel</button>
+        <button type="button" class="btn-action-secondary" @click="closeBundleModal">{{ t('common.cancel') }}</button>
         <button
           type="button"
           class="btn-action-primary"
@@ -216,7 +216,7 @@
           @click="doAssignBundle"
         >
           <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
-          Save
+          {{ t('common.save') }}
         </button>
       </template>
     </BaseModal>
@@ -225,15 +225,15 @@
     <BaseModal
       :close-label="t('ui.modal.closeDialog')"
       :model-value="!!deleteTarget"
-      title="Delete User"
+:title="t('adminUsers.deleteUserTitle')"
       size="sm"
       :show-close="false"
       @close="deleteTarget = null"
     >
-      <p v-if="deleteTarget">Delete <strong>{{ deleteTarget.username }}</strong>? This cannot be undone.</p>
+      <p v-if="deleteTarget">{{ t('adminUsers.deleteConfirm') }} <strong>{{ deleteTarget.username }}</strong>? {{ t('adminUsers.deleteUndone') }}</p>
       <template #actions>
-        <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
-        <button class="btn-action-danger" @click="deleteUser">Delete</button>
+        <button class="btn-action-secondary" @click="deleteTarget = null">{{ t('common.cancel') }}</button>
+        <button class="btn-action-danger" @click="deleteUser">{{ t('common.delete') }}</button>
       </template>
     </BaseModal>
   </div>
