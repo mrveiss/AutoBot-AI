@@ -138,7 +138,7 @@ defineExpose({ reset })
   flex-direction: column;
   gap: var(--spacing-3, 0.75rem);
   padding: var(--spacing-4, 1rem);
-  background: var(--color-bg-card, #1e1e2e);
+  background: var(--color-bg-card, var(--mmchat-card-bg));
   border-radius: var(--radius-lg, 0.5rem);
   overflow: hidden;
 }
@@ -154,7 +154,7 @@ defineExpose({ reset })
 .multi-model-chat__picker-label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -170,7 +170,7 @@ defineExpose({ reset })
   gap: var(--spacing-1, 0.25rem);
   cursor: pointer;
   font-size: 0.8125rem;
-  color: var(--text-primary, #e5e7eb);
+  color: var(--text-primary);
 }
 
 .multi-model-chat__model-name {
@@ -181,8 +181,8 @@ defineExpose({ reset })
 .multi-model-chat__model-ctx {
   font-size: 0.6875rem;
   font-family: ui-monospace, monospace;
-  color: var(--text-muted, #9ca3af);
-  background: var(--color-bg-tertiary, #1a1a2e);
+  color: var(--text-muted);
+  background: var(--color-bg-tertiary, var(--mmchat-surface-tertiary));
   border-radius: 0.25rem;
   padding: 0 0.25rem;
   cursor: default;
@@ -197,9 +197,9 @@ defineExpose({ reset })
 .multi-model-chat__textarea {
   flex: 1;
   resize: vertical;
-  background: var(--color-bg-input, #2a2a3e);
-  color: var(--text-primary, #e5e7eb);
-  border: 1px solid var(--border-default, #374151);
+  background: var(--color-bg-input, var(--mmchat-input-bg));
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 0.375rem);
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
   font-size: 0.875rem;
@@ -207,15 +207,15 @@ defineExpose({ reset })
 }
 
 .multi-model-chat__textarea:focus {
-  outline: 2px solid var(--color-electric-500, #6366f1);
+  outline: 2px solid var(--color-electric-500);
   outline-offset: 1px;
 }
 
 .multi-model-chat__send-btn {
   align-self: flex-end;
   padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
-  background: var(--color-electric-600, #4f46e5);
-  color: #fff;
+  background: var(--color-electric-600);
+  color: var(--mmchat-on-accent);
   border: none;
   border-radius: var(--radius-md, 0.375rem);
   font-size: 0.875rem;
@@ -231,7 +231,7 @@ defineExpose({ reset })
 }
 
 .multi-model-chat__send-btn:not(:disabled):hover {
-  background: var(--color-electric-500, #6366f1);
+  background: var(--color-electric-500);
 }
 
 /* ---- Responses ---- */
@@ -251,8 +251,8 @@ defineExpose({ reset })
 }
 
 .multi-model-chat__response-card {
-  background: var(--color-bg-secondary, #13131f);
-  border: 1px solid var(--border-default, #374151);
+  background: var(--color-bg-secondary, var(--mmchat-response-bg));
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 0.375rem);
   overflow: hidden;
   display: flex;
@@ -260,7 +260,7 @@ defineExpose({ reset })
 }
 
 .multi-model-chat__response-card--error {
-  border-color: var(--color-error, #ef4444);
+  border-color: var(--color-error);
 }
 
 .multi-model-chat__response-header {
@@ -268,15 +268,15 @@ defineExpose({ reset })
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
-  background: var(--color-bg-tertiary, #1a1a2e);
-  border-bottom: 1px solid var(--border-default, #374151);
+  background: var(--color-bg-tertiary, var(--mmchat-surface-tertiary));
+  border-bottom: 1px solid var(--border-default);
   gap: var(--spacing-2, 0.5rem);
 }
 
 .multi-model-chat__response-model {
   font-family: ui-monospace, monospace;
   font-size: 0.75rem;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -292,18 +292,18 @@ defineExpose({ reset })
 }
 
 .multi-model-chat__response-badge--streaming {
-  background: var(--color-electric-900, #1e1b4b);
-  color: var(--color-electric-300, #a5b4fc);
+  background: var(--color-electric-900);
+  color: var(--color-electric-300);
 }
 
 .multi-model-chat__response-badge--done {
-  background: var(--color-success-900, #14532d);
-  color: var(--color-success-300, #86efac);
+  background: var(--color-success-900, var(--mmchat-badge-done-bg));
+  color: var(--color-success-300, var(--mmchat-badge-done-text));
 }
 
 .multi-model-chat__response-badge--error {
-  background: var(--color-error-900, #450a0a);
-  color: var(--color-error-300, #fca5a5);
+  background: var(--color-error-900, var(--mmchat-badge-error-bg));
+  color: var(--color-error-300, var(--mmchat-badge-error-text));
 }
 
 .multi-model-chat__response-body {
@@ -316,7 +316,7 @@ defineExpose({ reset })
   margin: var(--spacing-0);
   font-family: ui-monospace, monospace;
   font-size: 0.8125rem;
-  color: var(--text-primary, #e5e7eb);
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.6;
@@ -324,7 +324,7 @@ defineExpose({ reset })
 
 .multi-model-chat__error-msg {
   font-size: 0.8125rem;
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
   margin: var(--spacing-0);
 }
 

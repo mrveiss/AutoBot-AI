@@ -828,7 +828,7 @@ onMounted(loadProjects)
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
 }
@@ -915,7 +915,7 @@ onMounted(loadProjects)
 .action-link {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent, var(--projbrowser-accent-text)));
   text-decoration: none;
 }
 
@@ -944,7 +944,7 @@ onMounted(loadProjects)
 .create-textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -956,7 +956,7 @@ onMounted(loadProjects)
 .create-select {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -970,7 +970,7 @@ onMounted(loadProjects)
 }
 
 .create-help-error {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 /* GH#11129: repo linkage styles */
@@ -1004,7 +1004,7 @@ onMounted(loadProjects)
 
 .repo-link {
   font-size: 0.8125rem;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent, var(--projbrowser-accent-text)));
   text-decoration: none;
   word-break: break-all;
 }
@@ -1019,7 +1019,7 @@ onMounted(loadProjects)
   color: var(--text-secondary);
   background: var(--bg-hover);
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   word-break: break-all;
 }
 
@@ -1033,18 +1033,18 @@ onMounted(loadProjects)
 }
 
 .repo-status-ready {
-  color: var(--color-success, #16a34a);
-  background: var(--color-success-bg, #dcfce7);
+  color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .repo-status-error {
-  color: var(--color-error, #dc2626);
-  background: var(--color-error-bg, #fee2e2);
+  color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .repo-status-syncing {
-  color: var(--color-warning, #d97706);
-  background: var(--color-warning-bg, #fef3c7);
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .repo-actions {
@@ -1062,7 +1062,7 @@ onMounted(loadProjects)
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
   transition: color var(--duration-200);
 }
 
@@ -1092,18 +1092,18 @@ onMounted(loadProjects)
 }
 
 .lifecycle-active {
-  color: var(--color-success, #16a34a);
-  background: var(--color-success-bg, #dcfce7);
+  color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .lifecycle-archived {
-  color: var(--color-warning, #d97706);
-  background: var(--color-warning-bg, #fef3c7);
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .lifecycle-pending_disposal {
-  color: var(--color-error, #dc2626);
-  background: var(--color-error-bg, #fee2e2);
+  color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .lifecycle-disposed {

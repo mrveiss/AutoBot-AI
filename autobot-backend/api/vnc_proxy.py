@@ -14,12 +14,23 @@ enabling the agent to see what users are viewing in real-time.
 """
 
 import asyncio
+import uuid
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
-from api.schemas_system import VncProxyStatusResponse
+from api.desktop_control_lock import (
+    acquire_human_control,
+    get_control_lock_state,
+    release_human_control,
+)
+from api.schemas_system import (
+    DesktopControlAcquireRequest,
+    DesktopControlLockResponse,
+    DesktopControlReleaseRequest,
+    VncProxyStatusResponse,
+)
 from api.ws_security import enforce_ws_origin
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -139,6 +150,137 @@ async def record_observation(vnc_type: str, observation_type: str, data: Metadat
         logger.debug("Failed to record observation for %s: %s", vnc_type, e)
 
 
+async def _audit_control_lock_change(action: str, session_id: str, current_user: dict) -> None:
+    """Best-effort audit log for a control-lock acquire/release (#12002).
+
+    Uses integrations.desktop_tracking (Issue #873), the existing desktop
+    activity audit hook. Never raises -- PostgreSQL may be disabled entirely
+    in single_user deployments (get_async_session_factory hard-raises in
+    that mode), and a missing/unauthenticated user_id must not block the
+    safety-critical lock operation itself.
+    """
+    raw_user_id = current_user.get("user_id")
+    if not raw_user_id:
+        logger.debug("Skipping control-lock audit for %s: no user_id on caller", action)
+        return
+    try:
+        user_id = uuid.UUID(raw_user_id)
+    except (ValueError, TypeError):
+        logger.debug("Skipping control-lock audit for %s: non-UUID user_id", action)
+        return
+
+    try:
+        from integrations.desktop_tracking import track_desktop_action
+        from user_management.database import get_async_session_factory
+
+        session_factory = get_async_session_factory()
+        async with session_factory() as db:
+            await track_desktop_action(
+                db=db,
+                user_id=user_id,
+                action=action,
+                session_id=session_id,
+                app_name=current_user.get("username"),
+            )
+            await db.commit()
+    except RuntimeError as e:
+        # PostgreSQL not enabled for this deployment mode -- expected in single_user.
+        logger.debug("Control-lock audit skipped (PostgreSQL unavailable): %s", e)
+    except Exception as e:
+        logger.warning("Control-lock audit logging failed for %s (non-fatal): %s", action, e)
+
+
+@router.post("/{vnc_type}/control/acquire", response_model=DesktopControlLockResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="acquire_desktop_control",
+    error_code_prefix="VNC_PROXY_CONTROL",
+)
+async def acquire_desktop_control(
+    vnc_type: str,
+    request: DesktopControlAcquireRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Human takeover: acquire the desktop control-lock (#12002, #11506 T1).
+
+    Muting the agent's actuation calls (api.vnc_manager / api.vnc_mcp) until
+    this is released or its idle-TTL expires.
+    """
+    if vnc_type not in VNC_ENDPOINTS:
+        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+
+    owner = current_user.get("username") or "unknown"
+    result = await acquire_human_control(request.session_id, owner)
+    await _audit_control_lock_change("control_lock_acquire", request.session_id, current_user)
+
+    return {
+        "success": result["success"],
+        "session_id": request.session_id,
+        "owner": result["owner"],
+        "human_active": result["human_active"],
+        "message": result["message"],
+    }
+
+
+@router.post("/{vnc_type}/control/release", response_model=DesktopControlLockResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="release_desktop_control",
+    error_code_prefix="VNC_PROXY_CONTROL",
+)
+async def release_desktop_control(
+    vnc_type: str,
+    request: DesktopControlReleaseRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Human handback: release the desktop control-lock (#12002, #11506 T1).
+
+    The agent resumes actuation immediately once released.
+    """
+    if vnc_type not in VNC_ENDPOINTS:
+        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+
+    owner = current_user.get("username") or "unknown"
+    result = await release_human_control(request.session_id, owner)
+    await _audit_control_lock_change("control_lock_release", request.session_id, current_user)
+
+    return {
+        "success": result["success"],
+        "session_id": request.session_id,
+        "owner": result["owner"],
+        "human_active": result["human_active"],
+        "message": result["message"],
+    }
+
+
+@router.get("/{vnc_type}/control/status", response_model=DesktopControlLockResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_desktop_control_status",
+    error_code_prefix="VNC_PROXY_CONTROL",
+)
+async def get_desktop_control_status(
+    vnc_type: str,
+    session_id: str = "default",
+    current_user: dict = Depends(get_current_user),
+):
+    """Get current desktop control-lock owner/state (#12002, #11506 T1)."""
+    if vnc_type not in VNC_ENDPOINTS:
+        raise HTTPException(status_code=404, detail=f"Unknown VNC type: {vnc_type}")
+
+    lock_state = await get_control_lock_state(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "owner": lock_state["owner"],
+        "human_active": lock_state["human_active"],
+        "message": (f"Control held by {lock_state['owner']}" if lock_state["owner"] else "Agent has control"),
+    }
+
+
 @router.get("/{vnc_type}/vnc.html", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -242,6 +384,14 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
 
     Proxies WebSocket traffic between frontend and VNC server,
     allowing backend to observe and log VNC traffic for agent
+
+    Issue #12002 (#11506 T1): this is the human's input path -- raw RFB
+    protocol frames forwarded straight through to the VNC server by
+    _forward_client_to_vnc. It never calls into api.vnc_manager's xdotool
+    endpoints, so human input is inherently NEVER gated by the desktop
+    control-lock; only the agent's actuation calls are (see
+    api.desktop_control_lock / the /control/acquire /control/release
+    endpoints above, which a human explicitly calls to take/release control).
 
     Args:
         vnc_type: 'desktop' or 'browser'

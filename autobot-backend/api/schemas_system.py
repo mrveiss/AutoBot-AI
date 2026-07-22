@@ -1106,6 +1106,9 @@ class VncRunningResponse(BaseModel):
 class VncStatusMessageResponse(BaseModel):
     status: str
     message: str
+    # Issue #12002 (#11506 T1): True when this call was a no-op because a
+    # human currently holds the desktop control-lock.
+    muted: bool = False
 
 
 class VncScreenshotResponse(BaseModel):
@@ -1198,19 +1201,24 @@ class MouseClickRequest(BaseModel):
     x: int = Field(..., ge=0, description="X coordinate")
     y: int = Field(..., ge=0, description="Y coordinate")
     button: str = Field(default="left", description="Mouse button: left, middle, right")
+    # Issue #12002 (#11506 T1): gates agent actuation against the desktop control-lock.
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class KeyboardTypeRequest(BaseModel):
     text: str = Field(..., description="Text to type")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class SpecialKeyRequest(BaseModel):
     key: str = Field(..., description="Special key name (e.g., Return, Escape, ctrl+c)")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class MouseScrollRequest(BaseModel):
     direction: str = Field(..., description="Scroll direction: up or down")
     amount: int = Field(default=3, ge=1, le=10, description="Scroll amount (1-10)")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class MouseDragRequest(BaseModel):
@@ -1218,6 +1226,7 @@ class MouseDragRequest(BaseModel):
     y1: int = Field(..., ge=0, description="Start Y coordinate")
     x2: int = Field(..., ge=0, description="End X coordinate")
     y2: int = Field(..., ge=0, description="End Y coordinate")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class ClipboardSyncRequest(BaseModel):
@@ -1580,6 +1589,8 @@ class DesktopClickMcpResponse(BaseModel):
     action: str
     coordinates: Dict[str, int]
     button: str
+    # Issue #12002 (#11506 T1): True when muted because a human holds control.
+    muted: bool = False
 
 
 class DesktopKeyboardTypeMcpResponse(BaseModel):
@@ -1587,6 +1598,7 @@ class DesktopKeyboardTypeMcpResponse(BaseModel):
     message: str
     action: str
     text_length: int
+    muted: bool = False
 
 
 class DesktopSpecialKeyMcpResponse(BaseModel):
@@ -1594,6 +1606,7 @@ class DesktopSpecialKeyMcpResponse(BaseModel):
     message: str
     action: str
     key: str
+    muted: bool = False
 
 
 class DesktopScreenshotMcpResponse(BaseModel):
@@ -1612,20 +1625,39 @@ class DesktopObserveStateMcpResponse(BaseModel):
     active_window: str | None = None
     screenshot: str | None = None
     screenshot_format: str | None = None
+    # Issue #12002 (#11506 T1): lets the agent see it should pause.
+    human_active: bool = False
+    control_owner: str | None = None
 
 
 class DesktopMouseClickRequest(BaseModel):
     x: int = Field(..., ge=0)
     y: int = Field(..., ge=0)
     button: str = Field(default="left")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class DesktopKeyboardTypeRequest(BaseModel):
     text: str
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class DesktopSpecialKeyRequest(BaseModel):
     key: str
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlStatusRequest(BaseModel):
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlStatusMcpResponse(BaseModel):
+    success: bool
+    session_id: str
+    human_active: bool
+    owner: str | None = None
+    acquired_at: str | None = None
+    message: str
 
 
 class DesktopObserveStateRequest(BaseModel):
@@ -3725,6 +3757,28 @@ class VncProxyStatusResponse(BaseModel):
     accessible: bool
     status: int | None = None
     error: str | None = None
+
+
+class DesktopControlAcquireRequest(BaseModel):
+    """Request for POST /vnc-proxy/{vnc_type}/control/acquire (#12002)."""
+
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlReleaseRequest(BaseModel):
+    """Request for POST /vnc-proxy/{vnc_type}/control/release (#12002)."""
+
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlLockResponse(BaseModel):
+    """Response for the desktop control-lock acquire/release/status endpoints (#12002)."""
+
+    success: bool
+    session_id: str
+    owner: str | None = None
+    human_active: bool
+    message: str
 
 
 # ---------------------------------------------------------------------------
