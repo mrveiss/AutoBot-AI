@@ -131,7 +131,9 @@ backend:
 
     # Deployment settings
     AUTOBOT_DEPLOYMENT_MODE: "production"  # Infrastructure mode: local/hybrid/distributed/production
-    AUTOBOT_USER_MODE: "single_company"    # User management: single_company/multi_company/provider
+    # #11671: reference the canonical backend_user_mode var, never a scattered
+    # literal, so full user management stays single-sourced (no single_user).
+    AUTOBOT_USER_MODE: "{{ backend_user_mode }}"    # User management: single_company/multi_company/provider
     AUTOBOT_BACKEND_HOST: "0.0.0.0"
     AUTOBOT_BACKEND_PORT: 8001
 

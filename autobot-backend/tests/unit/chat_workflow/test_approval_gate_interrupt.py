@@ -15,7 +15,6 @@ execute_tools nodes gate and dispatch exactly once.
 
 from __future__ import annotations
 
-
 import pytest
 
 

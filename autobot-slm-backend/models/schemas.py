@@ -561,10 +561,18 @@ class UpdateInfoResponse(BaseModel):
 
 
 class UpdateCheckResponse(BaseModel):
-    """Update check response."""
+    """Update check response.
+
+    code_update_available/code_status (#11964) surface the SAME
+    node.code_status field the fleet update-summary badge reads
+    (NodeUpdateSummary below), so the live per-node check and the
+    badge can never disagree.
+    """
 
     updates: List[UpdateInfoResponse]
     total: int
+    code_update_available: bool = False
+    code_status: str = "unknown"
 
 
 class UpdateApplyRequest(BaseModel):

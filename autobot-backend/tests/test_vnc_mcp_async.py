@@ -155,6 +155,8 @@ def _install_stubs() -> dict:
     nc = MagicMock()
     nc.VNC_HOST = "localhost"
     nc.VNC_PORT = 5900
+    # Issue #11579: canonical desktop display shared with gui_controller.py
+    nc.DESKTOP_DISPLAY = ":1"
     _stub("constants.network_constants", NetworkConstants=nc)
     _stub("type_defs")
     _stub("type_defs.common", Metadata=dict)
