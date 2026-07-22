@@ -732,6 +732,19 @@
   --costdash-mode-dollars-text: #1d4ed8;  /* "dollars" budget-mode badge text */
   --costdash-mode-tokens-bg: #fef3c7;     /* "tokens" budget-mode badge fill */
   --costdash-mode-tokens-text: #92400e;   /* "tokens" budget-mode badge text */
+
+  /* ============================================
+   * WORKFLOW CANVAS TOKENS
+   * Issue #11977 (umbrella #11515). Scoped to workflow/WorkflowCanvas.vue.
+   * Hex-only (deliberately NO OKLCH override) so the canvas renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * --wfcanvas-on-warning: black label on the warning-colored experimental
+   * badge (--text-on-warning carries an OKLCH override that would drift).
+   * --wfcanvas-node-switch: cyan header fill for the "switch" node type —
+   * no existing exact token (--chart-cyan is a different cyan).
+   * ============================================ */
+  --wfcanvas-on-warning: #000;      /* experimental badge text on warning bg */
+  --wfcanvas-node-switch: #0891b2;  /* "switch" node-type header fill */
 }
 
 /* ============================================
