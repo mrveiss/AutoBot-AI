@@ -104,7 +104,7 @@ export class ChatController {
       // general /chat send is unchanged.
       const activeCtx = this.chatStore.activeChatContext
       if (activeCtx && Object.keys(activeCtx).length > 0) {
-        options = { ...activeCtx, ...(options || {}) }
+        options = { ...activeCtx, ...options }
       }
 
       // Validate message content
