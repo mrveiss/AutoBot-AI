@@ -46,11 +46,22 @@ For local backend + frontend development you can also run `./run_agent.sh`. For 
 two-phase deployment model, bare-metal (systemd) installs, and full system requirements,
 see [INSTALL.md](../INSTALL.md) and the [Installation Guide](user-guide/01-installation.md).
 
-### Open your dashboard
+### Continue setup in the SLM
 
-Visit **http://localhost** in your browser. AutoBot is ready to use.
+Setup finishes in the **Service Lifecycle Manager (SLM)** — AutoBot's management layer —
+not at a static dashboard:
 
-For a guided first run, see the [Quick Start](user-guide/02-quickstart.md) and
+- **Installer (Option A):** the installer's last phase prints your **SLM URL**
+  (`https://<server-ip>/slm/`) and the **admin credentials**. Open that URL and log in
+  (self-signed certificate — expect a browser warning). The **Setup Wizard** launches
+  automatically and walks you through: add fleet nodes → test connections → enroll agents
+  → assign roles → provision the fleet → verify health → Fleet Overview.
+- **Docker (Option B):** the user UI is at **http://localhost**; the SLM admin is at
+  **http://localhost/slm**.
+
+You can re-run the wizard later from **Settings > General > Re-run Setup Wizard**. For the
+full two-phase flow and the setup-wizard steps, see [INSTALL.md](../INSTALL.md); for a
+guided first run see the [Quick Start](user-guide/02-quickstart.md) and
 [Configuration Guide](user-guide/03-configuration.md).
 
 ## What You Can Do
