@@ -2,16 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for co-located managed-service resolution in update-all (#11605).
+"""Tests for co-located managed-role resolution in update-all (#11605, #12083).
 
 update-all's slm_self_update stage covers only the SLM control plane and the
 fleet stage skips the self-node, so on a co-located single-box install the
-managed application services (autobot-backend / autobot-frontend) were updated
-by NEITHER stage when the SLM commit was already current. These tests cover the
-_resolve_colocated_managed_services helper that closes that gap via the existing
-per-component drift/resolve path — including its explicit #11611 autobot_shared-
-first ordering (this loop is a THIRD deploy site, so shared-first must be enforced
-here too, not inherited).
+managed application roles (backend, celery, scheduler, frontend, ai-stack,
+slm-agent, ...) were updated by NEITHER stage when the SLM commit was already
+current.
+
+#11605 originally closed this gap with a code-rsync-only resolve for a
+hardcoded (autobot-backend, autobot-frontend) 2-tuple — which never applied
+env/systemd render or npm build (#12083's root cause). These tests now cover
+the #12083 replacement: _resolve_colocated_managed_services runs each managed
+role's COMPLETE ansible procedure (run_role_full_procedure, the same
+entrypoint the per-role Migrate button uses) for a role set derived from
+NodeRole/Node.roles — not a hardcoded tuple — while still enforcing the
+#11611 autobot_shared-first ordering as a THIRD deploy site.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ import asyncio
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -84,7 +91,7 @@ if "models" in sys.modules and "models.schemas" in sys.modules:
 del _MODELS_SNAPSHOT
 
 
-_ALLOWED = {"autobot-backend", "autobot-frontend"}
+_NODE_ID = "00-SLM-Manager"
 
 
 @pytest.fixture(autouse=True)
@@ -100,152 +107,361 @@ def _restore_event_loop_after():
         asyncio.set_event_loop(asyncio.new_event_loop())
 
 
-def test_resolves_only_drifted_colocated_components() -> None:
-    """A drifted co-located component is rsynced + post-synced; a clean one is skipped."""
+def _role(name: str, playbook: str | None = "playbooks/deploy_role.yml") -> SimpleNamespace:
+    return SimpleNamespace(name=name, ansible_playbook=playbook)
+
+
+# ---------------------------------------------------------------------------
+# (a) update-all now invokes the FULL role procedure, not rsync
+# ---------------------------------------------------------------------------
+
+
+def test_resolves_full_procedure_for_each_colocated_role() -> None:
+    """Each co-located role gets run_role_full_procedure — not rsync/post-sync."""
     stage = UpdateAllStage(name="slm_self_update")
+    backend_role = _role("backend")
+    ai_stack_role = _role("ai-stack", playbook="setup-ai-stack.yml")
 
-    # autobot-backend has drift, autobot-frontend does not.
-    async def fake_drift(component: str) -> bool:
-        return component == "autobot-backend"
-
-    rsynced: list = []
-
-    async def fake_rsync(src, comp, excludes):
-        rsynced.append(comp)
-        return True, ""
-
-    post_synced: list = []
-
-    async def fake_post_sync(comp, src, dep):
-        post_synced.append(comp)
-        return False, ["ok"], True
-
-    with (
-        patch("api.code_sync.ALLOWED_COMPONENTS", _ALLOWED),
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
-        patch("api.code_sync._component_has_file_drift", side_effect=fake_drift),
-        patch("api.code_sync.get_default_source_dir", return_value="/opt/autobot/code_source/autobot-backend"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-backend"),
-        patch("api.code_sync._rsync_component_local", side_effect=fake_rsync),
-        patch("api.code_sync._run_post_sync_steps", side_effect=fake_post_sync),
-    ):
-        asyncio.run(_resolve_colocated_managed_services(stage))
-
-    # Only the drifted component is resolved.
-    assert rsynced == ["autobot-backend"]
-    assert post_synced == ["autobot-backend"]
-
-
-def test_shared_first_called_before_component_rsync() -> None:
-    """#11611: _ensure_autobot_shared_synced runs BEFORE the component rsync (order lock)."""
-    stage = UpdateAllStage(name="slm_self_update")
     calls: list = []
 
-    async def fake_drift(component: str) -> bool:
-        return component == "autobot-backend"
+    async def fake_full_procedure(role, node_id):
+        calls.append((role.name, node_id))
+        return {"success": True, "role": role.name, "output": "ok"}
+
+    with (
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value={"backend", "ai-stack"})),
+        patch("api.code_sync._load_colocated_roles", AsyncMock(return_value=[backend_role, ai_stack_role])),
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure),
+    ):
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
+
+    assert set(calls) == {("backend", _NODE_ID), ("ai-stack", _NODE_ID)}
+
+
+def test_role_without_playbook_is_skipped_not_run() -> None:
+    """A role with no ansible_playbook (e.g. autobot_shared) is logged as skipped.
+
+    run_role_full_procedure itself owns the no_playbook decision (#12096 review
+    — a single source of truth instead of a duplicate pre-check here), so the
+    co-located loop DOES call it, but its no_playbook result is surfaced as a
+    "skipped" log line, not a FAILED one.
+    """
+    stage = UpdateAllStage(name="slm_self_update")
+    no_playbook_role = _role("autobot_shared", playbook=None)
+
+    async def fake_full_procedure(role, node_id):
+        return {"success": False, "role": role.name, "error": "no_playbook"}
+
+    with (
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value={"autobot_shared"})),
+        patch("api.code_sync._load_colocated_roles", AsyncMock(return_value=[no_playbook_role])),
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure) as proc_mock,
+    ):
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
+
+    proc_mock.assert_called_once()
+    assert any("skipped" in msg and "FAILED" not in msg for msg in stage.log_lines)
+
+
+# ---------------------------------------------------------------------------
+# (b) the managed-role set is derived from node roles, not a hardcoded tuple
+# ---------------------------------------------------------------------------
+
+
+def test_role_set_derived_from_node_role_and_node_roles_column() -> None:
+    """_get_colocated_managed_role_names unions NodeRole ACTIVE rows + Node.roles,
+    minus control-plane roles and the docker/autobot_shared exclusions — never a
+    hardcoded (autobot-backend, autobot-frontend) tuple.
+    """
+
+    class _FakeScalars:
+        def __init__(self, values):
+            self._values = values
+
+        def all(self):
+            return self._values
+
+    class _FakeResult:
+        def __init__(self, values=None, scalar=None):
+            self._values = values
+            self._scalar = scalar
+
+        def scalars(self):
+            return _FakeScalars(self._values or [])
+
+        def scalar_one_or_none(self):
+            return self._scalar
+
+    fake_db = MagicMock()
+    fake_db.execute = AsyncMock(
+        side_effect=[
+            _FakeResult(values=["ai-stack", "slm-agent"]),  # NodeRole ACTIVE rows
+            _FakeResult(scalar=["ai-stack", "slm-agent", "backend", "slm-backend", "docker"]),  # Node.roles
+        ]
+    )
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return fake_db
+
+        async def __aexit__(self, *exc):
+            return False
+
+    fake_db_service = SimpleNamespace(session=lambda: _FakeSession())
+
+    # Patched via the live module objects (importlib.import_module), not the
+    # "services.database.db_service" string form: other test modules in a full
+    # sweep pop/replace sys.modules["services"]'s attribute bindings (#9780-style
+    # stub churn), which breaks unittest.mock's dotted-path getattr resolution
+    # even though "services.database"/"services.role_registry" are themselves
+    # present in sys.modules. Resolving the modules directly sidesteps that.
+    import importlib
+
+    _services_database = importlib.import_module("services.database")
+    _services_role_registry = importlib.import_module("services.role_registry")
+    with (
+        patch.object(_services_database, "db_service", fake_db_service),
+        patch.object(_services_role_registry, "CONTROL_PLANE_ROLE_NAMES", frozenset({"slm-backend", "slm-frontend"})),
+    ):
+        names = asyncio.run(_CS._get_colocated_managed_role_names(_NODE_ID))
+
+    # ai-stack/slm-agent/backend survive; slm-backend (control-plane) and
+    # docker (excluded infra role) are filtered out.
+    assert names == {"ai-stack", "slm-agent", "backend"}
+
+
+# ---------------------------------------------------------------------------
+# (c) autobot_shared-first ordering preserved
+# ---------------------------------------------------------------------------
+
+
+def test_shared_first_called_before_role_procedures() -> None:
+    """#11611: _ensure_autobot_shared_synced runs BEFORE any role procedure (order lock)."""
+    stage = UpdateAllStage(name="slm_self_update")
+    calls: list = []
 
     async def fake_shared(component: str):
         calls.append(("shared", component))
         return True, "ok"
 
-    async def fake_rsync(src, comp, excludes):
-        calls.append(("rsync", comp))
-        return True, ""
+    async def fake_get_names(node_id):
+        calls.append(("get_names", node_id))
+        return {"backend"}
 
-    async def fake_post_sync(comp, src, dep):
-        calls.append(("post", comp))
-        return False, ["ok"], True
+    async def fake_load_roles(role_names):
+        calls.append(("load_roles", tuple(sorted(role_names))))
+        return [_role("backend")]
+
+    async def fake_full_procedure(role, node_id):
+        calls.append(("procedure", role.name))
+        return {"success": True}
 
     with (
-        patch("api.code_sync.ALLOWED_COMPONENTS", _ALLOWED),
         patch("api.code_sync._ensure_autobot_shared_synced", side_effect=fake_shared),
-        patch("api.code_sync._component_has_file_drift", side_effect=fake_drift),
-        patch("api.code_sync.get_default_source_dir", return_value="/opt/autobot/code_source/autobot-backend"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-backend"),
-        patch("api.code_sync._rsync_component_local", side_effect=fake_rsync),
-        patch("api.code_sync._run_post_sync_steps", side_effect=fake_post_sync),
+        patch("api.code_sync._get_colocated_managed_role_names", side_effect=fake_get_names),
+        patch("api.code_sync._load_colocated_roles", side_effect=fake_load_roles),
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure),
     ):
-        asyncio.run(_resolve_colocated_managed_services(stage))
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
 
-    # shared-first for autobot-backend precedes its own rsync, which precedes post-sync.
-    assert calls == [
-        ("shared", "autobot-backend"),
-        ("rsync", "autobot-backend"),
-        ("post", "autobot-backend"),
-    ]
+    assert calls[0] == ("shared", "autobot-backend")
+    assert calls[-1] == ("procedure", "backend")
 
 
-def test_shared_sync_failure_skips_component_rsync() -> None:
-    """#11611 fail-safe: a failed shared sync skips the component rsync + restart entirely."""
+def test_shared_sync_failure_aborts_before_any_role_procedure() -> None:
+    """#11611 fail-safe: a failed shared sync skips role resolution + procedures entirely."""
     stage = UpdateAllStage(name="slm_self_update")
 
-    async def fake_drift(component: str) -> bool:
-        return component == "autobot-backend"
-
     with (
-        patch("api.code_sync.ALLOWED_COMPONENTS", _ALLOWED),
         patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(False, "shared boom"))),
-        patch("api.code_sync._component_has_file_drift", side_effect=fake_drift),
-        patch("api.code_sync.get_default_source_dir", return_value="/opt/autobot/code_source/autobot-backend"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-backend"),
-        patch("api.code_sync._rsync_component_local", AsyncMock()) as rsync_mock,
-        patch("api.code_sync._run_post_sync_steps", AsyncMock()) as post_mock,
+        patch("api.code_sync._get_colocated_managed_role_names", AsyncMock()) as names_mock,
+        patch("api.code_sync._load_colocated_roles", AsyncMock()) as load_mock,
+        patch("api.roles.run_role_full_procedure", AsyncMock()) as proc_mock,
     ):
-        asyncio.run(_resolve_colocated_managed_services(stage))
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
 
-    rsync_mock.assert_not_called()
-    post_mock.assert_not_called()
+    names_mock.assert_not_called()
+    load_mock.assert_not_called()
+    proc_mock.assert_not_called()
 
 
-def test_no_resolution_when_no_drift() -> None:
-    """When neither co-located service drifts, nothing is synced or restarted."""
+def test_no_resolution_when_no_roles_assigned() -> None:
+    """When no managed role is assigned/detected on this node, nothing runs."""
     stage = UpdateAllStage(name="slm_self_update")
 
     with (
-        patch("api.code_sync._component_has_file_drift", AsyncMock(return_value=False)),
-        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock()) as shared_mock,
-        patch("api.code_sync._rsync_component_local", AsyncMock()) as rsync_mock,
-        patch("api.code_sync._run_post_sync_steps", AsyncMock()) as post_mock,
-    ):
-        asyncio.run(_resolve_colocated_managed_services(stage))
-
-    shared_mock.assert_not_called()
-    rsync_mock.assert_not_called()
-    post_mock.assert_not_called()
-
-
-def test_rsync_failure_does_not_abort_other_components() -> None:
-    """A per-component rsync failure is logged and the loop continues (non-fatal)."""
-    stage = UpdateAllStage(name="slm_self_update")
-
-    async def fake_drift(component: str) -> bool:
-        return True  # both drift
-
-    post_synced: list = []
-
-    async def fake_post_sync(comp, src, dep):
-        post_synced.append(comp)
-        return False, ["ok"], True
-
-    async def fake_rsync(src, comp, excludes):
-        # autobot-backend fails to rsync; autobot-frontend succeeds.
-        if comp == "autobot-backend":
-            return False, "rsync boom"
-        return True, ""
-
-    with (
-        patch("api.code_sync.ALLOWED_COMPONENTS", _ALLOWED),
         patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
-        patch("api.code_sync._component_has_file_drift", side_effect=fake_drift),
-        patch("api.code_sync.get_default_source_dir", return_value="/opt/autobot/code_source/x"),
-        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/x"),
-        patch("api.code_sync._rsync_component_local", side_effect=fake_rsync),
-        patch("api.code_sync._run_post_sync_steps", side_effect=fake_post_sync),
+        patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value=set())),
+        patch("api.code_sync._load_colocated_roles", AsyncMock(return_value=[])) as load_mock,
+        patch("api.roles.run_role_full_procedure", AsyncMock()) as proc_mock,
     ):
-        asyncio.run(_resolve_colocated_managed_services(stage))
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
 
-    # backend rsync failed → not post-synced; frontend still resolved.
-    assert post_synced == ["autobot-frontend"]
+    load_mock.assert_called_once_with(set())
+    proc_mock.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# (d) per-role failure is non-fatal
+# ---------------------------------------------------------------------------
+
+
+def test_role_procedure_failure_does_not_abort_other_roles() -> None:
+    """A per-role procedure exception is logged and the loop continues (non-fatal)."""
+    stage = UpdateAllStage(name="slm_self_update")
+    backend_role = _role("backend")
+    frontend_role = _role("frontend")
+
+    async def fake_full_procedure(role, node_id):
+        if role.name == "backend":
+            raise RuntimeError("ansible boom")
+        return {"success": True, "role": role.name}
+
+    with (
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch(
+            "api.code_sync._get_colocated_managed_role_names",
+            AsyncMock(return_value={"backend", "frontend"}),
+        ),
+        patch(
+            "api.code_sync._load_colocated_roles",
+            AsyncMock(return_value=[backend_role, frontend_role]),
+        ),
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure) as proc_mock,
+    ):
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
+
+    # Both roles were attempted despite backend raising.
+    assert proc_mock.call_count == 2
+    assert any("resolve error" in msg for msg in stage.log_lines)
+
+
+def test_role_procedure_unsuccessful_result_is_non_fatal() -> None:
+    """A role procedure that returns success=False is logged and the loop continues."""
+    stage = UpdateAllStage(name="slm_self_update")
+    backend_role = _role("backend")
+    frontend_role = _role("frontend")
+
+    async def fake_full_procedure(role, node_id):
+        if role.name == "backend":
+            return {"success": False, "role": "backend", "error": "playbook_not_found"}
+        return {"success": True, "role": "frontend"}
+
+    with (
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch(
+            "api.code_sync._get_colocated_managed_role_names",
+            AsyncMock(return_value={"backend", "frontend"}),
+        ),
+        patch(
+            "api.code_sync._load_colocated_roles",
+            AsyncMock(return_value=[backend_role, frontend_role]),
+        ),
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure) as proc_mock,
+    ):
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
+
+    assert proc_mock.call_count == 2
+    assert any("FAILED" in msg for msg in stage.log_lines)
+
+
+# ---------------------------------------------------------------------------
+# (f) dedupe: roles sharing the SAME real ansible deploy run ONCE (#12096 review)
+# ---------------------------------------------------------------------------
+
+
+def test_dedupe_collapses_shared_ansible_deploys_to_one_run_each() -> None:
+    """backend/celery/scheduler share ONE backend-role deploy (playbooks/
+    deploy_role.yml `include_role: backend`); ai-stack/chromadb share ONE
+    setup-ai-stack.yml deploy. Distinct roles (slm-agent, frontend) each still
+    get their own run — a node carrying all seven role names must run the
+    backend procedure ONCE (not 3x), ai-stack ONCE, and slm-agent/frontend once
+    each: 4 runs total, never 7.
+    """
+    stage = UpdateAllStage(name="slm_self_update")
+    node_role_names = {"backend", "celery", "scheduler", "ai-stack", "chromadb", "slm-agent", "frontend"}
+
+    role_table = {
+        "backend": _role("backend", playbook="playbooks/deploy_role.yml"),
+        "celery": _role("celery", playbook="playbooks/deploy_role.yml"),
+        "scheduler": _role("scheduler", playbook="playbooks/deploy_role.yml"),
+        "ai-stack": _role("ai-stack", playbook="setup-ai-stack.yml"),
+        "chromadb": _role("chromadb", playbook="setup-ai-stack.yml"),
+        "slm-agent": _role("slm-agent", playbook="deploy-slm-agent.yml"),
+        "frontend": _role("frontend", playbook="playbooks/deploy_role.yml"),
+    }
+
+    async def fake_get_role(db, name):
+        return role_table.get(name)
+
+    calls: list = []
+
+    async def fake_full_procedure(role, node_id):
+        calls.append(role.name)
+        return {"success": True, "role": role.name}
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return MagicMock()
+
+        async def __aexit__(self, *exc):
+            return False
+
+    fake_db_service = SimpleNamespace(session=lambda: _FakeSession())
+
+    import importlib
+
+    _services_database = importlib.import_module("services.database")
+    _services_role_registry = importlib.import_module("services.role_registry")
+
+    with (
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value=node_role_names)),
+        patch.object(_services_database, "db_service", fake_db_service),
+        patch.object(_services_role_registry, "get_role", side_effect=fake_get_role),
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure),
+    ):
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
+
+    # Alphabetically-first survivor per coverage group: "backend" (of
+    # backend/celery/scheduler) and "ai-stack" (of ai-stack/chromadb).
+    assert sorted(calls) == ["ai-stack", "backend", "frontend", "slm-agent"]
+    assert any("covered by backend" in msg for msg in stage.log_lines)
+    assert any("covered by ai-stack" in msg for msg in stage.log_lines)
+
+
+def test_coverage_key_never_merges_roles_on_different_playbooks() -> None:
+    """Two roles on genuinely different playbooks always get distinct keys —
+    the dedupe never merges roles it hasn't verified share real coverage.
+    """
+    frontend_role = _role("frontend", playbook="playbooks/deploy_role.yml")
+    slm_agent_role = _role("slm-agent", playbook="deploy-slm-agent.yml")
+
+    assert _CS._colocated_coverage_key(frontend_role) != _CS._colocated_coverage_key(slm_agent_role)
+
+
+def test_deploy_role_yml_groups_match_playbook_when_clauses() -> None:
+    """_DEPLOY_ROLE_YML_GROUPS must mirror deploy_role.yml's actual `when:
+    deploy_role in [...]` clauses (#12096 review: "coverage-driven, not a
+    hardcoded skip list") — this test fails the moment the two drift apart.
+    """
+    import re
+
+    playbook_path = _BACKEND_ROOT / "ansible" / "playbooks" / "deploy_role.yml"
+    text = playbook_path.read_text(encoding="utf-8")
+    found_groups = {frozenset(m.split(", ")) for m in re.findall(r"deploy_role in \[([^\]]+)\]", text)}
+    found_groups = {frozenset(name.strip("' ") for name in group) for group in found_groups}
+
+    assert found_groups == set(_CS._DEPLOY_ROLE_YML_GROUPS)
+
+
+# ---------------------------------------------------------------------------
+# Retained utility coverage (#11605): _component_has_file_drift itself is
+# still correct even though it is no longer called from the co-located
+# resolve path (superseded by the DB-driven role-presence check, #12083).
+# ---------------------------------------------------------------------------
 
 
 def test_component_has_file_drift_false_when_not_deployed() -> None:
