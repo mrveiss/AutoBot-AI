@@ -4332,6 +4332,17 @@
       "presetHigh": "High",
       "presetMediumDesc": "Balanced quality and performance",
       "delay": "Delay:"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "redis": {

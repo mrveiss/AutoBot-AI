@@ -60,6 +60,9 @@ from api.vnc_humanization import (
     should_add_human_pause,
     simulate_mouse_curve,
 )
+
+# Issue #12002 (#11506 T1): agent<->human input arbitration
+from api.desktop_control_lock import is_human_active
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -332,22 +335,39 @@ def _run_xdotool_cmd(args: list[str], timeout: int = 5) -> Dict[str, str]:
         return {"status": "error", "message": "Internal server error"}
 
 
+def _muted_result() -> Dict[str, object]:
+    """Standard no-op result when the human control-lock is held (#12002).
+
+    The agent actuation caller must NOT run the xdotool command in this
+    case -- the human is currently driving the same X input queue.
+    """
+    return {
+        "status": "muted",
+        "message": "Muted: human is in control of the desktop session.",
+        "muted": True,
+    }
+
+
 @router.post("/click", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLICK")
 async def vnc_mouse_click(
     request: MouseClickRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+) -> Dict[str, object]:
     """
     Perform mouse click at specified coordinates with human-like behavior.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
 
     Args:
         request: MouseClickRequest with x, y coordinates and button type
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_human_active(request.session_id):
+        return _muted_result()
+
     # Add human-like randomness to click position (Issue #74 - Area 5)
     humanized_x, humanized_y = humanize_click_position(request.x, request.y)
 
@@ -366,17 +386,21 @@ async def vnc_mouse_click(
 async def vnc_keyboard_type(
     request: KeyboardTypeRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+) -> Dict[str, object]:
     """
     Type text via keyboard with human-like speed and pauses.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
 
     Args:
         request: KeyboardTypeRequest with text to type
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_human_active(request.session_id):
+        return _muted_result()
+
     # Get humanized typing delay in milliseconds for xdotool
     delay_seconds = humanize_typing_speed()
     delay_ms = int(delay_seconds * 1000)
@@ -413,17 +437,21 @@ async def vnc_keyboard_type(
 async def vnc_special_key(
     request: SpecialKeyRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+) -> Dict[str, object]:
     """
     Send special key or key combination.
     Issue #74: Desktop interaction controls.
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
 
     Args:
         request: SpecialKeyRequest with key name (e.g., "Return", "ctrl+c")
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_human_active(request.session_id):
+        return _muted_result()
+
     return _run_xdotool_cmd(["key", request.key])
 
 
@@ -432,17 +460,21 @@ async def vnc_special_key(
 async def vnc_mouse_scroll(
     request: MouseScrollRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+) -> Dict[str, object]:
     """
     Scroll mouse wheel.
     Issue #74: Desktop interaction controls.
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
 
     Args:
         request: MouseScrollRequest with direction and amount
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_human_active(request.session_id):
+        return _muted_result()
+
     # Mouse buttons: 4 = scroll up, 5 = scroll down
     button = "4" if request.direction == "up" else "5"
 
@@ -459,17 +491,21 @@ async def vnc_mouse_scroll(
 async def vnc_mouse_drag(
     request: MouseDragRequest,
     admin_check: bool = Depends(check_admin_permission),
-) -> Dict[str, str]:
+) -> Dict[str, object]:
     """
     Perform mouse drag operation with curved, human-like movement.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
 
     Args:
         request: MouseDragRequest with start and end coordinates
 
     Returns:
-        {"status": "success|error", "message": "..."}
+        {"status": "success|error|muted", "message": "..."}
     """
+    if await is_human_active(request.session_id):
+        return _muted_result()
+
     # Add realistic delay before starting drag
     pre_delay = humanize_action_delay()
     await asyncio.sleep(pre_delay)
