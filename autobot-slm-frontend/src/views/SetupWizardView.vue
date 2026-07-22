@@ -1122,8 +1122,8 @@ onMounted(async () => {
   background: none;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 1rem;
@@ -1154,8 +1154,8 @@ onMounted(async () => {
 }
 
 .step-indicator {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1718,8 +1718,8 @@ input.full-width {
 }
 
 .success-icon {
-  width: 64px;
-  height: 64px;
+  width: var(--spacing-16);
+  height: var(--spacing-16);
   border-radius: 50%;
   background: var(--color-success);
   color: var(--color-white);
