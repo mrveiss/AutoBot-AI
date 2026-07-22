@@ -734,6 +734,19 @@
   --costdash-mode-tokens-text: #92400e;   /* "tokens" budget-mode badge text */
 
   /* ============================================
+   * WORKFLOW CANVAS TOKENS
+   * Issue #11977 (umbrella #11515). Scoped to workflow/WorkflowCanvas.vue.
+   * Hex-only (deliberately NO OKLCH override) so the canvas renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * --wfcanvas-on-warning: black label on the warning-colored experimental
+   * badge (--text-on-warning carries an OKLCH override that would drift).
+   * --wfcanvas-node-switch: cyan header fill for the "switch" node type —
+   * no existing exact token (--chart-cyan is a different cyan).
+   * ============================================ */
+  --wfcanvas-on-warning: #000;      /* experimental badge text on warning bg */
+  --wfcanvas-node-switch: #0891b2;  /* "switch" node-type header fill */
+
+  /* ============================================
    * INTERACTIVE SCREENSHOT TOKENS
    * Issue #11967 (umbrella #11515). Scoped to browser/InteractiveScreenshot.vue.
    * The region-marking popup (#5136) renders a dark-slate palette; each hue
