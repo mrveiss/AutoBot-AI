@@ -5,13 +5,6 @@
 """Unit tests for RAGService retrieval feedback event emission (#1516)."""
 
 import asyncio
-import json
-import time
-from unittest.mock import AsyncMock, patch
-
-import pytest
-
-from tests.fixtures import make_async_redis
 
 # Real-load and parent-bind ``services.rag_service`` at collection time.
 #
@@ -24,8 +17,15 @@ from tests.fixtures import make_async_redis
 # ``_real_load_and_bind`` helper (#11661) binds the real module as a parent
 # attribute up front, making the patch resolve correctly regardless of order.
 import importlib.util as _ilu  # noqa: E402
+import json
 import sys as _sys  # noqa: E402
+import time
 from pathlib import Path as _Path  # noqa: E402
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from tests.fixtures import make_async_redis
 
 
 def _bind_real_rag_service() -> None:
