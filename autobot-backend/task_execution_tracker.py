@@ -119,9 +119,12 @@ class TaskExecutionTracker:
         Args:
             task_id: Task identifier
             task_context: Execution context with outputs. Issue #620.
+
+        Issue #12101: offloads the sync SQLite MemoryManager write to a
+        worker thread so it never blocks the event loop.
         """
         if task_id in self.active_tasks:
-            self.memory_manager.complete_task(task_id, outputs=task_context.outputs)
+            await asyncio.to_thread(self.memory_manager.complete_task, task_id, outputs=task_context.outputs)
         self.active_tasks.pop(task_id, None)
         await self._execute_task_callbacks(task_id, "completed")
 
@@ -231,9 +234,15 @@ class TaskExecutionTracker:
             async with tracker.track_task("Agent Communication", "Chat with user") as task_id:
                 result = await some_agent_operation()
                 return result
+
+        Issue #12101: the create->start sequence in ``_create_and_start_task``
+        performs sync SQLite MemoryManager writes, so it is offloaded to a
+        worker thread via a single asyncio.to_thread call to avoid blocking
+        the event loop while keeping the sequence atomic.
         """
         # Create and start task (Issue #620: uses helper)
-        task_id = self._create_and_start_task(
+        task_id = await asyncio.to_thread(
+            self._create_and_start_task,
             task_name,
             description,
             priority,
@@ -252,7 +261,8 @@ class TaskExecutionTracker:
 
         except Exception as e:
             logger.error("Task %s failed: %s", task_id, e)
-            self.memory_manager.fail_task(task_id, f"Task failed: {type(e).__name__}")
+            # Issue #12101: offload sync SQLite MemoryManager write.
+            await asyncio.to_thread(self.memory_manager.fail_task, task_id, f"Task failed: {type(e).__name__}")
             self.active_tasks.pop(task_id, None)
             await self._execute_task_callbacks(task_id, "completed")
             raise
