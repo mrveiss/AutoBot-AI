@@ -246,12 +246,16 @@ def test_excludes_for_known_component(stub_user):
     universally at the rsync chokepoint (_rsync_exclude_args), so the handler
     passes only the component-specific list.  Assert both halves of that
     contract instead of the pre-#11459 combined list.
+
+    #11611: resolving a Python backend now rsyncs autobot_shared FIRST (shared-
+    first ordering) and then the component — two rsync calls. The component call
+    (the last one) still carries its _SLM_COMPONENTS exclude list.
     """
     src_patch, dep_patch = _setup_dir_mocks()
-    captured_excludes: List[List[str]] = []
+    captured: List[tuple] = []
 
     async def fake_rsync(src, comp, excludes):
-        captured_excludes.append(excludes)
+        captured.append((comp, excludes))
         return True, ""
 
     rsync_patch = patch("api.code_sync._rsync_component_local", side_effect=fake_rsync)
@@ -259,9 +263,12 @@ def test_excludes_for_known_component(stub_user):
         req = DriftResolveRequest(component="autobot-slm-backend")
         _run(resolve_drift(req, stub_user))
 
-    assert len(captured_excludes) == 1
-    excludes = captured_excludes[0]
+    # #11611: autobot_shared is synced ahead of the backend.
+    assert len(captured) == 2
+    assert captured[0][0] == "autobot_shared"
+    assert captured[1][0] == "autobot-slm-backend"
     # The handler passes exactly the component's _SLM_COMPONENTS entry …
+    excludes = captured[1][1]
     expected = {comp: excl for comp, excl in _CS._SLM_COMPONENTS}["autobot-slm-backend"]
     assert excludes == expected
     # … and the rsync chokepoint injects the canonical artifact excludes.
