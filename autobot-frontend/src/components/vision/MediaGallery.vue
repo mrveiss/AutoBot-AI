@@ -416,10 +416,10 @@ onUnmounted(() => {
 
 .item-type-badge {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
+  top: var(--spacing-2);
+  right: var(--spacing-2);
+  width: var(--spacing-7);
+  height: var(--spacing-7);
   background: rgba(0, 0, 0, 0.6);
   border-radius: var(--radius-md);
   display: flex;
@@ -491,8 +491,8 @@ onUnmounted(() => {
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
+  width: var(--spacing-20);
+  height: var(--spacing-20);
   border-radius: 50%;
   background: var(--bg-tertiary);
   display: flex;
@@ -779,9 +779,9 @@ onUnmounted(() => {
 }
 
 .confirm-icon {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 16px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
+  margin: 0 auto var(--spacing-4);
   background: var(--color-warning-bg);
   border-radius: 50%;
   display: flex;
