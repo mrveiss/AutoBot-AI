@@ -7,11 +7,17 @@
  * Target: 100% code coverage
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { useModal, useModals, useModalGroup } from '../useModal'
 import type { ModalOptions } from '../useModal'
 
 describe('useModal composable', () => {
+  // #11625: guarantee no fake-timer state escapes this file into the parallel
+  // worker pool. Leaked fake timers between files was a named flake cause.
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   // ========================================
   // useModal() Basic Functionality Tests
   // ========================================
@@ -465,38 +471,44 @@ describe('useModal composable', () => {
     })
 
     it('should close modals in parallel with closeAll', async () => {
-      const closeTimings: number[] = []
-      const { modals, closeAll } = useModalGroup(['modal1', 'modal2', 'modal3'])
+      // #11625: prove parallelism DETERMINISTICALLY with fake timers instead of a
+      // wall-clock `toBeLessThan(100)` guard. That guard flaked on loaded parallel
+      // runners (reproduced under CPU load) — same class of wall-clock assertion
+      // #10275 already removed from this file's perf block.
+      vi.useFakeTimers()
+      try {
+        const closeTimings: number[] = []
+        const { modals, closeAll } = useModalGroup(['modal1', 'modal2', 'modal3'])
 
-      // Add delays to onClose callbacks
-      modals.modal1.close = async () => {
-        await new Promise(resolve => setTimeout(resolve, 50))
-        closeTimings.push(Date.now())
-        return useModal().close()
+        // Each close waits 50ms before recording its completion instant.
+        const delayedClose = () => async () => {
+          await new Promise(resolve => setTimeout(resolve, 50))
+          closeTimings.push(Date.now())
+          return useModal().close()
+        }
+        modals.modal1.close = delayedClose()
+        modals.modal2.close = delayedClose()
+        modals.modal3.close = delayedClose()
+
+        await modals.modal1.open()
+        await modals.modal2.open()
+        await modals.modal3.open()
+
+        // Kick off all closes WITHOUT awaiting so the three 50ms delays overlap.
+        const closePromise = closeAll()
+
+        // Parallel execution resolves ALL three timers within a single 50ms
+        // virtual advance. Sequential execution would need 150ms (3 x 50ms) and
+        // leave two timers pending after advancing only 50ms.
+        await vi.advanceTimersByTimeAsync(50)
+        await closePromise
+
+        // All three completed, and at the SAME virtual instant -> truly parallel.
+        expect(closeTimings).toHaveLength(3)
+        expect(new Set(closeTimings).size).toBe(1)
+      } finally {
+        vi.useRealTimers()
       }
-
-      modals.modal2.close = async () => {
-        await new Promise(resolve => setTimeout(resolve, 50))
-        closeTimings.push(Date.now())
-        return useModal().close()
-      }
-
-      modals.modal3.close = async () => {
-        await new Promise(resolve => setTimeout(resolve, 50))
-        closeTimings.push(Date.now())
-        return useModal().close()
-      }
-
-      await modals.modal1.open()
-      await modals.modal2.open()
-      await modals.modal3.open()
-
-      const startTime = Date.now()
-      await closeAll()
-      const duration = Date.now() - startTime
-
-      // Should complete in ~50ms (parallel), not ~150ms (sequential)
-      expect(duration).toBeLessThan(100)
     })
   })
 
