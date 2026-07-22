@@ -544,7 +544,7 @@ onMounted(fetchBacklog)
 
 .item-count {
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .header-actions {
@@ -561,9 +561,9 @@ onMounted(fetchBacklog)
 .filter-select,
 .filter-search {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
 }
@@ -576,7 +576,7 @@ onMounted(fetchBacklog)
 .backlog-table-wrapper {
   flex: 1;
   overflow: auto;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
 }
 
@@ -590,23 +590,23 @@ onMounted(fetchBacklog)
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--bg-elevated, #f9fafb);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
   white-space: nowrap;
 }
 
 .backlog-row {
-  border-bottom: 1px solid var(--border-default, #f3f4f6);
+  border-bottom: 1px solid var(--border-default);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .backlog-row:hover {
-  background: var(--bg-hover, #f9fafb);
+  background: var(--bg-hover);
 }
 
 .backlog-row.selected {
-  background: var(--color-primary-subtle, #eff6ff);
+  background: var(--color-primary-subtle, var(--backlogview-selected-row-bg));
 }
 
 .backlog-table td {
@@ -624,7 +624,7 @@ onMounted(fetchBacklog)
 .item-identifier {
   font-family: monospace;
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .assignee-avatar {
@@ -634,7 +634,7 @@ onMounted(fetchBacklog)
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   font-size: 0.65rem;
   font-weight: 600;
@@ -644,8 +644,8 @@ onMounted(fetchBacklog)
 .sprint-tag {
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--backlogview-sprint-tag-bg);
+  color: var(--backlogview-sprint-tag-text);
   border-radius: 0.25rem;
 }
 
@@ -653,7 +653,7 @@ onMounted(fetchBacklog)
 .loading-state {
   text-align: center;
   padding: 2rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 /* #10882: overlay/panel/header/footer chrome now provided by @autobot/ui
@@ -673,7 +673,7 @@ onMounted(fetchBacklog)
 .form-field label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .form-row {
@@ -689,9 +689,9 @@ onMounted(fetchBacklog)
 .form-select,
 .form-textarea {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
@@ -716,15 +716,15 @@ onMounted(fetchBacklog)
 .ac-header label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .btn-suggest {
   font-size: 0.8rem;
   padding: 0.25rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   cursor: pointer;
 }
 
@@ -738,9 +738,9 @@ onMounted(fetchBacklog)
   flex-direction: column;
   gap: 0.375rem;
   padding: 0.5rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
 }
 
 .ac-item {
@@ -754,13 +754,13 @@ onMounted(fetchBacklog)
 .create-error {
   margin: 0 0 0.5rem;
   font-size: 0.8125rem;
-  color: var(--color-danger, #b91c1c);
+  color: var(--color-danger);
 }
 
 .form-hint {
   margin: 0.25rem 0 0;
   font-size: 0.75rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .btn-primary {
@@ -768,7 +768,7 @@ onMounted(fetchBacklog)
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 0.375rem;
@@ -779,7 +779,7 @@ onMounted(fetchBacklog)
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #2563eb);
+  background: var(--color-primary-hover);
 }
 
 .btn-primary:disabled {
@@ -792,9 +792,9 @@ onMounted(fetchBacklog)
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -803,7 +803,7 @@ onMounted(fetchBacklog)
 }
 
 .btn-secondary:hover {
-  background: var(--bg-hover, #f9fafb);
+  background: var(--bg-hover);
 }
 
 .btn-icon {
