@@ -415,8 +415,7 @@ def _get_indexed_interaction_tools() -> List[MCPTool]:
         MCPTool(
             name="browser_state",
             description=(
-                "Get the current page state: URL, title, scroll info, and a numbered "
-                "menu of interactive elements."
+                "Get the current page state: URL, title, scroll info, and a numbered " "menu of interactive elements."
             ),
             input_schema={"type": "object", "properties": {}},
         ),

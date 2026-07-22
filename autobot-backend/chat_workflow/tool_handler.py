@@ -407,9 +407,7 @@ _INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
         f"({(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}) "
         "with value"
     ),
-    "select_index": lambda params, inner: (
-        f"Selected '{params.get('value', '')}' in element [{params.get('index')}]"
-    ),
+    "select_index": lambda params, inner: (f"Selected '{params.get('value', '')}' in element [{params.get('index')}]"),
     "hover_index": lambda params, inner: f"Hovered over element [{params.get('index')}]",
 }
 
