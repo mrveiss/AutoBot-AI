@@ -318,6 +318,14 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
         [],  # workflow_messages managed by graph state
     )
 
+    # #11612: persist lightweight_mode_used into state["context"] so
+    # _build_llm_iteration_context (used by generate_response) re-merges it
+    # into ctx.context. Without this, the ctx built above — which DOES carry
+    # the flag via _create_llm_iteration_context — is discarded, and the
+    # response-metadata cost badge sees it only on the non-graph path.
+    updated_context = dict(state.get("context", {}) or {})
+    updated_context["lightweight_mode_used"] = llm_params.get("lightweight_mode_used", False)
+
     return {
         "llm_params": {
             "ollama_endpoint": ctx.ollama_endpoint,
@@ -327,6 +335,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
         },
         "used_knowledge": ctx.used_knowledge,
         "rag_citations": [c for c in (ctx.rag_citations or [])],
+        "context": updated_context,
         # Reset per-turn loop detection state (#3583). LangGraph persists
         # ChatState in Redis across turns; without this reset, loop counts
         # accumulate across different user turns and trigger false aborts.
