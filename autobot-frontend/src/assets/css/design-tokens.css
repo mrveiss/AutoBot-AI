@@ -723,7 +723,7 @@
    * COST DASHBOARD TOKENS
    * Issue #11917 (umbrella #11515). Scoped to llc/CostDashboard.vue.
    * The budget-mode badges render a soft blue ("dollars") and amber ("tokens")
-   * palette. The nearest --color-*/--chart-* tokens carry OKLCH overrides that
+   * palette. The nearest --color-* / --chart-* tokens carry OKLCH overrides that
    * would shift the rendered pixels, so these are captured here as hex-only
    * (deliberately NO OKLCH override) so the badges render pixel-identical to
    * their previous hardcoded values across all browsers.
