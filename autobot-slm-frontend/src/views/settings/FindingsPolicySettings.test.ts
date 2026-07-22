@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 import FindingsPolicySettings from './FindingsPolicySettings.vue'
+import en from '@/locales/en.json'
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
@@ -10,6 +12,10 @@ vi.mock('@/stores/auth', () => ({
     getAuthHeaders: () => ({}),
   }),
 }))
+
+// vue-i18n 11 requires app.use(); install a real i18n plugin since the
+// component uses useI18n() and the template uses the global $t (#11359).
+const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 describe('FindingsPolicySettings', () => {
   beforeEach(() => {
@@ -29,7 +35,7 @@ describe('FindingsPolicySettings', () => {
   })
 
   it('loads the current policy on mount', async () => {
-    const wrapper = mount(FindingsPolicySettings)
+    const wrapper = mount(FindingsPolicySettings, { global: { plugins: [i18n] } })
     await flushPromises()
     const batchInput = wrapper.find('input[data-test="input-verify-batch-size"]').element as HTMLInputElement
     expect(batchInput.value).toBe('25')
@@ -38,7 +44,7 @@ describe('FindingsPolicySettings', () => {
   })
 
   it('PUTs the policy as JSON on save', async () => {
-    const wrapper = mount(FindingsPolicySettings)
+    const wrapper = mount(FindingsPolicySettings, { global: { plugins: [i18n] } })
     await flushPromises()
     await wrapper.find('button[data-test="save-policy"]').trigger('click')
     await flushPromises()
@@ -73,7 +79,7 @@ describe('FindingsPolicySettings', () => {
       } as Response
     }) as unknown as typeof fetch
 
-    const wrapper = mount(FindingsPolicySettings)
+    const wrapper = mount(FindingsPolicySettings, { global: { plugins: [i18n] } })
     await flushPromises()
     await wrapper.find('button[data-test="save-policy"]').trigger('click')
     await flushPromises()

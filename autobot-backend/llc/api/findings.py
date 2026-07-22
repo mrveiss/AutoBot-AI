@@ -19,9 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session
+from llc.deps import get_session, load_owned_project as _load_owned_project
 from llc.models.finding_proposal import LLCFindingProposal
-from llc.models.sprint import LLCProject
 from llc.services.finding_proposal_service import (
     FindingsDisabledError,
     ProposalStateError,
@@ -70,15 +69,6 @@ class DismissRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # IDOR guards
 # ---------------------------------------------------------------------------
-
-
-async def _load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
-    """Load project by id; 404 when missing or owned by a different org."""
-    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
-    project = result.scalar_one_or_none()
-    if project is None or str(project.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
 
 
 async def _load_owned_proposal(proposal_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCFindingProposal:

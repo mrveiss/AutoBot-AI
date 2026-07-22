@@ -823,6 +823,20 @@
   --secretsview-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
   --secretsview-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
   --secretsview-danger-border: #fecaca;      /* danger button border */
+
+  /* ============================================
+   * BACKLOG VIEW TOKENS
+   * Issue #12006 (umbrella #11515). Scoped to llc/BacklogView.vue.
+   * Hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * --backlogview-selected-row-bg is the literal fallback the selected row
+   * rendered because --color-primary-subtle is never defined in any theme;
+   * preserved behind that intended token name via nested var(). The sprint
+   * tag renders a soft sky badge with no existing exact semantic token.
+   * ============================================ */
+  --backlogview-selected-row-bg: #eff6ff;  /* selected row fill (undefined --color-primary-subtle fallback) */
+  --backlogview-sprint-tag-bg: #e0f2fe;    /* sprint tag badge fill */
+  --backlogview-sprint-tag-text: #0369a1;  /* sprint tag badge text */
 }
 
 /* ============================================

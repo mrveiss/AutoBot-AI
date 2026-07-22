@@ -967,6 +967,39 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         agent_type="chat_workflow",
     )
 
+    # GH#11958: on the default (flag-OFF) path, generate_response already
+    # dispatched these tool calls inline via _run_continuation_loop_iteration
+    # -> _process_tool_calls -> _dispatch_tool_call (results already streamed
+    # to the user via stream_cb), so `tool_calls` here holds POST-EXECUTION
+    # summary dicts (`{"tool": ..., "status": ...}` shape — see
+    # tool_handler.py's execution_results) rather than the pre-execution
+    # `{"name": ..., "params": ...}` shape `_process_tool_calls` expects.
+    # Re-dispatching would duplicate side effects and crash on
+    # `tool_call["name"]` (KeyError — #11958). Detected by SHAPE, not by
+    # re-reading the approval-gate flag: execute_tools is also exercised
+    # directly (e.g. on interrupt-resume) with a legitimate pre-execution
+    # list regardless of the flag's current value, so the flag alone can't
+    # tell already-executed summaries apart from planned calls.
+    already_executed = bool(tool_calls) and all("name" not in tc for tc in tool_calls)
+    if already_executed:
+        logger.debug(
+            "execute_tools: skipping re-dispatch of %d already-executed tool "
+            "summary/summaries (session=%s) — dispatched inline by generate_response",
+            len(tool_calls),
+            session_id,
+        )
+        emit_step_complete(
+            "execute_tools",
+            _cot_exec_start,
+            output_summary="tools already dispatched inline — skipped re-dispatch",
+            session_id=session_id,
+        )
+        return {
+            "should_continue": state.get("should_continue", False),
+            "workflow_messages": messages,
+            "tool_calls": [],
+        }
+
     # If approval was needed and denied, skip execution
     if decision and not decision.get("approved", False):
         deny_msg = {

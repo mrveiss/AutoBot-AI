@@ -200,9 +200,12 @@ function formatDate(iso: string) {
 }
 
 function switchToTimeline() {
+  // #11701: preserve the current board/sprint context so the Gantt scopes to
+  // this board's work items instead of jumping to the company-wide roadmap.
   router.push({
     name: 'llc-timeline',
     params: { companyId: companyId.value },
+    query: { board: boardId.value },
   })
 }
 

@@ -7981,7 +7981,9 @@
       "noProjects": "Ainda não há projetos nesta empresa.",
       "noItems": "Este projeto não tem itens de trabalho para agendar.",
       "ariaChart": "Gráfico de Gantt da linha do tempo do projeto",
-      "unscheduled": "não agendado"
+      "unscheduled": "não agendado",
+      "scopedTo": "Limitado a {name}",
+      "showAll": "Mostrar toda a empresa"
     },
     "backlog": {
       "title": "Backlog",
