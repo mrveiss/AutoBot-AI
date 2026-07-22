@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session
+from llc.deps import get_session, load_owned_project as _load_owned_project
 from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
@@ -694,15 +694,6 @@ async def update_project(
         setattr(project, field, value)
     await session.commit()
     await session.refresh(project)
-    return project
-
-
-async def _load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
-    """Load project by id; 404 when missing or owned by a different org (IDOR guard)."""
-    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
-    project = result.scalar_one_or_none()
-    if project is None or str(project.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Project not found")
     return project
 
 

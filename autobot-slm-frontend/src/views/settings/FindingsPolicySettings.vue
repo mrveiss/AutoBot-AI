@@ -9,18 +9,26 @@
  *
  * Reads/writes the SLM setting key `llc.findings_policy` (stored as a
  * JSON string: {enabled: bool, min_severity: str, require_approval_to_promote: bool,
- * run_on_index: bool, verify_batch_size: int}) via the SLM settings API.
- * Mirrors the DisposalPolicySettings.vue auth-store + fetch pattern.
+ * run_on_index: bool, verify_batch_size: int}) via the SLM settings API,
+ * using the shared `useSlmJsonSetting` fetch/save composable (#11359).
  * Issue #11271 P3.
  */
 
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { useSlmJsonSetting } from '@/composables/useSlmJsonSetting'
+
+interface FindingsPolicyPayload {
+  enabled: boolean
+  min_severity: 'high' | 'medium' | 'low'
+  require_approval_to_promote: boolean
+  run_on_index: boolean
+  verify_batch_size: number
+}
 
 const KEY = 'llc.findings_policy'
-const authStore = useAuthStore()
 const { t } = useI18n()
+const { saving, saved, load: loadJson, save: saveJson } = useSlmJsonSetting<FindingsPolicyPayload>(KEY)
 const policy = reactive({
   enabled: false,
   min_severity: 'medium' as 'high' | 'medium' | 'low',
@@ -28,19 +36,13 @@ const policy = reactive({
   run_on_index: false,
   verify_batch_size: 10,
 })
-const saving = ref(false)
-const saved = ref(false)
 const error = ref<string | null>(null)
 
 async function load(): Promise<void> {
   error.value = null
   try {
-    const res = await fetch(`${authStore.getApiUrl()}/api/settings/${KEY}`, {
-      headers: authStore.getAuthHeaders(),
-    })
-    if (res.ok) {
-      const setting = await res.json()
-      const parsed = setting.value ? JSON.parse(setting.value) : {}
+    const parsed = await loadJson()
+    if (parsed) {
       policy.enabled = Boolean(parsed.enabled ?? false)
       policy.min_severity = (parsed.min_severity ?? 'medium') as 'high' | 'medium' | 'low'
       policy.require_approval_to_promote = Boolean(parsed.require_approval_to_promote ?? false)
@@ -53,34 +55,23 @@ async function load(): Promise<void> {
 }
 
 async function save(): Promise<void> {
-  saving.value = true
-  saved.value = false
   error.value = null
-  const body = JSON.stringify({
-    value: JSON.stringify({
-      enabled: policy.enabled,
-      min_severity: policy.min_severity,
-      require_approval_to_promote: policy.require_approval_to_promote,
-      run_on_index: policy.run_on_index,
-      verify_batch_size: policy.verify_batch_size,
-    }),
-    description: 'Company OS findings policy',
-  })
-  const url = `${authStore.getApiUrl()}/api/settings/${KEY}`
-  const headers = { ...authStore.getAuthHeaders(), 'Content-Type': 'application/json' }
   try {
-    let res = await fetch(url, { method: 'PUT', headers, body })
-    if (res.status === 404) {
-      res = await fetch(url, { method: 'POST', headers, body })
-    }
-    saved.value = res.ok
-    if (!res.ok) {
+    const ok = await saveJson(
+      {
+        enabled: policy.enabled,
+        min_severity: policy.min_severity,
+        require_approval_to_promote: policy.require_approval_to_promote,
+        run_on_index: policy.run_on_index,
+        verify_batch_size: policy.verify_batch_size,
+      },
+      'Company OS findings policy',
+    )
+    if (!ok) {
       error.value = t('settings.findingsPolicySettings.failedToSaveFindingsPolicy')
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('settings.findingsPolicySettings.failedToSaveFindingsPolicy')
-  } finally {
-    saving.value = false
   }
 }
 
