@@ -11,7 +11,7 @@ from llc.services.disposal_policy import DisposalPolicy, get_disposal_policy
 
 @pytest.mark.asyncio
 async def test_defaults_when_no_slm_client():
-    with patch("llc.services.disposal_policy.get_slm_client", return_value=None):
+    with patch("llc.services.slm_policy.get_slm_client", return_value=None):
         policy = await get_disposal_policy()
     assert policy == DisposalPolicy(retention_days=0, require_approval=False)
 

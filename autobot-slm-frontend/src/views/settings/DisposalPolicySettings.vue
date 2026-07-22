@@ -9,29 +9,28 @@
  *
  * Reads/writes the SLM setting key `llc.project_disposal_policy` (stored as a
  * JSON string: {retention_days: int, require_approval: bool}) via the SLM
- * settings API. Mirrors the GeneralSettings.vue auth-store + fetch pattern.
- * Issue #11129 P2.
+ * settings API, using the shared `useSlmJsonSetting` fetch/save composable
+ * (#11359). Issue #11129 P2.
  */
 
 import { onMounted, reactive, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { useSlmJsonSetting } from '@/composables/useSlmJsonSetting'
+
+interface DisposalPolicyPayload {
+  retention_days: number
+  require_approval: boolean
+}
 
 const KEY = 'llc.project_disposal_policy'
-const authStore = useAuthStore()
+const { saving, saved, load: loadJson, save: saveJson } = useSlmJsonSetting<DisposalPolicyPayload>(KEY)
 const policy = reactive({ retention_days: 0, require_approval: false })
-const saving = ref(false)
-const saved = ref(false)
 const error = ref<string | null>(null)
 
 async function load(): Promise<void> {
   error.value = null
   try {
-    const res = await fetch(`${authStore.getApiUrl()}/api/settings/${KEY}`, {
-      headers: authStore.getAuthHeaders(),
-    })
-    if (res.ok) {
-      const setting = await res.json()
-      const parsed = setting.value ? JSON.parse(setting.value) : {}
+    const parsed = await loadJson()
+    if (parsed) {
       policy.retention_days = Number(parsed.retention_days ?? 0)
       policy.require_approval = Boolean(parsed.require_approval ?? false)
     }
@@ -41,28 +40,17 @@ async function load(): Promise<void> {
 }
 
 async function save(): Promise<void> {
-  saving.value = true
-  saved.value = false
   error.value = null
-  const body = JSON.stringify({
-    value: JSON.stringify({ retention_days: policy.retention_days, require_approval: policy.require_approval }),
-    description: 'Company OS project disposal policy',
-  })
-  const url = `${authStore.getApiUrl()}/api/settings/${KEY}`
-  const headers = { ...authStore.getAuthHeaders(), 'Content-Type': 'application/json' }
   try {
-    let res = await fetch(url, { method: 'PUT', headers, body })
-    if (res.status === 404) {
-      res = await fetch(url, { method: 'POST', headers, body })
-    }
-    saved.value = res.ok
-    if (!res.ok) {
+    const ok = await saveJson(
+      { retention_days: policy.retention_days, require_approval: policy.require_approval },
+      'Company OS project disposal policy',
+    )
+    if (!ok) {
       error.value = 'Failed to save disposal policy'
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to save disposal policy'
-  } finally {
-    saving.value = false
   }
 }
 

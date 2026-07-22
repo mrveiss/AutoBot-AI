@@ -38,10 +38,13 @@ import uuid
 from typing import AsyncGenerator, Callable, Set, Type, TypeVar
 
 from fastapi import Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.singleton_factory import lazy_singleton
+from llc.models.sprint import LLCProject
 from user_management.database import get_async_session_factory
+from user_management.services import TenantContext
 
 _T = TypeVar("_T")
 
@@ -134,4 +137,25 @@ async def require_board_role(
     return str(user_id)
 
 
-__all__ = ["get_session", "postgres_required", "require_board_role", "service_dep"]
+async def load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
+    """Load a project by id; 404 when missing or owned by a different org.
+
+    IDOR guard (#10148): canonical implementation shared by sprints.py and
+    findings.py, which previously each defined an identical
+    ``_load_owned_project`` (#11359). 404 (not 403) is used for both "missing"
+    and "wrong org" to avoid disclosing project existence to non-owners.
+    """
+    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+__all__ = [
+    "get_session",
+    "load_owned_project",
+    "postgres_required",
+    "require_board_role",
+    "service_dep",
+]
