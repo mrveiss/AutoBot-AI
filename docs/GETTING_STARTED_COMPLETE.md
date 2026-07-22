@@ -13,29 +13,38 @@ install on top. Everything — your data, memory, agents, and knowledge graph �
 New here? Start with [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md) for the
 core → SLM → modules picture, then follow the quick start below.
 
-## Quick Start (Docker, ~5 minutes)
+## Quick Start (~5 minutes)
 
 ### Prerequisites
 
 - Linux or WSL2 (Ubuntu 22.04 LTS recommended)
-- Docker and Docker Compose
-- Python 3.12 and Node.js 20 are installed automatically by the installer for bare-metal setups
 - 16 GB+ RAM recommended
+- **Installer path:** `install.sh` installs Python 3.12, Node.js 20, and all dependencies for you
+- **Docker path:** Docker and Docker Compose
 
-For bare-metal (systemd) installs and full system requirements, see the
-[Installation Guide](user-guide/01-installation.md).
+### Install — choose one
 
-### Install
+**Option A — One-line installer (recommended, full platform).** A single Virtualmin-style
+installer that deploys the Service Lifecycle Manager (SLM) and every dependency:
 
 ```bash
-# 1. Clone the repository
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | bash
+# or, after cloning:
+sudo ./install.sh              # add --unattended for a non-interactive install
+```
+
+**Option B — Docker Compose (quick eval / development).**
+
+```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-
-# 2. Configure and start with Docker
 cp .env.example .env
 docker compose up -d
 ```
+
+For local backend + frontend development you can also run `./run_agent.sh`. For the
+two-phase deployment model, bare-metal (systemd) installs, and full system requirements,
+see [INSTALL.md](../INSTALL.md) and the [Installation Guide](user-guide/01-installation.md).
 
 ### Open your dashboard
 
