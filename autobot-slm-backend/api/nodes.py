@@ -2497,15 +2497,23 @@ async def get_node_updates(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ):
-    """Get available updates for a node."""
+    """Get available updates for a node.
+
+    Includes code_update_available/code_status (#11964) computed via the
+    SAME is_code_update_available() helper the fleet update-summary badge
+    uses, so this live "Check for updates" scan can never disagree with
+    the badge shown on the node card.
+    """
     from sqlalchemy import or_
 
+    from api.updates import is_code_update_available
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
-    if not node_result.scalar_one_or_none():
+    node = node_result.scalar_one_or_none()
+    if not node:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Node not found",
@@ -2525,6 +2533,8 @@ async def get_node_updates(
     return UpdateCheckResponse(
         updates=[UpdateInfoResponse.model_validate(u) for u in updates],
         total=len(updates),
+        code_update_available=is_code_update_available(node),
+        code_status=node.code_status or "unknown",
     )
 
 

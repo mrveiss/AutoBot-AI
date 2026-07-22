@@ -208,7 +208,7 @@ function roleLabel(role: string): string {
   return label === key ? role : label
 }
 
-function roleBadgeVariant(role: string): 'primary' | 'success' | 'warning' | 'default' {
+function roleBadgeVariant(role: string): 'primary' | 'success' | 'warning' | 'neutral' {
   switch (role) {
     case 'owner':
       return 'primary'
@@ -218,7 +218,7 @@ function roleBadgeVariant(role: string): 'primary' | 'success' | 'warning' | 'de
     case 'guest':
       return 'warning'
     default:
-      return 'default'
+      return 'neutral'
   }
 }
 

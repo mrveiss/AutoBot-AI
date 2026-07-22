@@ -5,6 +5,21 @@
 # Services: SLM Backend, PostgreSQL, Nginx, Prometheus, Grafana, Node Exporter
 
 # ==========================================
+# CO-LOCATED SINGLE-BOX BACKEND WORKER COUNT (#11670, #876)
+# ==========================================
+# On a collapsed single-box deploy the SLM node ALSO runs the managed
+# autobot-backend. That box is resource-constrained (often WSL2), and 4 uvicorn
+# workers reproduced the #876 initialization deadlock — the reason the one-off
+# fix-backend-worker-deadlock scripts hand-placed a single-worker.conf drop-in.
+# #11670 removes those manual drop-ins and makes the canonical unit authoritative,
+# so we pin the worker count for the co-located box HERE via the env-driven
+# backend_workers var (the canonical mechanism) instead of a shadowing drop-in.
+# This group_vars applies only to the slm group → the co-located SLM node; a
+# DEDICATED multi-VM backend host lives in the `backend`/`main` group (not `slm`),
+# so it keeps the role default of 4 workers (roles/backend/defaults/main.yml).
+backend_workers: 1
+
+# ==========================================
 # FIREWALL CONFIGURATION (Issue #894)
 # ==========================================
 

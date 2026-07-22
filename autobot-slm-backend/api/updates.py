@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from models.database import (
+    CodeStatus,
     EventSeverity,
     EventType,
     Node,
@@ -754,6 +755,18 @@ async def check_updates(
     )
 
 
+def is_code_update_available(node: Node) -> bool:
+    """Canonical check for whether a node has a pending code update.
+
+    Single source of truth for "code update available" (#11964): consumed by
+    both the fleet update-summary badge (get_fleet_update_summary below) and
+    the live per-node "Check for updates" scan (nodes.get_node_updates), so
+    the two can never disagree — they read the exact same node.code_status
+    field via the same helper.
+    """
+    return (node.code_status or "") == CodeStatus.OUTDATED.value
+
+
 def _build_node_summaries(nodes: list, updates_by_node: dict, global_count: int) -> list:
     """Build per-node update summaries.
 
@@ -763,7 +776,7 @@ def _build_node_summaries(nodes: list, updates_by_node: dict, global_count: int)
     for node in nodes:
         sys_count = len(updates_by_node.get(node.node_id, []))
         sys_count += global_count
-        code_outdated = (node.code_status or "") == "outdated"
+        code_outdated = is_code_update_available(node)
         total = sys_count + (1 if code_outdated else 0)
         summaries.append(
             NodeUpdateSummary(

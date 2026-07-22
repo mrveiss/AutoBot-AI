@@ -11,8 +11,9 @@
   ../tokens/contract.css).
 
   Public API is preserved unchanged from the app version:
-    props   : modelValue (v-model), title, size (sm|md|lg), showClose,
-              closeOnOverlay, scrollable, closeLabel
+    props   : modelValue (v-model), title, size (sm|md|lg), width (custom
+              px/CSS width overriding size), showClose, closeOnOverlay,
+              scrollable, closeLabel
     slots   : title (rich header, falls back to `title` prop), default (body),
               actions (footer)
     emits   : update:modelValue, close
@@ -44,6 +45,13 @@ interface Props {
   title: string
   /** Modal size: sm (500px), md (900px), lg (1200px) */
   size?: ModalSize
+  /**
+   * Explicit dialog width — a CSS length string (e.g. "560px", "40rem") or a
+   * number treated as pixels. When set it overrides the `size`-derived width;
+   * when absent the `size` preset is used. The dialog still never exceeds the
+   * viewport (base `width: 90%` keeps it responsive on small screens).
+   */
+  width?: string | number
   /** Show close button */
   showClose?: boolean
   /** Close on overlay click */
@@ -95,6 +103,16 @@ const sizeClass = computed(() => {
   }
 })
 
+// When an explicit `width` is provided, override the size-preset max-width via
+// an inline style. Numbers are treated as pixels; strings pass through as-is.
+const dialogStyle = computed<Record<string, string> | undefined>(() => {
+  if (props.width === undefined || props.width === null || props.width === '') {
+    return undefined
+  }
+  const w = typeof props.width === 'number' ? `${props.width}px` : props.width
+  return { maxWidth: w }
+})
+
 const handleClose = () => {
   emit('update:modelValue', false)
   emit('close')
@@ -127,6 +145,7 @@ const onAfterEnter = () => focusFirst()
           :aria-describedby="descriptionId"
           class="aui-dialog"
           :class="[sizeClass, { 'aui-dialog-scrollable': scrollable }]"
+          :style="dialogStyle"
           tabindex="-1"
           @click.stop
           @keydown="onFocusTrapKeydown"
@@ -226,6 +245,9 @@ const onAfterEnter = () => focusFirst()
   align-items: center;
   padding: var(--aui-space-6);
   border-bottom: 1px solid var(--aui-color-border);
+  /* #10882: pin the chrome so only .aui-dialog-content yields space on short
+     viewports; default flex-shrink:1 let the header/footer compress and clip. */
+  flex-shrink: 0;
 }
 
 .aui-dialog-header h3 {
@@ -277,6 +299,8 @@ const onAfterEnter = () => focusFirst()
   gap: var(--aui-space-3);
   padding: var(--aui-space-6);
   border-top: 1px solid var(--aui-color-border);
+  /* #10882: keep the footer at full height so its buttons are never clipped. */
+  flex-shrink: 0;
 }
 
 /* Transitions */

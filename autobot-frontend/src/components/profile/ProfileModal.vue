@@ -3,229 +3,218 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click="handleClose">
-    <div
-      ref="dialogRef"
-      class="modal-content"
-      @click.stop
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="profile-title"
-      tabindex="-1"
-      @keydown="onFocusTrapKeydown"
-      @keydown.escape="handleClose"
-    >
-      <div class="modal-header">
-        <h2 id="profile-title">{{ $t('profile.title') }}</h2>
-        <button @click="handleClose" class="close-button" :aria-label="$t('profile.closeAria')">&times;</button>
-      </div>
+  <BaseModal
+    :model-value="isOpen"
+    :title="$t('profile.title')"
+    :close-label="$t('profile.closeAria')"
+    :width="600"
+    @close="handleClose"
+  >
+    <!-- Tab Bar -->
+    <div ref="profileTablistRef" class="tab-bar" role="tablist">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        v-bind="tabAttrs(tab.key)"
+        class="tab-btn"
+        :class="{ active: activeTab === tab.key }"
+        type="button"
+        @click="activeTab = tab.key"
+        @keydown="handleTabKeydown"
+      >
+        <Icon :name="tab.icon" />
+        {{ tab.label }}
+      </button>
+    </div>
 
-      <!-- Tab Bar -->
-      <div ref="profileTablistRef" class="tab-bar" role="tablist">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          v-bind="tabAttrs(tab.key)"
-          class="tab-btn"
-          :class="{ active: activeTab === tab.key }"
-          type="button"
-          @click="activeTab = tab.key"
-          @keydown="handleTabKeydown"
-        >
-          <Icon :name="tab.icon" />
-          {{ tab.label }}
-        </button>
-      </div>
+    <div class="modal-body">
+      <!-- General Tab -->
+      <div v-if="activeTab === 'general'" v-bind="panelAttrs('general')">
+        <div class="profile-section">
+          <h3>{{ $t('profile.accountInfo') }}</h3>
+          <div class="info-grid">
+            <div class="info-row">
+              <label>{{ $t('profile.username') }}</label>
+              <span>{{ currentUser?.username || 'N/A' }}</span>
+            </div>
+            <div class="info-row">
+              <label>{{ $t('profile.email') }}</label>
+              <span>{{ currentUser?.email || 'N/A' }}</span>
+            </div>
+            <div class="info-row">
+              <label>{{ $t('profile.role') }}</label>
+              <span class="role-badge" :class="`role-${currentUser?.role}`">{{ currentUser?.role || 'N/A' }}</span>
+            </div>
+            <div class="info-row">
+              <label>{{ $t('profile.lastLogin') }}</label>
+              <span>{{ formatDate(currentUser?.lastLoginAt) }}</span>
+            </div>
+          </div>
+        </div>
 
-      <div class="modal-body">
-        <!-- General Tab -->
-        <div v-if="activeTab === 'general'" v-bind="panelAttrs('general')">
-          <div class="profile-section">
-            <h3>{{ $t('profile.accountInfo') }}</h3>
-            <div class="info-grid">
-              <div class="info-row">
-                <label>{{ $t('profile.username') }}</label>
-                <span>{{ currentUser?.username || 'N/A' }}</span>
-              </div>
-              <div class="info-row">
-                <label>{{ $t('profile.email') }}</label>
-                <span>{{ currentUser?.email || 'N/A' }}</span>
-              </div>
-              <div class="info-row">
-                <label>{{ $t('profile.role') }}</label>
-                <span class="role-badge" :class="`role-${currentUser?.role}`">{{ currentUser?.role || 'N/A' }}</span>
-              </div>
-              <div class="info-row">
-                <label>{{ $t('profile.lastLogin') }}</label>
-                <span>{{ formatDate(currentUser?.lastLoginAt) }}</span>
-              </div>
+        <div class="profile-section">
+          <h3>{{ $t('profile.preferences') }}</h3>
+
+          <div class="pref-group">
+            <label class="pref-label">{{ $t('profile.theme') }}</label>
+            <div class="option-row">
+              <button
+                v-for="opt in themeOptions"
+                :key="opt.value"
+                @click="localPrefs.theme = opt.value"
+                class="option-btn"
+                :class="{ active: localPrefs.theme === opt.value }"
+                type="button"
+              >
+                {{ opt.label }}
+              </button>
             </div>
           </div>
 
-          <div class="profile-section">
-            <h3>{{ $t('profile.preferences') }}</h3>
-
-            <div class="pref-group">
-              <label class="pref-label">{{ $t('profile.theme') }}</label>
-              <div class="option-row">
-                <button
-                  v-for="opt in themeOptions"
-                  :key="opt.value"
-                  @click="localPrefs.theme = opt.value"
-                  class="option-btn"
-                  :class="{ active: localPrefs.theme === opt.value }"
-                  type="button"
-                >
-                  {{ opt.label }}
-                </button>
-              </div>
+          <div class="pref-group">
+            <label class="pref-label">{{ $t('profile.notifications') }}</label>
+            <div class="toggle-list">
+              <label class="toggle-item">
+                <input type="checkbox" v-model="localPrefs.notifications.email" />
+                <span>{{ $t('profile.emailNotifications') }}</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" v-model="localPrefs.notifications.browser" />
+                <span>{{ $t('profile.browserNotifications') }}</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" v-model="localPrefs.notifications.sound" />
+                <span>{{ $t('profile.soundNotifications') }}</span>
+              </label>
             </div>
+          </div>
 
-            <div class="pref-group">
-              <label class="pref-label">{{ $t('profile.notifications') }}</label>
-              <div class="toggle-list">
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="localPrefs.notifications.email" />
-                  <span>{{ $t('profile.emailNotifications') }}</span>
-                </label>
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="localPrefs.notifications.browser" />
-                  <span>{{ $t('profile.browserNotifications') }}</span>
-                </label>
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="localPrefs.notifications.sound" />
-                  <span>{{ $t('profile.soundNotifications') }}</span>
-                </label>
-              </div>
+          <div class="pref-group">
+            <label class="pref-label">{{ $t('profile.interface') }}</label>
+            <div class="toggle-list">
+              <label class="toggle-item">
+                <input type="checkbox" v-model="localPrefs.ui.compactMode" />
+                <span>{{ $t('profile.compactMode') }}</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" v-model="localPrefs.ui.showTooltips" />
+                <span>{{ $t('profile.showTooltips') }}</span>
+              </label>
+              <label class="toggle-item">
+                <input type="checkbox" v-model="localPrefs.ui.animationsEnabled" />
+                <span>{{ $t('profile.enableAnimations') }}</span>
+              </label>
             </div>
+          </div>
 
-            <div class="pref-group">
-              <label class="pref-label">{{ $t('profile.interface') }}</label>
-              <div class="toggle-list">
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="localPrefs.ui.compactMode" />
-                  <span>{{ $t('profile.compactMode') }}</span>
-                </label>
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="localPrefs.ui.showTooltips" />
-                  <span>{{ $t('profile.showTooltips') }}</span>
-                </label>
-                <label class="toggle-item">
-                  <input type="checkbox" v-model="localPrefs.ui.animationsEnabled" />
-                  <span>{{ $t('profile.enableAnimations') }}</span>
-                </label>
-              </div>
-            </div>
+          <button @click="savePreferences" class="save-btn" type="button">
+            {{ $t('profile.savePreferences') }}
+          </button>
+        </div>
+      </div>
 
-            <button @click="savePreferences" class="save-btn" type="button">
-              {{ $t('profile.savePreferences') }}
+      <!-- Appearance & Voice Tab -->
+      <div v-if="activeTab === 'appearance'" v-bind="panelAttrs('appearance')">
+        <div class="profile-section">
+          <h3>{{ $t('profile.appearance') }}</h3>
+          <PreferencesPanel />
+        </div>
+
+        <div class="profile-section">
+          <h3>{{ $t('profile.voiceChatDisplay') }}</h3>
+          <div class="option-row">
+            <button
+              @click="setVoiceDisplayMode('modal')"
+              class="option-btn"
+              :class="{ active: voiceDisplayMode === 'modal' }"
+              type="button"
+            >
+              <Icon name="expand-alt" class="mr-1" />
+              {{ $t('profile.fullScreen') }}
+            </button>
+            <button
+              @click="setVoiceDisplayMode('sidepanel')"
+              class="option-btn"
+              :class="{ active: voiceDisplayMode === 'sidepanel' }"
+              type="button"
+            >
+              <Icon name="columns" class="mr-1" />
+              {{ $t('profile.sidePanel') }}
             </button>
           </div>
         </div>
 
-        <!-- Appearance & Voice Tab -->
-        <div v-if="activeTab === 'appearance'" v-bind="panelAttrs('appearance')">
-          <div class="profile-section">
-            <h3>{{ $t('profile.appearance') }}</h3>
-            <PreferencesPanel />
-          </div>
-
-          <div class="profile-section">
-            <h3>{{ $t('profile.voiceChatDisplay') }}</h3>
-            <div class="option-row">
-              <button
-                @click="setVoiceDisplayMode('modal')"
-                class="option-btn"
-                :class="{ active: voiceDisplayMode === 'modal' }"
-                type="button"
-              >
-                <Icon name="expand-alt" class="mr-1" />
-                {{ $t('profile.fullScreen') }}
-              </button>
-              <button
-                @click="setVoiceDisplayMode('sidepanel')"
-                class="option-btn"
-                :class="{ active: voiceDisplayMode === 'sidepanel' }"
-                type="button"
-              >
-                <Icon name="columns" class="mr-1" />
-                {{ $t('profile.sidePanel') }}
-              </button>
-            </div>
-          </div>
-
-          <div class="profile-section">
-            <h3>{{ $t('profile.voiceProfiles') }}</h3>
-            <VoiceSettingsPanel />
-          </div>
-        </div>
-
-        <!-- Language Tab -->
-        <div v-if="activeTab === 'language'" v-bind="panelAttrs('language')">
-          <LanguageSettingsPanel />
-        </div>
-
-        <!-- Security Tab -->
-        <div v-if="activeTab === 'security'" v-bind="panelAttrs('security')">
-          <div class="profile-section">
-            <h3>{{ $t('profile.changePassword') }}</h3>
-            <div class="pw-form">
-              <input
-                v-model="passwordForm.current"
-                type="password"
-                :placeholder="$t('profile.currentPassword')"
-                class="pw-input"
-                autocomplete="current-password"
-              />
-              <input
-                v-model="passwordForm.newPw"
-                type="password"
-                :placeholder="$t('profile.newPassword')"
-                class="pw-input"
-                autocomplete="new-password"
-              />
-              <input
-                v-model="passwordForm.confirm"
-                type="password"
-                :placeholder="$t('profile.confirmNewPassword')"
-                class="pw-input"
-                autocomplete="new-password"
-              />
-              <button
-                @click="changePassword"
-                class="save-btn"
-                type="button"
-                :disabled="isChangingPassword"
-              >
-                {{ isChangingPassword ? $t('profile.changing') : $t('profile.changePassword') }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Devices Tab -->
-        <div v-if="activeTab === 'devices'" v-bind="panelAttrs('devices')">
-          <DeviceManagementPanel />
+        <div class="profile-section">
+          <h3>{{ $t('profile.voiceProfiles') }}</h3>
+          <VoiceSettingsPanel />
         </div>
       </div>
 
-      <!-- Success Toast -->
-      <div v-if="successMessage" class="toast success" role="status">
-        {{ successMessage }}
+      <!-- Language Tab -->
+      <div v-if="activeTab === 'language'" v-bind="panelAttrs('language')">
+        <LanguageSettingsPanel />
       </div>
 
-      <!-- Error Toast -->
-      <div v-if="errorMessage" class="toast error" role="alert">
-        {{ errorMessage }}
+      <!-- Security Tab -->
+      <div v-if="activeTab === 'security'" v-bind="panelAttrs('security')">
+        <div class="profile-section">
+          <h3>{{ $t('profile.changePassword') }}</h3>
+          <div class="pw-form">
+            <input
+              v-model="passwordForm.current"
+              type="password"
+              :placeholder="$t('profile.currentPassword')"
+              class="pw-input"
+              autocomplete="current-password"
+            />
+            <input
+              v-model="passwordForm.newPw"
+              type="password"
+              :placeholder="$t('profile.newPassword')"
+              class="pw-input"
+              autocomplete="new-password"
+            />
+            <input
+              v-model="passwordForm.confirm"
+              type="password"
+              :placeholder="$t('profile.confirmNewPassword')"
+              class="pw-input"
+              autocomplete="new-password"
+            />
+            <button
+              @click="changePassword"
+              class="save-btn"
+              type="button"
+              :disabled="isChangingPassword"
+            >
+              {{ isChangingPassword ? $t('profile.changing') : $t('profile.changePassword') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Devices Tab -->
+      <div v-if="activeTab === 'devices'" v-bind="panelAttrs('devices')">
+        <DeviceManagementPanel />
       </div>
     </div>
-  </div>
+
+    <!-- Success Toast -->
+    <div v-if="successMessage" class="toast success" role="status">
+      {{ successMessage }}
+    </div>
+
+    <!-- Error Toast -->
+    <div v-if="errorMessage" class="toast error" role="alert">
+      {{ errorMessage }}
+    </div>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch, toRef } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
@@ -233,19 +222,12 @@ import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { BaseModal } from '@autobot/ui'
 import { useTabs } from '@/composables/useTabs'
 
-const props = defineProps<{
+defineProps<{
   isOpen: boolean
 }>()
-
-const dialogRef = ref<HTMLElement | null>(null)
-const { onKeydown: onFocusTrapKeydown } = useFocusTrap(dialogRef)
-useFocusRestore(toRef(props, 'isOpen'))
-useBodyScrollLock(toRef(props, 'isOpen'))
-const { focusFirst } = useInitialFocus(dialogRef)
-watch(() => props.isOpen, (open) => { if (open) focusFirst() }, { immediate: true })
 
 const emit = defineEmits<{
   close: []
@@ -365,72 +347,13 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  /* #10750 C2: keep header fixed; scroll only .modal-body */
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--shadow-xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-6);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-header h2 {
-  margin: var(--spacing-0);
-  font-size: var(--text-2xl);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.close-button {
-  background: none;
-  border: none;
-  font-size: 32px;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: var(--spacing-0);
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-default);
-  transition: background-color var(--duration-200);
-}
-
-.close-button:hover {
-  background: var(--bg-secondary);
-}
-
+/* #10882: overlay/header chrome + focus-trap/scroll-lock now provided by
+   @autobot/ui BaseModal; the tab bar, panels and toasts remain here. */
 .tab-bar {
   display: flex;
   gap: var(--spacing-0);
   border-bottom: 1px solid var(--border-default);
-  padding: var(--spacing-0) var(--spacing-6);
+  margin-bottom: var(--spacing-6);
 }
 
 .tab-btn {
@@ -460,13 +383,6 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .tab-btn i {
   font-size: var(--text-sm);
-}
-
-.modal-body {
-  padding: var(--spacing-6);
-  /* #10750 C2: single scroll region */
-  overflow-y: auto;
-  min-height: 0;
 }
 
 .profile-section {

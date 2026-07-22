@@ -11,40 +11,39 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
   <BaseModal
     :close-label="t('ui.modal.closeDialog')"
     v-model="isVisible"
-    title="Local Usage Metrics"
+    :title="t('telemetryConsent.title')"
     size="sm"
     :show-close="false"
     :close-on-overlay="false"
   >
     <div class="modal-body">
-      <p class="consent-intro">
-        AutoBot can record <strong>anonymous operational metrics</strong> locally to power your
-        own monitoring dashboards. This data stays on your infrastructure and is
-        <strong>never sent to anyone</strong>.
-      </p>
+      <i18n-t keypath="telemetryConsent.intro" tag="p" class="consent-intro">
+        <template #metrics><strong>{{ t('telemetryConsent.introMetrics') }}</strong></template>
+        <template #never><strong>{{ t('telemetryConsent.introNever') }}</strong></template>
+      </i18n-t>
 
       <div class="data-summary">
         <h3 class="summary-title">
           <Icon name="chart-line" aria-hidden="true" />
-          What's recorded locally:
+          {{ t('telemetryConsent.summaryTitle') }}
         </h3>
         <ul class="data-list">
-          <li>API endpoint usage and response times</li>
-          <li>Voice session duration and token counts</li>
-          <li>Feature usage patterns</li>
+          <li>{{ t('telemetryConsent.dataApi') }}</li>
+          <li>{{ t('telemetryConsent.dataVoice') }}</li>
+          <li>{{ t('telemetryConsent.dataFeature') }}</li>
         </ul>
       </div>
 
       <div class="privacy-note">
         <Icon name="lock" aria-hidden="true" />
         <span>
-          <strong>Never recorded:</strong> personal data, code content, or chat messages.
+          <strong>{{ t('telemetryConsent.privacyLabel') }}</strong> {{ t('telemetryConsent.privacyText') }}
         </span>
       </div>
 
-      <p class="consent-footer">
-        You can change this preference anytime in <strong>Settings → Privacy</strong>.
-      </p>
+      <i18n-t keypath="telemetryConsent.footer" tag="p" class="consent-footer">
+        <template #settings><strong>{{ t('telemetryConsent.footerSettings') }}</strong></template>
+      </i18n-t>
     </div>
 
     <template #actions>
@@ -55,7 +54,7 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
         :disabled="isProcessing"
       >
         <Icon name="times" aria-hidden="true" />
-        Keep Off
+        {{ t('telemetryConsent.keepOff') }}
       </button>
       <button
         type="button"
@@ -64,7 +63,7 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
         :disabled="isProcessing"
       >
         <Icon name="check" aria-hidden="true" />
-        {{ isProcessing ? 'Saving...' : 'Enable' }}
+        {{ isProcessing ? t('common.saving') : t('telemetryConsent.enable') }}
       </button>
     </template>
   </BaseModal>

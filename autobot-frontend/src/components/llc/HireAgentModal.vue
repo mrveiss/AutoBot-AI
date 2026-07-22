@@ -9,36 +9,36 @@
   <BaseModal
     :close-label="t('ui.modal.closeDialog')"
     :model-value="true"
-    title="Hire Agent"
+    :title="t('hireAgent.title')"
     size="sm"
     @close="emit('close')"
   >
     <form class="hire-form" @submit.prevent="submit">
       <label class="field">
-        <span class="field-label">Agent name</span>
-        <input v-model="agentName" type="text" required class="field-input" placeholder="e.g. Builder-1" />
+        <span class="field-label">{{ t('hireAgent.agentName') }}</span>
+        <input v-model="agentName" type="text" required class="field-input" v-bind:placeholder="t('hireAgent.agentNamePlaceholder')" />
       </label>
 
       <label class="field">
-        <span class="field-label">Model</span>
+        <span class="field-label">{{ t('hireAgent.model') }}</span>
         <select v-model="model" class="field-input">
-          <option value="claude-sonnet-4-6">Sonnet (default)</option>
-          <option value="claude-haiku-4-5-20251001">Haiku (assistant)</option>
+          <option value="claude-sonnet-4-6">{{ t('hireAgent.modelSonnet') }}</option>
+          <option value="claude-haiku-4-5-20251001">{{ t('hireAgent.modelHaiku') }}</option>
         </select>
       </label>
 
       <label class="field">
-        <span class="field-label">Org role</span>
+        <span class="field-label">{{ t('hireAgent.orgRole') }}</span>
         <select v-model="orgRole" class="field-input">
-          <option value="worker">Worker</option>
-          <option value="specialist">Specialist</option>
-          <option value="coordinator">Coordinator</option>
-          <option value="manager">Manager</option>
+          <option value="worker">{{ t('hireAgent.roleWorker') }}</option>
+          <option value="specialist">{{ t('hireAgent.roleSpecialist') }}</option>
+          <option value="coordinator">{{ t('hireAgent.roleCoordinator') }}</option>
+          <option value="manager">{{ t('hireAgent.roleManager') }}</option>
         </select>
       </label>
 
       <label class="field">
-        <span class="field-label">Adapter</span>
+        <span class="field-label">{{ t('hireAgent.adapter') }}</span>
         <AdapterTypeSelect v-model="adapterType" />
       </label>
 
@@ -46,9 +46,9 @@
     </form>
 
     <template #actions>
-      <button type="button" class="btn btn-ghost" @click="emit('close')">Cancel</button>
+      <button type="button" class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
       <button type="submit" class="btn btn-primary" :disabled="submitting || !agentName" @click="submit">
-        {{ submitting ? 'Hiring…' : 'Hire' }}
+        {{ submitting ? t('hireAgent.hiring') : t('hireAgent.hire') }}
       </button>
     </template>
   </BaseModal>
