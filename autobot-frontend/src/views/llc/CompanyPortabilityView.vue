@@ -485,12 +485,12 @@ async function executeImport(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  background: var(--color-error-bg, #fee2e2);
-  border: 1px solid var(--color-error-border, #fca5a5);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: var(--radius-md);
   padding: var(--spacing-sm) var(--spacing-md);
   margin-bottom: var(--spacing-md);
-  color: var(--color-error-text, #991b1b);
+  color: var(--color-error-text, var(--coportability-error-text));
 }
 
 .btn-dismiss {
@@ -540,7 +540,7 @@ async function executeImport(): Promise<void> {
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--coportability-on-accent);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -577,8 +577,8 @@ async function executeImport(): Promise<void> {
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-error, #dc2626);
-  color: #fff;
+  background: var(--color-error);
+  color: var(--coportability-on-accent);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -661,7 +661,7 @@ async function executeImport(): Promise<void> {
 }
 
 .drop-zone--loaded {
-  border-color: var(--color-success, #16a34a);
+  border-color: var(--color-success);
   background: var(--color-success-bg, rgba(22, 163, 74, 0.05));
 }
 
@@ -706,8 +706,8 @@ async function executeImport(): Promise<void> {
 }
 
 .preview-warnings {
-  background: var(--color-warning-bg, #fef9c3);
-  border: 1px solid var(--color-warning-border, #fde047);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
   border-radius: var(--radius-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   margin-bottom: var(--spacing-md);
@@ -732,7 +732,7 @@ async function executeImport(): Promise<void> {
 }
 
 .row-collision {
-  background: var(--color-warning-bg, #fef9c3);
+  background: var(--color-warning-bg);
 }
 
 .preview-summary {
@@ -809,15 +809,15 @@ async function executeImport(): Promise<void> {
 }
 
 .result-success {
-  background: var(--color-success-bg, #dcfce7);
-  border: 1px solid var(--color-success-border, #86efac);
-  color: var(--color-success-text, #166534);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text, var(--coportability-success-text));
 }
 
 .result-error {
-  background: var(--color-error-bg, #fee2e2);
-  border: 1px solid var(--color-error-border, #fca5a5);
-  color: var(--color-error-text, #991b1b);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text, var(--coportability-error-text));
 }
 
 .result-counts {
@@ -835,7 +835,7 @@ async function executeImport(): Promise<void> {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  border-top-color: var(--coportability-on-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
