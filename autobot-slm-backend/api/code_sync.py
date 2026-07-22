@@ -4226,13 +4226,21 @@ async def _component_has_file_drift(component: str) -> bool:
 async def _resolve_colocated_managed_services(stage: UpdateAllStage) -> None:
     """Resolve co-located managed services on the SLM-Manager node (#11605).
 
-    Runs the existing per-component drift/resolve path (rsync + _run_post_sync_steps,
-    which handles pip/build/migrate/restart + health + rollback) for each co-located
+    Runs the per-component drift/resolve path (rsync + _run_post_sync_steps, which
+    handles pip/build/migrate/restart + health + rollback) for each co-located
     managed component that (a) is actually deployed on this host and (b) has file
-    drift. No new deploy mechanism is introduced — this reuses the exact steps the
-    manual resolve_drift endpoint uses, so autobot_shared-first ordering (#11611)
-    and health/rollback are inherited for free. Per-component failures are logged
-    and do not abort the pipeline.
+    drift.
+
+    #11611: autobot_shared-first ordering is enforced HERE explicitly — this loop
+    is a THIRD deploy site (alongside resolve_drift and _run_component_resolve_job).
+    _run_post_sync_steps only recreates the autobot_shared SYMLINK; it does NOT
+    sync the shared tree CONTENT, so without an explicit _ensure_autobot_shared_synced
+    call this path could rsync + restart autobot-backend onto a STALE autobot_shared
+    and crash-loop it (the exact #11611 failure, on the one-click co-located update).
+    So we call _ensure_autobot_shared_synced BEFORE the component rsync and skip the
+    component (fail-safe, no restart) when the shared tree cannot be synced.
+
+    Per-component failures are logged and do not abort the pipeline.
     """
     for component in _COLOCATED_MANAGED_COMPONENTS:
         if component not in ALLOWED_COMPONENTS:
@@ -4242,6 +4250,13 @@ async def _resolve_colocated_managed_services(stage: UpdateAllStage) -> None:
                 _stage_log(stage, f"co-located {component}: no drift — skipped (#11605)")
                 continue
             _stage_log(stage, f"co-located {component}: drift detected — resolving (#11605)")
+            # #11611: sync autobot_shared BEFORE this component's rsync + restart so
+            # a newly-added `from autobot_shared.X` import resolves at startup. Skip
+            # the component (no restart) if the shared tree cannot be synced.
+            shared_ok, shared_msg = await _ensure_autobot_shared_synced(component)
+            if not shared_ok:
+                _stage_log(stage, f"co-located {component}: {shared_msg} — skipped (#11611)")
+                continue
             source_dir = get_default_source_dir(component)
             deployed_dir = get_default_deployed_dir(component)
             source_root = str(Path(source_dir).parent)
