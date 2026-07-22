@@ -1,121 +1,101 @@
 <template>
-  <Teleport to="body">
-    <Transition name="modal-fade">
-      <div
-        v-if="open"
-        class="modal-backdrop"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="$t('views.marketplace.sources.title')"
-        @click.self="onClose"
-      >
-        <div class="modal-card" @keydown.esc="onClose">
-          <header class="modal-header">
-            <h2 class="modal-title">{{ $t('views.marketplace.sources.title') }}</h2>
-            <button class="modal-close" :aria-label="$t('common.close')" @click="onClose">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="close-icon">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </header>
+  <BaseModal
+    :model-value="open"
+    :title="$t('views.marketplace.sources.title')"
+    :close-label="$t('common.close')"
+    :width="600"
+    @close="onClose"
+  >
+    <div class="modal-body">
+      <p class="hint">{{ $t('views.marketplace.sources.hint') }}</p>
 
-          <div class="modal-body">
-            <p class="hint">{{ $t('views.marketplace.sources.hint') }}</p>
-
-            <!-- Existing sources list -->
-            <ul v-if="sources.length > 0" class="sources-list">
-              <li v-for="src in sources" :key="src.id" class="source-row">
-                <div class="source-info">
-                  <div class="source-name">
-                    {{ src.name }}
-                    <span v-if="src.is_builtin" class="builtin-badge">
-                      {{ $t('views.marketplace.sources.builtin') }}
-                    </span>
-                  </div>
-                  <div v-if="src.url" class="source-url">{{ src.url }}</div>
-                  <div v-if="src.description" class="source-desc">{{ src.description }}</div>
-                </div>
-                <button
-                  v-if="!src.is_builtin"
-                  class="btn btn-danger"
-                  :disabled="busy"
-                  @click="onDelete(src.id)"
-                >
-                  {{ $t('common.remove') }}
-                </button>
-              </li>
-            </ul>
-
-            <!-- Add new source form -->
-            <div class="add-form">
-              <h3 class="add-title">{{ $t('views.marketplace.sources.addTitle') }}</h3>
-              <label class="form-field">
-                <span class="form-label">{{ $t('views.marketplace.sources.nameLabel') }}</span>
-                <input
-                  v-model.trim="newName"
-                  type="text"
-                  class="form-input"
-                  maxlength="64"
-                  :placeholder="$t('views.marketplace.sources.namePlaceholder')"
-                />
-              </label>
-              <label class="form-field">
-                <span class="form-label">{{ $t('views.marketplace.sources.urlLabel') }}</span>
-                <input
-                  v-model.trim="newUrl"
-                  type="url"
-                  class="form-input"
-                  placeholder="https://example.com/plugins.json"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-              </label>
-              <label class="form-field">
-                <span class="form-label">
-                  {{ $t('views.marketplace.sources.descLabel') }}
-                  <span class="form-label-optional">{{ $t('common.optional') }}</span>
-                </span>
-                <input
-                  v-model.trim="newDesc"
-                  type="text"
-                  class="form-input"
-                  maxlength="200"
-                />
-              </label>
-
-              <div v-if="error" class="error-banner" role="alert">
-                {{ error }}
-              </div>
-
-              <button
-                class="btn btn-primary"
-                :disabled="!canAdd || busy"
-                @click="onAdd"
-              >
-                {{ busy ? $t('views.marketplace.sources.adding') : $t('views.marketplace.sources.add') }}
-              </button>
+      <!-- Existing sources list -->
+      <ul v-if="sources.length > 0" class="sources-list">
+        <li v-for="src in sources" :key="src.id" class="source-row">
+          <div class="source-info">
+            <div class="source-name">
+              {{ src.name }}
+              <span v-if="src.is_builtin" class="builtin-badge">
+                {{ $t('views.marketplace.sources.builtin') }}
+              </span>
             </div>
+            <div v-if="src.url" class="source-url">{{ src.url }}</div>
+            <div v-if="src.description" class="source-desc">{{ src.description }}</div>
           </div>
+          <button
+            v-if="!src.is_builtin"
+            class="btn btn-danger"
+            :disabled="busy"
+            @click="onDelete(src.id)"
+          >
+            {{ $t('common.remove') }}
+          </button>
+        </li>
+      </ul>
 
-          <footer class="modal-footer">
-            <button class="btn btn-ghost" @click="onClose">
-              {{ $t('common.close') }}
-            </button>
-          </footer>
+      <!-- Add new source form -->
+      <div class="add-form">
+        <h3 class="add-title">{{ $t('views.marketplace.sources.addTitle') }}</h3>
+        <label class="form-field">
+          <span class="form-label">{{ $t('views.marketplace.sources.nameLabel') }}</span>
+          <input
+            v-model.trim="newName"
+            type="text"
+            class="form-input"
+            maxlength="64"
+            :placeholder="$t('views.marketplace.sources.namePlaceholder')"
+          />
+        </label>
+        <label class="form-field">
+          <span class="form-label">{{ $t('views.marketplace.sources.urlLabel') }}</span>
+          <input
+            v-model.trim="newUrl"
+            type="url"
+            class="form-input"
+            placeholder="https://example.com/plugins.json"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </label>
+        <label class="form-field">
+          <span class="form-label">
+            {{ $t('views.marketplace.sources.descLabel') }}
+            <span class="form-label-optional">{{ $t('common.optional') }}</span>
+          </span>
+          <input
+            v-model.trim="newDesc"
+            type="text"
+            class="form-input"
+            maxlength="200"
+          />
+        </label>
+
+        <div v-if="error" class="error-banner" role="alert">
+          {{ error }}
         </div>
+
+        <button
+          class="btn btn-primary"
+          :disabled="!canAdd || busy"
+          @click="onAdd"
+        >
+          {{ busy ? $t('views.marketplace.sources.adding') : $t('views.marketplace.sources.add') }}
+        </button>
       </div>
-    </Transition>
-  </Teleport>
+    </div>
+
+    <template #actions>
+      <button class="btn btn-ghost" @click="onClose">
+        {{ $t('common.close') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { BaseModal } from '@autobot/ui'
 import { useMarketplaceSources } from '@/composables/useMarketplaceSources'
 
 const props = defineProps<{ open: boolean }>()
@@ -200,66 +180,9 @@ async function onDelete(id: string) {
 </script>
 
 <style scoped>
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--spacing-md);
-}
-
-.modal-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-xl);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-title {
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: var(--spacing-xs);
-  border-radius: var(--radius-sm);
-}
-
-.modal-close:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.close-icon {
-  width: 20px;
-  height: 20px;
-}
-
+/* #10882: overlay/header/footer chrome now provided by @autobot/ui BaseModal;
+   only the body layout + form styling remain here. */
 .modal-body {
-  padding: var(--spacing-lg);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
@@ -386,14 +309,6 @@ async function onDelete(id: string) {
   font-size: var(--text-sm);
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-top: 1px solid var(--border-default);
-}
-
 .btn {
   padding: var(--spacing-sm) var(--spacing-md);
   font-size: var(--text-sm);
@@ -431,15 +346,5 @@ async function onDelete(id: string) {
 
 .btn-danger:hover:not(:disabled) {
   filter: brightness(1.1);
-}
-
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 150ms ease;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
 }
 </style>

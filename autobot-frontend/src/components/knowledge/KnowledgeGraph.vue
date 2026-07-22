@@ -281,15 +281,17 @@
     </transition>
 
     <!-- Create Entity Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4><Icon name="plus-circle" /> {{ $t('knowledge.graph.createEntityTitle') }}</h4>
-          <button @click="showCreateModal = false" class="close-btn">
-            <Icon name="times" />
-          </button>
-        </div>
-        <form @submit.prevent="createEntity" class="entity-form">
+    <BaseModal
+      :model-value="showCreateModal"
+      :title="$t('knowledge.graph.createEntityTitle')"
+      :close-label="$t('common.close')"
+      :width="480"
+      @close="showCreateModal = false"
+    >
+      <template #title>
+        <Icon name="plus-circle" /> {{ $t('knowledge.graph.createEntityTitle') }}
+      </template>
+      <form id="entity-form" @submit.prevent="createEntity" class="entity-form">
           <div class="form-group">
             <label for="entity-name">{{ $t('knowledge.graph.nameLabel') }}</label>
             <input
@@ -326,19 +328,19 @@
               :placeholder="$t('knowledge.graph.observationsPlaceholder')"
             ></textarea>
           </div>
-          <div class="form-actions">
-            <button type="button" @click="showCreateModal = false" class="action-btn">
-              {{ $t('knowledge.graph.cancel') }}
-            </button>
-            <button type="submit" class="action-btn primary" :disabled="isCreating">
-              <Icon name="spinner" class="animate-spin" v-if="isCreating" />
-              <Icon name="plus" v-else />
-              {{ $t('knowledge.graph.create') }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+
+      <template #actions>
+        <button type="button" @click="showCreateModal = false" class="action-btn">
+          {{ $t('knowledge.graph.cancel') }}
+        </button>
+        <button type="submit" form="entity-form" class="action-btn primary" :disabled="isCreating">
+          <Icon name="spinner" class="animate-spin" v-if="isCreating" />
+          <Icon name="plus" v-else />
+          {{ $t('knowledge.graph.create') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Legend -->
     <div class="graph-legend">
@@ -387,6 +389,7 @@
 // Author: mrveiss
 
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
 // Type-only imports — runtime load handled by the shared composable (#5234).
 import type cytoscape from 'cytoscape'
@@ -1781,53 +1784,7 @@ watch(layoutMode, () => {
 }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 480px;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--color-primary);
-  color: white;
-}
-
-.modal-header h4 {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-}
-
-.modal-header .close-btn {
-  color: white;
-}
-
-.entity-form {
-  padding: var(--spacing-lg);
-}
+/* #10882: overlay/header/footer chrome now provided by @autobot/ui BaseModal. */
 
 .form-group {
   margin-bottom: var(--spacing-md);
@@ -1867,15 +1824,6 @@ watch(layoutMode, () => {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
-.form-group input:focus-visible,
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-lg);
-}
-
 /* Legend */
 .graph-legend {
   padding: var(--spacing-md);
