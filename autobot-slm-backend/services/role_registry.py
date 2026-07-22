@@ -103,21 +103,25 @@ _BACKEND_ROLES = [
         "auto_restart": True,
         "health_check_port": 8443,
         "health_check_path": "/api/health",
-        # Install deps into the backend venv, then migrate. Mirrors the backend
-        # ansible role (#11117): strip only the editable autobot_shared, and
-        # rewrite the two sibling-relative includes to the canonical code_source
-        # path so pip can resolve them — `-c ../constraints/` (#10524 constraints)
-        # and `-r ../requirements.txt` (the ~23 root runtime deps: paramiko,
-        # asyncssh, pypdf, python-docx/pptx, openpyxl, …). Both siblings live in
-        # code_source but NOT next to the synced autobot-backend/, so stripping
-        # `-r` (as before) silently dropped those deps on deploy — #11135. A bare
-        # `pip install -r requirements.txt` would error on the unresolvable
-        # include and, via the && short-circuit, silently skip alembic (#11069).
+        # Install deps into the backend venv, then migrate. Delegates the
+        # filter+rewrite to the canonical scripts/build-filtered-requirements.sh
+        # (#11134), which strips only the editable autobot_shared and rewrites
+        # the two sibling-relative includes to the canonical code_source path
+        # so pip can resolve them — `-c ../constraints/` (#10524 constraints,
+        # #11117 rewrite) and `-r ../requirements.txt` (the ~23 root runtime
+        # deps: paramiko, asyncssh, pypdf, python-docx/pptx, openpyxl, …). Both
+        # siblings live in code_source but NOT next to the synced
+        # autobot-backend/, so stripping `-r` (as before #11135) silently
+        # dropped those deps on deploy. The backend ansible role
+        # (ansible/roles/backend/tasks/main.yml) invokes the same script, so
+        # both deploy paths share one implementation instead of drifting.
+        # A bare `pip install -r requirements.txt` would error on the
+        # unresolvable include and, via the && short-circuit, silently skip
+        # alembic (#11069).
         "post_sync_cmd": (
             f"cd {_BASE_DIR}/autobot-backend && "
-            "grep -Ev '^-e.*autobot[-_]shared' requirements.txt "
-            f"| sed 's|^-c \\.\\./constraints/|-c {_BASE_DIR}/code_source/constraints/|;"
-            f" s|^-r \\.\\./requirements.txt|-r {_BASE_DIR}/code_source/requirements.txt|' "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements.txt {_BASE_DIR}/code_source "
             "> /tmp/requirements-filtered-slm.txt && "
             "PIP_USE_DEPRECATED=legacy-resolver PIP_DEFAULT_TIMEOUT=120 "
             "venv/bin/pip install -r /tmp/requirements-filtered-slm.txt && "
