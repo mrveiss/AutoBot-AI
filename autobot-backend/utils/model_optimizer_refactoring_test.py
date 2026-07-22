@@ -7,6 +7,8 @@ Test suite for model_optimizer.py refactoring (Issue #353)
 Verifies backward compatibility and Feature Envy fixes
 """
 
+import pytest
+
 from utils.model_optimizer import (
     ModelCapabilityTier,
     ModelInfo,
@@ -43,7 +45,9 @@ def test_system_resources_dataclass():
 
     # Test behavior methods
     assert resources.allows_large_models() is True  # Low CPU/memory
-    assert resources.get_max_model_size_gb() == float("inf")
+    # Issue #1966: max size is 80% of available memory (OOM safety margin),
+    # not an unbounded float("inf") tier.
+    assert resources.get_max_model_size_gb() == 12.8
 
     # Test dict conversion (backward compatibility)
     resources_dict = resources.to_dict()
@@ -54,7 +58,7 @@ def test_system_resources_dataclass():
     # Test high load scenario
     high_load = SystemResources(cpu_percent=85.0, memory_percent=80.0, available_memory_gb=3.0)
     assert high_load.allows_large_models() is False
-    assert high_load.get_max_model_size_gb() == 4.0
+    assert high_load.get_max_model_size_gb() == pytest.approx(2.4)
 
     print("✅ SystemResources dataclass works correctly")  # noqa: print
 
@@ -72,8 +76,10 @@ def test_task_request_analyze_complexity():
     simple_task = TaskRequest(query="What is Python?", task_type="chat")
     assert simple_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.SIMPLE
 
-    # Complex query
-    complex_task = TaskRequest(query="Design a scalable microservices architecture", task_type="code")
+    # Complex query. Must avoid CODE_COMPLEXITY_KEYWORDS (e.g. "architecture") —
+    # for task_type="code", analyze_complexity() bumps those straight to
+    # SPECIALIZED regardless of complexity_keywords (#11954).
+    complex_task = TaskRequest(query="Design a REST API for user management", task_type="code")
     assert complex_task.analyze_complexity(complexity_keywords) == ModelCapabilityTier.COMPLEX
 
     # Specialized query
