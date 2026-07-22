@@ -1058,6 +1058,37 @@
   --tmplbrowser-cat-startup-end: #fee140;       /* startup icon gradient end */
   --tmplbrowser-cat-custom-start: #a8edea;      /* custom icon gradient start */
   --tmplbrowser-cat-custom-end: #fed6e3;        /* custom icon gradient end */
+
+  /* ============================================
+   * VIDEO CELL TOKENS (#12046, umbrella #11515)
+   * Scoped to artifact-cells/VideoCell.vue. Hex-only (deliberately NO OKLCH
+   * override) so the cell renders pixel-identical to its previous hardcoded
+   * values across all browsers. --videocell-surface-2 is the literal fallback
+   * the badges, spinner track, progress track, error panel and button hover
+   * rendered because --color-surface-2 is never defined in any theme;
+   * preserved behind that intended token name via nested var().
+   * --videocell-video-bg is the pure-black letterbox fill behind the video
+   * element (--bg-dark carries an OKLCH override that would drift).
+   * ============================================ */
+  --videocell-surface-2: #f3f4f6;  /* badge, track, error and hover fill (undefined --color-surface-2 fallback) */
+  --videocell-video-bg: #000;      /* video wrapper letterbox fill */
+
+  /* ============================================
+   * KANBAN BOARD TOKENS (#12047, umbrella #11515)
+   * Scoped to llc/KanbanBoardView.vue. Hex-only (deliberately NO OKLCH
+   * override) so the WIP-limit column-header states render pixel-identical to
+   * their previous hardcoded values across all browsers. The soft-yellow warn
+   * and soft-red exceeded palettes have no existing exact semantic token
+   * (--color-danger-dark matches the exceeded text hex but carries an OKLCH
+   * override that would drift). Work-item status and priority colors live in
+   * component script data, NOT here. Batch-mate CodeCell.vue (#12048) needed
+   * no scoped tokens - its chrome is already fully tokenised and its hljs
+   * syntax-highlighting palette is DATA, preserved literal in the component.
+   * ============================================ */
+  --kanban-wip-warn-bg: #fef9c3;        /* WIP-limit warning column-header fill */
+  --kanban-wip-warn-text: #713f12;      /* WIP-limit warning column-header text */
+  --kanban-wip-exceeded-bg: #fee2e2;    /* WIP-limit exceeded column-header fill */
+  --kanban-wip-exceeded-text: #991b1b;  /* WIP-limit exceeded column-header text */
 }
 
 /* ============================================
