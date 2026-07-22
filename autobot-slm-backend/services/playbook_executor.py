@@ -13,6 +13,7 @@ import asyncio
 import logging
 import os
 import re
+import shlex
 import shutil
 import time
 from pathlib import Path
@@ -54,14 +55,20 @@ SELF_UPDATE_DETACH_UNIT_PREFIX = os.getenv("SLM_SELF_UPDATE_UNIT_PREFIX", "autob
 SYSTEMD_RUN_ENV_ALLOWLIST_EXACT = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "SSH_AUTH_SOCK")
 SYSTEMD_RUN_ENV_ALLOWLIST_PREFIXES = ("ANSIBLE_",)
 
-# Durable ansible-native log for detached self-update runs (#11492). A pipe's
-# read end is owned by this backend process, so once the Play 1 restart task
-# kills it, the pipe read side closes — a subsequent write from the (now
-# detached, still running) ansible-playbook process would raise
-# BrokenPipeError. ANSIBLE_LOG_PATH gives Play 1's tail and Play 2/3 a durable
-# record on disk independent of that pipe, mirroring the existing
-# /var/log/autobot/provision-wizard.log precedent (api/setup_wizard.py).
+# File-backed output for detached self-update runs (#11492). A pipe's read
+# end is owned by this backend process, so once the Play 1 restart task kills
+# it, the pipe read side closes — a subsequent write from the (now detached,
+# still running) ansible-playbook process would raise BrokenPipeError,
+# killing Play 2/3 exactly like the cgroup-kill this fix exists to prevent.
+# The detached run's stdout/stderr are redirected to this file instead of the
+# backend's pipe (see _wrap_with_systemd_scope), so a dead backend can never
+# crash it; this backend tails the same file for live progress while it is
+# still alive. Mirrors the existing /var/log/autobot/provision-wizard.log
+# precedent (api/setup_wizard.py).
 SELF_UPDATE_LOG_PATH = Path(os.getenv("SLM_SELF_UPDATE_LOG_PATH", "/var/log/autobot/self-update-ansible.log"))
+
+# Poll interval while tailing the detached run's log file for live progress.
+SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
 
 
 class PlaybookExecutor:
@@ -209,7 +216,13 @@ class PlaybookExecutor:
         if "TASK [" in line and "[PLAY " in line:
             try:
                 task_start = line.index("TASK [")
-                task_name = line[task_start + 6 :].split("]")[0]
+                # rsplit (not split): the task's own display name embeds a
+                # "[PLAY N]" prefix, i.e. its own "]" — splitting on the FIRST
+                # "]" truncated at "[PLAY 1" and "[PLAY 1]" never matched
+                # below (#11492 discovery while adding self-update log-tail
+                # parsing tests). The trailing "] ***" padding never contains
+                # "]" itself, so the LAST "]" is always the true delimiter.
+                task_name = line[task_start + 6 :].rsplit("]", 1)[0]
 
                 if "[PLAY 1]" in task_name:
                     return self._parse_play1_task(task_name)
@@ -287,13 +300,13 @@ class PlaybookExecutor:
 
         return cmd
 
-    async def _stream_playbook_output(
+    async def _process_playbook_lines(
         self,
-        process: asyncio.subprocess.Process,
+        line_iter,
         progress_callback: Callable | None,
     ) -> List[str]:
         """
-        Stream and parse playbook output for progress (Issue #880, #3033).
+        Shared line-processing loop for playbook output (Issue #880, #3033, #11492).
 
         Fires progress_callback for each recognized Ansible output line.
         Between recognized lines — when Ansible is silent during long-running
@@ -302,8 +315,13 @@ class PlaybookExecutor:
 
         A new tracker is started each time a TASK line is detected and the
         previous one is cancelled, so heartbeats are scoped per task.
+
+        ``line_iter`` is any async iterator of decoded, rstripped text lines —
+        either live from the child's stdout pipe, or tailed from a log file
+        for a detached self-update run (#11492) — so both sources share this
+        one parsing/heartbeat implementation.
         """
-        output_lines = []
+        output_lines: List[str] = []
         current_tracker: TaskProgressTracker | None = None
 
         async def _stop_current_tracker() -> None:
@@ -319,34 +337,76 @@ class PlaybookExecutor:
                 current_tracker = TaskProgressTracker(task_name, progress_callback)
                 await current_tracker.__aenter__()
 
-        if process.stdout:
-            try:
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        break
+        try:
+            async for line_str in line_iter:
+                output_lines.append(line_str)
 
-                    line_str = line.decode("utf-8", errors="replace").rstrip()
-                    output_lines.append(line_str)
-
-                    if progress_callback:
-                        progress = self._parse_progress(line_str)
-                        if progress:
-                            stage = progress.get("stage", "")
-                            # Start a fresh tracker for every new task boundary
-                            # so heartbeats reflect the task currently executing.
-                            if stage in ("task", "heartbeat") or stage.endswith(
-                                ("_starting", "_syncing", "_restarting", "_waiting")
-                            ):
-                                await _start_tracker(progress.get("message", stage))
-                            try:
-                                await progress_callback(progress)
-                            except Exception as e:
-                                logger.debug("Progress callback error: %s", e, exc_info=False)
-            finally:
-                await _stop_current_tracker()
+                if progress_callback:
+                    progress = self._parse_progress(line_str)
+                    if progress:
+                        stage = progress.get("stage", "")
+                        # Start a fresh tracker for every new task boundary
+                        # so heartbeats reflect the task currently executing.
+                        if stage in ("task", "heartbeat") or stage.endswith(
+                            ("_starting", "_syncing", "_restarting", "_waiting")
+                        ):
+                            await _start_tracker(progress.get("message", stage))
+                        try:
+                            await progress_callback(progress)
+                        except Exception as e:
+                            logger.debug("Progress callback error: %s", e, exc_info=False)
+        finally:
+            await _stop_current_tracker()
 
         return output_lines
+
+    @staticmethod
+    async def _iter_pipe_lines(process: asyncio.subprocess.Process):
+        """Yield decoded lines from a live child stdout pipe (Issue #880, #3033)."""
+        if not process.stdout:
+            return
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+            yield line.decode("utf-8", errors="replace").rstrip()
+
+    @staticmethod
+    async def _iter_log_file_lines(log_path: Path, process: asyncio.subprocess.Process):
+        """Tail a log file for a detached run's output (#11492).
+
+        Polls for newly appended lines while ``process`` (the detaching
+        wrapper) is still running; stops once it has exited and no further
+        lines are pending. The detached ansible-playbook process itself keeps
+        writing to this same file independently after this backend restarts —
+        this generator simply stops watching, it never stops the write side.
+        """
+        with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+            while True:
+                line = await asyncio.to_thread(fh.readline)
+                if not line:
+                    if process.returncode is not None:
+                        break
+                    await asyncio.sleep(SELF_UPDATE_LOG_TAIL_POLL_SEC)
+                    continue
+                yield line.rstrip("\n")
+
+    async def _stream_playbook_output(
+        self,
+        process: asyncio.subprocess.Process,
+        progress_callback: Callable | None,
+    ) -> List[str]:
+        """Stream and parse live pipe output for progress. Helper for _run_subprocess."""
+        return await self._process_playbook_lines(self._iter_pipe_lines(process), progress_callback)
+
+    async def _tail_playbook_log(
+        self,
+        log_path: Path,
+        process: asyncio.subprocess.Process,
+        progress_callback: Callable | None,
+    ) -> List[str]:
+        """Tail a detached run's log file and parse it for progress (#11492)."""
+        return await self._process_playbook_lines(self._iter_log_file_lines(log_path, process), progress_callback)
 
     @staticmethod
     def _ensure_ansible_temp_dirs() -> None:
@@ -469,17 +529,28 @@ class PlaybookExecutor:
         return shutil.which("systemd-run") is not None and "INVOCATION_ID" in os.environ
 
     @staticmethod
-    def _ensure_self_update_log_path(env: Dict[str, str]) -> None:
-        """Point ansible at a durable on-disk log for detached runs (#11492).
+    def _prepare_self_update_log_file() -> Path | None:
+        """Create/truncate a fresh log file for this detached run (#11492).
 
-        Best-effort: a failure to create the log dir must not block the run —
-        it only means the pipe (while attached) remains the sole output.
+        The detached ansible-playbook process's stdout/stderr are redirected
+        here (see _wrap_with_systemd_scope) instead of the backend's pipe, so
+        a dead backend can never BrokenPipe-crash Play 2/3. Truncated per run
+        so log-tailing starts at byte 0 and a stale prior run's content is
+        never replayed as this run's progress.
+
+        Returns None on failure — the caller must NOT detach without
+        file-backed output in that case (a pipe-only detach would just move
+        the same crash risk this fix exists to close from "cgroup kill" to
+        "broken pipe"; direct-exec, though it dies with the backend, is at
+        least a deterministic, well-understood failure mode).
         """
         try:
             SELF_UPDATE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            env["ANSIBLE_LOG_PATH"] = str(SELF_UPDATE_LOG_PATH)
+            SELF_UPDATE_LOG_PATH.write_text("", encoding="utf-8")
+            return SELF_UPDATE_LOG_PATH
         except OSError as exc:
-            logger.warning("Could not prepare self-update log path %s: %s", SELF_UPDATE_LOG_PATH, exc)
+            logger.error("Could not prepare self-update log file %s: %s", SELF_UPDATE_LOG_PATH, exc)
+            return None
 
     @staticmethod
     def _systemd_run_env_args(env: Dict[str, str]) -> List[str]:
@@ -490,19 +561,30 @@ class PlaybookExecutor:
                 args.append(f"--setenv={key}={value}")
         return args
 
-    def _wrap_with_systemd_scope(self, cmd: List[str], env: Dict[str, str]) -> List[str]:
-        """Wrap an ansible-playbook cmd to run in its own transient systemd scope.
+    def _wrap_with_systemd_scope(self, cmd: List[str], env: Dict[str, str], log_path: Path) -> List[str]:
+        """Wrap an ansible-playbook cmd to run detached, file-backed (#11492).
 
-        A separate scope = a separate cgroup, so ``systemctl restart
-        autobot-slm-backend`` (KillMode=control-group) no longer SIGTERMs this
-        run. ``sudo`` mirrors the existing privilege pattern already used for
-        service restarts (_restart_slm_service) — the passwordless-sudo
-        sudoers rule this service already relies on. ``--uid``/``--gid`` drop
-        back to the caller's own identity so ansible-playbook still runs as
-        the SLM service user, not root; ``--working-directory`` replaces the
-        ``cwd=`` kwarg systemd-run does not inherit.
+        Two layers:
+          - ``sudo systemd-run --scope --collect``: a separate transient scope
+            = a separate cgroup, so ``systemctl restart autobot-slm-backend``
+            (KillMode=control-group) no longer SIGTERMs this run. ``sudo``
+            mirrors the existing privilege pattern already used for service
+            restarts (_restart_slm_service) — the passwordless-sudo sudoers
+            rule this service already relies on. ``--uid``/``--gid`` drop back
+            to the caller's own identity so ansible-playbook still runs as the
+            SLM service user, not root; ``--working-directory`` replaces the
+            ``cwd=`` kwarg systemd-run does not inherit.
+          - ``sh -c 'exec "$0" "$@" >> <log> 2>&1'``: reopens the FINAL exec'd
+            process's (ansible-playbook, not this shell) stdout/stderr onto
+            the log file before replacing the shell image, so its output is
+            never connected to the backend's pipe in the first place — a dead
+            backend cannot BrokenPipe it. ``exec "$0" "$@"`` keeps every
+            argument a literal positional parameter, so no argv needs shell
+            escaping beyond the already-quoted log path.
         """
         unit_name = f"{SELF_UPDATE_DETACH_UNIT_PREFIX}-{os.getpid()}-{int(time.time())}"
+        redirect_script = f'exec "$0" "$@" >> {shlex.quote(str(log_path))} 2>&1'
+        file_backed_cmd = ["/bin/sh", "-c", redirect_script, *cmd]
         return [
             "sudo",
             "systemd-run",
@@ -514,8 +596,32 @@ class PlaybookExecutor:
             f"--working-directory={self.ansible_dir}",
             *self._systemd_run_env_args(env),
             "--",
-            *cmd,
+            *file_backed_cmd,
         ]
+
+    def _prepare_detached_run(self, cmd: List[str], env: Dict[str, str]) -> tuple[List[str], Path | None]:
+        """Resolve the effective argv + log path for a requested detach (#11492).
+
+        Helper for _run_subprocess. Returns (cmd, None) unchanged whenever
+        detaching isn't possible (no systemd-run/service context, or the log
+        file couldn't be prepared) so the caller falls back to the exact
+        pipe-attached behavior that existed before this fix.
+        """
+        if not self._self_update_detach_available():
+            logger.warning(
+                "Self-update detach requested but systemd-run/service context "
+                "unavailable — running attached (this run will die if the "
+                "backend restarts mid-flight)"
+            )
+            return cmd, None
+
+        log_path = self._prepare_self_update_log_file()
+        if log_path is None:
+            logger.error("Self-update detach requested but log file unavailable — running attached")
+            return cmd, None
+
+        logger.info("Self-update run detached into transient systemd scope, output -> %s", log_path)
+        return self._wrap_with_systemd_scope(cmd, env, log_path), log_path
 
     async def _run_subprocess(
         self,
@@ -531,33 +637,40 @@ class PlaybookExecutor:
 
         Args:
             detach: When True AND the runtime supports it (#11492), wrap the
-                command in ``systemd-run --scope --collect`` so it survives a
-                same-process ``systemctl restart autobot-slm-backend`` mid-run
-                (the self-update path). Falls back to the direct exec when
-                systemd-run/systemd-service context is unavailable (dev mode,
-                tests, containers).
+                command in ``systemd-run --scope --collect`` with file-backed
+                stdout/stderr so it survives a same-process ``systemctl
+                restart autobot-slm-backend`` mid-run (the self-update path)
+                without a dead backend's pipe crashing it. Falls back to the
+                unchanged direct exec + pipe when systemd-run/systemd-service
+                context or the log file is unavailable (dev mode, tests,
+                containers).
         """
         effective_cmd = cmd
+        log_path: Path | None = None
+        stdout_target: int = asyncio.subprocess.PIPE
+        stderr_target: int = asyncio.subprocess.STDOUT
+
         if detach:
-            self._ensure_self_update_log_path(env)
-            if self._self_update_detach_available():
-                effective_cmd = self._wrap_with_systemd_scope(cmd, env)
-                logger.info("Self-update run detached into transient systemd scope")
-            else:
-                logger.warning(
-                    "Self-update detach requested but systemd-run/service context "
-                    "unavailable — running attached (this run will die if the "
-                    "backend restarts mid-flight)"
-                )
+            effective_cmd, log_path = self._prepare_detached_run(cmd, env)
+            if log_path is not None:
+                # Real output goes to the file (see _wrap_with_systemd_scope);
+                # nothing meaningful is expected on this outer pipe, and
+                # leaving it as PIPE-but-unread risks the wrapper deadlocking
+                # once the OS pipe buffer fills.
+                stdout_target = asyncio.subprocess.DEVNULL
+                stderr_target = asyncio.subprocess.DEVNULL
 
         process = await asyncio.create_subprocess_exec(
             *effective_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
+            stdout=stdout_target,
+            stderr=stderr_target,
             cwd=str(self.ansible_dir),
             env=env,
         )
-        output_lines = await self._stream_playbook_output(process, progress_callback)
+        if log_path is not None:
+            output_lines = await self._tail_playbook_log(log_path, process, progress_callback)
+        else:
+            output_lines = await self._stream_playbook_output(process, progress_callback)
         await process.wait()
         return {"output": "\n".join(output_lines), "returncode": process.returncode}
 
