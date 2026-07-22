@@ -23,7 +23,7 @@ import type { BadgeVariant } from '@/types/component-props'
 import { createLogger } from '@/utils/debugUtils'
 
 const BADGE_SIZES = ['xs', 'sm', 'md', 'lg'] as const
-const BADGE_VARIANTS = ['default', 'primary', 'success', 'warning', 'error', 'info'] as const
+const BADGE_VARIANTS = ['neutral', 'primary', 'success', 'warning', 'danger', 'info'] as const
 
 const logger = createLogger('BaseBadge')
 
@@ -40,7 +40,7 @@ interface Props {
 const { t } = useI18n()
 
 const props = withDefaults(defineProps<Props>(), {
-  variant: 'default',
+  variant: 'neutral',
   size: 'sm',
   rounded: true,
   outline: false,
@@ -144,7 +144,7 @@ if (import.meta.env.DEV) {
 }
 
 /* Color Variants - Solid */
-.badge-default {
+.badge-neutral {
   background-color: var(--bg-secondary);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
@@ -168,7 +168,7 @@ if (import.meta.env.DEV) {
   border: 1px solid transparent;
 }
 
-.badge-error {
+.badge-danger {
   background-color: var(--color-error-bg);
   color: var(--color-error-dark);
   border: 1px solid transparent;
@@ -181,7 +181,7 @@ if (import.meta.env.DEV) {
 }
 
 /* Outline Variants */
-.badge-outline.badge-default {
+.badge-outline.badge-neutral {
   background-color: transparent;
   color: var(--text-primary);
   border-color: var(--border-default);
@@ -205,7 +205,7 @@ if (import.meta.env.DEV) {
   border-color: var(--color-warning);
 }
 
-.badge-outline.badge-error {
+.badge-outline.badge-danger {
   background-color: transparent;
   color: var(--color-error);
   border-color: var(--color-error);
@@ -281,7 +281,7 @@ if (import.meta.env.DEV) {
 
 /* Dark Mode Adjustments */
 @media (prefers-color-scheme: dark) {
-  .badge-default {
+  .badge-neutral {
     background-color: var(--bg-tertiary);
     border-color: var(--border-default);
   }

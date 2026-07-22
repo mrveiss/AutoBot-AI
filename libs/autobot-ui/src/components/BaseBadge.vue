@@ -6,7 +6,11 @@
   for statuses, counts, and tags. See BaseButton.vue for the kit rules.
 -->
 <script setup lang="ts">
-export type BadgeVariant = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'
+import type { SemanticVariant } from '../types/semantic'
+
+// BadgeVariant is the canonical semantic vocabulary (#10885); kept as an alias
+// so existing `BadgeVariant` imports keep working without duplicating the union.
+export type BadgeVariant = SemanticVariant
 export type BadgeSize = 'sm' | 'md'
 
 withDefaults(

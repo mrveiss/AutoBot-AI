@@ -80,11 +80,11 @@
         <div class="component-section">
           <h4 class="section-heading">{{ $t('views.componentShowcase.variants') }}</h4>
           <div class="badge-group">
-            <BaseBadge variant="default">{{ $t('views.componentShowcase.default') }}</BaseBadge>
+            <BaseBadge variant="neutral">{{ $t('views.componentShowcase.default') }}</BaseBadge>
             <BaseBadge variant="primary">{{ $t('views.componentShowcase.primary') }}</BaseBadge>
             <BaseBadge variant="success">{{ $t('views.componentShowcase.success') }}</BaseBadge>
             <BaseBadge variant="warning">{{ $t('views.componentShowcase.warning') }}</BaseBadge>
-            <BaseBadge variant="error">{{ $t('views.componentShowcase.error') }}</BaseBadge>
+            <BaseBadge variant="danger">{{ $t('views.componentShowcase.error') }}</BaseBadge>
             <BaseBadge variant="info">{{ $t('views.componentShowcase.info') }}</BaseBadge>
           </div>
 
@@ -93,7 +93,7 @@
             <BaseBadge variant="primary" outline>{{ $t('views.componentShowcase.primary') }}</BaseBadge>
             <BaseBadge variant="success" outline>{{ $t('views.componentShowcase.success') }}</BaseBadge>
             <BaseBadge variant="warning" outline>{{ $t('views.componentShowcase.warning') }}</BaseBadge>
-            <BaseBadge variant="error" outline>{{ $t('views.componentShowcase.error') }}</BaseBadge>
+            <BaseBadge variant="danger" outline>{{ $t('views.componentShowcase.error') }}</BaseBadge>
           </div>
 
           <h4 class="section-heading">{{ $t('views.componentShowcase.monospace') }}</h4>
@@ -186,7 +186,7 @@
 
             <template #cell-status="{ value }">
               <BaseBadge
-                :variant="value === 'active' ? 'success' : value === 'pending' ? 'warning' : 'default'"
+                :variant="value === 'active' ? 'success' : value === 'pending' ? 'warning' : 'neutral'"
                 size="sm"
               >
                 {{ value }}
