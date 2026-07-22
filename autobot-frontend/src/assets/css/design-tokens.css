@@ -922,6 +922,39 @@
   --coportability-error-text: #991b1b;    /* error banner + failed-result foreground */
   --coportability-success-text: #166534;  /* success-result foreground */
   --coportability-on-accent: #fff;        /* white button label + spinner highlight on accent */
+
+  /* ============================================
+   * COMPANY SELECTOR VIEW TOKENS (#12036, umbrella #11515)
+   * Scoped to llc/CompanySelectorView.vue. Hex-only (deliberately NO OKLCH
+   * override) so the view renders pixel-identical to its previous hardcoded
+   * values across all browsers. These are the literal fallbacks the accent
+   * card, dot, status badge and create-link styles rendered because their
+   * intended Ember semantic tokens (--color-accent, --color-accent-subtle,
+   * --color-accent-text, --color-accent-border) are defined only by the
+   * ember theme; preserved behind those intended token names via nested
+   * var() so ember still wins where it defines them. Batch-mate
+   * ApprovalsInbox.vue (#12035) needed no scoped tokens - its style hexes
+   * were all dead fallbacks of defined tokens and were dropped.
+   * ============================================ */
+  --coselector-accent: #c4651a;         /* accent border, dot fill, create link (non-ember --color-accent fallback) */
+  --coselector-accent-subtle: #fcefe0;  /* active card + status badge fill (non-ember --color-accent-subtle fallback) */
+
+  /* ============================================
+   * MEMORY PRIVACY PANEL TOKENS (#12037, umbrella #11515)
+   * Scoped to settings/MemoryPrivacyPanel.vue. Hex-only (deliberately NO
+   * OKLCH override) so the panel renders pixel-identical to its previous
+   * hardcoded values across all browsers. The surface fills are the literal
+   * fallbacks the panel rendered because --surface-secondary,
+   * --surface-tertiary and --color-primary-muted are never defined in any
+   * theme; preserved behind those intended token names via nested var().
+   * --mempriv-on-accent is the white button label on the primary and danger
+   * fills (--text-on-primary carries an OKLCH override that would drift).
+   * ============================================ */
+  --mempriv-surface-secondary: #333;    /* secondary button + store badge fill (undefined --surface-secondary fallback) */
+  --mempriv-item-surface: #2a2a2a;      /* memory-item card fill (undefined --surface-secondary fallback) */
+  --mempriv-surface-tertiary: #1a1a1a;  /* provenance code-block fill (undefined --surface-tertiary fallback) */
+  --mempriv-primary-muted: #1e3a5f;     /* store-tag chip fill (undefined --color-primary-muted fallback) */
+  --mempriv-on-accent: #fff;            /* white button label on primary and danger fills */
 }
 
 /* ============================================

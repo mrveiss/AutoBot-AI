@@ -132,13 +132,13 @@ onMounted(async () => {
 .selector-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .selector-subtitle {
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 /* #10502: unavailable (no company-mode deployment) empty-state */
@@ -149,9 +149,9 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  border: 1px solid var(--border-default, #e5e7eb);
-  border-radius: var(--radius-lg, 12px);
-  background: var(--bg-secondary, #f9fafb);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
 }
 
 .selector-unavailable-icon {
@@ -162,20 +162,20 @@ onMounted(async () => {
 .selector-unavailable-title {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .selector-unavailable-desc {
   max-width: 32rem;
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .selector-error {
   padding: 0.75rem 1rem;
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-danger-bg, #fae5e1);
-  color: var(--color-error, #cb3326);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-bg);
+  color: var(--color-error);
   font-size: 0.875rem;
 }
 
@@ -187,7 +187,7 @@ onMounted(async () => {
 .selector-empty {
   padding: 3rem 0;
   text-align: center;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -210,28 +210,28 @@ onMounted(async () => {
   gap: 0.75rem;
   padding: 0.875rem 1rem;
   text-align: left;
-  border-radius: var(--radius-lg, 12px);
-  border: 1px solid var(--border-default, #e5e7eb);
-  background: var(--bg-card, #ffffff);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
   cursor: pointer;
 }
 
 .company-card:hover {
-  border-color: var(--color-accent-border, var(--color-accent, #c4651a));
-  background: var(--bg-hover, #f9fafb);
+  border-color: var(--color-accent-border, var(--color-accent, var(--coselector-accent)));
+  background: var(--bg-hover);
 }
 
 .company-card.active {
-  border-color: var(--color-accent, #c4651a);
-  background: var(--color-accent-subtle, #fcefe0);
+  border-color: var(--color-accent, var(--coselector-accent));
+  background: var(--color-accent-subtle, var(--coselector-accent-subtle));
 }
 
 .company-dot {
   width: 0.625rem;
   height: 0.625rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   flex: none;
-  background: var(--color-accent, #c4651a);
+  background: var(--color-accent, var(--coselector-accent));
 }
 
 .company-meta {
@@ -243,12 +243,12 @@ onMounted(async () => {
 
 .company-name {
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .company-description {
   font-size: 0.8125rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -260,14 +260,14 @@ onMounted(async () => {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  background: var(--color-accent-subtle, #fcefe0);
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  border-radius: var(--radius-full);
+  background: var(--color-accent-subtle, var(--coselector-accent-subtle));
+  color: var(--color-accent-text, var(--color-accent, var(--coselector-accent)));
   flex: none;
 }
 
 .selector-create {
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent, var(--coselector-accent)));
   font-size: 0.875rem;
   font-weight: 600;
   text-decoration: none;
