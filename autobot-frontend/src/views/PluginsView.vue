@@ -330,6 +330,11 @@
         </div>
       </div>
 
+      <!-- Audit Log Tab — Issue #9049; relocated to page-level panel (#11980) -->
+      <div v-if="!isMarketplaceActive && activeTab === 'audit'">
+        <CapabilityAuditLog />
+      </div>
+
       <!-- Marketplace sub-route — Issue #1803 -->
       <router-view v-if="isMarketplaceActive" />
     </div>
@@ -411,12 +416,6 @@
             <p v-else class="config-empty">{{ $t('views.plugins.noConfig') }}</p>
           </div>
         </div>
-
-      <!-- Audit Log Tab (pre-existing: only renders while a plugin detail is
-           open + audit tab active; see #10882 follow-up note) -->
-      <div v-if="!isMarketplaceActive && activeTab === 'audit'">
-        <CapabilityAuditLog />
-      </div>
     </BaseModal>
 
     <!-- Capability Approval Dialog — Issue #9049 -->
