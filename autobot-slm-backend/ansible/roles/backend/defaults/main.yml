@@ -25,9 +25,10 @@ backend_host: "127.0.0.1"   # uvicorn: localhost only (nginx proxies from LAN)
 backend_port: 8001           # uvicorn: plain HTTP port (internal)
 backend_nginx_port: 8443     # nginx: external TLS port (LAN-facing)
 # #11670: worker count is owned by the canonical unit (autobot-backend.service.j2),
-# not by hand-placed .service.d/ drop-ins. Constrained/co-located single-box
-# installs may lower this per-inventory (e.g. backend_workers: 1) — the retired
-# fix-backend-worker-deadlock scripts used to force that via single-worker.conf.
+# not by hand-placed .service.d/ drop-ins. The co-located single-box lowers this
+# to 1 per-inventory via group_vars/slm.yml (#876) — the same protection the
+# legacy fix-backend-worker-deadlock scripts forced via single-worker.conf, now
+# delivered through the canonical env-driven var. Dedicated backend VMs keep 4.
 backend_workers: 4
 # #11670: systemd start/stop timeouts owned by the canonical unit. First boot
 # imports torch/sentence-transformers/chromadb (5-6 min) so the start window is

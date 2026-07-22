@@ -1,0 +1,28 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+[Unit]
+Description=AutoBot Backend API
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=autobot
+Group=autobot
+WorkingDirectory={{ backend_workdir }}
+Environment="PATH={{ backend_venv }}/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/autobot:/opt/autobot/autobot-user-backend"
+EnvironmentFile={{ backend_workdir }}/.env
+EnvironmentFile=-/etc/autobot/service-keys/main-backend.env
+
+# Issue #876: Single worker mode to prevent initialization deadlock
+# FastAPI is async - single worker handles high concurrency efficiently
+ExecStart={{ backend_venv }}/bin/uvicorn main:app --host 0.0.0.0 --port 8443 --workers 1
+
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/autobot/backend.log
+StandardError=append:/var/log/autobot/backend-error.log
+
+[Install]
+WantedBy=multi-user.target
