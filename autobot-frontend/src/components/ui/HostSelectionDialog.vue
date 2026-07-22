@@ -702,8 +702,8 @@ onUnmounted(() => {
 }
 
 .host-icon {
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -830,8 +830,8 @@ onUnmounted(() => {
 }
 
 .checkmark {
-  width: 20px;
-  height: 20px;
+  width: var(--spacing-5);
+  height: var(--spacing-5);
   border: 2px solid var(--border-secondary);
   border-radius: var(--radius-sm);
   margin-right: var(--spacing-2);
@@ -847,7 +847,7 @@ onUnmounted(() => {
 .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
   content: '\2713';
   position: absolute;
-  top: -2px;
+  top: var(--spacing-neg-2px);
   left: 3px;
   color: var(--text-on-primary);
   font-size: var(--font-size-sm);
