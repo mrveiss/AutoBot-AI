@@ -565,7 +565,7 @@ function formatFactorName(factor: string): string {
 }
 
 .ownership-metrics .metric-bar {
-  height: 8px;
+  height: var(--spacing-2);
   background: rgba(71, 85, 105, 0.4);
   border-radius: var(--radius-default);
   overflow: hidden;
@@ -776,7 +776,7 @@ function formatFactorName(factor: string): string {
 }
 
 .score-track {
-  height: 6px;
+  height: var(--spacing-1-5);
   background: rgba(71, 85, 105, 0.4);
   border-radius: var(--radius-default);
   overflow: hidden;
@@ -809,7 +809,7 @@ function formatFactorName(factor: string): string {
 }
 
 .area-tag {
-  padding: 3px 8px;
+  padding: 3px var(--spacing-2);
   background: rgba(71, 85, 105, 0.4);
   border-radius: var(--radius-default);
   font-size: 0.75em;
@@ -942,7 +942,7 @@ function formatFactorName(factor: string): string {
 }
 
 .gap-risk-badge {
-  padding: 3px 8px;
+  padding: 3px var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: 0.75em;
   font-weight: 700;
