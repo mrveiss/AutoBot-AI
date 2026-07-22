@@ -67,7 +67,10 @@ class TestKeyboardTypeGating:
 
     @pytest.mark.asyncio
     async def test_executes_when_human_inactive(self):
-        with _human_active(False), patch(
+        # should_add_human_pause() is stochastic (20% chance of a mid-typing
+        # pause that splits into 2 xdotool calls) -- pin it False so this
+        # test deterministically exercises the single-call path.
+        with _human_active(False), patch("api.vnc_manager.should_add_human_pause", return_value=False), patch(
             "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
         ) as mock_run:
             result = await vnc_keyboard_type(KeyboardTypeRequest(text="hello"), admin_check=True)
