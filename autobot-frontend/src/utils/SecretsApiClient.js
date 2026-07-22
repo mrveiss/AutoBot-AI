@@ -7,12 +7,12 @@
  * with proper error handling and chat scope management.
  */
 
-import { ApiClient } from './ApiClient';
+import apiClient from './ApiClient';
 import { getApiBase } from '@/config/ssot-config';
 
 class SecretsApiClient {
     constructor() {
-        this.apiClient = new ApiClient();
+        this.apiClient = apiClient;
         this.currentChatId = null;
     }
 
