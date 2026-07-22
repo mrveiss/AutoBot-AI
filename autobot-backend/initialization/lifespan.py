@@ -2173,7 +2173,6 @@ async def cleanup_services(app: FastAPI):
         # pools would reopen lazily post-close, leaking connections at exit.
         # shutdown() is a blocking call, so it runs via asyncio.to_thread to
         # avoid blocking the event loop while queued jobs finish.
-        global _executor
         if _executor is not None:
             await asyncio.to_thread(_executor.shutdown, wait=True, cancel_futures=False)
             logger.info("🧵 Thread pool executor drained")
