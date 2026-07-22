@@ -180,9 +180,17 @@ class ReconcilerService:
         await self._broadcast_node_status(node.node_id, NodeStatus.OFFLINE.value, node.hostname)
 
     async def _check_node_health(self) -> None:
-        """Check node health based on heartbeats and network reachability."""
+        """Check node health based on heartbeats and network reachability.
+
+        Issue #11963: the manager/self node is excluded from the ping-based
+        demotion below — it is heartbeated locally (compose_fleet.py) from
+        real-time metrics of this very process, so ICMP reachability (which
+        can be blocked/unreliable and races the self-heartbeat loop) must
+        never mark it degraded/offline.
+        """
         from sqlalchemy import or_
 
+        from services.compose_fleet import is_manager_node
         from services.database import db_service
 
         async with db_service.session() as db:
@@ -210,6 +218,9 @@ class ReconcilerService:
             stale_nodes = result.scalars().all()
 
             for node in stale_nodes:
+                if is_manager_node(node.node_id):
+                    continue
+
                 is_reachable = await self._ping_host(node.ip_address)
                 old_status = node.status
 
