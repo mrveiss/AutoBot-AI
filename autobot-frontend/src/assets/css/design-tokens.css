@@ -803,6 +803,32 @@
   --intscreenshot-popup-save-bg: #3b82f6;      /* popup save-button fill */
 
   /* ============================================
+   * HEARTBEAT PANEL TOKENS
+   * Issue #12004 (umbrella #11515). Scoped to agents/HeartbeatPanel.vue.
+   * Hex-only (deliberately NO OKLCH override) so the panel renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * --hbpanel-border, --hbpanel-btn-bg, --hbpanel-btn-border,
+   * --hbpanel-btn-hover-bg are the literal fallbacks the panel rendered
+   * because --border, --bg-btn, --bg-btn-hover are never defined in any
+   * theme; preserved behind those intended token names via nested var().
+   * The badge/button text hues each match a --color-x-light or
+   * --text-secondary base value, but those semantic tokens carry OKLCH
+   * overrides that would shift the rendered pixels, so they are captured
+   * here verbatim.
+   * ============================================ */
+  --hbpanel-border: #334155;        /* card, input and divider borders (undefined --border fallback) */
+  --hbpanel-btn-bg: #334155;        /* default button fill (undefined --bg-btn fallback) */
+  --hbpanel-btn-border: #475569;    /* default button border (undefined --border fallback) */
+  --hbpanel-btn-hover-bg: #475569;  /* default button hover fill (undefined --bg-btn-hover fallback) */
+  --hbpanel-error-text: #fca5a5;    /* error banner and inline error-message text */
+  --hbpanel-success-text: #34d399;  /* green status badge and resume-button text */
+  --hbpanel-neutral-text: #94a3b8;  /* gray status badge text */
+  --hbpanel-info-text: #60a5fa;     /* blue status badge text */
+  --hbpanel-warning-text: #facc15;  /* yellow status badge text */
+  --hbpanel-danger-text: #f87171;   /* red status badge text */
+  --hbpanel-orange-text: #fb923c;   /* orange status badge and pause-button text */
+
+  /* ============================================
    * SECRETS VIEW TOKENS
    * Issue #12005 (umbrella #11515). Scoped to llc/SecretsView.vue.
    * Hex-only (deliberately NO OKLCH override) so the view renders
