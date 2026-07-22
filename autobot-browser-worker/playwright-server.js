@@ -5,6 +5,7 @@
 const { chromium } = require('playwright');
 const express = require('express');
 const { SessionStore } = require('./session-store');
+const { collectIndexedElements, resolveElementByIndex } = require('./element-index');
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
@@ -958,6 +959,42 @@ async function ensureMcpPage(sessionId) {
   return entry.mcpPage;
 }
 
+// --- Indexed interactive-element state (#11537) ---
+//
+// "state" here is what OpenManus feeds the model on every step: the current
+// URL/title/scroll position plus a numbered menu of interactive elements, so
+// the model can click_index/fill_index instead of guessing a CSS selector.
+async function capturePageState(page) {
+  const elements = await collectIndexedElements(page);
+  const scroll = await page.evaluate(() => ({
+    x: window.scrollX,
+    y: window.scrollY,
+    maxX: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+    maxY: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+  }));
+  return {
+    url: page.url(),
+    title: await page.title(),
+    scroll,
+    elements,
+  };
+}
+
+// New browser-worker endpoint (#11537 task 2): current page state, numbered
+// interactive elements included, for the session's MCP automation page.
+app.post('/state', async (req, res) => {
+  const sessionId = sessionIdFromRequest(req);
+  try {
+    const page = await ensureMcpPage(sessionId);
+    const state = await capturePageState(page);
+    res.json({ success: true, session_id: sessionId, ...state, timestamp: new Date().toISOString() });
+  } catch (e) {
+    logger.error('state error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+// --- End indexed interactive-element state (#11537) ---
+
 app.post('/automation', async (req, res) => {
   const { action, params = {} } = req.body;
   const sessionId = sessionIdFromRequest(req);
@@ -1028,8 +1065,71 @@ app.post('/automation', async (req, res) => {
         result = { success: true };
         break;
       }
+      // --- Indexed interactive-element actions (#11537) ---
+      // The index is resolved against a freshly-collected element list on
+      // every call (never a stale cache), then acted on via its xpath
+      // locator — "resolved server-side" so the LLM never has to guess a
+      // CSS selector.
+      case 'browser_state': {
+        result = await capturePageState(page);
+        break;
+      }
+      case 'click_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.click(resolved.element.selector, { timeout: params.timeout || 10000 });
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      case 'fill_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.fill(resolved.element.selector, params.value, { timeout: params.timeout || 10000 });
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      case 'select_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.selectOption(resolved.element.selector, params.value);
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      case 'hover_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.hover(resolved.element.selector);
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      // --- End indexed interactive-element actions (#11537) ---
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
+    }
+    // #11537 task 4: every browser tool result carries the current numbered
+    // element menu, refreshed post-action, so the model always sees an
+    // up-to-date menu without a separate round trip. Non-fatal on failure —
+    // a page mid-navigation/closed should not fail the action that just
+    // succeeded. 'browser_state' already *is* the page state — no need to
+    // capture it twice.
+    if (action !== 'browser_state') {
+      try {
+        result.page_state = await capturePageState(page);
+      } catch (stateErr) {
+        logger.warn('Automation: page_state capture failed for %s: %s', action, stateErr.message);
+      }
     }
     res.json({ success: true, action, result, session_id: sessionId, timestamp: new Date().toISOString() });
   } catch (error) {

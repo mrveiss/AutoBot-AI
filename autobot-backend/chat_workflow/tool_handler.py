@@ -337,6 +337,82 @@ WAIT_FOR_SELECTOR_SCHEMA: dict = {
     "required": ["selector"],
 }
 
+# Issue #11537: indexed interactive-element schemas. OpenManus numbers every
+# interactive element on the page so the model clicks/fills by index instead
+# of inventing a CSS selector — the index below is resolved to a concrete
+# element server-side (autobot-browser-worker/element-index.js).
+CLICK_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Click an interactive element by its numbered index from the page's element menu.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+    },
+    "required": ["index"],
+}
+
+FILL_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Fill an interactive element by its numbered index from the page's element menu.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "value": {"type": "string", "description": "Value to fill into the element."},
+        "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+    },
+    "required": ["index", "value"],
+}
+
+SELECT_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Select a dropdown option on an element identified by its numbered index.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "value": {"type": "string", "description": "Value to select."},
+    },
+    "required": ["index", "value"],
+}
+
+HOVER_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Hover over an interactive element by its numbered index.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+    },
+    "required": ["index"],
+}
+
+BROWSER_STATE_SCHEMA: dict = {
+    "type": "object",
+    "description": (
+        "Get the current page state: URL, title, scroll info, and a numbered menu "
+        "of interactive elements for use with click_index/fill_index/select_index/hover_index."
+    ),
+    "properties": {},
+}
+
+# Issue #11537: how many numbered elements to render in the LLM-visible state
+# block per browser tool result (the browser-worker itself caps the raw list
+# via BROWSER_STATE_MAX_ELEMENTS; this bounds the prompt-text rendering).
+BROWSER_STATE_PROMPT_MAX_ELEMENTS = env_int("AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS", default=30)
+
+# Issue #11537: text formatters for the four indexed-element tool results,
+# keyed by tool name so _format_browser_action_text stays a flat dispatch.
+_INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
+    "click_index": lambda params, inner: (
+        f"Clicked element [{params.get('index')}]: "
+        f"{(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}"
+    ),
+    "fill_index": lambda params, inner: (
+        f"Filled element [{params.get('index')}] "
+        f"({(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}) "
+        "with value"
+    ),
+    "select_index": lambda params, inner: (
+        f"Selected '{params.get('value', '')}' in element [{params.get('index')}]"
+    ),
+    "hover_index": lambda params, inner: f"Hovered over element [{params.get('index')}]",
+}
+
 # Issue #4529: JSON Schema definitions for built-in tools dispatched directly
 # (not via MCP).  Used by _validate_builtin_tool_arguments() so every dispatch
 # path passes through validate_tool_arguments() before execution.
@@ -355,6 +431,12 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "get_text": GET_TEXT_SCHEMA,
     "get_attribute": GET_ATTRIBUTE_SCHEMA,
     "wait_for_selector": WAIT_FOR_SELECTOR_SCHEMA,
+    # Issue #11537: indexed interactive-element actions.
+    "click_index": CLICK_INDEX_SCHEMA,
+    "fill_index": FILL_INDEX_SCHEMA,
+    "select_index": SELECT_INDEX_SCHEMA,
+    "hover_index": HOVER_INDEX_SCHEMA,
+    "browser_state": BROWSER_STATE_SCHEMA,
     # Imported from tools.code_interpreter — single source of truth for the schema.
     # Issue #4561: was missing, causing code_interpreter args to bypass validation
     # (Issue #4562).  All future built-in tool schemas should follow this pattern:
@@ -445,6 +527,12 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
         "get_text",
         "get_attribute",
         "wait_for_selector",
+        # Issue #11537: indexed interactive-element actions.
+        "click_index",
+        "fill_index",
+        "select_index",
+        "hover_index",
+        "browser_state",
     }
 )
 
@@ -2066,9 +2154,15 @@ class ToolHandlerMixin:
         """Record a successful browser tool execution and return its WorkflowMessage. Issue #2735.
 
         Extracted from _handle_browser_tool to keep parent under 65 lines.
+        Issue #11538: also carries the raw screenshot (if any) into
+        execution_results so the vision-in-the-loop continuation can find it.
         """
         summary = self._format_browser_result(tool_name, params, result)
-        execution_results.append({"tool": tool_name, "status": "success", "output": summary})
+        entry: dict[str, Any] = {"tool": tool_name, "status": "success", "output": summary}
+        base64_image = self._extract_browser_image(result)
+        if base64_image:
+            entry["base64_image"] = base64_image
+        execution_results.append(entry)
         return WorkflowMessage(
             type="command_output",
             content=summary,
@@ -2080,6 +2174,36 @@ class ToolHandlerMixin:
             },
         )
 
+    def _extract_browser_image(self, result: dict[str, Any]) -> str | None:
+        """Pull the base64 PNG out of a browser tool result, if present. Issue #11538.
+
+        Only the ``screenshot`` action returns image bytes today; kept
+        tool-name-agnostic (checks common keys) so a future browser/VNC
+        action that starts returning images is picked up automatically.
+        """
+        inner = result.get("result", result)
+        return inner.get("image") or inner.get("screenshot")
+
+    def _format_page_state_block(self, page_state: dict[str, Any] | None) -> str:
+        """Render the numbered interactive-element menu for LLM consumption. Issue #11537.
+
+        OpenManus-style: the model picks click_index/fill_index targets from
+        this menu instead of guessing a CSS selector. Appended to every
+        browser tool result so the menu is always current (task 4).
+        """
+        if not page_state:
+            return ""
+        elements = page_state.get("elements") or []
+        if not elements:
+            return ""
+        lines = [f"\nInteractive elements ({len(elements)}):"]
+        for el in elements[:BROWSER_STATE_PROMPT_MAX_ELEMENTS]:
+            role = el.get("role", el.get("tag", "element"))
+            name = (el.get("name") or "").strip()
+            label = f' "{name}"' if name else ""
+            lines.append(f"  [{el.get('index')}] {role}{label}")
+        return "\n".join(lines)
+
     def _format_browser_result(
         self,
         tool_name: str,
@@ -2089,10 +2213,25 @@ class ToolHandlerMixin:
         """Format browser tool result as text for LLM context. Issue #1368.
 
         Browser VM returns: {"success": bool, "action": str, "result": {...}}
-        The inner 'result' dict contains tool-specific data.
+        The inner 'result' dict contains tool-specific data. Issue #11537:
+        appends the numbered interactive-element menu when present.
         """
         inner = result.get("result", result)
+        summary = self._format_browser_action_text(tool_name, params, inner, result)
+        # browser_state's payload *is* the page state; every other action
+        # carries it nested under "page_state" (attached post-action).
+        page_state = inner if tool_name == "browser_state" else inner.get("page_state")
+        state_block = self._format_page_state_block(page_state)
+        return summary + state_block if state_block else summary
 
+    def _format_browser_action_text(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        inner: dict[str, Any],
+        result: dict[str, Any],
+    ) -> str:
+        """Build the tool-specific summary line for _format_browser_result. Issue #1368/#11537."""
         if tool_name == "navigate":
             url = inner.get("url", params.get("url", ""))
             title = inner.get("title", "")
@@ -2137,6 +2276,13 @@ class ToolHandlerMixin:
         if tool_name == "wait_for_selector":
             sel = params.get("selector", "")
             return f"Element found: {sel}"
+
+        if tool_name in _INDEXED_ELEMENT_TOOL_TEXT:
+            return _INDEXED_ELEMENT_TOOL_TEXT[tool_name](params, inner)
+
+        if tool_name == "browser_state":
+            elements = inner.get("elements") or []
+            return f"Page state: {inner.get('url', '')} — {len(elements)} interactive element(s)"
 
         return json.dumps(result, default=str)[:1000]
 

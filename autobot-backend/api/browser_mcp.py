@@ -36,16 +36,22 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_code import MCPTool
 from api.schemas_system import (
+    BrowserClickIndexRequest,
+    BrowserClickIndexResponse,
     BrowserClickRequest,
     BrowserClickResponse,
     BrowserEvaluateRequest,
     BrowserEvaluateResponse,
+    BrowserFillIndexRequest,
+    BrowserFillIndexResponse,
     BrowserFillRequest,
     BrowserFillResponse,
     BrowserGetAttributeRequest,
     BrowserGetAttributeResponse,
     BrowserGetTextRequest,
     BrowserGetTextResponse,
+    BrowserHoverIndexRequest,
+    BrowserHoverIndexResponse,
     BrowserHoverRequest,
     BrowserHoverResponse,
     BrowserInterceptApiRequest,
@@ -57,8 +63,12 @@ from api.schemas_system import (
     BrowserPageSnapshotResponse,
     BrowserScreenshotRequest,
     BrowserScreenshotResponse,
+    BrowserSelectIndexRequest,
+    BrowserSelectIndexResponse,
     BrowserSelectRequest,
     BrowserSelectResponse,
+    BrowserStateRequest,
+    BrowserStateResponse,
     BrowserWaitForSelectorRequest,
     BrowserWaitForSelectorResponse,
 )
@@ -393,6 +403,65 @@ def _get_browser_interaction_tools() -> List[MCPTool]:
     ]
 
 
+def _get_indexed_interaction_tools() -> List[MCPTool]:
+    """MCP tools for indexed interactive-element actions (#11537).
+
+    OpenManus numbers every interactive element on the page so the model
+    clicks/fills by index instead of inventing a CSS selector; the index is
+    resolved to a concrete element server-side in the browser worker.
+    """
+    index_field = {"type": "integer", "description": "Element index from the numbered element menu."}
+    return [
+        MCPTool(
+            name="browser_state",
+            description=(
+                "Get the current page state: URL, title, scroll info, and a numbered "
+                "menu of interactive elements."
+            ),
+            input_schema={"type": "object", "properties": {}},
+        ),
+        MCPTool(
+            name="click_index",
+            description="Click an interactive element by its numbered index from the page's element menu",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "index": index_field,
+                    "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+                },
+                "required": ["index"],
+            },
+        ),
+        MCPTool(
+            name="fill_index",
+            description="Fill an interactive element by its numbered index from the page's element menu",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "index": index_field,
+                    "value": {"type": "string", "description": "Value to fill into the element"},
+                    "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+                },
+                "required": ["index", "value"],
+            },
+        ),
+        MCPTool(
+            name="select_index",
+            description="Select a dropdown option on an element identified by its numbered index",
+            input_schema={
+                "type": "object",
+                "properties": {"index": index_field, "value": {"type": "string", "description": "Value to select"}},
+                "required": ["index", "value"],
+            },
+        ),
+        MCPTool(
+            name="hover_index",
+            description="Hover over an interactive element by its numbered index",
+            input_schema={"type": "object", "properties": {"index": index_field}, "required": ["index"]},
+        ),
+    ]
+
+
 def _create_screenshot_tool() -> MCPTool:
     """Helper for _get_browser_extraction_tools. Build screenshot MCPTool. Ref: #1088."""
     return MCPTool(
@@ -538,6 +607,7 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
     tools = []
     tools.extend(_get_browser_navigation_tools())
     tools.extend(_get_browser_interaction_tools())
+    tools.extend(_get_indexed_interaction_tools())  # #11537
     tools.extend(_get_browser_extraction_tools())
     tools.extend(_get_web_pipeline_tools())  # #5136 Phase 1
     return tools
@@ -911,6 +981,151 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
     }
 
 
+# --- Indexed interactive-element endpoints (#11537) ---
+
+
+@router.post("/mcp/state", response_model=BrowserStateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="browser_state_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def browser_state_mcp(request: BrowserStateRequest) -> Metadata:
+    """Get the current page state: URL, title, scroll info, numbered elements."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    result = await send_to_browser_vm(
+        "browser_state",
+        {},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "browser_state",
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/click_index", response_model=BrowserClickIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="click_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def click_index_mcp(request: BrowserClickIndexRequest) -> Metadata:
+    """Click an element by its numbered index, resolved server-side."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser click_index: %s", request.index)
+
+    result = await send_to_browser_vm(
+        "click_index",
+        {"index": request.index, "timeout": request.timeout},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "click_index",
+        "index": request.index,
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/fill_index", response_model=BrowserFillIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="fill_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def fill_index_mcp(request: BrowserFillIndexRequest) -> Metadata:
+    """Fill an element by its numbered index, resolved server-side."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser fill_index: %s", request.index)
+
+    result = await send_to_browser_vm(
+        "fill_index",
+        {"index": request.index, "value": request.value, "timeout": request.timeout},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "fill_index",
+        "index": request.index,
+        "value_length": len(request.value),
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/select_index", response_model=BrowserSelectIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="select_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def select_index_mcp(request: BrowserSelectIndexRequest) -> Metadata:
+    """Select a dropdown option on an element by its numbered index."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser select_index: %s -> %s", request.index, request.value)
+
+    result = await send_to_browser_vm(
+        "select_index",
+        {"index": request.index, "value": request.value},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "select_index",
+        "index": request.index,
+        "value": request.value,
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/hover_index", response_model=BrowserHoverIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="hover_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def hover_index_mcp(request: BrowserHoverIndexRequest) -> Metadata:
+    """Hover over an element by its numbered index, resolved server-side."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser hover_index: %s", request.index)
+
+    result = await send_to_browser_vm(
+        "hover_index",
+        {"index": request.index},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "hover_index",
+        "index": request.index,
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+# --- End indexed interactive-element endpoints (#11537) ---
+
+
 @router.get("/mcp/status", response_model=BrowserMcpStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -956,7 +1171,7 @@ async def get_browser_mcp_status() -> Metadata:
             "max_per_minute": MAX_REQUESTS_PER_MINUTE,
             "reset_time": reset_time_iso,
         },
-        "tools_available": 12,  # updated for page_snapshot + intercept_api (#5136)
+        "tools_available": 17,  # #5136 page_snapshot+intercept_api, #11537 +5 indexed-element tools
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 

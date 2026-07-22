@@ -1900,6 +1900,95 @@ class BrowserHoverResponse(BaseModel):
     timestamp: str
 
 
+class BrowserStateRequest(BaseModel):
+    """Request for POST /browser/mcp/state (#11537)."""
+
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserClickIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/click_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    timeout: int | None = Field(10000, description="Timeout in milliseconds")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserFillIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/fill_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    value: str = Field(..., description="Value to fill into the element")
+    timeout: int | None = Field(10000, description="Timeout in milliseconds")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserSelectIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/select_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    value: str = Field(..., description="Value to select")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserHoverIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/hover_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserStateResponse(BaseModel):
+    success: bool
+    action: str
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserClickIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserFillIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
+    value_length: int
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserSelectIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
+    value: str
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserHoverIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
+    result: Any | None = None
+    timestamp: str
+
+
 class BrowserMcpStatusResponse(BaseModel):
     success: bool
     bridge: str
