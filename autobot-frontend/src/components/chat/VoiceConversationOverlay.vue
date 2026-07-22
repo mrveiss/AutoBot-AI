@@ -41,6 +41,7 @@
                 <option value="walkie-talkie">{{ $t('chat.voice.walkieTalkie') }}</option>
                 <option value="hands-free">{{ $t('chat.voice.handsFree') }}</option>
                 <option value="full-duplex">{{ $t('chat.voice.fullDuplex') }}</option>
+                <option value="realtime-webrtc">{{ $t('chat.voice.realtimeWebrtc') }}</option>
               </select>
 
               <!-- Language indicator (#1334) -->
@@ -58,9 +59,21 @@
                 class="voice-overlay__ws-indicator"
                 :class="{
                   'voice-overlay__ws-indicator--connected':
-                    wsConnected,
+                    voiceConversation.wsConnected?.value,
                 }"
-                :title="wsConnected
+                :title="voiceConversation.wsConnected?.value
+                  ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
+              ></div>
+
+              <!-- RTC connection indicator (realtime-webrtc) -->
+              <div
+                v-if="voiceConversation.mode.value === 'realtime-webrtc'"
+                class="voice-overlay__ws-indicator"
+                :class="{
+                  'voice-overlay__ws-indicator--connected':
+                    voiceConversation.realtimeConnectionState.value === 'connected',
+                }"
+                :title="voiceConversation.realtimeConnectionState.value === 'connected'
                   ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
               ></div>
 
@@ -245,7 +258,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
-import { useVoiceOutput } from '@/composables/useVoiceOutput'
+import type { ConversationMode } from '@/composables/useVoiceConversation'
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -253,7 +266,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const voiceConversation = useVoiceConversation()
-const { wsConnected } = useVoiceOutput()
 const overlayRef = ref<HTMLElement | null>(null)
 const conversationRef = ref<HTMLElement | null>(null)
 
@@ -274,8 +286,11 @@ const isFullDuplex = computed(
 const isHandsFree = computed(
   () => voiceConversation.mode.value === 'hands-free',
 )
+const isRealtimeWebrtc = computed(
+  () => voiceConversation.mode.value === 'realtime-webrtc',
+)
 const isAutoMode = computed(
-  () => isFullDuplex.value || isHandsFree.value,
+  () => isFullDuplex.value || isHandsFree.value || isRealtimeWebrtc.value,
 )
 
 // Show insecure-context warning when a mic-dependent mode is active
@@ -310,9 +325,7 @@ function handleMicClick(): void {
 
 function handleModeChange(event: Event): void {
   const target = event.target as HTMLSelectElement
-  voiceConversation.setMode(
-    target.value as 'walkie-talkie' | 'hands-free' | 'full-duplex',
-  )
+  voiceConversation.setMode(target.value as ConversationMode)
 }
 
 function close(): void {

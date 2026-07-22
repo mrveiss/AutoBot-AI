@@ -59,7 +59,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   fontSize: 'medium',
   accentColor: 'blue',
   layoutDensity: 'comfortable',
-  voiceDisplayMode: 'modal',
+  voiceDisplayMode: 'sidepanel',
   language: 'en',
   contextOverflowMode: 'auto',
   reasoningEffort: 'auto'
@@ -69,7 +69,7 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 const fontSize = ref<FontSize>('medium')
 const accentColor = ref<AccentColor>('blue')
 const layoutDensity = ref<LayoutDensity>('comfortable')
-const voiceDisplayMode = ref<VoiceDisplayMode>('modal')
+const voiceDisplayMode = ref<VoiceDisplayMode>('sidepanel')
 const language = ref<string>('en')
 const contextOverflowMode = ref<ContextOverflowMode>('auto')
 const reasoningEffort = ref<ReasoningEffort>('auto')
