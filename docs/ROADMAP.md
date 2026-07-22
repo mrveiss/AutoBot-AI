@@ -5,8 +5,8 @@ nav_order: 4
 
 **Project Start**: July 2025
 **Current Status**: Active Development - See [docs/system-state.md](system-state.md) for current status
-**Last Updated**: February 18, 2026
-**Canonical Source**: This is the single authoritative project roadmap
+**Last Updated**: July 22, 2026
+**Canonical Source**: This is the single authoritative project roadmap (rolling; formerly `ROADMAP_2025.md`)
 
 > **Note**: Previous roadmap files have been archived to `docs/archive/`. This document consolidates all roadmap variants and provides accurate implementation status based on actual codebase verification.
 
@@ -16,7 +16,11 @@ nav_order: 4
 
 AutoBot has evolved into a **comprehensive autonomous AI platform** through intensive development. This roadmap consolidates information from all previous roadmap variants and provides verified implementation status.
 
-### Verified Implementation (December 2025)
+### Verified Implementation (snapshot: December 2025)
+
+> These counts are a December 2025 codebase snapshot and have grown since (e.g. the
+> `autobot-backend/agents/` directory now holds 60+ agents and the frontend 360+ Vue
+> components). Treat the table as a point-in-time baseline, not a live count.
 
 | Metric | Verified Count | Source |
 |--------|----------------|--------|
@@ -875,4 +879,4 @@ AutoBot has achieved **~99% production readiness** with a multi-VM distributed f
 
 ---
 
-*This roadmap consolidates all previous variants and provides verified implementation status based on actual codebase analysis. Last updated: February 18, 2026.*
+*This roadmap consolidates all previous variants and provides verified implementation status based on actual codebase analysis. Last updated: July 22, 2026.*

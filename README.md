@@ -52,22 +52,27 @@ AutoBot is three layers, bottom to top:
 
 → Full picture: [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.md)
 
-## Quick Start (3 Steps)
+## Quick Start
 
-### 1. Clone the Repository
+**Option A — One-line installer (recommended, full platform).** Deploys the Service
+Lifecycle Manager (SLM) and all dependencies:
+```bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash
+```
+When it finishes, the installer prints your **SLM URL** (`https://<server-ip>/slm/`) and
+admin credentials. Open that URL and log in — the **Setup Wizard** then walks you through
+adding fleet nodes, enrolling agents, assigning roles, and provisioning.
+
+**Option B — Docker Compose (quick eval / development).**
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-```
-
-### 2. Start with Docker
-```bash
 cp .env.example .env
 docker compose up -d
 ```
+User UI at **http://localhost**, SLM admin at **http://localhost/slm**.
 
-### 3. Open Your Dashboard
-Visit **http://localhost** in your browser. AutoBot is ready to use.
+→ Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -291,7 +296,6 @@ All configuration uses environment variables in `.env`. See `.env.example` for a
 Key settings:
 - `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`
 - `AUTOBOT_LLM_PROVIDER` — `ollama` (default) or others
-- `AUTOBOT_SINGLE_USER_MODE` — `true` (development) or `false` (multi-user)
 
 ### LLM Providers and Fallback
 
@@ -404,8 +408,10 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 
 ## Roadmap
 
+### Shipped
+- [x] Multi-user authentication and RBAC (single-user mode retired)
+
 ### Upcoming
-- [ ] Multi-user authentication and RBAC
 - [ ] Kubernetes orchestration support
 - [ ] Advanced analytics dashboards
 - [ ] Module ecosystem and registry

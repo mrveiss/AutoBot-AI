@@ -62,7 +62,7 @@ for the core → SLM → modules picture, then use this index to navigate everyt
 | Document | Description |
 | --- | --- |
 | [[GLOSSARY]] | Terms and definitions |
-| [[ROADMAP_2025]] | 2025 product roadmap |
+| [[ROADMAP]] | Product roadmap |
 | [[DEPENDENCIES]] | Dependency overview |
 | [[external_apps/_index\|External Apps]] | Archived external AI tool system prompts |
 
