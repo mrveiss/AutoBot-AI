@@ -125,7 +125,7 @@ async function handleLogin() {
 
 ```vue
 <script setup lang="ts">
-import { useFormValidation } from '@/composables/useFormValidation'
+import { useFormValidation } from '@autobot/ui'
 
 const { fields, errors, isValid, validate, touch, reset } = useFormValidation({
   username: {
@@ -283,7 +283,7 @@ const validatePath = async (pathKey: string) => {
 
 ```vue
 <script setup lang="ts">
-import { useFormValidation } from '@/composables/useFormValidation'
+import { useFormValidation } from '@autobot/ui'
 
 const { fields, errors, isValid, validateField, touch } = useFormValidation({
   api_endpoint: {
@@ -448,7 +448,7 @@ async function importFromUrl() {
 
 ```vue
 <script setup lang="ts">
-import { useFormValidation } from '@/composables/useFormValidation'
+import { useFormValidation } from '@autobot/ui'
 
 const {
   fields: textFields,
@@ -589,7 +589,7 @@ const addWorker = async () => {
 
 ```vue
 <script setup lang="ts">
-import { useFormValidation } from '@/composables/useFormValidation'
+import { useFormValidation } from '@autobot/ui'
 
 const { fields, errors, isValid, validate, reset } = useFormValidation({
   name: {
@@ -907,7 +907,7 @@ const { fields, errors } = useFormValidation({
 
 For each form with validation:
 
-- [ ] Import `useFormValidation` from `@/composables/useFormValidation`
+- [ ] Import `useFormValidation` from `@autobot/ui`
 - [ ] Replace reactive validation objects with `useFormValidation` config
 - [ ] Map validation functions to declarative rules
 - [ ] Update template to use `fields.fieldName.value` and `errors.fieldName.value`
@@ -1009,7 +1009,7 @@ clearErrors()
 Full TypeScript support with type-safe field access:
 
 ```typescript
-import type { UseFormValidationReturn, FieldConfig } from '@/composables/useFormValidation'
+import type { UseFormValidationReturn, FieldConfig } from '@autobot/ui'
 
 const config: Record<string, FieldConfig> = {
   username: {

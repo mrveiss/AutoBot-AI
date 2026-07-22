@@ -35,3 +35,17 @@ export { useInitialFocus } from './src/composables/useInitialFocus'
 export type { UseInitialFocusReturn } from './src/composables/useInitialFocus'
 
 export { useBodyScrollLock, __resetLockStateForTests } from './src/composables/useBodyScrollLock'
+
+// Data composables — pagination + form-validation primitives promoted from
+// the main app (#10885) so both frontends import them from one canonical
+// home instead of re-deriving them per view.
+export { usePagination, useSimplePagination, useShowAllToggle } from './src/composables/usePagination'
+export type { PaginationOptions, UsePaginationReturn } from './src/composables/usePagination'
+
+export { useFormValidation, quickValidate, validators } from './src/composables/useFormValidation'
+export type {
+  ValidationRule,
+  ValidationRuleConfig,
+  FieldConfig,
+  UseFormValidationReturn,
+} from './src/composables/useFormValidation'
