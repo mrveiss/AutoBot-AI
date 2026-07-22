@@ -18,7 +18,6 @@ from .backlog import router as backlog_router
 from .boards import router as boards_router
 from .budget import cost_events_router, costs_by_model_router
 from .budget import router as budget_router
-from .ceo_chat import router as ceo_chat_router
 from .companies import router as companies_router
 from .context import router as context_router
 from .controls import router as controls_router
@@ -68,7 +67,6 @@ router.include_router(agent_wiki_router)
 router.include_router(runs_router)
 router.include_router(heartbeat_runs_router)
 router.include_router(replay_router)
-router.include_router(ceo_chat_router)
 router.include_router(decisions_router)
 router.include_router(routines_router)
 router.include_router(portability_router)
