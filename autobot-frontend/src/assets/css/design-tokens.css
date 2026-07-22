@@ -732,6 +732,31 @@
   --costdash-mode-dollars-text: #1d4ed8;  /* "dollars" budget-mode badge text */
   --costdash-mode-tokens-bg: #fef3c7;     /* "tokens" budget-mode badge fill */
   --costdash-mode-tokens-text: #92400e;   /* "tokens" budget-mode badge text */
+
+  /* ============================================
+   * ERROR MONITORING VIEW TOKENS
+   * Issue #11978 (umbrella #11515). Scoped to views/ErrorMonitoringView.vue.
+   * The view references palette tokens (--color-blue-100, --color-red-700, …)
+   * and --color-error-text that are NOT defined in this SSOT, so their hex
+   * fallbacks are what actually renders. Those rendered hexes are captured
+   * here as hex-only (deliberately NO OKLCH override) and kept as nested
+   * fallbacks — var(--color-x, var(--errmon-y)) — so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * ============================================ */
+  --errmon-error-text: #dc2626;            /* error-banner foreground */
+  --errmon-badge-category-bg: #dbeafe;     /* category badge fill (soft blue) */
+  --errmon-badge-category-text: #1d4ed8;   /* category badge text */
+  --errmon-badge-component-bg: #ede9fe;    /* component badge fill (soft violet) */
+  --errmon-badge-component-text: #6d28d9;  /* component badge text */
+  --errmon-badge-resolved-bg: #dcfce7;     /* resolved badge fill (soft green) */
+  --errmon-badge-resolved-text: #15803d;   /* resolved badge text */
+  --errmon-sev-critical-bg: #fee2e2;       /* critical severity badge fill */
+  --errmon-sev-critical-text: #b91c1c;     /* critical severity badge text */
+  --errmon-sev-high-bg: #ffedd5;           /* high severity badge fill */
+  --errmon-sev-high-text: #c2410c;         /* high severity badge text */
+  --errmon-sev-warning-bg: #fef9c3;        /* warning severity badge fill */
+  --errmon-sev-warning-text: #a16207;      /* warning severity badge text */
+  --errmon-bar-component: #7c3aed;         /* component breakdown bar fill */
 }
 
 /* ============================================
