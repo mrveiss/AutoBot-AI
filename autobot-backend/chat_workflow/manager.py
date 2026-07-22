@@ -44,6 +44,7 @@ from .models import (
     StreamingMessage,
     WorkflowSession,
     build_governed_identity,
+    filter_internal_prompts,
 )
 from .session_handler import SessionHandlerMixin
 from .tool_handler import ToolHandlerMixin
@@ -74,21 +75,9 @@ _TOOL_CALL_COMPLETE_RE = TOOL_CALL_COMPLETE_RE
 _TOOL_CALL_BARE_CLOSE_RE = TOOL_CALL_BARE_CLOSE_RE
 _TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
 
-# Issue #716: Patterns for internal prompts that should not be shown to users
-# These are continuation instructions that LLM sometimes echoes back
-_INTERNAL_PROMPT_PATTERNS = [
-    re.compile(
-        r"\*\*CRITICAL MULTI-STEP TASK INSTRUCTIONS.*?\*\*YOUR RESPONSE:\*\*",
-        re.DOTALL | re.IGNORECASE,
-    ),
-    re.compile(r"User is in the middle of a multi-step task\. \d+ step\(s\) have been completed\."),
-    re.compile(r"\*\*ORIGINAL USER REQUEST \(analyze this.*?\)\:\*\*"),
-    re.compile(
-        r"\*\*DECISION PROCESS:\*\*.*?\*\*IF TASK IS COMPLETE\*\*.*?TOOL_CALL",
-        re.DOTALL | re.IGNORECASE,
-    ),
-    re.compile(r"\*\*IF MORE STEPS NEEDED\*\*.*?`<TOOL_CALL", re.DOTALL),
-]
+
+# Issue #716/#11867: internal-prompt-echo patterns are consolidated into the
+# canonical `filter_internal_prompts` in chat_workflow.models (imported above).
 
 
 async def _resolve_reasoning_effort(context: Dict[str, Any]) -> str:
@@ -252,8 +241,9 @@ class ChatWorkflowManager(
     def _filter_internal_prompts(self, text: str) -> str:
         """Filter out internal continuation prompts that LLM echoes back (Issue #716).
 
-        The LLM sometimes echoes the continuation instructions we send it, which
-        should never be shown to the user. This filters those out.
+        Delegates to the canonical module-level
+        :func:`chat_workflow.models.filter_internal_prompts` (Issue #11867
+        consolidation) so the patterns and behaviour live in exactly one place.
 
         Args:
             text: LLM response text that may contain echoed internal prompts
@@ -261,21 +251,7 @@ class ChatWorkflowManager(
         Returns:
             Text with internal prompts removed
         """
-        filtered = text
-        for pattern in _INTERNAL_PROMPT_PATTERNS:
-            filtered = pattern.sub("", filtered)
-
-        # Also clean up any resulting multiple newlines
-        filtered = re.sub(r"\n{3,}", "\n\n", filtered)
-
-        if filtered != text:
-            logger.debug(
-                "[Issue #716] Filtered internal prompts from LLM response " "(original: %d chars, filtered: %d chars)",
-                len(text),
-                len(filtered),
-            )
-
-        return filtered.strip()
+        return filter_internal_prompts(text)
 
     def _find_last_tag_positions(self, content: str) -> Dict[str, int]:
         """Find last occurrence positions of thought/planning tags."""
@@ -3037,7 +3013,11 @@ before summarizing.
             else:
                 yield item
 
-        combined_response = "\n\n".join(all_llm_responses)
+        # Issue #716/#11867: strip any internal continuation prompt the LLM echoed
+        # back before the final response is persisted / shown to the user. Runs once
+        # on the complete text (multi-line patterns intact) — a no-op unless a genuine
+        # internal-prompt echo is present, so legitimate output is never altered.
+        combined_response = self._filter_internal_prompts("\n\n".join(all_llm_responses))
         await self._persist_conversation(session_id, session, message, combined_response)
         await self._persist_workflow_messages(session_id, workflow_messages, combined_response)
 
