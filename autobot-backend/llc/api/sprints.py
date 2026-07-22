@@ -41,7 +41,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session, load_owned_project as _load_owned_project
+from llc.deps import get_session
+from llc.deps import load_owned_project as _load_owned_project
 from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
