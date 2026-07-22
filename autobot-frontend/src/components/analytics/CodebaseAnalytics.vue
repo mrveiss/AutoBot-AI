@@ -1102,8 +1102,8 @@ onUnmounted(() => {
 }
 
 .toggle-slider {
-  width: 40px;
-  height: 20px;
+  width: var(--spacing-10);
+  height: var(--spacing-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-xl);
   position: relative;
@@ -1112,13 +1112,13 @@ onUnmounted(() => {
 
 .toggle-slider:before {
   content: '';
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   background: var(--text-on-primary);
   border-radius: 50%;
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: var(--spacing-0-5);
+  left: var(--spacing-0-5);
   transition: all var(--duration-300);
 }
 
@@ -1127,7 +1127,7 @@ onUnmounted(() => {
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
-  transform: translateX(20px);
+  transform: translateX(var(--spacing-5));
 }
 
 .refresh-all-btn {
@@ -1258,7 +1258,7 @@ onUnmounted(() => {
   border-bottom: 2px solid transparent;
   transition: all var(--duration-150) var(--ease-in-out);
   position: relative;
-  top: 1px;
+  top: var(--spacing-px);
   white-space: nowrap;
 }
 
@@ -1279,8 +1279,8 @@ onUnmounted(() => {
 }
 
 .sub-tab-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   flex-shrink: 0;
 }
 
