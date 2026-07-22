@@ -40,8 +40,14 @@ except (ImportError, RuntimeError):
 
 from autobot_shared.redis_client import get_redis_client
 
-# Import the centralized ConfigManager and Redis client utility
-from config import config as global_config_manager
+# Import the centralized ConfigManager and Redis client utility.
+# NOTE: must be `config_manager` (config/manager.py's ConfigManager, backed by
+# config.yaml + defaults.py), NOT `config` (autobot_shared.ssot_config's
+# AutoBotConfig proxy). The two are different objects: `config` only supports
+# attribute-style access (e.g. config.redis_host); `get_nested()` dotted-path
+# lookups below require `config_manager`. Using `config` here previously raised
+# AttributeError: 'AutoBotConfig' object has no attribute 'get_nested' (#11971).
+from config import config_manager as global_config_manager
 from events.bus import PersistStrategy, publish_event
 from knowledge_base import KnowledgeBase
 from security_layer import SecurityLayer
@@ -49,15 +55,39 @@ from services.llm_service import get_llm_service
 from system_integration import SystemIntegration
 from task_handlers import TaskExecutor
 
-# Conditional import for GUIController based on OS
+# Conditional import for GUIController based on OS.
+# Issue #11970: this gate was inverted. AutoBot's desktop-automation stack
+# (Xvfb/Xtigervnc + pyautogui, see api/vnc_manager.py, gui_controller.py's
+# CANONICAL_DISPLAY) is Linux-only — the real controller must run on Linux.
+# Non-Linux dev machines have neither the VNC/X server nor pyautogui's
+# Linux-specific backend available, so they get the no-op dummy.
+#
+# Headless Linux nodes (self-hosted CI runners, non-desktop worker VMs) have
+# no DISPLAY env var, or a stale one pointing at a not-yet-started X server
+# (real CI installs pyautogui via requirements-ci/automation.txt but never
+# sets DISPLAY/starts Xvfb). pyautogui's mouseinfo submodule hard-raises at
+# IMPORT time in either case -- verified: KeyError('DISPLAY') when unset,
+# Xlib.error.DisplayConnectionError when set but unreachable. Same class of
+# startup race already guarded at runtime in gui_controller.py's __init__
+# (Issue #11579's pyautogui.size() guard); broad except here matches that
+# precedent since the exact Xlib/X11 failure surface is environment-dependent
+# and unbounded. Fall back to the dummy controller rather than crashing
+# worker startup/import-smoke -- exactly the "headless or server environment
+# without a display" case gui_controller_dummy.py's own docstring covers.
 if sys.platform.startswith("linux"):
+    try:
+        from gui_controller import GUIController
+
+        GUI_AUTOMATION_SUPPORTED = True
+    except Exception as e:  # noqa: BLE001 - see comment above; unbounded Xlib/X11 import-time surface
+        logger.warning("Real GUIController unavailable on this Linux node (%s); using dummy.", e)
+        from gui_controller_dummy import GUIController
+
+        GUI_AUTOMATION_SUPPORTED = False
+else:
     from gui_controller_dummy import GUIController
 
     GUI_AUTOMATION_SUPPORTED = False
-else:
-    from gui_controller import GUIController
-
-    GUI_AUTOMATION_SUPPORTED = True
 
 
 class WorkerNode:

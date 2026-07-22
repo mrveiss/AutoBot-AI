@@ -20,7 +20,7 @@ tests/test_vnc_mcp_async.py for scrot/xdotool.
 import os
 import sys
 import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -179,3 +179,80 @@ class TestReadTextFromRegionPreserved:
         assert result["text"] == ""
 
         gui_controller_module.pyautogui.screenshot.side_effect = None
+
+
+class TestGUIControllerHandlerParity:
+    """Issue #11970: real GUIController must implement the same public
+    method surface as gui_controller_dummy.GUIController, since flipping the
+    platform gate now routes task_handlers/gui_handlers.py's calls to the
+    real controller on Linux.
+    """
+
+    @pytest.mark.asyncio
+    async def test_click_element_success(self, gui_controller_module, display_active):
+        controller = gui_controller_module.GUIController()
+        location = MagicMock(x=10, y=20)
+        controller.locate_element_by_image = AsyncMock(return_value=location)
+
+        result = await controller.click_element("button.png")
+
+        assert result["status"] == "success"
+        gui_controller_module.pyautogui.click.assert_called_with(10, 20, clicks=1, interval=0.0, button="left")
+
+    @pytest.mark.asyncio
+    async def test_click_element_not_found(self, gui_controller_module, display_active):
+        controller = gui_controller_module.GUIController()
+        controller.locate_element_by_image = AsyncMock(return_value=None)
+
+        result = await controller.click_element("missing.png")
+
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_type_text_accepts_interval_and_returns_status(self, gui_controller_module, display_active):
+        """Handler calls type_text(text, interval) positionally (#11970)."""
+        controller = gui_controller_module.GUIController()
+
+        result = await controller.type_text("hello", 0.05)
+
+        assert result["status"] == "success"
+        gui_controller_module.pyautogui.write.assert_called_with("hello", interval=0.05)
+
+    @pytest.mark.asyncio
+    async def test_move_mouse_returns_status(self, gui_controller_module, display_active):
+        controller = gui_controller_module.GUIController()
+
+        result = await controller.move_mouse(5, 6, 0.1)
+
+        assert result["status"] == "success"
+        gui_controller_module.pyautogui.moveTo.assert_called_with(5, 6, duration=0.1)
+
+    @pytest.mark.asyncio
+    async def test_bring_window_to_front_success(self, gui_controller_module, display_active):
+        controller = gui_controller_module.GUIController()
+
+        with patch("gui_controller.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = await controller.bring_window_to_front("My App")
+
+        assert result["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_bring_window_to_front_not_found(self, gui_controller_module, display_active):
+        controller = gui_controller_module.GUIController()
+
+        with patch("gui_controller.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1)
+            result = await controller.bring_window_to_front("Unknown App")
+
+        assert result["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_bring_window_to_front_xdotool_missing(self, gui_controller_module, display_active):
+        controller = gui_controller_module.GUIController()
+
+        with patch("gui_controller.subprocess.run", side_effect=FileNotFoundError()):
+            result = await controller.bring_window_to_front("My App")
+
+        assert result["status"] == "error"
+        assert "xdotool" in result["message"]

@@ -183,13 +183,96 @@ class GUIController:
         except Exception as e:
             logger.error("Error clicking at (%s, %s): %s", x, y, e)
 
-    async def type_text(self, text):
-        """Simulate typing the specified text."""
+    async def click_element(
+        self,
+        image_path: str,
+        confidence: float = 0.9,
+        button: str = "left",
+        clicks: int = 1,
+        interval: float = 0.0,
+    ) -> Dict[str, Any]:
+        """Locate an element by image and click it (Issue #11970 parity).
+
+        Interface parity with gui_controller_dummy.GUIController.click_element,
+        required by task_handlers/gui_handlers.py's GUIClickElementHandler.
+        """
         try:
-            await asyncio.to_thread(pyautogui.write, text)
+            location = await self.locate_element_by_image(image_path, confidence=confidence)
+            if not location:
+                return {
+                    "status": "error",
+                    "message": f"Element not found for image: {image_path}",
+                }
+            await asyncio.to_thread(
+                pyautogui.click,
+                location.x,
+                location.y,
+                clicks=clicks,
+                interval=interval,
+                button=button,
+            )
+            logger.debug("Clicked element '%s' at %s", image_path, location)
+            return {"status": "success", "message": "GUI click completed"}
+        except Exception as e:
+            logger.error("Error clicking element '%s': %s", image_path, e)
+            return {"status": "error", "message": "Operation failed"}
+
+    async def type_text(self, text: str, interval: float = 0.0) -> Dict[str, Any]:
+        """Simulate typing the specified text.
+
+        Issue #11970: accepts ``interval`` (dummy-controller parity) and
+        returns a status dict, required by task_handlers/gui_handlers.py's
+        GUITypeTextHandler (``result.get("status", ...)``).
+        """
+        try:
+            await asyncio.to_thread(pyautogui.write, text, interval=interval)
             logger.debug("Typed text: %s", text)
+            return {"status": "success", "message": "GUI text type completed"}
         except Exception as e:
             logger.error("Error typing text: %s", e)
+            return {"status": "error", "message": "Operation failed"}
+
+    async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
+        """Move the mouse to the specified coordinates (Issue #11970 parity).
+
+        Interface parity with gui_controller_dummy.GUIController.move_mouse,
+        required by task_handlers/gui_handlers.py's GUIMoveMouseHandler.
+        """
+        try:
+            await asyncio.to_thread(pyautogui.moveTo, x, y, duration=duration)
+            logger.debug("Moved mouse to (%s, %s)", x, y)
+            return {"status": "success", "message": "GUI mouse move completed"}
+        except Exception as e:
+            logger.error("Error moving mouse to (%s, %s): %s", x, y, e)
+            return {"status": "error", "message": "Operation failed"}
+
+    async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
+        """Bring a window matching app_title to the foreground (Issue #11970 parity).
+
+        Uses xdotool (same tool already relied on by api.vnc_manager for
+        desktop interaction on the canonical display), since pyautogui has
+        no native cross-platform window-focus API. Interface parity with
+        gui_controller_dummy.GUIController.bring_window_to_front, required
+        by task_handlers/gui_handlers.py's GUIBringWindowToFrontHandler.
+        """
+        try:
+            result = await asyncio.to_thread(
+                subprocess.run,  # nosec B603 B607 - fixed argv, app_title passed as a single arg (no shell)
+                ["/usr/bin/xdotool", "search", "--name", app_title, "windowactivate"],
+                capture_output=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                logger.debug("Brought window '%s' to front", app_title)
+                return {"status": "success", "message": "GUI window bring to front completed"}
+            logger.warning("xdotool could not find/activate window '%s'", app_title)
+            return {"status": "error", "message": f"Window not found: {app_title}"}
+        except FileNotFoundError:
+            logger.error("xdotool not installed; cannot bring window '%s' to front", app_title)
+            return {"status": "error", "message": "xdotool not installed"}
+        except Exception as e:
+            logger.error("Error bringing window '%s' to front: %s", app_title, e)
+            return {"status": "error", "message": "Operation failed"}
 
     async def locate_element_by_image(self, image_path, confidence=0.8):
         """Locate an element on the screen by matching an image."""
