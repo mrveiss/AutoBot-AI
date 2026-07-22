@@ -140,19 +140,29 @@ def test_resolves_full_procedure_for_each_colocated_role() -> None:
 
 
 def test_role_without_playbook_is_skipped_not_run() -> None:
-    """A role with no ansible_playbook (e.g. autobot_shared) is skipped, never invoked."""
+    """A role with no ansible_playbook (e.g. autobot_shared) is logged as skipped.
+
+    run_role_full_procedure itself owns the no_playbook decision (#12096 review
+    — a single source of truth instead of a duplicate pre-check here), so the
+    co-located loop DOES call it, but its no_playbook result is surfaced as a
+    "skipped" log line, not a FAILED one.
+    """
     stage = UpdateAllStage(name="slm_self_update")
     no_playbook_role = _role("autobot_shared", playbook=None)
+
+    async def fake_full_procedure(role, node_id):
+        return {"success": False, "role": role.name, "error": "no_playbook"}
 
     with (
         patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
         patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value={"autobot_shared"})),
         patch("api.code_sync._load_colocated_roles", AsyncMock(return_value=[no_playbook_role])),
-        patch("api.roles.run_role_full_procedure", AsyncMock()) as proc_mock,
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure) as proc_mock,
     ):
         asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
 
-    proc_mock.assert_not_called()
+    proc_mock.assert_called_once()
+    assert any("skipped" in msg and "FAILED" not in msg for msg in stage.log_lines)
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +365,96 @@ def test_role_procedure_unsuccessful_result_is_non_fatal() -> None:
 
     assert proc_mock.call_count == 2
     assert any("FAILED" in msg for msg in stage.log_lines)
+
+
+# ---------------------------------------------------------------------------
+# (f) dedupe: roles sharing the SAME real ansible deploy run ONCE (#12096 review)
+# ---------------------------------------------------------------------------
+
+
+def test_dedupe_collapses_shared_ansible_deploys_to_one_run_each() -> None:
+    """backend/celery/scheduler share ONE backend-role deploy (playbooks/
+    deploy_role.yml `include_role: backend`); ai-stack/chromadb share ONE
+    setup-ai-stack.yml deploy. Distinct roles (slm-agent, frontend) each still
+    get their own run — a node carrying all seven role names must run the
+    backend procedure ONCE (not 3x), ai-stack ONCE, and slm-agent/frontend once
+    each: 4 runs total, never 7.
+    """
+    stage = UpdateAllStage(name="slm_self_update")
+    node_role_names = {"backend", "celery", "scheduler", "ai-stack", "chromadb", "slm-agent", "frontend"}
+
+    role_table = {
+        "backend": _role("backend", playbook="playbooks/deploy_role.yml"),
+        "celery": _role("celery", playbook="playbooks/deploy_role.yml"),
+        "scheduler": _role("scheduler", playbook="playbooks/deploy_role.yml"),
+        "ai-stack": _role("ai-stack", playbook="setup-ai-stack.yml"),
+        "chromadb": _role("chromadb", playbook="setup-ai-stack.yml"),
+        "slm-agent": _role("slm-agent", playbook="deploy-slm-agent.yml"),
+        "frontend": _role("frontend", playbook="playbooks/deploy_role.yml"),
+    }
+
+    async def fake_get_role(db, name):
+        return role_table.get(name)
+
+    calls: list = []
+
+    async def fake_full_procedure(role, node_id):
+        calls.append(role.name)
+        return {"success": True, "role": role.name}
+
+    class _FakeSession:
+        async def __aenter__(self):
+            return MagicMock()
+
+        async def __aexit__(self, *exc):
+            return False
+
+    fake_db_service = SimpleNamespace(session=lambda: _FakeSession())
+
+    import importlib
+
+    _services_database = importlib.import_module("services.database")
+    _services_role_registry = importlib.import_module("services.role_registry")
+
+    with (
+        patch("api.code_sync._ensure_autobot_shared_synced", AsyncMock(return_value=(True, ""))),
+        patch("api.code_sync._get_colocated_managed_role_names", AsyncMock(return_value=node_role_names)),
+        patch.object(_services_database, "db_service", fake_db_service),
+        patch.object(_services_role_registry, "get_role", side_effect=fake_get_role),
+        patch("api.roles.run_role_full_procedure", side_effect=fake_full_procedure),
+    ):
+        asyncio.run(_resolve_colocated_managed_services(stage, _NODE_ID))
+
+    # Alphabetically-first survivor per coverage group: "backend" (of
+    # backend/celery/scheduler) and "ai-stack" (of ai-stack/chromadb).
+    assert sorted(calls) == ["ai-stack", "backend", "frontend", "slm-agent"]
+    assert any("covered by backend" in msg for msg in stage.log_lines)
+    assert any("covered by ai-stack" in msg for msg in stage.log_lines)
+
+
+def test_coverage_key_never_merges_roles_on_different_playbooks() -> None:
+    """Two roles on genuinely different playbooks always get distinct keys —
+    the dedupe never merges roles it hasn't verified share real coverage.
+    """
+    frontend_role = _role("frontend", playbook="playbooks/deploy_role.yml")
+    slm_agent_role = _role("slm-agent", playbook="deploy-slm-agent.yml")
+
+    assert _CS._colocated_coverage_key(frontend_role) != _CS._colocated_coverage_key(slm_agent_role)
+
+
+def test_deploy_role_yml_groups_match_playbook_when_clauses() -> None:
+    """_DEPLOY_ROLE_YML_GROUPS must mirror deploy_role.yml's actual `when:
+    deploy_role in [...]` clauses (#12096 review: "coverage-driven, not a
+    hardcoded skip list") — this test fails the moment the two drift apart.
+    """
+    import re
+
+    playbook_path = _BACKEND_ROOT / "ansible" / "playbooks" / "deploy_role.yml"
+    text = playbook_path.read_text(encoding="utf-8")
+    found_groups = {frozenset(m.split(", ")) for m in re.findall(r"deploy_role in \[([^\]]+)\]", text)}
+    found_groups = {frozenset(name.strip("' ") for name in group) for group in found_groups}
+
+    assert found_groups == set(_CS._DEPLOY_ROLE_YML_GROUPS)
 
 
 # ---------------------------------------------------------------------------

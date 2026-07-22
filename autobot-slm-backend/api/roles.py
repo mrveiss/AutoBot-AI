@@ -382,6 +382,16 @@ async def migrate_role(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Ansible playbook not found",
         )
+    if result.get("error") == "execution_error":
+        # #12096 review: run_role_full_procedure never raises — an infra failure
+        # (git update, secrets fetch, ...) before ansible even started surfaces
+        # here as a handled 500, not an unhandled trace. The raw exception text
+        # stays server-side (logged in run_role_full_procedure) — never in the
+        # client-facing detail (codeql[py/stack-trace-exposure]).
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role migration failed to execute — see server logs",
+        )
     return result
 
 
@@ -399,7 +409,11 @@ async def run_role_full_procedure(role: Role, target_node_id: str) -> dict:
     error="playbook_not_found" (or error="no_playbook" when the role has none
     configured) so callers choose their own handling — an HTTP 422 for the
     interactive endpoint above, or a logged skip for update-all's fail-safe
-    per-role loop.
+    per-role loop. #12096 review: execute_playbook() runs pre-flight steps
+    (_update_code_source, fetch_deploy_secrets) BEFORE its own try/except, so
+    infra failures there can still propagate past a narrower `except
+    FileNotFoundError` — the whole call is wrapped so ANY exception becomes
+    success=False, error="execution_error" instead of an unhandled trace.
     """
     if not role.ansible_playbook:
         return _role_procedure_result(role, target_node_id, success=False, error="no_playbook")
@@ -425,6 +439,9 @@ async def run_role_full_procedure(role: Role, target_node_id: str) -> dict:
     except FileNotFoundError as exc:
         logger.exception("Playbook not found: %s", role.ansible_playbook)
         return _role_procedure_result(role, target_node_id, success=False, error="playbook_not_found", output=str(exc))
+    except Exception as exc:
+        logger.exception("Full role procedure %s -> %s failed before completion: %s", role.name, target_node_id, exc)
+        return _role_procedure_result(role, target_node_id, success=False, error="execution_error", output=str(exc))
 
     logger.info(
         "Full role procedure %s -> %s: success=%s",

@@ -4268,20 +4268,77 @@ async def _load_colocated_roles(role_names: set) -> list:
     return roles
 
 
+# Role-name groups that resolve to the SAME actual ansible include target
+# within playbooks/deploy_role.yml's `when: deploy_role in [...]` clauses
+# (code review on #12083/#12096): each of these groups shares ONE
+# `include_role:` — running the group's playbook once for any member already
+# deploys every other member. Mirrors that file's dispatch table exactly;
+# test_deploy_role_yml_groups_match_playbook (test_colocated_managed_update_11605.py)
+# parses the YAML `when` clauses and fails if this constant drifts from it.
+_DEPLOY_ROLE_YML_GROUPS: Tuple[frozenset, ...] = (
+    frozenset({"backend", "celery", "scheduler"}),  # include_role: backend
+    frozenset({"postgresql", "slm-database"}),  # include_role: postgresql
+    frozenset({"llm", "autobot-llm-cpu", "autobot-llm-gpu"}),  # include_role: llm
+)
+
+
+def _colocated_coverage_key(role) -> tuple:
+    """Return a dedupe key: roles that genuinely share the SAME real deploy get
+    the SAME key (#12096 review — running the full backend role 3x for
+    backend+celery+scheduler, or setup-ai-stack.yml twice for ai-stack+chromadb,
+    is idempotent but multiplies restart windows on the live box for no benefit).
+
+    playbooks/deploy_role.yml branches on the role_name extra_var, so two roles
+    only share real coverage there when _DEPLOY_ROLE_YML_GROUPS says so. Every
+    other playbook in this registry is static (no role_name branching) and
+    deploys the same fixed target regardless of which role triggered it
+    (verified for setup-ai-stack.yml: it unconditionally includes both the
+    ai-stack and chromadb systemd units) — a shared playbook string alone is a
+    safe dedupe key for those. Never merges two roles on a guess.
+    """
+    if role.ansible_playbook == "playbooks/deploy_role.yml":
+        for group in _DEPLOY_ROLE_YML_GROUPS:
+            if role.name in group:
+                return ("deploy_role", group)
+        return ("deploy_role", role.name)  # own dedicated `when` branch
+    return ("playbook", role.ansible_playbook)
+
+
+def _dedupe_colocated_roles(stage: UpdateAllStage, roles: list) -> list:
+    """Keep one representative role per _colocated_coverage_key (#12096 review).
+
+    *roles* must already be sorted by name (as _load_colocated_roles returns
+    them) so the kept representative is deterministic — alphabetically first
+    within each coverage group.
+    """
+    kept: dict = {}
+    for role in roles:
+        key = _colocated_coverage_key(role)
+        if key in kept:
+            _stage_log(
+                stage,
+                f"co-located {role.name}: covered by {kept[key].name}'s deploy — skipped (#12096)",
+            )
+            continue
+        kept[key] = role
+    return list(kept.values())
+
+
 async def _run_colocated_role_procedures(stage: UpdateAllStage, roles: list, slm_node_id: str) -> None:
     """Run the full ansible procedure for each role (#12083); per-role failures are non-fatal."""
     from api.roles import run_role_full_procedure
 
     for role in roles:
-        if not role.ansible_playbook:
-            _stage_log(stage, f"co-located {role.name}: no ansible_playbook configured — skipped (#12083)")
-            continue
         try:
             result = await run_role_full_procedure(role, slm_node_id)
-            outcome = "ok" if result.get("success") else f"FAILED ({result.get('error', 'see output')})"
-            _stage_log(stage, f"co-located {role.name}: {outcome} via {role.ansible_playbook} (#12083)")
         except Exception as exc:
             _stage_log(stage, f"co-located {role.name}: resolve error: {exc} (#12083)")
+            continue
+        if result.get("error") == "no_playbook":
+            _stage_log(stage, f"co-located {role.name}: no ansible_playbook configured — skipped (#12083)")
+            continue
+        outcome = "ok" if result.get("success") else f"FAILED ({result.get('error', 'see output')})"
+        _stage_log(stage, f"co-located {role.name}: {outcome} via {role.ansible_playbook} (#12083)")
 
 
 async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id: str) -> None:
@@ -4316,6 +4373,12 @@ async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id
     if not roles:
         _stage_log(stage, "co-located roles: none assigned/detected on this node (#12083)")
         return
+
+    # #12096 review: collapse roles that share the SAME real ansible deploy
+    # (backend/celery/scheduler; ai-stack/chromadb) onto ONE run each — running
+    # the full backend role 3x (or setup-ai-stack.yml twice) is idempotent but
+    # needlessly multiplies restart windows on the live box.
+    roles = _dedupe_colocated_roles(stage, roles)
 
     await _run_colocated_role_procedures(stage, roles, slm_node_id)
 
