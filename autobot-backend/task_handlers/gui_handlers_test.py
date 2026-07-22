@@ -54,9 +54,7 @@ class TestGUIHandlersAwaitControllerCalls:
     @pytest.mark.asyncio
     async def test_read_text_from_region_awaits_and_returns_result(self):
         ctx = _make_ctx({"x": 1, "y": 2, "width": 10, "height": 20})
-        ctx.worker.gui_controller.read_text_from_region = AsyncMock(
-            return_value={"status": "success", "text": "hi"}
-        )
+        ctx.worker.gui_controller.read_text_from_region = AsyncMock(return_value={"status": "success", "text": "hi"})
 
         result = await GUIReadTextFromRegionHandler().execute(ctx)
 
