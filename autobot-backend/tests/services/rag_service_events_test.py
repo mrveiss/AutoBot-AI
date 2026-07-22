@@ -5,13 +5,44 @@
 """Unit tests for RAGService retrieval feedback event emission (#1516)."""
 
 import asyncio
+
+# Real-load and parent-bind ``services.rag_service`` at collection time.
+#
+# The backend conftest registers ``services`` as a MagicMock package stub. When
+# a test does ``patch("services.rag_service.publish_event")``, unittest.mock
+# resolves the target via ``getattr(sys.modules["services"], "rag_service")``,
+# which hits the stub's catch-all ``__getattr__`` and returns a throwaway mock
+# on the FIRST use — so the patch silently lands on the wrong object and the
+# first test in the class saw 0 publish calls (#11248). Mirroring the conftest
+# ``_real_load_and_bind`` helper (#11661) binds the real module as a parent
+# attribute up front, making the patch resolve correctly regardless of order.
+import importlib.util as _ilu  # noqa: E402
 import json
+import sys as _sys  # noqa: E402
 import time
+from pathlib import Path as _Path  # noqa: E402
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from tests.fixtures import make_async_redis
+
+
+def _bind_real_rag_service() -> None:
+    name = "services.rag_service"
+    path = _Path(__file__).resolve().parents[2] / "services" / "rag_service.py"
+    spec = _ilu.spec_from_file_location(name, str(path))
+    if not spec or not spec.loader:
+        return
+    mod = _ilu.module_from_spec(spec)
+    _sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    parent, _, child = name.rpartition(".")
+    if parent in _sys.modules:
+        setattr(_sys.modules[parent], child, mod)
+
+
+_bind_real_rag_service()
 
 # =============================================================================
 # _emit_retrieval_feedback Tests
