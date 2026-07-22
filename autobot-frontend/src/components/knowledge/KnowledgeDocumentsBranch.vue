@@ -108,42 +108,36 @@
     </details>
 
     <!-- Delete confirmation dialog -->
-    <div
-      v-if="deleteTarget"
-      ref="deleteDialogRef"
-      class="modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="$t('documents.confirmDeleteAria', { title: deleteTarget.title })"
-      tabindex="-1"
-      @keydown="onDeleteDialogKeydown"
-      @keydown.escape="deleteTarget = null"
+    <BaseModal
+      :model-value="!!deleteTarget"
+      :title="$t('documents.deleteHeading')"
+      :close-label="$t('ui.modal.closeDialog')"
+      :width="360"
+      @close="deleteTarget = null"
     >
-      <div class="modal-card">
-        <h3 class="modal-title">{{ $t('documents.deleteHeading') }}</h3>
-        <p class="modal-body">
-          {{ $t('documents.deleteBody', { title: deleteTarget.title }) }}
-        </p>
-        <div class="modal-actions">
-          <BaseButton variant="ghost" size="sm" @click="deleteTarget = null">
-            {{ $t('common.cancel') }}
-          </BaseButton>
-          <BaseButton
-            variant="error"
-            size="sm"
-            :disabled="composable.isLoading.value"
-            @click="executeDelete"
-          >
-            {{ $t('common.delete') }}
-          </BaseButton>
-        </div>
-      </div>
-    </div>
+      <p v-if="deleteTarget" class="modal-body">
+        {{ $t('documents.deleteBody', { title: deleteTarget.title }) }}
+      </p>
+
+      <template #actions>
+        <BaseButton variant="ghost" size="sm" @click="deleteTarget = null">
+          {{ $t('common.cancel') }}
+        </BaseButton>
+        <BaseButton
+          variant="error"
+          size="sm"
+          :disabled="composable.isLoading.value"
+          @click="executeDelete"
+        >
+          {{ $t('common.delete') }}
+        </BaseButton>
+      </template>
+    </BaseModal>
   </details>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
@@ -151,7 +145,7 @@ import { useAIDocument } from '@/composables/useAIDocument'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Project } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { BaseModal } from '@autobot/ui'
 
 const PAGE_SIZE = 50
 
@@ -192,14 +186,6 @@ const currentOffset = ref(0)
 // ---------------------------------------------------------------------------
 
 const deleteTarget = ref<{ id: string; title: string } | null>(null)
-const deleteDialogRef = ref<HTMLElement | null>(null)
-const isDeleteDialogOpen = computed(() => deleteTarget.value !== null)
-
-const { onKeydown: onDeleteDialogKeydown } = useFocusTrap(deleteDialogRef)
-useFocusRestore(isDeleteDialogOpen)
-useBodyScrollLock(isDeleteDialogOpen)
-const { focusFirst: focusDeleteFirst } = useInitialFocus(deleteDialogRef)
-watch(isDeleteDialogOpen, (open) => { if (open) focusDeleteFirst() }, { immediate: true })
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -460,41 +446,12 @@ function formatDate(iso: string): string {
 }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-6);
-  width: 360px;
-  max-width: 90vw;
-}
-
-.modal-title {
-  margin: var(--spacing-0) var(--spacing-0) var(--spacing-3);
-  font-size: var(--text-base);
-  font-weight: 600;
-}
-
+/* #10882: overlay/header/footer chrome + focus-trap/scroll-lock now provided
+   by @autobot/ui BaseModal; only the confirmation copy styling remains. */
 .modal-body {
-  margin: var(--spacing-0) var(--spacing-0) var(--spacing-5);
+  margin: var(--spacing-0);
   font-size: 0.9rem;
   color: var(--text-muted);
   line-height: 1.5;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-2);
 }
 </style>

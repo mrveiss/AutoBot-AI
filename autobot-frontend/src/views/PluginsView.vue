@@ -335,27 +335,14 @@
     </div>
 
     <!-- Plugin Detail Modal -->
-    <div v-if="selectedPlugin" class="modal-overlay" @click.self="closeDetail">
-      <div
-        ref="detailDialogRef"
-        class="modal-panel"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="$t('views.plugins.pluginDetails')"
-        tabindex="-1"
-        @keydown="onDetailKeydown"
-        @keydown.escape="closeDetail"
-      >
-        <div class="modal-header">
-          <h2 class="modal-title">{{ selectedPlugin.display_name }}</h2>
-          <button class="modal-close" @click="closeDetail" :aria-label="$t('views.plugins.close')">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div class="modal-body">
+    <BaseModal
+      :model-value="!!selectedPlugin"
+      :title="selectedPlugin?.display_name ?? ''"
+      :close-label="$t('views.plugins.close')"
+      :width="560"
+      @close="closeDetail"
+    >
+        <div v-if="selectedPlugin" class="modal-body">
           <!-- Info Grid -->
           <dl class="info-grid">
             <dt>{{ $t('views.plugins.name') }}</dt><dd>{{ selectedPlugin.name }}</dd>
@@ -424,13 +411,13 @@
             <p v-else class="config-empty">{{ $t('views.plugins.noConfig') }}</p>
           </div>
         </div>
-      </div>
 
-      <!-- Audit Log Tab -->
+      <!-- Audit Log Tab (pre-existing: only renders while a plugin detail is
+           open + audit tab active; see #10882 follow-up note) -->
       <div v-if="!isMarketplaceActive && activeTab === 'audit'">
         <CapabilityAuditLog />
       </div>
-    </div>
+    </BaseModal>
 
     <!-- Capability Approval Dialog — Issue #9049 -->
     <CapabilityApprovalDialog
@@ -454,10 +441,10 @@
 // Issue #929 - Plugin Manager UI
 // Issue #1359: i18n string extraction
 // Issue #11522: schema-driven config form
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { BaseModal } from '@autobot/ui'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
 import PluginInstallModal from '@/components/plugins/PluginInstallModal.vue'
 import CapabilityApprovalDialog from '@/components/plugins/CapabilityApprovalDialog.vue'
@@ -501,13 +488,6 @@ const actionLoading = ref<Record<string, boolean>>({})
 // Modal state
 const selectedPlugin = ref<PluginInfo | null>(null)
 
-const detailDialogRef = ref<HTMLElement | null>(null)
-const isDetailOpen = computed(() => selectedPlugin.value !== null)
-const { onKeydown: onDetailKeydown } = useFocusTrap(detailDialogRef)
-useFocusRestore(isDetailOpen)
-useBodyScrollLock(isDetailOpen)
-const { focusFirst: focusDetailFirst } = useInitialFocus(detailDialogRef)
-watch(isDetailOpen, (open) => { if (open) focusDetailFirst() }, { immediate: true })
 const pluginConfig = ref<Record<string, unknown> | null>(null)
 const configLoading = ref(false)
 const editingConfig = ref(false)
@@ -969,69 +949,9 @@ onMounted(async () => {
 }
 
 /* ---- Modal ---- */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-  padding: var(--spacing-md);
-}
-
-.modal-panel {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 560px;
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--shadow-2xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-lg) var(--spacing-xl);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-title {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: var(--spacing-0);
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: var(--spacing-xs);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  transition: color var(--duration-150) var(--ease-in-out);
-}
-
-.modal-close:hover {
-  color: var(--text-primary);
-}
-
-.modal-close svg {
-  width: 20px;
-  height: 20px;
-}
-
+/* #10882: overlay/header chrome now provided by @autobot/ui BaseModal;
+   the detail body keeps its column layout + section gap. */
 .modal-body {
-  padding: var(--spacing-xl);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
@@ -1170,10 +1090,6 @@ onMounted(async () => {
 
   .plugin-grid {
     grid-template-columns: 1fr;
-  }
-
-  .modal-panel {
-    max-height: 95vh;
   }
 }
 </style>

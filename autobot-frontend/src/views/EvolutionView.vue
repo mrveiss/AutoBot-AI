@@ -271,19 +271,13 @@
     </div>
 
     <!-- Analysis Modal -->
-    <div v-if="showAnalysisModal" class="modal-overlay" @click.self="showAnalysisModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 class="modal-title">{{ $t('analytics.evolution.analyzeRepository') }}</h3>
-          <button
-            @click="showAnalysisModal = false"
-            class="modal-close"
-            :aria-label="$t('common.close')"
-          >
-            <Icon name="times" />
-          </button>
-        </div>
-
+    <BaseModal
+      :model-value="showAnalysisModal"
+      :title="$t('analytics.evolution.analyzeRepository')"
+      :close-label="$t('common.close')"
+      :width="600"
+      @close="showAnalysisModal = false"
+    >
         <div class="modal-body">
           <div class="field-group">
             <label>{{ $t('analytics.evolution.modal.repoPath') }}</label>
@@ -333,22 +327,21 @@
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button @click="showAnalysisModal = false" class="btn-action-secondary">
-            {{ $t('analytics.evolution.modal.cancel') }}
-          </button>
-          <button
-            @click="runAnalysis"
-            class="btn-action-primary"
-            :disabled="!analysisForm.repo_path || evolution.loading.value"
-          >
-            <Icon name="sync-alt" :spin="true" v-if="evolution.loading.value" />
-            <Icon name="play-circle" v-else />
-            {{ evolution.loading.value ? $t('analytics.evolution.modal.analyzing') : $t('analytics.evolution.modal.startAnalysis') }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #actions>
+        <button @click="showAnalysisModal = false" class="btn-action-secondary">
+          {{ $t('analytics.evolution.modal.cancel') }}
+        </button>
+        <button
+          @click="runAnalysis"
+          class="btn-action-primary"
+          :disabled="!analysisForm.repo_path || evolution.loading.value"
+        >
+          <Icon name="sync-alt" :spin="true" v-if="evolution.loading.value" />
+          <Icon name="play-circle" v-else />
+          {{ evolution.loading.value ? $t('analytics.evolution.modal.analyzing') : $t('analytics.evolution.modal.startAnalysis') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -361,6 +354,7 @@ import EvolutionTimelineChart from '@/components/charts/EvolutionTimelineChart.v
 import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue'
 import CodeEvolutionTimeline from '@/components/analytics/CodeEvolutionTimeline.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute()
@@ -742,70 +736,8 @@ onMounted(async () => {
 }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  /* #10750 C2: keep header/footer fixed; scroll only .modal-body */
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--shadow-2xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-5);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-title {
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: var(--text-lg);
-  cursor: pointer;
-  padding: var(--spacing-1);
-}
-
-.modal-close:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-5);
-  /* #10750 C2: single scroll region */
-  overflow-y: auto;
-  min-height: 0;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-  padding: var(--spacing-5);
-  border-top: 1px solid var(--border-default);
-}
+/* #10882: overlay/header/footer chrome now provided by @autobot/ui BaseModal;
+   .modal-body is just an unstyled body wrapper here. */
 
 /* Form Styles */
 .form-row {

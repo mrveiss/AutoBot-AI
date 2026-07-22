@@ -159,21 +159,19 @@
     </div>
 
     <!-- Create / Edit Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-card" role="dialog" :aria-label="editTarget ? 'Edit Policy' : 'New Policy'">
-        <div class="modal-header">
-          <h3>{{ editTarget ? 'Edit Policy' : 'New Budget Policy' }}</h3>
-          <button class="btn-icon" aria-label="Close" @click="closeModal">
-            <Icon name="times" />
-          </button>
-        </div>
+    <BaseModal
+      :model-value="showModal"
+      :title="editTarget ? 'Edit Policy' : 'New Budget Policy'"
+      close-label="Close"
+      :width="560"
+      @close="closeModal"
+    >
+      <div v-if="modalError" class="error-banner">
+        <Icon name="exclamation-circle" />
+        <span>{{ modalError }}</span>
+      </div>
 
-        <div v-if="modalError" class="error-banner">
-          <Icon name="exclamation-circle" />
-          <span>{{ modalError }}</span>
-        </div>
-
-        <form class="modal-form" @submit.prevent="submitForm">
+      <form id="budget-policy-form" class="modal-form" @submit.prevent="submitForm">
           <div class="form-row">
             <label class="form-label">Name</label>
             <input v-model="form.name" type="text" class="text-input" placeholder="My policy" />
@@ -246,40 +244,44 @@
               Enabled
             </label>
           </div>
-          <div class="modal-actions">
-            <button type="button" class="btn-action-secondary" @click="closeModal">Cancel</button>
-            <button type="submit" class="btn-action-primary" :disabled="saving">
-              <Icon v-if="saving" name="sync-alt" :spin="true" />
-              {{ editTarget ? 'Save Changes' : 'Create Policy' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+
+      <template #actions>
+        <button type="button" class="btn-action-secondary" @click="closeModal">Cancel</button>
+        <button
+          type="submit"
+          form="budget-policy-form"
+          class="btn-action-primary"
+          :disabled="saving"
+        >
+          <Icon v-if="saving" name="sync-alt" :spin="true" />
+          {{ editTarget ? 'Save Changes' : 'Create Policy' }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete confirm dialog -->
-    <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
-      <div class="modal-card modal-card-sm" role="dialog" aria-label="Confirm Delete">
-        <div class="modal-header">
-          <h3>Delete Policy</h3>
-          <button class="btn-icon" aria-label="Close" @click="deleteTarget = null">
-            <Icon name="times" />
-          </button>
-        </div>
-        <p class="modal-body-text">
-          Are you sure you want to delete
-          <strong>{{ deleteTarget.name || deleteTarget.id }}</strong>?
-          This cannot be undone.
-        </p>
-        <div class="modal-actions">
-          <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
-          <button class="btn-action-danger" :disabled="deleting" @click="doDelete">
-            <Icon v-if="deleting" name="sync-alt" :spin="true" />
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
+    <BaseModal
+      :model-value="!!deleteTarget"
+      title="Delete Policy"
+      close-label="Close"
+      :width="420"
+      @close="deleteTarget = null"
+    >
+      <p v-if="deleteTarget" class="modal-body-text">
+        Are you sure you want to delete
+        <strong>{{ deleteTarget.name || deleteTarget.id }}</strong>?
+        This cannot be undone.
+      </p>
+
+      <template #actions>
+        <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
+        <button class="btn-action-danger" :disabled="deleting" @click="doDelete">
+          <Icon v-if="deleting" name="sync-alt" :spin="true" />
+          Delete
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -290,6 +292,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
 
 const logger = createLogger('BudgetPolicies')
 
@@ -886,56 +889,11 @@ onMounted(loadPolicies)
 .mt-6 { margin-top: var(--spacing-6); }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--spacing-4);
-}
-
-.modal-card {
-  background: var(--color-bg);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
-  /* #10750 C2: keep header fixed; scroll only the form body (below) */
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-card-sm {
-  max-width: 420px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-5) var(--spacing-6);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-header h3 {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  margin: 0;
-}
-
+/* #10882: overlay/header/actions chrome now provided by @autobot/ui BaseModal. */
 .modal-form {
-  padding: var(--spacing-6);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
-  /* #10750 C2: single scroll region beneath the fixed header */
-  overflow-y: auto;
-  min-height: 0;
 }
 
 .form-row {
@@ -974,16 +932,7 @@ onMounted(loadPolicies)
   cursor: pointer;
 }
 
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-2);
-  padding-top: var(--spacing-2);
-  border-top: 1px solid var(--border-default);
-}
-
 .modal-body-text {
-  padding: var(--spacing-5) var(--spacing-6);
   font-size: var(--text-sm);
   color: var(--text-primary);
   margin: 0;

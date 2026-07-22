@@ -122,9 +122,14 @@
     </div>
 
     <!-- AC Suggester create form -->
-    <div v-if="showCreateForm" class="modal-overlay" @click.self="showCreateForm = false">
-      <div class="modal-panel">
-        <h3>{{ t('llc.backlog.createTitle') }}</h3>
+    <BaseModal
+      :model-value="showCreateForm"
+      :title="t('llc.backlog.createTitle')"
+      :close-label="t('ui.modal.closeDialog')"
+      :width="560"
+      @close="showCreateForm = false"
+    >
+      <div class="modal-form-body">
         <div class="form-field">
           <label>{{ t('llc.backlog.fieldTitle') }}</label>
           <input v-model="newItem.title" type="text" class="form-input" :placeholder="t('llc.backlog.titlePlaceholder')" />
@@ -179,19 +184,25 @@
 
         <p v-if="createError" class="create-error" role="alert">{{ createError }}</p>
 
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
-          <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
-            {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
-          </button>
-        </div>
       </div>
-    </div>
+
+      <template #actions>
+        <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
+        <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
+          {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Bulk sprint assign drawer -->
-    <div v-if="showBulkAssign" class="modal-overlay" @click.self="showBulkAssign = false">
-      <div class="modal-panel">
-        <h3>{{ t('llc.backlog.assignToSprint') }}</h3>
+    <BaseModal
+      :model-value="showBulkAssign"
+      :title="t('llc.backlog.assignToSprint')"
+      :close-label="t('ui.modal.closeDialog')"
+      :width="560"
+      @close="showBulkAssign = false"
+    >
+      <div class="modal-form-body">
         <p>{{ t('llc.backlog.itemsSelected', { count: selectedIds.size }) }}</p>
         <div class="form-field">
           <label>{{ t('llc.backlog.project') }}</label>
@@ -211,14 +222,15 @@
             {{ t('llc.backlog.noSprints') }}
           </p>
         </div>
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
-          <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
-            {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
-          </button>
-        </div>
       </div>
-    </div>
+
+      <template #actions>
+        <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
+        <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
+          {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <WorkItemDetail
       v-if="detailItem"
@@ -238,6 +250,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
+import { BaseModal } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
@@ -643,33 +656,12 @@ onMounted(fetchBacklog)
   color: var(--text-secondary, #9ca3af);
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal-panel {
-  background: var(--bg-surface, #fff);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 560px;
+/* #10882: overlay/panel/header/footer chrome now provided by @autobot/ui
+   BaseModal; only the body field stack keeps its 1rem gap here. */
+.modal-form-body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-panel h3 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
 }
 
 .form-field {
@@ -757,12 +749,6 @@ onMounted(fetchBacklog)
   gap: 0.5rem;
   font-size: 0.875rem;
   cursor: pointer;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 
 .create-error {
