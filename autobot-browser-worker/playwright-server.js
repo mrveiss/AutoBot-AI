@@ -977,6 +977,11 @@ async function capturePageState(page) {
     title: await page.title(),
     scroll,
     elements,
+    // #11538 review MINOR 3: callers echo this back as expected_element_count
+    // on a later *_index call so a stale index (page changed shape since this
+    // state was captured) is rejected instead of silently acting on the
+    // wrong element — see resolveElementByIndex's stale-index guard.
+    element_count: elements.length,
   };
 }
 
@@ -1076,7 +1081,7 @@ app.post('/automation', async (req, res) => {
       }
       case 'click_index': {
         const elements = await collectIndexedElements(page);
-        const resolved = resolveElementByIndex(elements, params.index);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
         if (resolved.error) {
           return res.status(400).json({ success: false, error: resolved.error, action });
         }
@@ -1086,7 +1091,7 @@ app.post('/automation', async (req, res) => {
       }
       case 'fill_index': {
         const elements = await collectIndexedElements(page);
-        const resolved = resolveElementByIndex(elements, params.index);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
         if (resolved.error) {
           return res.status(400).json({ success: false, error: resolved.error, action });
         }
@@ -1096,7 +1101,7 @@ app.post('/automation', async (req, res) => {
       }
       case 'select_index': {
         const elements = await collectIndexedElements(page);
-        const resolved = resolveElementByIndex(elements, params.index);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
         if (resolved.error) {
           return res.status(400).json({ success: false, error: resolved.error, action });
         }
@@ -1106,7 +1111,7 @@ app.post('/automation', async (req, res) => {
       }
       case 'hover_index': {
         const elements = await collectIndexedElements(page);
-        const resolved = resolveElementByIndex(elements, params.index);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
         if (resolved.error) {
           return res.status(400).json({ success: false, error: resolved.error, action });
         }

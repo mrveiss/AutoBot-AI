@@ -341,12 +341,27 @@ WAIT_FOR_SELECTOR_SCHEMA: dict = {
 # interactive element on the page so the model clicks/fills by index instead
 # of inventing a CSS selector — the index below is resolved to a concrete
 # element server-side (autobot-browser-worker/element-index.js).
+#
+# `expected_element_count` (optional, from a prior browser_state's
+# `element_count`) is the stale-index guard: if the live element count no
+# longer matches, the worker rejects the call instead of silently acting on
+# whatever now sits at that index (review #11538 MINOR 3).
+_EXPECTED_ELEMENT_COUNT_FIELD = {
+    "type": "integer",
+    "description": (
+        "Optional: element_count from the browser_state call this index was chosen against. "
+        "If the live page's element count no longer matches, the action is rejected instead of "
+        "silently acting on the wrong element — re-fetch browser_state and retry."
+    ),
+}
+
 CLICK_INDEX_SCHEMA: dict = {
     "type": "object",
     "description": "Click an interactive element by its numbered index from the page's element menu.",
     "properties": {
         "index": {"type": "integer", "description": "Element index from the numbered element menu."},
         "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
     },
     "required": ["index"],
 }
@@ -358,6 +373,7 @@ FILL_INDEX_SCHEMA: dict = {
         "index": {"type": "integer", "description": "Element index from the numbered element menu."},
         "value": {"type": "string", "description": "Value to fill into the element."},
         "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
     },
     "required": ["index", "value"],
 }
@@ -368,6 +384,7 @@ SELECT_INDEX_SCHEMA: dict = {
     "properties": {
         "index": {"type": "integer", "description": "Element index from the numbered element menu."},
         "value": {"type": "string", "description": "Value to select."},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
     },
     "required": ["index", "value"],
 }
@@ -377,6 +394,7 @@ HOVER_INDEX_SCHEMA: dict = {
     "description": "Hover over an interactive element by its numbered index.",
     "properties": {
         "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
     },
     "required": ["index"],
 }

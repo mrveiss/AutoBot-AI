@@ -81,18 +81,33 @@ async function collectIndexedElements(page, maxElements = DEFAULT_MAX_ELEMENTS) 
 }
 
 /**
- * Resolve an `index` param against a previously-collected element list.
- * Pure/no I/O — this is what "resolved server-side" means for click_index /
+ * Resolve an `index` param against a freshly-collected element list. Pure/no
+ * I/O — this is what "resolved server-side" means for click_index /
  * fill_index / select_index / hover_index: the index never reaches the DOM
  * directly, it is translated to a concrete locator here first.
  *
+ * Stale-index guard (review MINOR 3): if the caller supplies `expectedCount`
+ * — the element count it saw when it chose the index, e.g. from a prior
+ * browser_state call — and the live count differs, the page changed shape
+ * since then and the index may no longer point at the element the caller
+ * intended. Returned as a clear error rather than silently acting on
+ * whatever now happens to sit at that index.
+ *
  * @param {Array<object>} elements - Result of collectIndexedElements().
  * @param {*} index - The raw `index` param from the tool call.
+ * @param {*} [expectedCount] - Element count the caller chose the index against.
  * @returns {{element:object}|{error:string}}
  */
-function resolveElementByIndex(elements, index) {
+function resolveElementByIndex(elements, index, expectedCount) {
   if (typeof index !== 'number' || !Number.isInteger(index)) {
     return { error: 'index must be an integer' };
+  }
+  if (typeof expectedCount === 'number' && expectedCount !== elements.length) {
+    return {
+      error:
+        `Page changed since state was captured (expected ${expectedCount} elements, ` +
+        `found ${elements.length}) — call browser_state again before retrying.`,
+    };
   }
   const target = elements[index];
   if (!target) {

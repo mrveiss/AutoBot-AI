@@ -1908,11 +1908,20 @@ class BrowserStateRequest(BaseModel):
     )
 
 
+# Stale-index guard (#11538 review MINOR 3): echo a prior browser_state's
+# element_count back so the worker rejects the call if the page changed
+# shape since then, instead of silently acting on the wrong element.
+_EXPECTED_ELEMENT_COUNT_DESCRIPTION = (
+    "Optional: element_count from the browser_state call this index was chosen against"
+)
+
+
 class BrowserClickIndexRequest(BaseModel):
     """Request for POST /browser/mcp/click_index (#11537)."""
 
     index: int = Field(..., description="Element index from the numbered element menu")
     timeout: int | None = Field(10000, description="Timeout in milliseconds")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
     session_id: str | None = Field(
         None, description="Conversation/session id for isolated browser-context routing (#11539)"
     )
@@ -1924,6 +1933,7 @@ class BrowserFillIndexRequest(BaseModel):
     index: int = Field(..., description="Element index from the numbered element menu")
     value: str = Field(..., description="Value to fill into the element")
     timeout: int | None = Field(10000, description="Timeout in milliseconds")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
     session_id: str | None = Field(
         None, description="Conversation/session id for isolated browser-context routing (#11539)"
     )
@@ -1934,6 +1944,7 @@ class BrowserSelectIndexRequest(BaseModel):
 
     index: int = Field(..., description="Element index from the numbered element menu")
     value: str = Field(..., description="Value to select")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
     session_id: str | None = Field(
         None, description="Conversation/session id for isolated browser-context routing (#11539)"
     )
@@ -1943,6 +1954,7 @@ class BrowserHoverIndexRequest(BaseModel):
     """Request for POST /browser/mcp/hover_index (#11537)."""
 
     index: int = Field(..., description="Element index from the numbered element menu")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
     session_id: str | None = Field(
         None, description="Conversation/session id for isolated browser-context routing (#11539)"
     )

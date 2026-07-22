@@ -411,6 +411,12 @@ def _get_indexed_interaction_tools() -> List[MCPTool]:
     resolved to a concrete element server-side in the browser worker.
     """
     index_field = {"type": "integer", "description": "Element index from the numbered element menu."}
+    # Stale-index guard (#11538 review MINOR 3): echo browser_state's element_count
+    # back so the worker rejects the call if the page changed shape since then.
+    expected_count_field = {
+        "type": "integer",
+        "description": "Optional: element_count from the browser_state call this index was chosen against.",
+    }
     return [
         MCPTool(
             name="browser_state",
@@ -427,6 +433,7 @@ def _get_indexed_interaction_tools() -> List[MCPTool]:
                 "properties": {
                     "index": index_field,
                     "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+                    "expected_element_count": expected_count_field,
                 },
                 "required": ["index"],
             },
@@ -440,6 +447,7 @@ def _get_indexed_interaction_tools() -> List[MCPTool]:
                     "index": index_field,
                     "value": {"type": "string", "description": "Value to fill into the element"},
                     "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+                    "expected_element_count": expected_count_field,
                 },
                 "required": ["index", "value"],
             },
@@ -449,14 +457,22 @@ def _get_indexed_interaction_tools() -> List[MCPTool]:
             description="Select a dropdown option on an element identified by its numbered index",
             input_schema={
                 "type": "object",
-                "properties": {"index": index_field, "value": {"type": "string", "description": "Value to select"}},
+                "properties": {
+                    "index": index_field,
+                    "value": {"type": "string", "description": "Value to select"},
+                    "expected_element_count": expected_count_field,
+                },
                 "required": ["index", "value"],
             },
         ),
         MCPTool(
             name="hover_index",
             description="Hover over an interactive element by its numbered index",
-            input_schema={"type": "object", "properties": {"index": index_field}, "required": ["index"]},
+            input_schema={
+                "type": "object",
+                "properties": {"index": index_field, "expected_element_count": expected_count_field},
+                "required": ["index"],
+            },
         ),
     ]
 
@@ -1023,7 +1039,11 @@ async def click_index_mcp(request: BrowserClickIndexRequest) -> Metadata:
 
     result = await send_to_browser_vm(
         "click_index",
-        {"index": request.index, "timeout": request.timeout},
+        {
+            "index": request.index,
+            "timeout": request.timeout,
+            "expected_element_count": request.expected_element_count,
+        },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
@@ -1051,7 +1071,12 @@ async def fill_index_mcp(request: BrowserFillIndexRequest) -> Metadata:
 
     result = await send_to_browser_vm(
         "fill_index",
-        {"index": request.index, "value": request.value, "timeout": request.timeout},
+        {
+            "index": request.index,
+            "value": request.value,
+            "timeout": request.timeout,
+            "expected_element_count": request.expected_element_count,
+        },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
@@ -1080,7 +1105,11 @@ async def select_index_mcp(request: BrowserSelectIndexRequest) -> Metadata:
 
     result = await send_to_browser_vm(
         "select_index",
-        {"index": request.index, "value": request.value},
+        {
+            "index": request.index,
+            "value": request.value,
+            "expected_element_count": request.expected_element_count,
+        },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
@@ -1109,7 +1138,7 @@ async def hover_index_mcp(request: BrowserHoverIndexRequest) -> Metadata:
 
     result = await send_to_browser_vm(
         "hover_index",
-        {"index": request.index},
+        {"index": request.index, "expected_element_count": request.expected_element_count},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 

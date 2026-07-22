@@ -33,6 +33,7 @@ from chat_workflow.tool_call_grammar import (
     TOOL_CALL_OPENING_RE,
     strip_unparsed_tool_tags,
 )
+from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
@@ -157,6 +158,55 @@ def _extract_latest_tool_screenshot(execution_history: List[Dict[str, Any]]) -> 
         if image:
             return image
     return None
+
+
+def _prune_stale_screenshots(execution_history: List[Dict[str, Any]]) -> None:
+    """Drop ``base64_image`` from entries outside the vision lookback window (#11538).
+
+    _record_browser_success stores the raw screenshot on every screenshot
+    tool's execution_results entry, but only the latest one within
+    VISION_TOOL_LOOKBACK_MESSAGES is ever read (_extract_latest_tool_screenshot).
+    Without pruning, every multi-hundred-KB blob from the whole task would live
+    in execution_history (and therefore conversation state) for the task's
+    entire lifetime. Mutates *execution_history* in place.
+    """
+    if VISION_TOOL_LOOKBACK_MESSAGES <= 0:
+        cutoff = len(execution_history)
+    else:
+        cutoff = max(0, len(execution_history) - VISION_TOOL_LOOKBACK_MESSAGES)
+    for entry in execution_history[:cutoff]:
+        entry.pop("base64_image", None)
+
+
+def _strip_data_url_prefix(image_b64: str) -> str:
+    """Strip a ``data:image/...;base64,`` prefix, if present (#11538).
+
+    Screenshots already arrive as raw base64 from the browser worker, but this
+    is defensive: Ollama's /api/generate ``images`` field wants raw base64
+    only — a data-URL-prefixed string would be treated as invalid image bytes.
+    """
+    if "," in image_b64 and image_b64.strip().lower().startswith("data:"):
+        return image_b64.split(",", 1)[1]
+    return image_b64
+
+
+def _resolve_vision_payload_shape(ollama_endpoint: str) -> str:
+    """Return which image-attachment shape the target endpoint actually consumes (#11538).
+
+    manager.py's continuation loop always POSTs to an Ollama-shaped endpoint —
+    llm_handler._get_ollama_endpoint_for_model() (and every other endpoint
+    resolver in llm_handler.py) unconditionally suffixes PATH_OLLAMA_GENERATE,
+    and the stream is parsed as Ollama-native (_parse_stream_chunk reads
+    chunk_data["response"]). Ollama's /api/generate ignores an OpenAI-style
+    "messages" field entirely and instead expects a top-level "images" list of
+    raw base64 strings — so that's the shape used whenever the endpoint is the
+    Ollama generate path. If/when an OpenAI-compatible /chat/completions path
+    is wired into this loop, route it to "openai_chat" here instead of
+    guessing at the payload builder.
+    """
+    if ollama_endpoint.endswith(PATH_OLLAMA_GENERATE):
+        return "ollama_generate"
+    return "openai_chat"
 
 
 class ChatWorkflowManager(
@@ -1888,17 +1938,36 @@ before summarizing.
         max_tokens = mgr.get_max_history_tokens(model_name)
         return (prompt_tokens + VISION_IMAGE_TOKEN_ESTIMATE) <= max_tokens
 
-    def _build_vision_messages(self, current_prompt: str, image_b64: str) -> list[dict] | None:
-        """Build the OpenAI-style image content block for the payload. Issue #11538.
+    def _build_vision_messages(self, current_prompt: str, image_b64: str) -> list[dict]:
+        """Build the OpenAI-style image content block for an OpenAI-compatible
+        /chat/completions payload. Issue #11538.
 
         Reuses OpenAIGPT4VProvider._build_openai_image_content — the existing
-        content-block builder — rather than inventing a second one. Returns
-        None (caller keeps text-only) when there is no image to attach.
+        content-block builder — rather than inventing a second one. Only used
+        when _resolve_vision_payload_shape() says the target endpoint is
+        "openai_chat" — the continuation loop today always targets Ollama's
+        /api/generate instead (see _attach_vision_payload).
         """
         from modern_ai_integration import OpenAIGPT4VProvider
 
         content = OpenAIGPT4VProvider._build_openai_image_content(current_prompt, [image_b64])
         return [{"role": "user", "content": content}]
+
+    def _attach_vision_payload(self, payload: dict, ollama_endpoint: str, current_prompt: str, image_b64: str) -> None:
+        """Attach *image_b64* to *payload* in the shape the target endpoint reads. Issue #11538.
+
+        Provider-aware: Ollama's /api/generate ignores "messages" entirely and
+        reads images from a top-level raw-base64 "images" list
+        (_resolve_vision_payload_shape picks this for every endpoint this loop
+        currently targets). An OpenAI-compatible /chat/completions path — not
+        wired into this loop today — would read the "messages" content-block
+        shape instead. Mutates *payload* in place.
+        """
+        shape = _resolve_vision_payload_shape(ollama_endpoint)
+        if shape == "ollama_generate":
+            payload["images"] = [_strip_data_url_prefix(image_b64)]
+        else:
+            payload["messages"] = self._build_vision_messages(current_prompt, image_b64)
 
     def _get_llm_request_payload(
         self,
@@ -1907,14 +1976,15 @@ before summarizing.
         system_prompt: str = "",
         api_kwargs: dict | None = None,
         image_b64: str | None = None,
+        ollama_endpoint: str = "",
     ) -> dict:
         """Build LLM request payload.
 
         Issue #8993: api_kwargs are merged at top level for Anthropic extended-thinking.
         Issue #11538: when *image_b64* is set and the model is vision-capable and the
-        image fits the context budget, an OpenAI-style image content block is added
-        under "messages" (vision-capable providers use it; others keep the existing
-        text-only "prompt" field, unaffected).
+        image fits the context budget, it is attached in the shape *ollama_endpoint*
+        actually consumes (see _attach_vision_payload) — vision-capable models get it,
+        non-vision models keep the existing text-only "prompt" field, unaffected.
         """
         payload = {
             "model": selected_model,
@@ -1932,7 +2002,7 @@ before summarizing.
             payload.update(api_kwargs)
         vision_ready = image_b64 and _model_supports_vision(selected_model)
         if vision_ready and self._image_fits_budget(current_prompt, selected_model):
-            payload["messages"] = self._build_vision_messages(current_prompt, image_b64)
+            self._attach_vision_payload(payload, ollama_endpoint, current_prompt, image_b64)
         return payload
 
     async def _log_and_parse_tool_calls(
@@ -2029,12 +2099,18 @@ before summarizing.
         """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620.
 
         Issue #11538: ``image_b64`` (the latest browser/VNC screenshot, if any) is
-        threaded into the payload, gated on vision support in _get_llm_request_payload.
+        threaded into the payload, gated on vision support and attached in the shape
+        ``ollama_endpoint`` (the actual POST target) consumes — see _attach_vision_payload.
         """
         import aiohttp
 
         payload = self._get_llm_request_payload(
-            selected_model, current_prompt, system_prompt, api_kwargs=api_kwargs, image_b64=image_b64
+            selected_model,
+            current_prompt,
+            system_prompt,
+            api_kwargs=api_kwargs,
+            image_b64=image_b64,
+            ollama_endpoint=ollama_endpoint,
         )
         llm_response = ""
 
@@ -2277,6 +2353,9 @@ before summarizing.
         # Issue #11538: thread the most recent browser/VNC screenshot (last
         # VISION_TOOL_LOOKBACK_MESSAGES tool results) into this iteration's payload.
         latest_screenshot = _extract_latest_tool_screenshot(ctx.execution_history)
+        # Prune older screenshots now that this iteration has read the window —
+        # nothing outside it is ever consulted again (#11538 MINOR: retention).
+        _prune_stale_screenshots(ctx.execution_history)
 
         async for item in self._process_single_llm_iteration(
             http_client,
