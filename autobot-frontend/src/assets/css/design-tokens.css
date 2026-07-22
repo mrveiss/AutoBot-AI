@@ -40,6 +40,13 @@
   --color-primary-bg: rgba(59, 130, 246, 0.1);
   --color-primary-bg-hover: rgba(59, 130, 246, 0.15);
 
+  /* Focus-ring color (#12050). Previously referenced (--color-focus /
+   * --color-focus-ring) but never defined → resolved to currentColor.
+   * Aliased to the primary brand color, matching the app-wide
+   * `outline: 2px solid var(--color-primary)` focus pattern. */
+  --color-focus: var(--color-primary);
+  --color-focus-ring: var(--color-primary);
+
   /* Text on colored backgrounds */
   --text-on-primary: #ffffff;
   --text-on-success: #ffffff;
@@ -401,6 +408,7 @@
   --duration-100: 100ms;
   --duration-150: 150ms;
   --duration-200: 200ms;
+  --duration-250: 250ms;
   --duration-300: 300ms;
   --duration-500: 500ms;
   --duration-700: 700ms;
