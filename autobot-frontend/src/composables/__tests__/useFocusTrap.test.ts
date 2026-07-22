@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ref } from 'vue'
-import { useFocusTrap, FOCUSABLE_SELECTOR } from '../useFocusTrap'
+import { useFocusTrap, FOCUSABLE_SELECTOR } from '@autobot/ui'
 
 /** Build a container with the given number of tabbable buttons. */
 function makeContainer(buttonCount: number): {

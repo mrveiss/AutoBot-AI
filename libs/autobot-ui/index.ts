@@ -23,3 +23,15 @@ export { default as EmptyState } from './src/components/EmptyState.vue'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'
+
+// Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
+// initial-focus primitives shared by every dialog and modal consumer.
+export { useFocusTrap, isTabbable, FOCUSABLE_SELECTOR } from './src/composables/useFocusTrap'
+export type { UseFocusTrapReturn } from './src/composables/useFocusTrap'
+
+export { useFocusRestore } from './src/composables/useFocusRestore'
+
+export { useInitialFocus } from './src/composables/useInitialFocus'
+export type { UseInitialFocusReturn } from './src/composables/useInitialFocus'
+
+export { useBodyScrollLock, __resetLockStateForTests } from './src/composables/useBodyScrollLock'

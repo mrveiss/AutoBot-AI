@@ -189,10 +189,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import { useFocusTrap } from '@/composables/useFocusTrap';
-import { useFocusRestore } from '@/composables/useFocusRestore';
-import { useInitialFocus } from '@/composables/useInitialFocus';
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock';
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
