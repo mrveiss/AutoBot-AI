@@ -323,8 +323,7 @@ async def test_run_subprocess_unwrapped_when_detach_false(tmp_path):
 async def test_tail_playbook_log_parses_existing_lines_then_stops(tmp_path):
     log_path = tmp_path / "self-update-ansible.log"
     log_path.write_text(
-        "PLAY [Play 1 - Update SLM Server First] ****\n"
-        "TASK [[PLAY 1] SLM | Restart autobot-slm-backend] ****\n",
+        "PLAY [Play 1 - Update SLM Server First] ****\n" "TASK [[PLAY 1] SLM | Restart autobot-slm-backend] ****\n",
         encoding="utf-8",
     )
     ex = _executor(tmp_path)
