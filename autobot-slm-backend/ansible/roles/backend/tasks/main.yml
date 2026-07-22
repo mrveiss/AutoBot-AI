@@ -586,20 +586,21 @@
     - restart backend
     - restart celery
 
-# The filtered file is written to /tmp, so its `-c ../constraints/shared.txt`
-# (kept from requirements.txt, #10524) would resolve relative to /tmp and fail
-# (pip errors on a missing constraint file). Rewrite it to the canonical
-# code_source constraints path, which always exists as the git checkout, so the
-# pinned constraints are actually applied on deploy (#11117).
-- name: Resolve absolute constraints path for filtered requirements
-  ansible.builtin.set_fact:
-    backend_constraints_abs: "{{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/"
-
+# The filtered file is written to /tmp, so its sibling-relative `-c
+# ../constraints/shared.txt` (#10524) and `-r ../requirements.txt` (#11135)
+# includes would resolve relative to /tmp and fail (pip errors on a missing
+# file). Delegate the filter+rewrite to the canonical
+# scripts/build-filtered-requirements.sh (#11134), which rewrites both to the
+# code_source path, which always exists as the git checkout, so the pinned
+# constraints AND root runtime deps are actually applied on deploy (#11117,
+# #11135). services/role_registry.py's backend post_sync_cmd invokes the same
+# script, so both deploy paths share one implementation instead of drifting.
 - name: Create filtered backend requirements file
   ansible.builtin.shell:
     cmd: >-
-      grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt
-      | sed 's|^-c \.\./constraints/|-c {{ backend_constraints_abs }}|'
+      bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+      {{ backend_code_dir }}/requirements.txt
+      {{ code_source_dir | default('/opt/autobot/code_source') }}
       > /tmp/requirements-filtered.txt
   become_user: "{{ backend_user }}"
 
