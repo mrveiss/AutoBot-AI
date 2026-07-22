@@ -24,7 +24,7 @@
  * beforeEach.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createTestingPinia } from '@pinia/testing'
 import { nextTick } from 'vue'
@@ -120,13 +120,19 @@ function applyMocks(
 
 // ── Mount helper ─────────────────────────────────────────────────────────────
 
+// #11625: track every mounted wrapper so afterEach can unmount them. Without
+// this, components (and their scoped timers — e.g. useTransientError's 5s
+// timeout — plus reactive effects) survived each test and leaked into later
+// tests / parallel-worker files, causing order-dependent flake.
+const mountedWrappers: VueWrapper[] = []
+
 function mountKnowledgeUpload(
   controllerMock = makeControllerMock(),
   progressMock = makeUploadProgressMock()
 ) {
   applyMocks(controllerMock, progressMock)
 
-  return mount(KnowledgeUpload, {
+  const wrapper = mount(KnowledgeUpload, {
     global: {
       plugins: [
         createTestingPinia({
@@ -152,6 +158,9 @@ function mountKnowledgeUpload(
       }
     }
   })
+
+  mountedWrappers.push(wrapper)
+  return wrapper
 }
 
 // ── File utilities ────────────────────────────────────────────────────────────
@@ -194,6 +203,12 @@ describe('KnowledgeUpload — file upload section', () => {
     controllerMock = makeControllerMock()
     progressMock = makeUploadProgressMock()
     applyMocks(controllerMock, progressMock)
+  })
+
+  afterEach(() => {
+    // Unmount every wrapper so no component, scoped timer or reactive effect
+    // survives into the next test or parallel-worker file (#11625).
+    while (mountedWrappers.length) mountedWrappers.pop()?.unmount()
   })
 
   // ── Idle render ─────────────────────────────────────────────────────────
