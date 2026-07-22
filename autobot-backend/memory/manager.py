@@ -350,9 +350,9 @@ class MemoryManager:
         """
         if not task_id or not task_id.strip():
             raise ValueError("task_id cannot be empty")
-        if "duration_seconds" in kwargs and kwargs["duration_seconds"] < 0:
+        if kwargs.get("duration_seconds") is not None and kwargs["duration_seconds"] < 0:
             raise ValueError("duration_seconds cannot be negative")
-        if "retry_count" in kwargs and kwargs["retry_count"] < 0:
+        if kwargs.get("retry_count") is not None and kwargs["retry_count"] < 0:
             raise ValueError("retry_count cannot be negative")
         await self._ensure_initialized()
         return await self._task_storage.update_task(task_id, status=status, **kwargs)
