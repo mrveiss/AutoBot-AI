@@ -7810,22 +7810,7 @@
       "createFailed": "Failed to create company"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ New",
-      "selectCompany": "Select a company to view threads.",
-      "loading": "Loading...",
-      "noThreads": "No threads yet.",
-      "emptyState": "Select a thread or create a new one.",
-      "loadingMessages": "Loading messages...",
-      "noMessages": "No messages yet.",
-      "messagePlaceholder": "Type a message...",
-      "send": "Send",
-      "newThreadTitle": "New Thread",
-      "titleLabel": "Title",
-      "titlePlaceholder": "Thread title...",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating..."
+      "selectCompany": "Select a company to view threads."
     },
     "dashboard": {
       "title": "Company Dashboard",
@@ -8523,9 +8508,6 @@
     },
     "approvals": {
       "decideError": "Nie udało się zapisać Twojej decyzji. Spróbuj ponownie."
-    },
-    "ceoChat": {
-      "sendError": "Nie udało się wysłać wiadomości. Została przywrócona, aby można było spróbować ponownie."
     },
     "timeline": {
       "rescheduleError": "Nie udało się zapisać nowego harmonogramu. Zmiana została cofnięta."

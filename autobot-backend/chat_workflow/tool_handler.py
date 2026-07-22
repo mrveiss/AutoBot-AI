@@ -24,6 +24,7 @@ from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
+from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -479,23 +480,11 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     return None
 
 
-# Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
-# Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
-# #11545: the closing `>` is optional — some chat models emit `</TOOL_CALL`
-# (newline/prose after) without it.
-# #11552: the closing tag itself is often TRUNCATED to `</TOOL` (the model drops
-# `_CALL`) or spaced (`</TOOL_ CALL>`), then a hallucinated success line follows.
-# Both previously left the tool call unparsed → raw tag leaked, tool never ran
-# (0 work items, CEO chat). The close now tolerates `</TOOL[_[ ]CALL][>]`: the
-# `_CALL` and trailing `>` are both optional. The close requires a word boundary
-# after `tool` (either the proper `_call\b` continuation, or `\b` when `_CALL` is
-# dropped) so `</tool_callable…`/`</toolbox…` never match; the opening tag
-# (`<TOOL_CALL name=… params=…>`) is still required, so a bare `</tool>` in prose
-# can never match on its own.
-_TOOL_CALL_PATTERN = re.compile(
-    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool(?:_?\s*call\b|\b)\s*>?',
-    re.IGNORECASE | re.DOTALL,
-)
+# Issue #11693: the tool-call grammar (parse pattern + close-variant
+# tolerance for #11545/#11552) is now the single canonical source of truth
+# in tool_call_grammar.py, shared with chat_workflow/manager.py. Kept as a
+# module-level alias here for backwards-compatible imports.
+_TOOL_CALL_PATTERN = TOOL_CALL_PATTERN
 
 # Issue #260: Security tool detection pattern for auto-parsing
 _SECURITY_TOOL_PATTERN = re.compile(r"(nmap|nikto|gobuster|ffuf|masscan|nuclei|searchsploit)\b", re.IGNORECASE)
@@ -2034,9 +2023,15 @@ class ToolHandlerMixin:
                 )
                 return
 
-            from api.browser_mcp import send_to_browser_vm
+            from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
 
-            result = await send_to_browser_vm(tool_name, params)
+            # #11539: route this call to the BrowserContext dedicated to this
+            # conversation so cookies/login state never bleed into another one.
+            result = await send_to_browser_vm(
+                tool_name,
+                params,
+                session_id=session_id or DEFAULT_BROWSER_SESSION_ID,
+            )
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for browser tools
             result_text = str(result)
@@ -2197,12 +2192,12 @@ class ToolHandlerMixin:
 
         try:
             if fetch_full:
-                results = await self._execute_web_search_full(query, max_pages)
+                results = await self._execute_web_search_full(query, max_pages, session_id)
             else:
                 # #7479: snippet path now honors max_pages too (was hardcoded
                 # to 5, ignoring caller's choice — confusingly inconsistent
                 # with fetch_full mode).
-                results = await self._execute_web_search(query, max_pages)
+                results = await self._execute_web_search(query, max_pages, session_id)
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
             results = await _emit_after_tool_execute("web_search", results, session_id, {})
@@ -2384,7 +2379,7 @@ class ToolHandlerMixin:
         json_str = json.dumps(result["data"], indent=2, ensure_ascii=False)
         return f"## Extracted data from {url}\n\n```json\n{json_str}\n```"
 
-    async def _execute_web_search(self, query: str, max_pages: int = 5) -> str:
+    async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.
 
         Tries the existing Playwright search service first (structured results),
@@ -2393,6 +2388,9 @@ class ToolHandlerMixin:
         ``max_pages`` (#7479) — caller-requested result count. Threaded into
         ``_web_search_via_playwright`` so the snippet path returns the same
         number of results that the fetch_full path would.
+
+        ``session_id`` (#11539) — threaded into the browser-VM fallback so it
+        reuses this conversation's isolated browser context.
         """
         # Primary: use existing search_web_embedded (Rule 2: reuse existing code)
         try:
@@ -2403,9 +2401,9 @@ class ToolHandlerMixin:
             logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
 
         # Fallback: browser VM with DuckDuckGo HTML
-        return await self._web_search_final_fallback(query)
+        return await self._web_search_final_fallback(query, session_id)
 
-    async def _execute_web_search_full(self, query: str, max_pages: int) -> str:
+    async def _execute_web_search_full(self, query: str, max_pages: int, session_id: str = "") -> str:
         """Search + full-page fetch mode. Issue #7404.
 
         Gets structured entries from Playwright, fans out WebFetcher.fetch
@@ -2418,10 +2416,12 @@ class ToolHandlerMixin:
         call via ``_web_search_via_playwright`` — wasteful when
         ``_web_search_structured_entries`` already determined Playwright
         unavailable (#7478).
+
+        ``session_id`` (#11539) — threaded into the browser-VM fallback.
         """
         entries = await self._web_search_structured_entries(query, max_pages)
         if not entries:
-            return await self._web_search_final_fallback(query)
+            return await self._web_search_final_fallback(query, session_id)
         enriched = await _fetch_pages_concurrent(entries, max_pages)
         return _format_full_search_results(query, enriched)
 
@@ -2478,7 +2478,7 @@ class ToolHandlerMixin:
             lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
         return "\n".join(lines)
 
-    async def _web_search_final_fallback(self, query: str) -> str:
+    async def _web_search_final_fallback(self, query: str, session_id: str = "") -> str:
         """Browser-VM last resort with actionable guidance instead of silence (#11665).
 
         When the registry and Playwright yielded nothing and even the browser
@@ -2487,30 +2487,39 @@ class ToolHandlerMixin:
         configuration that unlocks topic search.
         """
         try:
-            result = await self._web_search_via_browser_vm(query)
+            result = await self._web_search_via_browser_vm(query, session_id)
             if result:
                 return result
         except Exception as exc:
             logger.debug("[#11665] Browser VM search fallback unavailable: %s", exc)
         return _search_unavailable_message(query)
 
-    async def _web_search_via_browser_vm(self, query: str) -> str:
+    async def _web_search_via_browser_vm(self, query: str, session_id: str = "") -> str:
         """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
         from urllib.parse import (  # stdlib — lazy to match surrounding pattern
             quote_plus,
         )
 
-        from api.browser_mcp import send_to_browser_vm  # lazy to avoid circular import
+        from api.browser_mcp import (  # lazy to avoid circular import
+            DEFAULT_BROWSER_SESSION_ID,
+            send_to_browser_vm,
+        )
 
         search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+        # #11539: route through this conversation's isolated browser context.
+        vm_session_id = session_id or DEFAULT_BROWSER_SESSION_ID
 
-        nav_result = await send_to_browser_vm("navigate", {"url": search_url})
+        nav_result = await send_to_browser_vm("navigate", {"url": search_url}, session_id=vm_session_id)
         if not nav_result.get("success", True):
             raise RuntimeError(f"Failed to navigate to search page: {nav_result.get('error', 'unknown')}")
 
         # Try results div first, then fall back to body
         for selector in ("div.results", "body"):
-            text_result = await send_to_browser_vm("get_text", {"selector": selector})
+            text_result = await send_to_browser_vm(
+                "get_text",
+                {"selector": selector},
+                session_id=vm_session_id,
+            )
             inner = text_result.get("result", text_result)
             raw_text = inner.get("text", "")
             if raw_text:

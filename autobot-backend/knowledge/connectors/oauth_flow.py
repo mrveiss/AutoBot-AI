@@ -162,14 +162,22 @@ def build_authorize_url(
 # ---------------------------------------------------------------------------
 
 
-async def _post_token(token_url: str, payload: dict) -> dict:
+async def _post_token(token_url: str, payload: dict, *, connector: aiohttp.BaseConnector | None = None) -> dict:
     """POST form-encoded *payload* to *token_url*; return the parsed token dict.
 
     Raises RuntimeError on a non-2xx response or transport error.
+
+    When *connector* is provided (an SSRF-pinned :class:`aiohttp.TCPConnector`
+    from ``ssrf_guard.pinned_connector``), the session connects to the
+    pre-resolved public IP so the token POST cannot be DNS-rebound to a private
+    address between validation and connect. The session owns and closes it.
     """
     timeout = aiohttp.ClientTimeout(total=_TOKEN_REQUEST_TIMEOUT)
+    session_kwargs: dict = {"timeout": timeout}
+    if connector is not None:
+        session_kwargs["connector"] = connector
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with aiohttp.ClientSession(**session_kwargs) as session:
             async with session.post(
                 token_url,
                 data=payload,
@@ -193,10 +201,14 @@ async def exchange_code(
     code: str,
     redirect_uri: str,
     code_verifier: str,
+    *,
+    connector: aiohttp.BaseConnector | None = None,
 ) -> dict:
     """Exchange an authorization *code* for tokens.
 
     Returns the raw token response (access_token, refresh_token, expires_in, ...).
+    Pass *connector* (an SSRF-pinned connector) to defeat DNS-rebinding on the
+    outbound token POST.
     """
     payload = {
         "grant_type": "authorization_code",
@@ -206,7 +218,7 @@ async def exchange_code(
         "client_secret": client_secret,
         "code_verifier": code_verifier,
     }
-    return await _post_token(provider.token_url, payload)
+    return await _post_token(provider.token_url, payload, connector=connector)
 
 
 async def refresh_access_token(
@@ -214,11 +226,15 @@ async def refresh_access_token(
     client_id: str,
     client_secret: str,
     refresh_token: str,
+    *,
+    connector: aiohttp.BaseConnector | None = None,
 ) -> dict:
     """Exchange a *refresh_token* for a fresh access token.
 
     Returns the raw token response. Some providers (e.g. GitLab) rotate the
     refresh token and return a new one; callers must persist it when present.
+    Pass *connector* (an SSRF-pinned connector) to defeat DNS-rebinding on the
+    outbound token POST.
     """
     payload = {
         "grant_type": "refresh_token",
@@ -226,4 +242,4 @@ async def refresh_access_token(
         "client_id": client_id,
         "client_secret": client_secret,
     }
-    return await _post_token(token_url, payload)
+    return await _post_token(token_url, payload, connector=connector)

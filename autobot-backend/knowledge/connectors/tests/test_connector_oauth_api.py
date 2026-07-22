@@ -15,29 +15,10 @@ from auth_middleware import get_current_user
 from knowledge.connectors import oauth_flow
 
 
-class _FakeRedis:
-    """Minimal in-memory redis supporting set(ex=) and getdel()."""
-
-    def __init__(self):
-        self.store = {}
-
-    def set(self, key, value, ex=None):
-        self.store[key] = value
-        return True
-
-    def get(self, key):
-        return self.store.get(key)
-
-    def getdel(self, key):
-        return self.store.pop(key, None)
-
-    def delete(self, key):
-        return 1 if self.store.pop(key, None) is not None else 0
-
-
 @pytest.fixture
-def client(monkeypatch):
-    fake_redis = _FakeRedis()
+def client(monkeypatch, single_use_fake_redis):
+    # Shared single-use-state Redis stub (conftest fixture — #11699).
+    fake_redis = single_use_fake_redis
     monkeypatch.setattr(mod, "get_redis_client", lambda database=None: fake_redis)
     # Provider configured.
     monkeypatch.setattr(oauth_flow.config.auth, "google_oauth_client_id", "cid", raising=False)

@@ -113,28 +113,35 @@ export function useBrowserSessionData() {
 
   /**
    * Playwright back navigation.
+   *
+   * `sessionId` (#11539) routes this to the caller's isolated browser
+   * context on the worker, same as navigateTo — omit for the shared
+   * default session.
    */
-  async function navigateBack(): Promise<PlaywrightNavigationResponse> {
+  async function navigateBack(sessionId?: string): Promise<PlaywrightNavigationResponse> {
     return await apiClient.post<PlaywrightNavigationResponse>(
-      `${getApiBase()}/playwright/back`
+      `${getApiBase()}/playwright/back`,
+      { session_id: sessionId }
     )
   }
 
   /**
-   * Playwright forward navigation.
+   * Playwright forward navigation. `sessionId` (#11539) — see navigateBack.
    */
-  async function navigateForward(): Promise<PlaywrightNavigationResponse> {
+  async function navigateForward(sessionId?: string): Promise<PlaywrightNavigationResponse> {
     return await apiClient.post<PlaywrightNavigationResponse>(
-      `${getApiBase()}/playwright/forward`
+      `${getApiBase()}/playwright/forward`,
+      { session_id: sessionId }
     )
   }
 
   /**
-   * Playwright page reload.
+   * Playwright page reload. `sessionId` (#11539) — see navigateBack.
    */
-  async function reloadPage(): Promise<PlaywrightNavigationResponse> {
+  async function reloadPage(sessionId?: string): Promise<PlaywrightNavigationResponse> {
     return await apiClient.post<PlaywrightNavigationResponse>(
-      `${getApiBase()}/playwright/reload`
+      `${getApiBase()}/playwright/reload`,
+      { session_id: sessionId }
     )
   }
 

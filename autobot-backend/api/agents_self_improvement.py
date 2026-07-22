@@ -161,6 +161,36 @@ async def reset_agent_learning(
     )
 
 
+@router.post(
+    "/{agent_id}/rollback-strategy",
+    response_model=LearnedStrategyResponse | None,
+    summary="Roll back a learned strategy to its previous revision",
+)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="rollback_agent_strategy",
+    error_code_prefix="AGENTS_SELF_IMPROVEMENT",
+)
+async def rollback_agent_strategy(
+    agent_id: str,
+    task_type: str | None = Query(None, description="Task type to roll back"),
+    _admin: bool = Depends(check_admin_permission),
+    current_user: Any = Depends(get_current_user),
+) -> LearnedStrategyResponse | None:
+    """Revert a task type's learned strategy to its previous revision (GH#11534).
+
+    Undoes a single bad synthesized/imported strategy without wiping all learned
+    state (unlike reset-learning). Admin-gated and tenant-scoped. Returns the
+    restored strategy, or None when there is no prior revision to roll back to.
+    """
+    learner = _get_learner()
+    effective_type = task_type or agent_id
+    restored = await learner.rollback_strategy(effective_type, tenant_id=_caller_tenant(current_user))
+    if not restored:
+        return None
+    return LearnedStrategyResponse(**restored.__dict__)
+
+
 @router.get(
     "/{agent_id}/knowledge-export",
     response_model=LearnedKnowledgeExport,

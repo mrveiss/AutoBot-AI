@@ -16,6 +16,10 @@ const logger = createLogger('ChatController')
 interface ChatJsonResponseData {
   response?: string
   content?: string
+  // #11843: stable backend message id — reused so a later poll / live-event
+  // echo of the same reply dedups instead of rendering a second bubble.
+  message_id?: string
+  id?: string
   model?: string
   tokens_used?: number
   response_time?: number
@@ -426,7 +430,10 @@ export class ChatController {
         frontendMessageId = this.chatStore.addMessage({
           content: '',
           sender,
-          type: messageType
+          type: messageType,
+          // #11843: persist the backend message id so a later poll / live-event
+          // echo of this reply dedups against it instead of double-rendering.
+          ...(backendMessageId ? { message_id: backendMessageId } : {})
         }) as string
         if (backendMessageId) {
           messageIdMap.set(backendMessageId, frontendMessageId)
@@ -603,9 +610,15 @@ export class ChatController {
     // Legacy format was: { response: "..." }
     const responseContent = data.response || data.content
 
-    // Add final response with enhanced metadata
+    // Add final response with enhanced metadata.
+    // #11843: route through addOrUpdateMessage keyed on the backend message id so
+    // a later re-hydration / poll / live-event echo of the SAME reply reconciles
+    // into this bubble instead of appending a duplicate. When the backend supplies
+    // no id this behaves exactly like addMessage (a fresh id per distinct reply).
     if (responseContent) {
-      this.chatStore.addMessage({
+      const backendId = data.message_id || data.id
+      this.chatStore.addOrUpdateMessage({
+        ...(backendId ? { id: backendId, message_id: backendId } : {}),
         content: responseContent,
         sender: 'assistant',
         type: 'response', // Mark as final response

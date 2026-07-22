@@ -143,7 +143,7 @@ docker build -f docker/sandbox.Dockerfile -t autobot-sandbox:test .
 ```bash
 cd autobot-vue
 npm ci
-npm run lint -- --fix
+npm run lint:fix
 npm run type-check
 ```
 

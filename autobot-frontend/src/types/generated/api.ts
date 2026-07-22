@@ -29836,7 +29836,7 @@ export interface paths {
          *     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
          *     the provider authorize URL. The client never supplies the verifier — the
          *     callback takes it from the stored state (#11297). Requires admin: the stored
-         *     credential is system-wide.
+         *     credential is shared by the admin's org (per-org scoped, #11497).
          */
         post: operations["oauth_initiate_api_llm_auth_oauth_initiate_post"];
         delete?: never;
@@ -29864,7 +29864,7 @@ export interface paths {
          *     provides. This closes the CSRF / code-injection hole where a lured admin could
          *     bind an attacker's account as the shared system credential (#11297).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
         delete?: never;
@@ -29890,7 +29890,7 @@ export interface paths {
          *     ``user_code`` + ``verification_uri`` for the user to complete on another device.
          *     The caller polls ``/device/poll`` until approval or expiry.
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_initiate_api_llm_auth_device_initiate_post"];
         delete?: never;
@@ -29915,7 +29915,7 @@ export interface paths {
          *     Returns ``stored=False`` when the grant is still pending (caller should
          *     retry after the ``interval`` from ``/device/initiate``).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_poll_api_llm_auth_device_poll_post"];
         delete?: never;
@@ -29934,6 +29934,10 @@ export interface paths {
         /**
          * Provider Auth Status
          * @description Return the auth connection status for a provider.
+         *
+         *     Dual-read (finding #1, #11497): reports the caller's org-scoped token when
+         *     present, else the legacy ``"global"`` token — so orgs that connected before
+         *     the change still show connected with zero reconnect.
          */
         get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
         put?: never;
@@ -29958,7 +29962,7 @@ export interface paths {
          * Revoke Provider Auth
          * @description Revoke stored OAuth / device-code / session tokens for a provider.
          *
-         *     Requires admin — credential is system-wide (shared by all users).
+         *     Requires admin — credential is per-org scoped (shared within the admin's org, #11497).
          */
         delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
         options?: never;
@@ -33256,6 +33260,7 @@ export interface paths {
          *
          *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_back_api_playwright_back_post"];
         delete?: never;
@@ -33279,6 +33284,7 @@ export interface paths {
          *
          *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_forward_api_playwright_forward_post"];
         delete?: never;
@@ -33298,7 +33304,9 @@ export interface paths {
          * Get Worker Status
          * @description Get browser worker connectivity status from Browser VM (#1130)
          *
-         *     Proxies to Browser VM /status endpoint which checks the persistent navPage.
+         *     Proxies to Browser VM /status endpoint which checks the persistent navPage
+         *     for this caller's session (#11539 — session_id selects which isolated
+         *     context's navPage is inspected; omitted = shared default session).
          */
         get: operations["get_worker_status_api_playwright_worker_status_get"];
         put?: never;
@@ -33323,7 +33331,8 @@ export interface paths {
          * @description Take screenshot of the persistent navigation page on Browser VM (#1130)
          *
          *     Unlike /screenshot which takes a fresh-page screenshot for a given URL,
-         *     this returns a screenshot of the current state of the persistent navPage.
+         *     this returns a screenshot of the current state of the persistent navPage
+         *     for this caller's session (#11539).
          */
         post: operations["take_worker_screenshot_api_playwright_worker_screenshot_post"];
         delete?: never;
@@ -36842,6 +36851,30 @@ export interface paths {
          * @description Clear all learned outcomes and strategies for an agent or task type.
          */
         post: operations["reset_agent_learning_api_agents__agent_id__reset_learning_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agent_id}/rollback-strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll back a learned strategy to its previous revision
+         * @description Revert a task type's learned strategy to its previous revision (GH#11534).
+         *
+         *     Undoes a single bad synthesized/imported strategy without wiping all learned
+         *     state (unlike reset-learning). Admin-gated and tenant-scoped. Returns the
+         *     restored strategy, or None when there is no prior revision to roll back to.
+         */
+        post: operations["rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -57901,6 +57934,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57926,6 +57964,11 @@ export interface components {
              * @description JavaScript code to execute
              */
             script: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57962,6 +58005,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57994,6 +58042,11 @@ export interface components {
              * @description Attribute name to retrieve
              */
             attribute: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58021,6 +58074,11 @@ export interface components {
              * @description CSS selector for element
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58046,6 +58104,11 @@ export interface components {
              * @description CSS selector for element to hover
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58166,6 +58229,11 @@ export interface components {
              * @default 30000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58239,6 +58307,11 @@ export interface components {
              * @default false
              */
             full_page: boolean | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58273,6 +58346,11 @@ export interface components {
              * @description Value to select
              */
             value: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58421,6 +58499,11 @@ export interface components {
              * @default visible
              */
             state: string | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85208,6 +85291,8 @@ export interface components {
             deltaY: number;
             /** Text */
             text?: string | null;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85225,6 +85310,11 @@ export interface components {
              * @default 30000
              */
             timeout: number;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85251,6 +85341,8 @@ export interface components {
              * @default networkidle
              */
             wait_until: string;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85268,6 +85360,8 @@ export interface components {
              * @default 5000
              */
             wait_timeout: number;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85285,6 +85379,18 @@ export interface components {
              * @default 5
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PlaywrightSessionRequest
+         * @description Optional body for worker proxy calls with no other payload (#11539):
+         *     /back, /forward, /worker-screenshot. GET /status takes the same id as a
+         *     query param instead (no request body on GET).
+         */
+        PlaywrightSessionRequest: {
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -144329,7 +144435,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144338,6 +144448,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -144349,7 +144468,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144360,11 +144483,22 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_worker_status_api_playwright_worker_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                session_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -144380,6 +144514,15 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightWorkerStatusResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     take_worker_screenshot_api_playwright_worker_screenshot_post: {
@@ -144389,7 +144532,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144398,6 +144545,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -149061,6 +149217,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetLearningResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post: {
+        parameters: {
+            query?: {
+                /** @description Task type to roll back */
+                task_type?: string | null;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedStrategyResponse"] | null;
                 };
             };
             /** @description Validation Error */

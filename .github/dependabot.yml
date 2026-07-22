@@ -132,6 +132,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vega-embed"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "vega-functions"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "vega-lite"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@pinia/testing"

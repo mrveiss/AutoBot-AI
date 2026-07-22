@@ -499,9 +499,9 @@ onMounted(async () => {
 
 .btn-export {
   padding: 0.4rem 1rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -517,8 +517,8 @@ onMounted(async () => {
   flex: 1;
   min-width: 160px;
   padding: 1rem;
-  background: var(--bg-surface, #fff);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   display: flex;
   flex-direction: column;
@@ -527,7 +527,7 @@ onMounted(async () => {
 
 .card-label {
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -538,7 +538,7 @@ onMounted(async () => {
 
 .card-sub {
   font-size: 0.75rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   word-break: break-all;
 }
 
@@ -550,8 +550,8 @@ onMounted(async () => {
 
 .budget-section,
 .chart-section {
-  background: var(--bg-surface, #fff);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -580,32 +580,32 @@ onMounted(async () => {
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.15rem 0.45rem;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   white-space: nowrap;
 }
 
 .mode-dollars {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--costdash-mode-dollars-bg);
+  color: var(--costdash-mode-dollars-text);
 }
 
 .mode-tokens {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--costdash-mode-tokens-bg);
+  color: var(--costdash-mode-tokens-text);
 }
 
 .gauge-track {
   flex: 1;
   height: 0.5rem;
-  background: var(--bg-elevated, #f3f4f6);
-  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .gauge-fill {
   height: 100%;
   background: var(--color-success);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   transition: width 0.3s;
 }
 
@@ -624,11 +624,11 @@ onMounted(async () => {
   min-width: 12rem;
   text-align: right;
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .shadow-cost {
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   font-size: 0.75rem;
   margin-left: 0.25rem;
 }
@@ -636,11 +636,11 @@ onMounted(async () => {
 .btn-settings {
   padding: 0.2rem 0.45rem;
   background: transparent;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
   cursor: pointer;
   font-size: 0.85rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   opacity: 0.6;
   transition: opacity 0.15s;
 }
@@ -650,7 +650,7 @@ onMounted(async () => {
 /* Modal */
 .modal-agent-name {
   font-size: 0.85rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   margin-top: -0.5rem;
 }
 
@@ -668,7 +668,7 @@ onMounted(async () => {
 .mode-toggle {
   display: flex;
   gap: 0;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   overflow: hidden;
 }
@@ -680,36 +680,36 @@ onMounted(async () => {
   border: none;
   cursor: pointer;
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   transition: background 0.15s, color 0.15s;
 }
 
 .mode-toggle button.active {
-  background: var(--color-primary, #3b82f6);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .input-prefix-wrap {
   display: flex;
   align-items: center;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   overflow: hidden;
 }
 
 .input-prefix {
   padding: 0.45rem 0.6rem;
-  background: var(--bg-elevated, #f9fafb);
-  border-right: 1px solid var(--border-default, #d1d5db);
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border-default);
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .field-input {
   padding: 0.45rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
@@ -722,7 +722,7 @@ onMounted(async () => {
 
 .field-hint {
   font-size: 0.75rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -741,8 +741,8 @@ onMounted(async () => {
 
 .btn-primary {
   padding: 0.45rem 1.25rem;
-  background: var(--color-primary, #3b82f6);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border: none;
   border-radius: 0.375rem;
   font-size: 0.875rem;
@@ -759,7 +759,7 @@ onMounted(async () => {
   padding: 0.45rem 1rem;
   background: transparent;
   color: var(--text-primary);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   cursor: pointer;
@@ -787,7 +787,7 @@ onMounted(async () => {
 
 .bar-fill {
   width: 100%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   border-radius: 0.125rem 0.125rem 0 0;
   min-height: 2px;
   transition: height 0.3s;
@@ -795,7 +795,7 @@ onMounted(async () => {
 
 .bar-label {
   font-size: 0.6rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   transform: rotate(-45deg);
   transform-origin: center;
   white-space: nowrap;
@@ -811,21 +811,21 @@ onMounted(async () => {
 .filter-select,
 .filter-date {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
 }
 
 .date-sep {
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .table-wrapper {
   overflow: auto;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
 }
 
@@ -839,14 +839,14 @@ onMounted(async () => {
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--bg-elevated, #f9fafb);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
   white-space: nowrap;
 }
 
 .cost-table td {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--border-default, #f3f4f6);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .num-cell {
@@ -857,6 +857,6 @@ onMounted(async () => {
 .state-msg {
   text-align: center;
   padding: 2rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 </style>

@@ -12,13 +12,12 @@ GH#7409
 
 import logging
 import shutil
-import urllib.parse
 from pathlib import Path
 
 import aiofiles
 from fastapi import APIRouter, Form, HTTPException, Request
 
-from api.files import ALLOWED_EXTENSIONS, INVALID_PATH_CHARACTERS, get_file_info
+from api.files import ALLOWED_EXTENSIONS, get_file_info
 from api.schemas_code import (
     FileSandboxCreateDirResponse,
     FileSandboxDeleteResponse,
@@ -30,7 +29,7 @@ from api.schemas_code import (
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.security.path_validator import validate_relative_path
+from autobot_shared.security.path_validator import SandboxPathError, resolve_within_sandbox
 from constants.error_constants import ERR_DIRECTORY_NOT_FOUND, ERR_FILE_NOT_FOUND
 from utils.io_executor import run_in_file_executor
 from utils.path_validation import is_invalid_name
@@ -55,33 +54,16 @@ def _check_permission(request: Request, permission: str) -> dict:
 
 
 def _validate_path(path: str) -> Path:
-    """Validate and resolve a path within the sandbox root directory."""
-    if not path:
-        return SANDBOX_FILES_ROOT
+    """Validate and resolve a path within the sandbox root directory.
 
-    clean_path = path.strip("/")
-
-    # "/" collapses to "" after stripping; that is the root, not an escape
-    # attempt — validate_relative_path rejects empty segments (#11823).
-    if not clean_path:
-        return SANDBOX_FILES_ROOT
-
-    if (
-        ".." in clean_path
-        or clean_path.startswith("/")
-        or "~" in clean_path
-        or any(char in clean_path for char in INVALID_PATH_CHARACTERS)
-    ):
-        raise HTTPException(status_code=400, detail="Invalid path: path traversal not allowed")
-
-    decoded_path = urllib.parse.unquote(clean_path)
-    if ".." in decoded_path or decoded_path.startswith("/"):
-        raise HTTPException(status_code=400, detail="Invalid path: encoded traversal not allowed")
-
+    Thin wrapper over the shared sandbox resolver (#11844); traversal
+    protection and the #11823 root-addressing fix live once in
+    autobot_shared.security.path_validator.resolve_within_sandbox.
+    """
     try:
-        return validate_relative_path(clean_path, SANDBOX_FILES_ROOT)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Path outside sandbox not allowed")
+        return resolve_within_sandbox(path, SANDBOX_FILES_ROOT)
+    except SandboxPathError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/view/{file_path:path}", response_model=FileSandboxViewResponse)

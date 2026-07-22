@@ -350,13 +350,13 @@ function handleMigrateClick() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
-  background: var(--bg-secondary, #1e1e2e);
-  color: var(--text-primary, #fff);
-  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg);
   width: 540px;
   max-width: 90vw;
   max-height: 80vh;
@@ -368,13 +368,13 @@ function handleMigrateClick() {
 .modal-header {
   display: flex;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #333);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header-icon {
-  font-size: 20px;
-  color: #eab308;
+  font-size: var(--text-xl);
+  color: var(--color-warning);
   margin-right: 10px;
   flex-shrink: 0;
 }
@@ -382,38 +382,38 @@ function handleMigrateClick() {
 .modal-header h3 {
   margin: 0;
   flex: 1;
-  font-size: 16px;
-  color: var(--text-primary, #fff);
+  font-size: var(--text-base);
+  color: var(--text-primary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   cursor: pointer;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .modal-body {
-  padding: 20px;
+  padding: var(--spacing-5);
   overflow-y: auto;
   flex: 1;
 }
 
 .modal-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color, #333);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 /* Loading */
 .loading {
-  padding: 40px 0;
+  padding: var(--spacing-10) 0;
   text-align: center;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -425,8 +425,8 @@ function handleMigrateClick() {
   display: inline-block;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--border-color, #333);
-  border-top-color: var(--primary-color, #3b82f6);
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -440,47 +440,47 @@ function handleMigrateClick() {
 /* Warning banner */
 .warning-banner {
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #ef4444;
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3) var(--spacing-4);
+  margin-bottom: var(--spacing-4);
 }
 
 .warning-text {
-  margin: 0 0 4px 0;
+  margin: 0 0 var(--spacing-1) 0;
   font-weight: 500;
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .warning-ip {
   margin: 0;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .warning-ip code {
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
   font-family: monospace;
 }
 
 /* Role sections */
 .role-section {
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  border-radius: 6px;
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.05);
 }
 
 .role-section--danger {
-  border-left: 4px solid #ef4444;
+  border-left: 4px solid var(--color-danger);
 }
 
 .role-section--warning {
-  border-left: 4px solid #eab308;
+  border-left: 4px solid var(--color-warning);
 }
 
 .role-section--safe {
-  border-left: 4px solid #22c55e;
+  border-left: 4px solid var(--color-success);
 }
 
 .section-title {
@@ -491,15 +491,15 @@ function handleMigrateClick() {
 }
 
 .section-title--danger {
-  color: #ef4444;
+  color: var(--color-danger);
 }
 
 .section-title--warning {
-  color: #eab308;
+  color: var(--color-warning);
 }
 
 .section-title--safe {
-  color: #22c55e;
+  color: var(--color-success);
 }
 
 .role-row {
@@ -521,49 +521,49 @@ function handleMigrateClick() {
 
 .role-name {
   font-weight: 500;
-  color: var(--text-primary, #fff);
-  font-size: 14px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .role-reason {
-  color: var(--text-muted, #888);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
 
 /* Options */
 .options-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-4);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   cursor: pointer;
-  font-size: 14px;
-  color: var(--text-primary, #fff);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
 }
 
 .checkbox-label input[type='checkbox'] {
-  accent-color: var(--primary-color, #3b82f6);
+  accent-color: var(--primary-color);
   width: 16px;
   height: 16px;
 }
 
 /* Confirm */
 .confirm-section {
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
 }
 
 .confirm-label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: var(--spacing-2);
   font-size: 13px;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
 }
 
 .confirm-label code {
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
   font-family: monospace;
   background: rgba(255, 255, 255, 0.08);
   padding: 2px 6px;
@@ -572,26 +572,26 @@ function handleMigrateClick() {
 
 .confirm-input {
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: var(--bg-primary, #121220);
-  color: var(--text-primary, #fff);
-  border: 1px solid var(--border-color, #333);
-  font-size: 14px;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-default);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  font-size: var(--text-sm);
   font-family: monospace;
   box-sizing: border-box;
 }
 
 .confirm-input:focus {
   outline: none;
-  border-color: var(--primary-color, #3b82f6);
+  border-color: var(--primary-color);
 }
 
 /* Status blocks (running / complete / failed) */
 .status-block {
-  padding: 40px 0;
+  padding: var(--spacing-10) 0;
   text-align: center;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -599,38 +599,38 @@ function handleMigrateClick() {
 }
 
 .status-block--success {
-  color: #22c55e;
+  color: var(--color-success);
   font-weight: 500;
 }
 
 .status-block--error {
-  color: #ef4444;
+  color: var(--color-danger);
   font-weight: 500;
 }
 
 /* Buttons */
 .btn {
-  padding: 8px 20px;
+  padding: var(--spacing-2) var(--spacing-5);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-weight: 500;
-  font-size: 14px;
+  font-size: var(--text-sm);
   transition: opacity 0.15s;
 }
 
 .btn-sm {
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: var(--spacing-1) var(--spacing-3);
+  font-size: var(--text-xs);
 }
 
 .btn-primary {
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color);
   color: white;
 }
 
 .btn-danger {
-  background: #ef4444;
+  background: var(--color-danger);
   color: white;
 }
 
@@ -641,47 +641,47 @@ function handleMigrateClick() {
 
 .btn-cancel {
   background: transparent;
-  border: 1px solid var(--border-color, #333);
-  color: var(--text-primary, #fff);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .btn-migrate {
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color);
   color: white;
 }
 
 /* Log output (#2678) */
 .log-section {
-  margin-top: 16px;
+  margin-top: var(--spacing-4);
 }
 
 .log-toggle {
   background: none;
-  border: 1px solid var(--border-color, #333);
-  color: var(--text-muted, #888);
-  padding: 6px 12px;
-  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 6px var(--spacing-3);
+  border-radius: var(--radius-default);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-xs);
   width: 100%;
   text-align: left;
 }
 
 .log-toggle:hover {
-  color: var(--text-primary, #fff);
-  border-color: var(--text-muted, #888);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
 }
 
 .log-output {
   display: none;
-  margin-top: 8px;
-  padding: 12px;
-  background: var(--bg-primary, #121220);
-  border: 1px solid var(--border-color, #333);
-  border-radius: 4px;
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-default);
   font-size: 11px;
   line-height: 1.5;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   max-height: 300px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -694,6 +694,6 @@ function handleMigrateClick() {
 }
 
 .log-expanded .log-toggle {
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
 }
 </style>

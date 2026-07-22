@@ -163,6 +163,10 @@ __all__ = [
     "redis_get",
     "redis_set",
     "redis_delete",
+    # Await-tolerant single-use-state helpers on a caller-provided client
+    "client_setex",
+    "client_getdel",
+    "client_get",
     # Backward compatibility
     "RedisDatabaseManager",
     "redis_db_manager",
@@ -521,6 +525,61 @@ async def redis_delete(key: str, database: str = "main") -> int:
     if client:
         return await client.delete(key)
     return 0
+
+
+# =============================================================================
+# Await-tolerant single-use-state helpers (client-provided; sync OR async)
+# =============================================================================
+# These operate on a Redis client the caller already holds (as returned by
+# get_redis_client(...) — which may be sync — or get_async_redis_client(...)).
+# They tolerate both by awaiting the result only when it is awaitable, so a
+# single call site works whether the injected client is sync or async.
+#
+# Canonical home for the single-use OAuth-state primitive that the connector
+# and provider auth flows both depend on (Issue #11699 — previously duplicated
+# in api/knowledge_connector_oauth.py + api/provider_auth.py, the latter via a
+# private cross-module import introduced by #11297).
+
+
+async def client_setex(client: Any, key: str, ttl: int, value: str) -> None:
+    """SET *key*=*value* with a *ttl*-second expiry on a caller-provided client.
+
+    The client may be synchronous or asynchronous; the write is awaited only
+    when the underlying call returns an awaitable.
+    """
+    result = client.set(key, value, ex=ttl)
+    if hasattr(result, "__await__"):
+        await result
+
+
+async def client_getdel(client: Any, key: str) -> Any | None:
+    """Atomically fetch and delete a key (single-use state).
+
+    Uses GETDEL when the client exposes it, otherwise falls back to GET+DELETE.
+    The client may be synchronous or asynchronous.
+    """
+    getdel = getattr(client, "getdel", None)
+    if getdel is not None:
+        result = getdel(key)
+        if hasattr(result, "__await__"):
+            result = await result
+        return result
+    # Fallback for clients without GETDEL.
+    value = client.get(key)
+    if hasattr(value, "__await__"):
+        value = await value
+    deleted = client.delete(key)
+    if hasattr(deleted, "__await__"):
+        await deleted
+    return value
+
+
+async def client_get(client: Any, key: str) -> Any | None:
+    """Read a key without deleting it; the client may be sync or async."""
+    value = client.get(key)
+    if hasattr(value, "__await__"):
+        value = await value
+    return value
 
 
 # =============================================================================

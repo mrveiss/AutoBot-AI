@@ -551,6 +551,187 @@
   --color-agent-draft-border: #3B82F6;
   --color-agent-draft-bg: #EFF6FF;
   --color-user-edit-cursor: #059669;
+
+  /* ============================================
+   * TERMINAL COMPONENT TOKENS
+   * Issue #11859 (umbrella #11515). Shared by the terminal component family
+   * (TerminalWindow, CompletionSuggestions, BaseXTerminal, TerminalOutput, …).
+   * The terminal renders a distinct dark-chrome palette plus a literal ANSI
+   * content palette. ANSI content colors are INTENTIONALLY literal (they carry
+   * terminal semantics) and are NOT mapped to semantic UI tokens.
+   * Hex/rgba only — deliberately NO OKLCH override — so terminal output renders
+   * pixel-identical across all browsers.
+   * ============================================ */
+
+  /* Chrome / frame surfaces (dark toolbar, footer, modals) */
+  --terminal-chrome-bg: #2d2d2d;          /* header, footer, modal surface */
+  --terminal-chrome-bg-alt: #1e1e1e;      /* status bar, previews, wells */
+  --terminal-chrome-bg-actions: #252525;  /* modal action footer */
+  --terminal-border: #444444;             /* control / modal borders */
+  --terminal-border-subtle: #333333;      /* status/footer separators */
+  --terminal-border-strong: #666666;      /* button outlines */
+  --terminal-btn-hover-bg: #555555;       /* button + scrollbar-thumb base */
+  --terminal-scrollbar-thumb-hover: #777777;
+
+  /* Chrome text */
+  --terminal-text: #ffffff;               /* bright foreground */
+  --terminal-text-muted: #888888;         /* metadata labels */
+  --terminal-text-dim: #cccccc;           /* secondary body text */
+  --terminal-text-dim-strong: #dddddd;    /* emphasis body text */
+
+  /* ANSI content palette — literal, do NOT remap to semantic tokens */
+  --terminal-ansi-green: #00ff00;         /* prompt + cursor */
+  --terminal-ansi-red: #ff6b6b;           /* error output */
+  --terminal-ansi-cyan: #87ceeb;          /* command output */
+  --terminal-ansi-purple: #9370db;        /* system messages */
+  --terminal-ansi-violet: #6f42c1;        /* workflow info */
+  --terminal-ansi-red-bg: rgba(255, 107, 107, 0.2);
+  --terminal-ansi-violet-bg: rgba(111, 66, 193, 0.1);
+
+  /* Overlay + danger-pulse shadow (bootstrap red #dc3545, distinct from --color-danger) */
+  --terminal-overlay: rgba(0, 0, 0, 0.7);
+  --terminal-shadow-danger: rgba(220, 53, 69, 0.4);
+  --terminal-shadow-danger-fade: rgba(220, 53, 69, 0);
+
+  /* ============================================
+   * ONBOARDING WIZARD TOKENS
+   * Issue #11875 (umbrella #11515). Scoped to OnboardingWizard.vue.
+   * Hex-only (deliberately NO OKLCH override) so the wizard renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * The tier + banner text colors have no existing exact semantic token.
+   * --onboarding-accent is the indigo accent the wizard shows when the active
+   * theme sets no --color-accent (base / dark / light); the ember variant
+   * overrides --color-accent to its marigold, so it is never used there.
+   * ============================================ */
+  --onboarding-accent: #6366f1;              /* default accent (non-ember themes) */
+  --onboarding-tier-powerful: #c084fc;       /* "powerful" tier badge text */
+  --onboarding-tier-balanced: #818cf8;       /* "balanced" tier badge text */
+  --onboarding-tier-fast: #4ade80;           /* "fast" tier badge text */
+  --onboarding-banner-error-text: #fca5a5;   /* error banner foreground */
+  --onboarding-banner-warning-text: #fde68a; /* soft (warning) banner foreground */
+
+  /* ============================================
+   * VISION AUTOMATION VIEW TOKENS
+   * Issue #11885 (umbrella #11515). Scoped to VisionAutomationView.vue.
+   * Hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * The light status-badge/alert palette and light surface fills have no
+   * existing exact semantic token (mapping to OKLCH tokens would drift).
+   * --vision-surface-secondary/-badge-neutral-bg/-chip-bg are the literal
+   * fallbacks the view rendered because --color-surface-secondary is never
+   * defined in any theme; preserved behind that intended token name.
+   * ============================================ */
+  --vision-surface-secondary: #f9fafb;   /* card/header/stat/ocr/opportunity surface fill */
+  --vision-badge-neutral-bg: #f3f4f6;    /* neutral badge fill */
+  --vision-chip-bg: #e5e7eb;             /* interaction chip fill */
+  --vision-badge-success-bg: #dcfce7;    /* operational/online status badge fill */
+  --vision-badge-success-text: #15803d;  /* operational/online status badge text */
+  --vision-badge-warning-bg: #fef9c3;    /* degraded status badge fill */
+  --vision-badge-warning-text: #a16207;  /* degraded status badge text */
+  --vision-error-bg: #fee2e2;            /* error badge + error alert background */
+  --vision-error-text: #b91c1c;          /* error badge + error alert foreground */
+  --vision-alert-error-border: #fca5a5;  /* error alert border */
+
+  /* ============================================
+   * WORK ITEM DETAIL TOKENS
+   * Issue #11880 (umbrella #11515). Scoped to llc/WorkItemDetail.vue.
+   * The "AGENT" comment chip renders a soft-violet badge with no existing
+   * exact semantic token. Hex-only (deliberately NO OKLCH override) so the
+   * chip renders pixel-identical to its previous hardcoded values across all
+   * browsers.
+   * ============================================ */
+  --workitem-agent-chip-bg: #ddd6fe;    /* AGENT comment chip background */
+  --workitem-agent-chip-text: #5b21b6;  /* AGENT comment chip text */
+
+  /* ============================================
+   * ROUTINES CONSOLE TOKENS
+   * Issue #11891 (umbrella #11515). Scoped to llc/RoutinesView.vue.
+   * Hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded values across all browsers.
+   * These are the literal fallbacks the view rendered because their intended
+   * Ember semantic tokens (--color-accent, --bg-code, --bg-muted,
+   * --color-success/warning/info/danger-*) are undefined in non-ember themes;
+   * preserved behind those intended token names via nested var() so ember
+   * still wins where it defines them.
+   * ============================================ */
+  --routines-accent: #c4651a;              /* primary-button accent fill (non-ember) */
+  --routines-on-accent: #fff;              /* primary-button label on accent */
+  --routines-bg-code: #f3f4f6;             /* cron code chip fill */
+  --routines-badge-neutral-bg: #f3f4f6;    /* neutral status-badge / queued run fill */
+  --routines-status-archived-bg: #e5e7eb;  /* archived status-badge fill */
+  --routines-success-bg: #dcfce7;          /* active / succeeded status fill */
+  --routines-success-text: #15803d;        /* active / succeeded status text */
+  --routines-warning-bg: #fef3c7;          /* paused status fill */
+  --routines-warning-text: #b45309;        /* paused status text */
+  --routines-danger-border: #fecaca;       /* danger button border */
+  --routines-run-failed-bg: #fee2e2;       /* failed run status fill */
+  --routines-info-bg: #dbeafe;             /* running run status fill */
+  --routines-info-text: #1d4ed8;           /* running run status text */
+
+  /* ============================================
+   * VOICE CONVERSATION OVERLAY TOKENS
+   * Issue #11901 (umbrella #11515). Scoped to chat/VoiceConversationOverlay.vue.
+   * The overlay renders an electric-glow comm-station palette (accent blues,
+   * status green/red, soft warning yellows). Each hue matches a --color-*-light
+   * base value, but those semantic tokens carry OKLCH overrides that would shift
+   * the rendered pixels, so they are captured here as hex-only (deliberately NO
+   * OKLCH override) so the overlay renders pixel-identical to its previous
+   * hardcoded values across all browsers.
+   * ============================================ */
+  --voiceoverlay-accent-blue: #60a5fa;        /* icon, user-bubble/mic accent, meter start */
+  --voiceoverlay-accent-blue-light: #93c5fd;  /* lang badge, transcript, processing, threshold value */
+  --voiceoverlay-accent-indigo: #818cf8;      /* amplitude-meter gradient end */
+  --voiceoverlay-accent-green: #34d399;       /* assistant bubble + speaking-state glow */
+  --voiceoverlay-accent-red: #f87171;         /* listening-state glow */
+  --voiceoverlay-error-text: #fca5a5;         /* error banner foreground */
+  --voiceoverlay-warning-text: #fcd34d;       /* cert-warning title/foreground */
+  --voiceoverlay-warning-body-text: #fde68a;  /* cert-warning body */
+  --voiceoverlay-muted-text: #94a3b8;         /* cert-warning fallback note */
+
+  /* ============================================
+   * SERVICE MESSAGE TIMELINE TOKENS
+   * Issue #11918 (umbrella #11515). Scoped to
+   * visualizations/ServiceMessageTimeline.vue.
+   * Per-message-type data-viz palette (dot markers + type badges) — these are
+   * a semantic data series, NOT chrome, so they are preserved verbatim rather
+   * than collapsed into semantic UI tokens. Captured hex-only (deliberately NO
+   * OKLCH/theme override) so the timeline renders pixel-identical to its
+   * previous hardcoded values across all browsers.
+   * ============================================ */
+  --timeline-task: #4a90d9;             /* task */
+  --timeline-result: #4caf50;           /* result */
+  --timeline-error: #f44336;            /* error */
+  --timeline-health: #8bc34a;           /* health */
+  --timeline-deploy: #ff9800;           /* deploy */
+  --timeline-workflow-step: #9c27b0;    /* workflow_step */
+  --timeline-notification: #00bcd4;     /* notification */
+
+  /* ============================================
+   * FAILURE ANALYSIS DASHBOARD TOKENS
+   * Issue #11916 (umbrella #11515). Scoped to views/FailureAnalysisDashboard.vue.
+   * The primary-button label, spinner highlight and causal-chain index badge
+   * render pure white on the blue accent. There is no plain-white design token
+   * (--text-on-primary carries an OKLCH override), so the literal is preserved
+   * here as hex-only (deliberately NO OKLCH override) so the view renders
+   * pixel-identical to its previous hardcoded #fff across all browsers. All
+   * other colors in the view already resolve to emitted Tailwind --color-*
+   * tokens; their dead hex fallbacks were dropped.
+   * ============================================ */
+  --faildash-on-accent: #fff;   /* white label/highlight on blue accent surfaces */
+
+  /* ============================================
+   * COST DASHBOARD TOKENS
+   * Issue #11917 (umbrella #11515). Scoped to llc/CostDashboard.vue.
+   * The budget-mode badges render a soft blue ("dollars") and amber ("tokens")
+   * palette. The nearest --color-* / --chart-* tokens carry OKLCH overrides that
+   * would shift the rendered pixels, so these are captured here as hex-only
+   * (deliberately NO OKLCH override) so the badges render pixel-identical to
+   * their previous hardcoded values across all browsers.
+   * ============================================ */
+  --costdash-mode-dollars-bg: #dbeafe;    /* "dollars" budget-mode badge fill */
+  --costdash-mode-dollars-text: #1d4ed8;  /* "dollars" budget-mode badge text */
+  --costdash-mode-tokens-bg: #fef3c7;     /* "tokens" budget-mode badge fill */
+  --costdash-mode-tokens-text: #92400e;   /* "tokens" budget-mode badge text */
 }
 
 /* ============================================

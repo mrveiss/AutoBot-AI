@@ -7810,22 +7810,7 @@
       "createFailed": "Unternehmen konnte nicht erstellt werden"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ Neu",
-      "selectCompany": "Wählen Sie ein Unternehmen, um Threads anzuzeigen.",
-      "loading": "Wird geladen...",
-      "noThreads": "Noch keine Threads.",
-      "emptyState": "Wählen Sie einen Thread aus oder erstellen Sie einen neuen.",
-      "loadingMessages": "Nachrichten werden geladen...",
-      "noMessages": "Noch keine Nachrichten.",
-      "messagePlaceholder": "Nachricht eingeben...",
-      "send": "Senden",
-      "newThreadTitle": "Neuer Thread",
-      "titleLabel": "Titel",
-      "titlePlaceholder": "Thread-Titel...",
-      "cancel": "Abbrechen",
-      "create": "Erstellen",
-      "creating": "Wird erstellt..."
+      "selectCompany": "Wählen Sie ein Unternehmen, um Threads anzuzeigen."
     },
     "dashboard": {
       "title": "Unternehmens-Dashboard",
@@ -8523,9 +8508,6 @@
     },
     "approvals": {
       "decideError": "Ihre Entscheidung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
-    },
-    "ceoChat": {
-      "sendError": "Ihre Nachricht konnte nicht gesendet werden. Sie wurde wiederhergestellt, damit Sie es erneut versuchen können."
     },
     "timeline": {
       "rescheduleError": "Der neue Zeitplan konnte nicht gespeichert werden. Die Änderung wurde rückgängig gemacht."

@@ -46,6 +46,7 @@ from typing import Any
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_7_DAYS
+from services.task_workspace_common import validate_task_id
 
 logger = get_logger(__name__)
 
@@ -202,7 +203,7 @@ class TaskWorkspaceManager:
 
     async def create(self, task_id: str) -> WorkspaceInfo:
         """Create or resume a workspace for *task_id*.  Idempotent."""
-        _validate_task_id(task_id)
+        validate_task_id(task_id)
         existing = await self.get(task_id)
         if existing is not None:
             logger.info("workspace: resuming container for task=%s", task_id)
@@ -215,7 +216,7 @@ class TaskWorkspaceManager:
 
     async def get(self, task_id: str) -> WorkspaceInfo | None:
         """Return WorkspaceInfo if the workspace is registered, else None."""
-        _validate_task_id(task_id)
+        validate_task_id(task_id)
         raw = await asyncio.to_thread(self._redis.get, _redis_meta_key(task_id))
         if raw is None:
             return None
@@ -232,7 +233,7 @@ class TaskWorkspaceManager:
         Reuses SecureSandboxExecutor's validation logic: blocked commands are
         rejected before any Docker call is made.
         """
-        _validate_task_id(task_id)
+        validate_task_id(task_id)
         # GH#11059: shlex.split (not str.split) so quoted args tokenize correctly
         # and the base-command denylist check sees the real argv[0].
         cmd_list = command if isinstance(command, list) else shlex.split(command)
@@ -280,7 +281,7 @@ class TaskWorkspaceManager:
         Tag format: ``autobot-workspace-<task_id>:<checkpoint_name>``
         Also stores step checkpoint in Redis to wire into CheckpointResumer.
         """
-        _validate_task_id(task_id)
+        validate_task_id(task_id)
         _validate_checkpoint_name(checkpoint_name)
         info = await self.get(task_id)
         if info is None:
@@ -310,7 +311,7 @@ class TaskWorkspaceManager:
         Restore workspace from a snapshot: stop current container, recreate
         from the committed image, keep the same named volume.
         """
-        _validate_task_id(task_id)
+        validate_task_id(task_id)
         _validate_checkpoint_name(checkpoint_name)
         info = await self.get(task_id)
         if info is None:
@@ -327,7 +328,7 @@ class TaskWorkspaceManager:
 
     async def destroy(self, task_id: str) -> None:
         """Stop container, remove volume, delete Redis keys.  Best-effort."""
-        _validate_task_id(task_id)
+        validate_task_id(task_id)
         info = await self.get(task_id)
         if info is None:
             return
@@ -344,7 +345,7 @@ class TaskWorkspaceManager:
         handle over the existing xterm WebSocket infrastructure — no new PTY
         layer is created, the existing terminal WS plumbing is reused.
         """
-        _validate_task_id(task_id)
+        validate_task_id(task_id)
         info = await self.get(task_id)
         if info is None:
             raise ValueError(f"No workspace for task {task_id}")
@@ -610,13 +611,6 @@ def validate_exec_command(cmd: list[str]) -> bool:
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
-
-
-def _validate_task_id(task_id: str) -> None:
-    import re
-
-    if not re.match(r"^[0-9a-zA-Z_\-]{1,128}$", task_id):
-        raise ValueError(f"Invalid task_id {task_id!r}")
 
 
 def _validate_checkpoint_name(name: str) -> None:

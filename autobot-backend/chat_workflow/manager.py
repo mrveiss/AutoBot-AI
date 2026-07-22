@@ -23,6 +23,14 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
+from chat_workflow.tool_call_grammar import (
+    TOOL_CALL_BARE_CLOSE_RE,
+    TOOL_CALL_CLOSE_RE,
+    TOOL_CALL_COMPLETE_RE,
+    TOOL_CALL_OPEN_RE,
+    TOOL_CALL_OPENING_RE,
+    strip_unparsed_tool_tags,
+)
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
@@ -55,26 +63,16 @@ _TERMINAL_MESSAGE_TYPES: FrozenSet[str] = frozenset({"terminal_command", "termin
 # Issue #380: Module-level frozenset for block content types
 _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
 
-# Issue #380: Pre-compiled regex for tool call normalization
-_TOOL_CALL_OPEN_RE = re.compile(r"<TOOL_\s+CALL")
-_TOOL_CALL_CLOSE_RE = re.compile(r"</TOOL_\s+CALL>")
-
-# Issue #727: Pattern to detect completed tool call tags (for hallucination prevention)
-# Matches </tool_call>, </TOOL_CALL>, and </TOOL_ CALL> (underscore variant).
-# #11545: the trailing `>` is optional — some models omit it (`</TOOL_CALL` +
-# newline); `\b` keeps `</tool_callable` from matching.
-_TOOL_CALL_COMPLETE_RE = re.compile(r"</\s*tool_?\s*call\b\s*>?", re.IGNORECASE)
-
-# #11552: chat models frequently TRUNCATE the close to a bare `</TOOL` (dropping
-# `_CALL`) and then hallucinate a success line. Detecting that stops the stream so
-# the fabricated prose is never shown — but a bare `</tool…` also appears in
-# legitimate prose (HTML/XML/JSX talk), and this detector scans the WHOLE response
-# with no structural anchor. So the bare close only counts as a completed tool
-# call when a well-formed opening `<TOOL_CALL …>` is already in the buffer (the
-# only way a real truncated call can occur). `\b` after `tool` keeps `</tool_call`
-# (handled above) and `</toolbox` from matching here.
-_TOOL_CALL_BARE_CLOSE_RE = re.compile(r"</\s*tool\b", re.IGNORECASE)
-_TOOL_CALL_OPENING_RE = re.compile(r"<\s*tool_?\s*call\b[^>]*>", re.IGNORECASE)
+# Issue #11693: the tool-call grammar (normalization, completion detector,
+# truncated-close tolerance for #11545/#11552) is now the single canonical
+# source of truth in tool_call_grammar.py, shared with
+# chat_workflow/tool_handler.py. Module-level aliases kept for
+# backwards-compatible imports (tests import these names directly).
+_TOOL_CALL_OPEN_RE = TOOL_CALL_OPEN_RE
+_TOOL_CALL_CLOSE_RE = TOOL_CALL_CLOSE_RE
+_TOOL_CALL_COMPLETE_RE = TOOL_CALL_COMPLETE_RE
+_TOOL_CALL_BARE_CLOSE_RE = TOOL_CALL_BARE_CLOSE_RE
+_TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
 
 # Issue #716: Patterns for internal prompts that should not be shown to users
 # These are continuation instructions that LLM sometimes echoes back
@@ -2505,6 +2503,11 @@ before summarizing.
         Run a single loop iteration. Yields (llm_response, should_continue) at end.
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 12 to 4.
+        Issue #11612: Sets the lightweight_mode_used ContextVar here — the single
+        seam both the legacy continuation loop (_run_llm_iterations) and the
+        LangGraph path (graph.py::_run_llm_iteration) call through — instead of
+        in the outer _execute_llm_continuation_loop wrapper, which the graph
+        path bypasses entirely (causing the cost badge to always read False).
         """
         logger.info(
             "[ChatWorkflowManager] Continuation iteration %d/%d",
@@ -2512,16 +2515,23 @@ before summarizing.
             self.MAX_CONTINUATION_ITERATIONS,
         )
 
-        llm_response = None
-        should_continue = False
+        # MVA-1993 / #11216 / #11612: store lightweight_mode_used in a task-local
+        # ContextVar (not on the shared singleton) for the response-metadata badge.
+        _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
+        try:
+            llm_response = None
+            should_continue = False
 
-        async for item in self._run_continuation_iteration(http_client, current_prompt, iteration, ctx):
-            if isinstance(item, tuple) and len(item) == 3:
-                llm_response, _, should_continue = item
-            else:
-                yield item
+            async for item in self._run_continuation_iteration(http_client, current_prompt, iteration, ctx):
+                if isinstance(item, tuple) and len(item) == 3:
+                    llm_response, _, should_continue = item
+                else:
+                    yield item
 
-        yield (llm_response, should_continue)
+            yield (llm_response, should_continue)
+        finally:
+            # MVA-1993 / #11216: restore the caller's task-local value (token reset).
+            _current_lightweight_mode.reset(_lw_token)
 
     def _log_iteration_start(self, ctx: LLMIterationContext) -> None:
         """Issue #665: Extracted from _run_llm_iterations to reduce function length.
@@ -2666,15 +2676,13 @@ before summarizing.
         Execute the multi-step LLM continuation loop.
 
         Issue #375: Uses LLMIterationContext to reduce parameter count from 10 to 1.
-        Issue MVA-1993: Sets lightweight_mode_used flag for response metadata.
+        Issue MVA-1993 / #11612: lightweight_mode_used ContextVar is now set inside
+        _run_continuation_loop_iteration (the shared seam both this loop and the
+        LangGraph path call through), not here — see that method's docstring.
         """
         import aiohttp
 
         from autobot_shared.http_client import get_http_client
-
-        # MVA-1993 / #11216: store lightweight_mode_used in a task-local ContextVar
-        # (not on the shared singleton) for the response-metadata badge.
-        _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
 
         try:
             http_client = get_http_client()
@@ -2690,10 +2698,6 @@ before summarizing.
             error_msg = self._create_llm_error_message(error, ctx.workflow_messages)
             yield error_msg
             yield ([], [], error_msg)
-
-        finally:
-            # MVA-1993 / #11216: restore the caller's task-local value (token reset).
-            _current_lightweight_mode.reset(_lw_token)
 
     async def _persist_workflow_messages(
         self,
@@ -2721,6 +2725,11 @@ before summarizing.
                     continue
 
                 sender = "system" if wf_msg.type == "terminal_output" else "assistant"
+                # #11545 (cosmetic): the persisted chat-history entry is the
+                # final user-visible reply — strip any <TOOL_CALL ...> tag
+                # that never matched the full grammar (genuinely unparsed)
+                # so raw markup never renders. Guarded no-op otherwise.
+                content = strip_unparsed_tool_tags(wf_msg.content)
                 # Issue #4448: Extract KB-only citations into top-level sources list.
                 # metadata.citations includes the always-appended llm_training entry —
                 # filter it out so sources contains only knowledge-base references.
@@ -2738,7 +2747,7 @@ before summarizing.
                 batch.append(
                     chat_mgr._build_message_dict(
                         sender,
-                        wf_msg.content,
+                        content,
                         wf_msg.type,
                         wf_msg.metadata,
                         None,

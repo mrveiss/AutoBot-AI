@@ -36,6 +36,18 @@ def _scoped_tenant(tenant_id: str, op: str) -> str | None:
     return tid
 
 
+def _task_type_helpers():
+    """Lazily import the shared normalize/allowlist helpers (GH#11534).
+
+    Imported at call time (not module load) so the judge never pulls the ``agents``
+    package init into its own import — keeping learner + judge in agreement on the
+    task_type vocabulary without risking an import cycle.
+    """
+    from agents.task_pattern_learner import enforce_key_cap, normalize_task_type
+
+    return normalize_task_type, enforce_key_cap
+
+
 @dataclass
 class TaskOutcomeRecord:
     """Record of a single task outcome evaluation."""
@@ -123,6 +135,11 @@ class TaskOutcomeJudge(BaseLLMJudge):
             return
         try:
             redis = await self._get_redis()
+            # GH#11534: normalize + allowlist so the judge and TaskPatternLearner
+            # agree on the key, then cap distinct task_type keys per tenant.
+            normalize_task_type, enforce_key_cap = _task_type_helpers()
+            task_type = normalize_task_type(task_type)
+            task_type = await enforce_key_cap(redis, f"task:outcomes:{tid}:", task_type)
             key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=task_type)
             record = TaskOutcomeRecord(
                 task_type=task_type,
@@ -154,7 +171,9 @@ class TaskOutcomeJudge(BaseLLMJudge):
             return []
         try:
             redis = await self._get_redis()
-            key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=task_type)
+            # GH#11534: normalize so reads resolve the same key the write path used.
+            normalize_task_type, _ = _task_type_helpers()
+            key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=normalize_task_type(task_type))
             raw = await redis.lrange(key, 0, limit - 1)
             return [TaskOutcomeRecord(**json.loads(r)) for r in raw]
         except Exception as exc:
@@ -168,7 +187,9 @@ class TaskOutcomeJudge(BaseLLMJudge):
             return
         try:
             redis = await self._get_redis()
-            key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=task_type)
+            # GH#11534: normalize so the cleared key matches the write path's key.
+            normalize_task_type, _ = _task_type_helpers()
+            key = REDIS_OUTCOMES_KEY.format(tenant_id=tid, task_type=normalize_task_type(task_type))
             await redis.delete(key)
         except Exception as exc:
             logger.warning("Failed to clear task outcomes: %s", exc)
