@@ -19,7 +19,7 @@ import type {
   NodeEvent,
   NodeEventFilters,
   CertificateInfo,
-  UpdateInfo,
+  NodeUpdateCheckResponse,
   ConnectionTestRequest,
   ConnectionTestResult,
   Deployment,
@@ -313,9 +313,12 @@ export function useSlmApi() {
   }
 
   // Updates
-  async function checkUpdates(nodeId: string): Promise<UpdateInfo[]> {
-    const response = await client.get<{ updates: UpdateInfo[] }>(`/nodes/${nodeId}/updates`)
-    return response.data.updates
+  // Returns the full check response (#11964): code_update_available/
+  // code_status mirror the same node.code_status field the fleet
+  // update-summary badge reads, so callers can reconcile the two.
+  async function checkUpdates(nodeId: string): Promise<NodeUpdateCheckResponse> {
+    const response = await client.get<NodeUpdateCheckResponse>(`/nodes/${nodeId}/updates`)
+    return response.data
   }
 
   async function applyUpdates(

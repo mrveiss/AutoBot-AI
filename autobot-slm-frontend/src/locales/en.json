@@ -805,6 +805,7 @@
       "checking": "Checking...",
       "clear": "Clear",
       "clickCheckForUpdatesToScan": "Click \"Check for Updates\" to scan",
+      "codeUpdateAvailable": "Code update available",
       "duration": "Duration",
       "eventPlural": "event{plural}",
       "eventsWillAppearHereAsThey": "Events will appear here as they occur.",
