@@ -53,7 +53,21 @@ SELF_UPDATE_DETACH_UNIT_PREFIX = os.getenv("SLM_SELF_UPDATE_UNIT_PREFIX", "autob
 # passed explicitly. Only a narrow allowlist (never secrets) is forwarded;
 # ansible receives its stored secrets via `-e @file` (#11735 pattern), not env.
 SYSTEMD_RUN_ENV_ALLOWLIST_EXACT = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "SSH_AUTH_SOCK")
-SYSTEMD_RUN_ENV_ALLOWLIST_PREFIXES = ("ANSIBLE_",)
+
+# Invariant: no ANSIBLE_* var may carry a secret (e.g. ANSIBLE_VAULT_PASSWORD)
+# through this allowlist — secrets ride via `-e @file` (#11735), never env.
+# Enumerated exactly (not a prefix match) to the keys this module itself sets
+# — _build_ansible_env's fixed set plus ANSIBLE_INVENTORY (execute_playbook)
+# — so a caller-supplied or inherited ANSIBLE_VAULT_PASSWORD/-style var can
+# never slip through just by starting with "ANSIBLE_".
+ANSIBLE_ENV_ALLOWLIST_EXACT = (
+    "ANSIBLE_FORCE_COLOR",
+    "ANSIBLE_NOCOLOR",
+    "ANSIBLE_HOST_KEY_CHECKING",
+    "ANSIBLE_SSH_RETRIES",
+    "ANSIBLE_LOCAL_TEMP",
+    "ANSIBLE_INVENTORY",
+)
 
 # File-backed output for detached self-update runs (#11492). A pipe's read
 # end is owned by this backend process, so once the Play 1 restart task kills
@@ -547,6 +561,9 @@ class PlaybookExecutor:
         try:
             SELF_UPDATE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
             SELF_UPDATE_LOG_PATH.write_text("", encoding="utf-8")
+            # Ansible output can contain sensitive paths/values — 0600, not
+            # the world-readable default umask (#11492 hardening).
+            os.chmod(SELF_UPDATE_LOG_PATH, 0o600)
             return SELF_UPDATE_LOG_PATH
         except OSError as exc:
             logger.error("Could not prepare self-update log file %s: %s", SELF_UPDATE_LOG_PATH, exc)
@@ -554,26 +571,32 @@ class PlaybookExecutor:
 
     @staticmethod
     def _systemd_run_env_args(env: Dict[str, str]) -> List[str]:
-        """Build explicit --setenv=NAME=VALUE args for the detached scope (#11492)."""
-        args = []
-        for key, value in env.items():
-            if key in SYSTEMD_RUN_ENV_ALLOWLIST_EXACT or key.startswith(SYSTEMD_RUN_ENV_ALLOWLIST_PREFIXES):
-                args.append(f"--setenv={key}={value}")
-        return args
+        """Build explicit --setenv=NAME=VALUE args for the detached scope (#11492).
+
+        Allowlist is a fixed enumeration (SYSTEMD_RUN_ENV_ALLOWLIST_EXACT +
+        ANSIBLE_ENV_ALLOWLIST_EXACT), never a prefix match — a caller-supplied
+        or inherited ANSIBLE_VAULT_PASSWORD/-style var must never forward just
+        by starting with "ANSIBLE_".
+        """
+        allowed = SYSTEMD_RUN_ENV_ALLOWLIST_EXACT + ANSIBLE_ENV_ALLOWLIST_EXACT
+        return [f"--setenv={key}={env[key]}" for key in allowed if key in env]
 
     def _wrap_with_systemd_scope(self, cmd: List[str], env: Dict[str, str], log_path: Path) -> List[str]:
         """Wrap an ansible-playbook cmd to run detached, file-backed (#11492).
 
         Two layers:
-          - ``sudo systemd-run --scope --collect``: a separate transient scope
-            = a separate cgroup, so ``systemctl restart autobot-slm-backend``
-            (KillMode=control-group) no longer SIGTERMs this run. ``sudo``
-            mirrors the existing privilege pattern already used for service
-            restarts (_restart_slm_service) — the passwordless-sudo sudoers
-            rule this service already relies on. ``--uid``/``--gid`` drop back
-            to the caller's own identity so ansible-playbook still runs as the
-            SLM service user, not root; ``--working-directory`` replaces the
-            ``cwd=`` kwarg systemd-run does not inherit.
+          - ``sudo -n systemd-run --scope --collect``: a separate transient
+            scope = a separate cgroup, so ``systemctl restart
+            autobot-slm-backend`` (KillMode=control-group) no longer SIGTERMs
+            this run. ``sudo`` mirrors the existing privilege pattern already
+            used for service restarts (_restart_slm_service) — the
+            passwordless-sudo sudoers rule this service already relies on;
+            ``-n`` (non-interactive) fast-fails instead of hanging on a
+            password prompt if that sudoers rule is ever misconfigured.
+            ``--uid``/``--gid`` drop back to the caller's own identity so
+            ansible-playbook still runs as the SLM service user, not root;
+            ``--working-directory`` replaces the ``cwd=`` kwarg systemd-run
+            does not inherit.
           - ``sh -c 'exec "$0" "$@" >> <log> 2>&1'``: reopens the FINAL exec'd
             process's (ansible-playbook, not this shell) stdout/stderr onto
             the log file before replacing the shell image, so its output is
@@ -587,6 +610,7 @@ class PlaybookExecutor:
         file_backed_cmd = ["/bin/sh", "-c", redirect_script, *cmd]
         return [
             "sudo",
+            "-n",
             "systemd-run",
             "--scope",
             "--collect",

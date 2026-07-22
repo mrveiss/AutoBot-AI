@@ -130,6 +130,9 @@ def test_prepare_self_update_log_file_creates_and_truncates(tmp_path):
 
     assert result == log_path
     assert log_path.read_text(encoding="utf-8") == ""
+    # Ansible output can contain sensitive paths/values — 0600, not the
+    # world-readable default umask (#11492 hardening).
+    assert oct(log_path.stat().st_mode & 0o777) == "0o600"
 
 
 def test_prepare_self_update_log_file_returns_none_on_failure(tmp_path):
@@ -158,7 +161,8 @@ def test_wrap_with_systemd_scope_builds_expected_command(tmp_path):
     wrapped = ex._wrap_with_systemd_scope(cmd, env, log_path)
 
     assert wrapped[0] == "sudo"
-    assert wrapped[1] == "systemd-run"
+    assert wrapped[1] == "-n"  # non-interactive: fast-fail, never hang on a password prompt
+    assert wrapped[2] == "systemd-run"
     assert "--scope" in wrapped
     assert "--collect" in wrapped
     assert any(a.startswith("--unit=autobot-selfupdate-") for a in wrapped)
@@ -195,6 +199,23 @@ def test_systemd_run_env_args_allowlist_excludes_secrets():
     assert not any("POSTGRES_PASSWORD" in a for a in args)
 
 
+def test_systemd_run_env_args_ansible_allowlist_is_enumerated_not_prefix():
+    """An ANSIBLE_*-prefixed var outside the enumerated set (e.g. a vault
+    password) must never forward just by matching the "ANSIBLE_" prefix
+    (#11492 hardening — the allowlist is a fixed enumeration, not a prefix
+    match)."""
+    env = {
+        "ANSIBLE_FORCE_COLOR": "0",  # enumerated -> forwarded
+        "ANSIBLE_VAULT_PASSWORD": "hunter2",  # NOT enumerated -> must never forward
+        "ANSIBLE_UNKNOWN_FUTURE_VAR": "whatever",  # NOT enumerated -> must never forward
+    }
+    args = _pe.PlaybookExecutor._systemd_run_env_args(env)
+
+    assert "--setenv=ANSIBLE_FORCE_COLOR=0" in args
+    assert not any("ANSIBLE_VAULT_PASSWORD" in a for a in args)
+    assert not any("ANSIBLE_UNKNOWN_FUTURE_VAR" in a for a in args)
+
+
 # ---------------------------------------------------------------------------
 # _run_subprocess: wrap+file-backed vs fallback
 # ---------------------------------------------------------------------------
@@ -222,7 +243,8 @@ async def test_run_subprocess_wraps_file_backed_when_systemd_available(tmp_path)
     assert result["returncode"] == 0
     argv = captured["args"]
     assert argv[0] == "sudo"
-    assert argv[1] == "systemd-run"
+    assert argv[1] == "-n"
+    assert argv[2] == "systemd-run"
     assert "--scope" in argv
     assert "--collect" in argv
     tail = list(argv[argv.index("--") + 1 :])
@@ -234,8 +256,9 @@ async def test_run_subprocess_wraps_file_backed_when_systemd_available(tmp_path)
     # BrokenPipe-crash the detached process (#11492 crux).
     assert captured["kwargs"]["stdout"] == asyncio.subprocess.DEVNULL
     assert captured["kwargs"]["stderr"] == asyncio.subprocess.DEVNULL
-    # The log file was truncated fresh for this run.
+    # The log file was truncated fresh for this run and locked to 0600.
     assert log_path.read_text(encoding="utf-8") == ""
+    assert oct(log_path.stat().st_mode & 0o777) == "0o600"
 
 
 @pytest.mark.asyncio
