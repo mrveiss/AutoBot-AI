@@ -69,10 +69,15 @@
       when: deploy_role == 'ai-stack'
       tags: ['ai-stack']
 
+    # celery/scheduler (#12083): role_registry.py's celery/scheduler roles share
+    # the SAME source (autobot-backend/) and the SAME ansible role — the backend
+    # role's tasks (ansible/roles/backend/tasks/main.yml) already deploy the
+    # autobot-celery + autobot-celery-beat systemd units alongside the backend
+    # service, so all three role names correctly converge on this one include.
     - name: "Apply Backend Role"
       include_role:
         name: backend
-      when: deploy_role == 'backend'
+      when: deploy_role in ['backend', 'celery', 'scheduler']
       tags: ['backend']
 
     - name: "Apply Browser Role"
@@ -81,10 +86,12 @@
       when: deploy_role == 'browser'
       tags: ['browser']
 
+    # autobot-llm-cpu/autobot-llm-gpu (#12083): role_registry.py names these two
+    # separate LLM node roles, both served by the one generic llm ansible role.
     - name: "Apply LLM Role"
       include_role:
         name: llm
-      when: deploy_role == 'llm'
+      when: deploy_role in ['llm', 'autobot-llm-cpu', 'autobot-llm-gpu']
       tags: ['llm']
 
     - name: "Apply VNC Role"
@@ -99,10 +106,12 @@
       when: deploy_role == 'monitoring'
       tags: ['monitoring']
 
+    # slm-database (#12083): role_registry.py's slm-database role (SLM's own
+    # PostgreSQL) is served by the same generic postgresql ansible role.
     - name: "Apply PostgreSQL Role"
       include_role:
         name: postgresql
-      when: deploy_role == 'postgresql'
+      when: deploy_role in ['postgresql', 'slm-database']
       tags: ['postgresql']
 
     - name: "Apply SLM Manager Role"

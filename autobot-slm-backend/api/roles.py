@@ -376,16 +376,39 @@ async def migrate_role(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Role '{role_name}' has no ansible_playbook configured",
         )
-    return await _run_role_migration(role, migrate_req.target_node_id)  # codeql[py/stack-trace-exposure]
+    result = await run_role_full_procedure(role, migrate_req.target_node_id)  # codeql[py/stack-trace-exposure]
+    if result.get("error") == "playbook_not_found":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Ansible playbook not found",
+        )
+    return result
 
 
-async def _run_role_migration(role: Role, target_node_id: str) -> dict:
-    """Execute playbook migration for a role on a target node."""
+async def run_role_full_procedure(role: Role, target_node_id: str) -> dict:
+    """Run *role*'s COMPLETE ansible procedure against *target_node_id* (#12083).
+
+    Canonical entrypoint for a role's full deploy — code + deps + env/systemd
+    render + build + schema migrate + restart + health — via its ansible
+    playbook. Shared by BOTH the interactive per-role Migrate/Redeploy endpoint
+    (this module) and update-all's co-located managed-role pass
+    (api/code_sync.py _resolve_colocated_managed_services) so the two paths can
+    never drift apart (#11820 design: "per-role update runs ALL procedures").
+
+    Never raises: a missing playbook surfaces as success=False with
+    error="playbook_not_found" (or error="no_playbook" when the role has none
+    configured) so callers choose their own handling — an HTTP 422 for the
+    interactive endpoint above, or a logged skip for update-all's fail-safe
+    per-role loop.
+    """
+    if not role.ansible_playbook:
+        return _role_procedure_result(role, target_node_id, success=False, error="no_playbook")
+
     from services.playbook_executor import PlaybookExecutor
 
     executor = PlaybookExecutor()
     logger.info(
-        "Migrating role %s to node %s via %s",
+        "Running full role procedure: %s -> %s via %s",
         role.name,
         target_node_id,
         role.ansible_playbook,
@@ -401,25 +424,44 @@ async def _run_role_migration(role: Role, target_node_id: str) -> dict:
         )
     except FileNotFoundError as exc:
         logger.exception("Playbook not found: %s", role.ansible_playbook)
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Ansible playbook not found",
-        ) from exc
+        return _role_procedure_result(role, target_node_id, success=False, error="playbook_not_found", output=str(exc))
 
     logger.info(
-        "Migration of role %s to %s: success=%s",
+        "Full role procedure %s -> %s: success=%s",
         role.name,
         target_node_id,
         result["success"],
     )
-    return {
-        "success": result["success"],
+    return _role_procedure_result(
+        role,
+        target_node_id,
+        success=result["success"],
+        output=result["output"],
+        returncode=result["returncode"],
+    )
+
+
+def _role_procedure_result(
+    role: Role,
+    target_node_id: str,
+    *,
+    success: bool,
+    error: str | None = None,
+    output: str = "",
+    returncode: int = -1,
+) -> dict:
+    """Build the standard run_role_full_procedure() return shape."""
+    result = {
+        "success": success,
         "role": role.name,
         "target_node_id": target_node_id,
         "playbook": role.ansible_playbook,
-        "output": result["output"],
-        "returncode": result["returncode"],
+        "output": output,
+        "returncode": returncode,
     }
+    if error:
+        result["error"] = error
+    return result
 
 
 # =========================================================================

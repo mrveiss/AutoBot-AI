@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""_run_role_migration must pass role_name, not deploy_role (#11782).
+"""run_role_full_procedure must pass role_name, not deploy_role (#11782, #12083).
 
 ansible/playbooks/deploy_role.yml hard-fails ("role_name parameter is
 required") when role_name is undefined and derives deploy_role from it, so
@@ -73,12 +73,12 @@ def test_migration_passes_role_name_not_deploy_role():
     fake_exec = MagicMock()
     fake_exec.execute_playbook = AsyncMock(return_value={"success": True, "output": "ok", "returncode": 0})
 
-    # _run_role_migration does a local `from services.playbook_executor import
+    # run_role_full_procedure does a local `from services.playbook_executor import
     # PlaybookExecutor`, so install a stub module exposing it for the call.
     stub_pe = MagicMock()
     stub_pe.PlaybookExecutor = MagicMock(return_value=fake_exec)
     with patch.dict(sys.modules, {"services.playbook_executor": stub_pe}):
-        _run(_roles_mod._run_role_migration(role, "00-SLM-Manager"))
+        _run(_roles_mod.run_role_full_procedure(role, "00-SLM-Manager"))
 
     kwargs = fake_exec.execute_playbook.call_args.kwargs
     assert kwargs["extra_vars"] == {"role_name": "tts-worker"}

@@ -168,7 +168,11 @@ def test_scheduler_role_present():
     assert role["systemd_service"] == "autobot-celery-beat"
     assert role["required"] is True
     assert role["auto_restart"] is True
-    assert role["ansible_playbook"] == "deploy-backend.yml"
+    # #12083: "deploy-backend.yml" never existed under ansible/ (FileNotFoundError
+    # on every Migrate); scheduler now shares the generic role dispatcher
+    # (playbooks/deploy_role.yml), which include_role: backend for
+    # deploy_role in ['backend', 'celery', 'scheduler'].
+    assert role["ansible_playbook"] == "playbooks/deploy_role.yml"
 
 
 def test_scheduler_in_backend_ansible_group():

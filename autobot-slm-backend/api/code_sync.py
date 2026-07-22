@@ -37,7 +37,7 @@ from models.database import CodeSource, CodeStatus
 from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
-from models.database import Node, NodeRole, Setting, UpdateSchedule
+from models.database import Node, NodeRole, RoleStatus, Setting, UpdateSchedule
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -4196,16 +4196,6 @@ async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
         return None
 
 
-# Managed application services that run co-located on the SLM-Manager node in a
-# single-box install. update-all's slm_self_update stage covers only the SLM
-# control plane and the fleet stage skips the self-node, so these were updated by
-# NEITHER stage whenever the SLM commit was already current — the one-click update
-# reported success while autobot-backend/-frontend stayed stale (#11605). They are
-# resolved via the SAME per-component drift/resolve path as the manual
-# "Resync from Source" button (rsync + _run_post_sync_steps).
-_COLOCATED_MANAGED_COMPONENTS: Tuple[str, ...] = ("autobot-backend", "autobot-frontend")
-
-
 async def _component_has_file_drift(component: str) -> bool:
     """Return True when *component* is deployed on this host AND drifts from code_source.
 
@@ -4227,53 +4217,107 @@ async def _component_has_file_drift(component: str) -> bool:
     return len(report.get("drifted_files", [])) > 0
 
 
-async def _resolve_colocated_managed_services(stage: UpdateAllStage) -> None:
-    """Resolve co-located managed services on the SLM-Manager node (#11605).
+async def _get_colocated_managed_role_names(node_id: str) -> set:
+    """Return managed role names assigned-or-detected on *node_id* (#12083).
 
-    Runs the per-component drift/resolve path (rsync + _run_post_sync_steps, which
-    handles pip/build/migrate/restart + health + rollback) for each co-located
-    managed component that (a) is actually deployed on this host and (b) has file
-    drift.
+    Replaces the hardcoded _COLOCATED_MANAGED_COMPONENTS 2-tuple with a
+    data-driven set sourced from NodeRole rows (ACTIVE status) UNION the
+    Node.roles JSON column — the same two sources api/roles.py's
+    _get_active_role_names uses, since Node.roles is how a self-managed/
+    co-located node's local slm-agent reports detected roles without a
+    per-node heartbeat row for every assignment.
 
-    #11611: autobot_shared-first ordering is enforced HERE explicitly — this loop
-    is a THIRD deploy site (alongside resolve_drift and _run_component_resolve_job).
-    _run_post_sync_steps only recreates the autobot_shared SYMLINK; it does NOT
-    sync the shared tree CONTENT, so without an explicit _ensure_autobot_shared_synced
-    call this path could rsync + restart autobot-backend onto a STALE autobot_shared
-    and crash-loop it (the exact #11611 failure, on the one-click co-located update).
-    So we call _ensure_autobot_shared_synced BEFORE the component rsync and skip the
-    component (fail-safe, no restart) when the shared tree cannot be synced.
-
-    Per-component failures are logged and do not abort the pipeline.
+    Control-plane roles (slm-backend/slm-frontend/slm-database/slm-monitoring)
+    are excluded — already brought current by slm_self_update's own Ansible
+    run. "docker"/"autobot_shared" are excluded too: docker's only playbook is
+    the deprecated legacy multi-VM compose flow, and autobot_shared has no
+    standalone role (synced explicitly via _ensure_autobot_shared_synced).
     """
-    for component in _COLOCATED_MANAGED_COMPONENTS:
-        if component not in ALLOWED_COMPONENTS:
+    from services.database import db_service
+    from services.role_registry import CONTROL_PLANE_ROLE_NAMES
+
+    names: set = set()
+    async with db_service.session() as db:
+        nr_result = await db.execute(
+            select(NodeRole.role_name).where(
+                NodeRole.node_id == node_id,
+                NodeRole.status == RoleStatus.ACTIVE.value,
+            )
+        )
+        names.update(nr_result.scalars().all())
+
+        node_result = await db.execute(select(Node.roles).where(Node.node_id == node_id))
+        node_roles = node_result.scalar_one_or_none()
+        if node_roles:
+            names.update(node_roles)
+
+    return names - CONTROL_PLANE_ROLE_NAMES - {"docker", "autobot_shared"}
+
+
+async def _load_colocated_roles(role_names: set) -> list:
+    """Fetch Role rows for *role_names*, skipping any not in the registry (#12083)."""
+    from services.database import db_service
+    from services.role_registry import get_role
+
+    roles = []
+    async with db_service.session() as db:
+        for name in sorted(role_names):
+            role = await get_role(db, name)
+            if role is not None:
+                roles.append(role)
+    return roles
+
+
+async def _run_colocated_role_procedures(stage: UpdateAllStage, roles: list, slm_node_id: str) -> None:
+    """Run the full ansible procedure for each role (#12083); per-role failures are non-fatal."""
+    from api.roles import run_role_full_procedure
+
+    for role in roles:
+        if not role.ansible_playbook:
+            _stage_log(stage, f"co-located {role.name}: no ansible_playbook configured — skipped (#12083)")
             continue
         try:
-            if not await _component_has_file_drift(component):
-                _stage_log(stage, f"co-located {component}: no drift — skipped (#11605)")
-                continue
-            _stage_log(stage, f"co-located {component}: drift detected — resolving (#11605)")
-            # #11611: sync autobot_shared BEFORE this component's rsync + restart so
-            # a newly-added `from autobot_shared.X` import resolves at startup. Skip
-            # the component (no restart) if the shared tree cannot be synced.
-            shared_ok, shared_msg = await _ensure_autobot_shared_synced(component)
-            if not shared_ok:
-                _stage_log(stage, f"co-located {component}: {shared_msg} — skipped (#11611)")
-                continue
-            source_dir = get_default_source_dir(component)
-            deployed_dir = get_default_deployed_dir(component)
-            source_root = str(Path(source_dir).parent)
-            excludes_map = {comp: excl for comp, excl in _SLM_COMPONENTS}
-            excludes = excludes_map.get(component, [])
-            ok, msg = await _rsync_component_local(source_root, component, excludes)
-            if not ok:
-                _stage_log(stage, f"co-located {component}: rsync failed: {msg} (#11605)")
-                continue
-            _, _post_steps, pip_ok = await _run_post_sync_steps(component, source_dir, deployed_dir)
-            _stage_log(stage, f"co-located {component}: resolved (ok={pip_ok}) (#11605)")
+            result = await run_role_full_procedure(role, slm_node_id)
+            outcome = "ok" if result.get("success") else f"FAILED ({result.get('error', 'see output')})"
+            _stage_log(stage, f"co-located {role.name}: {outcome} via {role.ansible_playbook} (#12083)")
         except Exception as exc:
-            _stage_log(stage, f"co-located {component}: resolve error: {exc} (#11605)")
+            _stage_log(stage, f"co-located {role.name}: resolve error: {exc} (#12083)")
+
+
+async def _resolve_colocated_managed_services(stage: UpdateAllStage, slm_node_id: str) -> None:
+    """Run the FULL ansible role procedure for every co-located managed role (#12083).
+
+    Replaces the old code-rsync-only resolve (#11605): each managed role
+    assigned-or-detected on the SLM's own node now gets its COMPLETE ansible
+    procedure — code + deps + env/systemd render + build + schema migrate +
+    restart + health — via run_role_full_procedure, the SAME entrypoint the
+    per-role Migrate button (api/roles.py) uses, so the two paths can never
+    drift apart. This is the fast path taken when the SLM control plane is
+    already at the target commit (no Ansible self-update fires), so nothing
+    else would otherwise apply config-only changes (env single_company toggle,
+    systemd drop-in removal, internal-key unify, frontend rebuild) for these
+    roles — the #11605 rsync-only resolve never touched them either.
+
+    #11611: autobot_shared is synced ahead of every role here (belt-and-
+    suspenders — the backend Ansible role also re-syncs it internally, but
+    ai-stack/slm-agent symlink to this same standalone dir rather than
+    re-syncing it themselves). A failed sync aborts before any role procedure
+    runs so nothing restarts onto a stale shared tree.
+
+    Per-role failures are logged and do NOT abort the pipeline (fail-safe).
+    """
+    shared_ok, shared_msg = await _ensure_autobot_shared_synced("autobot-backend")
+    if not shared_ok:
+        _stage_log(stage, f"co-located roles: {shared_msg} — aborting role procedures (#11611)")
+        return
+
+    role_names = await _get_colocated_managed_role_names(slm_node_id)
+    roles = await _load_colocated_roles(role_names)
+    if not roles:
+        _stage_log(stage, "co-located roles: none assigned/detected on this node (#12083)")
+        return
+
+    await _run_colocated_role_procedures(stage, roles, slm_node_id)
 
 
 async def _run_slm_stage(
@@ -4313,13 +4357,15 @@ async def _run_slm_stage(
             stage.status = _StageStatus.CURRENT
             stage.sha = _short_sha(remote_commit)
             stage.message = f"SLM already at {_short_sha(remote_commit)} — no restart needed"
-            # #11605: the SLM control plane is current, so no Ansible self-update
-            # fires — but co-located managed services (autobot-backend/-frontend)
-            # can still carry file drift that neither this stage nor the self-node-
-            # skipping fleet stage would otherwise resolve. Resolve them here via
-            # the per-component drift/resolve path so the one-click update actually
-            # brings the whole co-located box current.
-            await _resolve_colocated_managed_services(stage)
+            # #11605/#12083: the SLM control plane is current, so no Ansible
+            # self-update fires — but co-located managed roles (backend,
+            # celery, scheduler, frontend, ai-stack, slm-agent, ...) can still
+            # need config/build changes (env render, systemd drop-ins, npm
+            # build) that neither this stage nor the self-node-skipping fleet
+            # stage would otherwise apply. Run each role's FULL ansible
+            # procedure here so the one-click update actually brings the whole
+            # co-located box current.
+            await _resolve_colocated_managed_services(stage, slm_node.node_id)
             stage.completed_at = _now_iso()
             _stage_log(stage, stage.message)
             return False
