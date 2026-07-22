@@ -2691,6 +2691,41 @@ before summarizing.
             # MVA-1993 / #11216: restore the caller's task-local value (token reset).
             _current_lightweight_mode.reset(_lw_token)
 
+    async def _run_llm_iteration_plan_only(
+        self,
+        http_client,
+        current_prompt: str,
+        iteration: int,
+        ctx: LLMIterationContext,
+    ):
+        """Plan-only LLM iteration for the flag-gated approval-interrupt (GH#11202).
+
+        Unlike ``_run_continuation_loop_iteration``, this NEVER dispatches the
+        parsed tool calls — it only calls the LLM and parses its response via
+        ``_collect_and_validate_llm_response`` (the same seam, minus dispatch).
+        The caller (the graph's ``execute_tools`` node) is the sole dispatch
+        point, so the approval interrupt can pause before any side effect.
+
+        Yields WorkflowMessages, then ``(llm_response, tool_calls, should_stop)``
+        where ``tool_calls`` are the raw pre-execution ``{"name", "params"}``
+        dicts (never execution summaries).
+        """
+        _lw_token = _current_lightweight_mode.set(ctx.context.get("lightweight_mode_used", False))
+        try:
+            llm_response = None
+            tool_calls = None
+            should_stop = False
+
+            async for item in self._collect_and_validate_llm_response(http_client, current_prompt, iteration, ctx):
+                if isinstance(item, tuple) and len(item) == 3:
+                    llm_response, tool_calls, should_stop = item
+                else:
+                    yield item
+
+            yield (llm_response, tool_calls, should_stop)
+        finally:
+            _current_lightweight_mode.reset(_lw_token)
+
     def _log_iteration_start(self, ctx: LLMIterationContext) -> None:
         """Issue #665: Extracted from _run_llm_iterations to reduce function length.
 
