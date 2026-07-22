@@ -1,5 +1,10 @@
 <template>
-  <div class="voice-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
+  <div
+    class="voice-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+    tabindex="-1"
+    ref="panelRef"
+    @keydown.escape="close"
+  >
     <!-- Header -->
     <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
@@ -89,16 +94,29 @@
       {{ voiceConversation.errorMessage.value }}
     </div>
 
-    <!-- Insecure context warning -->
+    <!-- Insecure-context warning (#1059) — shown when mic-dependent mode selected
+         but browser blocks getUserMedia due to an untrusted certificate -->
     <div
       v-if="showInsecureContextWarning"
       class="voice-panel__cert-warning"
     >
-      <p class="font-semibold text-xs">
+      <p class="voice-panel__cert-warning-title">
         <Icon name="lock" class="me-1" />{{ $t('chat.voice.micBlocked') }}
       </p>
-      <p class="text-xs opacity-80">
-        {{ $t('chat.voice.certRequiredShort') }}
+      <p class="voice-panel__cert-warning-body">
+        {{ $t('chat.voice.certRequired') }}
+      </p>
+      <ol class="voice-panel__cert-warning-steps">
+        <li>{{ $t('chat.voice.certStep1') }}</li>
+        <li>
+          {{ $t('chat.voice.certStep2Pre') }}
+          <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>,
+          {{ $t('chat.voice.certStep2Post', { origin: currentOrigin }) }}
+        </li>
+      </ol>
+      <p class="voice-panel__cert-warning-fallback">
+        <Icon name="info-circle" class="me-1" />
+        {{ $t('chat.voice.walkieTalkieFallback') }}
       </p>
     </div>
 
@@ -168,7 +186,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import type { ConversationMode } from '@/composables/useVoiceConversation'
@@ -179,6 +197,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const voiceConversation = useVoiceConversation()
+const panelRef = ref<HTMLElement | null>(null)
 
 const isFullDuplex = computed(
   () => voiceConversation.mode.value === 'full-duplex',
@@ -196,6 +215,7 @@ const isAutoMode = computed(
 const showInsecureContextWarning = computed(
   () => isAutoMode.value && !voiceConversation.micAccessAvailable.value,
 )
+const currentOrigin = window.location.origin
 
 const stateClass = computed(() => ({
   'voice-panel__state-ring--idle': voiceConversation.state.value === 'idle',
@@ -268,6 +288,12 @@ function close(): void {
 
 onBeforeUnmount(() => {
   voiceConversation.cleanup()
+})
+
+// Focus panel for keyboard accessibility (mirrors VoiceConversationOverlay)
+onMounted(async () => {
+  await nextTick()
+  panelRef.value?.focus()
 })
 </script>
 
@@ -417,6 +443,37 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1);
+}
+
+.voice-panel__cert-warning-title {
+  font-weight: 600;
+  font-size: var(--text-xs);
+}
+
+.voice-panel__cert-warning-body {
+  color: var(--voiceoverlay-warning-body-text);
+}
+
+.voice-panel__cert-warning-steps {
+  padding-left: var(--spacing-4);
+  list-style: decimal;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.voice-panel__cert-warning-steps code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-default);
+  font-size: 0.625rem;
+  word-break: break-all;
+}
+
+.voice-panel__cert-warning-fallback {
+  color: var(--voiceoverlay-muted-text);
+  font-size: 0.625rem;
+  margin-top: var(--spacing-1);
 }
 
 /* Hands-free controls */
