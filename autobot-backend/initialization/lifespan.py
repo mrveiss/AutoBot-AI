@@ -1852,6 +1852,23 @@ async def cleanup_services(app: FastAPI):
         app: FastAPI application instance
     """
     logger.info("🛑 AutoBot Backend shutting down...")
+
+    # Issue #11679: Cancel + await the phase-2 background-init task FIRST,
+    # before any other cleanup step. Without this, a fast shutdown can race
+    # initialize_background_services() while it is still creating resources
+    # (Redis subscriptions, background loops, etc.), voiding the "Redis
+    # closed LAST" ordering guarantee below for those late-created resources.
+    bg_init_task = getattr(app.state, "background_init_task", None)
+    if bg_init_task is not None and not bg_init_task.done():
+        bg_init_task.cancel()
+        try:
+            await bg_init_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as _bg_init_err:
+            logger.warning("Background init task raised during cancellation: %s", _bg_init_err)
+        logger.info("✅ Phase-2 background init task cancelled before shutdown")
+
     try:
         # GH#9044: Close transcriber DB connection
         transcriber_db = getattr(app.state, "transcriber_db", None)
@@ -2149,6 +2166,17 @@ async def cleanup_services(app: FastAPI):
         except Exception as _db_err:
             logger.warning("Database engine dispose failed: %s", _db_err)
 
+        # Issue #11679: Drain the bounded thread-pool executor BEFORE closing
+        # Redis pools. Ordering decision: queued default-executor jobs (e.g.
+        # chat_history/cache.py offloading a sync redis_client.setex call)
+        # must finish before Redis pools close — otherwise redis-py sync
+        # pools would reopen lazily post-close, leaking connections at exit.
+        # shutdown() is a blocking call, so it runs via asyncio.to_thread to
+        # avoid blocking the event loop while queued jobs finish.
+        if _executor is not None:
+            await asyncio.to_thread(_executor.shutdown, wait=True, cancel_futures=False)
+            logger.info("🧵 Thread pool executor drained")
+
         # Issue #11638: Close all Redis pools LAST — earlier shutdown steps
         # above may still publish events or flush state through Redis.
         try:
@@ -2218,18 +2246,21 @@ def create_lifespan_manager():
         await initialize_critical_services(app)
 
         # Phase 2: Background initialization (NON-BLOCKING)
+        # Issue #11679: track the task on app.state so cleanup_services() can
+        # cancel+await it FIRST on shutdown, before any resource is torn down.
+        # Without this, a fast shutdown during phase-2 init can race resource
+        # creation (e.g. Redis subscriptions, background loops), voiding the
+        # "Redis closed LAST" cleanup ordering for those late-created resources.
         logger.info("🔄 Starting background services initialization...")
-        asyncio.create_task(initialize_background_services(app))
+        app.state.background_init_task = asyncio.create_task(
+            initialize_background_services(app), name="phase2_background_init"
+        )
 
         yield  # Application starts serving requests here
 
-        # Cleanup on shutdown
+        # Cleanup on shutdown — thread pool is drained INSIDE cleanup_services,
+        # before Redis pools close (Issue #11679; see ordering comment there).
         await cleanup_services(app)
-
-        # Shutdown thread pool
-        if _executor:
-            _executor.shutdown(wait=True, cancel_futures=False)
-            logger.info("🧵 Thread pool shutdown complete")
 
     return lifespan
 
