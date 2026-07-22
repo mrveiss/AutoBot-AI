@@ -732,6 +732,16 @@
   --costdash-mode-dollars-text: #1d4ed8;  /* "dollars" budget-mode badge text */
   --costdash-mode-tokens-bg: #fef3c7;     /* "tokens" budget-mode badge fill */
   --costdash-mode-tokens-text: #92400e;   /* "tokens" budget-mode badge text */
+
+  /* ============================================
+   * WORKFLOW BUILDER VIEW TOKENS
+   * Issue #11984 (umbrella #11515). Scoped to views/WorkflowBuilderView.vue.
+   * The offline health indicator renders a neutral gray with no existing
+   * exact semantic token. Hex-only (deliberately NO OKLCH override) so the
+   * indicator renders pixel-identical to its previous hardcoded value across
+   * all browsers.
+   * ============================================ */
+  --wfbuilder-offline-text: #6b7280;   /* offline health-indicator text */
 }
 
 /* ============================================
