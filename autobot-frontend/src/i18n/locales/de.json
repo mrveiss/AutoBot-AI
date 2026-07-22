@@ -7981,7 +7981,9 @@
       "noProjects": "Noch keine Projekte in diesem Unternehmen.",
       "noItems": "Dieses Projekt hat keine planbaren Arbeitselemente.",
       "ariaChart": "Projekt-Zeitachsen-Gantt-Diagramm",
-      "unscheduled": "ungeplant"
+      "unscheduled": "ungeplant",
+      "scopedTo": "Eingegrenzt auf {name}",
+      "showAll": "Gesamtes Unternehmen anzeigen"
     },
     "backlog": {
       "title": "Backlog",

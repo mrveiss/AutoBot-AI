@@ -7970,7 +7970,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "Scoped to {name}",
+      "showAll": "Show whole company"
     },
     "backlog": {
       "title": "Backlog",
