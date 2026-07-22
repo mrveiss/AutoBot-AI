@@ -2794,8 +2794,11 @@ async def _ansible_self_update(node_id: str) -> None:
 
     Covers every role Ansible knows about (backend, frontend, shared, agent,
     plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
-    Fire-and-forget: the SLM service restarts mid-run so this coroutine dies;
-    callers must poll health rather than await a result.
+    Fire-and-forget: the SLM service restarts mid-run so this coroutine dies.
+    ``detach=True`` runs the ansible-playbook process in its own systemd
+    transient scope (#11492) so it — unlike this coroutine — survives that
+    restart and completes Play 1's tail plus Play 2/3; callers must poll
+    health rather than await a result.
 
     Issue #9224: Update node version in DB after successful sync.
     C2-a: Clear the resume plan on playbook failure (before restart) so stale
@@ -2807,6 +2810,7 @@ async def _ansible_self_update(node_id: str) -> None:
         result = await executor.execute_playbook(
             playbook_name="update-all-nodes.yml",
             limit=limit,
+            detach=True,
         )
         if not result["success"]:
             logger.error("Ansible full-machine update failed for %s: %s", node_id, result["output"][:500])
