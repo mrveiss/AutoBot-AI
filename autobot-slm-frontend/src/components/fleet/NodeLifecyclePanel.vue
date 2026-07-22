@@ -16,6 +16,7 @@
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { useFleetStore } from '@/stores/fleet'
 import { getConfig, getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
@@ -62,6 +63,8 @@ interface UpdatesInfo {
   count: number
   security: number
   updates: AvailableUpdate[]
+  /** #11964: same node.code_status the fleet-summary badge reads. */
+  codeUpdateAvailable: boolean
 }
 
 interface EventFilters {
@@ -91,6 +94,7 @@ const emit = defineEmits<{
 
 // API composable (methods will be added later)
 const api = useSlmApi()
+const fleetStore = useFleetStore()
 
 // State
 const events = ref<LifecycleEvent[]>([])
@@ -163,9 +167,9 @@ const filteredEvents = computed(() => {
 
 const updatesSummary = computed(() => {
   if (!availableUpdates.value) return null
-  const { count, security, updates } = availableUpdates.value
+  const { count, security, updates, codeUpdateAvailable } = availableUpdates.value
   const critical = updates.filter((u) => u.severity === 'critical').length
-  return { count, security, critical }
+  return { count, security, critical, codeUpdateAvailable }
 })
 
 // Methods
@@ -391,25 +395,30 @@ async function loadMoreEvents(): Promise<void> {
 async function checkForUpdates(): Promise<void> {
   isCheckingUpdates.value = true
   try {
-    const updates = await api.checkUpdates(props.nodeId)
+    // #11964: fleetStore.checkNodeUpdates() also reconciles the cached
+    // fleet-summary badge with this fresh scan, so the two can never
+    // disagree after a live check.
+    const result = await fleetStore.checkNodeUpdates(props.nodeId)
 
-    // Map backend response to local UpdatesInfo format
-    // Backend returns update_id, frontend type has id
-    const securityCount = updates.filter((u) => u.severity === 'critical' || u.severity === 'high').length
+    // Map backend response to local UpdatesInfo format.
+    // Backend field names are update_id/available_version (#11964 fix:
+    // these previously read the non-existent u.id/u.version).
+    const securityCount = result.updates.filter((u) => u.severity === 'critical' || u.severity === 'high').length
     availableUpdates.value = {
-      count: updates.length,
+      count: result.total,
       security: securityCount,
-      updates: updates.map((u) => ({
-        id: u.id,
-        version: u.version,
-        description: u.description,
+      updates: result.updates.map((u) => ({
+        id: u.update_id,
+        version: u.available_version,
+        description: u.description ?? '',
         severity: u.severity as 'low' | 'medium' | 'high' | 'critical',
       })),
+      codeUpdateAvailable: result.code_update_available,
     }
   } catch (error) {
     logger.error('Failed to check for updates:', error)
     // Show empty updates if API fails
-    availableUpdates.value = { count: 0, security: 0, updates: [] }
+    availableUpdates.value = { count: 0, security: 0, updates: [], codeUpdateAvailable: false }
   } finally {
     isCheckingUpdates.value = false
   }
@@ -651,12 +660,13 @@ onUnmounted(() => {
       <div class="flex items-center justify-between">
         <!-- Update Status -->
         <div class="flex items-center gap-3">
-          <template v-if="updatesSummary && updatesSummary.count > 0">
+          <template v-if="updatesSummary && (updatesSummary.count > 0 || updatesSummary.codeUpdateAvailable)">
             <div class="flex items-center gap-2 text-warning-600">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12" />
               </svg>
-              <span class="font-medium">{{ $t('fleet.nodeLifecyclePanel.value0UpdatePluralAvailable', { value0: updatesSummary.count, plural: updatesSummary.count === 1 ? '' : 's' }) }}</span>
+              <span v-if="updatesSummary.count > 0" class="font-medium">{{ $t('fleet.nodeLifecyclePanel.value0UpdatePluralAvailable', { value0: updatesSummary.count, plural: updatesSummary.count === 1 ? '' : 's' }) }}</span>
+              <span v-if="updatesSummary.codeUpdateAvailable" class="font-medium">{{ $t('fleet.nodeLifecyclePanel.codeUpdateAvailable') }}</span>
             </div>
             <span v-if="updatesSummary.security > 0" class="text-sm text-red-600">{{ $t('fleet.nodeLifecyclePanel.value0Security', { value0: updatesSummary.security }) }}</span>
             <span v-if="updatesSummary.critical > 0" class="text-sm font-medium text-red-700">{{ $t('fleet.nodeLifecyclePanel.value0Critical', { value0: updatesSummary.critical }) }}</span>
