@@ -11787,12 +11787,14 @@ export interface paths {
          * Vnc Mouse Click
          * @description Perform mouse click at specified coordinates with human-like behavior.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseClickRequest with x, y coordinates and button type
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_click_api_vnc_click_post"];
         delete?: never;
@@ -11814,12 +11816,14 @@ export interface paths {
          * Vnc Keyboard Type
          * @description Type text via keyboard with human-like speed and pauses.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: KeyboardTypeRequest with text to type
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_keyboard_type_api_vnc_type_post"];
         delete?: never;
@@ -11841,12 +11845,14 @@ export interface paths {
          * Vnc Special Key
          * @description Send special key or key combination.
          *     Issue #74: Desktop interaction controls.
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: SpecialKeyRequest with key name (e.g., "Return", "ctrl+c")
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_special_key_api_vnc_key_post"];
         delete?: never;
@@ -11868,12 +11874,14 @@ export interface paths {
          * Vnc Mouse Scroll
          * @description Scroll mouse wheel.
          *     Issue #74: Desktop interaction controls.
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseScrollRequest with direction and amount
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_scroll_api_vnc_scroll_post"];
         delete?: never;
@@ -11895,12 +11903,14 @@ export interface paths {
          * Vnc Mouse Drag
          * @description Perform mouse drag operation with curved, human-like movement.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseDragRequest with start and end coordinates
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_drag_api_vnc_drag_post"];
         delete?: never;
@@ -12510,6 +12520,71 @@ export interface paths {
          *         {"status": "success", "message": "..."}
          */
         delete: operations["clear_session_state_api_vnc_session_clear_state_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/acquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acquire Desktop Control
+         * @description Human takeover: acquire the desktop control-lock (#12002, #11506 T1).
+         *
+         *     Muting the agent's actuation calls (api.vnc_manager / api.vnc_mcp) until
+         *     this is released or its idle-TTL expires.
+         */
+        post: operations["acquire_desktop_control_api_vnc_proxy__vnc_type__control_acquire_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Desktop Control
+         * @description Human handback: release the desktop control-lock (#12002, #11506 T1).
+         *
+         *     The agent resumes actuation immediately once released.
+         */
+        post: operations["release_desktop_control_api_vnc_proxy__vnc_type__control_release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Desktop Control Status
+         * @description Get current desktop control-lock owner/state (#12002, #11506 T1).
+         */
+        get: operations["get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -13204,6 +13279,7 @@ export interface paths {
          * Desktop Mouse Click Mcp
          * @description MCP tool: Click mouse at coordinates on desktop.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_mouse_click_mcp_api_vnc_mcp_desktop_mouse_click_post"];
         delete?: never;
@@ -13225,6 +13301,7 @@ export interface paths {
          * Desktop Keyboard Type Mcp
          * @description MCP tool: Type text on desktop keyboard.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_keyboard_type_mcp_api_vnc_mcp_desktop_keyboard_type_post"];
         delete?: never;
@@ -13246,6 +13323,7 @@ export interface paths {
          * Desktop Special Key Mcp
          * @description MCP tool: Send special key or key combination.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_special_key_mcp_api_vnc_mcp_desktop_special_key_post"];
         delete?: never;
@@ -13288,8 +13366,35 @@ export interface paths {
          * Desktop Observe State Mcp
          * @description MCP tool: Observe current desktop state with metadata.
          *     Issue #74: Agent desktop observation.
+         *     Issue #12002 (#11506 T1): includes control-lock state so the agent knows
+         *     to pause actuation when a human is active.
          */
         post: operations["desktop_observe_state_mcp_api_vnc_mcp_desktop_observe_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc/mcp/desktop_control_status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desktop Control Status Mcp
+         * @description MCP tool: Check whether a human currently holds the desktop control-lock.
+         *
+         *     Issue #12002 (#11506 T1): agents should call this (or read human_active
+         *     from desktop_observe_state) before actuation and pause while a human is
+         *     active -- desktop_mouse_click/keyboard_type/special_key are muted
+         *     automatically, but polling this lets the agent avoid wasted calls.
+         */
+        post: operations["desktop_control_status_mcp_api_vnc_mcp_desktop_control_status_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -69260,6 +69365,85 @@ export interface components {
             };
             /** Button */
             button: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlAcquireRequest
+         * @description Request for POST /vnc-proxy/{vnc_type}/control/acquire (#12002).
+         */
+        DesktopControlAcquireRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlLockResponse
+         * @description Response for the desktop control-lock acquire/release/status endpoints (#12002).
+         */
+        DesktopControlLockResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Owner */
+            owner?: string | null;
+            /** Human Active */
+            human_active: boolean;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlReleaseRequest
+         * @description Request for POST /vnc-proxy/{vnc_type}/control/release (#12002).
+         */
+        DesktopControlReleaseRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DesktopControlStatusMcpResponse */
+        DesktopControlStatusMcpResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Human Active */
+            human_active: boolean;
+            /** Owner */
+            owner?: string | null;
+            /** Acquired At */
+            acquired_at?: string | null;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DesktopControlStatusRequest */
+        DesktopControlStatusRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -69273,6 +69457,11 @@ export interface components {
             action: string;
             /** Text Length */
             text_length: number;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -69280,6 +69469,12 @@ export interface components {
         DesktopKeyboardTypeRequest: {
             /** Text */
             text: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -69294,6 +69489,12 @@ export interface components {
              * @default left
              */
             button: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -69313,6 +69514,13 @@ export interface components {
             screenshot?: string | null;
             /** Screenshot Format */
             screenshot_format?: string | null;
+            /**
+             * Human Active
+             * @default false
+             */
+            human_active: boolean;
+            /** Control Owner */
+            control_owner?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -69351,6 +69559,11 @@ export interface components {
             action: string;
             /** Key */
             key: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -69358,6 +69571,12 @@ export interface components {
         DesktopSpecialKeyRequest: {
             /** Key */
             key: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -75890,6 +76109,12 @@ export interface components {
              * @description Text to type
              */
             text: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -82293,6 +82518,12 @@ export interface components {
              * @default left
              */
             button: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -82318,6 +82549,12 @@ export interface components {
              * @description End Y coordinate
              */
             y2: number;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -82334,6 +82571,12 @@ export interface components {
              * @default 3
              */
             amount: number;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -92865,6 +93108,12 @@ export interface components {
              * @description Special key name (e.g., Return, Escape, ctrl+c)
              */
             key: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -98507,6 +98756,11 @@ export interface components {
             status: string;
             /** Message */
             message: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -117413,6 +117667,109 @@ export interface operations {
             };
         };
     };
+    acquire_desktop_control_api_vnc_proxy__vnc_type__control_acquire_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlAcquireRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_desktop_control_api_vnc_proxy__vnc_type__control_release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get: {
+        parameters: {
+            query?: {
+                session_id?: string;
+            };
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_vnc_client_api_vnc_proxy__vnc_type__vnc_html_get: {
         parameters: {
             query?: never;
@@ -118408,6 +118765,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DesktopObserveStateMcpResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desktop_control_status_mcp_api_vnc_mcp_desktop_control_status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlStatusMcpResponse"];
                 };
             };
             /** @description Validation Error */
