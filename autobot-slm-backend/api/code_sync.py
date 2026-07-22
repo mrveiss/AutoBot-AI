@@ -2547,7 +2547,7 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     if is_local_source:
         logger.info("SLM self-sync: code source is local at %s, using direct rsync", repo_path)
     else:
-        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
         if not _ssh_key_usable(ssh_key):
             logger.error("SLM self-sync failed: SSH key not usable at %s", ssh_key)
             return
