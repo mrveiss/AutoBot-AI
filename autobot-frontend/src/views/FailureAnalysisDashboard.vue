@@ -334,7 +334,7 @@ function levelClass(level: string): string {
 
 .required {
   color: var(--color-red-500);
-  margin-left: 2px;
+  margin-left: var(--spacing-0-5);
 }
 
 .form-input,
@@ -409,8 +409,8 @@ function levelClass(level: string): string {
 
 .spinner {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: var(--spacing-3-5);
+  height: var(--spacing-3-5);
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-top-color: var(--faildash-on-accent);
   border-radius: 50%;
@@ -451,8 +451,8 @@ function levelClass(level: string): string {
 }
 
 .dismiss-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 /* Result panel */
@@ -572,7 +572,7 @@ function levelClass(level: string): string {
 }
 
 .event-type-badge {
-  padding: 2px var(--spacing-2);
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary, var(--bg-secondary));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -582,7 +582,7 @@ function levelClass(level: string): string {
 
 .confidence-pill {
   margin-left: auto;
-  padding: 2px var(--spacing-2);
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--color-blue-50);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
@@ -620,8 +620,8 @@ function levelClass(level: string): string {
 
 .chain-index {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -675,7 +675,7 @@ function levelClass(level: string): string {
 }
 
 .rec-type-badge {
-  padding: 2px var(--spacing-2);
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -718,7 +718,7 @@ function levelClass(level: string): string {
 }
 
 .meta-pill {
-  padding: 2px var(--spacing-2);
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-full);
@@ -751,7 +751,7 @@ function levelClass(level: string): string {
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 /* Confounders */
@@ -792,8 +792,8 @@ function levelClass(level: string): string {
 }
 
 .empty-icon {
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   color: var(--border-default);
 }
 </style>
