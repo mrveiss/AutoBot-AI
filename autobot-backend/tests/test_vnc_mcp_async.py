@@ -407,9 +407,10 @@ class TestControlLockGating:
         request_mock.button = "left"
         request_mock.session_id = "default"
 
-        with patch.object(
-            vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)
-        ), patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt:
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)),
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt,
+        ):
             result = await vnc_mcp_module.desktop_mouse_click_mcp(request_mock)
 
         assert result["success"] is False
@@ -422,9 +423,10 @@ class TestControlLockGating:
         request_mock.text = "hello world"
         request_mock.session_id = "default"
 
-        with patch.object(
-            vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)
-        ), patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt:
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)),
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt,
+        ):
             result = await vnc_mcp_module.desktop_keyboard_type_mcp(request_mock)
 
         assert result["success"] is False
@@ -437,9 +439,10 @@ class TestControlLockGating:
         request_mock.key = "Return"
         request_mock.session_id = "default"
 
-        with patch.object(
-            vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)
-        ), patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt:
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=True)),
+            patch("asyncio.to_thread", new_callable=AsyncMock) as mock_tt,
+        ):
             result = await vnc_mcp_module.desktop_special_key_mcp(request_mock)
 
         assert result["success"] is False
@@ -455,9 +458,10 @@ class TestControlLockGating:
         request_mock.session_id = "default"
         fake_result = {"status": "success", "message": "Action completed"}
 
-        with patch.object(
-            vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=False)
-        ), patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_result) as mock_tt:
+        with (
+            patch.object(vnc_mcp_module, "is_human_active", new=AsyncMock(return_value=False)),
+            patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_result) as mock_tt,
+        ):
             result = await vnc_mcp_module.desktop_mouse_click_mcp(request_mock)
 
         assert result["success"] is True
@@ -475,9 +479,7 @@ class TestControlLockGating:
             "redis_available": True,
         }
 
-        with patch.object(
-            vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)
-        ):
+        with patch.object(vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)):
             result = await vnc_mcp_module.desktop_control_status_mcp(request_mock)
 
         assert result["success"] is True
@@ -497,9 +499,7 @@ class TestControlLockGating:
             "redis_available": True,
         }
 
-        with patch.object(
-            vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)
-        ):
+        with patch.object(vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)):
             result = await vnc_mcp_module.desktop_control_status_mcp(request_mock)
 
         assert result["success"] is True
@@ -521,9 +521,10 @@ class TestControlLockGating:
             args=[], returncode=0, stdout="dimensions:  1920x1080 pixels\n", stderr=""
         )
 
-        with patch.object(
-            vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)
-        ), patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_ok):
+        with (
+            patch.object(vnc_mcp_module, "get_control_lock_state", new=AsyncMock(return_value=fake_state)),
+            patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_ok),
+        ):
             result = await vnc_mcp_module.desktop_observe_state_mcp(request_mock)
 
         assert result["human_active"] is True

@@ -47,9 +47,12 @@ class TestMouseClickGating:
 
     @pytest.mark.asyncio
     async def test_executes_when_human_inactive(self):
-        with _human_active(False), patch(
-            "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
-        ) as mock_run:
+        with (
+            _human_active(False),
+            patch(
+                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+            ) as mock_run,
+        ):
             result = await vnc_mouse_click(MouseClickRequest(x=10, y=20), admin_check=True)
 
         assert result["status"] == "success"
@@ -70,9 +73,13 @@ class TestKeyboardTypeGating:
         # should_add_human_pause() is stochastic (20% chance of a mid-typing
         # pause that splits into 2 xdotool calls) -- pin it False so this
         # test deterministically exercises the single-call path.
-        with _human_active(False), patch("api.vnc_manager.should_add_human_pause", return_value=False), patch(
-            "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
-        ) as mock_run:
+        with (
+            _human_active(False),
+            patch("api.vnc_manager.should_add_human_pause", return_value=False),
+            patch(
+                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+            ) as mock_run,
+        ):
             result = await vnc_keyboard_type(KeyboardTypeRequest(text="hello"), admin_check=True)
 
         assert result["status"] == "success"
@@ -90,9 +97,12 @@ class TestSpecialKeyGating:
 
     @pytest.mark.asyncio
     async def test_executes_when_human_inactive(self):
-        with _human_active(False), patch(
-            "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
-        ) as mock_run:
+        with (
+            _human_active(False),
+            patch(
+                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+            ) as mock_run,
+        ):
             result = await vnc_special_key(SpecialKeyRequest(key="Return"), admin_check=True)
 
         assert result["status"] == "success"
@@ -110,9 +120,12 @@ class TestMouseScrollGating:
 
     @pytest.mark.asyncio
     async def test_executes_when_human_inactive(self):
-        with _human_active(False), patch(
-            "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
-        ) as mock_run:
+        with (
+            _human_active(False),
+            patch(
+                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+            ) as mock_run,
+        ):
             result = await vnc_mouse_scroll(MouseScrollRequest(direction="up"), admin_check=True)
 
         assert result["status"] == "success"
@@ -130,9 +143,12 @@ class TestMouseDragGating:
 
     @pytest.mark.asyncio
     async def test_executes_when_human_inactive(self):
-        with _human_active(False), patch(
-            "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
-        ) as mock_run:
+        with (
+            _human_active(False),
+            patch(
+                "api.vnc_manager._run_xdotool_cmd", return_value={"status": "success", "message": "Action completed"}
+            ) as mock_run,
+        ):
             result = await vnc_mouse_drag(MouseDragRequest(x1=0, y1=0, x2=10, y2=10), admin_check=True)
 
         assert result["status"] == "success"

@@ -31,9 +31,10 @@ class TestAcquireEndpoint:
             "human_active": True,
             "message": "Control acquired by alice",
         }
-        with patch(
-            "api.vnc_proxy.acquire_human_control", new=AsyncMock(return_value=fake_result)
-        ), patch("api.vnc_proxy._audit_control_lock_change", new=AsyncMock()) as mock_audit:
+        with (
+            patch("api.vnc_proxy.acquire_human_control", new=AsyncMock(return_value=fake_result)),
+            patch("api.vnc_proxy._audit_control_lock_change", new=AsyncMock()) as mock_audit,
+        ):
             response = await acquire_desktop_control(
                 "desktop",
                 DesktopControlAcquireRequest(session_id="default"),
@@ -65,9 +66,10 @@ class TestReleaseEndpoint:
             "human_active": False,
             "message": "Control released",
         }
-        with patch(
-            "api.vnc_proxy.release_human_control", new=AsyncMock(return_value=fake_result)
-        ), patch("api.vnc_proxy._audit_control_lock_change", new=AsyncMock()):
+        with (
+            patch("api.vnc_proxy.release_human_control", new=AsyncMock(return_value=fake_result)),
+            patch("api.vnc_proxy._audit_control_lock_change", new=AsyncMock()),
+        ):
             response = await release_desktop_control(
                 "desktop",
                 DesktopControlReleaseRequest(session_id="default"),
@@ -85,9 +87,10 @@ class TestReleaseEndpoint:
             "human_active": True,
             "message": "Control lock is held by another user",
         }
-        with patch(
-            "api.vnc_proxy.release_human_control", new=AsyncMock(return_value=fake_result)
-        ), patch("api.vnc_proxy._audit_control_lock_change", new=AsyncMock()):
+        with (
+            patch("api.vnc_proxy.release_human_control", new=AsyncMock(return_value=fake_result)),
+            patch("api.vnc_proxy._audit_control_lock_change", new=AsyncMock()),
+        ):
             response = await release_desktop_control(
                 "desktop",
                 DesktopControlReleaseRequest(),
