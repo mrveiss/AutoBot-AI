@@ -550,7 +550,7 @@ async def desktop_screenshot_mcp() -> Metadata:
             capture_output=True,
             text=True,
             timeout=10,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
 
         if result.returncode != 0:
@@ -561,7 +561,7 @@ async def desktop_screenshot_mcp() -> Metadata:
                 capture_output=True,
                 text=True,
                 timeout=10,
-                env={"DISPLAY": ":1"},
+                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
             )
 
         if result.returncode != 0:
@@ -622,7 +622,7 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             for line in result.stdout.split("\n"):
@@ -642,7 +642,7 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             state["active_window"] = result.stdout.strip()
