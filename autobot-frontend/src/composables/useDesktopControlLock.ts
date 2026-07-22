@@ -59,21 +59,6 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
 
   const basePath = `/vnc-proxy/${vncType}/control`
 
-  async function refreshStatus(): Promise<DesktopControlLockState | null> {
-    try {
-      const result = await ApiClient.get<DesktopControlLockState>(
-        `${basePath}/status?session_id=${encodeURIComponent(sessionId)}`
-      )
-      owner.value = result.owner
-      humanActive.value = result.human_active
-      return result
-    } catch (err: unknown) {
-      logger.error('Failed to fetch control-lock status:', err)
-      error.value = extractErrorMessage(err, 'Failed to fetch control status')
-      return null
-    }
-  }
-
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
   function stopHeartbeat(): void {
@@ -86,9 +71,12 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
   function startHeartbeat(): void {
     stopHeartbeat()
     // Periodic re-acquire refreshes the Redis TTL; does NOT fire immediately
-    // (the caller just acquired), only on subsequent ticks.
+    // (the caller just acquired/confirmed ownership), only on subsequent
+    // ticks. `silent: true` so this background refresh never toggles
+    // `loading` (would otherwise flicker/disable the Take/Release button
+    // every 30s -- #12002 review nit).
     heartbeatTimer = setInterval(() => {
-      void acquire()
+      void acquire({ silent: true })
     }, HEARTBEAT_INTERVAL_MS)
   }
 
@@ -98,9 +86,35 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
     onScopeDispose(stopHeartbeat)
   }
 
-  async function acquire(): Promise<DesktopControlLockState | null> {
+  async function refreshStatus(): Promise<DesktopControlLockState | null> {
+    try {
+      const result = await ApiClient.get<DesktopControlLockState>(
+        `${basePath}/status?session_id=${encodeURIComponent(sessionId)}`
+      )
+      owner.value = result.owner
+      humanActive.value = result.human_active
+      // Resume the heartbeat if we discover (e.g. after a page reload/remount)
+      // that we already hold the lock -- otherwise its idle-TTL silently
+      // expires while the UI still shows "You have control" (#12002 review fix).
+      if (result.human_active && result.owner === userStore.currentUser?.username) {
+        startHeartbeat()
+      } else {
+        stopHeartbeat()
+      }
+      return result
+    } catch (err: unknown) {
+      logger.error('Failed to fetch control-lock status:', err)
+      error.value = extractErrorMessage(err, 'Failed to fetch control status')
+      return null
+    }
+  }
+
+  async function acquire(options: { silent?: boolean } = {}): Promise<DesktopControlLockState | null> {
+    const { silent = false } = options
     error.value = null
-    loading.value = true
+    if (!silent) {
+      loading.value = true
+    }
     try {
       const result = await ApiClient.post<DesktopControlLockState>(`${basePath}/acquire`, {
         session_id: sessionId
@@ -112,11 +126,17 @@ export function useDesktopControlLock(vncType: string = 'desktop', sessionId: st
       }
       return result
     } catch (err: unknown) {
-      logger.error('Failed to acquire desktop control:', err)
+      if (silent) {
+        logger.warn('Silent heartbeat re-acquire failed:', err)
+      } else {
+        logger.error('Failed to acquire desktop control:', err)
+      }
       error.value = extractErrorMessage(err, 'Failed to take control')
       return null
     } finally {
-      loading.value = false
+      if (!silent) {
+        loading.value = false
+      }
     }
   }
 

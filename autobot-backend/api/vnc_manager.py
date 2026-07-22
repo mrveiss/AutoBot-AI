@@ -19,8 +19,6 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-# Issue #12002 (#11506 T1): agent<->human input arbitration
-from api.desktop_control_lock import is_human_active
 from api.schemas_system import (
     ClipboardSyncRequest,
     ConnectionSettings,
@@ -62,7 +60,10 @@ from api.vnc_humanization import (
     should_add_human_pause,
     simulate_mouse_curve,
 )
-from auth_middleware import check_admin_permission
+
+# Issue #12002 (#11506 T1): agent<->human input arbitration
+from api.desktop_control_lock import is_actuation_muted
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
@@ -347,16 +348,32 @@ def _muted_result() -> Dict[str, object]:
     }
 
 
+def _caller_username(current_user: object) -> str | None:
+    """Extract a username for owner-aware gating (#12002).
+
+    playback_macro() calls vnc_mouse_click/etc. directly (Python function
+    call, not an HTTP request), so `current_user` there is still the
+    unresolved fastapi.params.Depends sentinel rather than a dict. Treat
+    that -- and any other non-dict value -- as "unknown caller": is_actuation_muted
+    then falls back to unconditional gating (safe default) instead of raising.
+    """
+    if isinstance(current_user, dict):
+        return current_user.get("username")
+    return None
+
+
 @router.post("/click", response_model=VncStatusMessageResponse)
 @with_error_handling(error_code_prefix="VNC_CLICK")
 async def vnc_mouse_click(
     request: MouseClickRequest,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
     Perform mouse click at specified coordinates with human-like behavior.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
-    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: MouseClickRequest with x, y coordinates and button type
@@ -364,7 +381,7 @@ async def vnc_mouse_click(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_human_active(request.session_id):
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
         return _muted_result()
 
     # Add human-like randomness to click position (Issue #74 - Area 5)
@@ -385,11 +402,13 @@ async def vnc_mouse_click(
 async def vnc_keyboard_type(
     request: KeyboardTypeRequest,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
     Type text via keyboard with human-like speed and pauses.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
-    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: KeyboardTypeRequest with text to type
@@ -397,7 +416,7 @@ async def vnc_keyboard_type(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_human_active(request.session_id):
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
         return _muted_result()
 
     # Get humanized typing delay in milliseconds for xdotool
@@ -436,11 +455,13 @@ async def vnc_keyboard_type(
 async def vnc_special_key(
     request: SpecialKeyRequest,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
     Send special key or key combination.
     Issue #74: Desktop interaction controls.
-    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: SpecialKeyRequest with key name (e.g., "Return", "ctrl+c")
@@ -448,7 +469,7 @@ async def vnc_special_key(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_human_active(request.session_id):
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
         return _muted_result()
 
     return _run_xdotool_cmd(["key", request.key])
@@ -459,11 +480,13 @@ async def vnc_special_key(
 async def vnc_mouse_scroll(
     request: MouseScrollRequest,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
     Scroll mouse wheel.
     Issue #74: Desktop interaction controls.
-    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: MouseScrollRequest with direction and amount
@@ -471,7 +494,7 @@ async def vnc_mouse_scroll(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_human_active(request.session_id):
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
         return _muted_result()
 
     # Mouse buttons: 4 = scroll up, 5 = scroll down
@@ -490,11 +513,13 @@ async def vnc_mouse_scroll(
 async def vnc_mouse_drag(
     request: MouseDragRequest,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, object]:
     """
     Perform mouse drag operation with curved, human-like movement.
     Issue #74: Desktop interaction controls + Area 5 (humanization).
-    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
+    Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+    control-lock -- the lock owner's own toolbar keeps working.
 
     Args:
         request: MouseDragRequest with start and end coordinates
@@ -502,7 +527,7 @@ async def vnc_mouse_drag(
     Returns:
         {"status": "success|error|muted", "message": "..."}
     """
-    if await is_human_active(request.session_id):
+    if await is_actuation_muted(request.session_id, _caller_username(current_user)):
         return _muted_result()
 
     # Add realistic delay before starting drag

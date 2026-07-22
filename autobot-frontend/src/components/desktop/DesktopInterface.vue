@@ -233,8 +233,16 @@ const { wrap: wrapCheckConnection } = useLoadingState()
 const errorVnc = ref<Error | null>(null)
 const errorCheck = ref<Error | null>(null)
 
+// Issue #12002 (#11506 T1): DesktopInterface has no real per-session context
+// of its own (single canonical shared desktop -- no chat session/route param
+// here to mirror #11539/#11579's session_id threading against). "default" is
+// the SAME literal both composables already defaulted to independently;
+// naming it here ties them together explicitly instead of relying on two
+// separate defaults coincidentally matching.
+const DESKTOP_CONTROL_SESSION_ID = 'default'
+
 // VNC controls (Issue #74)
-const vncControls = useVncControls()
+const vncControls = useVncControls(DESKTOP_CONTROL_SESSION_ID)
 const showContextPanel = ref(false)
 
 // Desktop control-lock (Issue #12002, #11506 T1)
@@ -246,7 +254,7 @@ const {
   refreshStatus: refreshControlLockStatus,
   takeControl,
   releaseControl
-} = useDesktopControlLock()
+} = useDesktopControlLock('desktop', DESKTOP_CONTROL_SESSION_ID)
 
 const controlLockLabel = computed(() => {
   if (!humanActive.value) return t('desktop.controlLock.agentHasControl')

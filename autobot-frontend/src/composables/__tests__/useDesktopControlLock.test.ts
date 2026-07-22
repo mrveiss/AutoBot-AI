@@ -159,4 +159,118 @@ describe('useDesktopControlLock', () => {
     })
     scope.stop()
   })
+
+  describe('heartbeat (#12002 review fixes)', () => {
+    // Mirrors the composable's private HEARTBEAT_INTERVAL_MS.
+    const HEARTBEAT_INTERVAL_MS = 30000
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('refreshStatus resumes the heartbeat when we already own the lock (remount)', async () => {
+      const userStore = useUserStore()
+      userStore.currentUser = { id: 'u1', username: 'alice' } as never
+
+      mockGet.mockResolvedValueOnce(fakeState({ owner: 'alice', human_active: true }))
+      mockPost.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+
+      const scope = effectScope()
+      await scope.run(async () => {
+        const { refreshStatus } = useDesktopControlLock('desktop', 'default')
+        await refreshStatus()
+
+        expect(mockPost).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
+
+        expect(mockPost).toHaveBeenCalledWith('/vnc-proxy/desktop/control/acquire', { session_id: 'default' })
+      })
+      scope.stop()
+    })
+
+    it('refreshStatus does NOT start a heartbeat when a different user holds the lock', async () => {
+      const userStore = useUserStore()
+      userStore.currentUser = { id: 'u1', username: 'alice' } as never
+
+      mockGet.mockResolvedValueOnce(fakeState({ owner: 'bob', human_active: true }))
+
+      const scope = effectScope()
+      await scope.run(async () => {
+        const { refreshStatus } = useDesktopControlLock('desktop', 'default')
+        await refreshStatus()
+
+        await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS * 2)
+        expect(mockPost).not.toHaveBeenCalled()
+      })
+      scope.stop()
+    })
+
+    it('silent heartbeat re-acquire never toggles loading (no button flicker/disable)', async () => {
+      const userStore = useUserStore()
+      userStore.currentUser = { id: 'u1', username: 'alice' } as never
+
+      mockGet.mockResolvedValueOnce(fakeState({ owner: 'alice', human_active: true }))
+
+      let resolveHeartbeatPost: (value: unknown) => void = () => {}
+      mockPost.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveHeartbeatPost = resolve
+          })
+      )
+
+      const scope = effectScope()
+      await scope.run(async () => {
+        const { refreshStatus, loading } = useDesktopControlLock('desktop', 'default')
+        await refreshStatus()
+
+        await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
+        // Heartbeat POST is now in-flight (pending promise) -- loading must
+        // stay false throughout (#12002 review nit).
+        expect(loading.value).toBe(false)
+
+        resolveHeartbeatPost(fakeState({ owner: 'alice', human_active: true }))
+        await vi.advanceTimersByTimeAsync(0)
+        expect(loading.value).toBe(false)
+      })
+      scope.stop()
+    })
+
+    it('scope disposal stops the resumed heartbeat', async () => {
+      const userStore = useUserStore()
+      userStore.currentUser = { id: 'u1', username: 'alice' } as never
+
+      mockGet.mockResolvedValueOnce(fakeState({ owner: 'alice', human_active: true }))
+      mockPost.mockResolvedValue(fakeState({ owner: 'alice', human_active: true }))
+
+      const scope = effectScope()
+      await scope.run(async () => {
+        const { refreshStatus } = useDesktopControlLock('desktop', 'default')
+        await refreshStatus()
+      })
+      scope.stop()
+
+      await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS * 3)
+      expect(mockPost).not.toHaveBeenCalled()
+    })
+
+    it('takeControl still uses a non-silent acquire (loading toggles for the explicit user action)', async () => {
+      mockPost.mockResolvedValueOnce(fakeState({ owner: 'alice', human_active: true }))
+
+      const scope = effectScope()
+      await scope.run(async () => {
+        const { takeControl, loading } = useDesktopControlLock('desktop', 'default')
+        const promise = takeControl()
+        expect(loading.value).toBe(true)
+        await promise
+        expect(loading.value).toBe(false)
+      })
+      scope.stop()
+    })
+  })
 })

@@ -52,6 +52,26 @@ DESKTOP_CONTROL_LOCK_TTL_SECONDS: int = int(os.environ.get("AUTOBOT_DESKTOP_CONT
 
 _LOCK_KEY_PREFIX = "autobot:desktop:control_lock:"
 
+# Atomic compare-owner-and-delete. Runs entirely inside Redis (single
+# command from the client's perspective) so there is no GET-then-DELETE
+# window for a concurrent acquire to land in between (#12002 review fix):
+# without this, owner A releasing while owner B's takeover interleaves
+# between A's read and A's delete would let A's stale DELETE remove B's
+# freshly-acquired lock. Returns: 'OK' (deleted), 'NONE' (no lock held), or
+# the raw current record JSON (owner mismatch -- caller still holds it).
+_RELEASE_LUA_SCRIPT = """
+local raw = redis.call('GET', KEYS[1])
+if not raw then
+  return 'NONE'
+end
+local ok, data = pcall(cjson.decode, raw)
+if not ok or data.owner ~= ARGV[1] then
+  return raw
+end
+redis.call('DEL', KEYS[1])
+return 'OK'
+"""
+
 
 def _lock_key(session_id: str) -> str:
     """Build the Redis key for a session's control lock."""
@@ -134,9 +154,12 @@ async def acquire_human_control(session_id: str, owner: str) -> dict:
 async def release_human_control(session_id: str, owner: str) -> dict:
     """Release the human control lock for a session.
 
-    Only the current owner may release the lock (compare-and-delete), so one
-    human cannot accidentally hand control back to the agent on another
-    human's behalf.
+    Only the current owner may release the lock. This is a single atomic
+    Redis Lua EVAL (compare-owner-and-delete) -- NOT a separate GET followed
+    by a DELETE -- so there is no window for a concurrent acquire_human_control()
+    to land in between the check and the delete (#12002 review fix: a
+    non-atomic GET-then-DELETE let a stale release remove a freshly-acquired
+    lock belonging to a different owner).
 
     Returns:
         {"success", "owner", "human_active", "message"}
@@ -152,35 +175,41 @@ async def release_human_control(session_id: str, owner: str) -> dict:
                 "human_active": True,
                 "message": "Redis unavailable; control lock could not be released",
             }
-        raw = await redis.get(key)
-        if raw is None:
+        result = await redis.eval(_RELEASE_LUA_SCRIPT, 1, key, owner)
+        if isinstance(result, bytes):
+            result = result.decode("utf-8")
+
+        if result == "OK":
+            logger.info("desktop_control_lock: released session=%s owner=%s", session_id, owner)
+            return {
+                "success": True,
+                "owner": None,
+                "human_active": False,
+                "message": "Control released",
+            }
+        if result == "NONE":
             return {
                 "success": True,
                 "owner": None,
                 "human_active": False,
                 "message": "No active control lock to release",
             }
-        record = json.loads(raw)
-        if record.get("owner") != owner:
-            logger.warning(
-                "desktop_control_lock: release denied session=%s requester=%s owner=%s",
-                session_id,
-                owner,
-                record.get("owner"),
-            )
-            return {
-                "success": False,
-                "owner": record.get("owner"),
-                "human_active": True,
-                "message": "Control lock is held by another user",
-            }
-        await redis.delete(key)
-        logger.info("desktop_control_lock: released session=%s owner=%s", session_id, owner)
+
+        # Owner mismatch -- `result` is the raw JSON of whoever currently
+        # holds the lock (possibly a different owner who took over in the
+        # window before this call reached Redis).
+        current_record = json.loads(result)
+        logger.warning(
+            "desktop_control_lock: release denied session=%s requester=%s owner=%s",
+            session_id,
+            owner,
+            current_record.get("owner"),
+        )
         return {
-            "success": True,
-            "owner": None,
-            "human_active": False,
-            "message": "Control released",
+            "success": False,
+            "owner": current_record.get("owner"),
+            "human_active": True,
+            "message": "Control lock is held by another user",
         }
     except Exception as e:
         logger.error("desktop_control_lock: Redis error releasing %s: %s", key, e)
@@ -208,6 +237,35 @@ async def is_human_active(session_id: str) -> bool:
         )
         return True
     return record is not None
+
+
+async def is_actuation_muted(session_id: str, caller: str | None = None) -> bool:
+    """Return True when actuation should be muted for this caller.
+
+    Issue #12002 review fix: the agent's MCP path must ALWAYS yield to any
+    human holding the lock, but a human's OWN admin-toolbar REST calls
+    (api.vnc_manager's /click, /type, /key, /scroll, /drag) must not be
+    muted by their own takeover.
+
+    - ``caller=None`` (the agent's MCP path, api.vnc_mcp.py): unconditional
+      -- muted whenever ANY human holds the lock. Equivalent to
+      ``is_human_active(session_id)``.
+    - ``caller=<username>`` (human REST toolbar, api.vnc_manager.py): muted
+      only when a DIFFERENT human holds the lock; the lock owner's own
+      toolbar keeps working while they hold control.
+    """
+    record, redis_ok = await _get_lock_record(session_id)
+    if not redis_ok:
+        logger.error(
+            "desktop_control_lock: Redis unavailable for session %s, failing safe (muting actuation)",
+            session_id,
+        )
+        return True
+    if record is None:
+        return False
+    if caller is not None and record.get("owner") == caller:
+        return False
+    return True
 
 
 async def get_lock_owner(session_id: str) -> str | None:
