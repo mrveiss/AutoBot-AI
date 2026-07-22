@@ -180,6 +180,25 @@ export interface DriftResolveResponse {
   deployed_dir: string
 }
 
+// Issue #11303: Async per-component drift/resolve job types
+export interface DriftResolveJobResponse {
+  job_id: string
+  component: string
+  status: string
+}
+
+export interface ComponentSyncJobStatus {
+  job_id: string
+  component: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  success: boolean | null
+  deps_changed: boolean
+  message: string | null
+  post_steps: string[]
+  created_at: string | null
+  completed_at: string | null
+}
+
 // Re-export role types for consumers (Issue #779)
 export type { Role, SyncResult }
 
@@ -743,6 +762,48 @@ export function useCodeSync() {
     }
   }
 
+  /**
+   * Start an async per-component drift/resolve job (#11303).
+   *
+   * Returns immediately with a job_id instead of awaiting the full rsync +
+   * post-sync steps inline, so the GUI never blocks on a slow resync or the
+   * component's own service restart. Poll getResolveDriftStatus() for progress.
+   */
+  async function startResolveDriftAsync(component: string): Promise<DriftResolveJobResponse | null> {
+    error.value = null
+    try {
+      const response = await client.post<DriftResolveJobResponse>('/code-sync/drift/resolve-async', {
+        component,
+      })
+      return response.data
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status?: number; data?: { detail?: string } } }
+      error.value = axiosErr?.response?.data?.detail || 'Failed to start drift resolve job'
+      return null
+    }
+  }
+
+  /**
+   * Poll the status of an async drift/resolve job (#11303).
+   *
+   * Returns null ONLY on a true 404 (unknown job_id) so the caller stops
+   * polling. Returns undefined on transient errors (network refused / 5xx
+   * during the component's own restart) so the caller keeps polling instead
+   * of treating a self-restart as job failure.
+   */
+  async function getResolveDriftStatus(jobId: string): Promise<ComponentSyncJobStatus | null | undefined> {
+    try {
+      const response = await client.get<ComponentSyncJobStatus>(`/code-sync/drift/resolve/status/${jobId}`)
+      return response.data
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status?: number } }
+      if (axiosErr?.response?.status === 404) {
+        return null
+      }
+      return undefined
+    }
+  }
+
   // =============================================================================
   // Return Public API
   // =============================================================================
@@ -794,9 +855,11 @@ export function useCodeSync() {
     syncRole: rolesComposable.syncRole,
     pullFromSource: rolesComposable.pullFromSource,
 
-    // Drift detection (Issue #2834) + resolution (#7149)
+    // Drift detection (Issue #2834) + resolution (#7149) + async job (#11303)
     fetchDrift,
     resolveDrift,
+    startResolveDriftAsync,
+    getResolveDriftStatus,
 
     // SLM self-update (#9073)
     selfUpdate,
