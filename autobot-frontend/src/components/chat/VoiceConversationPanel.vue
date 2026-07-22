@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
   appearance: none;
   padding: 0.2rem 1.5rem 0.2rem 0.4rem;
   border-radius: var(--radius-default);
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
+  border: 1px solid var(--border-subtle);
   background: var(--bg-tertiary)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")
     no-repeat right 0.35rem center;
@@ -324,8 +324,8 @@ onBeforeUnmount(() => {
 }
 
 .voice-panel__ws-dot {
-  width: 6px;
-  height: 6px;
+  width: var(--spacing-1-5);
+  height: var(--spacing-1-5);
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.6);
   transition: background var(--duration-200);
@@ -458,8 +458,8 @@ onBeforeUnmount(() => {
 
 .voice-panel__slider::-webkit-slider-thumb {
   appearance: none;
-  width: 10px;
-  height: 10px;
+  width: var(--spacing-2-5);
+  height: var(--spacing-2-5);
   border-radius: 50%;
   background: var(--color-primary);
   border: 2px solid var(--bg-card);
@@ -467,8 +467,8 @@ onBeforeUnmount(() => {
 }
 
 .voice-panel__slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
+  width: var(--spacing-2-5);
+  height: var(--spacing-2-5);
   border-radius: 50%;
   background: var(--color-primary);
   border: 2px solid var(--bg-card);
@@ -515,8 +515,8 @@ onBeforeUnmount(() => {
 .voice-panel__mic-btn {
   position: relative;
   z-index: 1;
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -578,7 +578,7 @@ onBeforeUnmount(() => {
 
 /* Scrollbar */
 .overflow-y-auto::-webkit-scrollbar {
-  width: 4px;
+  width: var(--spacing-1);
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
