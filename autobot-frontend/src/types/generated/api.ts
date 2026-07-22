@@ -14508,6 +14508,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browser/mcp/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Browser State Mcp
+         * @description Get the current page state: URL, title, scroll info, numbered elements.
+         */
+        post: operations["browser_state_mcp_api_browser_mcp_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/click_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Click Index Mcp
+         * @description Click an element by its numbered index, resolved server-side.
+         */
+        post: operations["click_index_mcp_api_browser_mcp_click_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/fill_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill Index Mcp
+         * @description Fill an element by its numbered index, resolved server-side.
+         */
+        post: operations["fill_index_mcp_api_browser_mcp_fill_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/select_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Index Mcp
+         * @description Select a dropdown option on an element by its numbered index.
+         */
+        post: operations["select_index_mcp_api_browser_mcp_select_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/hover_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hover Index Mcp
+         * @description Hover over an element by its numbered index, resolved server-side.
+         */
+        post: operations["hover_index_mcp_api_browser_mcp_hover_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browser/mcp/status": {
         parameters: {
             query?: never;
@@ -57921,6 +58021,50 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserClickIndexRequest
+         * @description Request for POST /browser/mcp/click_index (#11537).
+         */
+        BrowserClickIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Timeout
+             * @description Timeout in milliseconds
+             * @default 10000
+             */
+            timeout: number | null;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserClickIndexResponse */
+        BrowserClickIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserClickRequest */
         BrowserClickRequest: {
             /**
@@ -57980,6 +58124,57 @@ export interface components {
             action: string;
             /** Script Preview */
             script_preview: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BrowserFillIndexRequest
+         * @description Request for POST /browser/mcp/fill_index (#11537).
+         */
+        BrowserFillIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Value
+             * @description Value to fill into the element
+             */
+            value: string;
+            /**
+             * Timeout
+             * @description Timeout in milliseconds
+             * @default 10000
+             */
+            timeout: number | null;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserFillIndexResponse */
+        BrowserFillIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Value Length */
+            value_length: number;
             /** Result */
             result?: unknown | null;
             /** Timestamp */
@@ -58092,6 +58287,44 @@ export interface components {
             selector: string;
             /** Text */
             text?: string | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BrowserHoverIndexRequest
+         * @description Request for POST /browser/mcp/hover_index (#11537).
+         */
+        BrowserHoverIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserHoverIndexResponse */
+        BrowserHoverIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Result */
+            result?: unknown | null;
             /** Timestamp */
             timestamp: string;
         } & {
@@ -58334,6 +58567,51 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserSelectIndexRequest
+         * @description Request for POST /browser/mcp/select_index (#11537).
+         */
+        BrowserSelectIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Value
+             * @description Value to select
+             */
+            value: string;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserSelectIndexResponse */
+        BrowserSelectIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Value */
+            value: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserSelectRequest */
         BrowserSelectRequest: {
             /**
@@ -58460,6 +58738,32 @@ export interface components {
              * @default 0
              */
             mhtml_files_count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BrowserStateRequest
+         * @description Request for POST /browser/mcp/state (#11537).
+         */
+        BrowserStateRequest: {
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserStateResponse */
+        BrowserStateResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
         } & {
             [key: string]: unknown;
         };
@@ -119632,6 +119936,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserHoverResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    browser_state_mcp_api_browser_mcp_state_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    click_index_mcp_api_browser_mcp_click_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserClickIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserClickIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fill_index_mcp_api_browser_mcp_fill_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserFillIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserFillIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_index_mcp_api_browser_mcp_select_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserSelectIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserSelectIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hover_index_mcp_api_browser_mcp_hover_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserHoverIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserHoverIndexResponse"];
                 };
             };
             /** @description Validation Error */
