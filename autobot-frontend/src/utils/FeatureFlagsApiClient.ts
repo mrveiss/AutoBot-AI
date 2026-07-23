@@ -9,11 +9,9 @@
  * Issue #580: GUI integration for feature flags management
  */
 
-import appConfig from '@/config/AppConfig.js';
-import { NetworkConstants } from '@/constants/network';
+import apiClient from '@/utils/ApiClient';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
 
 const logger = createLogger('FeatureFlagsApiClient');
@@ -81,51 +79,17 @@ export type { ApiResponse } from '@/types/api';
  * Communicates with /api/admin/feature-flags and /api/admin/access-control endpoints
  */
 class FeatureFlagsApiClient {
-  private baseUrl: string = '';
-  private baseUrlPromise: Promise<string> | null = null;
-
-  constructor() {
-    this.initializeBaseUrl();
-  }
-
-  private async initializeBaseUrl(): Promise<void> {
-    try {
-      this.baseUrl = await appConfig.getApiUrl('');
-    } catch {
-      logger.warn('AppConfig initialization failed, using NetworkConstants fallback');
-      this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
-    }
-  }
-
-  private async ensureBaseUrl(): Promise<string> {
-    if (this.baseUrl) {
-      return this.baseUrl;
-    }
-
-    if (!this.baseUrlPromise) {
-      this.baseUrlPromise = this.initializeBaseUrl().then(() => this.baseUrl);
-    }
-
-    return await this.baseUrlPromise;
-  }
+  // Base-URL resolution, auth-token injection (with expiry check), 401
+  // auto-logout+redirect, and org-context headers all live on the shared
+  // apiClient singleton (#12152) — this client is a thin typed wrapper
+  // around it, translating raw Response into the local ApiResponse<T> shape.
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: { method?: string; body?: unknown } = {}
   ): Promise<ApiResponse<T>> {
-    const baseUrl = await this.ensureBaseUrl();
-    const url = `${baseUrl}${endpoint}`;
-
-    const defaultHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
     try {
-      const response = await fetchWithAuth(url, {
-        ...options,
-        headers: { ...defaultHeaders, ...options.headers },
-      });
-
+      const response = await apiClient.rawRequest(endpoint, options);
       const data = await response.json();
 
       if (!response.ok) {
@@ -169,7 +133,7 @@ class FeatureFlagsApiClient {
   }>> {
     return this.request(`${getApiBase()}/admin/feature-flags/enforcement-mode`, {
       method: 'PUT',
-      body: JSON.stringify({ mode }),
+      body: { mode },
     });
   }
 
@@ -185,7 +149,7 @@ class FeatureFlagsApiClient {
     const encodedEndpoint = encodeURIComponent(endpoint);
     return this.request(`${getApiBase()}/admin/feature-flags/endpoint/${encodedEndpoint}`, {
       method: 'PUT',
-      body: JSON.stringify({ mode }),
+      body: { mode },
     });
   }
 
