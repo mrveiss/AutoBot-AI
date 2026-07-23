@@ -48675,7 +48675,8 @@ export interface paths {
          * @description Provision a default budget row for an agent (GH#9901).
          *
          *     Returns 201 on creation, 409 if a row already exists.
-         *     Returns 404 if the agent does not exist in agent_org_nodes.
+         *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
+         *     a different tenant (GH#12136).
          *     company_id is derived from agent_org_nodes — callers cannot scope rows
          *     to arbitrary companies.
          */
