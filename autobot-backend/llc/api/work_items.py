@@ -52,7 +52,7 @@ from ..models.enums import (
     WorkItemStatus,
     WorkItemType,
 )
-from ..models.work_item import LLCWorkItemComment
+from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
@@ -306,7 +306,7 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-async def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
+async def _relations_to_list(item: Any, session: AsyncSession) -> List[Dict[str, Any]]:
     """Serialize outgoing relations for the response (GH#8252).
 
     #11684: use ``awaitable_attrs`` so relationship access is async-safe. Items
@@ -316,14 +316,33 @@ async def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
     not-yet-loaded relationship raises ``MissingGreenlet`` (sync IO in an async
     context) → the endpoint 500s even though the row exists. ``awaitable_attrs``
     returns the cached value when already loaded and awaits a load otherwise, so
-    every path serializes correctly. (``outgoing_relations`` is ``lazy=selectin``;
-    each relation's ``target`` is lazy=select — an N+1 when an item has many
-    relations, tracked as a fast-follow.)
+    every path serializes correctly.
+
+    #11686: fetch the referenced targets' three serialized columns
+    (``identifier``/``title``/``status``) in a single bulk query keyed by
+    ``target_id`` instead of lazy-loading each ``rel.target`` (N+1). Selecting
+    columns rather than the ``LLCWorkItem`` entity also avoids eager-loading each
+    target's ``children``/``comments``/``work_products``/relations subtree (all
+    ``lazy=selectin``) — only the fields actually serialized are read.
     """
-    rows = []
     outgoing = await item.awaitable_attrs.outgoing_relations
-    for rel in outgoing or []:
-        tgt = await rel.awaitable_attrs.target
+    if not outgoing:
+        return []
+
+    target_ids = {rel.target_id for rel in outgoing}
+    result = await session.execute(
+        select(
+            LLCWorkItem.id,
+            LLCWorkItem.identifier,
+            LLCWorkItem.title,
+            LLCWorkItem.status,
+        ).where(LLCWorkItem.id.in_(target_ids))
+    )
+    targets = {row.id: row for row in result}
+
+    rows = []
+    for rel in outgoing:
+        tgt = targets.get(rel.target_id)
         rows.append(
             {
                 "id": str(rel.id),
@@ -378,7 +397,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "has_human_handoff_context": bool(getattr(item, "review_brief", None)),
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-        "relations": await _relations_to_list(item),
+        "relations": await _relations_to_list(item, session),
     }
 
 
