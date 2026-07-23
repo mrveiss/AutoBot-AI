@@ -142,8 +142,8 @@ def test_postgres_role_present():
     assert role["systemd_service"] == "postgresql"
     assert role["required"] is True
     assert role["auto_restart"] is True
-    # No AutoBot playbook owns postgres provisioning; api/roles.py returns 422.
-    assert role["ansible_playbook"] is None
+    # #12170: postgres now has a dedicated deploy playbook (was None → 422).
+    assert role["ansible_playbook"] == "playbooks/deploy-postgres-role.yml"
     assert role["sync_type"] is None
     # Non-empty target_path ensures role_detector activates path + systemd checks.
     assert role["target_path"] == "/var/lib/postgresql"
@@ -365,3 +365,30 @@ def test_build_filtered_requirements_script_rewrites_root_requirements_not_strip
     assert "-c /opt/autobot/code_source/constraints/shared.txt" in output
     assert "-r /opt/autobot/code_source/requirements.txt" in output
     assert "fastapi>=0.139.2" in output
+
+
+# ---------------------------------------------------------------------------
+# Ansible playbook resolution (#12170 gave postgres a real playbook; guards the
+# #12083/#12095 bug class where an ansible_playbook points at a non-existent
+# file, making per-role Migrate raise FileNotFoundError / return HTTP 422).
+# ---------------------------------------------------------------------------
+
+_ANSIBLE_DIR = _Path(__file__).parent.parent.parent / "ansible"
+
+
+def test_postgres_has_deploy_playbook():
+    """#12170: postgres must have a real deploy playbook (was None -> HTTP 422)."""
+    assert _role("postgres")["ansible_playbook"] == "playbooks/deploy-postgres-role.yml"
+
+
+def test_all_role_ansible_playbooks_resolve():
+    """Every configured ansible_playbook resolves to a real file under ansible/,
+    so per-role Migrate/Redeploy can never FileNotFoundError."""
+    missing = []
+    for role in DEFAULT_ROLES:
+        pb = role.get("ansible_playbook")
+        if not pb:
+            continue
+        if not (_ANSIBLE_DIR / pb).is_file():
+            missing.append(f"{role['name']} -> {pb}")
+    assert not missing, f"role ansible_playbook(s) missing under {_ANSIBLE_DIR}: {missing}"

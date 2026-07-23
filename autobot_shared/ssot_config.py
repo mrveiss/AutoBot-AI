@@ -1734,6 +1734,12 @@ class FeatureConfig(BaseSettings):
     graph_rag: bool = Field(default=True, alias="AUTOBOT_FEATURE_GRAPH_RAG")
     mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
 
+    # Issue #10538: Slack/Confluence/Jira KB ingestion connectors.
+    # Disabled by default — no credentials are configured out of the box and
+    # these connectors make outbound calls to third-party SaaS APIs. Set
+    # AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS=true once credentials exist.
+    kb_enterprise_connectors: bool = Field(default=False, alias="AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS")
+
 
 class CostModelConfig(BaseSettings):
     """Operator-supplied monthly cost estimates for hardware components.

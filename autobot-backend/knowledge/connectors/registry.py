@@ -41,16 +41,24 @@ logger = get_logger(__name__)
 # Maps a logical capability category (lowercase, normalised) to the list of
 # registered connector type strings that satisfy it.  Only connector types
 # that are actually implemented in this codebase are listed here.
+#
+# Issue #10538: "slack"/"confluence"/"jira" are listed for documentation
+# purposes even though registration is feature-flagged (default disabled) —
+# resolve_by_category() only ever returns *live* instances, so listing them
+# here is safe: with the flag off they are never registered/instantiated and
+# simply never match.
 CATEGORY_MAP: Dict[str, List[str]] = {
     "cloud storage": ["gdrive", "onedrive", "nextcloud"],
     "source control": ["gitlab", "gitea"],
-    "wiki": ["notion"],
-    "knowledge base": ["notion", "file_server", "web_crawler"],
+    "wiki": ["notion", "confluence"],
+    "knowledge base": ["notion", "file_server", "web_crawler", "confluence"],
     "file system": ["file_server"],
     "database": ["database"],
     "web": ["web_crawler"],
     "audio": ["audio"],
     "external": ["external_adapter"],
+    "chat": ["slack"],
+    "issue tracker": ["jira"],
 }
 
 

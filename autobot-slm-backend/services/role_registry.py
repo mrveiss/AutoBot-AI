@@ -226,10 +226,11 @@ _DATABASE_ROLES = [
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
-        # No AutoBot-owned playbook provisions postgres; deploy-database.yml
-        # provisions Redis Stack only.  api/roles.py:338-341 returns HTTP 422
-        # for None — correct behaviour for an externally managed service.
-        "ansible_playbook": None,
+        # #12170: postgres now has a dedicated deploy entry point.
+        # playbooks/deploy-postgres-role.yml delegates to the full, tested
+        # deploy-user-management-db.yml; run_role_full_procedure's --limit runs
+        # only the phase matching the migrated node. Was None (HTTP 422).
+        "ansible_playbook": "playbooks/deploy-postgres-role.yml",
     },
 ]
 
