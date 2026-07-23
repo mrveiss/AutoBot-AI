@@ -8757,6 +8757,27 @@
       "pause": "Suspendre",
       "resume": "Reprendre",
       "complete": "Terminer"
+    },
+    "streaming": {
+      "title": "Sessions de diffusion",
+      "newSession": "Nouvelle session",
+      "terminate": "Terminer",
+      "capVncAvailable": "VNC disponible",
+      "capNovncAvailable": "noVNC disponible",
+      "capMaxSessions": "Sessions max.",
+      "formUserIdLabel": "ID utilisateur",
+      "formUserIdPlaceholder": "ex. user-123",
+      "formResolutionLabel": "Résolution",
+      "formResolutionPlaceholder": "ex. 1920x1080",
+      "formDepthLabel": "Profondeur de couleur",
+      "colSessionId": "ID de session",
+      "colUser": "Utilisateur",
+      "colStatus": "Statut",
+      "colDisplay": "Affichage",
+      "colCreatedAt": "Créée",
+      "colActions": "Actions",
+      "emptyTitle": "Aucune session de diffusion active",
+      "emptyMessage": "Aucune session de diffusion du bureau active pour le moment."
     }
   },
   "adminUsers": {

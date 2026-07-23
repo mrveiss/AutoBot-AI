@@ -8757,6 +8757,27 @@
       "pause": "Pausieren",
       "resume": "Fortsetzen",
       "complete": "Abschließen"
+    },
+    "streaming": {
+      "title": "Streaming-Sitzungen",
+      "newSession": "Neue Sitzung",
+      "terminate": "Beenden",
+      "capVncAvailable": "VNC verfügbar",
+      "capNovncAvailable": "noVNC verfügbar",
+      "capMaxSessions": "Max. Sitzungen",
+      "formUserIdLabel": "Benutzer-ID",
+      "formUserIdPlaceholder": "z. B. user-123",
+      "formResolutionLabel": "Auflösung",
+      "formResolutionPlaceholder": "z. B. 1920x1080",
+      "formDepthLabel": "Farbtiefe",
+      "colSessionId": "Sitzungs-ID",
+      "colUser": "Benutzer",
+      "colStatus": "Status",
+      "colDisplay": "Anzeige",
+      "colCreatedAt": "Erstellt",
+      "colActions": "Aktionen",
+      "emptyTitle": "Keine aktiven Streaming-Sitzungen",
+      "emptyMessage": "Derzeit gibt es keine aktiven Desktop-Streaming-Sitzungen."
     }
   },
   "adminUsers": {

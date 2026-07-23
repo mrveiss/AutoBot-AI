@@ -8757,6 +8757,27 @@
       "pause": "Pausar",
       "resume": "Retomar",
       "complete": "Concluir"
+    },
+    "streaming": {
+      "title": "Sessões de transmissão",
+      "newSession": "Nova sessão",
+      "terminate": "Encerrar",
+      "capVncAvailable": "VNC disponível",
+      "capNovncAvailable": "noVNC disponível",
+      "capMaxSessions": "Sessões máximas",
+      "formUserIdLabel": "ID do usuário",
+      "formUserIdPlaceholder": "ex.: user-123",
+      "formResolutionLabel": "Resolução",
+      "formResolutionPlaceholder": "ex.: 1920x1080",
+      "formDepthLabel": "Profundidade de cor",
+      "colSessionId": "ID da sessão",
+      "colUser": "Usuário",
+      "colStatus": "Status",
+      "colDisplay": "Tela",
+      "colCreatedAt": "Criada",
+      "colActions": "Ações",
+      "emptyTitle": "Nenhuma sessão de transmissão ativa",
+      "emptyMessage": "Não há sessões de transmissão de área de trabalho ativas no momento."
     }
   },
   "adminUsers": {

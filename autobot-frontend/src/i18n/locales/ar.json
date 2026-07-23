@@ -8757,6 +8757,27 @@
       "pause": "إيقاف مؤقت",
       "resume": "استئناف",
       "complete": "إكمال"
+    },
+    "streaming": {
+      "title": "جلسات البث",
+      "newSession": "جلسة جديدة",
+      "terminate": "إنهاء",
+      "capVncAvailable": "VNC متاح",
+      "capNovncAvailable": "noVNC متاح",
+      "capMaxSessions": "الحد الأقصى للجلسات",
+      "formUserIdLabel": "معرّف المستخدم",
+      "formUserIdPlaceholder": "مثال: user-123",
+      "formResolutionLabel": "الدقة",
+      "formResolutionPlaceholder": "مثال: 1920x1080",
+      "formDepthLabel": "عمق اللون",
+      "colSessionId": "معرّف الجلسة",
+      "colUser": "المستخدم",
+      "colStatus": "الحالة",
+      "colDisplay": "الشاشة",
+      "colCreatedAt": "تاريخ الإنشاء",
+      "colActions": "الإجراءات",
+      "emptyTitle": "لا توجد جلسات بث نشطة",
+      "emptyMessage": "لا توجد جلسات بث لسطح المكتب نشطة حاليًا."
     }
   },
   "adminUsers": {

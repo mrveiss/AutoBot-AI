@@ -8757,6 +8757,27 @@
       "pause": "Pausar",
       "resume": "Reanudar",
       "complete": "Completar"
+    },
+    "streaming": {
+      "title": "Sesiones de transmisión",
+      "newSession": "Nueva sesión",
+      "terminate": "Finalizar",
+      "capVncAvailable": "VNC disponible",
+      "capNovncAvailable": "noVNC disponible",
+      "capMaxSessions": "Sesiones máximas",
+      "formUserIdLabel": "ID de usuario",
+      "formUserIdPlaceholder": "p. ej., user-123",
+      "formResolutionLabel": "Resolución",
+      "formResolutionPlaceholder": "p. ej., 1920x1080",
+      "formDepthLabel": "Profundidad de color",
+      "colSessionId": "ID de sesión",
+      "colUser": "Usuario",
+      "colStatus": "Estado",
+      "colDisplay": "Pantalla",
+      "colCreatedAt": "Creada",
+      "colActions": "Acciones",
+      "emptyTitle": "No hay sesiones de transmisión activas",
+      "emptyMessage": "No hay sesiones de transmisión de escritorio activas en este momento."
     }
   },
   "adminUsers": {
