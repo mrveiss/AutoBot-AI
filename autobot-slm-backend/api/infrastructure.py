@@ -108,7 +108,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "and Redis VM. Sets up slm, slm_users, and autobot_users databases "
         "with secure authentication and cross-VM connectivity.",
         category=PlaybookCategory.DATABASE,
-        playbook_file="deploy-user-management-db.yml",
+        playbook_file="playbooks/deploy-user-management-db.yml",
         target_hosts=["slm", "redis"],
         variables={
             "postgresql_version": "16",
@@ -124,7 +124,9 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "RedisGraph, and RedisTimeSeries modules for high-performance "
         "data operations.",
         category=PlaybookCategory.DATABASE,
-        playbook_file="deploy-redis-stack.yml",
+        # #12095: deploy-redis-stack.yml never existed; setup-redis-stack.yml is the
+        # real Redis Stack provisioning playbook (same file the setup-redis-stack entry uses).
+        playbook_file="setup-redis-stack.yml",
         target_hosts=["redis"],
         variables={
             "redis_port": 6379,
@@ -138,7 +140,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         name="Monitoring Stack Setup",
         description="Deploy Prometheus, Grafana, and Alertmanager for " "comprehensive fleet monitoring and alerting.",
         category=PlaybookCategory.MONITORING,
-        playbook_file="deploy-slm-manager.yml",
+        playbook_file="playbooks/deploy-slm-manager.yml",
         target_hosts=["slm_server"],
         variables={
             "prometheus_port": 9090,
@@ -153,7 +155,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         name="PostgreSQL Database Setup",
         description="Deploy PostgreSQL 16 database server for SLM " "backend data persistence.",
         category=PlaybookCategory.DATABASE,
-        playbook_file="deploy-slm-manager.yml",
+        playbook_file="playbooks/deploy-slm-manager.yml",
         target_hosts=["slm_server"],
         variables={
             "postgresql_version": "16",
@@ -169,7 +171,9 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         description="Generate and deploy TLS certificates for secure "
         "communication between fleet nodes using internal CA.",
         category=PlaybookCategory.SECURITY,
-        playbook_file="deploy-tls.yml",
+        # #12095: deploy-tls.yml never existed; enable-tls.yml is the canonical
+        # fleet TLS enablement playbook. (Mapping pending owner confirmation.)
+        playbook_file="enable-tls.yml",
         target_hosts=["all"],
         variables={
             "cert_validity_days": 365,
@@ -186,7 +190,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "configuration (redis, backend, frontend, AI, NPU, browser) "
         "in dependency order.",
         category=PlaybookCategory.NETWORKING,
-        playbook_file="provision-fleet-roles.yml",
+        playbook_file="playbooks/provision-fleet-roles.yml",
         target_hosts=["slm_nodes"],
         variables={},
         estimated_duration="20-30 minutes",
@@ -199,7 +203,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "via the REST API. Assigns roles for heartbeat acceptance "
         "and fleet dashboard visibility.",
         category=PlaybookCategory.NETWORKING,
-        playbook_file="seed-fleet-nodes.yml",
+        playbook_file="playbooks/seed-fleet-nodes.yml",
         target_hosts=["localhost"],
         variables={},
         estimated_duration="1-2 minutes",
@@ -212,7 +216,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         "frontend, nginx, TLS, monitoring, seed nodes, and "
         "auto-provision all fleet roles.",
         category=PlaybookCategory.NETWORKING,
-        playbook_file="deploy-slm-manager.yml",
+        playbook_file="playbooks/deploy-slm-manager.yml",
         target_hosts=["slm_server", "slm_nodes"],
         variables={},
         estimated_duration="30-45 minutes",
