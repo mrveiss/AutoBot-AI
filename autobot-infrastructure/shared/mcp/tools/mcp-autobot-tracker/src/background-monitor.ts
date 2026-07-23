@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import { createClient } from 'redis';
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs/promises';

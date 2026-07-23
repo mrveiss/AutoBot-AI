@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # AutoBot Frontend Dependencies Persistence Script
 # This script ensures @heroicons/vue and other critical dependencies persist across rebuilds

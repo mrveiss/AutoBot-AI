@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Start Celery worker for AutoBot IaC platform
 # Manages asynchronous Ansible playbook execution with real-time event streaming
 

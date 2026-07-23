@@ -1,0 +1,8 @@
+{
+  "id": "doc-005",
+  "title": "Incident Postmortem: 2026-05-12 Outage",
+  "category": "engineering",
+  "author": "sre-team",
+  "updated_at": "2026-05-13T10:00:00+00:00",
+  "content": "Root cause was an unbounded connection pool on the ingest worker that exhausted Redis connections during a traffic spike. Remediation: added a hard pool ceiling, alerting on pool saturation, and a load test that reproduces the spike before the next release."
+}

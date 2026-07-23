@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # MCP Bridge Activation and Verification Script
 # Issue #51 - Backend Activation Procedure for New MCP Bridges
 

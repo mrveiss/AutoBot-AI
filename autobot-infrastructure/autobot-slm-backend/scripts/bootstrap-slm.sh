@@ -1,10 +1,11 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot SLM Bootstrap Script
 # Deploys complete SLM stack (backend + frontend) to target node
 #
 # Usage: ./bootstrap-slm.sh -u USER -h HOST [OPTIONS]
 #
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
 set -euo pipefail

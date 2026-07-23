@@ -1,0 +1,8 @@
+{
+  "id": "doc-002",
+  "title": "Q3 Product Roadmap",
+  "category": "product",
+  "author": "product-team",
+  "updated_at": "2026-02-14T12:30:00+00:00",
+  "content": "Q3 priorities: ship the connector marketplace beta, finish the mobile companion app onboarding flow, and reduce median first-response latency in the support queue by 20%. Stretch goal: multi-tenant cost attribution dashboard."
+}

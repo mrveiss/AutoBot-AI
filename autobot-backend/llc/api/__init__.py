@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """LLC API router (GH#8251)."""
 
-from fastapi import APIRouter, Depends
-
-from llc.deps import postgres_required
+from fastapi import APIRouter
 
 from .activity import router as activity_router
 from .adapters import router as adapters_router
@@ -39,10 +37,9 @@ from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .work_items import router as work_items_router
 
-# GH#10010: All LLC routes require Postgres, which AutoBot always provides
-# (#10636).  The postgres_required dependency is retained as a router-level
-# hook for these Postgres-backed routes.
-router = APIRouter(prefix="/llc", tags=["llc"], dependencies=[Depends(postgres_required)])
+# All LLC routes are Postgres-backed, which AutoBot always provides (#10636);
+# single_user mode is retired, so no availability gate is needed (#10202).
+router = APIRouter(prefix="/llc", tags=["llc"])
 router.include_router(activity_router)
 router.include_router(boards_router)
 router.include_router(adapters_router)

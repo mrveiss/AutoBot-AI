@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Security audit script for AutoBot project
 # Checks for sensitive data that shouldn't be committed to git

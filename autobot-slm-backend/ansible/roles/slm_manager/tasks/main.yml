@@ -191,8 +191,21 @@
       - "--exclude=.git"
       - "--exclude=venv"
       - "--exclude=data"
+      - "--exclude=.deployed_commit"
     delete: true
   notify: restart slm backend
+  tags: ['slm', 'backend', 'deploy']
+
+# #12202: record the commit actually installed at slm_backend_dir so the
+# code-sync self-update skip-check (_get_slm_deployed_commit) reads what is
+# really deployed instead of code_source HEAD (which stage 2 of the update
+# pipeline already advances before this check runs).
+- name: "SLM | Record deployed commit marker (#12202)"
+  ansible.builtin.shell:
+    cmd: >-
+      git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD
+      > {{ slm_backend_dir }}/.deployed_commit
+  changed_when: false
   tags: ['slm', 'backend', 'deploy']
 
 # ==========================================================

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Install and configure pre-commit hooks for AutoBot
 # This script sets up automated code quality enforcement
 

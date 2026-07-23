@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Setup script for Tier 2 Advanced Web Research capabilities
 # This installs Playwright, configures browsers, and sets up dependencies

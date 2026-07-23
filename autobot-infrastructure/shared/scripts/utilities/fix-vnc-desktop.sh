@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Fix VNC to show actual desktop environment
 # Run with: sudo bash fix-vnc-desktop.sh
 

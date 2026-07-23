@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot SSH Configuration Script
 # Creates secure SSH client configuration for AutoBot distributed infrastructure
 # Part of CVE-AUTOBOT-2025-001 remediation

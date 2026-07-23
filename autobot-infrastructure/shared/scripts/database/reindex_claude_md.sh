@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # CLAUDE.md Vector Database Re-indexing Script
 # Deletes outdated CLAUDE.md chunks and re-indexes current version
 # Location: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/scripts/database/reindex_claude_md.sh

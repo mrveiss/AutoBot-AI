@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 #
 # Script to create GitHub issues for centralization project
 # Requires: gh CLI (GitHub CLI) - Install with: sudo apt install gh

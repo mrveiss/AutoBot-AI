@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Repository Cleanliness Enforcement Script
 # Automatically moves misplaced files to proper directories
 # Can be run manually or as a pre-commit hook

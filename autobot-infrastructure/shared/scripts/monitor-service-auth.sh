@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Service Authentication Monitoring Script
 # Monitors authentication patterns during 24-hour logging phase
 

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Week 1 Tasks 1.5-1.6: Test Execution Script
 # Run comprehensive tests for ConversationFileManager database initialization
 

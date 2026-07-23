@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Test Suite Configuration
 Provides pytest fixtures with configuration-driven test setup.

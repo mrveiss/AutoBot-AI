@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot NPU Worker - Stop Script
 # Manual intervention script for stopping the NPU worker service
 

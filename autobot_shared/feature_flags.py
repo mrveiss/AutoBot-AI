@@ -24,6 +24,8 @@ Subsystem flags that default ``False`` (opt-in):
 
 * ``kb_enterprise_connectors`` — Slack/Confluence/Jira KB ingestion connectors
   (AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS). Issue #10538.
+* ``kb_mock_connector`` — offline mock/replay KB connector for dev/CI testing
+  of the sync() pipeline (AUTOBOT_FEATURE_KB_MOCK_CONNECTOR). Issue #10538.
 
 Usage::
 
@@ -57,6 +59,7 @@ _SUBSYSTEM_FLAG_MAP: dict[str, str] = {
     "training": "training_enabled",
     "osint": "osint_enabled",
     "kb_enterprise_connectors": "kb_enterprise_connectors",
+    "kb_mock_connector": "kb_mock_connector",
 }
 
 F = TypeVar("F", bound=Callable)

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Network Configuration
 # Centralized network configuration for all network-related scripts
 # Uses environment variables with fallback to NetworkConstants defaults

@@ -273,30 +273,25 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
 
 
 def cap_unmatched_output(command: str, output: str, exit_code: int) -> str:
-    """
-    Hard safety net for output that no rule matched.
+    """Enforce a hard character ceiling on output that matched no rule.
 
-    Rule-based filters understand the semantics of a specific command's output
-    (pytest failures, diff hunks, etc). This is the blunt fallback: if nothing
-    matched, output can otherwise flow into conversation history completely
-    uncapped. This guarantees a hard ceiling regardless of rule match, using the
-    same tee-and-hint mechanism the matched-rule path already relies on.
+    The rule pipeline shrinks output whose shape it recognises; anything it does
+    not recognise would otherwise reach conversation history at full length. This
+    is the last-resort ceiling — keep the start and end (where errors and
+    summaries usually sit), drop the middle, and leave a pointer to the full
+    copy via the same tee mechanism the matched path uses.
     """
-    if len(output) <= _MAX_UNMATCHED_OUTPUT_CHARS:
+    limit = _MAX_UNMATCHED_OUTPUT_CHARS
+    if len(output) <= limit:
         return output
 
-    half = _MAX_UNMATCHED_OUTPUT_CHARS // 2
-    head = output[:half]
-    tail = output[-half:]
-    omitted = len(output) - (2 * half)
-    truncated = f"{head}\n[... {omitted} chars omitted ...]\n{tail}"
+    keep = limit // 2
+    dropped = len(output) - 2 * keep
+    capped = f"{output[:keep]}\n[... {dropped} chars omitted ...]\n{output[-keep:]}"
 
-    slug = command.strip().split()[0] if command.strip() else "unknown"
-    hint = tee_and_hint(output, slug, exit_code)
-    if hint:
-        truncated = truncated + "\n" + hint
-
-    return truncated
+    words = command.split()
+    hint = tee_and_hint(output, words[0] if words else "unknown", exit_code)
+    return f"{capped}\n{hint}" if hint else capped
 
 
 def _line_similarity(a: str, b: str) -> float:

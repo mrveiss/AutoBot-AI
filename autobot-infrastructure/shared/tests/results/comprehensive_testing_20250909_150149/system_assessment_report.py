@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot System Comprehensive Testing and Analysis
 Testing all aspects of the AutoBot application for integrity and performance assessment
