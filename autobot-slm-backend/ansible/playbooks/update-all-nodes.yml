@@ -262,6 +262,30 @@
         - autobot_shared
       tags: [slm]
 
+    # #12223 (#12202): the self-update path deploys the SLM backend via the
+    # unarchive above and never runs the slm_manager role — where the #12202
+    # marker-write lives — so without this the .deployed_commit marker is never
+    # written and _get_slm_deployed_commit() always returns None (self-update
+    # always fires, never skips-when-current). Record the just-deployed commit
+    # here too, mirroring the slm_manager role, so the skip-check works.
+    - name: "[PLAY 1] SLM | Record deployed commit marker (#12223, #12202)"
+      ansible.builtin.shell:
+        cmd: >-
+          git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD
+          > /opt/autobot/autobot-slm-backend/.deployed_commit
+      changed_when: false
+      become: true
+      tags: [slm]
+
+    - name: "[PLAY 1] SLM | Own the deployed-commit marker (#12223)"
+      file:
+        path: /opt/autobot/autobot-slm-backend/.deployed_commit
+        owner: autobot
+        group: autobot
+        mode: "0644"
+      become: true
+      tags: [slm]
+
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
       ansible.builtin.file:
