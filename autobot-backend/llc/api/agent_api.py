@@ -187,6 +187,7 @@ async def agent_upload_attachment(
 @router.get("/context/{item_id}")
 async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
     """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
+    _agent_context(request)  # GH#12148: enforce authenticated agent context (defense-in-depth)
     from ..kb.work_item_kb import WorkItemKB
 
     kb = WorkItemKB()
