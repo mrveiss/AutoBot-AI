@@ -4,13 +4,15 @@
 // Author: mrveiss
 /**
  * Unit tests for useAdvancedControl (#12162, #12102, #11506 T1 — Stage 1;
- * #12169, #12102 — Stage 2 streaming sessions).
+ * #12169, #12102 — Stage 2 streaming sessions; #12173, #12102 — Stage 3
+ * system monitoring + emergency-stop).
  *
  * Covers: loadTakeovers populates pending/active/status from the client,
  * approve/pause/resume/complete call the right client methods and refresh
  * state on success, failures (success:false or thrown) surface via the
- * `error` ref without throwing, and the Stage 2 streaming equivalents
- * (loadStreaming/createStreaming/terminateStreaming).
+ * `error` ref without throwing, the Stage 2 streaming equivalents
+ * (loadStreaming/createStreaming/terminateStreaming), and the Stage 3
+ * monitoring equivalents (loadMonitoring/emergencyStop).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -29,6 +31,10 @@ const mockListStreamingSessions = vi.fn()
 const mockGetStreamingCapabilities = vi.fn()
 const mockCreateStreamingSession = vi.fn()
 const mockTerminateStreamingSession = vi.fn()
+const mockGetSystemStatus = vi.fn()
+const mockGetSystemHealth = vi.fn()
+const mockEmergencyStop = vi.fn()
+const mockGetMonitoringWebSocketUrl = vi.fn()
 
 vi.mock('@/utils/AdvancedControlApiClient', () => ({
   advancedControlApiClient: {
@@ -44,6 +50,10 @@ vi.mock('@/utils/AdvancedControlApiClient', () => ({
     getStreamingCapabilities: (...args: unknown[]) => mockGetStreamingCapabilities(...args),
     createStreamingSession: (...args: unknown[]) => mockCreateStreamingSession(...args),
     terminateStreamingSession: (...args: unknown[]) => mockTerminateStreamingSession(...args),
+    getSystemStatus: (...args: unknown[]) => mockGetSystemStatus(...args),
+    getSystemHealth: (...args: unknown[]) => mockGetSystemHealth(...args),
+    emergencyStop: (...args: unknown[]) => mockEmergencyStop(...args),
+    getMonitoringWebSocketUrl: (...args: unknown[]) => mockGetMonitoringWebSocketUrl(...args),
   },
 }))
 
@@ -75,6 +85,47 @@ const okCapabilities = {
   },
 }
 
+const okSystemStatus = {
+  success: true,
+  data: {
+    system_status: {
+      status: 'healthy',
+      timestamp: 1700000000,
+      uptime_seconds: 3600,
+      streaming_capabilities: {
+        vnc_available: true,
+        novnc_available: true,
+        max_sessions: 4,
+        supported_resolutions: ['1920x1080'],
+        supported_depths: [24],
+      },
+    },
+    active_sessions: [],
+    pending_takeovers: [],
+    active_takeovers: [],
+    resource_usage: {
+      cpu_percent: 12.5,
+      memory_percent: 40.1,
+      disk_usage: 55.0,
+      process_count: 210,
+      load_average: [0.1, 0.2, 0.3] as [number, number, number],
+    },
+  },
+}
+
+const okSystemHealth = {
+  success: true,
+  data: {
+    status: 'healthy' as const,
+    desktop_streaming_available: true,
+    novnc_available: true,
+    active_streaming_sessions: 0,
+    pending_takeovers: 0,
+    active_takeovers: 0,
+    paused_tasks: 0,
+  },
+}
+
 function resetMocks(): void {
   mockGetPendingTakeovers.mockReset().mockResolvedValue(okEmpty)
   mockGetActiveTakeovers.mockReset().mockResolvedValue(okEmptyActive)
@@ -88,6 +139,10 @@ function resetMocks(): void {
   mockGetStreamingCapabilities.mockReset().mockResolvedValue(okCapabilities)
   mockCreateStreamingSession.mockReset()
   mockTerminateStreamingSession.mockReset()
+  mockGetSystemStatus.mockReset().mockResolvedValue(okSystemStatus)
+  mockGetSystemHealth.mockReset().mockResolvedValue(okSystemHealth)
+  mockEmergencyStop.mockReset()
+  mockGetMonitoringWebSocketUrl.mockReset().mockReturnValue('ws://host/api/advanced-control/ws/monitoring')
 }
 
 describe('useAdvancedControl', () => {
@@ -101,13 +156,24 @@ describe('useAdvancedControl', () => {
   })
 
   it('starts with empty state', () => {
-    const { pendingTakeovers, activeTakeovers, takeoverStatus, streamingSessions, streamingCapabilities, loading, error } =
-      useAdvancedControl()
+    const {
+      pendingTakeovers,
+      activeTakeovers,
+      takeoverStatus,
+      streamingSessions,
+      streamingCapabilities,
+      systemStatus,
+      systemHealth,
+      loading,
+      error,
+    } = useAdvancedControl()
     expect(pendingTakeovers.value).toEqual([])
     expect(activeTakeovers.value).toEqual([])
     expect(takeoverStatus.value).toBeNull()
     expect(streamingSessions.value).toEqual([])
     expect(streamingCapabilities.value).toBeNull()
+    expect(systemStatus.value).toBeNull()
+    expect(systemHealth.value).toBeNull()
     expect(loading.value).toBe(false)
     expect(error.value).toBeNull()
   })
@@ -323,5 +389,94 @@ describe('useAdvancedControl', () => {
       expect(error.value).toBe('network down')
     })
     scope.stop()
+  })
+
+  // -------------------------------------------------------------------------
+  // System monitoring + emergency-stop (#12173, #12102 — Stage 3)
+  // -------------------------------------------------------------------------
+
+  it('loadMonitoring populates systemStatus and systemHealth from the client', async () => {
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { loadMonitoring, systemStatus, systemHealth, loading, error } = useAdvancedControl()
+      const promise = loadMonitoring()
+      expect(loading.value).toBe(true)
+      await promise
+
+      expect(loading.value).toBe(false)
+      expect(error.value).toBeNull()
+      expect(systemStatus.value?.resource_usage.cpu_percent).toBe(12.5)
+      expect(systemHealth.value?.status).toBe('healthy')
+    })
+    scope.stop()
+
+    expect(mockGetSystemStatus).toHaveBeenCalled()
+    expect(mockGetSystemHealth).toHaveBeenCalled()
+  })
+
+  it('surfaces a loadMonitoring thrown error via the error ref', async () => {
+    mockGetSystemStatus.mockRejectedValueOnce(new Error('network down'))
+    mockGetSystemHealth.mockRejectedValueOnce(new Error('network down'))
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { loadMonitoring, error } = useAdvancedControl()
+      await loadMonitoring()
+      expect(error.value).toBe('network down')
+    })
+    scope.stop()
+  })
+
+  it('emergencyStop calls the client and reloads monitoring data on success', async () => {
+    mockEmergencyStop.mockResolvedValueOnce({
+      success: true,
+      data: { success: true, message: 'Emergency stop activated', takeover_request_id: 'r-emergency' },
+    })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { emergencyStop, systemStatus } = useAdvancedControl()
+      const result = await emergencyStop()
+      expect(result).toBe(true)
+      expect(systemStatus.value?.resource_usage.cpu_percent).toBe(12.5)
+    })
+    scope.stop()
+
+    expect(mockEmergencyStop).toHaveBeenCalled()
+    expect(mockGetSystemStatus).toHaveBeenCalled()
+    expect(mockGetSystemHealth).toHaveBeenCalled()
+  })
+
+  it('surfaces an emergencyStop client success:false error without throwing', async () => {
+    mockEmergencyStop.mockResolvedValueOnce({ success: false, error: 'takeover system unavailable' })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { emergencyStop, error } = useAdvancedControl()
+      const result = await emergencyStop()
+      expect(result).toBe(false)
+      expect(error.value).toBe('takeover system unavailable')
+    })
+    scope.stop()
+    expect(mockGetSystemStatus).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a thrown emergencyStop error via the error ref', async () => {
+    mockEmergencyStop.mockRejectedValueOnce(new Error('network down'))
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { emergencyStop, error } = useAdvancedControl()
+      const result = await emergencyStop()
+      expect(result).toBe(false)
+      expect(error.value).toBe('network down')
+    })
+    scope.stop()
+  })
+
+  it('getMonitoringWebSocketUrl passes through to the client', () => {
+    const { getMonitoringWebSocketUrl } = useAdvancedControl()
+    expect(getMonitoringWebSocketUrl()).toBe('ws://host/api/advanced-control/ws/monitoring')
+    expect(mockGetMonitoringWebSocketUrl).toHaveBeenCalled()
   })
 })
