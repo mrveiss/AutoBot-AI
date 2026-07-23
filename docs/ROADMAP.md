@@ -621,9 +621,8 @@ External (standalone MCP servers):
 1. **context7** - Code documentation/reference
 2. **mcp-structured-thinking** - Structured reasoning
 3. **mcp-github-project-manager** - GitHub integration
-4. **mcp-task-manager-server** - Task management
-5. **mcp-autobot-tracker** - AutoBot tracking
-6. **code-index-mcp** - Code indexing
+4. **mcp-autobot-tracker** - AutoBot tracking
+5. **code-index-mcp** - Code indexing
 
 Backend bridges (verified from `autobot-backend/api/*_mcp.py`):
 

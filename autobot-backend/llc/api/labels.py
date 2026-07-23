@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import get_session, service_dep
+from llc.deps import assert_company_access, get_session, service_dep
 from user_management.services import TenantContext
 
 from ..models.label import LLCLabel
@@ -47,17 +47,6 @@ _service = service_dep(LLCLabelService)
 # ------------------------------------------------------------------
 # Auth / tenant isolation (GH#12148)
 # ------------------------------------------------------------------
-
-
-def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
-    """Reject cross-tenant access to a company-scoped label request (GH#12148).
-
-    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
-    from "doesn't exist" — matches goals.py/budget.py (GH#12136). Platform
-    admins are exempt.
-    """
-    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=404, detail="Company not found")
 
 
 async def _assert_label_in_company(session: AsyncSession, label_id: str, company_id: str) -> None:
@@ -125,7 +114,7 @@ async def create_label(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     try:
         label = await _service().create(
             session,
@@ -148,7 +137,7 @@ async def list_labels(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     return await _service().list_labels(session, company_id=company_id)
 
 
@@ -161,7 +150,7 @@ async def update_label(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     await _assert_label_in_company(session, label_id, company_id)
     try:
         label = await _service().update(
@@ -187,7 +176,7 @@ async def delete_label(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     await _assert_label_in_company(session, label_id, company_id)
     try:
         await _service().delete(session, label_id=label_id)
@@ -210,7 +199,7 @@ async def assign_labels(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     await _assert_work_item_in_company(session, work_item_id, company_id)
     await _assert_labels_in_company(session, body.label_ids, company_id)
     try:
@@ -238,7 +227,7 @@ async def remove_label(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     await _assert_work_item_in_company(session, work_item_id, company_id)
     try:
         await _service().remove_label(

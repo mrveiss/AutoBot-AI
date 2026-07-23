@@ -29,13 +29,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import assert_company_access
 from llc.services.model_tiers import get_model_tier_service
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -128,22 +129,6 @@ class QuotaWindow(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Auth / tenant isolation (GH#12148)
-# ---------------------------------------------------------------------------
-
-
-def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
-    """Reject cross-tenant access to a company-scoped cost request (GH#12148).
-
-    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
-    from "doesn't exist" — matches goals.py/budget.py (GH#12136). Platform
-    admins are exempt.
-    """
-    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-
-# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -162,7 +147,7 @@ async def costs_by_agent_model(
     ``cachedInputTokens`` is ``0`` for providers without cache hit reporting.
     """
     if company_id:
-        _assert_company_match(ctx, company_id)
+        assert_company_access(ctx, company_id)
     effective_company_id = company_id or str(ctx.org_id)
     if not effective_company_id:
         return []
@@ -232,7 +217,7 @@ async def quota_windows(
     and are populated by the quota monitor (phase 3).
     """
     if company_id:
-        _assert_company_match(ctx, company_id)
+        assert_company_access(ctx, company_id)
     effective_company_id = company_id or str(ctx.org_id)
     svc = get_model_tier_service()
 

@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import functools
 import uuid
-from typing import AsyncGenerator, Callable, Set, Type, TypeVar
+from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
 
 from fastapi import Depends, HTTPException
 from sqlalchemy import select
@@ -152,8 +152,51 @@ async def load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: 
     return project
 
 
+def assert_company_access(ctx: TenantContext, company_id: Any) -> None:
+    """Reject cross-tenant access to a company-scoped resource (#12184).
+
+    Canonical tenant-check idiom, consolidated from the near-identical
+    per-router ``_assert_company_match`` copies previously defined in
+    approvals.py, decisions.py, costs.py, goals.py, backlog.py, budget.py,
+    review_gate_policies.py, agent_hires.py, and labels.py. 404 (not 403) so a
+    cross-tenant caller can't distinguish "not my company" from "doesn't
+    exist". Platform admins are exempt. Both sides are ``str()``-coerced so
+    callers may pass either a ``str`` or a ``uuid.UUID``.
+    """
+    if str(company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+
+async def load_authorized(
+    session: AsyncSession,
+    model: Type[_T],
+    obj_id: Any,
+    ctx: TenantContext,
+    *,
+    id_attr: str = "id",
+    company_attr: str = "company_id",
+    not_found_detail: str = "Not found",
+) -> _T:
+    """Load a *model* row by *obj_id*; 404 if missing or owned by another org (#12184).
+
+    Generic IDOR-guard loader consolidating the per-router
+    ``_get_authorized_<obj>`` / ``_load_authorized_<obj>`` copies, each of
+    which re-implemented "select by id, then compare the row's owning company
+    to ``ctx.org_id``". 404 (not 403) is used for both "missing" and "wrong
+    org" to avoid disclosing row existence to non-owners. Platform admins are
+    exempt.
+    """
+    result = await session.execute(select(model).where(getattr(model, id_attr) == obj_id))
+    row = result.scalar_one_or_none()
+    if row is None or (str(getattr(row, company_attr)) != str(ctx.org_id) and not ctx.is_platform_admin):
+        raise HTTPException(status_code=404, detail=not_found_detail)
+    return row
+
+
 __all__ = [
+    "assert_company_access",
     "get_session",
+    "load_authorized",
     "load_owned_project",
     "postgres_required",
     "require_board_role",

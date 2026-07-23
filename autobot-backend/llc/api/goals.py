@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
+from llc.deps import assert_company_access
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -100,27 +101,16 @@ class WorkItemSummaryResponse(BaseModel):
         from_attributes = True
 
 
-# ------------------------------------------------------------------ Auth / tenant isolation (GH#12136)
-
-
-def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
-    """Reject cross-tenant access to a company-scoped goal request.
-
-    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
-    from "doesn't exist" — matches the established pattern in
-    boards.py/sprints.py/work_items.py (GH#10296, GH#10148, GH#9861). Platform
-    admins are exempt, matching companies.py's org-chart/backlog-reorder idiom.
-    """
-    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-
 async def _get_authorized_goal(session: AsyncSession, goal_id: uuid.UUID, ctx: TenantContext) -> LLCGoal:
-    """Load a goal and enforce tenant isolation; 404 if missing or cross-tenant (GH#12136)."""
+    """Load a goal and enforce tenant isolation; 404 if missing or cross-tenant (GH#12136).
+
+    Uses the service getter (not the generic bare-select ``load_authorized``)
+    because ``GoalService.get`` is the seam tests mock (test_goals_idor.py) —
+    swapping to a raw ``session.execute(select(...))`` here would bypass that
+    mock in the test harness and change observable behaviour.
+    """
     goal = await _svc().get(session, goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    if str(goal.company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
+    if goal is None or (str(goal.company_id) != str(ctx.org_id) and not ctx.is_platform_admin):
         raise HTTPException(status_code=404, detail="Goal not found")
     return goal
 
@@ -136,7 +126,7 @@ async def list_goals(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     goals = await _svc().list_by_company(session, company_id, parent_goal_id)
     return [GoalResponse.model_validate(g) for g in goals]
 
@@ -148,7 +138,7 @@ async def create_goal(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
-    _assert_company_match(ctx, body.company_id)
+    assert_company_access(ctx, body.company_id)
     goal = await _svc().create(
         session,
         company_id=body.company_id,
