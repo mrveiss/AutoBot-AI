@@ -15,7 +15,7 @@ write). Import is an admin/user action, so the routes are user-facing
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
