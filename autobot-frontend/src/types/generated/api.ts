@@ -166372,9 +166372,7 @@ export interface operations {
     list_secrets_api_llc_secrets__company_id__get: {
         parameters: {
             query?: never;
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 company_id: string;
             };
@@ -166405,9 +166403,7 @@ export interface operations {
     set_secret_api_llc_secrets__company_id__post: {
         parameters: {
             query?: never;
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 company_id: string;
             };
@@ -166442,9 +166438,7 @@ export interface operations {
     get_secret_api_llc_secrets__company_id___name__get: {
         parameters: {
             query?: never;
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 name: string;
                 company_id: string;
@@ -166478,9 +166472,7 @@ export interface operations {
             query: {
                 actor: string;
             };
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 name: string;
                 company_id: string;

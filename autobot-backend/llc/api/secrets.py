@@ -10,21 +10,25 @@ Route group: /llc/secrets/{company_id}
   GET    /{name}             — get decrypted value for a named secret
   DELETE /{name}             — revoke a secret
 
-Access control: the X-Agent-Company-Id header is required and must match the
-{company_id} path parameter.  Values are NEVER returned in list responses.
+Access control: the caller must present a valid authenticated session whose
+tenant (`TenantContext.org_id`) matches the {company_id} path parameter
+(GH#12147); platform admins are exempt. Values are NEVER returned in list
+responses.
 """
 
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from llc.models.secret import LLCSecret
 from llc.services.secret import SecretNotFound, SecretService
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 router = APIRouter(prefix="/secrets", tags=["llc-secrets"])
 
@@ -74,17 +78,20 @@ def _get_service() -> SecretService:
 
 def _check_company_access(
     company_id: str,
-    x_agent_company_id: str = Header(..., alias="X-Agent-Company-Id"),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> str:
-    """Verify the caller belongs to the requested company.
+    """Verify the authenticated caller belongs to the requested company (GH#12147).
 
-    Returns the validated company_id. Raises HTTP 403 on mismatch.
+    Tenant is derived server-side from the validated JWT/session
+    (``require_org_context``), never from a client-supplied header. Returns
+    the validated company_id. Raises HTTP 404 (not 403) on mismatch so a
+    cross-tenant caller can't distinguish "not my company" from "doesn't
+    exist" — matches the goals.py/companies.py idiom (GH#12136). Platform
+    admins are exempt.
     """
-    if x_agent_company_id != company_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Agent company does not match requested company",
-        )
+    if str(company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     return company_id
 
 
