@@ -4149,13 +4149,25 @@ async def _clear_resume_plan() -> None:
 
 
 async def _get_slm_deployed_commit() -> Optional[str]:
-    """Return the commit hash currently deployed on this SLM instance (C1).
+    """Return the commit hash actually installed at the SLM deploy path (C1, #12202).
 
-    Reads from git_tracker (git rev-parse HEAD) with DB fallback — the same
-    source used by the /code-sync/status endpoint's local_version field.
+    Reads the ``.deployed_commit`` marker written by the ``slm_manager``
+    Ansible role right after it rsyncs code_source into the install dir
+    (get_default_deployed_dir) — NOT ``git_tracker.get_local_commit()``,
+    which reflects code_source HEAD. Stage 2 (code_source_pull) already
+    advances code_source HEAD to remote before this check runs, so comparing
+    against git_tracker would always read remote == remote and the self-
+    update would never fire (#12202 root cause).
+
+    Returns None when the marker is absent/unreadable/empty — callers must
+    treat that as "not current" (fail-safe toward firing the self-update).
     """
-    git_tracker_inst = get_git_tracker()
-    return await git_tracker_inst.get_local_commit()
+    marker = Path(get_default_deployed_dir("autobot-slm-backend")) / ".deployed_commit"
+    try:
+        commit = marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return commit or None
 
 
 async def _run_github_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
