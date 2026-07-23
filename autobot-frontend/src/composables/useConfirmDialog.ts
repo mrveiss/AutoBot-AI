@@ -31,6 +31,13 @@ function _resolve(value: boolean): void {
   resolve?.(value)
 }
 
+/** Test-only: reset module-level state to its initial values. */
+export function _resetForTests(): void {
+  dialogVisible.value = false
+  dialogOptions.value = null
+  resolveRef.value = null
+}
+
 export function useConfirmDialog() {
   return { confirm, dialogVisible, dialogOptions, _resolve }
 }

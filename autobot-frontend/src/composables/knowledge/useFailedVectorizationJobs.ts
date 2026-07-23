@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 /**
- * useKnowledgeVectorization Composable
+ * useFailedVectorizationJobs Composable
  *
  * Manages failed vectorization jobs — fetching, retrying, deleting, and
  * clearing all failed jobs. Extracted from FailedVectorizationsManager (#6041).
@@ -19,7 +19,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('useKnowledgeVectorization')
+const logger = createLogger('useFailedVectorizationJobs')
 
 // ==================== Types ====================
 
@@ -103,7 +103,7 @@ export const clearAllFailedVectorizationJobs = async (): Promise<number> => {
 
 // ==================== Reactive composable ====================
 
-export interface UseKnowledgeVectorizationReturn {
+export interface UseFailedVectorizationJobsReturn {
   /** Current list of failed vectorization jobs. */
   failedJobs: Readonly<Ref<FailedVectorizationJob[]>>
   /** Set of job IDs currently being retried. */
@@ -127,7 +127,7 @@ export interface UseKnowledgeVectorizationReturn {
   clearAllFailedVectorizationJobs: typeof clearAllFailedVectorizationJobs
 }
 
-export function useKnowledgeVectorization(): UseKnowledgeVectorizationReturn {
+export function useFailedVectorizationJobs(): UseFailedVectorizationJobsReturn {
   const failedJobs = ref<FailedVectorizationJob[]>([])
   const retryingJobs = ref<Set<string>>(new Set())
   const error = ref<string | null>(null)

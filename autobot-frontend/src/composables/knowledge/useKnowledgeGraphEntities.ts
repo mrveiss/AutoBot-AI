@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 /**
- * useKnowledgeGraph
+ * useKnowledgeGraphEntities
  *
  * Encapsulates all HTTP fetching for the KnowledgeGraph component (#6040):
  *   - fetchGraphData()  — parallel GET for unified graph + memory entities
@@ -21,7 +21,7 @@ import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('useKnowledgeGraph')
+const logger = createLogger('useKnowledgeGraphEntities')
 
 // ============================================================================
 // Types
@@ -59,7 +59,7 @@ export interface GraphData {
 // Composable
 // ============================================================================
 
-export interface UseKnowledgeGraphReturn {
+export interface UseKnowledgeGraphEntitiesReturn {
   /** Current entity list (merged from unified KB + memory endpoints). */
   entities: Readonly<Ref<GraphEntity[]>>
   /** Current relation list (deduplicated). */
@@ -77,7 +77,7 @@ export interface UseKnowledgeGraphReturn {
   createGraphEntity: (payload: NewEntityPayload) => Promise<GraphEntity | null>
 }
 
-export function useKnowledgeGraph(): UseKnowledgeGraphReturn {
+export function useKnowledgeGraphEntities(): UseKnowledgeGraphEntitiesReturn {
   const entities = ref<GraphEntity[]>([])
   const relations = ref<GraphRelation[]>([])
   const errorMessage = ref('')

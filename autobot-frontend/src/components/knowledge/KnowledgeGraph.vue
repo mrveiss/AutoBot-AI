@@ -395,8 +395,8 @@ import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, def
 import type cytoscape from 'cytoscape'
 import type { Core, NodeSingular } from 'cytoscape'
 import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
-import { useKnowledgeGraph } from '@/composables/knowledge/useKnowledgeGraph'
-import type { GraphEntity as Entity, GraphRelation as Relation } from '@/composables/knowledge/useKnowledgeGraph'
+import { useKnowledgeGraphEntities } from '@/composables/knowledge/useKnowledgeGraphEntities'
+import type { GraphEntity as Entity, GraphRelation as Relation } from '@/composables/knowledge/useKnowledgeGraphEntities'
 import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
 import { getCssVar } from '@/composables/useCssVars'
@@ -431,7 +431,7 @@ const emit = defineEmits<{
 // Types
 // ============================================================================
 
-// Entity and Relation types are imported from useKnowledgeGraph composable.
+// Entity and Relation types are imported from useKnowledgeGraphEntities composable.
 
 interface NewEntity {
   name: string
@@ -450,7 +450,7 @@ const {
   errorMessage: graphError,
   fetchGraphData,
   createGraphEntity,
-} = useKnowledgeGraph()
+} = useKnowledgeGraphEntities()
 
 const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
 watch(graphError, (msg) => {
@@ -883,7 +883,7 @@ function handleCleanupComplete(): void {
 }
 
 /**
- * Refreshes the knowledge graph by delegating to useKnowledgeGraph.fetchGraphData().
+ * Refreshes the knowledge graph by delegating to useKnowledgeGraphEntities.fetchGraphData().
  * Emits 'graph-refreshed' event on successful load with entity/relation counts.
  */
 async function refreshGraph(): Promise<void> {
@@ -911,7 +911,7 @@ async function refreshGraph(): Promise<void> {
 
 /**
  * Creates a new entity via the composable, updates the graph, and emits events.
- * Validates required fields before delegating to useKnowledgeGraph.createGraphEntity().
+ * Validates required fields before delegating to useKnowledgeGraphEntities.createGraphEntity().
  */
 async function createEntity(): Promise<void> {
   if (!newEntity.value.name || !newEntity.value.type || !newEntity.value.observations) {
