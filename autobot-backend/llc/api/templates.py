@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from llc.deps import assert_company_access
 from llc.models.template import (
     TemplateCategory,
     TemplateDetail,
@@ -56,15 +57,9 @@ def _get_service(session: AsyncSession = Depends(get_async_session)) -> Template
     return TemplateService(session=session)
 
 
-def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
-    """Reject a caller-supplied company that isn't the caller's own org (GH#12148).
-
-    Platform admins are exempt. 403 (not 404) here because the caller is
-    asserting a company identity that isn't theirs — an authorization failure,
-    not a lookup miss.
-    """
-    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+# Cross-tenant/cross-company denials return 404 (existence non-disclosure),
+# consistent with every other LLC router via the shared ``assert_company_access``
+# seam in ``llc.deps`` (#12184).
 
 
 @router.post("/", response_model=TemplateDetail, status_code=status.HTTP_201_CREATED)
@@ -81,7 +76,7 @@ async def publish_template(
     caller-supplied ``company_id`` must match it (GH#12148).
     """
     if company_id is not None:
-        _assert_company_match(ctx, str(company_id))
+        assert_company_access(ctx, company_id)
     try:
         result = await svc.publish(req, company_id=ctx.org_id)
         await svc.session.commit()
@@ -123,7 +118,7 @@ async def list_templates(
     caller-supplied ``company_id`` must match it (GH#12148).
     """
     if company_id is not None:
-        _assert_company_match(ctx, str(company_id))
+        assert_company_access(ctx, company_id)
     params = TemplateListParams(
         category=category,
         tag=tag,
@@ -182,13 +177,13 @@ async def get_template(
     caller-supplied ``company_id`` must match it (GH#12148).
     """
     if company_id is not None:
-        _assert_company_match(ctx, str(company_id))
+        assert_company_access(ctx, company_id)
     try:
         return await svc.get(template_id, requesting_company_id=ctx.org_id)
     except TemplateNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     except TemplateAccessError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
 
 
 @router.post("/{template_id}/import", response_model=TemplateImportResult)
@@ -203,7 +198,7 @@ async def import_template(
 
     The import target must be the caller's authenticated org (GH#12148).
     """
-    _assert_company_match(ctx, str(req.target_company_id))
+    assert_company_access(ctx, req.target_company_id)
     try:
         result = await svc.import_template(template_id, req)
         await svc.session.commit()
@@ -211,7 +206,7 @@ async def import_template(
     except TemplateNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     except TemplateAccessError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     except TemplateSecretPlaceholderError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -236,10 +231,10 @@ async def delete_template(
     except TemplateNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     except TemplateAccessError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
 
     if not ctx.is_platform_admin and str(detail.created_by_company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
 
     try:
         await svc.delete(template_id)
