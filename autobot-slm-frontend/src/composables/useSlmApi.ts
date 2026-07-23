@@ -67,6 +67,7 @@ import type {
   MonitoringSystemHealth,
   DashboardOverview,
   LogsResponse,
+  AppLogsResponse,
   BlueGreenDeploymentApi,
   BlueGreenCreate,
   BlueGreenListResponse,
@@ -811,6 +812,31 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function getAppLogs(options: {
+    node_id: string
+    service: string
+    severity?: string
+    hours?: number
+    q?: string
+    page?: number
+    per_page?: number
+    mcp_instance?: string
+  }): Promise<AppLogsResponse> {
+    const params = new URLSearchParams()
+    params.append('node_id', options.node_id)
+    params.append('service', options.service)
+    if (options.severity) params.append('severity', options.severity)
+    if (options.hours) params.append('hours', options.hours.toString())
+    if (options.q) params.append('q', options.q)
+    if (options.page) params.append('page', options.page.toString())
+    if (options.per_page) params.append('per_page', options.per_page.toString())
+    if (options.mcp_instance) params.append('mcp_instance', options.mcp_instance)
+    const response = await client.get<AppLogsResponse>(
+      `/monitoring/app-logs?${params.toString()}`
+    )
+    return response.data
+  }
+
   async function getErrorSummary(hours?: number): Promise<{
     total_errors: number
     by_type: Record<string, number>
@@ -1325,6 +1351,7 @@ export function useSlmApi() {
     getSystemHealth,
     getMonitoringDashboard,
     getMonitoringLogs,
+    getAppLogs,
     getErrorSummary,
     // Blue-Green Deployments (Issue #726)
     getBlueGreenDeployments,

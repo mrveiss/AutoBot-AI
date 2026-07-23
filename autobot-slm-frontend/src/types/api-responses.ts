@@ -309,6 +309,24 @@ export interface LogsResponse {
   per_page: number
 }
 
+// Application-log viewer (Issue #11302) — tails allowlisted on-node log files
+// (backend-error.log, celery-error.log, etc.) via GET /monitoring/app-logs.
+export interface AppLogEntry {
+  line_number: number
+  timestamp: string | null
+  severity: string | null
+  message: string
+}
+
+export interface AppLogsResponse {
+  entries: AppLogEntry[]
+  total: number
+  page: number
+  per_page: number
+  node_id: string
+  service: string
+}
+
 // =============================================================================
 // Blue-Green Deployments (Issue #726 Phase 3)
 // =============================================================================
