@@ -36,10 +36,16 @@ slm_agent_data_dir: /var/lib/slm-agent
 #   - redis:   autobot_shared.redis_client (health_collector.py imports it at
 #              module load) — was MISSING here, so a fresh restart on the system
 #              python crash-looped with ModuleNotFoundError: No module named 'redis'.
+#   - pydantic-settings / sqlalchemy: autobot_shared transitive deps (its config +
+#              DB modules, per autobot_shared/pyproject.toml). The agent imports
+#              autobot_shared, so these load at agent startup — MISSING here caused
+#              the same ModuleNotFoundError crash-loop on 2026-07-23 (#12142).
 slm_agent_python_packages:
   - aiohttp
   - psutil
   - redis
+  - pydantic-settings
+  - sqlalchemy
 
 # Services to monitor (systemd service names)
 # Override per-host in inventory, e.g.:
