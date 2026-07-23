@@ -698,6 +698,30 @@ function _handleVadSpeechEnd(audio: Float32Array): void {
     })
 }
 
+/** Test-only: reset module-level state to its initial values. */
+export function _resetForTests(): void {
+  state.value = 'idle'
+  mode.value = 'walkie-talkie'
+  currentTranscript.value = ''
+  bubbles.value = []
+  isActive.value = false
+  errorMessage.value = ''
+  silenceThreshold.value = 1500
+  audioLevel.value = 0
+  currentLanguage.value = 'en'
+  _recognition = null
+  _voiceUnsubscribe = null
+  _vadAudioCtx = null
+  _vadNode = null
+  _micStream = null
+  _sileroVad = null
+  _whisperFallback = false
+  _fallbackRecorder = null
+  _fallbackStream = null
+  _transcribeController = null
+  _ttsCooldownTimer = null
+}
+
 // ─── Main composable ────────────────────────────────────
 
 export function useVoiceConversation() {
