@@ -11,6 +11,13 @@ Route group: /llc/templates
   GET    /{template_id}        — fetch full template JSON
   POST   /{template_id}/import — import template into target company
   DELETE /{template_id}        — delete template + remove from ChromaDB
+
+Auth / tenant isolation (GH#12148): every handler requires an authenticated
+user. Company-scoped operations bind the requesting/owning company to the
+caller's authenticated organization context rather than trusting a
+caller-supplied ``company_id`` — a caller can no longer read, publish into,
+import into, or delete templates on behalf of an arbitrary company. DELETE
+additionally requires the caller's org to own the template (or platform admin).
 """
 
 import uuid
@@ -19,6 +26,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from llc.models.template import (
     TemplateCategory,
     TemplateDetail,
@@ -38,6 +46,7 @@ from llc.services.template import (
     TemplateService,
 )
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 router = APIRouter(prefix="/templates", tags=["llc-templates"])
 
@@ -47,15 +56,34 @@ def _get_service(session: AsyncSession = Depends(get_async_session)) -> Template
     return TemplateService(session=session)
 
 
+def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
+    """Reject a caller-supplied company that isn't the caller's own org (GH#12148).
+
+    Platform admins are exempt. 403 (not 404) here because the caller is
+    asserting a company identity that isn't theirs — an authorization failure,
+    not a lookup miss.
+    """
+    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
 @router.post("/", response_model=TemplateDetail, status_code=status.HTTP_201_CREATED)
 async def publish_template(
     req: TemplatePublishRequest,
     company_id: Optional[uuid.UUID] = Query(None, description="Owning company ID"),
     svc: TemplateService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> TemplateDetail:
-    """Publish a scrubbed company export as a reusable template (GH#8260)."""
+    """Publish a scrubbed company export as a reusable template (GH#8260).
+
+    The template is owned by the caller's authenticated organization; a
+    caller-supplied ``company_id`` must match it (GH#12148).
+    """
+    if company_id is not None:
+        _assert_company_match(ctx, str(company_id))
     try:
-        result = await svc.publish(req, company_id=company_id)
+        result = await svc.publish(req, company_id=ctx.org_id)
         await svc.session.commit()
         return result
     except ValueError:
@@ -66,8 +94,13 @@ async def publish_template(
 async def search_templates(
     q: str = Query(..., min_length=1, description="Semantic search query"),
     svc: TemplateService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
 ) -> TemplateSearchResponse:
-    """RAG search over platform:template_kb ChromaDB collection (GH#8260)."""
+    """RAG search over platform:template_kb ChromaDB collection (GH#8260).
+
+    Returns platform-level template metadata only; requires authentication
+    (GH#12148).
+    """
     results: List[TemplateSearchResult] = await svc.search(q)
     return TemplateSearchResponse(query=q, results=results, total=len(results))
 
@@ -81,8 +114,16 @@ async def list_templates(
     page_size: int = Query(default=20, ge=1, le=100),
     company_id: Optional[uuid.UUID] = Query(None, description="Requesting company ID"),
     svc: TemplateService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[TemplateRead]:
-    """List templates visible to the requesting company (GH#8260)."""
+    """List templates visible to the caller's organization (GH#8260).
+
+    Private-template visibility is scoped to the authenticated org; a
+    caller-supplied ``company_id`` must match it (GH#12148).
+    """
+    if company_id is not None:
+        _assert_company_match(ctx, str(company_id))
     params = TemplateListParams(
         category=category,
         tag=tag,
@@ -90,24 +131,29 @@ async def list_templates(
         page=page,
         page_size=page_size,
     )
-    return await svc.list_templates(params, requesting_company_id=company_id)
+    return await svc.list_templates(params, requesting_company_id=ctx.org_id)
 
 
 # Static /built-in routes MUST be declared before the dynamic /{template_id}
 # route: FastAPI matches in definition order, so a {template_id: uuid} above
 # would swallow GET /built-in and 422 on UUID parsing of "built-in" (GH#9042).
 @router.get("/built-in", response_model=List[Dict])
-async def list_built_in_templates() -> List[Dict]:
+async def list_built_in_templates(
+    _current_user: dict = Depends(get_current_user),
+) -> List[Dict]:
     """List all built-in company templates (GH#9042).
 
     Returns template metadata only (name, description, category, tags).
-    Does not require authentication or database access.
+    Requires authentication (GH#12148).
     """
     return TemplateService.list_built_in_templates()
 
 
 @router.get("/built-in/{template_key}", response_model=Dict)
-async def get_built_in_template(template_key: str) -> Dict:
+async def get_built_in_template(
+    template_key: str,
+    _current_user: dict = Depends(get_current_user),
+) -> Dict:
     """Fetch a specific built-in template by key (GH#9042).
 
     Args:
@@ -127,10 +173,18 @@ async def get_template(
     template_id: uuid.UUID,
     company_id: Optional[uuid.UUID] = Query(None, description="Requesting company ID"),
     svc: TemplateService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> TemplateDetail:
-    """Fetch full template JSON by ID (GH#8260)."""
+    """Fetch full template JSON by ID (GH#8260).
+
+    Access is evaluated against the caller's authenticated org; a
+    caller-supplied ``company_id`` must match it (GH#12148).
+    """
+    if company_id is not None:
+        _assert_company_match(ctx, str(company_id))
     try:
-        return await svc.get(template_id, requesting_company_id=company_id)
+        return await svc.get(template_id, requesting_company_id=ctx.org_id)
     except TemplateNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
     except TemplateAccessError:
@@ -142,8 +196,14 @@ async def import_template(
     template_id: uuid.UUID,
     req: TemplateImportRequest,
     svc: TemplateService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> TemplateImportResult:
-    """Import template into target company; resolves {{SECRET}} placeholders (GH#8260)."""
+    """Import template into target company; resolves {{SECRET}} placeholders (GH#8260).
+
+    The import target must be the caller's authenticated org (GH#12148).
+    """
+    _assert_company_match(ctx, str(req.target_company_id))
     try:
         result = await svc.import_template(template_id, req)
         await svc.session.commit()
@@ -163,8 +223,24 @@ async def import_template(
 async def delete_template(
     template_id: uuid.UUID,
     svc: TemplateService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
-    """Delete template from DB and ChromaDB collection (GH#8260)."""
+    """Delete template from DB and ChromaDB collection (GH#8260).
+
+    Only the owning organization (or a platform admin) may delete a template
+    (GH#12148).
+    """
+    try:
+        detail = await svc.get(template_id, requesting_company_id=ctx.org_id)
+    except TemplateNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+    except TemplateAccessError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if not ctx.is_platform_admin and str(detail.created_by_company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
     try:
         await svc.delete(template_id)
         await svc.session.commit()

@@ -225,7 +225,10 @@ def test_list_labels_route(app_client):
 def test_update_label_not_found(app_client):
     client, company_id, label_id, *_ = app_client
 
-    with patch("llc.api.labels._service") as mock_svc:
+    with (
+        patch("llc.api.labels._service") as mock_svc,
+        patch("llc.api.labels._assert_label_in_company", new=AsyncMock()),
+    ):
         svc = AsyncMock()
         svc.update = AsyncMock(side_effect=LabelNotFound(label_id))
         mock_svc.return_value = svc
@@ -241,7 +244,10 @@ def test_update_label_not_found(app_client):
 def test_delete_label_not_found(app_client):
     client, company_id, label_id, *_ = app_client
 
-    with patch("llc.api.labels._service") as mock_svc:
+    with (
+        patch("llc.api.labels._service") as mock_svc,
+        patch("llc.api.labels._assert_label_in_company", new=AsyncMock()),
+    ):
         svc = AsyncMock()
         svc.delete = AsyncMock(side_effect=LabelNotFound(label_id))
         mock_svc.return_value = svc
@@ -255,7 +261,11 @@ def test_assign_labels_work_item_not_found(app_client):
     client, company_id, label_id, *_ = app_client
     work_item_id = str(uuid.uuid4())
 
-    with patch("llc.api.labels._service") as mock_svc:
+    with (
+        patch("llc.api.labels._service") as mock_svc,
+        patch("llc.api.labels._assert_work_item_in_company", new=AsyncMock()),
+        patch("llc.api.labels._assert_labels_in_company", new=AsyncMock()),
+    ):
         svc = AsyncMock()
         svc.assign_labels = AsyncMock(side_effect=WorkItemNotFound(work_item_id))
         mock_svc.return_value = svc
@@ -272,7 +282,10 @@ def test_remove_label_work_item_not_found(app_client):
     client, company_id, label_id, *_ = app_client
     work_item_id = str(uuid.uuid4())
 
-    with patch("llc.api.labels._service") as mock_svc:
+    with (
+        patch("llc.api.labels._service") as mock_svc,
+        patch("llc.api.labels._assert_work_item_in_company", new=AsyncMock()),
+    ):
         svc = AsyncMock()
         svc.remove_label = AsyncMock(side_effect=WorkItemNotFound(work_item_id))
         mock_svc.return_value = svc
