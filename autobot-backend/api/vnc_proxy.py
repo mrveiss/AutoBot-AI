@@ -154,10 +154,9 @@ async def _audit_control_lock_change(action: str, session_id: str, current_user:
     """Best-effort audit log for a control-lock acquire/release (#12002).
 
     Uses integrations.desktop_tracking (Issue #873), the existing desktop
-    activity audit hook. Never raises -- PostgreSQL may be disabled entirely
-    in single_user deployments (get_async_session_factory hard-raises in
-    that mode), and a missing/unauthenticated user_id must not block the
-    safety-critical lock operation itself.
+    activity audit hook. Never raises -- a transient PostgreSQL/session-factory
+    error must not block the safety-critical lock operation, and neither must a
+    missing/unauthenticated user_id.
     """
     raw_user_id = current_user.get("user_id")
     if not raw_user_id:
@@ -184,7 +183,7 @@ async def _audit_control_lock_change(action: str, session_id: str, current_user:
             )
             await db.commit()
     except RuntimeError as e:
-        # PostgreSQL not enabled for this deployment mode -- expected in single_user.
+        # Defensive: session factory unavailable (e.g. startup race) -- non-fatal.
         logger.debug("Control-lock audit skipped (PostgreSQL unavailable): %s", e)
     except Exception as e:
         logger.warning("Control-lock audit logging failed for %s (non-fatal): %s", action, e)

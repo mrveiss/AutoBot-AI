@@ -12,7 +12,7 @@ unit-testable in isolation:
 
 - ``principal`` — the caller's ``(user_id, permissions)`` from the auth
   middleware + RBAC; 401 when unauthenticated.
-- ``get_session`` — the Postgres ``AsyncSession`` (gated by ``postgres_required``).
+- ``get_session`` — the Postgres ``AsyncSession`` (always available; #10636).
 - ``get_coordinator`` — the ``SecretsCoordinator``; 503 when the root key is unset.
 
 Coordinator exceptions map to HTTP: ``SecretNotFoundError``→404,
