@@ -8757,6 +8757,27 @@
       "pause": "Wstrzymaj",
       "resume": "Wznów",
       "complete": "Zakończ"
+    },
+    "streaming": {
+      "title": "Sesje strumieniowania",
+      "newSession": "Nowa sesja",
+      "terminate": "Zakończ",
+      "capVncAvailable": "VNC dostępne",
+      "capNovncAvailable": "noVNC dostępne",
+      "capMaxSessions": "Maks. liczba sesji",
+      "formUserIdLabel": "ID użytkownika",
+      "formUserIdPlaceholder": "np. user-123",
+      "formResolutionLabel": "Rozdzielczość",
+      "formResolutionPlaceholder": "np. 1920x1080",
+      "formDepthLabel": "Głębia koloru",
+      "colSessionId": "ID sesji",
+      "colUser": "Użytkownik",
+      "colStatus": "Stan",
+      "colDisplay": "Ekran",
+      "colCreatedAt": "Utworzono",
+      "colActions": "Działania",
+      "emptyTitle": "Brak aktywnych sesji strumieniowania",
+      "emptyMessage": "Obecnie nie ma aktywnych sesji strumieniowania pulpitu."
     }
   },
   "adminUsers": {

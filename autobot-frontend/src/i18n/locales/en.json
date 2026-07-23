@@ -8757,6 +8757,27 @@
       "pause": "Pause",
       "resume": "Resume",
       "complete": "Complete"
+    },
+    "streaming": {
+      "title": "Streaming Sessions",
+      "newSession": "New Session",
+      "terminate": "Terminate",
+      "capVncAvailable": "VNC Available",
+      "capNovncAvailable": "noVNC Available",
+      "capMaxSessions": "Max Sessions",
+      "formUserIdLabel": "User ID",
+      "formUserIdPlaceholder": "e.g. user-123",
+      "formResolutionLabel": "Resolution",
+      "formResolutionPlaceholder": "e.g. 1920x1080",
+      "formDepthLabel": "Color Depth",
+      "colSessionId": "Session ID",
+      "colUser": "User",
+      "colStatus": "Status",
+      "colDisplay": "Display",
+      "colCreatedAt": "Created",
+      "colActions": "Actions",
+      "emptyTitle": "No active streaming sessions",
+      "emptyMessage": "There are no active desktop streaming sessions right now."
     }
   },
   "adminUsers": {

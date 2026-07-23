@@ -8757,6 +8757,27 @@
       "pause": "Pauzēt",
       "resume": "Atsākt",
       "complete": "Pabeigt"
+    },
+    "streaming": {
+      "title": "Straumēšanas sesijas",
+      "newSession": "Jauna sesija",
+      "terminate": "Pārtraukt",
+      "capVncAvailable": "VNC pieejams",
+      "capNovncAvailable": "noVNC pieejams",
+      "capMaxSessions": "Maks. sesijas",
+      "formUserIdLabel": "Lietotāja ID",
+      "formUserIdPlaceholder": "piem., user-123",
+      "formResolutionLabel": "Izšķirtspēja",
+      "formResolutionPlaceholder": "piem., 1920x1080",
+      "formDepthLabel": "Krāsu dziļums",
+      "colSessionId": "Sesijas ID",
+      "colUser": "Lietotājs",
+      "colStatus": "Statuss",
+      "colDisplay": "Displejs",
+      "colCreatedAt": "Izveidota",
+      "colActions": "Darbības",
+      "emptyTitle": "Nav aktīvu straumēšanas sesiju",
+      "emptyMessage": "Pašlaik nav aktīvu darbvirsmas straumēšanas sesiju."
     }
   },
   "adminUsers": {

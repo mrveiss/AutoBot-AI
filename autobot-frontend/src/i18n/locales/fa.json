@@ -8757,6 +8757,27 @@
       "pause": "توقف",
       "resume": "ازسرگیری",
       "complete": "تکمیل"
+    },
+    "streaming": {
+      "title": "نشست‌های پخش زنده",
+      "newSession": "نشست جدید",
+      "terminate": "پایان دادن",
+      "capVncAvailable": "VNC در دسترس",
+      "capNovncAvailable": "noVNC در دسترس",
+      "capMaxSessions": "حداکثر نشست‌ها",
+      "formUserIdLabel": "شناسه کاربر",
+      "formUserIdPlaceholder": "مثلاً: user-123",
+      "formResolutionLabel": "وضوح تصویر",
+      "formResolutionPlaceholder": "مثلاً: 1920x1080",
+      "formDepthLabel": "عمق رنگ",
+      "colSessionId": "شناسه نشست",
+      "colUser": "کاربر",
+      "colStatus": "وضعیت",
+      "colDisplay": "نمایشگر",
+      "colCreatedAt": "ایجادشده",
+      "colActions": "عملیات",
+      "emptyTitle": "نشست پخش زنده فعالی وجود ندارد",
+      "emptyMessage": "در حال حاضر هیچ نشست پخش زنده دسکتاپ فعالی وجود ندارد."
     }
   },
   "adminUsers": {

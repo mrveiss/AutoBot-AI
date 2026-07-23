@@ -8757,6 +8757,27 @@
       "pause": "موقوف کریں",
       "resume": "دوبارہ شروع کریں",
       "complete": "مکمل کریں"
+    },
+    "streaming": {
+      "title": "اسٹریمنگ سیشنز",
+      "newSession": "نیا سیشن",
+      "terminate": "ختم کریں",
+      "capVncAvailable": "VNC دستیاب ہے",
+      "capNovncAvailable": "noVNC دستیاب ہے",
+      "capMaxSessions": "زیادہ سے زیادہ سیشنز",
+      "formUserIdLabel": "صارف کی شناخت",
+      "formUserIdPlaceholder": "مثلاً: user-123",
+      "formResolutionLabel": "ریزولیوشن",
+      "formResolutionPlaceholder": "مثلاً: 1920x1080",
+      "formDepthLabel": "کلر ڈیپتھ",
+      "colSessionId": "سیشن کی شناخت",
+      "colUser": "صارف",
+      "colStatus": "حالت",
+      "colDisplay": "ڈسپلے",
+      "colCreatedAt": "تخلیق شدہ",
+      "colActions": "اقدامات",
+      "emptyTitle": "کوئی فعال اسٹریمنگ سیشن نہیں",
+      "emptyMessage": "اس وقت کوئی فعال ڈیسک ٹاپ اسٹریمنگ سیشن موجود نہیں ہے۔"
     }
   },
   "adminUsers": {

@@ -186,13 +186,118 @@
       </template>
     </div>
 
-    <!-- Streaming tab placeholder -->
+    <!-- Streaming Sessions tab -->
     <div v-else-if="activeTab === 'streaming'" v-bind="panelAttrs('streaming')" class="acv-content">
-      <EmptyState
-        icon="window-restore"
-        :title="t('advancedControl.tabs.streamingTitle')"
-        :message="t('advancedControl.tabs.comingSoonMessage')"
-      />
+      <div v-if="error" class="error-banner">
+        <Icon name="exclamation-circle" />
+        <span>{{ error }}</span>
+        <button class="btn-dismiss" :aria-label="t('common.dismiss')" @click="clearError"><Icon name="times" /></button>
+      </div>
+
+      <!-- Capabilities summary -->
+      <div v-if="streamingCapabilities" class="status-summary">
+        <div class="status-card">
+          <span class="status-value">{{ streamingCapabilities.vnc_available ? t('common.yes') : t('common.no') }}</span>
+          <span class="status-label">{{ t('advancedControl.streaming.capVncAvailable') }}</span>
+        </div>
+        <div class="status-card">
+          <span class="status-value">{{ streamingCapabilities.novnc_available ? t('common.yes') : t('common.no') }}</span>
+          <span class="status-label">{{ t('advancedControl.streaming.capNovncAvailable') }}</span>
+        </div>
+        <div class="status-card">
+          <span class="status-value">{{ streamingCapabilities.max_sessions }}</span>
+          <span class="status-label">{{ t('advancedControl.streaming.capMaxSessions') }}</span>
+        </div>
+      </div>
+
+      <div v-if="loading && streamingSessions.length === 0" class="loading-state">
+        <Icon name="sync-alt" :spin="true" /> {{ t('advancedControl.loading') }}
+      </div>
+
+      <template v-else>
+        <section class="table-section">
+          <h3 class="section-title section-title--with-action">
+            <span>{{ t('advancedControl.streaming.title') }}</span>
+            <button class="btn-action-secondary" @click="toggleCreateForm">
+              <Icon name="plus-circle" />
+              {{ t('advancedControl.streaming.newSession') }}
+            </button>
+          </h3>
+
+          <form v-if="showCreateForm" class="streaming-create-form" @submit.prevent="onCreateStreaming">
+            <div class="form-field">
+              <label for="streaming-user-id">{{ t('advancedControl.streaming.formUserIdLabel') }}</label>
+              <input
+                id="streaming-user-id"
+                v-model="createForm.userId"
+                type="text"
+                required
+                :placeholder="t('advancedControl.streaming.formUserIdPlaceholder')"
+              />
+            </div>
+            <div class="form-field">
+              <label for="streaming-resolution">{{ t('advancedControl.streaming.formResolutionLabel') }}</label>
+              <input
+                id="streaming-resolution"
+                v-model="createForm.resolution"
+                type="text"
+                :placeholder="t('advancedControl.streaming.formResolutionPlaceholder')"
+              />
+            </div>
+            <div class="form-field">
+              <label for="streaming-depth">{{ t('advancedControl.streaming.formDepthLabel') }}</label>
+              <input id="streaming-depth" v-model.number="createForm.depth" type="number" min="1" />
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn-action-secondary" @click="toggleCreateForm">
+                {{ t('common.cancel') }}
+              </button>
+              <button type="submit" class="btn-action-primary" :disabled="loading">
+                {{ t('common.create') }}
+              </button>
+            </div>
+          </form>
+
+          <table v-if="streamingSessions.length > 0" class="data-table">
+            <thead>
+              <tr>
+                <th>{{ t('advancedControl.streaming.colSessionId') }}</th>
+                <th>{{ t('advancedControl.streaming.colUser') }}</th>
+                <th>{{ t('advancedControl.streaming.colStatus') }}</th>
+                <th>{{ t('advancedControl.streaming.colDisplay') }}</th>
+                <th>{{ t('advancedControl.streaming.colCreatedAt') }}</th>
+                <th>{{ t('advancedControl.streaming.colActions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="session in streamingSessions" :key="session.session_id">
+                <td>{{ session.session_id }}</td>
+                <td>{{ session.user_id }}</td>
+                <td><span class="badge" :class="streamingStatusBadgeClass(session.status)">{{ session.status }}</span></td>
+                <td>{{ session.display }}</td>
+                <td>{{ formatDate(session.created_at) }}</td>
+                <td class="actions-cell">
+                  <button
+                    class="btn-icon btn-danger"
+                    :title="t('advancedControl.streaming.terminate')"
+                    :disabled="loading"
+                    @click="onTerminateStreaming(session.session_id)"
+                  >
+                    <Icon name="trash-alt" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <EmptyState
+            v-else
+            icon="window-restore"
+            :title="t('advancedControl.streaming.emptyTitle')"
+            :message="t('advancedControl.streaming.emptyMessage')"
+            compact
+          />
+        </section>
+      </template>
     </div>
 
     <!-- Monitoring tab placeholder -->
@@ -207,13 +312,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTabs } from '@/composables/useTabs'
 import { useAdvancedControl } from '@/composables/useAdvancedControl'
 import Icon from '@/components/ui/Icon.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import type { TakeoverPriority, TakeoverStatus } from '@/utils/AdvancedControlApiClient'
+import type {
+  TakeoverPriority,
+  TakeoverStatus,
+  StreamingSession,
+  StreamingSessionRequest,
+} from '@/utils/AdvancedControlApiClient'
 
 const { t } = useI18n()
 
@@ -221,6 +331,8 @@ const {
   pendingTakeovers,
   activeTakeovers,
   takeoverStatus,
+  streamingSessions,
+  streamingCapabilities,
   loading,
   error,
   loadTakeovers,
@@ -228,6 +340,9 @@ const {
   pause,
   resume,
   complete,
+  loadStreaming,
+  createStreaming,
+  terminateStreaming,
 } = useAdvancedControl()
 
 const TAB_IDS = ['takeover', 'streaming', 'monitoring'] as const
@@ -244,9 +359,18 @@ interface TabDef {
 
 const tabs = computed<TabDef[]>(() => [
   { id: 'takeover', label: t('advancedControl.tabs.takeoverQueue'), icon: 'hand-paper', disabled: false },
-  { id: 'streaming', label: t('advancedControl.tabs.streaming'), icon: 'window-restore', disabled: true },
+  { id: 'streaming', label: t('advancedControl.tabs.streaming'), icon: 'window-restore', disabled: false },
   { id: 'monitoring', label: t('advancedControl.tabs.monitoring'), icon: 'tachometer-alt', disabled: true },
 ])
+
+// Load streaming data lazily the first time the tab becomes active, mirroring
+// the eager onMounted(loadTakeovers) call used for the (always-visible)
+// Takeover Queue tab.
+watch(activeTab, (tab) => {
+  if (tab === 'streaming') {
+    void loadStreaming()
+  }
+})
 
 function clearError(): void {
   error.value = null
@@ -313,6 +437,51 @@ async function onResume(sessionId: string): Promise<void> {
 
 async function onComplete(sessionId: string): Promise<void> {
   await complete(sessionId)
+}
+
+const streamingStatusBadgeClasses: Record<StreamingSession['status'], string> = {
+  active: 'badge-active',
+  paused: 'badge-admin',
+  terminated: 'badge-inactive',
+}
+
+function streamingStatusBadgeClass(status: StreamingSession['status']): string {
+  return streamingStatusBadgeClasses[status] ?? 'badge-bundle'
+}
+
+const showCreateForm = ref(false)
+const createForm = reactive<{ userId: string; resolution: string; depth: number | null }>({
+  userId: '',
+  resolution: '',
+  depth: null,
+})
+
+function resetCreateForm(): void {
+  createForm.userId = ''
+  createForm.resolution = ''
+  createForm.depth = null
+}
+
+function toggleCreateForm(): void {
+  showCreateForm.value = !showCreateForm.value
+  if (!showCreateForm.value) resetCreateForm()
+}
+
+async function onCreateStreaming(): Promise<void> {
+  if (!createForm.userId.trim()) return
+  const request: StreamingSessionRequest = { user_id: createForm.userId.trim() }
+  if (createForm.resolution.trim()) request.resolution = createForm.resolution.trim()
+  if (createForm.depth != null) request.depth = createForm.depth
+
+  const success = await createStreaming(request)
+  if (success) {
+    showCreateForm.value = false
+    resetCreateForm()
+  }
+}
+
+async function onTerminateStreaming(sessionId: string): Promise<void> {
+  await terminateStreaming(sessionId)
 }
 
 onMounted(loadTakeovers)
@@ -587,7 +756,8 @@ onMounted(loadTakeovers)
   color: var(--color-error);
 }
 
-.btn-action-secondary {
+.btn-action-secondary,
+.btn-action-primary {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1-5);
@@ -601,8 +771,61 @@ onMounted(loadTakeovers)
   cursor: pointer;
 }
 
-.btn-action-secondary:disabled {
+.btn-action-primary {
+  border-color: transparent;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+}
+
+.btn-action-secondary:disabled,
+.btn-action-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Streaming tab ──────────────────────────────────────────────────────── */
+
+.section-title--with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+}
+
+.streaming-create-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.form-field label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-field input {
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--spacing-2);
+  margin-left: auto;
 }
 </style>

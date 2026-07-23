@@ -3,12 +3,14 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 /**
- * Unit tests for useAdvancedControl (#12162, #12102, #11506 T1 — Stage 1).
+ * Unit tests for useAdvancedControl (#12162, #12102, #11506 T1 — Stage 1;
+ * #12169, #12102 — Stage 2 streaming sessions).
  *
  * Covers: loadTakeovers populates pending/active/status from the client,
  * approve/pause/resume/complete call the right client methods and refresh
- * state on success, and failures (success:false or thrown) surface via the
- * `error` ref without throwing.
+ * state on success, failures (success:false or thrown) surface via the
+ * `error` ref without throwing, and the Stage 2 streaming equivalents
+ * (loadStreaming/createStreaming/terminateStreaming).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -23,6 +25,10 @@ const mockPauseTakeoverSession = vi.fn()
 const mockResumeTakeoverSession = vi.fn()
 const mockCompleteTakeoverSession = vi.fn()
 const mockExecuteTakeoverAction = vi.fn()
+const mockListStreamingSessions = vi.fn()
+const mockGetStreamingCapabilities = vi.fn()
+const mockCreateStreamingSession = vi.fn()
+const mockTerminateStreamingSession = vi.fn()
 
 vi.mock('@/utils/AdvancedControlApiClient', () => ({
   advancedControlApiClient: {
@@ -34,6 +40,10 @@ vi.mock('@/utils/AdvancedControlApiClient', () => ({
     resumeTakeoverSession: (...args: unknown[]) => mockResumeTakeoverSession(...args),
     completeTakeoverSession: (...args: unknown[]) => mockCompleteTakeoverSession(...args),
     executeTakeoverAction: (...args: unknown[]) => mockExecuteTakeoverAction(...args),
+    listStreamingSessions: (...args: unknown[]) => mockListStreamingSessions(...args),
+    getStreamingCapabilities: (...args: unknown[]) => mockGetStreamingCapabilities(...args),
+    createStreamingSession: (...args: unknown[]) => mockCreateStreamingSession(...args),
+    terminateStreamingSession: (...args: unknown[]) => mockTerminateStreamingSession(...args),
   },
 }))
 
@@ -53,6 +63,18 @@ const okStatus = {
   },
 }
 
+const okEmptySessions = { success: true, data: { sessions: [], count: 0 } }
+const okCapabilities = {
+  success: true,
+  data: {
+    vnc_available: true,
+    novnc_available: true,
+    max_sessions: 4,
+    supported_resolutions: ['1920x1080'],
+    supported_depths: [24],
+  },
+}
+
 function resetMocks(): void {
   mockGetPendingTakeovers.mockReset().mockResolvedValue(okEmpty)
   mockGetActiveTakeovers.mockReset().mockResolvedValue(okEmptyActive)
@@ -62,6 +84,10 @@ function resetMocks(): void {
   mockResumeTakeoverSession.mockReset()
   mockCompleteTakeoverSession.mockReset()
   mockExecuteTakeoverAction.mockReset()
+  mockListStreamingSessions.mockReset().mockResolvedValue(okEmptySessions)
+  mockGetStreamingCapabilities.mockReset().mockResolvedValue(okCapabilities)
+  mockCreateStreamingSession.mockReset()
+  mockTerminateStreamingSession.mockReset()
 }
 
 describe('useAdvancedControl', () => {
@@ -75,10 +101,13 @@ describe('useAdvancedControl', () => {
   })
 
   it('starts with empty state', () => {
-    const { pendingTakeovers, activeTakeovers, takeoverStatus, loading, error } = useAdvancedControl()
+    const { pendingTakeovers, activeTakeovers, takeoverStatus, streamingSessions, streamingCapabilities, loading, error } =
+      useAdvancedControl()
     expect(pendingTakeovers.value).toEqual([])
     expect(activeTakeovers.value).toEqual([])
     expect(takeoverStatus.value).toBeNull()
+    expect(streamingSessions.value).toEqual([])
+    expect(streamingCapabilities.value).toBeNull()
     expect(loading.value).toBe(false)
     expect(error.value).toBeNull()
   })
@@ -186,6 +215,111 @@ describe('useAdvancedControl', () => {
     await scope.run(async () => {
       const { loadTakeovers, error } = useAdvancedControl()
       await loadTakeovers()
+      expect(error.value).toBe('network down')
+    })
+    scope.stop()
+  })
+
+  it('loadStreaming populates streamingSessions and streamingCapabilities from the client', async () => {
+    const session = {
+      session_id: 's1',
+      user_id: 'u1',
+      vnc_port: 5901,
+      novnc_port: 6901,
+      display: ':1',
+      created_at: '2026-07-23T00:00:00Z',
+      status: 'active' as const,
+    }
+    mockListStreamingSessions.mockResolvedValueOnce({ success: true, data: { sessions: [session], count: 1 } })
+    mockGetStreamingCapabilities.mockResolvedValueOnce({
+      success: true,
+      data: {
+        vnc_available: true,
+        novnc_available: false,
+        max_sessions: 2,
+        supported_resolutions: ['1280x720'],
+        supported_depths: [16],
+      },
+    })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { loadStreaming, streamingSessions, streamingCapabilities, loading, error } = useAdvancedControl()
+      const promise = loadStreaming()
+      expect(loading.value).toBe(true)
+      await promise
+
+      expect(loading.value).toBe(false)
+      expect(error.value).toBeNull()
+      expect(streamingSessions.value).toEqual([session])
+      expect(streamingCapabilities.value?.max_sessions).toBe(2)
+    })
+    scope.stop()
+  })
+
+  it('createStreaming calls createStreamingSession with the request and reloads on success', async () => {
+    mockCreateStreamingSession.mockResolvedValueOnce({
+      success: true,
+      data: {
+        session_id: 's1',
+        vnc_port: 5901,
+        novnc_port: 6901,
+        display: ':1',
+        vnc_url: 'vnc://host:5901',
+        web_url: 'http://host:6901',
+        websocket_endpoint: '/ws/desktop/s1',
+      },
+    })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { createStreaming } = useAdvancedControl()
+      const result = await createStreaming({ user_id: 'u1', resolution: '1920x1080', depth: 24 })
+      expect(result).toBe(true)
+    })
+    scope.stop()
+
+    expect(mockCreateStreamingSession).toHaveBeenCalledWith({ user_id: 'u1', resolution: '1920x1080', depth: 24 })
+    expect(mockListStreamingSessions).toHaveBeenCalled()
+  })
+
+  it('terminateStreaming calls terminateStreamingSession and reloads on success', async () => {
+    mockTerminateStreamingSession.mockResolvedValueOnce({ success: true, data: { success: true, session_id: 's1' } })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { terminateStreaming } = useAdvancedControl()
+      const result = await terminateStreaming('s1')
+      expect(result).toBe(true)
+    })
+    scope.stop()
+
+    expect(mockTerminateStreamingSession).toHaveBeenCalledWith('s1')
+    expect(mockListStreamingSessions).toHaveBeenCalled()
+  })
+
+  it('surfaces a createStreaming client success:false error without throwing', async () => {
+    mockCreateStreamingSession.mockResolvedValueOnce({ success: false, error: 'max sessions reached' })
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { createStreaming, error } = useAdvancedControl()
+      const result = await createStreaming({ user_id: 'u1' })
+      expect(result).toBe(false)
+      expect(error.value).toBe('max sessions reached')
+    })
+    scope.stop()
+    expect(mockListStreamingSessions).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a terminateStreaming thrown error via the error ref', async () => {
+    mockTerminateStreamingSession.mockRejectedValueOnce(new Error('network down'))
+
+    const scope = effectScope()
+    await scope.run(async () => {
+      const { terminateStreaming, error } = useAdvancedControl()
+      const result = await terminateStreaming('s1')
+      expect(result).toBe(false)
       expect(error.value).toBe('network down')
     })
     scope.stop()

@@ -8757,6 +8757,27 @@
       "pause": "השהה",
       "resume": "המשך",
       "complete": "השלם"
+    },
+    "streaming": {
+      "title": "הפעלות הזרמה",
+      "newSession": "הפעלה חדשה",
+      "terminate": "סיים",
+      "capVncAvailable": "VNC זמין",
+      "capNovncAvailable": "noVNC זמין",
+      "capMaxSessions": "מספר הפעלות מרבי",
+      "formUserIdLabel": "מזהה משתמש",
+      "formUserIdPlaceholder": "לדוגמה: user-123",
+      "formResolutionLabel": "רזולוציה",
+      "formResolutionPlaceholder": "לדוגמה: 1920x1080",
+      "formDepthLabel": "עומק צבע",
+      "colSessionId": "מזהה הפעלה",
+      "colUser": "משתמש",
+      "colStatus": "סטטוס",
+      "colDisplay": "תצוגה",
+      "colCreatedAt": "נוצרה",
+      "colActions": "פעולות",
+      "emptyTitle": "אין הפעלות הזרמה פעילות",
+      "emptyMessage": "אין כרגע הפעלות הזרמת שולחן עבודה פעילות."
     }
   },
   "adminUsers": {
