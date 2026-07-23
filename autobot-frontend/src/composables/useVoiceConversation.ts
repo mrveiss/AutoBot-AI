@@ -538,12 +538,12 @@ function _dispatchTranscript(text: string): void {
       speakStreaming(speechText)
       flushStreaming()
       // #6823: removed local one-shot `watch(isSpeaking, ...)` here.
-      // The factory-level watcher (below) is the single source of truth
-      // for TTS-completion handling — pre-fix this duplicate caused
-      // both `_resumeAutoListening` AND `_onSpeakingDone` to fire on
-      // every walkie-talkie/hands-free TTS burst, double-triggering
-      // the hands-free TTS cooldown timer and bouncing state through
-      // 'idle' → 'listening' → 'idle' → 'listening'.
+      // The module-level watcher (#12153, defined above this function) is
+      // the single source of truth for TTS-completion handling — pre-fix
+      // this duplicate caused both `_resumeAutoListening` AND
+      // `_onSpeakingDone` to fire on every walkie-talkie/hands-free TTS
+      // burst, double-triggering the hands-free TTS cooldown timer and
+      // bouncing state through 'idle' → 'listening' → 'idle' → 'listening'.
     }
   }).catch((err) => {
     logger.error('Failed to send voice transcript:', err)
@@ -722,10 +722,45 @@ export function _resetForTests(): void {
   _ttsCooldownTimer = null
 }
 
+// ─── Module-level watchers (#12153) ──────────────────────
+// Registered ONCE at module load — NOT inside useVoiceConversation(). That
+// function is invoked once per mounted caller (VoiceConversationPanel,
+// VoiceConversationOverlay, ChatInterface); a watch() registered in its body
+// added ANOTHER watcher on these module-singleton refs per mounted caller,
+// so `_resumeAutoListening` (and the language handler) fired once PER
+// mounted caller on every TTS-completion / language-preference change
+// instead of once. `isSpeaking` / `language` are themselves module-singleton
+// refs (useVoiceOutput.ts / usePreferences.ts), so resolving them here —
+// like the `_realtimeVoice` singleton above (#7345) — is safe and stable
+// for the app's lifetime.
+const { isSpeaking } = useVoiceOutput()
+const { language: prefLanguage } = usePreferences()
+
+// #6823: single source of truth for TTS-completion handling. Routes
+// through `_resumeAutoListening` (not the redundant `_onSpeakingDone`)
+// so the hands-free TTS cooldown timer is set exactly once per burst
+// — was previously fired by both the inner `_dispatchTranscript`
+// watcher AND this outer one.
+watch(isSpeaking, (speaking) => {
+  if (!speaking && state.value === 'speaking') {
+    _resumeAutoListening()
+  }
+})
+
+// #1334: Update STT language when preference changes mid-conversation
+watch(prefLanguage, (newLang) => {
+  currentLanguage.value = newLang || 'en'
+  if (_recognition && state.value === 'listening') {
+    const bcp47 = _LANG_TO_BCP47[newLang] || newLang
+    _recognition.lang = bcp47
+  }
+  logger.debug('Language preference changed:', newLang)
+})
+
 // ─── Main composable ────────────────────────────────────
 
 export function useVoiceConversation() {
-  const { isSpeaking, unlockAudio, stopSpeaking } = useVoiceOutput()
+  const { unlockAudio, stopSpeaking } = useVoiceOutput()
 
   const isListening = computed(() => state.value === 'listening')
   const isProcessing = computed(() => state.value === 'processing')
@@ -857,28 +892,6 @@ export function useVoiceConversation() {
     }
     logger.debug('Mode switched to:', newMode)
   }
-
-  // #6823: single source of truth for TTS-completion handling. Routes
-  // through `_resumeAutoListening` (not the redundant `_onSpeakingDone`)
-  // so the hands-free TTS cooldown timer is set exactly once per burst
-  // — was previously fired by both the inner `_dispatchTranscript`
-  // watcher AND this outer one.
-  watch(isSpeaking, (speaking) => {
-    if (!speaking && state.value === 'speaking') {
-      _resumeAutoListening()
-    }
-  })
-
-  // #1334: Update STT language when preference changes mid-conversation
-  const { language: prefLanguage } = usePreferences()
-  watch(prefLanguage, (newLang) => {
-    currentLanguage.value = newLang || 'en'
-    if (_recognition && state.value === 'listening') {
-      const bcp47 = _LANG_TO_BCP47[newLang] || newLang
-      _recognition.lang = bcp47
-    }
-    logger.debug('Language preference changed:', newLang)
-  })
 
   function cleanup(): void {
     deactivate()
