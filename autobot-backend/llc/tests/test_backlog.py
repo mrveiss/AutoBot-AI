@@ -11,6 +11,25 @@ from fastapi.testclient import TestClient
 from llc.models.enums import WorkItemPriority, WorkItemStatus, WorkItemType
 from llc.models.work_item import LLCWorkItem
 from llc.services.backlog import BacklogService
+from user_management.services import TenantContext
+
+_FIXED_USER_ID = uuid.UUID("55555555-5555-5555-5555-555555555555")
+
+
+def _override_admin_auth(app) -> None:  # noqa: ANN001
+    """Stub auth as a platform admin so tenant checks don't block these
+    service-layer route tests (GH#12136 added auth to backlog.py)."""
+    from api.user_management.dependencies import get_current_user, require_org_context
+
+    def _fake_user() -> dict:
+        return {"id": str(_FIXED_USER_ID), "user_id": str(_FIXED_USER_ID)}
+
+    def _fake_tenant() -> TenantContext:
+        return TenantContext(org_id=None, user_id=_FIXED_USER_ID, is_platform_admin=True)
+
+    app.dependency_overrides[get_current_user] = _fake_user
+    app.dependency_overrides[require_org_context] = _fake_tenant
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -219,6 +238,7 @@ def app_client():
         yield AsyncMock()
 
     app.dependency_overrides[get_session] = _stub_session
+    _override_admin_auth(app)
     return TestClient(app, raise_server_exceptions=True)
 
 
@@ -248,6 +268,7 @@ class TestBacklogRoute:
 
             app.include_router(router, prefix="/api/llc")
             app.dependency_overrides[get_session] = _fake_session
+            _override_admin_auth(app)
 
             from fastapi.testclient import TestClient as TC
 
@@ -278,6 +299,7 @@ class TestBacklogRoute:
 
         app.include_router(router, prefix="/api/llc")
         app.dependency_overrides[get_session] = _fake_session
+        _override_admin_auth(app)
 
         with patch("llc.api.backlog._service") as mock_svc_factory:
             svc = AsyncMock()
