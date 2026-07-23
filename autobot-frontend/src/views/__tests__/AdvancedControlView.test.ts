@@ -4,7 +4,8 @@
 // Author: mrveiss
 //
 // Tests for AdvancedControlView.vue (#12162, #12102, #11506 T1 — Stage 1;
-// #12169, #12102 — Stage 2 streaming sessions tab).
+// #12169, #12102 — Stage 2 streaming sessions tab; #12173, #12102 —
+// Stage 3 system monitoring + emergency-stop tab).
 // Mocks useAdvancedControl so no real HTTP calls are made, and asserts the
 // /admin/advanced-control route carries the same admin guard meta as its
 // sibling admin routes (router/index.ts requiresAdmin check).
@@ -26,6 +27,8 @@ const mockActiveTakeovers = ref<unknown[]>([])
 const mockTakeoverStatus = ref<unknown>(null)
 const mockStreamingSessions = ref<unknown[]>([])
 const mockStreamingCapabilities = ref<unknown>(null)
+const mockSystemStatus = ref<unknown>(null)
+const mockSystemHealth = ref<unknown>(null)
 const mockLoading = ref(false)
 const mockError = ref<string | null>(null)
 
@@ -37,6 +40,8 @@ const mockComplete = vi.fn().mockResolvedValue(true)
 const mockLoadStreaming = vi.fn().mockResolvedValue(undefined)
 const mockCreateStreaming = vi.fn().mockResolvedValue(true)
 const mockTerminateStreaming = vi.fn().mockResolvedValue(true)
+const mockLoadMonitoring = vi.fn().mockResolvedValue(undefined)
+const mockEmergencyStop = vi.fn().mockResolvedValue(true)
 
 vi.mock('@/composables/useAdvancedControl', () => ({
   useAdvancedControl: () => ({
@@ -45,6 +50,8 @@ vi.mock('@/composables/useAdvancedControl', () => ({
     takeoverStatus: mockTakeoverStatus,
     streamingSessions: mockStreamingSessions,
     streamingCapabilities: mockStreamingCapabilities,
+    systemStatus: mockSystemStatus,
+    systemHealth: mockSystemHealth,
     loading: mockLoading,
     error: mockError,
     loadTakeovers: mockLoadTakeovers,
@@ -56,7 +63,20 @@ vi.mock('@/composables/useAdvancedControl', () => ({
     loadStreaming: mockLoadStreaming,
     createStreaming: mockCreateStreaming,
     terminateStreaming: mockTerminateStreaming,
+    loadMonitoring: mockLoadMonitoring,
+    emergencyStop: mockEmergencyStop,
+    getMonitoringWebSocketUrl: vi.fn().mockReturnValue('ws://host/ws/monitoring'),
   }),
+}))
+
+const mockConfirm = vi.fn().mockResolvedValue(true)
+vi.mock('@/composables/useConfirmDialog', () => ({
+  useConfirmDialog: () => ({ confirm: mockConfirm }),
+}))
+
+const mockNotifySuccess = vi.fn()
+vi.mock('@/composables/useNotificationBus', () => ({
+  useNotificationBus: () => ({ notifySuccess: mockNotifySuccess }),
 }))
 
 vi.mock('@/utils/debugUtils', () => ({
@@ -88,6 +108,8 @@ describe('AdvancedControlView.vue', () => {
     mockTakeoverStatus.value = null
     mockStreamingSessions.value = []
     mockStreamingCapabilities.value = null
+    mockSystemStatus.value = null
+    mockSystemHealth.value = null
     mockLoading.value = false
     mockError.value = null
     mockLoadTakeovers.mockClear()
@@ -95,6 +117,10 @@ describe('AdvancedControlView.vue', () => {
     mockLoadStreaming.mockClear()
     mockCreateStreaming.mockClear()
     mockTerminateStreaming.mockClear()
+    mockLoadMonitoring.mockClear()
+    mockEmergencyStop.mockClear().mockResolvedValue(true)
+    mockConfirm.mockClear().mockResolvedValue(true)
+    mockNotifySuccess.mockClear()
   })
 
   it('is registered as an admin-gated route (same guard as sibling admin routes)', () => {
@@ -229,5 +255,119 @@ describe('AdvancedControlView.vue', () => {
       resolution: '1920x1080',
       depth: 24,
     })
+  })
+
+  // -------------------------------------------------------------------------
+  // Monitoring tab (#12173, #12102 — Stage 3)
+  // -------------------------------------------------------------------------
+
+  async function selectMonitoringTab(wrapper: ReturnType<typeof mountView>) {
+    const tabs = wrapper.findAll('button[role="tab"]')
+    const monitoringTab = tabs.find((btn) => btn.text().includes('Monitoring'))
+    expect(monitoringTab).toBeTruthy()
+    await monitoringTab!.trigger('click')
+    await flushPromises()
+  }
+
+  const systemHealthFixture = {
+    status: 'healthy',
+    desktop_streaming_available: true,
+    novnc_available: true,
+    active_streaming_sessions: 2,
+    pending_takeovers: 1,
+    active_takeovers: 0,
+    paused_tasks: 3,
+  }
+
+  const systemStatusFixture = {
+    system_status: {
+      status: 'healthy',
+      timestamp: 1700000000,
+      uptime_seconds: 3661,
+      streaming_capabilities: {
+        vnc_available: true,
+        novnc_available: true,
+        max_sessions: 4,
+        supported_resolutions: ['1920x1080'],
+        supported_depths: [24],
+      },
+    },
+    active_sessions: [],
+    pending_takeovers: [],
+    active_takeovers: [],
+    resource_usage: {
+      cpu_percent: 12.5,
+      memory_percent: 40.1,
+      disk_usage: 55.0,
+      process_count: 210,
+      load_average: [0.1, 0.2, 0.3],
+    },
+  }
+
+  it('enables the Monitoring tab and loads monitoring data on activation', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await selectMonitoringTab(wrapper)
+
+    expect(mockLoadMonitoring).toHaveBeenCalled()
+  })
+
+  it('renders health and resource-usage summaries once monitoring data loads', async () => {
+    mockSystemHealth.value = systemHealthFixture
+    mockSystemStatus.value = systemStatusFixture
+
+    const wrapper = mountView()
+    await flushPromises()
+    await selectMonitoringTab(wrapper)
+
+    expect(wrapper.text()).toContain('Healthy')
+    expect(wrapper.text()).toContain('12.5%')
+    expect(wrapper.text()).toContain('210')
+  })
+
+  it('renders the empty state when no monitoring data is available', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await selectMonitoringTab(wrapper)
+
+    expect(wrapper.text()).toContain('No monitoring data')
+  })
+
+  it('requires confirmation before calling emergencyStop, and does nothing if cancelled', async () => {
+    mockConfirm.mockResolvedValueOnce(false)
+    mockSystemHealth.value = systemHealthFixture
+    mockSystemStatus.value = systemStatusFixture
+
+    const wrapper = mountView()
+    await flushPromises()
+    await selectMonitoringTab(wrapper)
+
+    const stopBtn = wrapper.find('button.btn-danger-full')
+    expect(stopBtn.exists()).toBe(true)
+    await stopBtn.trigger('click')
+    await flushPromises()
+
+    expect(mockConfirm).toHaveBeenCalled()
+    expect(mockEmergencyStop).not.toHaveBeenCalled()
+    expect(mockNotifySuccess).not.toHaveBeenCalled()
+  })
+
+  it('calls emergencyStop and shows a success toast once confirmed', async () => {
+    mockConfirm.mockResolvedValueOnce(true)
+    mockSystemHealth.value = systemHealthFixture
+    mockSystemStatus.value = systemStatusFixture
+
+    const wrapper = mountView()
+    await flushPromises()
+    await selectMonitoringTab(wrapper)
+
+    const stopBtn = wrapper.find('button.btn-danger-full')
+    await stopBtn.trigger('click')
+    await flushPromises()
+
+    expect(mockConfirm).toHaveBeenCalled()
+    expect(mockEmergencyStop).toHaveBeenCalled()
+    expect(mockNotifySuccess).toHaveBeenCalled()
   })
 })

@@ -5,12 +5,12 @@
 
 /**
  * Advanced Control composable (#12162, #12102, #11506 T1 — Stage 1;
- * #12169, #12102 — Stage 2 streaming sessions).
+ * #12169, #12102 — Stage 2 streaming sessions; #12173, #12102 — Stage 3
+ * system monitoring + emergency-stop).
  *
- * Wraps `advancedControlApiClient`'s takeover-management and desktop
- * streaming endpoints for the admin-only Advanced Control panel.
- * Monitoring endpoints are out of scope (see AdvancedControlView.vue
- * placeholder).
+ * Wraps `advancedControlApiClient`'s takeover-management, desktop
+ * streaming, and system-monitoring endpoints for the admin-only Advanced
+ * Control panel.
  */
 
 import { ref } from 'vue'
@@ -23,6 +23,8 @@ import type {
   StreamingSession,
   StreamingCapabilities,
   StreamingSessionRequest,
+  SystemMonitoringResponse,
+  SystemHealthResponse,
 } from '@/utils/AdvancedControlApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { useUserStore } from '@/stores/useUserStore'
@@ -37,6 +39,8 @@ export function useAdvancedControl() {
   const takeoverStatus = ref<TakeoverSystemStatus | null>(null)
   const streamingSessions = ref<StreamingSession[]>([])
   const streamingCapabilities = ref<StreamingCapabilities | null>(null)
+  const systemStatus = ref<SystemMonitoringResponse | null>(null)
+  const systemHealth = ref<SystemHealthResponse | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -244,12 +248,78 @@ export function useAdvancedControl() {
     }
   }
 
+  /**
+   * Loads comprehensive system status and the quick health check in
+   * parallel. Partial failures are tolerated per-call, mirroring
+   * loadTakeovers/loadStreaming.
+   */
+  async function loadMonitoring(): Promise<void> {
+    loading.value = true
+    error.value = null
+    try {
+      const [statusRes, healthRes] = await Promise.all([
+        advancedControlApiClient.getSystemStatus(),
+        advancedControlApiClient.getSystemHealth(),
+      ])
+
+      if (statusRes.success && statusRes.data) {
+        systemStatus.value = statusRes.data
+      } else if (!statusRes.success) {
+        logger.error('Failed to load system status:', statusRes.error)
+      }
+
+      if (healthRes.success && healthRes.data) {
+        systemHealth.value = healthRes.data
+      } else if (!healthRes.success) {
+        logger.error('Failed to load system health:', healthRes.error)
+      }
+
+      if (!statusRes.success && !healthRes.success) {
+        error.value = statusRes.error || healthRes.error || 'Failed to load system monitoring data'
+      }
+    } catch (err) {
+      logger.error('Failed to load system monitoring data:', err)
+      error.value = err instanceof Error ? err.message : 'Failed to load system monitoring data'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Triggers an emergency stop of all autonomous operations (a
+   * CRITICAL-priority, auto-approved takeover request). Reloads monitoring
+   * data on success so the resulting takeover shows up immediately.
+   */
+  async function emergencyStop(): Promise<boolean> {
+    error.value = null
+    try {
+      const res = await advancedControlApiClient.emergencyStop()
+      if (!res.success) {
+        error.value = res.error || 'Failed to activate emergency stop'
+        return false
+      }
+      await loadMonitoring()
+      return true
+    } catch (err) {
+      logger.error('Failed to activate emergency stop:', err)
+      error.value = err instanceof Error ? err.message : 'Failed to activate emergency stop'
+      return false
+    }
+  }
+
+  /** Passthrough to the client's monitoring WebSocket URL builder. */
+  function getMonitoringWebSocketUrl(): string {
+    return advancedControlApiClient.getMonitoringWebSocketUrl()
+  }
+
   return {
     pendingTakeovers,
     activeTakeovers,
     takeoverStatus,
     streamingSessions,
     streamingCapabilities,
+    systemStatus,
+    systemHealth,
     loading,
     error,
     loadTakeovers,
@@ -261,5 +331,8 @@ export function useAdvancedControl() {
     loadStreaming,
     createStreaming,
     terminateStreaming,
+    loadMonitoring,
+    emergencyStop,
+    getMonitoringWebSocketUrl,
   }
 }

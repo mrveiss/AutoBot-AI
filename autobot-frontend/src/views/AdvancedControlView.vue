@@ -3,9 +3,10 @@
 <!-- Author: mrveiss -->
 <!--
   AdvancedControlView — admin-only Advanced Control panel (#12162, #12102,
-  #11506 T1 — Stage 1). Tabbed shell wired to AdvancedControlApiClient's
-  takeover-management endpoints. Streaming/Monitoring tabs are placeholders
-  for a later stage.
+  #11506 T1 — Stage 1; #12169, #12102 — Stage 2 streaming sessions;
+  #12173, #12102 — Stage 3 system monitoring + emergency-stop). Tabbed
+  shell wired to AdvancedControlApiClient's takeover-management, desktop
+  streaming, and system-monitoring endpoints.
 -->
 <template>
   <div class="advanced-control-view view-container">
@@ -300,22 +301,130 @@
       </template>
     </div>
 
-    <!-- Monitoring tab placeholder -->
+    <!-- Monitoring tab (#12173, #12102 — Stage 3) -->
     <div v-else-if="activeTab === 'monitoring'" v-bind="panelAttrs('monitoring')" class="acv-content">
+      <div v-if="error" class="error-banner">
+        <Icon name="exclamation-circle" />
+        <span>{{ error }}</span>
+        <button class="btn-dismiss" :aria-label="t('common.dismiss')" @click="clearError"><Icon name="times" /></button>
+      </div>
+
+      <div v-if="loading && !systemHealth && !systemStatus" class="loading-state">
+        <Icon name="sync-alt" :spin="true" /> {{ t('advancedControl.monitoring.loading') }}
+      </div>
+
+      <template v-else-if="systemHealth || systemStatus">
+        <!-- Health summary -->
+        <section v-if="systemHealth" class="table-section">
+          <h3 class="section-title">{{ t('advancedControl.monitoring.healthTitle') }}</h3>
+          <div class="status-summary status-summary--padded">
+            <div class="status-card status-card--system" :class="`status-card--${healthStatusClass}`">
+              <span class="status-label">{{ t('advancedControl.monitoring.healthStatus') }}</span>
+              <span class="badge" :class="healthStatusBadgeClass">{{ healthStatusLabel }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ systemHealth.desktop_streaming_available ? t('common.yes') : t('common.no') }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.desktopStreamingAvailable') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ systemHealth.novnc_available ? t('common.yes') : t('common.no') }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.novncAvailable') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ systemHealth.active_streaming_sessions }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.activeStreamingSessions') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ systemHealth.pending_takeovers }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.pendingTakeovers') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ systemHealth.active_takeovers }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.activeTakeovers') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ systemHealth.paused_tasks }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.pausedTasks') }}</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Resource usage -->
+        <section v-if="systemStatus" class="table-section">
+          <h3 class="section-title">{{ t('advancedControl.monitoring.resourceTitle') }}</h3>
+          <div class="status-summary status-summary--padded">
+            <div class="status-card">
+              <span class="status-value">{{ formatPercent(systemStatus.resource_usage.cpu_percent) }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.cpuUsage') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ formatPercent(systemStatus.resource_usage.memory_percent) }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.memoryUsage') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ formatPercent(systemStatus.resource_usage.disk_usage) }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.diskUsage') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ systemStatus.resource_usage.process_count }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.processCount') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ formatLoadAverage(systemStatus.resource_usage.load_average) }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.loadAverage') }}</span>
+            </div>
+            <div class="status-card">
+              <span class="status-value">{{ formatUptime(systemStatus.system_status.uptime_seconds) }}</span>
+              <span class="status-label">{{ t('advancedControl.monitoring.uptime') }}</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Emergency stop danger zone -->
+        <section class="table-section danger-zone-section">
+          <h3 class="section-title danger-heading">
+            <Icon name="exclamation-triangle" />
+            {{ t('advancedControl.monitoring.emergencyStopTitle') }}
+          </h3>
+          <div class="danger-card">
+            <div class="danger-content">
+              <div class="danger-icon">
+                <Icon name="power-off" />
+              </div>
+              <div class="danger-text">
+                <h4>{{ t('advancedControl.monitoring.emergencyStop') }}</h4>
+                <p>{{ t('advancedControl.monitoring.emergencyStopDescription') }}</p>
+              </div>
+            </div>
+            <button
+              class="btn-danger-full"
+              :disabled="loading"
+              @click="onEmergencyStop"
+            >
+              <Icon name="power-off" />
+              {{ t('advancedControl.monitoring.emergencyStop') }}
+            </button>
+          </div>
+        </section>
+      </template>
+
       <EmptyState
+        v-else
         icon="tachometer-alt"
-        :title="t('advancedControl.tabs.monitoringTitle')"
-        :message="t('advancedControl.tabs.comingSoonMessage')"
+        :title="t('advancedControl.monitoring.emptyTitle')"
+        :message="t('advancedControl.monitoring.emptyMessage')"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTabs } from '@/composables/useTabs'
 import { useAdvancedControl } from '@/composables/useAdvancedControl'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useNotificationBus } from '@/composables/useNotificationBus'
 import Icon from '@/components/ui/Icon.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import type {
@@ -326,6 +435,8 @@ import type {
 } from '@/utils/AdvancedControlApiClient'
 
 const { t } = useI18n()
+const { confirm } = useConfirmDialog()
+const { notifySuccess } = useNotificationBus()
 
 const {
   pendingTakeovers,
@@ -333,6 +444,8 @@ const {
   takeoverStatus,
   streamingSessions,
   streamingCapabilities,
+  systemStatus,
+  systemHealth,
   loading,
   error,
   loadTakeovers,
@@ -343,6 +456,8 @@ const {
   loadStreaming,
   createStreaming,
   terminateStreaming,
+  loadMonitoring,
+  emergencyStop,
 } = useAdvancedControl()
 
 const TAB_IDS = ['takeover', 'streaming', 'monitoring'] as const
@@ -360,17 +475,48 @@ interface TabDef {
 const tabs = computed<TabDef[]>(() => [
   { id: 'takeover', label: t('advancedControl.tabs.takeoverQueue'), icon: 'hand-paper', disabled: false },
   { id: 'streaming', label: t('advancedControl.tabs.streaming'), icon: 'window-restore', disabled: false },
-  { id: 'monitoring', label: t('advancedControl.tabs.monitoring'), icon: 'tachometer-alt', disabled: true },
+  { id: 'monitoring', label: t('advancedControl.tabs.monitoring'), icon: 'tachometer-alt', disabled: false },
 ])
 
-// Load streaming data lazily the first time the tab becomes active, mirroring
-// the eager onMounted(loadTakeovers) call used for the (always-visible)
-// Takeover Queue tab.
+// Refresh cadence for the Monitoring tab while it is active. A named
+// module-level constant rather than a magic number inline (no live-push
+// WS is wired here — see startMonitoringPoll below for rationale).
+const MONITORING_POLL_INTERVAL_MS = 10000
+let monitoringPollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopMonitoringPoll(): void {
+  if (monitoringPollTimer !== null) {
+    clearInterval(monitoringPollTimer)
+    monitoringPollTimer = null
+  }
+}
+
+function startMonitoringPoll(): void {
+  stopMonitoringPoll()
+  monitoringPollTimer = setInterval(() => {
+    void loadMonitoring()
+  }, MONITORING_POLL_INTERVAL_MS)
+}
+
+// Load streaming/monitoring data lazily the first time each tab becomes
+// active, mirroring the eager onMounted(loadTakeovers) call used for the
+// (always-visible) Takeover Queue tab. Monitoring additionally polls
+// while active — the backend's /ws/monitoring endpoint only pushes the
+// `health` slice (not the full status/resource-usage payload) and,
+// unlike its REST siblings, currently has no admin-auth check, so this
+// stage intentionally keeps the simpler poll instead of adopting it.
 watch(activeTab, (tab) => {
   if (tab === 'streaming') {
     void loadStreaming()
+  } else if (tab === 'monitoring') {
+    void loadMonitoring()
+    startMonitoringPoll()
+  } else {
+    stopMonitoringPoll()
   }
 })
+
+onUnmounted(stopMonitoringPoll)
 
 function clearError(): void {
   error.value = null
@@ -482,6 +628,54 @@ async function onCreateStreaming(): Promise<void> {
 
 async function onTerminateStreaming(sessionId: string): Promise<void> {
   await terminateStreaming(sessionId)
+}
+
+// ── Monitoring tab (#12173, #12102 — Stage 3) ──────────────────────────────
+
+const healthStatusClass = computed(() => (systemHealth.value?.status === 'unhealthy' ? 'emergency' : 'normal'))
+
+const healthStatusLabel = computed(() => {
+  return systemHealth.value?.status === 'unhealthy'
+    ? t('advancedControl.monitoring.statusUnhealthy')
+    : t('advancedControl.monitoring.statusHealthy')
+})
+
+const healthStatusBadgeClass = computed(() =>
+  systemHealth.value?.status === 'unhealthy' ? 'badge-inactive' : 'badge-active'
+)
+
+function formatPercent(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '—'
+  return `${value.toFixed(1)}%`
+}
+
+function formatLoadAverage(loadAverage: [number, number, number] | null): string {
+  if (!loadAverage) return '—'
+  return loadAverage.map((v) => v.toFixed(2)).join(' / ')
+}
+
+function formatUptime(seconds: number | null | undefined): string {
+  if (seconds == null || Number.isNaN(seconds) || seconds < 0) return '—'
+  const totalSeconds = Math.floor(seconds)
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const mins = Math.floor((totalSeconds % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
+}
+
+async function onEmergencyStop(): Promise<void> {
+  const ok = await confirm({
+    title: t('advancedControl.monitoring.emergencyStopConfirmTitle'),
+    message: t('advancedControl.monitoring.emergencyStopConfirmMessage'),
+  })
+  if (!ok) return
+
+  const success = await emergencyStop()
+  if (success) {
+    notifySuccess(t('advancedControl.monitoring.emergencyStopSuccess'))
+  }
 }
 
 onMounted(loadTakeovers)
@@ -827,5 +1021,93 @@ onMounted(loadTakeovers)
   display: flex;
   gap: var(--spacing-2);
   margin-left: auto;
+}
+
+/* ── Monitoring tab (#12173, #12102 — Stage 3) ──────────────────────────── */
+
+.status-summary--padded {
+  padding: var(--spacing-4);
+}
+
+.danger-zone-section {
+  border-color: var(--color-error-light);
+  background: var(--color-error-bg);
+}
+
+.danger-heading {
+  color: var(--color-error-dark);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.danger-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  flex-wrap: wrap;
+  padding: var(--spacing-4);
+}
+
+.danger-content {
+  display: flex;
+  gap: var(--spacing-4);
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+}
+
+.danger-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xl);
+  background: var(--color-error-bg-hover);
+  color: var(--color-error);
+  flex-shrink: 0;
+}
+
+.danger-text h4 {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: var(--spacing-0) var(--spacing-0) var(--spacing-1);
+}
+
+.danger-text p {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: var(--spacing-0);
+  line-height: 1.5;
+}
+
+.btn-danger-full {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1-5);
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border: 1px solid var(--color-error);
+  background: var(--color-error);
+  color: var(--text-on-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-danger-full:hover:not(:disabled) {
+  background: var(--color-error-dark);
+  border-color: var(--color-error-dark);
+}
+
+.btn-danger-full:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
