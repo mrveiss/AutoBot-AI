@@ -15,6 +15,7 @@ import hashlib
 import logging
 import os
 import shutil
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -529,6 +530,50 @@ async def _get_tracker_for_db(db: AsyncSession):
     return get_git_tracker(repo_path=repo_path, branch=branch)
 
 
+# #11820: TTL for the per-component staleness scan surfaced by GET /status.
+# Never hard-code a cache TTL — read it from the environment so a frequently
+# polled status endpoint doesn't re-checksum every deployed component per call.
+_STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS", "60"))
+_stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
+
+
+async def _compute_stale_components() -> list[str]:
+    """Return ALLOWED_COMPONENTS deployed on this box whose files drift from source.
+
+    Surfaces the #11820 gap: a co-located managed component can be stale (its
+    deployed files differ from code_source) even when a node's code_version
+    matches latest, so /status must not read "up to date" while this is set.
+    Only components actually deployed here (deployed dir present) are checked,
+    and the result is cached for _STALE_COMPONENTS_TTL_SECONDS to bound cost on
+    the polled status path. Defensive: a failing component is logged and skipped,
+    never breaking the status response.
+    """
+    now = time.monotonic()
+    if now - _stale_components_cache["ts"] < _STALE_COMPONENTS_TTL_SECONDS:
+        return _stale_components_cache["value"]
+
+    stale: list[str] = []
+    loop = asyncio.get_running_loop()
+    for component in sorted(ALLOWED_COMPONENTS):
+        try:
+            deployed_dir = get_default_deployed_dir(component)
+            if not os.path.isdir(deployed_dir):
+                continue  # not deployed on this box — nothing to compare
+            source_dir = get_default_source_dir(component)
+            report = await loop.run_in_executor(
+                None,
+                functools.partial(build_drift_report, source_dir, deployed_dir, component),
+            )
+            if report["drifted_files"]:
+                stale.append(component)
+        except Exception:  # noqa: BLE001 - a bad component must not break /status
+            logger.exception("stale-components scan failed for %s", component)
+
+    _stale_components_cache["ts"] = now
+    _stale_components_cache["value"] = stale
+    return stale
+
+
 @router.get("/status", response_model=CodeSyncStatusResponse)
 async def get_sync_status(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -584,6 +629,10 @@ async def get_sync_status(
     # Check if local repo has updates
     has_update = local_version is not None and latest_version is not None and local_version != latest_version
 
+    # #11820: surface deployed-vs-source drift for co-located managed components
+    # so the endpoint never reads "up to date" while a managed component is stale.
+    stale_components = await _compute_stale_components()
+
     return CodeSyncStatusResponse(
         latest_version=latest_version,
         local_version=local_version,
@@ -591,6 +640,7 @@ async def get_sync_status(
         has_update=has_update,
         outdated_nodes=outdated_nodes,
         total_nodes=total_nodes,
+        stale_components=stale_components,
     )
 
 

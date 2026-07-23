@@ -1609,6 +1609,10 @@ class CodeSyncStatusResponse(BaseModel):
     has_update: bool = False
     outdated_nodes: int = 0
     total_nodes: int = 0
+    # #11820: components deployed on this box whose files drift from code_source.
+    # Non-empty means a managed component is stale even if node code_version
+    # matches latest — so consumers must not report "up to date" while this is set.
+    stale_components: list[str] = []
 
 
 class CodeSyncRefreshResponse(BaseModel):
