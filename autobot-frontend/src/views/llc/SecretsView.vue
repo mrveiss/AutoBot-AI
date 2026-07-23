@@ -142,18 +142,12 @@ function actor() {
   return userStore.currentUser?.username ?? 'operator'
 }
 
-// Secrets routes require the X-Agent-Company-Id header (backend _check_company_access
-// equality guard); ApiClient does not inject it, so pass it explicitly per call.
-function companyHeaders() {
-  return { headers: { 'X-Agent-Company-Id': props.companyId ?? '' } }
-}
-
 async function loadSecrets() {
   if (!props.companyId) return
   isLoading.value = true
   loadError.value = ''
   try {
-    secrets.value = await api.get<SecretSummary[]>(`/api/llc/secrets/${props.companyId}`, companyHeaders())
+    secrets.value = await api.get<SecretSummary[]>(`/api/llc/secrets/${props.companyId}`)
   } catch (err) {
     logger.error('Failed to load secrets', err)
     loadError.value = t('llc.secrets.loadFailed')
@@ -185,11 +179,11 @@ async function submitEditor() {
   saving.value = true
   editorError.value = ''
   try {
-    await api.post(
-      `/api/llc/secrets/${props.companyId}`,
-      { name: form.value.name, value: form.value.value, actor: actor() },
-      companyHeaders(),
-    )
+    await api.post(`/api/llc/secrets/${props.companyId}`, {
+      name: form.value.name,
+      value: form.value.value,
+      actor: actor(),
+    })
     editorOpen.value = false
     await loadSecrets()
   } catch (err) {
@@ -210,7 +204,7 @@ async function revokeSecret(secret: SecretSummary) {
   try {
     // actor is a required query param on the revoke route (backend contract).
     const path = `/api/llc/secrets/${props.companyId}/${encodeURIComponent(secret.name)}`
-    await api.delete(`${path}?actor=${encodeURIComponent(actor())}`, companyHeaders())
+    await api.delete(`${path}?actor=${encodeURIComponent(actor())}`)
     await loadSecrets()
   } catch (err) {
     logger.error('Failed to revoke secret', err)
