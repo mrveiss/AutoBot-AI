@@ -272,26 +272,31 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
         return None
 
 
-def cap_unmatched_output(command: str, output: str, exit_code: int) -> str:
-    """Enforce a hard character ceiling on output that matched no rule.
+def _hard_cap(command: str, text: str, raw: str, exit_code: int) -> str:
+    """Enforce the hard character ceiling on *text*, teeing *raw* for the full copy.
 
-    The rule pipeline shrinks output whose shape it recognises; anything it does
-    not recognise would otherwise reach conversation history at full length. This
-    is the last-resort ceiling — keep the start and end (where errors and
-    summaries usually sit), drop the middle, and leave a pointer to the full
-    copy via the same tee mechanism the matched path uses.
+    Keep the start and end (where errors and summaries usually sit), drop the
+    middle, and leave a pointer to the full output saved via the same tee
+    mechanism the matched path uses. This is the terminal guard applied to both
+    the unmatched passthrough and matched-rule results (#11543) so no output can
+    reach conversation history above the ceiling, regardless of rule match.
     """
     limit = _MAX_UNMATCHED_OUTPUT_CHARS
-    if len(output) <= limit:
-        return output
+    if len(text) <= limit:
+        return text
 
     keep = limit // 2
-    dropped = len(output) - 2 * keep
-    capped = f"{output[:keep]}\n[... {dropped} chars omitted ...]\n{output[-keep:]}"
+    dropped = len(text) - 2 * keep
+    capped = f"{text[:keep]}\n[... {dropped} chars omitted ...]\n{text[-keep:]}"
 
     words = command.split()
-    hint = tee_and_hint(output, words[0] if words else "unknown", exit_code)
+    hint = tee_and_hint(raw, words[0] if words else "unknown", exit_code)
     return f"{capped}\n{hint}" if hint else capped
+
+
+def cap_unmatched_output(command: str, output: str, exit_code: int) -> str:
+    """Hard-cap output that matched no rule (delegates to :func:`_hard_cap`)."""
+    return _hard_cap(command, output, output, exit_code)
 
 
 def _line_similarity(a: str, b: str) -> float:
@@ -474,7 +479,10 @@ class ToolOutputFilter:
         except RuntimeError:
             pass
 
-        return filtered
+        # Issue #11543: terminal guard — a matched rule can still leave output
+        # above the ceiling (huge diff, hundreds of failures). Cap the final
+        # result regardless of match so nothing above the cap reaches history.
+        return _hard_cap(command, filtered, output, exit_code)
 
     def filter_blocks(self, output: str, handler: BlockHandler, exit_code: int = 0) -> str:
         """Filter structured block output using *handler* (ESLint, mypy, docker build, etc.)."""

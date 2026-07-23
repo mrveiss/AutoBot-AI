@@ -257,6 +257,9 @@ class LLCWorkItemRelation(Base):
         "LLCWorkItem",
         foreign_keys=[target_id],
         back_populates="incoming_relations",
+        # Issue #11686: batch-load targets to avoid an N+1 when serializing an
+        # item's outgoing relations (_relations_to_list reads each rel.target).
+        lazy="selectin",
     )
 
     __table_args__ = (
