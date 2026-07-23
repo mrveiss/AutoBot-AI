@@ -8,6 +8,13 @@ Routes:
   POST /agent-hires                           — create assistant agent, auto-resolves cheap model
   GET  /agent-hires                           — list hire records for the org
   POST /companies/{company_id}/agent-hires    — hire Sonnet or Haiku agent, generates AGENTS.md stub
+
+Access control: every route requires an authenticated session whose tenant
+(``TenantContext.org_id``) matches the target company — either an explicit
+``company_id`` (body or path) or, when omitted, the caller's own org
+(GH#12163). Platform admins are exempt. 404 (not 403) on mismatch so a
+cross-tenant caller can't distinguish "not my company" from "doesn't exist" —
+matches goals.py/secrets.py (GH#12136, GH#12147).
 """
 
 from __future__ import annotations
@@ -21,6 +28,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from llc.adapters import registered_adapter_types
 from llc.services.budget import BudgetService
@@ -212,6 +220,22 @@ async def _fetch_company_model_overrides(
 
 
 # ---------------------------------------------------------------------------
+# Auth / tenant isolation (GH#12163)
+# ---------------------------------------------------------------------------
+
+
+def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
+    """Reject cross-tenant access to a company-scoped hire request.
+
+    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
+    from "doesn't exist" — matches goals.py/secrets.py (GH#12136, GH#12147).
+    Platform admins are exempt.
+    """
+    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+
+# ---------------------------------------------------------------------------
 # GH#8487 — general auto-resolve routes
 # ---------------------------------------------------------------------------
 
@@ -220,12 +244,12 @@ async def _fetch_company_model_overrides(
 async def create_agent_hire(
     body: AgentHireCreate,
     session: AsyncSession = Depends(get_async_session),
-    ctx: TenantContext = Depends(lambda: None),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> AgentHireRead:
     """Create an assistant agent with auto-resolved cheap model (GH#8487)."""
-    effective_company_id = str(body.company_id) if body.company_id else (str(ctx.org_id) if ctx else None)
-    if not effective_company_id:
-        raise HTTPException(status_code=400, detail="company_id is required")
+    effective_company_id = str(body.company_id) if body.company_id else str(ctx.org_id)
+    _assert_company_match(ctx, effective_company_id)
 
     svc = get_model_tier_service()
     senior_adapter_cfg: Optional[Dict[str, Any]] = None
@@ -296,11 +320,10 @@ async def create_agent_hire(
 @router.get("/agent-hires", response_model=List[AgentHireRead])
 async def list_agent_hires(
     session: AsyncSession = Depends(get_async_session),
-    ctx: TenantContext = Depends(lambda: None),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentHireRead]:
     """List agent hire records for the caller's org (GH#8487)."""
-    if not ctx:
-        return []
     try:
         result = await session.execute(
             text(
@@ -345,8 +368,11 @@ async def hire_agent(
     company_id: uuid.UUID,
     body: AgentHireRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> AgentHireResponse:
     """Hire a new LLC agent with explicit model selection and AGENTS.md generation."""
+    _assert_company_match(ctx, str(company_id))
     resolved_model = body.model or SONNET_MODEL
     if resolved_model not in _VALID_MODELS:
         raise HTTPException(

@@ -7,6 +7,14 @@
 Route group: /llc/import
   POST /preview  — collision-detection preview (no writes)
   POST /execute  — transactional import
+
+Access control: both routes require an authenticated session. When
+``target_company_id`` names an existing company, the caller's tenant
+(``TenantContext.org_id``) must match it — platform admins are exempt — so an
+authenticated caller of one company can't import agents/goals/secrets into a
+different company (GH#12163, the IDOR fix). When ``target_company_id`` is
+omitted the import creates a brand-new top-level company (there is no
+existing tenant to check against), matching companies.py's ``create_company``.
 """
 
 import uuid
@@ -16,9 +24,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from llc.services.portability import PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 router = APIRouter(prefix="/import", tags=["llc-import"])
 
@@ -58,6 +68,26 @@ class ImportExecuteResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Auth / tenant isolation (GH#12163)
+# ---------------------------------------------------------------------------
+
+
+def _assert_import_target_access(ctx: TenantContext, target_company_id: Optional[uuid.UUID]) -> None:
+    """Reject importing into a company the caller doesn't belong to.
+
+    No-op when ``target_company_id`` is omitted (new-company import) — there
+    is no existing tenant to check against. 404 (not 403) on mismatch, so a
+    cross-tenant caller can't distinguish "not my company" from "doesn't
+    exist" — matches goals.py/secrets.py (GH#12136, GH#12147). Platform
+    admins are exempt.
+    """
+    if target_company_id is None:
+        return
+    if str(target_company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -70,7 +100,10 @@ class ImportExecuteResponse(BaseModel):
 async def preview_import(
     body: ImportPreviewRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ImportPreviewResponse:
+    _assert_import_target_access(ctx, body.target_company_id)
     svc = PortabilityService(session=session)
     try:
         result = await svc.preview_import(body.template, target_company_id=body.target_company_id)
@@ -88,7 +121,10 @@ async def preview_import(
 async def execute_import(
     body: ImportExecuteRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ImportExecuteResponse:
+    _assert_import_target_access(ctx, body.target_company_id)
     remapping = body.remapping_options.model_dump(exclude_none=True) if body.remapping_options else {}
     svc = PortabilityService(session=session)
     try:

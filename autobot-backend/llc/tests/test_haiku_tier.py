@@ -138,6 +138,7 @@ class TestHireAgentNamedBindDict:
     async def test_hire_agent_insert_binds_match_named_params(self) -> None:
         mod = _get_agent_hires_mod()
         from sqlalchemy.dialects import postgresql
+        from user_management.services import TenantContext
 
         session = AsyncMock()
         session.execute = AsyncMock()
@@ -145,12 +146,13 @@ class TestHireAgentNamedBindDict:
 
         body = mod.AgentHireRequest(agent_name="ABR CEO", org_role="manager", title="Chief Executive")
         company_id = uuid.uuid4()
+        ctx = TenantContext(org_id=company_id, user_id=uuid.uuid4())
 
         with (
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
             patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
         ):
-            await mod.hire_agent(company_id=company_id, body=body, session=session)
+            await mod.hire_agent(company_id=company_id, body=body, session=session, _current_user={}, ctx=ctx)
 
         stmt, params = session.execute.call_args_list[0].args
         assert isinstance(params, dict), "params must be a named-bind dict, not a positional tuple"
@@ -168,6 +170,7 @@ class TestHireAgentNamedBindDict:
     async def test_create_agent_hire_insert_binds_match_named_params(self) -> None:
         mod = _get_agent_hires_mod()
         from sqlalchemy.dialects import postgresql
+        from user_management.services import TenantContext
 
         session = AsyncMock()
         session.execute = AsyncMock()
@@ -175,7 +178,8 @@ class TestHireAgentNamedBindDict:
         session.rollback = AsyncMock()
 
         body = mod.AgentHireCreate(company_id=uuid.uuid4())
-        await mod.create_agent_hire(body=body, session=session, ctx=None)
+        ctx = TenantContext(org_id=body.company_id, user_id=uuid.uuid4())
+        await mod.create_agent_hire(body=body, session=session, _current_user={}, ctx=ctx)
 
         stmt, params = session.execute.call_args_list[0].args
         assert isinstance(params, dict), "params must be a named-bind dict, not a positional tuple"

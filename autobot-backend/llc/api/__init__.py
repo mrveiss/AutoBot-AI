@@ -75,7 +75,6 @@ router.include_router(context_router)
 router.include_router(controls_router)
 router.include_router(labels_router)
 router.include_router(templates_router)
-router.include_router(agent_hires_router)
 router.include_router(costs_router)
 
 
