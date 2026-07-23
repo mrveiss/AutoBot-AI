@@ -1740,6 +1740,11 @@ class FeatureConfig(BaseSettings):
     # AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS=true once credentials exist.
     kb_enterprise_connectors: bool = Field(default=False, alias="AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS")
 
+    # Issue #10538: Offline mock/replay KB connector for dev/CI testing.
+    # Disabled by default — it makes zero network calls, but the flag keeps a
+    # "mock" entry out of the production connector_types listing/UI.
+    kb_mock_connector: bool = Field(default=False, alias="AUTOBOT_FEATURE_KB_MOCK_CONNECTOR")
+
 
 class CostModelConfig(BaseSettings):
     """Operator-supplied monthly cost estimates for hardware components.
