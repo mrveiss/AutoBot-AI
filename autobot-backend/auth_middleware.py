@@ -566,9 +566,23 @@ class AuthenticationMiddleware:
         if not token_data:
             return None
 
+        # #12135: hard `token_data["username"]` crashed with an unhandled
+        # KeyError -> 500 for a structurally-valid, signature-verified token
+        # that simply carries the identity in a different claim (e.g. tokens
+        # minted by autobot-slm-backend use "sub", not "username" — see
+        # autobot-slm-backend/services/auth.py). The rest of the codebase
+        # already treats user_id/sub/username as interchangeable identity
+        # claims (see api/documents.py, api/voice.py, api/users.py), so fall
+        # back through them here rather than reject a valid token. Only a
+        # token with NO identity claim at all is treated as invalid.
+        username = token_data.get("username") or token_data.get("sub") or token_data.get("user_id")
+        if not username:
+            logger.warning("JWT verified but carries no username/sub/user_id claim — rejecting")
+            return None
+
         user = {
-            "username": token_data["username"],
-            "role": token_data["role"],
+            "username": username,
+            "role": token_data.get("role", "user"),
             "email": token_data.get("email", ""),
             "auth_method": "jwt",
         }
