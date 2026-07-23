@@ -477,6 +477,8 @@
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
+      - "--exclude=.env"
+      - "--exclude=*.env"
     delete: true
   tags: ['slm', 'frontend']
 
@@ -493,6 +495,8 @@
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
+      - "--exclude=.env"
+      - "--exclude=*.env"
     delete: true
   tags: ['slm', 'frontend']
 
@@ -500,6 +504,18 @@
   ansible.builtin.stat:
     path: "{{ slm_frontend_dir }}/package.json"
   register: slm_package_json
+  tags: ['slm', 'frontend']
+
+# #12112: force npm to recreate the @autobot/* file: workspace symlinks against
+# the freshly-synced libs/ + autobot-plugins/ trees — a stale node_modules can
+# otherwise leave them unlinked/dangling (bare specifier) and the SLM UI
+# white-pages at runtime.
+- name: "SLM | Remove stale @autobot workspace symlinks so npm relinks file: deps (#12112)"
+  ansible.builtin.file:
+    path: "{{ slm_frontend_dir }}/node_modules/@autobot"
+    state: absent
+  become_user: "{{ slm_user }}"
+  when: slm_frontend_build and slm_package_json.stat.exists
   tags: ['slm', 'frontend']
 
 - name: "SLM | Install frontend npm dependencies"
@@ -535,6 +551,14 @@
   ansible.builtin.stat:
     path: "{{ frontend_dist_dir | dirname }}/package.json"
   register: user_frontend_package_json
+  tags: ['slm', 'frontend', 'colocated']
+
+- name: "SLM | Remove stale @autobot workspace symlinks (user frontend) so npm relinks file: deps (#12112)"
+  ansible.builtin.file:
+    path: "{{ frontend_dist_dir | dirname }}/node_modules/@autobot"
+    state: absent
+  become_user: "{{ slm_user }}"
+  when: user_frontend_package_json.stat.exists | default(false)
   tags: ['slm', 'frontend', 'colocated']
 
 - name: "SLM | Install user frontend npm dependencies"

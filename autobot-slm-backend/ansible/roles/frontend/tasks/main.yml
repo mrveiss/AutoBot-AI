@@ -88,6 +88,43 @@
     recurse: true
   tags: ['frontend', 'deploy']
 
+# ============================================================
+# Shared @autobot/* workspace packages (#12112)
+# autobot-frontend package.json declares three file: deps:
+#   "@autobot/ui":       "file:../libs/autobot-ui"
+#   "@autobot/vnc":      "file:../autobot-plugins/vnc"
+#   "@autobot/terminal": "file:../autobot-plugins/terminal"
+# npm install symlinks node_modules/@autobot/* → those sibling dirs at install
+# time; if the target is absent the symlink dangles and Vite's rolldown bundler
+# fails to resolve the import at build time (SLM/user UI white-page). The
+# frontend code sync above only copies autobot-frontend/, so these shared trees
+# must be synced separately — mirrors the slm_manager role (MVA-893 / #10750 C2c).
+- name: "Frontend | Sync autobot-plugins (shared @autobot/vnc,terminal) from code_source (#12112)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-plugins/"
+    dest: "{{ frontend_install_dir }}/autobot-plugins/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=.git"
+      - "--exclude=.env"
+      - "--exclude=*.env"
+    delete: true
+  tags: ['frontend', 'deploy']
+
+- name: "Frontend | Sync libs (shared @autobot/ui kit) from code_source (#12112)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/libs/"
+    dest: "{{ frontend_install_dir }}/libs/"
+    rsync_opts:
+      - "--exclude=node_modules"
+      - "--exclude=dist"
+      - "--exclude=.git"
+      - "--exclude=.env"
+      - "--exclude=*.env"
+    delete: true
+  tags: ['frontend', 'deploy']
+
 - name: "Frontend | Ensure TLS cert directory exists"
   file:
     path: "{{ frontend_tls_cert_dir }}"
@@ -131,6 +168,21 @@
   stat:
     path: "{{ frontend_install_dir }}/autobot-frontend/package.json"
   register: package_json_path
+  tags: ['frontend', 'npm']
+
+# #12112: a stale lockfile or pre-existing node_modules can leave
+# node_modules/@autobot/* unlinked (or dangling at an old libs revision) so the
+# install below does NOT recreate the file: symlinks — vite then externalises
+# @autobot/ui to a bare specifier and the app white-pages at runtime. Remove the
+# @autobot scope first so `npm install` re-creates every file: workspace symlink
+# against the freshly-synced libs/ + autobot-plugins/ trees.
+- name: "Frontend | Remove stale @autobot workspace symlinks so npm relinks file: deps (#12112)"
+  ansible.builtin.file:
+    path: "{{ frontend_install_dir }}/autobot-frontend/node_modules/@autobot"
+    state: absent
+  become: true
+  become_user: "{{ frontend_user }}"
+  when: package_json_path.stat.exists
   tags: ['frontend', 'npm']
 
 - name: "Frontend | Install npm dependencies"
