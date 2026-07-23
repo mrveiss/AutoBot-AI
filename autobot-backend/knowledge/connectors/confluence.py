@@ -17,8 +17,13 @@ values below are documentation placeholders only.
 Config keys (under ``ConnectorConfig.config``):
     base_url (str): Confluence site base URL, e.g.
         "https://your-domain.atlassian.net/wiki". Required.
-    email (str): Atlassian account email used for basic auth. Required.
-    api_token (str): Atlassian API token. Required.
+    username (str): Atlassian account email used for basic auth. Required.
+        Canonical ``BasicAuth`` field (Issue #12221) — matches
+        ``auth_schema()`` below so the auth-schema validation and
+        credential-store encryption path actually secures the field the
+        connector reads.
+    password (str): Atlassian API token, used as the HTTP Basic password.
+        Required. Canonical ``BasicAuth`` field (Issue #12221).
     space_keys (list[str]): Confluence space keys to sync. Required.
     page_size (int): Pages per query batch. Default 25.
 """
@@ -84,8 +89,8 @@ class ConfluenceConnector(AbstractConnector):
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
-        self._email: str = cfg.get("email", "")
-        self._api_token: str = cfg.get("api_token", "")
+        self._email: str = cfg.get("username", "")
+        self._api_token: str = cfg.get("password", "")
         self._base_url: str = cfg.get("base_url", "").rstrip("/")
         self._space_keys: List[str] = cfg.get("space_keys", [])
         self._page_size: int = int(cfg.get("page_size", 25))

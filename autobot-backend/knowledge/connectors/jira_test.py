@@ -25,8 +25,8 @@ def jira_config():
         name="Test Jira",
         config={
             "base_url": "https://example.atlassian.net",
-            "email": "bot@example.com",
-            "api_token": "test-fake-api-credential",
+            "username": "bot@example.com",
+            "password": "test-fake-api-credential",
             "project_keys": ["ABC"],
         },
         enabled=True,

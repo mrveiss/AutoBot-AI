@@ -25,8 +25,8 @@ def confluence_config():
         name="Test Confluence",
         config={
             "base_url": "https://example.atlassian.net/wiki",
-            "email": "bot@example.com",
-            "api_token": "test-fake-api-credential",
+            "username": "bot@example.com",
+            "password": "test-fake-api-credential",
             "space_keys": ["ENG"],
         },
         enabled=True,

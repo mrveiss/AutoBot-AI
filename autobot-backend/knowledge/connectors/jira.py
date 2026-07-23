@@ -17,8 +17,13 @@ values below are documentation placeholders only.
 Config keys (under ``ConnectorConfig.config``):
     base_url (str): Jira site base URL, e.g.
         "https://your-domain.atlassian.net". Required.
-    email (str): Atlassian account email used for basic auth. Required.
-    api_token (str): Atlassian API token. Required.
+    username (str): Atlassian account email used for basic auth. Required.
+        Canonical ``BasicAuth`` field (Issue #12221) — matches
+        ``auth_schema()`` below so the auth-schema validation and
+        credential-store encryption path actually secures the field the
+        connector reads.
+    password (str): Atlassian API token, used as the HTTP Basic password.
+        Required. Canonical ``BasicAuth`` field (Issue #12221).
     project_keys (list[str]): Jira project keys to sync. Required.
     jql (str): Optional JQL override; when set, replaces the
         project-key-derived query entirely.
@@ -88,8 +93,8 @@ class JiraConnector(AbstractConnector):
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
-        self._email: str = cfg.get("email", "")
-        self._api_token: str = cfg.get("api_token", "")
+        self._email: str = cfg.get("username", "")
+        self._api_token: str = cfg.get("password", "")
         self._base_url: str = cfg.get("base_url", "").rstrip("/")
         self._project_keys: List[str] = cfg.get("project_keys", [])
         self._jql_override: str = cfg.get("jql", "")
