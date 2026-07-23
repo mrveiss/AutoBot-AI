@@ -20,6 +20,11 @@ Subsystem flags (all default ``True``):
 * ``training``         — model training / fine-tuning (AUTOBOT_FEATURE_TRAINING)
 * ``osint``            — OSINT sweep engine (AUTOBOT_FEATURE_OSINT)
 
+Subsystem flags that default ``False`` (opt-in):
+
+* ``kb_enterprise_connectors`` — Slack/Confluence/Jira KB ingestion connectors
+  (AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS). Issue #10538.
+
 Usage::
 
     from autobot_shared.feature_flags import is_feature_enabled, require_feature
@@ -51,6 +56,7 @@ _SUBSYSTEM_FLAG_MAP: dict[str, str] = {
     "computer_vision": "computer_vision_enabled",
     "training": "training_enabled",
     "osint": "osint_enabled",
+    "kb_enterprise_connectors": "kb_enterprise_connectors",
 }
 
 F = TypeVar("F", bound=Callable)
