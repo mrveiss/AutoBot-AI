@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 const { chromium } = require('playwright');
 const express = require('express');
 const app = express();

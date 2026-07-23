@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Automated Code Quality Fix Script for AutoBot
 Fixes common flake8 issues including unused imports, line length, and formatting

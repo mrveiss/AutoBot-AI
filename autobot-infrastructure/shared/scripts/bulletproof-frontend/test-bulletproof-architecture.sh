@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Bulletproof Frontend Architecture Testing Suite
 # Tests all failure scenarios and recovery mechanisms

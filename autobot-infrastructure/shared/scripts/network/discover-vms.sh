@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot VM Discovery Script (Linux/WSL version)
 # Discovers AutoBot VMs and updates Ansible inventory
 

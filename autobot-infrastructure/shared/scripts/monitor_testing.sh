@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Real-time monitoring script for PTY collaboration testing
 # This script monitors backend logs for PTY execution, approvals, and errors

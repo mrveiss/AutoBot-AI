@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Fix VNC for WSL (no physical display)
 # Run with: sudo bash fix-vnc-wsl.sh
 

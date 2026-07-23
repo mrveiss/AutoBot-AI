@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /* global VNC_frame_data, VNC_frame_encoding */
 
 import * as WebUtil from '../app/webutil.js';

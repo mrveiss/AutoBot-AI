@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Complete VM Sync Templates for AutoBot Distributed Architecture
 # Provides comprehensive sync capabilities for all VMs and services

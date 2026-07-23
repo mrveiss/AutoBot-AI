@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Start VNC server for AutoBot desktop access
 
 # Kill any existing VNC servers

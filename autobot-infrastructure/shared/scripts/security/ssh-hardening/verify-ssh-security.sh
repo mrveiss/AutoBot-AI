@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot SSH Security Verification Script
 # Verifies SSH host key verification is working properly
 # Part of CVE-AUTOBOT-2025-001 remediation testing

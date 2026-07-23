@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot SSH Host Key Population Script
 # Securely populates known_hosts with AutoBot VM host keys
 # Part of CVE-AUTOBOT-2025-001 remediation

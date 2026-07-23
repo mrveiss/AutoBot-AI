@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Test console warnings and errors using AutoBot's Browser VM
  * This script uses AutoBot's dedicated Browser VM for browser automation

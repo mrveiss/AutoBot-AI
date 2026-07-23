@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 const axios = require('axios');
 
 // Test frontend navigation using the Docker Playwright service

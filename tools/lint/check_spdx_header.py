@@ -44,9 +44,11 @@ SLASH_EXTS = {".ts", ".tsx", ".js", ".mjs"}
 CSS_EXTS = {".css"}
 TARGET_EXTS = HASH_EXTS | SLASH_EXTS | CSS_EXTS
 
-# Paths excluded from the sweep — vendored, generated, build output, the
-# infrastructure tree (which the relicense sweep skipped, matching the
-# black/isort/flake8 excludes), and line-sensitive canonical-check fixtures.
+# Paths excluded from the sweep — vendored, generated, build output, and
+# line-sensitive canonical-check fixtures. The infrastructure tree is
+# first-party (AutoBot-authored scripts/tests/config) and IS swept (#12175);
+# only genuinely third-party vendored subtrees under it stay excluded (their
+# own licenses govern — see THIRD-PARTY-NOTICES).
 EXCLUDE_RE = re.compile(
     r"(^|/)(?:"
     r"node_modules|"
@@ -55,7 +57,7 @@ EXCLUDE_RE = re.compile(
     r"_generated|generated|"
     r"fixtures"
     r")/"
-    r"|^autobot-infrastructure/"
+    r"|^autobot-infrastructure/shared/mcp/tools/(?:context7|mcp-structured-thinking)/"
     r"|^\.github/workflows/"
     r"|^data/file_manager_root/"
     r"|\.min\.(?:js|css)$"

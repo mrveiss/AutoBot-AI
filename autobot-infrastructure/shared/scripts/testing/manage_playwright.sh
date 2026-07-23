@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Playwright Service Management Script for AutoBot
 # Usage: ./manage_playwright.sh [start|stop|restart|status|logs]

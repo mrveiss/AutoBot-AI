@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Setup passwordless sudo for AutoBot operations
 
 echo "Setting up passwordless sudo for AutoBot operations..."

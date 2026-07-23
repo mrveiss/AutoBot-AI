@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """Generate frontend TypeScript types from canonical Python dataclasses.
 
 #7122: minimal codegen pipeline. Walks the dataclass field types of

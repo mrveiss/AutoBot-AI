@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Quick test script for desktop access setup
 
 echo "🧪 Testing desktop access setup requirements..."

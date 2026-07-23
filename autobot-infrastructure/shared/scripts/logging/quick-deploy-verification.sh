@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # AutoBot Logging System Quick Deployment Verification
 # Verifies that the enhanced centralized logging system can be deployed

@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Main entry point for AutoBot AI Stack Container
 Sets up environment and starts the AI API server

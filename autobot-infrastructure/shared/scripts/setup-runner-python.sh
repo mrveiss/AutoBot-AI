@@ -1,6 +1,7 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - Self-Hosted Runner Python Setup Script
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
 # Issue #1898: Standardize Python to deadsnakes PPA + Python 3.14 venv.

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Send the network scanning tools question through the visible browser GUI
  */
