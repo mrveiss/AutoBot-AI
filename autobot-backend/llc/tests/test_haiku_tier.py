@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import uuid
 from types import ModuleType
+
+from user_management.services import TenantContext
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -150,7 +152,8 @@ class TestHireAgentNamedBindDict:
             patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
             patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
         ):
-            await mod.hire_agent(company_id=company_id, body=body, session=session)
+            ctx = TenantContext(org_id=None, user_id=uuid.uuid4(), is_platform_admin=True)
+            await mod.hire_agent(company_id=company_id, body=body, session=session, ctx=ctx)
 
         stmt, params = session.execute.call_args_list[0].args
         assert isinstance(params, dict), "params must be a named-bind dict, not a positional tuple"
@@ -175,7 +178,8 @@ class TestHireAgentNamedBindDict:
         session.rollback = AsyncMock()
 
         body = mod.AgentHireCreate(company_id=uuid.uuid4())
-        await mod.create_agent_hire(body=body, session=session, ctx=None)
+        ctx = TenantContext(org_id=body.company_id, user_id=uuid.uuid4(), is_platform_admin=False)
+        await mod.create_agent_hire(body=body, session=session, ctx=ctx)
 
         stmt, params = session.execute.call_args_list[0].args
         assert isinstance(params, dict), "params must be a named-bind dict, not a positional tuple"
