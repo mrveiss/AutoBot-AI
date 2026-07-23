@@ -17,7 +17,7 @@ circular import when a router is loaded in isolation via importlib (e.g. tests).
 
 Usage::
 
-    from llc.deps import get_session, postgres_required, service_dep
+    from llc.deps import get_session, service_dep
     from llc.services.my_service import MyService
 
     router = APIRouter(...)
@@ -37,7 +37,7 @@ import functools
 import uuid
 from typing import AsyncGenerator, Callable, Set, Type, TypeVar
 
-from fastapi import Depends, HTTPException
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,20 +49,7 @@ from user_management.services import TenantContext
 _T = TypeVar("_T")
 
 
-def postgres_required() -> None:
-    """FastAPI dependency hook for LLC endpoints requiring a Postgres session.
-
-    AutoBot always runs full, Postgres-backed user management (#10636), so this
-    gate always passes.  Retained as a router-level dependency hook so existing
-    router wiring (``APIRouter(dependencies=[Depends(postgres_required)])``)
-    stays in place.
-    """
-    return None
-
-
-async def get_session(
-    _gate: None = Depends(postgres_required),
-) -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """Bare async DB session — no auto-commit or auto-rollback.
 
     Callers are responsible for explicit transaction management
@@ -155,7 +142,6 @@ async def load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: 
 __all__ = [
     "get_session",
     "load_owned_project",
-    "postgres_required",
     "require_board_role",
     "service_dep",
 ]
