@@ -81,13 +81,17 @@
     databases:
       - autobot_users
     postgresql_listen_addresses: "*"
-    pg_hba_remote_access:
-      - database: autobot_users
-        user: autobot_app
-        address: "{{ slm_host }}/32"
-      - database: autobot_users
-        user: autobot_app
-        address: "{{ backend_host }}/32"
+    # #12214: on a co-located single box the node is in both slm and redis groups,
+    # so this DB-VM play also runs here — but slm_host/backend_host (separate-VM
+    # addresses) may be undefined. Build the remote-access + firewall sets from
+    # only the hosts that ARE defined, so autobot_users is still created while
+    # cross-VM access is simply skipped when there is no separate VM.
+    _pg_remote_hosts: "{{ (([slm_host] if slm_host is defined else []) + ([backend_host] if backend_host is defined else [])) }}"
+    pg_hba_remote_access: >-
+      {{
+        ([{'database': 'autobot_users', 'user': 'autobot_app', 'address': slm_host ~ '/32'}] if slm_host is defined else [])
+        + ([{'database': 'autobot_users', 'user': 'autobot_app', 'address': backend_host ~ '/32'}] if backend_host is defined else [])
+      }}
 
   pre_tasks:
     - name: Display Redis VM database deployment info
@@ -99,7 +103,7 @@
           - "Host: {{ inventory_hostname }} ({{ ansible_host }})"
           - "User: {{ db_user }}"
           - "Databases: {{ databases | join(', ') }}"
-          - "Remote access from: SLM ({{ slm_host }}), Main ({{ backend_host }})"
+          - "Remote access from: SLM ({{ slm_host | default('n/a') }}), Main ({{ backend_host | default('n/a') }})"
 
   roles:
     - role: postgresql
@@ -108,15 +112,16 @@
         - redis
 
   post_tasks:
+    # #12214: only open the firewall for remote hosts that are actually defined
+    # (skipped entirely on a co-located single box with no separate VM).
     - name: Configure firewall for PostgreSQL
       community.general.ufw:
         rule: allow
         port: "{{ postgresql_port }}"
         src: "{{ item }}"
         proto: tcp
-      loop:
-        - "{{ slm_host }}"
-        - "{{ backend_host }}"
+      loop: "{{ _pg_remote_hosts }}"
+      when: _pg_remote_hosts | length > 0
 
     - name: Verify autobot_users database is accessible
       community.postgresql.postgresql_ping:
@@ -142,7 +147,9 @@
   gather_facts: false
 
   vars:
-    autobot_db_host: "{{ redis_host }}"
+    # #12214: on a co-located box there is no separate DB VM, so redis_host may
+    # be undefined — the autobot_users DB is local, so verify against 127.0.0.1.
+    autobot_db_host: "{{ redis_host | default('127.0.0.1') }}"
     autobot_db_user: "autobot_app"
 
   tasks:
@@ -179,12 +186,12 @@
           - "User Management Database Setup Complete"
           - "======================================"
           - ""
-          - "SLM Server ({{ slm_host }}):"
+          - "SLM Server ({{ slm_host | default('local') }}):"
           - "  - Database: slm (operational data)"
           - "  - Database: slm_users (admin accounts)"
           - "  - Credentials: /etc/autobot/db-credentials.env"
           - ""
-          - "Database VM ({{ redis_host }}):"
+          - "Database VM ({{ redis_host | default('local') }}):"
           - "  - Database: autobot_users (app users)"
           - "  - Credentials: /etc/autobot/db-credentials.env"
           - "  - Remote access: SLM, Main Backend"
