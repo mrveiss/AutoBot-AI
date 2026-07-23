@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import get_session, service_dep
+from llc.deps import assert_company_access, get_session, service_dep
 from user_management.services import TenantContext
 
 from ..models.enums import WorkItemStatus, WorkItemType
@@ -79,22 +79,6 @@ class BulkAssignSprintResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Auth / tenant isolation (GH#12136)
-# ---------------------------------------------------------------------------
-
-
-def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
-    """Reject cross-tenant access to a company-scoped backlog request.
-
-    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
-    from "doesn't exist" — matches boards.py/sprints.py/work_items.py (GH#10296).
-    Platform admins are exempt, matching companies.py's org-chart idiom.
-    """
-    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-
-# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -116,7 +100,7 @@ async def get_backlog(
     ctx: TenantContext = Depends(require_org_context),
 ) -> BacklogResponse:
     """Return backlog items ordered by priority (CRITICAL → HIGH → MEDIUM → LOW), then age."""
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     items, total = await _service().list_backlog(
         session,
         company_id=company_id,
@@ -147,7 +131,7 @@ async def bulk_assign_sprint(
     Items that don't belong to the given company are silently excluded.
     Returns the count of rows actually updated.
     """
-    _assert_company_match(ctx, body.company_id)
+    assert_company_access(ctx, body.company_id)
     if not body.work_item_ids:
         raise HTTPException(status_code=422, detail="work_item_ids must not be empty")
 

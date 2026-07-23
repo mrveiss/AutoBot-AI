@@ -17,33 +17,13 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from llc.deps import assert_company_access
 from llc.services.portability import PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
 router = APIRouter(prefix="/import", tags=["llc-import"])
-
-
-# ---------------------------------------------------------------------------
-# Auth / tenant isolation (GH#12148)
-# ---------------------------------------------------------------------------
-
-
-def _assert_target_company(ctx: TenantContext, target_company_id: Optional[uuid.UUID]) -> None:
-    """Enforce tenant isolation when importing into an existing company.
-
-    A ``target_company_id`` names an existing tenant to import into, so a
-    cross-tenant caller must be rejected (404, matching goals.py existence
-    disclosure avoidance). When ``target_company_id`` is None the import
-    creates a brand-new company scoped to the authenticated caller, so only
-    authentication is required. Platform admins are exempt (GH#12148).
-    """
-    if target_company_id is None:
-        return
-    if str(target_company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-
 
 # ---------------------------------------------------------------------------
 # Request / response schemas
@@ -95,7 +75,11 @@ async def preview_import(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ImportPreviewResponse:
-    _assert_target_company(ctx, body.target_company_id)
+    # A target_company_id names an existing tenant to import into, so a
+    # cross-tenant caller must be rejected. When None, the import creates a
+    # brand-new company scoped to the caller, so only auth is required.
+    if body.target_company_id is not None:
+        assert_company_access(ctx, body.target_company_id)
     svc = PortabilityService(session=session)
     try:
         result = await svc.preview_import(body.template, target_company_id=body.target_company_id)
@@ -116,7 +100,9 @@ async def execute_import(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ImportExecuteResponse:
-    _assert_target_company(ctx, body.target_company_id)
+    # See preview_import: target_company_id is optional (new-company import).
+    if body.target_company_id is not None:
+        assert_company_access(ctx, body.target_company_id)
     remapping = body.remapping_options.model_dump(exclude_none=True) if body.remapping_options else {}
     svc = PortabilityService(session=session)
     try:
