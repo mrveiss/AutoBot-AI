@@ -42,7 +42,7 @@ def manager():
     without touching Redis, the filesystem, or Memory Graph.
     """
     with (
-        patch("chat_history.base.global_config_manager", _make_config_stub()),
+        patch("chat_history.base.get_config_manager", return_value=_make_config_stub()),
         patch("chat_history.base._ssot_config", _make_ssot_stub()),
         patch("chat_history.base.get_redis_client", return_value=None),
         patch("chat_history.base.is_encryption_enabled", return_value=False),

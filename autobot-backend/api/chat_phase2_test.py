@@ -100,6 +100,7 @@ class TestChatRecentZremrangebyrank:
 
     @pytest.mark.asyncio
     async def test_zremrangebyrank_called_after_zadd_on_chat_recent(self):
+        from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
         from chat_history.session import SessionMixin
         from constants.redis_constants import REDIS_KEY
 
@@ -136,7 +137,9 @@ class TestChatRecentZremrangebyrank:
         zrem_args = next(e[1] for e in call_log if e[0] == "zremrangebyrank")
         assert zrem_args[0] == REDIS_KEY.CHAT_RECENT, "must use REDIS_KEY.CHAT_RECENT constant"
         assert zrem_args[1] == 0, "must remove from rank 0"
-        assert zrem_args[2] == -(mgr.max_session_files + 1), "must keep max_session_files most recent entries"
+        assert zrem_args[2] == -(
+            _CHAT_RECENT_MAX_ENTRIES + 1
+        ), "must keep _CHAT_RECENT_MAX_ENTRIES (#7570) most recent entries"
 
 
 # ---------------------------------------------------------------------------
