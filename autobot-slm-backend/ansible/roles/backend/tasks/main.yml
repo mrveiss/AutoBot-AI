@@ -151,6 +151,13 @@
 # every cross-service call 401'd. Reading it here converges both env files on one
 # value. Gated on a non-empty read so a host without slm-secrets.env keeps the
 # inventory/vault var (mirrors the #10400 SLM_SECRET_KEY pattern above).
+# #12145: stat first so the read-retry below only spins while the file exists.
+- name: "Backend | Stat slm-secrets.env for the internal-key read (#12145)"
+  ansible.builtin.stat:
+    path: /etc/autobot/slm-secrets.env
+  register: _slm_secrets_stat
+  tags: ['backend', 'config']
+
 - name: "Backend | Read AUTOBOT_INTERNAL_API_KEY from slm-secrets.env (#11507)"
   ansible.builtin.shell:
     cmd: >-
@@ -160,6 +167,14 @@
   changed_when: false
   failed_when: false
   no_log: true
+  # #12145: retry on a transient empty read (file mid-write during a concurrent
+  # deploy) so the key is not silently left drifted; short-circuits when the file
+  # is absent (nothing to align).
+  until: >-
+    (_backend_internal_api_key.stdout | default('') | trim | length > 0)
+    or (not (_slm_secrets_stat.stat.exists | default(false)))
+  retries: 5
+  delay: 2
   tags: ['backend', 'config']
 
 - name: "Backend | Align autobot_internal_api_key with slm-secrets.env when present (#11507)"
