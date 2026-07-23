@@ -23,10 +23,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
-from ..models.goal import GoalLevel, GoalStatus
+from ..models.goal import GoalLevel, GoalStatus, LLCGoal
 from ..models.work_item import LLCWorkItem
 from ..services.goal import GoalService
 
@@ -98,6 +100,31 @@ class WorkItemSummaryResponse(BaseModel):
         from_attributes = True
 
 
+# ------------------------------------------------------------------ Auth / tenant isolation (GH#12136)
+
+
+def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
+    """Reject cross-tenant access to a company-scoped goal request.
+
+    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
+    from "doesn't exist" — matches the established pattern in
+    boards.py/sprints.py/work_items.py (GH#10296, GH#10148, GH#9861). Platform
+    admins are exempt, matching companies.py's org-chart/backlog-reorder idiom.
+    """
+    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+
+async def _get_authorized_goal(session: AsyncSession, goal_id: uuid.UUID, ctx: TenantContext) -> LLCGoal:
+    """Load a goal and enforce tenant isolation; 404 if missing or cross-tenant (GH#12136)."""
+    goal = await _svc().get(session, goal_id)
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    if str(goal.company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return goal
+
+
 # ------------------------------------------------------------------ Routes
 
 
@@ -106,7 +133,10 @@ async def list_goals(
     company_id: str = Query(..., description="Company ID to filter goals"),
     parent_goal_id: Optional[uuid.UUID] = Query(None),
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
+    _assert_company_match(ctx, company_id)
     goals = await _svc().list_by_company(session, company_id, parent_goal_id)
     return [GoalResponse.model_validate(g) for g in goals]
 
@@ -115,7 +145,10 @@ async def list_goals(
 async def create_goal(
     body: GoalCreate,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
+    _assert_company_match(ctx, body.company_id)
     goal = await _svc().create(
         session,
         company_id=body.company_id,
@@ -134,10 +167,10 @@ async def create_goal(
 async def get_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
-    goal = await _svc().get(session, goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    goal = await _get_authorized_goal(session, goal_id, ctx)
     return GoalResponse.model_validate(goal)
 
 
@@ -146,7 +179,10 @@ async def update_goal(
     goal_id: uuid.UUID,
     body: GoalUpdate,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
+    await _get_authorized_goal(session, goal_id, ctx)
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     goal = await _svc().update(session, goal_id, **updates)
     if goal is None:
@@ -158,7 +194,10 @@ async def update_goal(
 async def delete_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    await _get_authorized_goal(session, goal_id, ctx)
     deleted = await _svc().delete(session, goal_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -168,10 +207,10 @@ async def delete_goal(
 async def get_ancestors(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
-    goal = await _svc().get(session, goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    await _get_authorized_goal(session, goal_id, ctx)
     ancestors = await _svc().get_ancestors(session, goal_id)
     return [GoalResponse.model_validate(a) for a in ancestors]
 
@@ -180,11 +219,11 @@ async def get_ancestors(
 async def list_tasks_for_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[WorkItemSummaryResponse]:
     """Return all work items linked to a goal (GH#6469)."""
-    goal = await _svc().get(session, goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    await _get_authorized_goal(session, goal_id, ctx)
     result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.goal_id == goal_id))
     items = result.scalars().all()
     return [WorkItemSummaryResponse.model_validate(item) for item in items]
