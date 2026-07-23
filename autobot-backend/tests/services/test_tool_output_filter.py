@@ -733,64 +733,62 @@ def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# cap_unmatched_output — terminal hard-size cap (#11543)
+# cap_unmatched_output — last-resort ceiling for rule-less output (#11543)
 # ---------------------------------------------------------------------------
 
 
-def test_cap_unmatched_output_under_cap_untouched():
-    pass
-
-    small_output = "just a normal short unmatched output\n"
-    result = cap_unmatched_output("some-unknown-tool", small_output, exit_code=0)
-    assert result == small_output
+def test_cap_returns_short_output_verbatim():
+    text = "a brief line of unmatched output\n"
+    assert cap_unmatched_output("mystery-cmd", text, exit_code=0) == text
 
 
-def test_cap_unmatched_output_multi_mb_is_truncated(tmp_path, monkeypatch):
+def test_cap_truncates_output_above_ceiling(tmp_path, monkeypatch):
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    huge_output = "x" * (3 * 1024 * 1024)  # 3 MB
+    oversized = "a" * (mod._MAX_UNMATCHED_OUTPUT_CHARS + 10_000)
 
-    result = cap_unmatched_output("totally-unknown-tool-xyz", huge_output, exit_code=0)
+    result = cap_unmatched_output("mystery-cmd", oversized, exit_code=0)
 
-    assert len(result) < len(huge_output)
+    assert len(result) < len(oversized)
     assert "chars omitted" in result
+    assert result.startswith("aaaa")  # head slice preserved
 
 
-def test_cap_unmatched_output_hint_points_at_real_teed_file(tmp_path, monkeypatch):
+def test_cap_tees_full_copy_and_links_it(tmp_path, monkeypatch):
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    huge_output = "y" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 3)
+    oversized = "b" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 4)
 
-    result = cap_unmatched_output("another-unknown-tool", huge_output, exit_code=0)
+    result = cap_unmatched_output("mystery-cmd", oversized, exit_code=0)
 
-    saved_files = list(tmp_path.glob("*.txt"))
-    assert len(saved_files) == 1
-    assert saved_files[0].read_text(encoding="utf-8") == huge_output
-    assert str(saved_files[0]) in result
+    teed = list(tmp_path.glob("*.txt"))
+    assert len(teed) == 1
+    assert teed[0].read_text(encoding="utf-8") == oversized
+    assert str(teed[0]) in result
 
 
-def test_filter_wires_unmatched_output_through_cap(tmp_path, monkeypatch):
+def test_filter_applies_cap_when_no_rule_matches(tmp_path, monkeypatch):
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    f = _make_filter({})  # no rules → _match_rule always returns None
-    huge_output = "z" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 3)
+    filt = _make_filter({})  # empty ruleset → _match_rule always returns None
+    oversized = "c" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 4)
 
-    result = f.filter("totally-unmatched-command --xyz", huge_output, exit_code=0)
+    result = filt.filter("no-such-command", oversized, exit_code=0)
 
-    assert len(result) < len(huge_output)
+    assert len(result) < len(oversized)
     assert "chars omitted" in result
     assert "full output saved" in result
 
 
-def test_filter_matched_rule_output_unaffected_by_cap(tmp_path, monkeypatch):
-    """Existing rule-based filters (below the cap) must be unaffected."""
+def test_matched_rule_path_bypasses_the_cap(tmp_path, monkeypatch):
+    """A matched rule trims its own output; the unmatched cap must not fire."""
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    f = _make_filter({"r": {"match_command": "^cmd", "max_lines": 3}})
-    result = f.filter("cmd", "\n".join(str(i) for i in range(10)))
-    assert "7\n8\n9" in result
-    assert "7 lines omitted" in result
+    filt = _make_filter({"only": {"match_command": "^run", "max_lines": 2}})
+    result = filt.filter("run", "\n".join(str(n) for n in range(6)))
+    assert "4\n5" in result
+    assert "lines omitted" in result
