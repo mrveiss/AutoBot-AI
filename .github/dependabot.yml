@@ -466,3 +466,20 @@ updates:
       - dependency-name: "websockets"
         # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
         update-types: ["version-update:semver-major"]
+
+  # #11829: knowledge-base-mcp is a uv project (uv.lock); without a "uv"
+  # ecosystem entry dependabot cannot rebase/raise grouped lock updates for it.
+  - package-ecosystem: "uv"
+    directory: "/autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"
