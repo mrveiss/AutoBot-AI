@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import uuid
 from types import ModuleType
-
-from user_management.services import TenantContext
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from user_management.services import TenantContext
 
 # GH#9995 / GH#10140: ``llc.api.agent_hires`` and ``llc.api.budget`` import
 # cleanly in the test environment, so import them normally. The previous
