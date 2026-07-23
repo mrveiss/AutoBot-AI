@@ -69,6 +69,17 @@
       when: deploy_role == 'ai-stack'
       tags: ['ai-stack']
 
+    # autobot_shared (#12094): standalone role extracted from the embedded #3649
+    # sync block in roles/backend/tasks/main.yml. Syncing the shared python
+    # package as its OWN role lets per-role Migrate refresh it first, fixing the
+    # staleness class of bugs in #11611. role_registry.py points this role at
+    # deploy_role.yml just like backend/frontend after #12083.
+    - name: "Apply autobot_shared Role"
+      include_role:
+        name: autobot_shared
+      when: deploy_role == 'autobot_shared'
+      tags: ['autobot_shared']
+
     # celery/scheduler (#12083): role_registry.py's celery/scheduler roles share
     # the SAME source (autobot-backend/) and the SAME ansible role — the backend
     # role's tasks (ansible/roles/backend/tasks/main.yml) already deploy the

@@ -1,0 +1,40 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# autobot_shared Role - Main Tasks (#12094)
+# Syncs the single canonical autobot_shared package from code_source to the
+# standalone PYTHONPATH dir imported by backend/Celery/MCP-bridge. Extracted
+# from the embedded #3649 block in roles/backend/tasks/main.yml so per-role
+# Migrate/Redeploy (/api/roles/autobot_shared/migrate) can sync it FIRST as its
+# own step, fixing the staleness class of bugs in #11611.
+
+# Issue #3649: Sync the single canonical autobot_shared to the standalone
+# PYTHONPATH dir. The backend's embedded path is a symlink here (#10020), so
+# syncing this directory is sufficient for all consumers. The .env / *.env
+# excludes protect the deployed systemd EnvironmentFile from --delete (#9970).
+- name: "Shared | Sync autobot_shared to standalone PYTHONPATH dir (#3649, #12094)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+    dest: "{{ backend_shared_standalone_dir }}/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+      - "--exclude=.env"
+      - "--exclude=*.env"
+      - "--delete"
+  notify:
+    - restart backend
+    - restart celery
+  tags: ['autobot_shared', 'deploy']
+
+- name: "Shared | Fix ownership of standalone autobot_shared (#3649)"
+  ansible.builtin.file:
+    path: "{{ backend_shared_standalone_dir }}"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+    recurse: true
+  tags: ['autobot_shared', 'deploy']

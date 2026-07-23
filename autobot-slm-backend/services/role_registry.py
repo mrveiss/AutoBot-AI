@@ -388,18 +388,14 @@ _INFRA_ROLES = [
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot_shared && pip install -e ."),
         "required": True,
         "degraded_without": [],
-        # #12083: "deploy-shared.yml" never existed anywhere under ansible/, and
-        # unlike backend/frontend there is no standalone ansible role for
-        # autobot_shared to repoint at either — its sync is embedded as tasks
-        # INSIDE ansible/roles/backend/tasks/main.yml ("Sync autobot_shared to
-        # standalone PYTHONPATH dir", #3649), not a role of its own. Extracting a
-        # dedicated autobot_shared role/playbook is out of scope here (creating a
-        # new playbook, not a rename) — filed as a follow-up. None matches the
-        # existing postgres precedent (api/roles.py returns HTTP 422 for None)
-        # instead of silently raising FileNotFoundError on every Migrate attempt.
-        # The rsync-based _ensure_autobot_shared_synced path (#11611) remains the
-        # working, correct way this role's content actually gets deployed.
-        "ansible_playbook": None,
+        # #12094: the standalone ansible/roles/autobot_shared/ role now exists
+        # (extracted from the embedded #3649 sync block in roles/backend), and
+        # playbooks/deploy_role.yml dispatches role_name == 'autobot_shared' to
+        # it. Repointing at the generic dispatcher (like backend/frontend after
+        # #12083) makes /api/roles/autobot_shared/migrate sync the shared package
+        # as its OWN first-class step, fixing the staleness class of bugs in
+        # #11611. The rsync-based _ensure_autobot_shared_synced path also remains.
+        "ansible_playbook": "playbooks/deploy_role.yml",
     },
     {
         "name": "slm-agent",
