@@ -264,7 +264,7 @@ async def create_agent_hire(
                 "(id, company_id, senior_agent_id, assistant_agent_id, "
                 "resolved_provider, resolved_model, hire_metadata) "
                 "VALUES (:id, :company_id, :senior_agent_id, :assistant_agent_id, "
-                ":resolved_provider, :resolved_model, :hire_metadata::jsonb) "
+                ":resolved_provider, :resolved_model, CAST(:hire_metadata AS jsonb)) "
                 "ON CONFLICT DO NOTHING"
             ),
             {
@@ -402,7 +402,7 @@ async def hire_agent(
             VALUES
                 (:id, :agent_id, :name, :org_role, :title, :capabilities,
                  :company_id, :reports_to, :heartbeat_cron, :heartbeat_enabled,
-                 :adapter_type, :adapter_config::jsonb, :model, :instructions_file_path)
+                 :adapter_type, CAST(:adapter_config AS jsonb), :model, :instructions_file_path)
         """),
         {
             "id": str(uuid.uuid4()),
