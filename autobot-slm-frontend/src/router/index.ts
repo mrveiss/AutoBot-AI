@@ -475,6 +475,12 @@ const router = createRouter({
           meta: { title: 'noVNC', parent: 'tools', admin: true }
         },
         {
+          path: 'advanced-control',
+          name: 'tools-advanced-control',
+          component: () => import('@/views/tools/admin/AdvancedControlTool.vue'),
+          meta: { title: 'Advanced Control', parent: 'tools', admin: true }
+        },
+        {
           path: 'voice',
           name: 'tools-voice',
           component: () => import('@/views/tools/admin/VoiceTool.vue'),
