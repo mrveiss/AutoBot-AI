@@ -222,15 +222,18 @@ class OllamaConnectionPool:
             logger.debug("[%s] Acquired connection (waited %.2fs)", request_id, wait_time)
 
             http_client = get_http_client()
-            session = await http_client.get_session()
-            execution_start = time.time()
+            # Issue #12119: tracked_session() so the borrowed session counts as
+            # in-flight for the yield's duration; a concurrent pool resize defers
+            # recreation until the connection slot is returned.
+            async with http_client.tracked_session() as session:
+                execution_start = time.time()
 
-            try:
-                yield session
-                await self._record_execution_success(request_id, time.time() - execution_start)
-            except Exception as e:
-                await self._record_execution_failure(request_id, e)
-                raise
+                try:
+                    yield session
+                    await self._record_execution_success(request_id, time.time() - execution_start)
+                except Exception as e:
+                    await self._record_execution_failure(request_id, e)
+                    raise
 
         except asyncio.TimeoutError:
             await self._handle_queue_timeout(request_id)

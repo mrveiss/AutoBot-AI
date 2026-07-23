@@ -412,14 +412,17 @@ async def websocket_proxy(websocket: WebSocket, vnc_type: str):
 
     try:
         http_client = get_http_client()
-        session = await http_client.get_session()
-        async with session.ws_connect(ws_url) as vnc_ws:
-            # Run both forwarding tasks concurrently using extracted helpers (Issue #315)
-            await asyncio.gather(
-                _forward_client_to_vnc(websocket, vnc_ws, vnc_type),
-                _forward_vnc_to_client(websocket, vnc_ws, vnc_type),
-                return_exceptions=True,
-            )
+        # Issue #12119: tracked_session() keeps this VNC WebSocket counted as an
+        # in-flight request for its full (potentially hours-long) lifetime, so a
+        # concurrent pool resize defers recreation instead of closing it mid-stream.
+        async with http_client.tracked_session() as session:
+            async with session.ws_connect(ws_url) as vnc_ws:
+                # Run both forwarding tasks concurrently using extracted helpers (Issue #315)
+                await asyncio.gather(
+                    _forward_client_to_vnc(websocket, vnc_ws, vnc_type),
+                    _forward_vnc_to_client(websocket, vnc_ws, vnc_type),
+                    return_exceptions=True,
+                )
 
     except aiohttp.ClientError as e:
         logger.error("[%s] Failed to connect to VNC WebSocket: %s", vnc_type, e)

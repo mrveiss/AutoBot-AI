@@ -612,25 +612,27 @@ async def execute_http_request(
 
         # Build request kwargs (Issue #665: uses extracted helper)
         http_client = get_http_client()
-        session = await http_client.get_session()
-        request_kwargs = _build_request_kwargs(url, request_headers, timeout, params, json_body, form_data)
+        # Issue #12119: tracked_session() so this MCP HTTP request counts as
+        # in-flight; a concurrent pool resize cannot close the session mid-request.
+        async with http_client.tracked_session() as session:
+            request_kwargs = _build_request_kwargs(url, request_headers, timeout, params, json_body, form_data)
 
-        # Execute the request
-        async with session.request(method, **request_kwargs) as response:
-            # Check response size before reading (if Content-Length provided)
-            content_length = response.headers.get("Content-Length")
-            if content_length and int(content_length) > MAX_RESPONSE_SIZE:
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"Response too large: {content_length} bytes (max: {MAX_RESPONSE_SIZE})",
-                )
+            # Execute the request
+            async with session.request(method, **request_kwargs) as response:
+                # Check response size before reading (if Content-Length provided)
+                content_length = response.headers.get("Content-Length")
+                if content_length and int(content_length) > MAX_RESPONSE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Response too large: {content_length} bytes (max: {MAX_RESPONSE_SIZE})",
+                    )
 
-            # Read response body (Issue #315 - uses helper)
-            body = None if method.upper() == "HEAD" else await _read_response_body_chunked(response)
-            json_response = _try_parse_json(body)
+                # Read response body (Issue #315 - uses helper)
+                body = None if method.upper() == "HEAD" else await _read_response_body_chunked(response)
+                json_response = _try_parse_json(body)
 
-            # Build response (Issue #665: uses extracted helper)
-            return _build_http_response(response, method, body, json_response)
+                # Build response (Issue #665: uses extracted helper)
+                return _build_http_response(response, method, body, json_response)
 
     except asyncio.TimeoutError:
         logger.error("HTTP request timed out after %s seconds: %s", timeout, url)
