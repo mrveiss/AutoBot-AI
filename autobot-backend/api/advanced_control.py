@@ -226,10 +226,10 @@ async def approve_takeover(
         logger.info("Takeover approved: %s -> %s", request_id, session_id)
         return {"success": True, "session_id": session_id}
 
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Internal server error")
-    except RuntimeError:
-        raise HTTPException(status_code=409, detail="Internal server error")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.post("/takeover/sessions/{session_id}/action", response_model=AdvancedControlTakeoverActionResponse)
@@ -258,8 +258,8 @@ async def execute_takeover_action(
         logger.info(f"Takeover action executed: {action.action_type} in session {session_id}")
         return {"success": True, "result": result}
 
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Internal server error")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/takeover/sessions/{session_id}/pause", response_model=AdvancedControlTakeoverSessionStatusResponse)
@@ -589,12 +589,12 @@ async def advanced_control_info(
             "Emergency stop capabilities",
         ],
         "endpoints": {
-            "streaming": "/api/control/streaming/",
-            "takeover": "/api/control/takeover/",
-            "system": "/api/control/system/",
+            "streaming": "/api/advanced-control/streaming/",
+            "takeover": "/api/advanced-control/takeover/",
+            "system": "/api/advanced-control/system/",
             "websockets": {
-                "monitoring": "/api/control/ws/monitoring",
-                "desktop": "/api/control/ws/desktop/{session_id}",
+                "monitoring": "/api/advanced-control/ws/monitoring",
+                "desktop": "/api/advanced-control/ws/desktop/{session_id}",
             },
         },
     }
