@@ -116,4 +116,6 @@ export const adminMenuItems: NavItem[] = [
   { to: '/admin/budget-policies', labelKey: 'nav.budgetPolicies', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', iconStroke: true },
   // Issue #10932: System Health panel — CONTENT_REACH probe
   { to: '/admin/system-health', labelKey: 'nav.systemHealth', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', iconStroke: true },
+  // Issue #12162 (#12102/#11506 T1 Stage 1): Advanced Control — takeover approval queue
+  { to: '/admin/advanced-control', labelKey: 'nav.advancedControl', icon: 'M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11', iconStroke: true },
 ];

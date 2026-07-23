@@ -194,7 +194,8 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "בריאות המערכת"
+    "systemHealth": "בריאות המערכת",
+    "advancedControl": "בקרה מתקדמת"
   },
   "llcMembers": {
     "title": "חברים",
@@ -8705,6 +8706,58 @@
     "adapter": "Adapter",
     "hiring": "Hiring…",
     "hire": "Hire"
+  },
+  "advancedControl": {
+    "title": "בקרה מתקדמת",
+    "subtitle": "אשר בקשות השתלטות ונהל הפעלות בקרה אנושית פעילות",
+    "tabListAriaLabel": "לשוניות בקרה מתקדמת",
+    "loading": "טוען את תור ההשתלטות…",
+    "tabs": {
+      "takeoverQueue": "תור השתלטות",
+      "streaming": "הזרמה",
+      "monitoring": "ניטור",
+      "comingSoon": "בקרוב",
+      "comingSoonMessage": "לשונית זו עדיין אינה זמינה.",
+      "streamingTitle": "הזרמת שולחן עבודה",
+      "monitoringTitle": "ניטור מערכת"
+    },
+    "summary": {
+      "pending": "ממתינות",
+      "active": "פעילות",
+      "paused": "מושהות",
+      "completed": "הושלמו",
+      "systemStatus": "מצב המערכת",
+      "statusNormal": "תקין",
+      "statusTakeoverActive": "השתלטות פעילה",
+      "statusEmergency": "חירום"
+    },
+    "pending": {
+      "title": "בקשות השתלטות ממתינות",
+      "colTrigger": "טריגר",
+      "colReason": "סיבה",
+      "colPriority": "עדיפות",
+      "colRequestedBy": "התבקש על ידי",
+      "colCreatedAt": "נוצר",
+      "colActions": "פעולות",
+      "unknownAgent": "סוכן לא ידוע",
+      "emptyTitle": "אין בקשות ממתינות",
+      "emptyMessage": "אין בקשות השתלטות הממתינות לאישור."
+    },
+    "active": {
+      "title": "הפעלות השתלטות פעילות",
+      "colOperator": "מפעיל",
+      "colStatus": "סטטוס",
+      "colStartedAt": "התחילה",
+      "colActionsExecuted": "פעולות שבוצעו",
+      "emptyTitle": "אין הפעלות פעילות",
+      "emptyMessage": "אין כרגע הפעלות בקרה אנושית פעילות."
+    },
+    "actions": {
+      "approve": "אשר",
+      "pause": "השהה",
+      "resume": "המשך",
+      "complete": "השלם"
+    }
   },
   "adminUsers": {
     "title": "User Management",
