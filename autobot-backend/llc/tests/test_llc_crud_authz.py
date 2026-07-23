@@ -289,16 +289,16 @@ async def test_templates_unauth_returns_401(session_factory) -> None:  # noqa: A
 
 
 @pytest.mark.asyncio
-async def test_templates_cross_tenant_list_returns_403(session_factory) -> None:  # noqa: ANN001
+async def test_templates_cross_tenant_list_returns_404(session_factory) -> None:  # noqa: ANN001
     company_id = str(uuid.uuid4())
     app = _make_app(session_factory, _OTHER_ORG, template_svc=_fake_template_service())
     async with _client(app) as client:
         resp = await client.get("/api/llc/templates/", params={"company_id": company_id})
-    assert resp.status_code == 403, resp.text
+    assert resp.status_code == 404, resp.text
 
 
 @pytest.mark.asyncio
-async def test_templates_import_cross_tenant_returns_403(session_factory) -> None:  # noqa: ANN001
+async def test_templates_import_cross_tenant_returns_404(session_factory) -> None:  # noqa: ANN001
     target = str(uuid.uuid4())
     template_id = str(uuid.uuid4())
     app = _make_app(session_factory, _OTHER_ORG, template_svc=_fake_template_service())
@@ -307,11 +307,11 @@ async def test_templates_import_cross_tenant_returns_403(session_factory) -> Non
             f"/api/llc/templates/{template_id}/import",
             json={"target_company_id": target, "secrets": {}},
         )
-    assert resp.status_code == 403, resp.text
+    assert resp.status_code == 404, resp.text
 
 
 @pytest.mark.asyncio
-async def test_templates_delete_non_owner_returns_403(session_factory) -> None:  # noqa: ANN001
+async def test_templates_delete_non_owner_returns_404(session_factory) -> None:  # noqa: ANN001
     caller_org = str(uuid.uuid4())
     template_id = str(uuid.uuid4())
     svc = _fake_template_service()
@@ -321,7 +321,7 @@ async def test_templates_delete_non_owner_returns_403(session_factory) -> None: 
     app = _make_app(session_factory, caller_org, template_svc=svc)
     async with _client(app) as client:
         resp = await client.delete(f"/api/llc/templates/{template_id}")
-    assert resp.status_code == 403, resp.text
+    assert resp.status_code == 404, resp.text
     svc.delete.assert_not_awaited()
 
 

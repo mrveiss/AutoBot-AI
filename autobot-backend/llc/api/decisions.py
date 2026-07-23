@@ -16,23 +16,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from llc.deps import assert_company_access
 from user_management.services import TenantContext
 
 from ..kb.decision_log import DecisionLogReader
 
 router = APIRouter()
 _reader = DecisionLogReader()
-
-
-def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
-    """Reject cross-tenant access to a company-scoped decision request (GH#12148).
-
-    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
-    from "doesn't exist" — matches goals.py/budget.py (GH#12136). Platform
-    admins are exempt.
-    """
-    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=404, detail="Company not found")
 
 
 @router.get("/companies/{company_id}/decisions/search")
@@ -47,7 +37,7 @@ async def search_decisions(
 
     Returns ranked results with text, metadata, and similarity distance.
     """
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     try:
         cid = uuid.UUID(company_id)
     except ValueError:
@@ -72,7 +62,7 @@ async def list_decisions(
 
     Filterable by approval type and date range.
     """
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     try:
         cid = uuid.UUID(company_id)
     except ValueError:
