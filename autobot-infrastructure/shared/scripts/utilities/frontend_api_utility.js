@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // Frontend API Connection Fix Script
 // Run this in your browser console (F12 -> Console) to fix API timeouts
 

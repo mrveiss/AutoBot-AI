@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Phase 4 Enterprise Features Enablement Script
 Enables all enterprise-grade features for AutoBot Phase 4 completion.

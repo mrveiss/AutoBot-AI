@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Batch VM Configuration for Single-User Environment
 # Since all VMs have only 'autobot' user, this simplifies mass configuration
 

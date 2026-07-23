@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 #
 # AutoBot Async Operations Baseline Performance Testing - Quick Execution Script
 # Week 2-3 Task 2.5: Performance Load Testing

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Test MCP Integration for AutoBot
 # This script verifies all MCP servers are properly configured
 

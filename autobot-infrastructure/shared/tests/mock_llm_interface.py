@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Mock LLM Interface for testing atomic facts extraction without real LLM calls.
 

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Zero-Downtime Frontend Update System
 # Performs updates without service interruption using blue-green deployment

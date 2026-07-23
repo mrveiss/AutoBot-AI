@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // MCP AutoBot Tracker - Comprehensive Test Suite
 // This test suite validates all core MCP server functionality
 

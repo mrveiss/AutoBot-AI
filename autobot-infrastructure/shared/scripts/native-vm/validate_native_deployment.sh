@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Native VM Deployment Validation Script
 # Comprehensive testing of all services and inter-VM communication
 

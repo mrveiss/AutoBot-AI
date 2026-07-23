@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Configuration Loader for Shell Scripts
 # Loads configuration from complete.yaml and provides helper functions
 

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 // Frontend testing script that uses the existing Playwright Docker service
 const http = require('http');
 

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot SLM Frontend - Start Script
 # Manual intervention script for starting nginx (serves frontend)
 
