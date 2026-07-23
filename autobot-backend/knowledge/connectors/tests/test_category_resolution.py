@@ -106,6 +106,11 @@ class TestCategoryMap:
             "database",
             "audio",
             "external_adapter",
+            # Issue #10538: feature-flagged (AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS,
+            # default off) — still valid canonical types, just not always registered.
+            "slack",
+            "confluence",
+            "jira",
         }
         for category, types in CATEGORY_MAP.items():
             for t in types:

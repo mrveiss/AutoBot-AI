@@ -64,6 +64,11 @@ class TestFeatureConfigSubsystemDefaults:
         cfg = _fresh_feature_config()
         assert cfg.osint_enabled is True
 
+    def test_kb_enterprise_connectors_disabled_default(self) -> None:
+        """Issue #10538: Slack/Confluence/Jira connectors default OFF."""
+        cfg = _fresh_feature_config()
+        assert cfg.kb_enterprise_connectors is False
+
 
 # ---------------------------------------------------------------------------
 # FeatureConfig env-var overrides
@@ -101,6 +106,11 @@ class TestFeatureConfigEnvVarOverrides:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_NPU="true")
         assert cfg.npu_enabled is True
 
+    def test_kb_enterprise_connectors_enabled_via_env(self) -> None:
+        """Issue #10538: opt-in via AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS."""
+        cfg = _fresh_feature_config(AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS="true")
+        assert cfg.kb_enterprise_connectors is True
+
 
 # ---------------------------------------------------------------------------
 # is_feature_enabled
@@ -123,6 +133,7 @@ class TestIsFeatureEnabled:
             "computer_vision_enabled": True,
             "training_enabled": True,
             "osint_enabled": True,
+            "kb_enterprise_connectors": False,
         }
         defaults.update(kwargs)
         for attr, val in defaults.items():
