@@ -17,9 +17,12 @@ SCAFFOLD NOTE: This connector is registered only when the
 values below are documentation placeholders only.
 
 Config keys (under ``ConnectorConfig.config``):
-    bot_token (str): Slack bot token (``xoxb-...``) with
+    token (str): Slack bot token (``xoxb-...``) with
         ``channels:history``, ``groups:history`` and ``channels:read``
-        scopes. Required.
+        scopes. Required. Canonical ``BearerAuth`` field (Issue #12221) —
+        matches ``auth_schema()`` below so the auth-schema validation and
+        credential-store encryption path actually secures the field the
+        connector reads.
     channel_ids (list[str]): Slack channel IDs to sync. Required.
     sync_threads (bool): Also ingest thread replies. Default True.
     oldest (str): Slack ``ts`` lower bound for the initial sync. Default "0".
@@ -92,7 +95,7 @@ class SlackConnector(AbstractConnector):
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
-        self._token: str = cfg.get("bot_token", "")
+        self._token: str = cfg.get("token", "")
         self._channel_ids: List[str] = cfg.get("channel_ids", [])
         self._sync_threads: bool = cfg.get("sync_threads", True)
         self._oldest: str = cfg.get("oldest", "0")

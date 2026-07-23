@@ -24,7 +24,7 @@ def slack_config():
         connector_type="slack",
         name="Test Slack",
         config={
-            "bot_token": "test-fake-bot-credential",
+            "token": "test-fake-bot-credential",
             "channel_ids": ["C123"],
             "sync_threads": True,
         },
