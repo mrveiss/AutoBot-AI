@@ -293,6 +293,34 @@ async def test_execute_import_target_company_not_found() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _import_agent — GH#12134 named-bind regression (sibling of agent_hires.py bug)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_import_agent_insert_binds_match_named_params() -> None:
+    """``:adapter_config::jsonb`` truncates the bind name in SQLAlchemy's
+    ``text()`` tokenizer (-> ``adapter_confi``), leaving an unresolved ':'
+    literal in the compiled SQL.  Fixed via ``CAST(:adapter_config AS jsonb)``.
+    """
+    from sqlalchemy.dialects import postgresql
+
+    svc = _make_svc()
+    company_id = uuid.uuid4()
+    agent = {"name": "Bot", "agent_id": "old-id", "adapter_config": {}}
+
+    with patch.object(svc, "_agent_names_exist", return_value=[]):
+        await svc._import_agent(agent, company_id, secret_mapping={}, warnings=[])
+
+    stmt = svc.session.execute.call_args_list[0].args[0]
+    compiled = stmt.compile(dialect=postgresql.dialect(paramstyle="pyformat"))
+    assert "adapter_config" in compiled.params, (
+        f"'adapter_config' bind not recognized (got {sorted(compiled.params)}) — "
+        "a ':name::type' cast truncated the bind name (GH#12134)."
+    )
+
+
+# ---------------------------------------------------------------------------
 # execute_import — skips non-seed work items
 # ---------------------------------------------------------------------------
 

@@ -658,7 +658,7 @@ class PortabilityService(LLCServiceBase):
                    heartbeat_enabled, context_mode)
                 VALUES
                   (:id, :agent_id, :name, :reports_to, :org_role, :title, :capabilities,
-                   :company_id, :adapter_type, :adapter_config::jsonb, :heartbeat_cron,
+                   :company_id, :adapter_type, CAST(:adapter_config AS jsonb), :heartbeat_cron,
                    :heartbeat_enabled, :context_mode)
                 """).bindparams(
                 id=uuid.uuid4(),
