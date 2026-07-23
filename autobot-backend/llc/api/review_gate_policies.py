@@ -19,7 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from llc.deps import get_session, service_dep
+from user_management.services import TenantContext
 
 from ..models.enums import WorkItemType
 from ..services.review_gate import (
@@ -30,6 +32,43 @@ from ..services.review_gate import (
 
 router = APIRouter(tags=["llc-review-gate-policies"])
 _service = service_dep(ReviewGatePolicyService)
+
+
+# ------------------------------------------------------------------
+# Auth / tenant isolation (GH#12148)
+# ------------------------------------------------------------------
+
+
+def _assert_company_match(ctx: TenantContext, company_id: uuid.UUID) -> None:
+    """Reject cross-tenant access to a company-scoped policy request.
+
+    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
+    from "doesn't exist" — matches goals.py / boards.py (GH#12136). Platform
+    admins are exempt.
+    """
+    if str(company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+
+
+async def _get_authorized_policy(
+    session: AsyncSession,
+    svc: ReviewGatePolicyService,
+    company_id: uuid.UUID,
+    policy_id: uuid.UUID,
+    ctx: TenantContext,
+):
+    """Enforce tenant isolation and policy<->company ownership (IDOR fix).
+
+    The service mutators key on ``policy_id`` alone, so a caller could pass
+    their own ``company_id`` in the path (passing the tenant check) while
+    targeting a ``policy_id`` owned by a different company. Load the policy and
+    verify it belongs to the path company before mutating (GH#12148).
+    """
+    _assert_company_match(ctx, company_id)
+    policy = await svc.get_policy_by_id(session, str(policy_id))
+    if policy is None or str(policy.company_id) != str(company_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Policy {policy_id} not found")
+    return policy
 
 
 # ------------------------------------------------------------------
@@ -73,7 +112,10 @@ async def list_review_gate_policies(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[ReviewGatePolicyRead]:
+    _assert_company_match(ctx, company_id)
     policies = await svc.list_policies(session, str(company_id))
     return [ReviewGatePolicyRead.model_validate(p) for p in policies]
 
@@ -88,7 +130,10 @@ async def create_review_gate_policy(
     body: ReviewGatePolicyCreate,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ReviewGatePolicyRead:
+    _assert_company_match(ctx, company_id)
     try:
         policy = await svc.create_policy(
             session,
@@ -113,7 +158,10 @@ async def update_review_gate_policy(
     body: ReviewGatePolicyUpdate,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ReviewGatePolicyRead:
+    await _get_authorized_policy(session, svc, company_id, policy_id, ctx)
     try:
         policy = await svc.update_policy(
             session,
@@ -136,7 +184,10 @@ async def delete_review_gate_policy(
     policy_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    await _get_authorized_policy(session, svc, company_id, policy_id, ctx)
     deleted = await svc.delete_policy(session, str(policy_id))
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Policy {policy_id} not found")
