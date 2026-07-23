@@ -7657,6 +7657,7 @@
     "adminSandbox": "Sandbox",
     "budgetPolicies": "Budget Policies",
     "systemHealth": "System Health",
+    "advancedControl": "Advanced Control",
     "sharedLinks": "Shared Chat Links",
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
@@ -8705,6 +8706,58 @@
     "adapter": "Adapter",
     "hiring": "Hiring…",
     "hire": "Hire"
+  },
+  "advancedControl": {
+    "title": "Advanced Control",
+    "subtitle": "Approve takeover requests and manage active human-control sessions",
+    "tabListAriaLabel": "Advanced Control tabs",
+    "loading": "Loading takeover queue…",
+    "tabs": {
+      "takeoverQueue": "Takeover Queue",
+      "streaming": "Streaming",
+      "monitoring": "Monitoring",
+      "comingSoon": "Coming soon",
+      "comingSoonMessage": "This tab is not yet available.",
+      "streamingTitle": "Desktop Streaming",
+      "monitoringTitle": "System Monitoring"
+    },
+    "summary": {
+      "pending": "Pending",
+      "active": "Active",
+      "paused": "Paused",
+      "completed": "Completed",
+      "systemStatus": "System Status",
+      "statusNormal": "Normal",
+      "statusTakeoverActive": "Takeover Active",
+      "statusEmergency": "Emergency"
+    },
+    "pending": {
+      "title": "Pending Takeover Requests",
+      "colTrigger": "Trigger",
+      "colReason": "Reason",
+      "colPriority": "Priority",
+      "colRequestedBy": "Requested By",
+      "colCreatedAt": "Created",
+      "colActions": "Actions",
+      "unknownAgent": "Unknown agent",
+      "emptyTitle": "No pending requests",
+      "emptyMessage": "There are no takeover requests waiting for approval."
+    },
+    "active": {
+      "title": "Active Takeover Sessions",
+      "colOperator": "Operator",
+      "colStatus": "Status",
+      "colStartedAt": "Started",
+      "colActionsExecuted": "Actions Executed",
+      "emptyTitle": "No active sessions",
+      "emptyMessage": "There are no active human-control sessions right now."
+    },
+    "actions": {
+      "approve": "Approve",
+      "pause": "Pause",
+      "resume": "Resume",
+      "complete": "Complete"
+    }
   },
   "adminUsers": {
     "title": "User Management",

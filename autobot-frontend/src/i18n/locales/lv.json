@@ -7649,7 +7649,8 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Sistēmas veselība"
+    "systemHealth": "Sistēmas veselība",
+    "advancedControl": "Papildu vadība"
   },
   "llcMembers": {
     "title": "Dalibnieki",
@@ -8705,6 +8706,58 @@
     "adapter": "Adapteris",
     "hiring": "Pieņem…",
     "hire": "Pieņemt"
+  },
+  "advancedControl": {
+    "title": "Papildu vadība",
+    "subtitle": "Apstipriniet pārņemšanas pieprasījumus un pārvaldiet aktīvās manuālās vadības sesijas",
+    "tabListAriaLabel": "Papildu vadības cilnes",
+    "loading": "Notiek pārņemšanas rindas ielāde…",
+    "tabs": {
+      "takeoverQueue": "Pārņemšanas rinda",
+      "streaming": "Straumēšana",
+      "monitoring": "Pārraudzība",
+      "comingSoon": "Drīzumā",
+      "comingSoonMessage": "Šī cilne vēl nav pieejama.",
+      "streamingTitle": "Darbvirsmas straumēšana",
+      "monitoringTitle": "Sistēmas pārraudzība"
+    },
+    "summary": {
+      "pending": "Gaida",
+      "active": "Aktīvas",
+      "paused": "Pauzētas",
+      "completed": "Pabeigtas",
+      "systemStatus": "Sistēmas statuss",
+      "statusNormal": "Normāls",
+      "statusTakeoverActive": "Pārņemšana aktīva",
+      "statusEmergency": "Ārkārtas situācija"
+    },
+    "pending": {
+      "title": "Gaidošie pārņemšanas pieprasījumi",
+      "colTrigger": "Trigeris",
+      "colReason": "Iemesls",
+      "colPriority": "Prioritāte",
+      "colRequestedBy": "Pieprasīja",
+      "colCreatedAt": "Izveidots",
+      "colActions": "Darbības",
+      "unknownAgent": "Nezināms aģents",
+      "emptyTitle": "Nav gaidošu pieprasījumu",
+      "emptyMessage": "Nav pārņemšanas pieprasījumu, kas gaida apstiprinājumu."
+    },
+    "active": {
+      "title": "Aktīvās pārņemšanas sesijas",
+      "colOperator": "Operators",
+      "colStatus": "Statuss",
+      "colStartedAt": "Sākta",
+      "colActionsExecuted": "Izpildītās darbības",
+      "emptyTitle": "Nav aktīvu sesiju",
+      "emptyMessage": "Pašlaik nav aktīvu manuālās vadības sesiju."
+    },
+    "actions": {
+      "approve": "Apstiprināt",
+      "pause": "Pauzēt",
+      "resume": "Atsākt",
+      "complete": "Pabeigt"
+    }
   },
   "adminUsers": {
     "title": "Lietotāju pārvaldība",

@@ -7649,7 +7649,8 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Kondycja systemu"
+    "systemHealth": "Kondycja systemu",
+    "advancedControl": "Sterowanie zaawansowane"
   },
   "llcMembers": {
     "title": "Czlonkowie",
@@ -8705,6 +8706,58 @@
     "adapter": "Adapter",
     "hiring": "Zatrudnianie…",
     "hire": "Zatrudnij"
+  },
+  "advancedControl": {
+    "title": "Sterowanie zaawansowane",
+    "subtitle": "Zatwierdzaj żądania przejęcia i zarządzaj aktywnymi sesjami sterowania ręcznego",
+    "tabListAriaLabel": "Karty sterowania zaawansowanego",
+    "loading": "Wczytywanie kolejki przejęć…",
+    "tabs": {
+      "takeoverQueue": "Kolejka przejęć",
+      "streaming": "Strumieniowanie",
+      "monitoring": "Monitorowanie",
+      "comingSoon": "Wkrótce dostępne",
+      "comingSoonMessage": "Ta karta nie jest jeszcze dostępna.",
+      "streamingTitle": "Strumieniowanie pulpitu",
+      "monitoringTitle": "Monitorowanie systemu"
+    },
+    "summary": {
+      "pending": "Oczekujące",
+      "active": "Aktywne",
+      "paused": "Wstrzymane",
+      "completed": "Zakończone",
+      "systemStatus": "Stan systemu",
+      "statusNormal": "Normalny",
+      "statusTakeoverActive": "Przejęcie aktywne",
+      "statusEmergency": "Awaria"
+    },
+    "pending": {
+      "title": "Oczekujące żądania przejęcia",
+      "colTrigger": "Wyzwalacz",
+      "colReason": "Powód",
+      "colPriority": "Priorytet",
+      "colRequestedBy": "Zgłoszone przez",
+      "colCreatedAt": "Utworzono",
+      "colActions": "Działania",
+      "unknownAgent": "Nieznany agent",
+      "emptyTitle": "Brak oczekujących żądań",
+      "emptyMessage": "Nie ma żądań przejęcia oczekujących na zatwierdzenie."
+    },
+    "active": {
+      "title": "Aktywne sesje przejęcia",
+      "colOperator": "Operator",
+      "colStatus": "Stan",
+      "colStartedAt": "Rozpoczęto",
+      "colActionsExecuted": "Wykonane działania",
+      "emptyTitle": "Brak aktywnych sesji",
+      "emptyMessage": "Obecnie nie ma aktywnych sesji sterowania ręcznego."
+    },
+    "actions": {
+      "approve": "Zatwierdź",
+      "pause": "Wstrzymaj",
+      "resume": "Wznów",
+      "complete": "Zakończ"
+    }
   },
   "adminUsers": {
     "title": "Zarządzanie użytkownikami",

@@ -7649,7 +7649,8 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "صحة النظام"
+    "systemHealth": "صحة النظام",
+    "advancedControl": "التحكم المتقدم"
   },
   "llcMembers": {
     "title": "الأعضاء",
@@ -8705,6 +8706,58 @@
     "adapter": "Adapter",
     "hiring": "Hiring…",
     "hire": "Hire"
+  },
+  "advancedControl": {
+    "title": "التحكم المتقدم",
+    "subtitle": "الموافقة على طلبات الاستحواذ وإدارة جلسات التحكم البشري النشطة",
+    "tabListAriaLabel": "علامات تبويب التحكم المتقدم",
+    "loading": "جارٍ تحميل قائمة انتظار الاستحواذ…",
+    "tabs": {
+      "takeoverQueue": "قائمة انتظار الاستحواذ",
+      "streaming": "البث",
+      "monitoring": "المراقبة",
+      "comingSoon": "قريبًا",
+      "comingSoonMessage": "هذه العلامة غير متاحة بعد.",
+      "streamingTitle": "بث سطح المكتب",
+      "monitoringTitle": "مراقبة النظام"
+    },
+    "summary": {
+      "pending": "قيد الانتظار",
+      "active": "نشطة",
+      "paused": "متوقفة مؤقتًا",
+      "completed": "مكتملة",
+      "systemStatus": "حالة النظام",
+      "statusNormal": "طبيعية",
+      "statusTakeoverActive": "الاستحواذ نشط",
+      "statusEmergency": "حالة طارئة"
+    },
+    "pending": {
+      "title": "طلبات الاستحواذ قيد الانتظار",
+      "colTrigger": "المُحفِّز",
+      "colReason": "السبب",
+      "colPriority": "الأولوية",
+      "colRequestedBy": "طلبها",
+      "colCreatedAt": "تاريخ الإنشاء",
+      "colActions": "الإجراءات",
+      "unknownAgent": "وكيل غير معروف",
+      "emptyTitle": "لا توجد طلبات قيد الانتظار",
+      "emptyMessage": "لا توجد طلبات استحواذ بانتظار الموافقة."
+    },
+    "active": {
+      "title": "جلسات الاستحواذ النشطة",
+      "colOperator": "المُشغِّل",
+      "colStatus": "الحالة",
+      "colStartedAt": "بدأت",
+      "colActionsExecuted": "الإجراءات المنفذة",
+      "emptyTitle": "لا توجد جلسات نشطة",
+      "emptyMessage": "لا توجد جلسات تحكم بشري نشطة في الوقت الحالي."
+    },
+    "actions": {
+      "approve": "موافقة",
+      "pause": "إيقاف مؤقت",
+      "resume": "استئناف",
+      "complete": "إكمال"
+    }
   },
   "adminUsers": {
     "title": "User Management",

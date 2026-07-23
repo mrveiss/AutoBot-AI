@@ -838,6 +838,19 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
+  // Issue #12162 (#12102/#11506 T1 Stage 1): Advanced Control — takeover approval queue
+  {
+    path: '/admin/advanced-control',
+    name: 'admin-advanced-control',
+    component: () => import('@/views/AdvancedControlView.vue'),
+    meta: {
+      title: 'Advanced Control',
+      description: 'Takeover approval queue, streaming, and monitoring',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
+    },
+  },
   // GH#6470: Budget policy management (admin-only)
   {
     path: '/admin/budget-policies',

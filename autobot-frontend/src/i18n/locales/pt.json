@@ -7649,7 +7649,8 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Saúde do sistema"
+    "systemHealth": "Saúde do sistema",
+    "advancedControl": "Controle avançado"
   },
   "llcMembers": {
     "title": "Membros",
@@ -8705,6 +8706,58 @@
     "adapter": "Adaptador",
     "hiring": "Contratando…",
     "hire": "Contratar"
+  },
+  "advancedControl": {
+    "title": "Controle avançado",
+    "subtitle": "Aprove solicitações de controle manual e gerencie sessões ativas",
+    "tabListAriaLabel": "Abas de controle avançado",
+    "loading": "Carregando fila de solicitações…",
+    "tabs": {
+      "takeoverQueue": "Fila de solicitações",
+      "streaming": "Transmissão",
+      "monitoring": "Monitoramento",
+      "comingSoon": "Em breve",
+      "comingSoonMessage": "Esta aba ainda não está disponível.",
+      "streamingTitle": "Transmissão de área de trabalho",
+      "monitoringTitle": "Monitoramento do sistema"
+    },
+    "summary": {
+      "pending": "Pendentes",
+      "active": "Ativas",
+      "paused": "Pausadas",
+      "completed": "Concluídas",
+      "systemStatus": "Status do sistema",
+      "statusNormal": "Normal",
+      "statusTakeoverActive": "Controle ativo",
+      "statusEmergency": "Emergência"
+    },
+    "pending": {
+      "title": "Solicitações de controle pendentes",
+      "colTrigger": "Gatilho",
+      "colReason": "Motivo",
+      "colPriority": "Prioridade",
+      "colRequestedBy": "Solicitado por",
+      "colCreatedAt": "Criada",
+      "colActions": "Ações",
+      "unknownAgent": "Agente desconhecido",
+      "emptyTitle": "Nenhuma solicitação pendente",
+      "emptyMessage": "Não há solicitações de controle aguardando aprovação."
+    },
+    "active": {
+      "title": "Sessões de controle ativas",
+      "colOperator": "Operador",
+      "colStatus": "Status",
+      "colStartedAt": "Iniciada",
+      "colActionsExecuted": "Ações executadas",
+      "emptyTitle": "Nenhuma sessão ativa",
+      "emptyMessage": "Não há sessões de controle manual ativas no momento."
+    },
+    "actions": {
+      "approve": "Aprovar",
+      "pause": "Pausar",
+      "resume": "Retomar",
+      "complete": "Concluir"
+    }
   },
   "adminUsers": {
     "title": "Gerenciamento de usuários",

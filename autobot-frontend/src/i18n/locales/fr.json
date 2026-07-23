@@ -7649,7 +7649,8 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Santé du système"
+    "systemHealth": "Santé du système",
+    "advancedControl": "Contrôle avancé"
   },
   "llcMembers": {
     "title": "Membres",
@@ -8705,6 +8706,58 @@
     "adapter": "Adaptateur",
     "hiring": "Engagement…",
     "hire": "Engager"
+  },
+  "advancedControl": {
+    "title": "Contrôle avancé",
+    "subtitle": "Approuvez les demandes de prise de contrôle et gérez les sessions actives",
+    "tabListAriaLabel": "Onglets du contrôle avancé",
+    "loading": "Chargement de la file d'attente…",
+    "tabs": {
+      "takeoverQueue": "File de prise de contrôle",
+      "streaming": "Diffusion",
+      "monitoring": "Surveillance",
+      "comingSoon": "Bientôt disponible",
+      "comingSoonMessage": "Cet onglet n'est pas encore disponible.",
+      "streamingTitle": "Diffusion du bureau",
+      "monitoringTitle": "Surveillance du système"
+    },
+    "summary": {
+      "pending": "En attente",
+      "active": "Actives",
+      "paused": "En pause",
+      "completed": "Terminées",
+      "systemStatus": "État du système",
+      "statusNormal": "Normal",
+      "statusTakeoverActive": "Prise de contrôle active",
+      "statusEmergency": "Urgence"
+    },
+    "pending": {
+      "title": "Demandes de prise de contrôle en attente",
+      "colTrigger": "Déclencheur",
+      "colReason": "Raison",
+      "colPriority": "Priorité",
+      "colRequestedBy": "Demandé par",
+      "colCreatedAt": "Créée",
+      "colActions": "Actions",
+      "unknownAgent": "Agent inconnu",
+      "emptyTitle": "Aucune demande en attente",
+      "emptyMessage": "Aucune demande de prise de contrôle en attente d'approbation."
+    },
+    "active": {
+      "title": "Sessions de prise de contrôle actives",
+      "colOperator": "Opérateur",
+      "colStatus": "Statut",
+      "colStartedAt": "Démarrée",
+      "colActionsExecuted": "Actions exécutées",
+      "emptyTitle": "Aucune session active",
+      "emptyMessage": "Aucune session de contrôle manuel active pour le moment."
+    },
+    "actions": {
+      "approve": "Approuver",
+      "pause": "Suspendre",
+      "resume": "Reprendre",
+      "complete": "Terminer"
+    }
   },
   "adminUsers": {
     "title": "Gestion des utilisateurs",
