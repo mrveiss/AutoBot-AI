@@ -111,6 +111,9 @@ class TestCategoryMap:
             "slack",
             "confluence",
             "jira",
+            # Issue #10538: feature-flagged (AUTOBOT_FEATURE_KB_MOCK_CONNECTOR,
+            # default off) — offline fixture-replay connector for dev/CI.
+            "mock",
         }
         for category, types in CATEGORY_MAP.items():
             for t in types:

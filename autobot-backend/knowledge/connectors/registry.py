@@ -42,11 +42,11 @@ logger = get_logger(__name__)
 # registered connector type strings that satisfy it.  Only connector types
 # that are actually implemented in this codebase are listed here.
 #
-# Issue #10538: "slack"/"confluence"/"jira" are listed for documentation
-# purposes even though registration is feature-flagged (default disabled) —
-# resolve_by_category() only ever returns *live* instances, so listing them
-# here is safe: with the flag off they are never registered/instantiated and
-# simply never match.
+# Issue #10538: "slack"/"confluence"/"jira"/"mock" are listed for
+# documentation purposes even though registration is feature-flagged (default
+# disabled) — resolve_by_category() only ever returns *live* instances, so
+# listing them here is safe: with the flag off they are never
+# registered/instantiated and simply never match.
 CATEGORY_MAP: Dict[str, List[str]] = {
     "cloud storage": ["gdrive", "onedrive", "nextcloud"],
     "source control": ["gitlab", "gitea"],
@@ -59,6 +59,7 @@ CATEGORY_MAP: Dict[str, List[str]] = {
     "external": ["external_adapter"],
     "chat": ["slack"],
     "issue tracker": ["jira"],
+    "test": ["mock"],
 }
 
 
