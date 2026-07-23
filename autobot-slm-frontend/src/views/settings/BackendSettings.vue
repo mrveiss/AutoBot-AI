@@ -75,7 +75,7 @@ async function testConnection(): Promise<void> {
 
   try {
     const startTime = Date.now()
-    const response = await fetch(`${getBackendUrl()}/api/health`)
+    const response = await fetch(`${getBackendUrl()}/health`)
 
     responseTime.value = Date.now() - startTime
 
