@@ -138,6 +138,7 @@ class TestHireAgentNamedBindDict:
     async def test_hire_agent_insert_binds_match_named_params(self) -> None:
         mod = _get_agent_hires_mod()
         from sqlalchemy.dialects import postgresql
+
         from user_management.services import TenantContext
 
         session = AsyncMock()
@@ -170,6 +171,7 @@ class TestHireAgentNamedBindDict:
     async def test_create_agent_hire_insert_binds_match_named_params(self) -> None:
         mod = _get_agent_hires_mod()
         from sqlalchemy.dialects import postgresql
+
         from user_management.services import TenantContext
 
         session = AsyncMock()
