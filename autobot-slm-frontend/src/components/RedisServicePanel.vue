@@ -98,7 +98,7 @@ function statusTextClass(status: string | undefined): string {
 
 async function fetchStatus(): Promise<void> {
   try {
-    const response = await fetch(`${getBackendUrl()}/api/redis-service/status`, {
+    const response = await fetch(`${getBackendUrl()}/redis-service/status`, {
       headers: authHeaders(),
     })
     if (!response.ok) {
@@ -122,7 +122,7 @@ async function performAction(action: 'start' | 'stop' | 'restart'): Promise<void
   successMessage.value = null
 
   try {
-    const response = await fetch(`${getBackendUrl()}/api/redis-service/${action}`, {
+    const response = await fetch(`${getBackendUrl()}/redis-service/${action}`, {
       method: 'POST',
       headers: authHeaders(),
     })
