@@ -51200,13 +51200,19 @@ export interface paths {
         };
         /**
          * List Templates
-         * @description List templates visible to the requesting company (GH#8260).
+         * @description List templates visible to the caller's organization (GH#8260).
+         *
+         *     Private-template visibility is scoped to the authenticated org; a
+         *     caller-supplied ``company_id`` must match it (GH#12148).
          */
         get: operations["list_templates_api_llc_templates__get"];
         put?: never;
         /**
          * Publish Template
          * @description Publish a scrubbed company export as a reusable template (GH#8260).
+         *
+         *     The template is owned by the caller's authenticated organization; a
+         *     caller-supplied ``company_id`` must match it (GH#12148).
          */
         post: operations["publish_template_api_llc_templates__post"];
         delete?: never;
@@ -51225,6 +51231,9 @@ export interface paths {
         /**
          * Search Templates
          * @description RAG search over platform:template_kb ChromaDB collection (GH#8260).
+         *
+         *     Returns platform-level template metadata only; requires authentication
+         *     (GH#12148).
          */
         get: operations["search_templates_api_llc_templates_search_get"];
         put?: never;
@@ -51247,7 +51256,7 @@ export interface paths {
          * @description List all built-in company templates (GH#9042).
          *
          *     Returns template metadata only (name, description, category, tags).
-         *     Does not require authentication or database access.
+         *     Requires authentication (GH#12148).
          */
         get: operations["list_built_in_templates_api_llc_templates_built_in_get"];
         put?: never;
@@ -51294,6 +51303,9 @@ export interface paths {
         /**
          * Get Template
          * @description Fetch full template JSON by ID (GH#8260).
+         *
+         *     Access is evaluated against the caller's authenticated org; a
+         *     caller-supplied ``company_id`` must match it (GH#12148).
          */
         get: operations["get_template_api_llc_templates__template_id__get"];
         put?: never;
@@ -51301,6 +51313,9 @@ export interface paths {
         /**
          * Delete Template
          * @description Delete template from DB and ChromaDB collection (GH#8260).
+         *
+         *     Only the owning organization (or a platform admin) may delete a template
+         *     (GH#12148).
          */
         delete: operations["delete_template_api_llc_templates__template_id__delete"];
         options?: never;
@@ -51320,6 +51335,8 @@ export interface paths {
         /**
          * Import Template
          * @description Import template into target company; resolves {{SECRET}} placeholders (GH#8260).
+         *
+         *     The import target must be the caller's authenticated org (GH#12148).
          */
         post: operations["import_template_api_llc_templates__template_id__import_post"];
         delete?: never;
