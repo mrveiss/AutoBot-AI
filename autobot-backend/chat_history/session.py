@@ -233,7 +233,7 @@ class SessionMixin:
 
         session_data = self._build_session_data(session_id, session_title, current_time, metadata)
 
-        await self.save_session(session_id=session_id, messages=[], name=session_title)
+        await self.save_session(session_id=session_id, messages=[], name=session_title, metadata=metadata)
         await self._create_memory_graph_entity(session_id, session_title, current_time, metadata)
 
         logger.info("Created new chat session: %s", session_id)
@@ -460,6 +460,7 @@ class SessionMixin:
         name: str,
         session_messages: List[Dict[str, Any]],
         current_time: str,
+        metadata: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         Build updated chat data dictionary for session save.
@@ -470,11 +471,17 @@ class SessionMixin:
             name: Optional session name.
             session_messages: Messages to include.
             current_time: Current timestamp string.
+            metadata: Optional metadata to merge into the persisted ``metadata``
+                sub-dict. When None, any existing on-disk metadata is left
+                untouched (Issue #12129). When provided, it is merged on top
+                of the existing metadata using the same merge semantics as
+                :meth:`ChatHistoryManager.update_session_metadata` — no
+                clobbering of previously persisted keys.
 
         Returns:
             Updated chat data dictionary.
 
-        Issue #620.
+        Issue #620, #12129.
         """
         chat_data.update(
             {
@@ -485,6 +492,12 @@ class SessionMixin:
                 "created_time": chat_data.get("created_time", current_time),
             }
         )
+
+        if metadata:
+            existing_metadata = chat_data.get("metadata", {})
+            existing_metadata.update(metadata)
+            chat_data["metadata"] = existing_metadata
+
         return chat_data
 
     async def save_session(
@@ -492,6 +505,7 @@ class SessionMixin:
         session_id: str,
         messages: List[Dict[str, Any]] | None = None,
         name: str = "",
+        metadata: Dict[str, Any] | None = None,
     ):
         """
         Save a chat session with messages and metadata.
@@ -500,8 +514,12 @@ class SessionMixin:
             session_id: The identifier for the session to save.
             messages: The messages to save (defaults to empty list).
             name: Optional name for the chat session.
+            metadata: Optional metadata to merge into the persisted session
+                metadata. Defaults to None, which leaves any existing on-disk
+                metadata untouched (Issue #12129) — callers that never pass
+                metadata keep their exact prior behavior.
 
-        Issue #665, #620: Refactored to use extracted helper methods.
+        Issue #665, #620, #12129: Refactored to use extracted helper methods.
         """
         try:
             self._sanitize_session_id(session_id)
@@ -513,7 +531,9 @@ class SessionMixin:
             session_messages = self._prepare_session_messages(session_id, messages)
 
             chat_data = await self._load_existing_chat_data(session_id, chat_file, chats_directory)
-            chat_data = self._build_session_chat_data(chat_data, session_id, name, session_messages, current_time)
+            chat_data = self._build_session_chat_data(
+                chat_data, session_id, name, session_messages, current_time, metadata
+            )
 
             await self._write_session_to_storage(chat_file, chat_data)
             await self._update_redis_cache_on_save(session_id, chat_data)
