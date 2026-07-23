@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
@@ -123,36 +124,6 @@ def _build_response(row: LLCAgentBudget, remaining: Decimal, is_over: bool, aler
     )
 
 
-def _assert_company_match(ctx: TenantContext, company_id: str) -> None:
-    """Reject cross-tenant access to a company-scoped budget request (GH#12136).
-
-    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
-    from "doesn't exist" — matches boards.py/sprints.py/work_items.py (GH#10296).
-    Platform admins are exempt, matching companies.py's org-chart idiom.
-    """
-    if company_id != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=404, detail="Company not found")
-
-
-async def _assert_agent_tenant(session: AsyncSession, agent_id: str, ctx: TenantContext) -> None:
-    """Verify the budget row for *agent_id* belongs to the caller's org (GH#12136).
-
-    404 if the agent has no budget row or belongs to a different tenant —
-    avoids disclosing agent existence across tenants. Platform admins exempt.
-
-    Callers use ``Depends(get_tenant_context)`` (not ``require_org_context``)
-    since agent_id-keyed routes carry no company_id in path/query for the org
-    to be resolved up front — org_id may legitimately be None here (e.g. a
-    non-admin caller whose JWT lacks an org claim), which this then denies.
-    """
-    if ctx.is_platform_admin:
-        return
-    result = await session.execute(select(LLCAgentBudget.company_id).where(LLCAgentBudget.agent_id == agent_id))
-    row_company_id = result.scalar_one_or_none()
-    if row_company_id is None or str(row_company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
-
-
 @router.post("/{agent_id}", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
 async def provision_budget(
     agent_id: str,
@@ -182,7 +153,7 @@ async def provision_budget(
     # of how the raw text() query returns the UUID column across dialects
     # (GH#12136 — needed for the tenant-match comparison below).
     company_id = str(uuid.UUID(str(agent_record[0])))
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
 
     svc = BudgetService()
     row, created = await svc.provision_budget(session, agent_id, company_id, body.budget_limit)
@@ -204,7 +175,7 @@ async def list_budgets(
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
     """List all per-agent budget rows for a company (GH#8551, GH#8997)."""
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id))
     rows = result.scalars().all()
     svc = BudgetService()
@@ -238,10 +209,14 @@ async def get_budget(
     # GH#8461: single SELECT — fetch the row directly and compute derived fields
     # here rather than calling check_budget() (which does its own SELECT) then
     # re-fetching the same row.
-    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
-    row = result.scalar_one_or_none()
-    if row is None or (str(row.company_id) != str(ctx.org_id) and not ctx.is_platform_admin):
-        raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
+    row = await load_authorized(
+        session,
+        LLCAgentBudget,
+        agent_id,
+        ctx,
+        id_attr="agent_id",
+        not_found_detail=f"No budget row for agent {agent_id}",
+    )
 
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
@@ -255,7 +230,14 @@ async def ingest_cost(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> IngestResponse:
-    await _assert_agent_tenant(session, agent_id, ctx)
+    await load_authorized(
+        session,
+        LLCAgentBudget,
+        agent_id,
+        ctx,
+        id_attr="agent_id",
+        not_found_detail=f"No budget row for agent {agent_id}",
+    )
     svc = BudgetService()
     try:
         cost = await svc.ingest_cost_event(session, agent_id, body.tokens_in, body.tokens_out, body.model)
@@ -274,10 +256,14 @@ async def update_limit(
     ctx: TenantContext = Depends(get_tenant_context),
 ) -> BudgetResponse:
     """Update budget limits and mode (GH#8215, GH#8997)."""
-    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
-    row = result.scalar_one_or_none()
-    if row is None or (str(row.company_id) != str(ctx.org_id) and not ctx.is_platform_admin):
-        raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
+    row = await load_authorized(
+        session,
+        LLCAgentBudget,
+        agent_id,
+        ctx,
+        id_attr="agent_id",
+        not_found_detail=f"No budget row for agent {agent_id}",
+    )
 
     # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
     # no str() conversion needed (which would silently coerce to TEXT in the ORM).
@@ -345,7 +331,7 @@ async def list_cost_events(
     A dedicated cost-event store is not yet implemented; this derives the
     data from LLCAgentBudget rows.
     """
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     result = await session.execute(
         select(LLCAgentBudget)
         .where(LLCAgentBudget.company_id == company_id)
@@ -414,7 +400,7 @@ async def costs_by_agent_model(
     a future migration adds the columns.  The endpoint is intentionally
     available from day one so dashboards can start wiring up immediately.
     """
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     result = await session.execute(
         text("""
             SELECT

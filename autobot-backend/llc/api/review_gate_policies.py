@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
-from llc.deps import get_session, service_dep
+from llc.deps import assert_company_access, get_session, service_dep
 from user_management.services import TenantContext
 
 from ..models.enums import WorkItemType
@@ -39,17 +39,6 @@ _service = service_dep(ReviewGatePolicyService)
 # ------------------------------------------------------------------
 
 
-def _assert_company_match(ctx: TenantContext, company_id: uuid.UUID) -> None:
-    """Reject cross-tenant access to a company-scoped policy request.
-
-    404 (not 403) so a cross-tenant caller can't distinguish "not my company"
-    from "doesn't exist" — matches goals.py / boards.py (GH#12136). Platform
-    admins are exempt.
-    """
-    if str(company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-
-
 async def _get_authorized_policy(
     session: AsyncSession,
     svc: ReviewGatePolicyService,
@@ -62,9 +51,14 @@ async def _get_authorized_policy(
     The service mutators key on ``policy_id`` alone, so a caller could pass
     their own ``company_id`` in the path (passing the tenant check) while
     targeting a ``policy_id`` owned by a different company. Load the policy and
-    verify it belongs to the path company before mutating (GH#12148).
+    verify it belongs to the path company before mutating (GH#12148). This
+    path-consistency check is intentionally NOT admin-exempt (unlike
+    ``assert_company_access``): even a platform admin navigating
+    /companies/{company_id}/review-gate-policies/{policy_id} must have the two
+    path segments agree, so it stays local rather than folding into the
+    generic loader.
     """
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     policy = await svc.get_policy_by_id(session, str(policy_id))
     if policy is None or str(policy.company_id) != str(company_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Policy {policy_id} not found")
@@ -115,7 +109,7 @@ async def list_review_gate_policies(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[ReviewGatePolicyRead]:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     policies = await svc.list_policies(session, str(company_id))
     return [ReviewGatePolicyRead.model_validate(p) for p in policies]
 
@@ -133,7 +127,7 @@ async def create_review_gate_policy(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> ReviewGatePolicyRead:
-    _assert_company_match(ctx, company_id)
+    assert_company_access(ctx, company_id)
     try:
         policy = await svc.create_policy(
             session,
