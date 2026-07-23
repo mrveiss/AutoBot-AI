@@ -404,6 +404,8 @@ async def get_system_status(
     Issue #744: Requires admin authentication.
     """
     # Get resource usage
+    import time
+
     import psutil
 
     resource_usage = {
@@ -420,10 +422,14 @@ async def get_system_status(
     # Get takeover data
     pending_takeovers = await get_takeover_manager().get_pending_requests()
     active_takeovers = await get_takeover_manager().get_active_sessions()
+    # #12177: both fields were mistakenly set to psutil.boot_time() (an absolute
+    # boot epoch). timestamp is when this snapshot was taken; uptime_seconds is a
+    # duration (now - boot).
+    now = time.time()
     system_status = {
         "status": "healthy",
-        "timestamp": psutil.boot_time(),
-        "uptime_seconds": psutil.boot_time(),
+        "timestamp": now,
+        "uptime_seconds": now - psutil.boot_time(),
         "streaming_capabilities": get_desktop_streaming().get_system_capabilities(),
     }
 
