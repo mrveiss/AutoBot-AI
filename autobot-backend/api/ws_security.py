@@ -17,6 +17,7 @@ so every authenticated WS endpoint can reuse one audited implementation (#11088)
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import WebSocket
 
@@ -67,3 +68,53 @@ async def enforce_ws_origin(websocket: WebSocket) -> bool:
         except Exception:  # already closed / handshake not completed
             pass
         return False
+
+
+def authenticate_ws_admin(websocket: WebSocket) -> bool:
+    """Fail-closed auth+authz for admin WS endpoints: a valid user (JWT/session/
+    cookie) or the internal-service key, AND admin role — matching the REST
+    endpoints' ``Depends(check_admin_permission)``.
+
+    A WebSocket exposes the same ``headers``/``cookies`` interface as a Request,
+    so the standard auth middleware resolves the caller. Any error → deny.
+
+    Originally added inline to ``api/task_workspace_ws.py`` (#11051); extracted
+    here so every admin WS endpoint reuses one audited implementation (#12178).
+    """
+    # Dev/test escape hatch: when WS auth is explicitly disabled, allow the
+    # connection. Production defaults to "1", so full auth is required.
+    if os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") != "1":
+        return True
+    try:
+        from auth_middleware import (  # noqa: PLC0415
+            get_auth_middleware,
+            verify_internal_api_key,
+        )
+
+        if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
+            return True
+        user = get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
+        if not user:
+            return False
+        return user.get("role") == "admin"
+    except Exception:
+        logger.warning("WS admin auth error — denying", exc_info=True)
+        return False
+
+
+async def enforce_ws_admin(websocket: WebSocket) -> bool:
+    """Enforce admin auth and, on rejection, close the socket with ``4001``.
+
+    Convenience wrapper mirroring :func:`enforce_ws_origin`: call before
+    ``websocket.accept()`` and ``return`` when it yields ``False``.
+
+    Returns ``True`` when the caller is an authenticated admin (or WS auth is
+    disabled for dev/test), ``False`` after having closed the socket ``4001``.
+    """
+    if authenticate_ws_admin(websocket):
+        return True
+    try:
+        await websocket.close(code=4001, reason="Authentication required (admin)")
+    except Exception:  # already closed / handshake not completed
+        pass
+    return False
