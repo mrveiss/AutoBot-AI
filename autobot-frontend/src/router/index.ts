@@ -863,6 +863,20 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // Issue #12102: Advanced Control — desktop streaming + human takeover admin
+  // panel (umbrella #11506). Wires in AdvancedControlApiClient against the live
+  // /api/advanced-control/* backend routes (admin-gated server-side).
+  {
+    path: '/admin/advanced-control',
+    name: 'admin-advanced-control',
+    component: () => import('@/views/AdvancedControlView.vue'),
+    meta: {
+      title: 'Advanced Control',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },
