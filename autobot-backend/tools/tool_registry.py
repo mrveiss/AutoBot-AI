@@ -535,7 +535,9 @@ class ToolRegistry:
     async def bring_window_to_front(self, window_title: str) -> Dict[str, Any]:
         """Bring a window to the front."""
         task = self._create_base_task("gui_bring_window_to_front")
-        task["window_title"] = window_title
+        # Issue #12070: key must be "app_title" — GUIBringWindowToFrontHandler
+        # (task_handlers/gui_handlers.py) requires that key, not "window_title".
+        task["app_title"] = window_title
 
         result = await self._execute_worker_task(task)
         return {
@@ -544,6 +546,40 @@ class ToolRegistry:
             "result": result.get(
                 "output",
                 result.get("message", f"Brought window to front: {window_title}"),
+            ),
+            "status": result.get("status", "success"),
+        }
+
+    async def read_text_from_region(self, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
+        """OCR-read text from a screen region (Issue #12070)."""
+        task = self._create_base_task("gui_read_text_from_region")
+        task["x"] = x
+        task["y"] = y
+        task["width"] = width
+        task["height"] = height
+
+        result = await self._execute_worker_task(task)
+        return {
+            "tool_name": "read_text_from_region",
+            "tool_args": {"x": x, "y": y, "width": width, "height": height},
+            "result": result.get("text", result.get("message", "")),
+            "status": result.get("status", "success"),
+        }
+
+    async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
+        """Move the mouse cursor to the specified coordinates (Issue #12070)."""
+        task = self._create_base_task("gui_move_mouse")
+        task["x"] = x
+        task["y"] = y
+        task["duration"] = duration
+
+        result = await self._execute_worker_task(task)
+        return {
+            "tool_name": "move_mouse",
+            "tool_args": {"x": x, "y": y, "duration": duration},
+            "result": result.get(
+                "output",
+                result.get("message", f"Moved mouse to ({x}, {y})"),
             ),
             "status": result.get("status", "success"),
         }
@@ -625,6 +661,10 @@ class ToolRegistry:
             "typetext": lambda args: self.type_text(args.get("text", "")),
             "clickelement": lambda args: self.click_element(args.get("image_path", "")),
             "bringwindowtofront": lambda args: self.bring_window_to_front(args.get("window_title", "")),
+            "readtextfromregion": lambda args: self.read_text_from_region(
+                args.get("x", 0), args.get("y", 0), args.get("width", 0), args.get("height", 0)
+            ),
+            "movemouse": lambda args: self.move_mouse(args.get("x", 0), args.get("y", 0), args.get("duration", 0.0)),
             "askuserformanual": lambda args: self.ask_user_for_manual(
                 args.get("program_name", ""), args.get("question_text", "")
             ),
@@ -805,6 +845,9 @@ class ToolRegistry:
             "type_text",
             "click_element",
             "bring_window_to_front",
+            # Issue #12070: previously had handlers but no task-creation wiring
+            "read_text_from_region",
+            "move_mouse",
             "ask_user_for_manual",
             "respond_conversationally",
             "code_interpreter",
