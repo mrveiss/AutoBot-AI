@@ -458,7 +458,24 @@ export class KnowledgeRepository extends ApiRepository {
     // #12326: backend serves fact update at PUT /api/knowledge-maintenance/fact/{fact_id}
     // (autobot-backend/api/knowledge_maintenance.py:1435). The prior
     // /knowledge_base/facts/{id} path 404'd.
-    const response = await this.put<KnowledgeDocument>(`${getApiBase()}/knowledge-maintenance/fact/${documentId}`, updates)
+    //
+    // The backend binds UpdateFactRequest (autobot-backend/api/schemas_knowledge.py:3006)
+    // which only accepts `content`, `category`, and `metadata` (Metadata = Dict[str, Any]).
+    // Callers also send `title`, `source`, and `tags`; with pydantic `extra=ignore`
+    // those are silently dropped (200 but never persisted). Fold them into `metadata`
+    // so they persist, merging (not clobbering) any metadata the caller supplies.
+    const { content, category, metadata, title, source, tags } = updates
+    const mergedMetadata: Record<string, unknown> = { ...(metadata ?? {}) }
+    if (title !== undefined) mergedMetadata.title = title
+    if (source !== undefined) mergedMetadata.source = source
+    if (tags !== undefined) mergedMetadata.tags = tags
+
+    const body: Record<string, unknown> = {}
+    if (content !== undefined) body.content = content
+    if (category !== undefined) body.category = category
+    if (Object.keys(mergedMetadata).length > 0) body.metadata = mergedMetadata
+
+    const response = await this.put<KnowledgeDocument>(`${getApiBase()}/knowledge-maintenance/fact/${documentId}`, body)
     return response.data
   }
 
