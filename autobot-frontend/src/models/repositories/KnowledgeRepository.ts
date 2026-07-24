@@ -465,7 +465,7 @@ export class KnowledgeRepository extends ApiRepository {
     // those are silently dropped (200 but never persisted). Fold them into `metadata`
     // so they persist, merging (not clobbering) any metadata the caller supplies.
     const { content, category, metadata, title, source, tags } = updates
-    const mergedMetadata: Record<string, unknown> = { ...(metadata ?? {}) }
+    const mergedMetadata: Record<string, unknown> = { ...metadata }
     if (title !== undefined) mergedMetadata.title = title
     if (source !== undefined) mergedMetadata.source = source
     if (tags !== undefined) mergedMetadata.tags = tags
