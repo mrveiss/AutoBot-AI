@@ -385,8 +385,10 @@ class SecurityScanner:
             json.dump(self.scan_results, f, indent=2)
 
         # Save markdown summary
+        # FP: the markdown report is a summary of counts/status only
+        # (see generate_markdown_report) — no secret values are written.
         md_report_path = self.reports_dir / f"security_summary_{timestamp}.md"
-        with open(md_report_path, "w") as f:
+        with open(md_report_path, "w") as f:  # codeql[py/clear-text-storage-sensitive-data]
             f.write(self.generate_markdown_report())
 
         logger.info("📄 Reports saved to:")

@@ -325,7 +325,10 @@ class SecretsMigrator:
 
         # Save rollback SQL
         if not self.dry_run:
-            rollback_file = Path("/tmp/secrets_migration_rollback.sql")
+            # FP: rollback SQL contains only identifiers/metadata
+            # (secret_id, owner_id, scope) — never the secret value itself
+            # (see rollback_sql.append above). No sensitive material is stored.
+            rollback_file = Path("/tmp/secrets_migration_rollback.sql")  # codeql[py/clear-text-storage-sensitive-data]
             rollback_file.write_text("\n".join(self.rollback_sql))
             logger.info("Rollback SQL saved to: %s", rollback_file)
 

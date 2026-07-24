@@ -546,7 +546,9 @@ class MigrationValidator:
         logger.info("\n%s", report)
 
         # Save to file
-        report_file = Path("/tmp/migration_validation_report.txt")
+        # FP: report contains only counts, secret IDs and validation
+        # messages — never secret values (see generate_report / issues[]).
+        report_file = Path("/tmp/migration_validation_report.txt")  # codeql[py/clear-text-storage-sensitive-data]
         report_file.write_text(report)
         logger.info("\nReport saved to: %s", report_file)
 
