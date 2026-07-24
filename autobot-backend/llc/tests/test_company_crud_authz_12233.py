@@ -189,6 +189,9 @@ def _membership(is_member: bool = True) -> MagicMock:
     m = MagicMock()
     m.is_member = AsyncMock(return_value=is_member)
     m.add_member = AsyncMock()
+    # #12325: list_companies now filters against a single membership-id query
+    # instead of one is_member call per root.
+    m.list_member_company_ids = AsyncMock(return_value=({_ORG_ID} if is_member else set()))
     return m
 
 
