@@ -7662,6 +7662,12 @@
     "advancedControl": "Contrôle avancé"
   },
   "llcCompanyStatus": {
+    "showArchived": "Afficher les archivées",
+    "delete": "Supprimer",
+    "confirmDeleteTitle": "Supprimer l'entreprise",
+    "confirmDelete": "Supprimer « {name} » ? L'entreprise archivée et ses données seront supprimées. Cette action est irréversible ici.",
+    "deleteError": "Impossible de supprimer l'entreprise.",
+    "deleteHasChildren": "Cette entreprise a des sous-entreprises. Retirez-les ou rattachez-les avant de la supprimer.",
     "onboarding": "Intégration",
     "active": "Active",
     "paused": "En pause",

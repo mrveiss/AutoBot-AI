@@ -7662,6 +7662,12 @@
     "advancedControl": "Controle avançado"
   },
   "llcCompanyStatus": {
+    "showArchived": "Mostrar arquivadas",
+    "delete": "Excluir",
+    "confirmDeleteTitle": "Excluir empresa",
+    "confirmDelete": "Excluir \"{name}\"? Isso remove a empresa arquivada e os seus dados. Não é possível desfazer isto aqui.",
+    "deleteError": "Não foi possível excluir a empresa.",
+    "deleteHasChildren": "Esta empresa tem subempresas. Remova-as ou reatribua-as antes de excluir.",
     "onboarding": "Integração",
     "active": "Ativa",
     "paused": "Pausada",

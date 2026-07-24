@@ -7711,6 +7711,12 @@
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
   },
   "llcCompanyStatus": {
+    "showArchived": "Show archived",
+    "delete": "Delete",
+    "confirmDeleteTitle": "Delete company",
+    "confirmDelete": "Delete \"{name}\"? This removes the archived company and its data. This cannot be undone from here.",
+    "deleteError": "Could not delete the company.",
+    "deleteHasChildren": "This company has sub-companies. Remove or re-parent them before deleting it.",
     "onboarding": "Onboarding",
     "active": "Active",
     "paused": "Paused",

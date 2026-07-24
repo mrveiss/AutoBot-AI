@@ -199,6 +199,12 @@
     "advancedControl": "בקרה מתקדמת"
   },
   "llcCompanyStatus": {
+    "showArchived": "הצג בארכיון",
+    "delete": "מחיקה",
+    "confirmDeleteTitle": "מחיקת חברה",
+    "confirmDelete": "למחוק את \"{name}\"? פעולה זו תסיר את החברה שבארכיון ואת הנתונים שלה. לא ניתן לבטל זאת מכאן.",
+    "deleteError": "לא ניתן היה למחוק את החברה.",
+    "deleteHasChildren": "לחברה זו יש חברות בנות. הסר או שייך אותן מחדש לפני המחיקה.",
     "onboarding": "קליטה",
     "active": "פעילה",
     "paused": "מושהית",

@@ -162,6 +162,10 @@ def _current_user_id(current_user: dict) -> str:
 
 @router.get("/", response_model=List[CompanyRead])
 async def list_companies(
+    include_archived: bool = Query(
+        False,
+        description="Include ARCHIVED companies (hidden by default so retired entries do not clutter the list).",
+    ),
     svc: CompanyService = Depends(_get_service),
     current_user: dict = Depends(get_current_user),
     membership_svc: MembershipService = Depends(_get_membership_service),
@@ -173,8 +177,12 @@ async def list_companies(
     authenticated; non-admins see only companies they are a member of, while
     platform admins still see all roots. Membership is the same tenant
     primitive ``get_tenant_context`` uses to authorise ``X-Organization-Id``.
+
+    Archive visibility (#12212): ARCHIVED companies are excluded unless
+    ``include_archived`` is set, keeping the default list free of retired
+    companies while leaving them recoverable via the "show archived" toggle.
     """
-    companies = await svc.list_root_companies()
+    companies = await svc.list_root_companies(include_archived=include_archived)
     if _is_platform_admin(current_user):
         return [_to_read(c) for c in companies]
     user_id = _current_user_id(current_user)

@@ -199,6 +199,12 @@
     "advancedControl": "کنترل پیشرفته"
   },
   "llcCompanyStatus": {
+    "showArchived": "نمایش بایگانی‌شده‌ها",
+    "delete": "حذف",
+    "confirmDeleteTitle": "حذف شرکت",
+    "confirmDelete": "«{name}» حذف شود؟ این کار شرکت بایگانی‌شده و داده‌های آن را حذف می‌کند. این عمل از اینجا قابل بازگردانی نیست.",
+    "deleteError": "حذف شرکت ممکن نشد.",
+    "deleteHasChildren": "این شرکت زیرشرکت دارد. پیش از حذف، آن‌ها را حذف یا جابه‌جا کنید.",
     "onboarding": "راه‌اندازی",
     "active": "فعال",
     "paused": "متوقف‌شده",
