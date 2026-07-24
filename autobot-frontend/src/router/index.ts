@@ -876,6 +876,18 @@ export const routes: RouteRecordRaw[] = [
       admin: true,
     },
   },
+  // Issue #11996 (#11994): Always-on provider-fallback observability panel
+  {
+    path: '/admin/provider-fallback',
+    name: 'admin-provider-fallback',
+    component: () => import('@/views/ProviderFallbackView.vue'),
+    meta: {
+      title: 'Provider Fallback',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
   // /desktop removed from nav — noVNC is accessible via the Chat tab's noVNC tab.
   // Redirect any bookmarked /desktop URLs to /chat.
   { path: '/desktop', redirect: '/chat' },

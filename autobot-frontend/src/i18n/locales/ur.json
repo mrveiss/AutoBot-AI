@@ -195,6 +195,7 @@
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "سسٹم کی صحت",
+    "providerFallback": "فراہم کنندہ فال بیک",
     "advancedControl": "ایڈوانسڈ کنٹرول"
   },
   "llcCompanyStatus": {
@@ -8623,6 +8624,22 @@
       "error": "سسٹم کی صحت لوڈ کرنے میں ناکامی",
       "refresh": "تازہ کریں",
       "noSources": "کوئی مواد کا ذریعہ ترتیب نہیں دیا گیا"
+    },
+    "providerFallback": {
+      "title": "فراہم کنندہ فال بیک",
+      "subtitle": "LLM فراہم کنندگان اور ماڈلز کے فال بیک کی براہ راست سرگرمی",
+      "status": "حیثیت",
+      "stateHealthy": "کوئی فعال فال بیک نہیں",
+      "stateDegraded": "فال بیک فعال",
+      "active": "فعال فال بیکس",
+      "chains": "ترتیب شدہ زنجیریں",
+      "timeline": "براہ راست سرگرمی",
+      "switched": "تبدیل ہو گیا",
+      "exhausted": "ختم ہو گیا",
+      "refresh": "تازہ کریں",
+      "loading": "فال بیک حیثیت لوڈ ہو رہی ہے…",
+      "noData": "کوئی فراہم کنندہ فال بیک سرگرمی نہیں",
+      "none": "کوئی نہیں"
     }
   },
   "components": {
