@@ -108,12 +108,16 @@ class VectorWriteBuffer:
         embedding: List[float],
         document: str,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> None:
+    ) -> bool:
         """Buffer a vector write. If the buffer is full, flush immediately.
 
         Issue #10941: Reject entries with empty/None embeddings — they cause
         IndexError in chroma normalize_insert_record_set and contaminate the
         entire flush batch, silently dropping all valid vectors alongside them.
+
+        Issue #12312: Returns ``True`` when the entry was buffered and ``False``
+        when it was dropped (empty embedding), so callers can detect the drop and
+        record a retriable failure instead of assuming success.
         """
         if not embedding:
             logger.warning(
@@ -121,7 +125,7 @@ class VectorWriteBuffer:
                 "(embedding generation failed upstream); vector will NOT be stored",
                 id,
             )
-            return
+            return False
         async with self._lock:
             self._buffer[id] = BufferedWrite(
                 id=id,
@@ -134,6 +138,7 @@ class VectorWriteBuffer:
 
         if should_flush:
             await self._flush()
+        return True
 
     async def flush_now(self) -> int:
         """Force an immediate flush. Returns number of entries flushed."""
