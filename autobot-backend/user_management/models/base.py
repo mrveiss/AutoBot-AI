@@ -53,6 +53,23 @@ class Base(AsyncAttrs, DeclarativeBase):
         uuid.UUID: Uuid(as_uuid=True),
     }
 
+    # #12322: eagerly fetch server-side default/onupdate columns (e.g.
+    # ``updated_at``) via RETURNING on INSERT *and* UPDATE, for all models.
+    # SQLAlchemy's default ``eager_defaults="auto"`` only does this for INSERT,
+    # leaving onupdate columns expired after an UPDATE flush — a subsequent sync
+    # attribute read (e.g. Pydantic response serialization outside the greenlet
+    # context) then raises MissingGreenlet. This recurred twice (#12209 goals,
+    # #12309 companies), each patched with a per-call ``session.refresh``.
+    # Setting it here kills the whole class in one place and removes the extra
+    # per-write refresh SELECT (RETURNING is fetched inline with the UPDATE).
+    # Dialects without RETURNING (e.g. sqlite < 3.35) transparently fall back to
+    # a post-UPDATE SELECT, so the column is still populated — never expired.
+    # The other declarative bases were evaluated and are NOT susceptible to this
+    # class, so the fix only needs to live here: LLCBase (llc/models/activity.py)
+    # is append-only (no server-side onupdate), and SkillsBase (skills/models.py)
+    # uses a client-side ``onupdate`` assigned in Python (never expired post-flush).
+    __mapper_args__ = {"eager_defaults": True}
+
 
 class TimestampMixin:
     """Backward compatibility alias for TimestampMixin.

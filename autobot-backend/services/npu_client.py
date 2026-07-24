@@ -18,9 +18,10 @@ Usage:
 """
 
 import asyncio
+import os
 import threading
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import aiohttp
 
@@ -72,6 +73,20 @@ BATCH_TIMEOUT = 60.0
 
 # Cache for health status
 HEALTH_CHECK_CACHE_TTL = 30  # seconds
+
+# Embedding retry policy (Issue #12312). A non-200 / timeout / empty result from a
+# busy local backend is a routine, recoverable condition — retry with exponential
+# backoff before giving up so a transient blip does not permanently drop a vector.
+#
+# EMBEDDING_MAX_ATTEMPTS is the TOTAL number of attempts (not extra retries): 3 means
+# up to 3 tries. It applies ONLY to the background / on-demand reconcile path
+# (``vectorize_existing_fact``) — callers pass it explicitly. The INLINE user-facing
+# path (fact create, query embedding) uses the fast-fail default of a single attempt
+# so a downed backend cannot stall a request; failures there are recorded to the
+# reconciler's pending set, which retries in the background. Env-tunable; never
+# hard-code per-caller (repo rule).
+EMBEDDING_MAX_ATTEMPTS = max(1, int(os.environ.get("EMBEDDING_MAX_ATTEMPTS", "3")))
+EMBEDDING_RETRY_BASE_DELAY = max(0.0, float(os.environ.get("EMBEDDING_RETRY_BASE_DELAY_SECONDS", "0.5")))
 
 
 @dataclass
@@ -341,36 +356,67 @@ async def cleanup_npu_client() -> None:
         _npu_client = None
 
 
+async def _try_ollama_embedding(text: str, model_name: str, ollama_url: str) -> Tuple[List[float] | None, str]:
+    """Single Ollama embedding attempt.
+
+    Issue #12312: Returns ``(embedding, "")`` on success or ``(None, reason)`` on
+    failure so every non-success route carries a diagnosable reason instead of
+    silently falling through. Distinguishes non-200 (with status + body) from a
+    200-with-empty-result — previously indistinguishable in the logs.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                ollama_url,
+                json={"model": model_name, "prompt": text},
+                timeout=aiohttp.ClientTimeout(total=EMBEDDING_TIMEOUT),
+            ) as response:
+                if response.status != 200:
+                    body = (await response.text())[:200]
+                    return None, f"Ollama HTTP {response.status}: {body!r}"
+                data = await response.json()
+                embedding = data.get("embedding")
+                if not embedding:
+                    return None, "Ollama returned HTTP 200 with empty/missing embedding"
+                return embedding, ""
+    except Exception as e:
+        return None, f"Ollama request error: {e}"
+
+
 # Embedding generation with automatic fallback
 async def generate_embedding_with_fallback(
     text: str,
     model_name: str = "nomic-embed-text",
     ollama_host: str = None,
     ollama_port: str = None,
+    max_attempts: int = 1,
 ) -> List[float] | None:
     """
     Generate embedding with automatic fallback.
 
-    Tries NPU worker first, falls back to Ollama if unavailable.
+    Tries NPU worker first, falls back to Ollama if unavailable. Every failure
+    route is logged with its reason (Issue #12312) so a dropped vector is never
+    undiagnosable.
+
+    ``max_attempts`` controls in-call retry with exponential backoff. It defaults
+    to ``1`` (fast-fail) so INLINE user-facing callers (fact create, query
+    embedding) never stall behind a downed backend — worst case one
+    ``EMBEDDING_TIMEOUT`` instead of N. The background / on-demand reconcile path
+    passes ``EMBEDDING_MAX_ATTEMPTS`` to retry transient blips in the background
+    where latency is not user-visible.
 
     Args:
         text: Text to embed
         model_name: Model name
         ollama_host: Ollama host for fallback
         ollama_port: Ollama port for fallback
+        max_attempts: Total attempts before giving up (>=1). Inline default is 1.
 
     Returns:
         Embedding vector or None if all methods fail
     """
     client = get_npu_client()
-
-    # Try NPU worker first
-    if await client.is_available():
-        embedding = await client.generate_embedding(text, model_name)
-        if embedding:
-            logger.debug(f"Generated embedding via NPU worker ({model_name})")
-            _embedding_generated.labels(backend="npu", status="success").inc()
-            return embedding
+    max_attempts = max(1, max_attempts)
 
     # Fallback to Ollama - use SSOT config for defaults
     # config.port.ollama is the canonical path for the port (MVA-1454 / 6c0726ec1).
@@ -378,24 +424,39 @@ async def generate_embedding_with_fallback(
     ollama_port = ollama_port or config.port.ollama
     ollama_url = f"http://{ollama_host}:{ollama_port}/api/embeddings"
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                ollama_url,
-                json={"model": model_name, "prompt": text},
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    embedding = data.get("embedding")
-                    if embedding:
-                        logger.debug(f"Generated embedding via Ollama ({model_name})")
-                        _embedding_generated.labels(backend="ollama", status="success").inc()
-                        return embedding
-    except Exception as e:
-        logger.warning(f"Ollama embedding generation failed: {e}")
+    last_reason = "no attempts made"
+    for attempt in range(1, max_attempts + 1):
+        # Try NPU worker first
+        if await client.is_available():
+            embedding = await client.generate_embedding(text, model_name)
+            if embedding:
+                logger.debug(f"Generated embedding via NPU worker ({model_name})")
+                _embedding_generated.labels(backend="npu", status="success").inc()
+                return embedding
+            last_reason = "NPU worker available but returned an empty embedding"
+            logger.warning("Embedding attempt %d/%d: %s (model=%s)", attempt, max_attempts, last_reason, model_name)
+
+        # Fallback to Ollama
+        embedding, reason = await _try_ollama_embedding(text, model_name, ollama_url)
+        if embedding:
+            logger.debug(f"Generated embedding via Ollama ({model_name})")
+            _embedding_generated.labels(backend="ollama", status="success").inc()
+            return embedding
+        last_reason = reason
+        logger.warning("Embedding attempt %d/%d failed: %s (model=%s)", attempt, max_attempts, reason, model_name)
+
+        if attempt < max_attempts and EMBEDDING_RETRY_BASE_DELAY > 0:
+            await asyncio.sleep(EMBEDDING_RETRY_BASE_DELAY * (2 ** (attempt - 1)))
 
     _embedding_generated.labels(backend="none", status="failure").inc()
+    logger.error(
+        "Embedding generation FAILED after %d attempt(s) — caller must handle the "
+        "missing vector (do NOT silently drop). model=%s, last_reason=%s, text_prefix=%r",
+        max_attempts,
+        model_name,
+        last_reason,
+        text[:80],
+    )
     return None
 
 

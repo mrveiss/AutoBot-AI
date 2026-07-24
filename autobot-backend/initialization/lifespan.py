@@ -268,34 +268,34 @@ async def _init_security_layer(app: FastAPI) -> None:
 async def _init_database() -> None:
     """Helper for initialize_critical_services. Ref: #1088.
 
-    Issue #898: Initialize PostgreSQL async engine. Raises RuntimeError on failure.
+    Issue #898: Initialize PostgreSQL async engine.
+    Issue #12293: ``init_database()`` now distinguishes a permanent credential
+    misconfiguration (fail fast with a loud CRITICAL diagnosis) from transient
+    DB unavailability (bounded, clearly-logged retry). Both raise a clear
+    ``RuntimeError``; surface it unchanged rather than re-wrapping into a
+    generic "Database initialization failed" that would bury the root cause.
     """
     logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
-    logger.info("🔍 DEBUG: About to call get_deployment_config()")
     try:
         from user_management.config import get_deployment_config
 
         config = get_deployment_config()
         logger.info(
-            "🔍 DEBUG: Deployment config loaded - mode=%s, postgres_enabled=%s",
+            "Database: mode=%s postgres_enabled=%s target=%s:%s/%s",
             config.mode.value,
             config.postgres_enabled,
-        )
-        logger.info(
-            "🔍 DEBUG: PostgreSQL - host=%s, port=%s, db=%s",
             config.postgres_host,
             config.postgres_port,
             config.postgres_db,
         )
-        logger.info("🔍 DEBUG: About to call init_database()")
         await init_database()
         logger.info("✅ [ 16%] Database: PostgreSQL async engine initialized")
     except Exception as db_error:
-        logger.error("❌ CRITICAL: Database initialization failed: %s", db_error)
-        import traceback
-
-        logger.error("❌ TRACEBACK: %s", traceback.format_exc())
-        raise RuntimeError(f"Database initialization failed: {db_error}")
+        # init_database() has already logged a CRITICAL fail-fast / bounded-retry
+        # diagnosis (#12293). Re-raise its clear RuntimeError unchanged so the
+        # root cause (e.g. stale autobot_app password) is not hidden.
+        logger.error("❌ CRITICAL: Database initialization aborted: %s", db_error)
+        raise
 
 
 async def _init_telemetry_and_redis() -> None:
@@ -390,7 +390,10 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     try:
         from transcriber.database import Database
 
-        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
+        # Resolve to an absolute path: ``create_recording`` rejects relative
+        # filepaths, and relying on cwd is fragile across launch contexts
+        # (GH#12310 — every upload 500'd because the default was relative).
+        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber")).resolve()
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / "uploads").mkdir(exist_ok=True)
         (data_dir / "processed").mkdir(exist_ok=True)
