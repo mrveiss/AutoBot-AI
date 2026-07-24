@@ -141,6 +141,40 @@ class TestCompanyStatusTransitions:
         assert result.llc_status == LLCCompanyStatus.ARCHIVED.value
 
     @pytest.mark.asyncio
+    async def test_offboard_from_active(self):
+        # Issue #12234: OFFBOARDING was in _ARCHIVE_FROM but no transition ever
+        # set it, making the state unreachable.
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc.offboard(org.id)
+
+        assert result.llc_status == LLCCompanyStatus.OFFBOARDING.value
+
+    @pytest.mark.asyncio
+    async def test_offboard_rejects_invalid_state(self):
+        org = _make_org(llc_status="paused")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        with pytest.raises(ValueError):
+            await svc.offboard(org.id)
+
+    @pytest.mark.asyncio
+    async def test_archive_reachable_via_offboard(self):
+        # Full lifecycle leg #12234 completes: ACTIVE -> OFFBOARDING -> ARCHIVED.
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        offboarded = await svc.offboard(org.id)
+        assert offboarded.llc_status == LLCCompanyStatus.OFFBOARDING.value
+
+        archived = await svc.archive(org.id)
+        assert archived.llc_status == LLCCompanyStatus.ARCHIVED.value
+
+    @pytest.mark.asyncio
     async def test_activate_from_onboarding(self):
         # Issue #12211: onboarding -> active is the transition that was missing.
         org = _make_org(llc_status="onboarding")

@@ -48891,6 +48891,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/offboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Offboard Company
+         * @description Transition a company to OFFBOARDING (from ACTIVE). Issue #12234.
+         *
+         *     Completes the lifecycle started in #12211: OFFBOARDING was already a
+         *     valid archive() source but nothing ever transitioned a company into it.
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
+         */
+        post: operations["offboard_company_api_llc_companies__company_id__offboard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/archive": {
         parameters: {
             query?: never;
@@ -165755,6 +165779,37 @@ export interface operations {
                 "application/json": components["schemas"]["CompanyStatusTransitionRequest"] | null;
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    offboard_company_api_llc_companies__company_id__offboard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

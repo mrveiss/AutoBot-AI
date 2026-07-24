@@ -167,6 +167,10 @@ class CompanyService(LLCServiceBase):
     _ACTIVATE_FROM: frozenset[str] = frozenset({LLCCompanyStatus.ONBOARDING.value, LLCCompanyStatus.PAUSED.value})
     # Valid states from which suspend() is allowed
     _SUSPEND_FROM: frozenset[str] = frozenset({LLCCompanyStatus.ONBOARDING.value, LLCCompanyStatus.ACTIVE.value})
+    # Valid states from which offboard() is allowed. Issue #12234: OFFBOARDING
+    # was defined and included in _ARCHIVE_FROM (below) but nothing ever
+    # transitioned a company into it, making the state unreachable.
+    _OFFBOARD_FROM: frozenset[str] = frozenset({LLCCompanyStatus.ACTIVE.value})
     # Valid states from which archive() is allowed
     _ARCHIVE_FROM: frozenset[str] = frozenset({LLCCompanyStatus.PAUSED.value, LLCCompanyStatus.OFFBOARDING.value})
 
@@ -206,6 +210,25 @@ class CompanyService(LLCServiceBase):
         org.paused_at = now_utc()
         await self.session.flush()
         logger.info("LLC company suspended: %s (id=%s)", org.name, org.id)
+        return org
+
+    async def offboard(self, company_id: uuid.UUID) -> Organization:
+        """Transition company to OFFBOARDING status.
+
+        Only allowed from ACTIVE — raises ValueError otherwise. This is the
+        step before archive() (#12234): OFFBOARDING was already a valid
+        ``_ARCHIVE_FROM`` source but no transition ever set it, leaving it
+        unreachable.
+        """
+        org = await self._get_or_404(company_id)
+        if org.llc_status not in self._OFFBOARD_FROM:
+            raise ValueError(
+                f"Cannot offboard company in '{org.llc_status}' state "
+                f"(allowed from: {', '.join(sorted(self._OFFBOARD_FROM))})"
+            )
+        org.llc_status = LLCCompanyStatus.OFFBOARDING.value
+        await self.session.flush()
+        logger.info("LLC company offboarding started: %s (id=%s)", org.name, org.id)
         return org
 
     async def archive(self, company_id: uuid.UUID) -> Organization:
