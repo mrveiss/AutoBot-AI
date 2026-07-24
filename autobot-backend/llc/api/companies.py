@@ -233,13 +233,19 @@ class CompanyStatusTransitionRequest(BaseModel):
 async def activate_company(
     company_id: uuid.UUID,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
     """Transition a company to ACTIVE (from ONBOARDING or PAUSED).
 
     Issue #12211: this is the dedicated transition the CompanyUpdate schema
     defers to (``llc_status`` is intentionally not PATCH-able) — without it a
-    company was stuck in ONBOARDING forever.
+    company was stuck in ONBOARDING forever. Tenant access is enforced the same
+    way as ``get_org_chart``/``reorder_backlog``: the caller's org must match
+    *company_id* unless they are a platform admin.
     """
+    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.activate(company_id)
         await svc.session.commit()
@@ -260,8 +266,15 @@ async def suspend_company(
     company_id: uuid.UUID,
     body: Optional[CompanyStatusTransitionRequest] = None,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
-    """Transition a company to PAUSED (from ONBOARDING or ACTIVE). Issue #12211."""
+    """Transition a company to PAUSED (from ONBOARDING or ACTIVE). Issue #12211.
+
+    Tenant-scoped: caller's org must match *company_id* unless platform admin.
+    """
+    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.suspend(company_id, reason=body.reason if body else None)
         await svc.session.commit()
@@ -281,8 +294,15 @@ async def suspend_company(
 async def archive_company(
     company_id: uuid.UUID,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
-    """Transition a company to ARCHIVED (from PAUSED or OFFBOARDING). Issue #12211."""
+    """Transition a company to ARCHIVED (from PAUSED or OFFBOARDING). Issue #12211.
+
+    Tenant-scoped: caller's org must match *company_id* unless platform admin.
+    """
+    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.archive(company_id)
         await svc.session.commit()
