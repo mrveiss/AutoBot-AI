@@ -1226,9 +1226,12 @@ watch(() => store.isTyping, (isTyping) => {
 // #11997: resolve a fallback event's conversation id to the last assistant
 // message of that conversation (the response the fallback produced).
 function resolveFallbackTargetMessage(conversationId: string): string | null {
-  const session =
-    store.sessions.find((s) => s.id === conversationId) ?? store.currentSession
-  const msgs = session?.messages ?? []
+  // #11994: correlate ONLY to the event's own conversation — never fall back to
+  // the current session, or a fallback from another conversation would be
+  // mis-attributed to the message being viewed (cross-conversation leak).
+  const session = store.sessions.find((s) => s.id === conversationId)
+  if (!session) return null
+  const msgs = session.messages ?? []
   for (let i = msgs.length - 1; i >= 0; i--) {
     if (msgs[i].sender === 'assistant') return msgs[i].id
   }
