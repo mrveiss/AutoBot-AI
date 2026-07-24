@@ -5552,7 +5552,10 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "حذف گفتگو ممکن نشد. لطفاً دوباره تلاش کنید."
+    }
   },
   "serviceMessages": {
     "metadata": "Metadata",
