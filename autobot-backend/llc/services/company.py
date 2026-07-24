@@ -161,10 +161,34 @@ class CompanyService(LLCServiceBase):
     # Status transitions
     # ------------------------------------------------------------------
 
+    # Valid states from which activate() is allowed (ONBOARDING -> ACTIVE, or
+    # PAUSED -> ACTIVE as a resume). Issue #12211: without this, a company can
+    # never leave ONBOARDING.
+    _ACTIVATE_FROM: frozenset[str] = frozenset({LLCCompanyStatus.ONBOARDING.value, LLCCompanyStatus.PAUSED.value})
     # Valid states from which suspend() is allowed
     _SUSPEND_FROM: frozenset[str] = frozenset({LLCCompanyStatus.ONBOARDING.value, LLCCompanyStatus.ACTIVE.value})
     # Valid states from which archive() is allowed
     _ARCHIVE_FROM: frozenset[str] = frozenset({LLCCompanyStatus.PAUSED.value, LLCCompanyStatus.OFFBOARDING.value})
+
+    async def activate(self, company_id: uuid.UUID) -> Organization:
+        """Transition company to ACTIVE status.
+
+        Allowed from ONBOARDING (finish onboarding) or PAUSED (resume) — raises
+        ValueError otherwise. Clears any pause state so a resumed company is no
+        longer marked paused (#12211).
+        """
+        org = await self._get_or_404(company_id)
+        if org.llc_status not in self._ACTIVATE_FROM:
+            raise ValueError(
+                f"Cannot activate company in '{org.llc_status}' state "
+                f"(allowed from: {', '.join(sorted(self._ACTIVATE_FROM))})"
+            )
+        org.llc_status = LLCCompanyStatus.ACTIVE.value
+        org.pause_reason = None
+        org.paused_at = None
+        await self.session.flush()
+        logger.info("LLC company activated: %s (id=%s)", org.name, org.id)
+        return org
 
     async def suspend(self, company_id: uuid.UUID, reason: Optional[str] = None) -> Organization:
         """Transition company to PAUSED status.

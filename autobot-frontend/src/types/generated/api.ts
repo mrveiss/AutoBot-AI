@@ -48843,6 +48843,76 @@ export interface paths {
         patch: operations["update_company_api_llc_companies__company_id__patch"];
         trace?: never;
     };
+    "/api/llc/companies/{company_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Company
+         * @description Transition a company to ACTIVE (from ONBOARDING or PAUSED).
+         *
+         *     Issue #12211: this is the dedicated transition the CompanyUpdate schema
+         *     defers to (``llc_status`` is intentionally not PATCH-able) — without it a
+         *     company was stuck in ONBOARDING forever. Tenant access is enforced the same
+         *     way as ``get_org_chart``/``reorder_backlog``: the caller's org must match
+         *     *company_id* unless they are a platform admin.
+         */
+        post: operations["activate_company_api_llc_companies__company_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend Company
+         * @description Transition a company to PAUSED (from ONBOARDING or ACTIVE). Issue #12211.
+         *
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
+         */
+        post: operations["suspend_company_api_llc_companies__company_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Company
+         * @description Transition a company to ARCHIVED (from PAUSED or OFFBOARDING). Issue #12211.
+         *
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
+         */
+        post: operations["archive_company_api_llc_companies__company_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/companies/{company_id}/tree": {
         parameters: {
             query?: never;
@@ -62400,6 +62470,16 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CompanyStatusTransitionRequest
+         * @description Optional payload for a status transition (e.g. a suspend reason).
+         */
+        CompanyStatusTransitionRequest: {
+            /** Reason */
+            reason?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -165607,6 +165687,103 @@ export interface operations {
                 "application/json": components["schemas"]["CompanyUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_company_api_llc_companies__company_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suspend_company_api_llc_companies__company_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CompanyStatusTransitionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_company_api_llc_companies__company_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

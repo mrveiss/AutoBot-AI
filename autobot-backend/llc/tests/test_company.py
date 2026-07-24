@@ -141,6 +141,40 @@ class TestCompanyStatusTransitions:
         assert result.llc_status == LLCCompanyStatus.ARCHIVED.value
 
     @pytest.mark.asyncio
+    async def test_activate_from_onboarding(self):
+        # Issue #12211: onboarding -> active is the transition that was missing.
+        org = _make_org(llc_status="onboarding")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc.activate(org.id)
+
+        assert result.llc_status == LLCCompanyStatus.ACTIVE.value
+
+    @pytest.mark.asyncio
+    async def test_activate_from_paused_clears_pause_state(self):
+        org = _make_org(llc_status="paused")
+        org.pause_reason = "was paused"
+        org.paused_at = datetime_now()
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc.activate(org.id)
+
+        assert result.llc_status == LLCCompanyStatus.ACTIVE.value
+        assert result.pause_reason is None
+        assert result.paused_at is None
+
+    @pytest.mark.asyncio
+    async def test_activate_rejects_invalid_state(self):
+        org = _make_org(llc_status="archived")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        with pytest.raises(ValueError):
+            await svc.activate(org.id)
+
+    @pytest.mark.asyncio
     async def test_not_found_raises(self):
         svc = _make_service()
         svc._get_or_404 = AsyncMock(side_effect=CompanyNotFoundError("not found"))
