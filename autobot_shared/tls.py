@@ -18,6 +18,11 @@ from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
+# Canonical minimum TLS version for every AutoBot SSL context (#12285).
+# CodeQL py/insecure-protocol: pinning this rejects the broken TLSv1/TLSv1_1
+# protocols that ssl.create_default_context() is reported to still permit.
+MIN_TLS_VERSION: ssl.TLSVersion = ssl.TLSVersion.TLSv1_2
+
 # Hosts treated as loopback for TLS trust decisions (#6654).
 _LOOPBACK_HOSTS: frozenset = frozenset({"127.0.0.1", "localhost", "::1", "ip6-localhost"})
 
@@ -64,6 +69,8 @@ def get_internal_tls_context(
     For non-loopback production deployments configure ``AUTOBOT_TLS_CA_PATH``.
     """
     ctx = ssl.create_default_context()
+    # Reject the broken TLSv1/TLSv1_1 protocols on every path below (#12285).
+    ctx.minimum_version = MIN_TLS_VERSION
 
     # 1. Explicit CA path (mTLS callers resolve the path before calling)
     if ca_path and os.path.isfile(ca_path):
