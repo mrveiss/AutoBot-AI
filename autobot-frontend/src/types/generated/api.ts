@@ -20576,6 +20576,9 @@ export interface paths {
          *         include_pattern_analysis: Whether to include code pattern analysis (Issue #208)
          *         quick: If True, skip expensive analyses for faster export
          *         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
+         *         source_id: Scope the report and every sub-analysis to this code source
+         *             (Issue #12372). Falls back to the most recently indexed source, or
+         *             AutoBot's own root only when no source is resolvable.
          *
          *     Returns:
          *         Markdown formatted report as plain text
