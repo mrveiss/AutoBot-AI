@@ -36,12 +36,18 @@ class TestCallerOwnerId:
         assert _caller_owner_id({"id": "alice", "user_id": "ignored"}) == "alice"
         assert _caller_owner_id({"user_id": "bob"}) == "bob"
 
-    def test_none_for_identityless_caller(self):
-        """Internal service key yields a synthetic admin with no id -> unscoped."""
-        from api.codebase_analytics.endpoints.shared import _caller_owner_id
+    def test_none_only_for_service_key_not_other_identityless(self):
+        """Only the internal service key ({"service": True}) is unscoped; any other
+        identity-less authenticated caller (e.g. a sub-only token) fails closed."""
+        from api.codebase_analytics.endpoints.shared import _NO_OWNER_ID, _caller_owner_id
 
         assert _caller_owner_id(None) is None
-        assert _caller_owner_id({"username": "service:slm", "role": "admin"}) is None
+        # Real internal-service dict (auth_middleware.py: minted with service=True).
+        assert _caller_owner_id({"username": "service:slm", "role": "admin", "service": True}) is None
+        # #12375 item c: an SLM-minted token carrying identity only in sub/username
+        # (no id/user_id and NOT the service key) must NOT get unscoped see-all.
+        assert _caller_owner_id({"sub": "carol", "role": "admin"}) == _NO_OWNER_ID
+        assert _caller_owner_id({"username": "dave", "role": "admin"}) == _NO_OWNER_ID
 
 
 class TestAuthorizeSourceAccess:
@@ -90,7 +96,7 @@ class TestAuthorizeSourceAccess:
             await shared.authorize_source_access(src.id, {"id": "bob"})
 
     async def test_service_caller_allowed(self):
-        """Internal service key (no id) keeps unscoped access to any source."""
+        """Internal service key (service=True, no id) keeps unscoped access to any source."""
         from api.codebase_analytics.endpoints import shared
 
         src = _source(owner_id="alice", access=SourceAccess.PRIVATE)
@@ -98,7 +104,31 @@ class TestAuthorizeSourceAccess:
             "api.codebase_analytics.source_storage.get_source",
             AsyncMock(return_value=src),
         ):
-            await shared.authorize_source_access(src.id, {"username": "service:slm", "role": "admin"})
+            await shared.authorize_source_access(
+                src.id, {"username": "service:slm", "role": "admin", "service": True}
+            )
+
+    async def test_subonly_token_denied_on_foreign_private(self):
+        """#12375 item c: an authenticated admin whose token carries only sub/username
+        (no id, not the service key) must be denied a foreign PRIVATE source, not
+        granted unscoped see-all. Non-disclosing 404."""
+        from api.codebase_analytics.endpoints import shared
+
+        src = _source(owner_id="alice", access=SourceAccess.PRIVATE)
+        with patch(
+            "api.codebase_analytics.source_storage.get_source",
+            AsyncMock(return_value=src),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await shared.authorize_source_access(src.id, {"sub": "mallory", "role": "admin"})
+            assert exc.value.status_code == 404
+            # But a PUBLIC source is still reachable by the same identity-less caller.
+            pub = _source(owner_id="alice", access=SourceAccess.PUBLIC)
+        with patch(
+            "api.codebase_analytics.source_storage.get_source",
+            AsyncMock(return_value=pub),
+        ):
+            await shared.authorize_source_access(pub.id, {"sub": "mallory", "role": "admin"})
 
     async def test_foreign_private_source_returns_404(self):
         """The bug: another admin's PRIVATE source must 404, not return data."""
@@ -204,3 +234,53 @@ class TestRequireSourceAccessDependency:
         ):
             await shared.require_source_access(req)
         get_source.assert_not_called()
+
+
+class TestPatternAnalyzeBodyAuthz:
+    """#12375 item a: /patterns/analyze takes source_id in the BODY, so the
+    router-level require_source_access (path/query only) cannot gate it; the
+    handler must authorize it before enqueuing the Celery task."""
+
+    async def _call(self, user, src):
+        from api.codebase_analytics.endpoints import pattern_analysis as pa
+
+        req = pa.PatternAnalysisRequest(source_id="s1", path="/tmp/proj")
+        delay = _FakeDelay()
+        with patch.object(pa.run_pattern_analysis, "delay", delay), patch.object(
+            pa, "store_latest_task_id", AsyncMock()
+        ), patch(
+            "auth_middleware.get_current_user", AsyncMock(return_value=user)
+        ), patch(
+            "api.codebase_analytics.source_storage.get_source",
+            AsyncMock(return_value=src),
+        ):
+            result = await pa.start_pattern_analysis(req, _FakeRequest())
+        return result, delay
+
+    async def test_foreign_private_source_blocks_before_enqueue(self):
+        src = _source(owner_id="alice", access=SourceAccess.PRIVATE)
+        with pytest.raises(HTTPException) as exc:
+            await self._call({"id": "bob"}, src)
+        assert exc.value.status_code == 404
+
+    async def test_owner_may_enqueue(self):
+        src = _source(owner_id="alice", access=SourceAccess.PRIVATE)
+        result, delay = await self._call({"id": "alice"}, src)
+        assert delay.called
+        assert result.status == "pending"
+
+
+class _FakeDelay:
+    called = False
+
+    def __call__(self, *a, **k):
+        self.called = True
+
+        class _R:
+            id = "task-123"
+
+        return _R()
+
+
+class _FakeRequest:
+    """Minimal stand-in; get_current_user is patched so its internals are unused."""
