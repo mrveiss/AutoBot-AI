@@ -236,8 +236,11 @@ async def get_cached_analysis():
     response (Issue #12365) if no cached results exist or cache retrieval
     fails — consistent with the other analytics `/cached` endpoints.
     """
+    # Detector construction (an importlib load) is infra, not cache state: let a
+    # broken detector propagate to @with_error_handling rather than masking it as
+    # "no data". Only the cache READ degrades to no_data (#12365 review item b).
+    detector = await _get_detector()
     try:
-        detector = await _get_detector()
         cached = await detector.get_cached_report()
     except Exception as e:
         logger.warning("Anti-pattern cache retrieval failed, returning no_data: %s", e)
@@ -246,9 +249,9 @@ async def get_cached_analysis():
     if cached:
         return JSONResponse(content={"success": True, "cached": True, "data": cached})
 
+    # Bare status=no_data matches the sibling analytics /cached convention.
     return JSONResponse(
         content={
-            "success": False,
             "status": "no_data",
             "message": "No cached analysis available. Run /analyze first.",
         },

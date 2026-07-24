@@ -35,11 +35,10 @@ class TestGetCachedAnalysis:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["success"] is False
         assert body["status"] == "no_data"
 
     def test_retrieval_exception_returns_no_data_not_500(self, client):
-        """Cache retrieval error degrades to 200 no_data instead of 500."""
+        """A cache READ error degrades to 200 no_data instead of 500."""
         mock_detector = AsyncMock()
         mock_detector.get_cached_report.side_effect = RuntimeError("redis unavailable")
 
@@ -48,8 +47,19 @@ class TestGetCachedAnalysis:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body["success"] is False
         assert body["status"] == "no_data"
+
+    def test_detector_construction_fault_is_not_masked(self, client):
+        """#12365 review item b: a broken detector (infra fault) must surface,
+        not be reported as an empty cache. Only the cache READ degrades."""
+        with patch(
+            "api.anti_pattern._get_detector",
+            AsyncMock(side_effect=RuntimeError("detector import failed")),
+        ):
+            resp = client.get("/api/anti-pattern/cached")
+
+        # Whatever the error envelope, it must NOT be a 200 no_data.
+        assert not (resp.status_code == 200 and resp.json().get("status") == "no_data")
 
     def test_cache_hit_returns_data(self, client):
         """Cached results still return normally when present."""
