@@ -187,9 +187,7 @@ class TestDependencyModuleLoadIsolation:
         with patch.object(deps, "get_all_paginated", side_effect=fake_get_all_paginated):
             await deps._load_modules_from_chromadb(MagicMock(), {}, source_id="A")
 
-        assert captured["where"] == {
-            "$and": [{"type": {"$in": ["function", "class"]}}, {"source_id": "A"}]
-        }
+        assert captured["where"] == {"$and": [{"type": {"$in": ["function", "class"]}}, {"source_id": "A"}]}
 
     async def test_source_b_load_never_returns_source_a_modules(self):
         """Simulates real ChromaDB filtering to prove no cross-source bleed."""
