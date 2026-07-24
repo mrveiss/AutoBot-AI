@@ -10,7 +10,7 @@ Monitors system performance during workflow execution
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 import psutil
 
@@ -18,6 +18,36 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
+
+# Canonical resource-saturation thresholds (percent). Single source of truth so
+# every health surface derives the same verdict from cpu/memory/disk load.
+RESOURCE_THRESHOLDS = {"cpu_percent": 80, "memory_percent": 85, "disk_percent": 90}
+
+
+def evaluate_resource_thresholds(metrics: Mapping[str, float]) -> Dict[str, Any]:
+    """Classify an already-collected resource-metrics snapshot.
+
+    Pure helper (no sampling) so callers can grade the exact numbers they report
+    instead of taking a second, divergent psutil reading. Returns a dict with
+    ``status`` (``ok``/``warning``/``critical``) plus the triggering alert lists.
+    """
+    warnings: List[str] = []
+    critical: List[str] = []
+
+    for metric, threshold in RESOURCE_THRESHOLDS.items():
+        if metric not in metrics:
+            continue
+        value = metrics[metric]
+        if value > threshold:
+            critical.append(f"{metric}: {value:.1f}% (threshold: {threshold}%)")
+        elif value > threshold * 0.8:  # 80% of threshold as warning
+            warnings.append(f"{metric}: {value:.1f}% (approaching threshold: {threshold}%)")
+
+    return {
+        "status": "critical" if critical else ("warning" if warnings else "ok"),
+        "critical_alerts": critical,
+        "warnings": warnings,
+    }
 
 
 class SystemResourceMonitor:
@@ -352,26 +382,9 @@ class SystemResourceMonitor:
         """Check if system resources are within acceptable thresholds"""
         try:
             current = self.get_current_metrics()
-
-            # Define thresholds
-            thresholds = {"cpu_percent": 80, "memory_percent": 85, "disk_percent": 90}
-
-            warnings = []
-            critical = []
-
-            # Check each threshold
-            for metric, threshold in thresholds.items():
-                if metric in current:
-                    value = current[metric]
-                    if value > threshold:
-                        critical.append(f"{metric}: {value:.1f}% (threshold: {threshold}%)")
-                    elif value > threshold * 0.8:  # 80% of threshold as warning
-                        warnings.append(f"{metric}: {value:.1f}% " f"(approaching threshold: {threshold}%)")
-
+            verdict = evaluate_resource_thresholds(current)
             return {
-                "status": "critical" if critical else ("warning" if warnings else "ok"),
-                "critical_alerts": critical,
-                "warnings": warnings,
+                **verdict,
                 "current_metrics": current,
                 "check_timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
