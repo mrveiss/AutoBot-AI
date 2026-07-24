@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { KnowledgeStats } from '@/types/knowledgeBase'
-import { useKnowledgeStats } from '../knowledge/useKnowledgeStats'
+import { useKnowledgeStats, resetKnowledgeStats } from '../knowledge/useKnowledgeStats'
 
 vi.mock('@/utils/ApiClient', () => ({
   default: {
@@ -26,6 +26,9 @@ import apiClient from '@/utils/ApiClient'
 describe('useKnowledgeStats', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // useKnowledgeStats is a module-level singleton (#11658); clear its shared
+    // state so per-test assertions on the initial (empty) values hold.
+    resetKnowledgeStats()
   })
 
   describe('fetchStats', () => {
@@ -128,6 +131,53 @@ describe('useKnowledgeStats', () => {
 
       expect(data).toEqual(mockStats)
       expect(basicStats.value).toEqual(mockStats)
+    })
+  })
+
+  describe('shared-singleton state contract (#11658)', () => {
+    it('two consumers share the same refresh/refreshCategoryFacts state', async () => {
+      // Consumer A (e.g. a parent) and consumer B (e.g. a child section) each
+      // call useKnowledgeStats() independently, as real components do.
+      const consumerA = useKnowledgeStats()
+      const consumerB = useKnowledgeStats()
+
+      const mockStats: KnowledgeStats = { total_facts: 7, total_documents: 2 }
+      vi.mocked(apiClient.get).mockResolvedValueOnce(mockStats)
+
+      // A performs the fetch...
+      await consumerA.refresh()
+
+      // ...and B observes the same shared `stats` ref.
+      expect(consumerB.stats.value).toEqual(mockStats)
+      expect(consumerA.stats.value).toBe(consumerB.stats.value)
+    })
+
+    it('category fact counts fetched by one consumer are read by another (#11619 guard)', async () => {
+      const parent = useKnowledgeStats()
+      const child = useKnowledgeStats()
+
+      vi.mocked(apiClient.get).mockResolvedValueOnce({
+        categories: { docs: [1, 2, 3], notes: [1] },
+      })
+
+      // The reader/child triggers the fetch; a sibling/parent reads the counts.
+      await child.refreshCategoryFacts()
+
+      expect(parent.categoryFactCounts.value).toEqual({ docs: 3, notes: 1 })
+      expect(child.categoryFactCounts.value).toBe(parent.categoryFactCounts.value)
+    })
+
+    it('reset() clears shared state for all consumers', async () => {
+      const a = useKnowledgeStats()
+      const b = useKnowledgeStats()
+
+      const mockStats: KnowledgeStats = { total_facts: 1, total_documents: 1 }
+      vi.mocked(apiClient.get).mockResolvedValueOnce(mockStats)
+      await a.refresh()
+      expect(b.stats.value).toEqual(mockStats)
+
+      a.reset()
+      expect(b.stats.value).toBe(null)
     })
   })
 })

@@ -10,13 +10,25 @@
  * Split from useKnowledgeBase (#5122). Dead try/catch wrappers removed (#5123):
  * ApiClient already logs retries + final failure and never returns null.
  *
- * Reactive refs layer (#5149): the composable now owns loading/error state
- * via `ref`s and exposes a `refresh` action. The bare imperative functions
- * are still exported at module scope so non-reactive consumers (and the
- * `useKnowledgeBase` BC shim) keep working unchanged.
+ * Reactive refs layer (#5149): the composable owns loading/error state and a
+ * `refresh` action. The bare imperative functions are still exported at module
+ * scope so non-reactive consumers (and the `useKnowledgeBase` BC shim) keep
+ * working unchanged.
  *
  * Category facts extraction (#6052): fetchCategoryFacts / refreshCategoryFacts
  * extracted from KnowledgeStats.vue inline apiClient call.
+ *
+ * SHARED-SINGLETON STATE CONTRACT (#11658): the reactive refs below
+ * (`stats`, `basicStats`, `categoryFactCounts`, `isLoading`, `error`) are
+ * declared at MODULE scope, so every `useKnowledgeStats()` call returns the
+ * SAME refs. This is intentional — knowledge-base stats are global (there is
+ * one knowledge base, not one-per-component), so a refresh triggered by any
+ * consumer is observed by all readers. Previously these refs were per-call,
+ * which produced the #11619 bug: a parent fetched `refreshCategoryFacts()`
+ * into instance A while a child read `categoryFactCounts` from instance B, so
+ * the distribution chart rendered 0% bars. Do NOT move this state back inside
+ * the function. Use `resetKnowledgeStats()` to clear it (logout / KB switch /
+ * test teardown).
  */
 
 import { ref, readonly, type Ref } from 'vue'
@@ -66,6 +78,59 @@ export const fetchCategoryFacts = async (): Promise<Record<string, number> | nul
   }
 }
 
+// ==================== Shared-singleton reactive state (#11658) ====================
+// Declared at module scope so all consumers share one instance — see the
+// SHARED-SINGLETON STATE CONTRACT note in the file header.
+
+const stats = ref<KnowledgeStats | null>(null)
+const basicStats = ref<KnowledgeStats | null>(null)
+const categoryFactCounts = ref<Record<string, number>>({})
+const error = ref<Error | null>(null)
+const { isLoading, wrap } = useLoadingState()
+
+const refresh = async (): Promise<KnowledgeStats | null> => {
+  error.value = null
+  return wrap(async () => {
+    try {
+      const data = await fetchStats()
+      stats.value = data
+      return data
+    } catch (err) {
+      error.value = err instanceof Error ? err : new Error(String(err))
+      throw err
+    }
+  })
+}
+
+const refreshBasic = async (): Promise<KnowledgeStats | null> => {
+  error.value = null
+  return wrap(async () => {
+    const data = await fetchBasicStats()
+    basicStats.value = data
+    return data
+  })
+}
+
+const refreshCategoryFacts = async (): Promise<Record<string, number> | null> => {
+  const data = await fetchCategoryFacts()
+  if (data !== null) {
+    categoryFactCounts.value = data
+  }
+  return data
+}
+
+/**
+ * Clear all shared knowledge-stats state back to its initial (empty) values.
+ * Call on logout, when switching knowledge bases, or in test teardown so the
+ * module-level singleton does not leak state across contexts.
+ */
+export function resetKnowledgeStats(): void {
+  stats.value = null
+  basicStats.value = null
+  categoryFactCounts.value = {}
+  error.value = null
+}
+
 // ==================== Reactive composable ====================
 
 export interface UseKnowledgeStatsReturn {
@@ -85,6 +150,8 @@ export interface UseKnowledgeStatsReturn {
   refreshBasic: () => Promise<KnowledgeStats | null>
   /** Fetch category fact counts, update `categoryFactCounts`, return the payload. */
   refreshCategoryFacts: () => Promise<Record<string, number> | null>
+  /** Clear all shared state (logout / KB switch / test teardown). */
+  reset: () => void
   // Imperative passthroughs — BC with pre-#5149 callers
   fetchStats: typeof fetchStats
   fetchBasicStats: typeof fetchBasicStats
@@ -92,43 +159,6 @@ export interface UseKnowledgeStatsReturn {
 }
 
 export function useKnowledgeStats(): UseKnowledgeStatsReturn {
-  const stats = ref<KnowledgeStats | null>(null)
-  const basicStats = ref<KnowledgeStats | null>(null)
-  const categoryFactCounts = ref<Record<string, number>>({})
-  const { isLoading, wrap } = useLoadingState()
-  const error = ref<Error | null>(null)
-
-  const refresh = async (): Promise<KnowledgeStats | null> => {
-    error.value = null
-    return wrap(async () => {
-      try {
-        const data = await fetchStats()
-        stats.value = data
-        return data
-      } catch (err) {
-        error.value = err instanceof Error ? err : new Error(String(err))
-        throw err
-      }
-    })
-  }
-
-  const refreshBasic = async (): Promise<KnowledgeStats | null> => {
-    error.value = null
-    return wrap(async () => {
-      const data = await fetchBasicStats()
-      basicStats.value = data
-      return data
-    })
-  }
-
-  const refreshCategoryFacts = async (): Promise<Record<string, number> | null> => {
-    const data = await fetchCategoryFacts()
-    if (data !== null) {
-      categoryFactCounts.value = data
-    }
-    return data
-  }
-
   return {
     stats: readonly(stats) as Readonly<Ref<KnowledgeStats | null>>,
     basicStats: readonly(basicStats) as Readonly<Ref<KnowledgeStats | null>>,
@@ -138,6 +168,7 @@ export function useKnowledgeStats(): UseKnowledgeStatsReturn {
     refresh,
     refreshBasic,
     refreshCategoryFacts,
+    reset: resetKnowledgeStats,
     fetchStats,
     fetchBasicStats,
     fetchCategoryFacts,
