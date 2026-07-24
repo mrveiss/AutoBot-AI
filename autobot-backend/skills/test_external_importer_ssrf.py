@@ -81,3 +81,50 @@ async def test_import_git_repo_rejects_private_ips():
 
     with pytest.raises(RuntimeError, match="blocked by SSRF guard"):
         await importer.import_git_repo("https://10.0.0.1/repo.git")
+
+
+@pytest.mark.asyncio
+async def test_import_http_catalog_public_url_passes_and_pins_ip():
+    """A valid public catalog URL is fetched via an IP-pinned connector (#12278)."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    importer = ExternalSkillImporter()
+    fake_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+    mock_response = MagicMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={"skills": [{"name": "demo"}]})
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=False)
+
+    mock_get = MagicMock(return_value=mock_response)
+    mock_session = MagicMock()
+    mock_session.get = mock_get
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        with patch("aiohttp.ClientSession", return_value=mock_session) as mk_session:
+            skills = await importer.import_http_catalog("https://catalog.example.com/skills")
+
+    assert skills == [{"name": "demo"}]
+    # A pinned connector must be supplied to the session (DNS-rebind defence).
+    assert mk_session.call_args.kwargs.get("connector") is not None
+    # Redirects must be disabled so a 3xx cannot bypass the SSRF check.
+    assert mock_get.call_args.kwargs.get("allow_redirects") is False
+
+
+@pytest.mark.asyncio
+async def test_import_http_catalog_blocks_dns_rebind_to_private():
+    """is_public passes on check, but the pinned resolve sees a private IP → blocked."""
+    from unittest.mock import AsyncMock, patch
+
+    importer = ExternalSkillImporter()
+
+    fake_private = [(2, 1, 6, "", ("10.0.0.1", 0))]
+    # First-stage is_public check is forced True; the pinned resolve then sees a
+    # private IP and must reject (defence-in-depth against DNS-rebind).
+    with patch("autobot_shared.url_safety.is_public_url_async", AsyncMock(return_value=True)):
+        with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_private):
+            with pytest.raises(RuntimeError, match="blocked by SSRF guard"):
+                await importer.import_http_catalog("https://rebind.example.com/skills")
