@@ -223,3 +223,59 @@ async def test_provider_none_returns_error_response():
     result = await coordinator.execute_with_fallback(_make_request(), registry)
 
     assert result.error == "All providers unavailable"
+
+
+# ---------------------------------------------------------------------------
+# #11995: PROVIDER_FALLBACK event emission
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_emits_provider_fallback_event_on_success():
+    """A successful fallback hop emits PROVIDER_FALLBACK with the audit payload."""
+    coordinator = ModelFallbackCoordinator()
+    fallback_response = _ok_response("claude-sonnet-4")
+    registry = _make_registry([RateLimitError("quota hit"), fallback_response])
+    mgr = _chain_manager_with("claude-opus-4", ["claude-sonnet-4"])
+
+    with (
+        patch("llm_shared.model_fallback_coordinator.get_fallback_chain_manager", return_value=mgr),
+        patch("llm_shared.model_fallback_coordinator.emit_fallback_event", new=AsyncMock()) as mock_emit,
+    ):
+        await coordinator.execute_with_fallback(_make_request("claude-opus-4"), registry)
+
+    mock_emit.assert_awaited_once()
+    kwargs = mock_emit.await_args.kwargs
+    assert kwargs["primary_model"] == "claude-opus-4"
+    assert kwargs["fallback_model"] == "claude-sonnet-4"
+    assert kwargs["chain_tried"] == ["claude-opus-4", "claude-sonnet-4"]
+    assert kwargs.get("exhausted", False) is False
+
+
+@pytest.mark.asyncio
+async def test_emits_provider_fallback_event_on_exhaustion():
+    """Exhausting the fallback chain still emits PROVIDER_FALLBACK(exhausted=True)."""
+    coordinator = ModelFallbackCoordinator()
+    registry = _make_registry([RateLimitError("quota")] * 10)
+    mgr = _chain_manager_with("claude-opus-4", ["claude-sonnet-4"])
+
+    with (
+        patch("llm_shared.model_fallback_coordinator.get_fallback_chain_manager", return_value=mgr),
+        patch("llm_shared.model_fallback_coordinator.emit_fallback_event", new=AsyncMock()) as mock_emit,
+    ):
+        await coordinator.execute_with_fallback(_make_request("claude-opus-4"), registry, max_attempts=2)
+
+    mock_emit.assert_awaited_once()
+    assert mock_emit.await_args.kwargs["exhausted"] is True
+
+
+@pytest.mark.asyncio
+async def test_no_provider_fallback_event_when_primary_succeeds():
+    """No fallback hop → no PROVIDER_FALLBACK event."""
+    coordinator = ModelFallbackCoordinator()
+    registry = _make_registry([_ok_response()])
+
+    with patch("llm_shared.model_fallback_coordinator.emit_fallback_event", new=AsyncMock()) as mock_emit:
+        await coordinator.execute_with_fallback(_make_request(), registry)
+
+    mock_emit.assert_not_awaited()

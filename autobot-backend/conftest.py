@@ -367,6 +367,10 @@ if "llm_shared" not in sys.modules:
     # #11519: provider degradation store — load real BEFORE model_fallback_coordinator
     # and provider_registry which import it at module level.
     _real_load_and_bind("llm_shared.provider_degradation", _llm_root / "provider_degradation.py")
+    # #11995: PROVIDER_FALLBACK event emission helper — load real BEFORE
+    # model_fallback_coordinator, which imports it at module level. events.bus
+    # / events.event_types are unstubbed lightweight modules, safe to import here.
+    _real_load_and_bind("llm_shared.fallback_events", _llm_root / "fallback_events.py")
     _real_load_and_bind("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
     # #9017: reasoning_effort utility is imported by chat_workflow.manager at module level;
     # load the real file so tests that import manager don't hit the providers MagicMock stub.
