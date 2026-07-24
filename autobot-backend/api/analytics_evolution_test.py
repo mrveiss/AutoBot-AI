@@ -15,7 +15,7 @@ Tests the following functionality:
 
 import sys
 import types
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -73,8 +73,10 @@ class TestParseDateRange:
         end = "2025-01-31"
         start_ts, end_ts = _parse_date_range(start, end)
 
-        expected_start = datetime.fromisoformat(start).timestamp()
-        expected_end = datetime.fromisoformat(end).timestamp()
+        # Production parses ISO dates as UTC (parse_utc_iso); anchor expectations
+        # to UTC so the assertion is deterministic regardless of runner timezone.
+        expected_start = datetime.fromisoformat(start).replace(tzinfo=timezone.utc).timestamp()
+        expected_end = datetime.fromisoformat(end).replace(tzinfo=timezone.utc).timestamp()
         assert start_ts == expected_start
         assert end_ts == expected_end
 
