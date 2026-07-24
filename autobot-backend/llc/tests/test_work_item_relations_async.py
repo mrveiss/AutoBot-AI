@@ -29,23 +29,33 @@ class _Awaitable:
         return _coro()
 
 
-def _rel(rid, target):
-    return SimpleNamespace(
-        id=rid,
-        relation_type="blocks",
-        target_id="t-1",
-        awaitable_attrs=_Awaitable(target=target),
-    )
+def _rel(rid, target_id="t-1"):
+    return SimpleNamespace(id=rid, relation_type="blocks", target_id=target_id)
+
+
+class _FakeSession:
+    """Session whose execute() returns the given target column-rows (#11686:
+    _relations_to_list bulk-fetches target identifier/title/status by id)."""
+
+    def __init__(self, *target_rows):
+        self._rows = list(target_rows)
+
+    async def execute(self, *_args, **_kwargs):
+        return list(self._rows)
+
+
+def _target_row(tid, identifier, title, status):
+    return SimpleNamespace(id=tid, identifier=identifier, title=title, status=status)
 
 
 @pytest.mark.asyncio
-async def test_relations_to_list_awaits_unloaded_relationship():
+async def test_relations_to_list_serializes_target_fields():
     from llc.api import work_items
 
-    tgt = SimpleNamespace(identifier="MVT-9", title="Target", status="open")
-    item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[_rel("r-1", tgt)]))
+    item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[_rel("r-1")]))
+    session = _FakeSession(_target_row("t-1", "MVT-9", "Target", "open"))
 
-    rows = await work_items._relations_to_list(item)
+    rows = await work_items._relations_to_list(item, session)
 
     assert rows == [
         {
@@ -62,20 +72,20 @@ async def test_relations_to_list_awaits_unloaded_relationship():
 @pytest.mark.asyncio
 async def test_relations_to_list_empty_for_freshly_created_item():
     # The create path: a brand-new item has no relations — must return [] without
-    # a MissingGreenlet.
+    # a MissingGreenlet and without hitting the database.
     from llc.api import work_items
 
     item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[]))
-    assert await work_items._relations_to_list(item) == []
+    assert await work_items._relations_to_list(item, _FakeSession()) == []
 
 
 @pytest.mark.asyncio
 async def test_relations_to_list_handles_null_target():
-    # A relation whose target could not be resolved serializes None fields, not a crash.
+    # A relation whose target row is missing serializes None fields, not a crash.
     from llc.api import work_items
 
-    item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[_rel("r-2", None)]))
-    rows = await work_items._relations_to_list(item)
+    item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=[_rel("r-2")]))
+    rows = await work_items._relations_to_list(item, _FakeSession())  # no target rows
     assert rows == [
         {
             "id": "r-2",
@@ -86,3 +96,29 @@ async def test_relations_to_list_handles_null_target():
             "target_status": None,
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_relations_to_list_single_query_for_many_relations():
+    # #11686: N relations resolve their targets in ONE bulk query, not N (no N+1).
+    from llc.api import work_items
+
+    rels = [_rel(f"r-{i}", target_id=f"t-{i}") for i in range(5)]
+    item = SimpleNamespace(awaitable_attrs=_Awaitable(outgoing_relations=rels))
+
+    class _CountingSession(_FakeSession):
+        def __init__(self, *rows):
+            super().__init__(*rows)
+            self.execute_calls = 0
+
+        async def execute(self, *a, **k):
+            self.execute_calls += 1
+            return await super().execute(*a, **k)
+
+    session = _CountingSession(*[_target_row(f"t-{i}", f"MVT-{i}", f"T{i}", "open") for i in range(5)])
+
+    rows = await work_items._relations_to_list(item, session)
+
+    assert len(rows) == 5
+    assert session.execute_calls == 1, "targets must be batch-fetched in a single query"
+    assert rows[3]["target_identifier"] == "MVT-3"
