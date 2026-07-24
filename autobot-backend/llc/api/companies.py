@@ -12,6 +12,10 @@ Route group: /llc/companies
   DELETE /{id}                     — soft-delete a company
   GET    /{id}/tree                — recursive sub-company tree
   GET    /{id}/ancestry            — ancestors from root to this company
+  POST   /{id}/activate            — status transition -> ACTIVE (GH#12211)
+  POST   /{id}/suspend             — status transition -> PAUSED (GH#12211)
+  POST   /{id}/offboard            — status transition -> OFFBOARDING (GH#12234)
+  POST   /{id}/archive             — status transition -> ARCHIVED (GH#12211)
   POST   /{id}/members             — add a member (GH#8223)
   DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
   GET    /{id}/members             — list members (GH#8223)
@@ -293,6 +297,36 @@ async def suspend_company(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.suspend(company_id, reason=body.reason if body else None)
+        await svc.session.commit()
+        return _to_read(org)
+    except CompanyNotFoundError:
+        await svc.session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
+    except ValueError as exc:
+        await svc.session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from None
+    except Exception:
+        await svc.session.rollback()
+        raise
+
+
+@router.post("/{company_id}/offboard", response_model=CompanyRead)
+async def offboard_company(
+    company_id: uuid.UUID,
+    svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> CompanyRead:
+    """Transition a company to OFFBOARDING (from ACTIVE). Issue #12234.
+
+    Completes the lifecycle started in #12211: OFFBOARDING was already a
+    valid archive() source but nothing ever transitioned a company into it.
+    Tenant-scoped: caller's org must match *company_id* unless platform admin.
+    """
+    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    try:
+        org = await svc.offboard(company_id)
         await svc.session.commit()
         return _to_read(org)
     except CompanyNotFoundError:

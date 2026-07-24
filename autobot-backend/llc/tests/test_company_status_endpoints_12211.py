@@ -123,6 +123,45 @@ async def test_archive_endpoint_returns_archived():
 
 
 # ---------------------------------------------------------------------------
+# Offboard transition (#12234) — OFFBOARDING was previously unreachable.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_offboard_endpoint_returns_offboarding_and_commits():
+    svc = _svc()
+    svc.offboard = AsyncMock(return_value=_org(llc_status="offboarding"))
+    async with _client(_app(svc)) as client:
+        resp = await client.post(f"/api/llc/companies/{_ORG_ID}/offboard")
+    assert resp.status_code == 200
+    assert resp.json()["llc_status"] == "offboarding"
+    svc.offboard.assert_awaited_once()
+    svc.session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_offboard_endpoint_invalid_transition_maps_to_409():
+    svc = _svc()
+    svc.offboard = AsyncMock(side_effect=ValueError("Cannot offboard company in 'paused' state"))
+    async with _client(_app(svc)) as client:
+        resp = await client.post(f"/api/llc/companies/{_ORG_ID}/offboard")
+    assert resp.status_code == 409
+    assert "Cannot offboard" in resp.json()["detail"]
+    svc.session.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_offboard_cross_tenant_is_404_and_does_not_touch_service():
+    svc = _svc()
+    svc.offboard = AsyncMock(return_value=_org(llc_status="offboarding"))
+    other_company = uuid.uuid4()
+    async with _client(_app(svc)) as client:
+        resp = await client.post(f"/api/llc/companies/{other_company}/offboard")
+    assert resp.status_code == 404
+    svc.offboard.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # Authn / tenant authz on the mutating transition routes (#12211)
 # ---------------------------------------------------------------------------
 
