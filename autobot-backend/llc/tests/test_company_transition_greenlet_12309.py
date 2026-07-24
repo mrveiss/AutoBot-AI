@@ -27,12 +27,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
-from fastapi import FastAPI
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.api import companies
