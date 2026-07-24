@@ -236,7 +236,7 @@ class CodeEmbeddingGenerator:
         start_time = time.time()
         cache_key = self._get_cache_key(code, language)
 
-        cached = await self.embedding_cache.get(cache_key)
+        cached = await self.embedding_cache.get(cache_key, model=self.model_name)
         if cached is not None:
             return CodeEmbeddingResult(
                 embedding=np.array(cached),
@@ -248,7 +248,7 @@ class CodeEmbeddingGenerator:
 
         embedding, device_used = await self._compute_embedding(code, language)
 
-        await self.embedding_cache.put(cache_key, embedding.tolist())
+        await self.embedding_cache.put(cache_key, embedding.tolist(), model=self.model_name)
 
         return CodeEmbeddingResult(
             embedding=embedding,
@@ -424,7 +424,7 @@ class CodeEmbeddingGenerator:
                 for j, (embedding, device_used) in enumerate(raw_pairs):
                     code, lang = batch[j]
                     cache_key = self._get_cache_key(code, lang)
-                    await self.embedding_cache.put(cache_key, embedding.tolist())
+                    await self.embedding_cache.put(cache_key, embedding.tolist(), model=self.model_name)
                     results.append(
                         CodeEmbeddingResult(
                             embedding=embedding,

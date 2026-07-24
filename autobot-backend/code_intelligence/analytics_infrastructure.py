@@ -269,7 +269,7 @@ class AnalyticsInfrastructureMixin:
 
         cache = await self._get_embedding_cache()
         if cache:
-            cached = await cache.get(text)
+            cached = await cache.get(text, model=self._embedding_model)
             if cached:
                 self._metrics.cache_hits += 1
                 return cached
@@ -288,7 +288,7 @@ class AnalyticsInfrastructureMixin:
             self._metrics.embeddings_generated += 1
             self._metrics.llm_requests += 1
             if cache:
-                await cache.put(text, embedding)
+                await cache.put(text, embedding, model=self._embedding_model)
             return embedding
 
         return None

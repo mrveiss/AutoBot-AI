@@ -192,7 +192,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         # Check cache first
         cache = await self._get_embedding_cache()
         if cache:
-            cached = await cache.get(text)
+            cached = await cache.get(text, model=self.embedding_model)
             if cached:
                 self._cache_hits += 1
                 return cached
@@ -205,7 +205,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             if embedding:
                 self._embeddings_generated += 1
                 if cache:
-                    await cache.put(text, embedding)
+                    await cache.put(text, embedding, model=self.embedding_model)
                 return embedding
         except Exception as e:
             logger.warning("Failed to generate embedding: %s", e)
@@ -249,7 +249,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             if not text or not text.strip():
                 continue
             if cache:
-                cached = await cache.get(text)
+                cached = await cache.get(text, model=self.embedding_model)
                 if cached:
                     self._cache_hits += 1
                     results[idx] = cached
@@ -278,7 +278,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                     results[idx] = embedding
                     self._embeddings_generated += 1
                     if cache:
-                        await cache.put(text, embedding)
+                        await cache.put(text, embedding, model=self.embedding_model)
 
         logger.info(
             "Batch generated %d embeddings (%d concurrent)",

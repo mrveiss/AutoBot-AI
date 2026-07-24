@@ -27,6 +27,8 @@ def _make_search_instance():
     obj._l1_hits = 0
     obj._l2_hits = 0
     obj._cache_misses = 0
+    # Issue #12251: cache key is (model, text); the engine keys on this id.
+    obj._embedding_model = "test-embed-model"
 
     # Minimal embedding_cache stub
     cache = MagicMock()
