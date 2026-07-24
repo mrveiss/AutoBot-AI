@@ -198,8 +198,12 @@ async def update_company(
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.update(company_id, body)
+        # GH#12309: serialize BEFORE commit so that if response building ever
+        # fails the except handler's rollback still undoes the change — never
+        # leave a committed-but-500 state where the DB and caller disagree.
+        read = _to_read(org)
         await svc.session.commit()
-        return _to_read(org)
+        return read
     except CompanyNotFoundError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
@@ -264,8 +268,11 @@ async def activate_company(
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.activate(company_id)
+        # GH#12309: serialize BEFORE commit so a failed response never persists
+        # a partial transition (commit only lands on the success path).
+        read = _to_read(org)
         await svc.session.commit()
-        return _to_read(org)
+        return read
     except CompanyNotFoundError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
@@ -292,8 +299,10 @@ async def suspend_company(
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.suspend(company_id, reason=body.reason if body else None)
+        # GH#12309: serialize BEFORE commit (commit only on the success path).
+        read = _to_read(org)
         await svc.session.commit()
-        return _to_read(org)
+        return read
     except CompanyNotFoundError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
@@ -321,8 +330,10 @@ async def offboard_company(
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.offboard(company_id)
+        # GH#12309: serialize BEFORE commit (commit only on the success path).
+        read = _to_read(org)
         await svc.session.commit()
-        return _to_read(org)
+        return read
     except CompanyNotFoundError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
@@ -348,8 +359,10 @@ async def archive_company(
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.archive(company_id)
+        # GH#12309: serialize BEFORE commit (commit only on the success path).
+        read = _to_read(org)
         await svc.session.commit()
-        return _to_read(org)
+        return read
     except CompanyNotFoundError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
