@@ -488,7 +488,11 @@
     />
 
     <!-- Telemetry Consent Modal (Issue #9035) -->
-    <TelemetryConsentModal />
+    <!-- Gated behind authentication (#12334): the consent prompt persists its
+         choice via authenticated endpoints, so mounting it on the login/
+         unauthenticated route overlaid the Sign In form and 401'd, re-nagging
+         forever. Defer until after successful login. -->
+    <TelemetryConsentModal v-if="userStore.isAuthenticated" />
 
     <!-- System Status Notifications (limit to last 5 to prevent teleport accumulation) -->
     <SystemStatusNotification

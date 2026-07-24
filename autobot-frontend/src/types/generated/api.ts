@@ -37656,7 +37656,9 @@ export interface paths {
          * Get Cached Analysis
          * @description Get the most recent cached analysis results.
          *
-         *     Returns the last analysis if available, or 404 if no cached results exist.
+         *     Returns the last analysis if available, or a graceful "no_data" 200
+         *     response (Issue #12365) if no cached results exist or cache retrieval
+         *     fails — consistent with the other analytics `/cached` endpoints.
          */
         get: operations["get_cached_analysis_api_anti_pattern_cached_get"];
         put?: never;
