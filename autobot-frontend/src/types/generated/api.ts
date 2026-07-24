@@ -4979,6 +4979,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/knowledge_base/system-docs/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List System Doc Categories
+         * @description List system documentation categories with per-category counts.
+         *
+         *     Issue #12314: backs ``fetchDocCategories`` in the System Docs viewer.
+         */
+        get: operations["list_system_doc_categories_api_knowledge_base_system_docs_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/system-docs/category/{category_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List System Doc Category
+         * @description List documents in a system-docs category (metadata only, no content).
+         *
+         *     Issue #12314: backs ``fetchCategoryDocs``. Unknown/invalid categories
+         *     resolve to an empty list rather than an error.
+         */
+        get: operations["list_system_doc_category_api_knowledge_base_system_docs_category__category_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/system-docs/{doc_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get System Doc
+         * @description Return a single system document with its full markdown content.
+         *
+         *     Issue #12314: backs ``fetchDocContent``. ``doc_id`` is the opaque hash
+         *     id emitted by the list endpoints, so no client path reaches the disk.
+         */
+        get: operations["get_system_doc_api_knowledge_base_system_docs__doc_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/knowledge_base/docs/watcher/status": {
         parameters: {
             query?: never;
@@ -94308,6 +94376,112 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SystemDoc
+         * @description A single system documentation file (#12314).
+         *
+         *     Field names mirror the frontend ``SystemDoc`` interface
+         *     (``useKnowledgeSystemDocs.ts``) so the contract is explicit in
+         *     ``/openapi.json``. ``content`` is empty in list responses and
+         *     populated only by the single-document endpoint.
+         */
+        SystemDoc: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Path */
+            path: string;
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /**
+             * Type
+             * @default markdown
+             */
+            type: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            metadata?: components["schemas"]["SystemDocMetadata"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocCategory
+         * @description A documentation category node for the System Docs tree (#12314).
+         */
+        SystemDocCategory: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /**
+             * Icon
+             * @default folder
+             */
+            icon: string;
+            /** Children */
+            children?: components["schemas"]["SystemDocCategory"][];
+            /** Docs */
+            docs?: components["schemas"]["SystemDoc"][];
+            /**
+             * Doccount
+             * @default 0
+             */
+            docCount: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocContentResponse
+         * @description Shape of ``GET /api/knowledge_base/system-docs/{doc_id}`` (#12314).
+         */
+        SystemDocContentResponse: {
+            doc: components["schemas"]["SystemDoc"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocMetadata
+         * @description Optional per-document metadata for the System Docs viewer (#12314).
+         */
+        SystemDocMetadata: {
+            /** Wordcount */
+            wordCount?: number | null;
+            /** Lastmodified */
+            lastModified?: string | null;
+            /** Author */
+            author?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocsCategoriesResponse
+         * @description Shape of ``GET /api/knowledge_base/system-docs/categories`` (#12314).
+         */
+        SystemDocsCategoriesResponse: {
+            /** Categories */
+            categories?: components["schemas"]["SystemDocCategory"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocsCategoryResponse
+         * @description Shape of ``GET /api/knowledge_base/system-docs/category/{path}`` (#12314).
+         */
+        SystemDocsCategoryResponse: {
+            /** Docs */
+            docs?: components["schemas"]["SystemDoc"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SystemDynamicImportResponse
          * @description Response for POST /dynamic_import.
          */
@@ -108281,6 +108455,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocsStatsResponse"];
+                };
+            };
+        };
+    };
+    list_system_doc_categories_api_knowledge_base_system_docs_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemDocsCategoriesResponse"];
+                };
+            };
+        };
+    };
+    list_system_doc_category_api_knowledge_base_system_docs_category__category_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemDocsCategoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_system_doc_api_knowledge_base_system_docs__doc_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemDocContentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
