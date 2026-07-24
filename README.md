@@ -28,7 +28,7 @@ Your data stays on your machines. Your AI stays yours.
 |---|---|
 | Chat interface | Your prompts |
 | RAG knowledge base | Your documents |
-| Fleet management | Your infrastructure |
+| Service lifecycle management (SLM) | Your infrastructure |
 | Module ecosystem | Your data |
 
 ## The Platform Model
@@ -250,7 +250,7 @@ AutoBot runs as a coordinated set of services:
 |---------|------|------|
 | **Frontend** | Vue.js UI, TLS termination | 80, 443 |
 | **Backend** | FastAPI API server | 8001 |
-| **SLM** | Service Lifecycle Manager — fleet deploy/operate/scale | (via dashboard `/slm`) |
+| **SLM** | Service Lifecycle Manager — deploys, operates, and scales AutoBot's own services | (via dashboard `/slm`) |
 | **Redis** | Cache, message queue | 6379 |
 | **PostgreSQL** | Relational database | 5432 |
 | **ChromaDB** | Vector embeddings store | 8100 |
