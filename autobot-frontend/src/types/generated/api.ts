@@ -20884,6 +20884,9 @@ export interface paths {
          *     Args:
          *         use_llm: Whether to use LLM for semantic analysis (default: True)
          *         use_cache: Whether to cache results (default: True)
+         *         source_id: Scope the scan and cache to the selected code source
+         *             (Issue #12356). Falls back to AutoBot's own root only when no source
+         *             is resolvable.
          *
          *     Returns:
          *         Complete analysis results with all detected patterns
@@ -20908,6 +20911,7 @@ export interface paths {
          *
          *     Returns cached results if available, otherwise returns empty status.
          *     Use POST /cross-language/analyze to trigger a new analysis.
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_cross_language_summary_api_analytics_codebase_cross_language_summary_get"];
         put?: never;
@@ -20930,6 +20934,7 @@ export interface paths {
          * @description Get DTO/type mismatches between backend and frontend.
          *
          *     Returns mismatches where Python models and TypeScript interfaces differ.
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_dto_mismatches_api_analytics_codebase_cross_language_dto_mismatches_get"];
         put?: never;
@@ -20952,6 +20957,7 @@ export interface paths {
          * @description Get duplicated validation logic across languages.
          *
          *     Returns validation rules that exist in both Python and TypeScript.
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_validation_duplications_api_analytics_codebase_cross_language_validation_duplications_get"];
         put?: never;
@@ -20976,6 +20982,8 @@ export interface paths {
          *     Returns endpoints that are:
          *     - Orphaned (backend has, frontend doesn't call)
          *     - Missing (frontend calls, backend doesn't have)
+         *
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_api_contract_mismatches_api_analytics_codebase_cross_language_api_mismatches_get"];
         put?: never;
@@ -21003,6 +21011,7 @@ export interface paths {
          *     Args:
          *         min_similarity: Minimum similarity score (0.0-1.0, default: 0.7)
          *         limit: Maximum number of matches to return (default: 50)
+         *         source_id: Scope to the selected code source (Issue #12356)
          */
         get: operations["get_semantic_matches_api_analytics_codebase_cross_language_semantic_matches_get"];
         put?: never;
@@ -21028,6 +21037,7 @@ export interface paths {
          *         category: Filter by category (api_contract, data_types, validation, etc.)
          *         severity: Filter by severity (critical, high, medium, low, info)
          *         limit: Maximum patterns to return (default: 100)
+         *         source_id: Scope to the selected code source (Issue #12356)
          */
         get: operations["get_patterns_by_category_api_analytics_codebase_cross_language_patterns_get"];
         put?: never;
@@ -21052,6 +21062,8 @@ export interface paths {
          * @description Clear the cross-language analysis cache.
          *
          *     Call this after making code changes to get fresh results.
+         *     Issue #12356: Clears only the requested source's entry so clearing one
+         *     project's cache does not evict another project's cached analysis.
          */
         post: operations["clear_cross_language_cache_api_analytics_codebase_cross_language_clear_cache_post"];
         delete?: never;
@@ -128578,6 +128590,7 @@ export interface operations {
             query?: {
                 use_llm?: boolean;
                 use_cache?: boolean;
+                /** @description #12356: scope analysis to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -128608,7 +128621,10 @@ export interface operations {
     };
     get_cross_language_summary_api_analytics_codebase_cross_language_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128622,13 +128638,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_dto_mismatches_api_analytics_codebase_cross_language_dto_mismatches_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128642,13 +128670,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_validation_duplications_api_analytics_codebase_cross_language_validation_duplications_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128664,11 +128704,23 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_api_contract_mismatches_api_analytics_codebase_cross_language_api_mismatches_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128682,6 +128734,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -128691,6 +128752,8 @@ export interface operations {
             query?: {
                 min_similarity?: number;
                 limit?: number;
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -128724,6 +128787,8 @@ export interface operations {
                 category?: string | null;
                 severity?: string | null;
                 limit?: number;
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -128753,7 +128818,10 @@ export interface operations {
     };
     clear_cross_language_cache_api_analytics_codebase_cross_language_clear_cache_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: clear only this source's cache entry */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128767,6 +128835,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
