@@ -47,7 +47,7 @@ export function useDevices() {
     return wrap(async () => {
       try {
         error.value = null
-        const response = await api.get<DeviceListResponse>('/devices')
+        const response = await api.get<DeviceListResponse>('/api/devices')
         devices.value = response.devices || []
         logger.debug('Fetched devices:', devices.value.length)
       } catch (err) {
@@ -63,7 +63,7 @@ export function useDevices() {
     return wrap(async () => {
       try {
         error.value = null
-        await api.delete(`/devices/${deviceId}`)
+        await api.delete(`/api/devices/${deviceId}`)
         devices.value = devices.value.filter(d => d.id !== deviceId)
         logger.info('Device deleted:', deviceId)
       } catch (err) {
@@ -79,7 +79,7 @@ export function useDevices() {
     return wrap(async () => {
       try {
         error.value = null
-        const response = await api.get('/devices/pair-qr')
+        const response = await api.get('/api/devices/pair-qr')
         logger.debug('Got QR challenge')
         return response
       } catch (err) {
@@ -100,7 +100,7 @@ export function useDevices() {
     return wrap(async () => {
       try {
         error.value = null
-        const response = await api.post<{ device_id?: string }>('/devices/pair', payload)
+        const response = await api.post<{ device_id?: string }>('/api/devices/pair', payload)
         // Refresh the device list after successful pairing
         await fetchDevices()
         logger.info('Device paired:', response.device_id)
