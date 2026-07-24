@@ -4986,7 +4986,8 @@
       "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
       "deletedSuccess": "Deleted {count} chats",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "הצג תג גיבוי"
     },
     "overseer": {
       "copyCommand": "Copy command",
@@ -5418,6 +5419,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "דרך גיבוי",
+        "tooltip": "הספק הראשי אינו זמין — נענה על ידי ספק גיבוי ({primary} → {fallback})."
       }
     },
     "docResult": {

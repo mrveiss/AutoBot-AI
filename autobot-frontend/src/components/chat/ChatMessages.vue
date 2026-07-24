@@ -74,6 +74,11 @@
                 <i class="fas fa-bolt mr-1"></i>
                 {{ $t('chat.lightweightMode', { default: 'Lightweight' }) }}
               </span>
+              <!-- #11997: opt-in provider-fallback chip (off by default) -->
+              <ProviderFallbackChip
+                v-if="message.sender === 'assistant'"
+                :fallback-info="getFallbackForMessage(message.id)"
+              />
               <!-- Issue #1310: Visible type badge for typed messages -->
               <span
                 v-if="getMessageTypeBadge(message)"
@@ -557,7 +562,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -578,6 +583,8 @@ import { BaseModal } from '@autobot/ui'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
+import ProviderFallbackChip from '@/components/chat/ProviderFallbackChip.vue'
+import { useProviderFallbackChip } from '@/composables/useProviderFallbackChip'
 import ImageCell from '@/components/artifact-cells/ImageCell.vue'
 import VideoCell from '@/components/artifact-cells/VideoCell.vue'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
@@ -608,6 +615,10 @@ const { confirm } = useConfirmDialog()
 const store = useChatStore()
 const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
+
+// #11997: correlate live PROVIDER_FALLBACK events to the assistant message
+// they answered, so the opt-in fallback chip can render on that message.
+const { start: startFallbackTracking, getFallbackForMessage } = useProviderFallbackChip()
 const permissionStore = usePermissionStore()
 
 // Command Approval composable — replaces all inline fetchWithAuth calls
@@ -1212,7 +1223,24 @@ watch(() => store.isTyping, (isTyping) => {
 // }, { deep: true })
 
 // Initialize permission store on mount (scroll handled by useVirtualChatScroll)
+// #11997: resolve a fallback event's conversation id to the last assistant
+// message of that conversation (the response the fallback produced).
+function resolveFallbackTargetMessage(conversationId: string): string | null {
+  const session =
+    store.sessions.find((s) => s.id === conversationId) ?? store.currentSession
+  const msgs = session?.messages ?? []
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].sender === 'assistant') return msgs[i].id
+  }
+  return null
+}
+
+let stopFallbackTracking: (() => void) | null = null
+
 onMounted(async () => {
+  // #11997: start correlating provider-fallback events to chat messages.
+  stopFallbackTracking = startFallbackTracking(resolveFallbackTargetMessage)
+
   // Permission v2: Initialize permission store
   try {
     await permissionStore.initialize()
@@ -1223,6 +1251,11 @@ onMounted(async () => {
   } catch (error) {
     logger.warn('Failed to initialize permission store:', error)
   }
+})
+
+onUnmounted(() => {
+  stopFallbackTracking?.()
+  stopFallbackTracking = null
 })
 </script>
 
