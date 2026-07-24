@@ -161,30 +161,19 @@ async def request_takeover(
 
     Issue #744: Requires admin authentication.
     """
-    # Convert string enum to TakeoverTrigger
-    trigger_mapping = {
-        "MANUAL_REQUEST": TakeoverTrigger.MANUAL_REQUEST,
-        "CRITICAL_ERROR": TakeoverTrigger.CRITICAL_ERROR,
-        "SECURITY_CONCERN": TakeoverTrigger.SECURITY_CONCERN,
-        "USER_INTERVENTION_REQUIRED": TakeoverTrigger.USER_INTERVENTION_REQUIRED,
-        "SYSTEM_OVERLOAD": TakeoverTrigger.SYSTEM_OVERLOAD,
-        "APPROVAL_REQUIRED": TakeoverTrigger.APPROVAL_REQUIRED,
-        "TIMEOUT_EXCEEDED": TakeoverTrigger.TIMEOUT_EXCEEDED,
-    }
+    # Convert request strings to enums via direct name lookup so each enum is the
+    # single source of truth (#12208 — the old hand-maintained maps mirrored every
+    # member by hand and silently dropped any new one, rejecting a valid trigger
+    # with a 400). Enum member names are the UPPER strings the client sends.
+    try:
+        trigger = TakeoverTrigger[request.trigger.upper()]
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Invalid trigger: {request.trigger}") from None
 
-    trigger = trigger_mapping.get(request.trigger.upper())
-    if not trigger:
-        raise HTTPException(status_code=400, detail=f"Invalid trigger: {request.trigger}")
-
-    # Convert priority string to TaskPriority
-    priority_mapping = {
-        "LOW": TaskPriority.LOW,
-        "MEDIUM": TaskPriority.MEDIUM,
-        "HIGH": TaskPriority.HIGH,
-        "CRITICAL": TaskPriority.CRITICAL,
-    }
-
-    priority = priority_mapping.get(request.priority.upper(), TaskPriority.HIGH)
+    try:
+        priority = TaskPriority[request.priority.upper()]
+    except KeyError:
+        priority = TaskPriority.HIGH  # preserve current default-on-unknown behaviour
 
     request_id = await get_takeover_manager().request_takeover(
         trigger=trigger,
