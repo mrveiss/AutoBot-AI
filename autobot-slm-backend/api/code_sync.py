@@ -316,6 +316,11 @@ async def _run_component_resolve_job(job_id: str, component: str) -> None:
         steps2: List[str] = []
         await _restart_component_services(component, steps2)
 
+        # #11512: reached only when the restart above did NOT kill this
+        # process (self-restarting components never return from the call
+        # above) — a genuine successful resolve, so advance code_version.
+        await _advance_node_version_if_fully_synced(component)
+
     except Exception as exc:
         logger.error("component resolve job %s: unexpected error: %s", job_id, exc, exc_info=True)
         try:
@@ -537,7 +542,7 @@ _STALE_COMPONENTS_TTL_SECONDS = int(os.getenv("SLM_STALE_COMPONENTS_TTL_SECONDS"
 _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
 
 
-async def _compute_stale_components() -> list[str]:
+async def _compute_stale_components(force: bool = False) -> list[str]:
     """Return ALLOWED_COMPONENTS deployed on this box whose files drift from source.
 
     Surfaces the #11820 gap: a co-located managed component can be stale (its
@@ -547,9 +552,13 @@ async def _compute_stale_components() -> list[str]:
     and the result is cached for _STALE_COMPONENTS_TTL_SECONDS to bound cost on
     the polled status path. Defensive: a failing component is logged and skipped,
     never breaking the status response.
+
+    force=True bypasses the cache and re-scans immediately (#11512): callers
+    that just resynced a component need the FRESH drift state, not a stale
+    cached snapshot that could still list the component they just fixed.
     """
     now = time.monotonic()
-    if now - _stale_components_cache["ts"] < _STALE_COMPONENTS_TTL_SECONDS:
+    if not force and now - _stale_components_cache["ts"] < _STALE_COMPONENTS_TTL_SECONDS:
         return _stale_components_cache["value"]
 
     stale: list[str] = []
@@ -788,6 +797,11 @@ async def resolve_drift(
             deps_changed=deps_changed,
             post_steps=post_steps,
         )
+
+    # #11512: rsync + restart + health check all succeeded — this is a
+    # genuine successful drift-resolve, so advance the node's code_version
+    # marker (guarded: only when NO deployed component is still stale).
+    await _advance_node_version_if_fully_synced(request.component)
 
     return DriftResolveResponse(
         success=True,
@@ -3149,6 +3163,63 @@ async def _update_fleet_node_version(node_id: str) -> None:
         logger.warning("Fleet sync: could not update %s version: %s", node_id, db_err)
 
 
+async def _get_local_slm_node_id() -> str | None:
+    """Resolve this SLM's own Node row by matching external_url's host IP.
+
+    Same lookup used by /self-update and /nodes/{id}/sync (Issue #921):
+    IP match, not hostname, since hostnames are user-editable.
+    """
+    from services.database import db_service
+
+    slm_own_ip = urlparse(settings.external_url).hostname or ""
+    if not slm_own_ip:
+        return None
+
+    async with db_service.session() as db:
+        result = await db.execute(select(Node).where(Node.ip_address == slm_own_ip))
+        node = result.scalar_one_or_none()
+        return node.node_id if node else None
+
+
+async def _advance_node_version_if_fully_synced(component: str) -> None:
+    """Advance this node's code_version after a successful drift-resolve (#11512).
+
+    Root cause: Node.code_version was only advanced on a completed Ansible
+    self-update, never on drift-resolve/component-resync + restart, so a
+    node that is actually current stayed permanently flagged "outdated".
+
+    Safety: a single component resolving clean does NOT prove the whole node
+    is current — a sibling component could still be stale. Force a fresh
+    (uncached) scan across every deployed component and only advance when
+    NONE are stale, so a partially-synced node is never falsely marked
+    up to date.
+
+    Defensive by design (matches the rest of this module): this is a
+    best-effort side effect of a resolve/restart that already succeeded, so
+    any failure here (DB hiccup, unresolvable SLM IP, ...) is logged and
+    swallowed rather than turning an otherwise-successful resolve into a
+    reported failure.
+    """
+    try:
+        stale = await _compute_stale_components(force=True)
+        if stale:
+            logger.info(
+                "drift resolve %s: node still has stale components %s — not advancing code_version",
+                component,
+                stale,
+            )
+            return
+
+        node_id = await _get_local_slm_node_id()
+        if not node_id:
+            logger.debug("drift resolve %s: local SLM node not found — skipping version advance", component)
+            return
+
+        await _update_fleet_node_version(node_id)
+    except Exception as exc:  # noqa: BLE001 - best-effort side effect, never break the caller
+        logger.warning("drift resolve %s: could not advance node code_version: %s", component, exc)
+
+
 class MarkSyncedRequest(BaseModel):
     """Request to mark a node as synced without running rsync."""
 
@@ -4491,6 +4562,11 @@ async def _run_slm_stage(
             # procedure here so the one-click update actually brings the whole
             # co-located box current.
             await _resolve_colocated_managed_services(stage, slm_node.node_id)
+            # #11512: the SLM control plane was already at the deployed-commit
+            # marker's target and co-located roles were just resynced — same
+            # "resync succeeded but code_version never advanced" gap as
+            # drift-resolve. Guarded the same way (only when nothing is stale).
+            await _advance_node_version_if_fully_synced("autobot-slm-backend")
             stage.completed_at = _now_iso()
             _stage_log(stage, stage.message)
             return False
