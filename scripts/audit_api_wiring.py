@@ -57,6 +57,15 @@ INCLUDE_ROUTER_RE = re.compile(
     r"include_router\(\s*([A-Za-z_][\w.]*)[^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S
 )
 FE_API_RE = re.compile(r"[\'\"`](/api/[A-Za-z0-9_/${}():.\-]+)")
+# #12326: the dominant idiom composes the path from a helper —
+# ``apiClient.get(`${getApiBase()}/knowledge_base/health/status`)``. getApiBase()
+# resolves to '/api' (see ssot-config.ts:getApiBase), so the real call target is
+# ``/api`` + the captured suffix. Without this the audit only saw literal
+# ``'/api/...'`` strings (~42% of calls) and reported a clean bill while dozens of
+# ``${getApiBase()}/...`` calls hit non-existent routes.
+GETAPIBASE_CALL_RE = re.compile(
+    r"\$\{getApiBase\(\)\}(/[A-Za-z0-9_/${}():.\-]+)"
+)
 # #10037: ``${getBackendUrl()}/<path>`` calls. getBackendUrl() is host-level
 # (no /api), so any <path> that omits /api hits a path the backend doesn't
 # serve. We only flag the high-confidence case where /api<path> IS a real
@@ -242,7 +251,11 @@ def frontend_calls() -> dict[str, set[str]]:
                 # not real calls — skip them.
                 if line.lstrip()[:2] in ("* ", "//", "/*") or line.strip() == "*":
                     continue
-                for m in FE_API_RE.findall(line):
+                # Literal '/api/...' strings and getApiBase()-composed paths
+                # (#12326). getApiBase() -> '/api', so prepend it to the suffix.
+                matched = list(FE_API_RE.findall(line))
+                matched += ["/api" + s for s in GETAPIBASE_CALL_RE.findall(line)]
+                for m in matched:
                     p = norm_path(m)
                     # Unbalanced braces = extraction artifact (brace-expansion
                     # notation inside comments, e.g. `/api/x/{a,b}/y`), not a call.

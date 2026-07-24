@@ -383,8 +383,9 @@ export class SystemRepository extends ApiRepository {
   }
 
   async checkForUpdates(): Promise<unknown> {
-    // Note: Backend doesn't have update check - this is aspirational
-    const response = await this.get(`${getApiBase()}/system/updates/check`)
+    // #12326: backend serves the update check at POST /api/settings/updates/check
+    // (autobot-backend settings router). The prior GET /system/updates/check 404'd.
+    const response = await this.post(`${getApiBase()}/settings/updates/check`)
     return response.data
   }
 
