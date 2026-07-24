@@ -11,7 +11,6 @@ Coordinates context collection and decision making.
 Part of Issue #381 - God Class Refactoring
 """
 
-import asyncio
 from dataclasses import asdict
 from typing import Any, Dict, List
 
