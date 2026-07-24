@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from autobot_shared.db_url import assemble_postgres_url
+from autobot_shared.security.redaction import redact_mapping
 from config import settings
 from models.database import CodeSource, CodeStatus
 from models.database import ComponentSyncJob as ComponentSyncJobModel
@@ -4011,18 +4012,6 @@ _DEPS_FILES = ["requirements.txt", "package-lock.json"]
 _RESUME_PLAN_VERSION = 1
 _RESUME_PLAN_TTL_SECONDS = 7200  # 2 hours (C2-b)
 
-# Known secret extra-var key prefixes — values are redacted from log lines (Security).
-_SECRET_EXTRA_VAR_PREFIXES = (
-    "password",
-    "secret",
-    "token",
-    "key",
-    "pass",
-    "credential",
-    "cert",
-    "private",
-)
-
 # In-memory slot for the active orchestration job (at most one at a time).
 # Holds the last job even after it completes so GET /status keeps returning it (C3-a).
 _active_update_all: Dict[str, Any] = {}
@@ -4082,15 +4071,12 @@ def _make_stage(name: str) -> UpdateAllStage:
 
 
 def _mask_secret_extra_vars(extra_vars: Dict[str, str]) -> Dict[str, str]:
-    """Return a copy of extra_vars with secret values replaced by '***' (Security)."""
-    masked: Dict[str, str] = {}
-    for k, v in extra_vars.items():
-        lower_k = k.lower()
-        if any(lower_k.startswith(pfx) or pfx in lower_k for pfx in _SECRET_EXTRA_VAR_PREFIXES):
-            masked[k] = "***"
-        else:
-            masked[k] = v
-    return masked
+    """Return a copy of extra_vars with secret values replaced by '***' (Security).
+
+    Thin wrapper over the canonical :func:`redact_mapping` (#12242) — the secret
+    key/pattern set lives in one place so hardening applies everywhere at once.
+    """
+    return redact_mapping(extra_vars)
 
 
 async def _check_deps_changed(code_source_dir: str, deployed_dir: str, dep_file: str) -> bool:

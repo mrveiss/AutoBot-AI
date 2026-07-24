@@ -25,6 +25,7 @@ from typing_extensions import Annotated
 
 from api.nodes_execution import _is_local_ip, _require_online_node, _run_command, _run_via_ssh
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.security.redaction import redact_text
 from config import settings
 from models.database import (
     Deployment,
@@ -855,17 +856,9 @@ _MCP_BRIDGE_DEFAULT_INSTANCE = "default"
 _APP_LOG_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
 _APP_LOG_LEVEL_RE = re.compile(r"\b(CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG)\b")
 
-# Redaction patterns applied to every returned line (Security — never leak
-# secrets from application logs through the viewer).
-_APP_LOG_AUTH_HEADER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*).+")
-_APP_LOG_SECRET_KV_RE = re.compile(r"(?i)\b(api[_-]?key|token|secret|password|passwd)\b(\s*[:=]\s*)([^\s,;\"']+)")
-
-
-def _redact_app_log_line(line: str) -> str:
-    """Redact common secret patterns (tokens, passwords, Authorization headers) from *line*."""
-    line = _APP_LOG_AUTH_HEADER_RE.sub(r"\1***", line)
-    line = _APP_LOG_SECRET_KV_RE.sub(r"\1\2***", line)
-    return line
+# Secret redaction applied to every returned line (Security — never leak secrets
+# from application logs through the viewer). Canonical implementation lives in
+# autobot_shared.security.redaction (#12242) — do not add a divergent copy here.
 
 
 def _resolve_app_log_filename(service: str, mcp_instance: str | None) -> str:
@@ -921,7 +914,7 @@ def _parse_app_log_line(raw: str, line_number: int) -> AppLogEntry:
         line_number=line_number,
         timestamp=timestamp,
         severity=severity,
-        message=_redact_app_log_line(raw),
+        message=redact_text(raw),
     )
 
 
