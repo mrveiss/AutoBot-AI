@@ -80175,6 +80175,8 @@ export interface components {
             } | null;
             /** Token */
             token?: string | null;
+            /** Access Token */
+            access_token?: string | null;
             /** Session Id */
             session_id?: string | null;
             password_warning?: components["schemas"]["PasswordWarning"] | null;
