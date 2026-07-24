@@ -34,7 +34,7 @@ class _KB(FactsMixin):
         self.redis_client = MagicMock()
         self.vector_store = MagicMock()  # truthy so vectorization is attempted
         self._write_buffer = MagicMock()
-        self._write_buffer.write = AsyncMock()
+        self._write_buffer.write = AsyncMock(return_value=True)
 
 
 @pytest.mark.asyncio
@@ -75,7 +75,7 @@ async def test_empty_embedding_records_failure_and_skips_write(caplog):
 
 
 @pytest.mark.asyncio
-async def test_valid_embedding_writes_and_does_not_record_failure():
+async def test_valid_embedding_writes_marks_completed_and_srem():
     kb = _KB()
 
     with patch.object(facts_mod, "_generate_embedding_with_npu_fallback", AsyncMock(return_value=[0.1, 0.2, 0.3])):
@@ -84,3 +84,46 @@ async def test_valid_embedding_writes_and_does_not_record_failure():
     # Vector was buffered; no failure recorded.
     kb._write_buffer.write.assert_awaited_once()
     kb.redis_client.sadd.assert_not_called()
+    # nit #3: success clears stale failed/pending state (KB-health accuracy).
+    assert kb.redis_client.hset.call_args.kwargs["mapping"]["vectorization_status"] == "completed"
+    kb.redis_client.srem.assert_called_once_with(PENDING_SET_KEY, "fact-3")
+
+
+@pytest.mark.asyncio
+async def test_inline_vectorize_defaults_to_single_attempt():
+    """Issue #12312: inline create must fast-fail (one embedding attempt), not the N-attempt wait."""
+    kb = _KB()
+    shim = AsyncMock(return_value=[0.1, 0.2, 0.3])
+
+    with patch.object(facts_mod, "_generate_embedding_with_npu_fallback", shim):
+        await kb._vectorize_fact_in_chromadb("fact-4", "some content", {})
+
+    assert shim.await_args.kwargs["max_attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_reconcile_path_forwards_higher_attempt_count():
+    """The on-demand/reconcile path opts into multi-attempt retry."""
+    kb = _KB()
+    shim = AsyncMock(return_value=[0.1, 0.2, 0.3])
+
+    with patch.object(facts_mod, "_generate_embedding_with_npu_fallback", shim):
+        await kb._vectorize_fact_in_chromadb("fact-5", "some content", {}, max_attempts=3)
+
+    assert shim.await_args.kwargs["max_attempts"] == 3
+
+
+@pytest.mark.asyncio
+async def test_write_buffer_rejection_records_failure(caplog):
+    """nit #2: if the buffer drops a (non-empty) embedding, record a retriable failure."""
+    kb = _KB()
+    kb._write_buffer.write = AsyncMock(return_value=False)
+
+    with patch.object(facts_mod, "_generate_embedding_with_npu_fallback", AsyncMock(return_value=[0.1, 0.2, 0.3])):
+        with caplog.at_level(logging.ERROR):
+            await kb._vectorize_fact_in_chromadb("fact-6", "some content", {})
+
+    kb.redis_client.sadd.assert_called_once_with(PENDING_SET_KEY, "fact-6")
+    assert kb.redis_client.hset.call_args.kwargs["mapping"]["vectorization_status"] == "failed"
+    # No success marker written.
+    kb.redis_client.srem.assert_not_called()

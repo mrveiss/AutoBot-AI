@@ -161,7 +161,7 @@ def get_npu_warmup_status() -> Dict[str, Any]:
     }
 
 
-async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
+async def _generate_embedding_with_npu_fallback(text: str, max_attempts: int = 1) -> List[float]:
     """Generate a single embedding via the canonical NPU-fallback path.
 
     Issue #5105: Thin shim — delegates to
@@ -176,6 +176,9 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
 
     Args:
         text: Text content to embed.
+        max_attempts: Total attempts before giving up. Issue #12312: defaults to 1
+            (fast-fail) so inline user-facing paths never stall behind a downed
+            backend; the background reconcile path passes a higher count to retry.
 
     Returns:
         Embedding vector. Empty list if all backends fail (callers downstream
@@ -183,7 +186,7 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     """
     from services.npu_client import generate_embedding_with_fallback
 
-    embedding = await generate_embedding_with_fallback(text)
+    embedding = await generate_embedding_with_fallback(text, max_attempts=max_attempts)
     return embedding or []
 
 
@@ -606,7 +609,33 @@ class FactsMixin:
         except Exception as exc:
             logger.error("Could not record vectorization failure for fact %s: %s", fact_id, exc)
 
-    async def _vectorize_fact_in_chromadb(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
+    async def _mark_vectorization_succeeded(self, fact_id: str) -> None:
+        """Clear any failed/pending vectorization state after a successful vector write (Issue #12312).
+
+        Keeps the unvectorized-count metric accurate: a fact that previously failed
+        and then succeeds inline is marked ``completed`` and dropped from the pending
+        set immediately, rather than lingering as ``failed`` until the next reconcile
+        cycle. Mirrors ``BackgroundVectorizer._mark_vectorization_complete`` (#11296).
+        """
+        from background_vectorization import PENDING_SET_KEY
+
+        try:
+            fact_key = "fact:%s" % fact_id
+            await asyncio.to_thread(
+                self.redis_client.hset,
+                fact_key,
+                mapping={
+                    "vectorization_status": "completed",
+                    "vectorized_at": datetime.now(tz=timezone.utc).isoformat(),
+                },
+            )
+            await asyncio.to_thread(self.redis_client.srem, PENDING_SET_KEY, fact_id)
+        except Exception as exc:
+            logger.debug("Could not mark vectorization success for fact %s (non-critical): %s", fact_id, exc)
+
+    async def _vectorize_fact_in_chromadb(
+        self, fact_id: str, content: str, metadata: Dict[str, Any], max_attempts: int = 1
+    ) -> None:
         """
         Vectorize and store fact in ChromaDB vector store.
 
@@ -617,6 +646,9 @@ class FactsMixin:
             fact_id: Fact identifier
             content: Fact content text
             metadata: Fact metadata dict
+            max_attempts: Embedding attempts before giving up. Issue #12312: defaults
+                to 1 (fast-fail) for inline user-facing creates; the on-demand /
+                reconcile path (``vectorize_existing_fact``) passes a higher count.
         """
         if not self.vector_store:
             return
@@ -629,7 +661,7 @@ class FactsMixin:
 
         # Issue #165: Generate embedding using NPU worker with fallback
         # ChromaVectorStore.add() expects nodes with embeddings already set
-        embedding = await _generate_embedding_with_npu_fallback(content)
+        embedding = await _generate_embedding_with_npu_fallback(content, max_attempts=max_attempts)
 
         # Issue #12312: An empty embedding means generation failed upstream (backend
         # blip, timeout). Do NOT silently drop the vector and log success — record a
@@ -643,7 +675,11 @@ class FactsMixin:
         # Falls back to direct LlamaIndex add() when buffer is not yet started.
         write_buffer = getattr(self, "_write_buffer", None)
         if write_buffer is not None:
-            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+            # Issue #12312: honour the write buffer's drop signal so the empty-embedding
+            # contract self-enforces even if the guard above ever moves.
+            if not await write_buffer.write(fact_id, embedding, content, sanitized_metadata):
+                await self._record_failed_vectorization(fact_id, "write buffer rejected the embedding")
+                return
         else:
             from llama_index.core import Document
 
@@ -651,6 +687,7 @@ class FactsMixin:
             doc.embedding = embedding
             await asyncio.to_thread(self.vector_store.add, [doc])
 
+        await self._mark_vectorization_succeeded(fact_id)
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
 
     def _prepare_fact_metadata(
@@ -742,7 +779,14 @@ class FactsMixin:
             if not self.vector_store:
                 return {"status": "error", "message": "Vector store not available"}
 
-            await self._vectorize_fact_in_chromadb(fact_id, fact_info["content"], fact_info["metadata"])
+            # Issue #12312: This is the on-demand / reconcile retry path (admin batch,
+            # retry jobs, background backfill), not a user-facing create — so retry
+            # transient embedding failures with backoff here where latency is hidden.
+            from services.npu_client import EMBEDDING_MAX_ATTEMPTS
+
+            await self._vectorize_fact_in_chromadb(
+                fact_id, fact_info["content"], fact_info["metadata"], max_attempts=EMBEDDING_MAX_ATTEMPTS
+            )
 
             logger.info("Vectorized existing fact %s", fact_id)
             return {
@@ -923,13 +967,17 @@ class FactsMixin:
         # Issue #8405: Route through VectorWriteBuffer when available, like _vectorize_fact_in_chromadb.
         write_buffer = getattr(self, "_write_buffer", None)
         if write_buffer is not None:
-            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+            # Issue #12312: honour the write buffer's drop signal (self-enforcing contract).
+            if not await write_buffer.write(fact_id, embedding, content, sanitized_metadata):
+                await self._record_failed_vectorization(fact_id, "write buffer rejected the embedding (re-vectorize)")
+                return
         else:
             from llama_index.core import Document
 
             doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
             doc.embedding = embedding
             await asyncio.to_thread(self.vector_store.add, [doc])
+        await self._mark_vectorization_succeeded(fact_id)
         logger.info("Re-vectorized updated fact %s", fact_id)
 
     async def _refresh_content_hash(self, fact_id: str, old_content: str, new_content: str) -> None:

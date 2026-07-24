@@ -29,9 +29,8 @@ VALID_EMBEDDING = [0.1, 0.2, 0.3]
 
 
 @pytest.fixture(autouse=True)
-def _fast_retries(monkeypatch):
-    """Keep tests instant: 3 attempts, zero backoff sleep."""
-    monkeypatch.setattr(npu_client, "EMBEDDING_MAX_ATTEMPTS", 3)
+def _no_backoff_sleep(monkeypatch):
+    """Keep tests instant: zero backoff sleep between attempts."""
     monkeypatch.setattr(npu_client, "EMBEDDING_RETRY_BASE_DELAY", 0.0)
 
 
@@ -50,7 +49,9 @@ def _npu_unavailable(monkeypatch):
 
 class TestFailureIsSurfacedAndRetried:
     @pytest.mark.asyncio
-    async def test_all_attempts_fail_returns_none_and_logs_error(self, monkeypatch, caplog):
+    async def test_inline_default_is_single_attempt_fast_fail(self, monkeypatch, caplog):
+        """Issue #12312 regression: the inline default must NOT retry — one attempt only,
+        so a downed backend cannot stall a user-facing request with an N-attempt wait."""
         _npu_unavailable(monkeypatch)
 
         calls = {"n": 0}
@@ -62,11 +63,31 @@ class TestFailureIsSurfacedAndRetried:
         monkeypatch.setattr(npu_client, "_try_ollama_embedding", _always_fail)
 
         with caplog.at_level(logging.WARNING):
-            result = await generate_embedding_with_fallback("hello")
+            result = await generate_embedding_with_fallback("hello")  # default max_attempts=1
+
+        assert result is None
+        assert calls["n"] == 1  # exactly one attempt — no inline retry wait
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any("FAILED after 1 attempt" in r.getMessage() for r in errors)
+
+    @pytest.mark.asyncio
+    async def test_background_all_attempts_fail_returns_none_and_logs_error(self, monkeypatch, caplog):
+        _npu_unavailable(monkeypatch)
+
+        calls = {"n": 0}
+
+        async def _always_fail(_text, _model, _url):
+            calls["n"] += 1
+            return None, "Ollama HTTP 503: b'model is loading'"
+
+        monkeypatch.setattr(npu_client, "_try_ollama_embedding", _always_fail)
+
+        with caplog.at_level(logging.WARNING):
+            result = await generate_embedding_with_fallback("hello", max_attempts=3)
 
         # Failure is surfaced to the caller (None), NOT a silent empty success.
         assert result is None
-        # Retried the configured number of attempts before giving up.
+        # Retried the requested number of attempts before giving up.
         assert calls["n"] == 3
         # Every failed attempt is logged with its reason (no silent fall-through).
         assert sum("attempt" in r.message.lower() for r in caplog.records) >= 3
@@ -90,7 +111,7 @@ class TestFailureIsSurfacedAndRetried:
 
         monkeypatch.setattr(npu_client, "_try_ollama_embedding", _fail_then_succeed)
 
-        result = await generate_embedding_with_fallback("hello")
+        result = await generate_embedding_with_fallback("hello", max_attempts=3)
 
         assert result == VALID_EMBEDDING
         assert calls["n"] == 2  # first attempt failed, second recovered
