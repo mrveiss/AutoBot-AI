@@ -140,10 +140,11 @@ async def test_update_goal(svc: GoalService) -> None:
 
     assert updated is goal
     assert goal.title == "New Title"
-    # GH#12209: updated_at must be refreshed inside the awaited/greenlet-safe
-    # scope, else the router's synchronous GoalResponse.model_validate() call
-    # trips MissingGreenlet on the still-expired onupdate column.
-    session.refresh.assert_awaited_once_with(goal, attribute_names=["updated_at"])
+    # #12322: `updated_at` is now populated inline by the UPDATE RETURNING
+    # (Base's ``eager_defaults=True``), so the service no longer issues a
+    # per-call ``session.refresh``. Freshness on a real engine is asserted by
+    # ``test_update_goal_response_survives_sync_serialization`` below.
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -211,10 +212,10 @@ async def test_update_goal_response_survives_sync_serialization() -> None:
 
     Uses a real in-memory SQLite (aiosqlite) AsyncSession rather than mocks
     so SQLAlchemy's actual attribute-expiry/RETURNING behavior on UPDATE is
-    exercised: ``eager_defaults="auto"`` (the mapper default) only fetches
-    onupdate-computed columns via RETURNING on INSERT, not UPDATE, so without
-    the ``session.refresh(goal, ["updated_at"])`` fix, ``updated_at`` stays
-    expired post-flush and this test fails with MissingGreenlet.
+    exercised: with Base's ``eager_defaults=True`` (#12322) the onupdate
+    ``updated_at`` is fetched via RETURNING inline with the UPDATE, so it is
+    fresh post-flush and the synchronous ``GoalResponse.model_validate`` never
+    trips MissingGreenlet — without that setting this test would fail.
     """
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 

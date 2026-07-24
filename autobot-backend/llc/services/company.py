@@ -117,6 +117,11 @@ class CompanyService(LLCServiceBase):
                 setattr(org, field, value)
 
         await self.session.flush()
+        # #12322: `updated_at` is populated inline by the UPDATE's RETURNING
+        # clause (Base sets ``eager_defaults=True``), so it is never expired
+        # after flush() and the router's sync response serialization is safe.
+        # The previous per-call ``session.refresh(org, ["updated_at"])`` (#12309)
+        # is now redundant and removed.
         logger.info("LLC company updated: %s (id=%s)", org.name, org.id)
         return org
 
@@ -202,6 +207,11 @@ class CompanyService(LLCServiceBase):
         for field, value in field_updates.items():
             setattr(org, field, value)
         await self.session.flush()
+        # #12322: the onupdate `updated_at` is populated inline by the UPDATE's
+        # RETURNING clause (Base sets ``eager_defaults=True``), so it is never
+        # expired after flush() and the router's sync response serialization is
+        # safe. The previous per-call ``session.refresh(org, ["updated_at"])``
+        # (#12309) is now redundant and removed.
         logger.info(log_msg, org.name, org.id)
         return org
 

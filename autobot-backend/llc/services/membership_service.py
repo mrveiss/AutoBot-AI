@@ -140,3 +140,22 @@ class MembershipService(LLCServiceBase):
     ) -> bool:
         m = await self.get_member(session, company_id, user_id)
         return m is not None
+
+    async def list_member_company_ids(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> set[uuid.UUID]:
+        """Return the set of company ids *user_id* is a member of (#12325).
+
+        A single ``SELECT company_id ... WHERE user_id = :uid`` — the caller
+        filters candidate companies against this set in memory, replacing an
+        ``is_member`` round-trip per company (an N+1 that scaled with the total
+        system-wide tenant count, not the caller's own memberships).
+        """
+        result = await session.execute(
+            select(LLCCompanyMembership.company_id).where(
+                LLCCompanyMembership.user_id == uuid.UUID(user_id),
+            )
+        )
+        return {row[0] for row in result.all()}
