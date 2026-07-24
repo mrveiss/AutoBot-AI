@@ -136,6 +136,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "عبر الاحتياطي",
+        "tooltip": "المزود الأساسي غير متوفر — تمت الإجابة عبر مزود احتياطي ({primary} → {fallback})."
       }
     },
     "response": "استجابة",
@@ -210,7 +214,8 @@
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "إظهار شارة الاحتياطي"
     },
     "interface": {
       "loadFailed": "Failed to load chat interface",

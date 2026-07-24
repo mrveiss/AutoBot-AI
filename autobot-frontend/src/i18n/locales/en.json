@@ -160,6 +160,10 @@
         "overseer": "Overseer",
         "tool-code": "Code",
         "tool-output": "Output"
+      },
+      "fallback": {
+        "badge": "Via fallback",
+        "tooltip": "Primary provider unavailable — answered via a fallback provider ({primary} → {fallback})."
       }
     },
     "response": "response",
@@ -234,7 +238,8 @@
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Show fallback badge"
     },
     "folders": {
       "folders": "Folders",

@@ -4986,7 +4986,8 @@
       "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
       "deletedSuccess": "Deleted {count} chats",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "متبادل بیج دکھائیں"
     },
     "overseer": {
       "copyCommand": "Copy command",
@@ -5418,6 +5419,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "متبادل کے ذریعے",
+        "tooltip": "بنیادی فراہم کنندہ دستیاب نہیں — متبادل فراہم کنندہ کے ذریعے جواب دیا گیا ({primary} → {fallback})."
       }
     },
     "docResult": {
