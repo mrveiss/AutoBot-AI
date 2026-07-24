@@ -273,7 +273,9 @@ class TestExecuteWebSearchFull:
         ):
             result = await mixin._execute_web_search_full("no results query", max_pages=5)
 
-        mock_fallback.assert_called_once_with("no results query")
+        # #11539 threads session_id into the browser-VM fallback; with no
+        # session_id supplied to _execute_web_search_full it defaults to "".
+        mock_fallback.assert_called_once_with("no results query", "")
         assert result == "Fallback results"
 
     @pytest.mark.asyncio
