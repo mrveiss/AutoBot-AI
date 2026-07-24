@@ -387,15 +387,18 @@ async def _get_service_counts(db: AsyncSession, node_ids: list[str]) -> dict[str
     return counts
 
 
-@router.get("", response_model=NodeListResponse)
-async def list_nodes(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-    status_filter: str | None = Query(None, alias="status"),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
-) -> NodeListResponse:
-    """List all nodes with optional status filter."""
+_NODES_LIST_TIMEOUT = 10.0  # seconds; guards against slow/stale DB conn hangs (#10913)
+
+
+async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: int, per_page: int) -> NodeListResponse:
+    """DB-bound body of list_nodes, run under a bounded timeout (#10913).
+
+    Health is read from the already-stored ``Node`` columns (populated by
+    agent heartbeats — see ``node_heartbeat``/``last_heartbeat``); this never
+    live-probes individual nodes, so a single unreachable node cannot block
+    the response — only a slow/stale DB round-trip can, and that is bounded
+    by the caller's ``asyncio.wait_for``.
+    """
     query = select(Node)
 
     if status_filter:
@@ -426,6 +429,34 @@ async def list_nodes(
         page=page,
         per_page=per_page,
     )
+
+
+@router.get("", response_model=NodeListResponse)
+async def list_nodes(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    status_filter: str | None = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+) -> NodeListResponse:
+    """List all nodes with optional status filter.
+
+    Bounded by ``_NODES_LIST_TIMEOUT`` (#10913) so a stale/hung DB
+    connection (e.g. a silently-dropped WSL2 idle socket, #10491) can't
+    hang the whole endpoint — the request fails fast with 504 instead of
+    the client timing out with an opaque ``000``.
+    """
+    try:
+        return await asyncio.wait_for(
+            _query_nodes_page(db, status_filter, page, per_page),
+            timeout=_NODES_LIST_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("GET /nodes timed out after %.0fs (#10913)", _NODES_LIST_TIMEOUT)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Node listing timed out — DB may be under heavy load",
+        )
 
 
 @router.post("", response_model=NodeResponse, status_code=status.HTTP_201_CREATED)
