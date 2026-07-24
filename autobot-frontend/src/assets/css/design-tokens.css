@@ -586,6 +586,7 @@
   --terminal-text-muted: #888888;         /* metadata labels */
   --terminal-text-dim: #cccccc;           /* secondary body text */
   --terminal-text-dim-strong: #dddddd;    /* emphasis body text */
+  --terminal-text-output: #d4d4d4;        /* default (non-ANSI) command-output text */
 
   /* ANSI content palette — literal, do NOT remap to semantic tokens */
   --terminal-ansi-green: #00ff00;         /* prompt + cursor */

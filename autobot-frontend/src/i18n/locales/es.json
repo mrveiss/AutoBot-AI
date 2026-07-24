@@ -136,6 +136,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "Vía alternativa",
+        "tooltip": "Proveedor principal no disponible: respondido por un proveedor alternativo ({primary} → {fallback})."
       }
     },
     "response": "respuesta",
@@ -210,7 +214,8 @@
       "deleteFailed": "No se pudieron eliminar algunos chats",
       "sharedSuccess": "Chat compartido exitosamente",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Mostrar insignia de reserva"
     },
     "interface": {
       "loadFailed": "No se pudo cargar la interfaz de chat",
