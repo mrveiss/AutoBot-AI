@@ -214,7 +214,7 @@ class TestCrawlDepth:
         connector = WebCrawlerConnector(_make_config(["https://example.com"], max_depth=1))
         results = await connector.crawl(["https://example.com"], max_depth=1, ingest=False, same_origin=True)
         fetched_urls = [r.url for r in results]
-        assert "https://example.com" in fetched_urls
+        assert "https://example.com" in fetched_urls  # codeql[py/incomplete-url-substring-sanitization]
         # With max_depth=1, only the seed (depth=0) is emitted; depth=1 links are
         # added to the frontier but rejected by add_links since depth > max_depth.
         assert "https://example.com/about" not in fetched_urls
@@ -224,7 +224,7 @@ class TestCrawlDepth:
         connector = WebCrawlerConnector(_make_config(["https://example.com"], max_depth=2))
         results = await connector.crawl(["https://example.com"], max_depth=2, ingest=False, same_origin=True)
         fetched_urls = {r.url for r in results}
-        assert "https://example.com" in fetched_urls
+        assert "https://example.com" in fetched_urls  # codeql[py/incomplete-url-substring-sanitization]
         assert "https://example.com/about" in fetched_urls
         assert "https://example.com/blog" in fetched_urls
         # /contact is linked from /about at depth=2; adding it would require
@@ -251,7 +251,7 @@ class TestSameOrigin:
         connector = WebCrawlerConnector(_make_config(["https://example.com"], max_depth=2))
         results = await connector.crawl(["https://example.com"], max_depth=2, ingest=False, same_origin=True)
         fetched_urls = {r.url for r in results}
-        assert not any("external.com" in u for u in fetched_urls)
+        assert not any("external.com" in u for u in fetched_urls)  # codeql[py/incomplete-url-substring-sanitization]
 
     async def test_same_origin_false_allows_external(self, mock_bs4, mock_robots_none) -> None:
         connector = WebCrawlerConnector(_make_config(["https://example.com"], max_depth=2, same_origin=False))

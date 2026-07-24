@@ -117,7 +117,7 @@ class TestFrontier:
         f.add_links(["https://other.com/page", "https://example.com/about"], depth=1)
         item = f.next()
         assert item is not None
-        assert "example.com" in item[0]
+        assert "example.com" in item[0]  # codeql[py/incomplete-url-substring-sanitization]
         assert f.next() is None  # other.com was filtered
 
     def test_exhausted(self) -> None:

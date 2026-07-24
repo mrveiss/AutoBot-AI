@@ -185,7 +185,7 @@ class TestBuildEndSessionUrl:
         assert result is not None
         # urlencode percent-encodes the value; check the key is present and value is encoded
         assert "post_logout_redirect_uri=" in result
-        assert "app.example.com" in result
+        assert "app.example.com" in result  # codeql[py/incomplete-url-substring-sanitization]
 
     def test_appends_id_token_hint_when_present(self):
         link = _mock_sso_link(

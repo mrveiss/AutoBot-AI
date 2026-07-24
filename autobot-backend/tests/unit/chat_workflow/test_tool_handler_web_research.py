@@ -140,9 +140,9 @@ def test_format_map_results() -> None:
 
     output = _format_map_results(site_result)
     assert "Mapped 2 URLs" in output
-    assert "example.com" in output
+    assert "example.com" in output  # codeql[py/incomplete-url-substring-sanitization]
     assert "sitemap" in output
-    assert "https://example.com/" in output
+    assert "https://example.com/" in output  # codeql[py/incomplete-url-substring-sanitization]
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ async def test_exec_scrape_url_success() -> None:
     with patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result):
         output = await mixin._exec_scrape_url({"url": "https://example.com", "render": "auto"})
 
-    assert "https://example.com" in output
+    assert "https://example.com" in output  # codeql[py/incomplete-url-substring-sanitization]
     assert "Hello world" in output
 
 
