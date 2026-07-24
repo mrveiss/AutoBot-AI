@@ -34,7 +34,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import get_current_user, require_org_context
+from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, get_session, service_dep
 from llc.kb.collections import KbCollectionManager
@@ -146,11 +146,18 @@ def _is_platform_admin(current_user: dict) -> bool:
 
 
 def _current_user_id(current_user: dict) -> str:
-    """Return the caller's user id, or raise 401 when absent (#12233)."""
+    """Return the caller's user id, or raise 401 when absent/malformed (#12233).
+
+    #12325: validate the JWT subject as a UUID the same way ``get_tenant_context``
+    does (``_parse_uuid_safe``) — a non-UUID subject is a bad token and must yield
+    a clean 401, not a 500 later when it reaches a ``uuid.UUID(user_id)`` cast in
+    the membership query.
+    """
     raw = current_user.get("user_id") or current_user.get("id") or current_user.get("sub")
-    if not raw:
+    parsed = _parse_uuid_safe(str(raw)) if raw else None
+    if parsed is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
-    return str(raw)
+    return str(parsed)
 
 
 @router.get("/", response_model=List[CompanyRead])
@@ -171,7 +178,11 @@ async def list_companies(
     if _is_platform_admin(current_user):
         return [_to_read(c) for c in companies]
     user_id = _current_user_id(current_user)
-    visible = [c for c in companies if await membership_svc.is_member(svc.session, str(c.id), user_id)]
+    # #12325: one membership query for the caller, then an in-memory filter —
+    # replaces an ``is_member`` round-trip per root (an N+1 that scaled with the
+    # total system-wide tenant count). Non-members still match nothing.
+    member_ids = await membership_svc.list_member_company_ids(svc.session, user_id)
+    visible = [c for c in companies if c.id in member_ids]
     return [_to_read(c) for c in visible]
 
 
@@ -203,10 +214,20 @@ async def create_company(
     try:
         org = await svc.create(body)
         await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
-        await svc.session.commit()
+        # GH#12323: serialize the response AND ensure the KB collections BEFORE
+        # commit — mirroring the #12309/#12321 "serialize before commit" invariant
+        # the transition handlers use. If either step fails the except handler's
+        # rollback undoes the INSERT, so a 500 never leaves a committed-but-
+        # unreported company (previously commit() ran first, stranding the row).
+        # ensure_collection is idempotent (get_or_create), so a rollback after a
+        # partial KB pass — or a commit failure after a full one — leaves only
+        # harmless empty collections that the next create call reuses. create()'s
+        # INSERT populates updated_at via RETURNING, so no refresh is needed here.
+        read = _to_read(org)
         for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
             await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
-        return _to_read(org)
+        await svc.session.commit()
+        return read
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
