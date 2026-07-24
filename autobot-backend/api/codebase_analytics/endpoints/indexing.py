@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -193,7 +193,7 @@ def _create_cleanup_callback(task_id: str):
     operation="index_codebase",
     error_code_prefix="CODEBASE",
 )
-async def index_codebase(request: IndexCodebaseRequest | None = None):
+async def index_codebase(http_request: Request, request: IndexCodebaseRequest | None = None):
     """
     Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
 
@@ -201,6 +201,17 @@ async def index_codebase(request: IndexCodebaseRequest | None = None):
     Returns immediately with a task_id. If another job is running, queues the request.
     """
     global _current_indexing_task_id
+
+    # Issue #12358: the source_id here arrives in the request body, so the
+    # router-level require_source_access dependency (path/query only) cannot see
+    # it. Authorize it explicitly before resolving the source's clone path.
+    if request and request.source_id:
+        from auth_middleware import get_current_user  # noqa: PLC0415
+
+        from .shared import authorize_source_access  # noqa: PLC0415
+
+        user = await get_current_user(http_request)
+        await authorize_source_access(request.source_id, user)
 
     path_or_sync = await _validate_and_get_path(request)
 
