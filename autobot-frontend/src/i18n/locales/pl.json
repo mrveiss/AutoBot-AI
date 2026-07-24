@@ -7650,6 +7650,7 @@
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "Kondycja systemu",
+    "providerFallback": "Przełączanie dostawcy",
     "advancedControl": "Sterowanie zaawansowane"
   },
   "llcCompanyStatus": {
@@ -8623,6 +8624,22 @@
       "error": "Nie udało się załadować kondycji systemu",
       "refresh": "Odśwież",
       "noSources": "Brak skonfigurowanych źródeł treści"
+    },
+    "providerFallback": {
+      "title": "Przełączanie dostawcy",
+      "subtitle": "Aktywność przełączania dostawców i modeli LLM na żywo",
+      "status": "Status",
+      "stateHealthy": "Brak aktywnych przełączeń",
+      "stateDegraded": "Przełączenie aktywne",
+      "active": "Aktywne przełączenia",
+      "chains": "Skonfigurowane łańcuchy",
+      "timeline": "Aktywność na żywo",
+      "switched": "Przełączono",
+      "exhausted": "Wyczerpano",
+      "refresh": "Odśwież",
+      "loading": "Ładowanie stanu przełączania…",
+      "noData": "Brak aktywności przełączania dostawcy",
+      "none": "brak"
     }
   },
   "components": {
