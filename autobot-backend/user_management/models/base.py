@@ -64,6 +64,10 @@ class Base(AsyncAttrs, DeclarativeBase):
     # per-write refresh SELECT (RETURNING is fetched inline with the UPDATE).
     # Dialects without RETURNING (e.g. sqlite < 3.35) transparently fall back to
     # a post-UPDATE SELECT, so the column is still populated — never expired.
+    # The other declarative bases were evaluated and are NOT susceptible to this
+    # class, so the fix only needs to live here: LLCBase (llc/models/activity.py)
+    # is append-only (no server-side onupdate), and SkillsBase (skills/models.py)
+    # uses a client-side ``onupdate`` assigned in Python (never expired post-flush).
     __mapper_args__ = {"eager_defaults": True}
 
 
