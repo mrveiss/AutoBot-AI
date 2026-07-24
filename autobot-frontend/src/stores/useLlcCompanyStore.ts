@@ -82,6 +82,15 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     selectedCompanyId.value = ''
   }
 
+  /**
+   * Patch a company's llc_status in-place after a status transition (#12231),
+   * so the selector badge reflects the new state without a full refetch.
+   */
+  function applyStatus(id: string, status: string): void {
+    const company = companies.value.find((c) => c.id === id)
+    if (company) company.llc_status = status
+  }
+
   return {
     companies,
     selectedCompanyId,
@@ -93,6 +102,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     fetchCompanies,
     selectCompany,
     clearSelection,
+    applyStatus,
   }
 }, {
   persist: {

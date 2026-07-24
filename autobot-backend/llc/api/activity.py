@@ -3,6 +3,13 @@
 """LLC activity log API (GH#8216).
 
 GET /api/llc/companies/{company_id}/activity — paginated, filterable audit trail.
+
+Tenant isolation (#12215): the caller's authenticated org context
+(``TenantContext.org_id``, resolved by ``require_org_context`` — see
+``docs/llc/tenant-context.md``) must match the ``{company_id}`` path param, or
+platform-admin. Previously this route only required authentication with no
+tenant check at all, letting any authenticated user read any company's
+activity log by supplying an arbitrary ``company_id``.
 """
 
 from datetime import datetime
@@ -12,8 +19,10 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import get_current_user
+from api.user_management.dependencies import get_current_user, require_org_context
+from llc.deps import assert_company_access
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 from ..models.activity import ActorType
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
@@ -62,12 +71,14 @@ async def get_activity_log(
     page_size: int = Query(50, ge=1, le=200),
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ActivityLogResponse:
     """Return paginated activity log for a company.
 
     All filters are optional and AND-ed together. Results are ordered by
     occurred_at descending (newest first).
     """
+    assert_company_access(ctx, company_id)
     params = ActivityLogQuery(
         entity_type=entity_type,
         entity_id=entity_id,

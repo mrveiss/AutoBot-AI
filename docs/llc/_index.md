@@ -67,6 +67,7 @@ and leans on the platform for memory, inference, and governance.
 | [Budget token mode](budget-token-mode.md) | Token-based budget accounting for LLC agents |
 | [GitHub PR integration](github-pr-integration.md) | PR ↔ work-item linking, branch naming convention, webhook setup |
 | [Project timeline (Gantt)](project-timeline.md) | Timeline view, scheduled dates, dependency arrows, critical path |
+| [Tenant-context resolution](tenant-context.md) | How LLC API endpoints derive/enforce `X-Organization-Id` and company scoping |
 
 ## Related
 

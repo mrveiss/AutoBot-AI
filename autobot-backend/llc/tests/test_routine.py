@@ -337,7 +337,12 @@ async def test_api_trigger() -> None:
 
     with patch.object(mod, "_service", lambda: mock_svc):
         client = TestClient(app, raise_server_exceptions=True)
-        resp = client.post(f"/api/llc/routines/{routine_row.id}/trigger")
+        # #12215: /routines/{routine_id} has no company_id path param, so tenant
+        # context must come from the X-Organization-Id header.
+        resp = client.post(
+            f"/api/llc/routines/{routine_row.id}/trigger",
+            headers={"X-Organization-Id": str(routine_row.company_id)},
+        )
 
     # The trigger endpoint enqueues asynchronously → 202 Accepted.
     assert resp.status_code == 202

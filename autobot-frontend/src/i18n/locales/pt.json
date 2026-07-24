@@ -7652,6 +7652,22 @@
     "systemHealth": "Saúde do sistema",
     "advancedControl": "Controle avançado"
   },
+  "llcCompanyStatus": {
+    "onboarding": "Integração",
+    "active": "Ativa",
+    "paused": "Pausada",
+    "offboarding": "Encerramento",
+    "archived": "Arquivada",
+    "activate": "Ativar",
+    "suspend": "Pausar",
+    "offboard": "Encerrar",
+    "archive": "Arquivar",
+    "confirmTitle": "Confirmar alteração de estado",
+    "confirmOffboard": "Encerrar \"{name}\"? Isto inicia o encerramento da empresa.",
+    "confirmArchive": "Arquivar \"{name}\"? Este é um estado final e não pode ser desfeito.",
+    "confirm": "Confirmar",
+    "updateError": "Não foi possível alterar o estado da empresa."
+  },
   "llcMembers": {
     "title": "Membros",
     "subtitle": "Gerencie as pessoas que pertencem a esta empresa e suas funções.",

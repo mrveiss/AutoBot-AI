@@ -7652,6 +7652,22 @@
     "systemHealth": "Santé du système",
     "advancedControl": "Contrôle avancé"
   },
+  "llcCompanyStatus": {
+    "onboarding": "Intégration",
+    "active": "Active",
+    "paused": "En pause",
+    "offboarding": "Désengagement",
+    "archived": "Archivée",
+    "activate": "Activer",
+    "suspend": "Mettre en pause",
+    "offboard": "Désengager",
+    "archive": "Archiver",
+    "confirmTitle": "Confirmer le changement de statut",
+    "confirmOffboard": "Désengager « {name} » ? Cela lance la fermeture de l'entreprise.",
+    "confirmArchive": "Archiver « {name} » ? Il s'agit d'un état final et irréversible.",
+    "confirm": "Confirmer",
+    "updateError": "Impossible de changer le statut de l'entreprise."
+  },
   "llcMembers": {
     "title": "Membres",
     "subtitle": "Gérez les personnes qui appartiennent à cette entreprise et leurs rôles.",
