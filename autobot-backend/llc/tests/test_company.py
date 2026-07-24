@@ -217,6 +217,68 @@ class TestCompanyStatusTransitions:
             await svc.suspend(uuid.uuid4())
 
 
+class TestTransitionHelper:
+    """Focused tests for the shared ``_transition`` primitive (#12238).
+
+    The activate/suspend/offboard/archive wrappers are covered above; these
+    exercise the extracted helper directly to lock its behavior: in-range ->
+    applies target + field updates + flush; out-of-range -> canonical
+    ``Cannot <verb>`` ValueError; missing -> CompanyNotFoundError.
+    """
+
+    @pytest.mark.asyncio
+    async def test_in_range_applies_target_field_updates_and_flushes(self):
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc._transition(
+            org.id,
+            verb="suspend",
+            allowed_from=svc._SUSPEND_FROM,
+            target=LLCCompanyStatus.PAUSED,
+            log_msg="LLC company suspended: %s (id=%s)",
+            pause_reason="cause",
+            paused_at=None,
+        )
+
+        assert result.llc_status == LLCCompanyStatus.PAUSED.value
+        assert result.pause_reason == "cause"
+        svc.session.flush.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_out_of_range_raises_canonical_value_error(self):
+        org = _make_org(llc_status="archived")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        with pytest.raises(ValueError) as exc:
+            await svc._transition(
+                org.id,
+                verb="activate",
+                allowed_from=svc._ACTIVATE_FROM,
+                target=LLCCompanyStatus.ACTIVE,
+                log_msg="LLC company activated: %s (id=%s)",
+            )
+
+        assert "Cannot activate company in 'archived' state" in str(exc.value)
+        svc.session.flush.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_company_raises_not_found(self):
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(side_effect=CompanyNotFoundError("not found"))
+
+        with pytest.raises(CompanyNotFoundError):
+            await svc._transition(
+                uuid.uuid4(),
+                verb="archive",
+                allowed_from=svc._ARCHIVE_FROM,
+                target=LLCCompanyStatus.ARCHIVED,
+                log_msg="LLC company archived: %s (id=%s)",
+            )
+
+
 class TestSubCompanyTree:
     @pytest.mark.asyncio
     async def test_tree_single_node(self):

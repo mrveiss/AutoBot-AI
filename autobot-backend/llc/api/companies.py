@@ -36,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session, service_dep
+from llc.deps import assert_company_access, get_session, service_dep
 from llc.kb.collections import KbCollectionManager
 from llc.models.company import (
     CompanyAncestor,
@@ -177,9 +177,8 @@ async def get_company(
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
     # Issue #12233: tenant authz — caller's org must match company_id unless
-    # platform admin (same guard as get_org_chart / the status transitions).
-    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    # platform admin. Shared guard (#12238), identical 404 semantics.
+    assert_company_access(ctx, company_id)
     try:
         org = await svc.get(company_id)
         return _to_read(org)
@@ -196,8 +195,7 @@ async def update_company(
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.update(company_id, body)
         await svc.session.commit()
@@ -227,8 +225,7 @@ async def delete_company(
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         await svc.delete(company_id)
         await svc.session.commit()
@@ -264,8 +261,7 @@ async def activate_company(
     way as ``get_org_chart``/``reorder_backlog``: the caller's org must match
     *company_id* unless they are a platform admin.
     """
-    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.activate(company_id)
         await svc.session.commit()
@@ -293,8 +289,7 @@ async def suspend_company(
 
     Tenant-scoped: caller's org must match *company_id* unless platform admin.
     """
-    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.suspend(company_id, reason=body.reason if body else None)
         await svc.session.commit()
@@ -323,8 +318,7 @@ async def offboard_company(
     valid archive() source but nothing ever transitioned a company into it.
     Tenant-scoped: caller's org must match *company_id* unless platform admin.
     """
-    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.offboard(company_id)
         await svc.session.commit()
@@ -351,8 +345,7 @@ async def archive_company(
 
     Tenant-scoped: caller's org must match *company_id* unless platform admin.
     """
-    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.archive(company_id)
         await svc.session.commit()
@@ -675,9 +668,8 @@ async def reorder_backlog(
     backlog can still submit a reorder without receiving a 400).  A 400 is only
     raised when the entire list is empty (caught by pydantic min_length=1).
     """
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     cid = str(company_id)
-    if str(ctx.org_id) != cid and not ctx.is_platform_admin:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     result = await _backlog_svc().bulk_reorder(
         session,
         company_id=cid,

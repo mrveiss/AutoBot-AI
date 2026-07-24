@@ -174,6 +174,37 @@ class CompanyService(LLCServiceBase):
     # Valid states from which archive() is allowed
     _ARCHIVE_FROM: frozenset[str] = frozenset({LLCCompanyStatus.PAUSED.value, LLCCompanyStatus.OFFBOARDING.value})
 
+    async def _transition(
+        self,
+        company_id: uuid.UUID,
+        *,
+        verb: str,
+        allowed_from: frozenset[str],
+        target: LLCCompanyStatus,
+        log_msg: str,
+        **field_updates: object,
+    ) -> Organization:
+        """Shared status-transition primitive (#12238): guard + set + flush + log.
+
+        Loads the company, rejects an out-of-range current ``llc_status`` with
+        the canonical ``Cannot {verb} company in '<state>' state`` ValueError,
+        applies ``llc_status=target`` plus any *field_updates* (in order), then
+        flushes and logs *log_msg*. The public activate/suspend/offboard/archive
+        methods are thin wrappers so guard + messages live in one place.
+        """
+        org = await self._get_or_404(company_id)
+        if org.llc_status not in allowed_from:
+            raise ValueError(
+                f"Cannot {verb} company in '{org.llc_status}' state "
+                f"(allowed from: {', '.join(sorted(allowed_from))})"
+            )
+        org.llc_status = target.value
+        for field, value in field_updates.items():
+            setattr(org, field, value)
+        await self.session.flush()
+        logger.info(log_msg, org.name, org.id)
+        return org
+
     async def activate(self, company_id: uuid.UUID) -> Organization:
         """Transition company to ACTIVE status.
 
@@ -181,36 +212,30 @@ class CompanyService(LLCServiceBase):
         ValueError otherwise. Clears any pause state so a resumed company is no
         longer marked paused (#12211).
         """
-        org = await self._get_or_404(company_id)
-        if org.llc_status not in self._ACTIVATE_FROM:
-            raise ValueError(
-                f"Cannot activate company in '{org.llc_status}' state "
-                f"(allowed from: {', '.join(sorted(self._ACTIVATE_FROM))})"
-            )
-        org.llc_status = LLCCompanyStatus.ACTIVE.value
-        org.pause_reason = None
-        org.paused_at = None
-        await self.session.flush()
-        logger.info("LLC company activated: %s (id=%s)", org.name, org.id)
-        return org
+        return await self._transition(
+            company_id,
+            verb="activate",
+            allowed_from=self._ACTIVATE_FROM,
+            target=LLCCompanyStatus.ACTIVE,
+            log_msg="LLC company activated: %s (id=%s)",
+            pause_reason=None,
+            paused_at=None,
+        )
 
     async def suspend(self, company_id: uuid.UUID, reason: Optional[str] = None) -> Organization:
         """Transition company to PAUSED status.
 
         Only allowed from ONBOARDING or ACTIVE — raises ValueError otherwise.
         """
-        org = await self._get_or_404(company_id)
-        if org.llc_status not in self._SUSPEND_FROM:
-            raise ValueError(
-                f"Cannot suspend company in '{org.llc_status}' state "
-                f"(allowed from: {', '.join(sorted(self._SUSPEND_FROM))})"
-            )
-        org.llc_status = LLCCompanyStatus.PAUSED.value
-        org.pause_reason = reason
-        org.paused_at = now_utc()
-        await self.session.flush()
-        logger.info("LLC company suspended: %s (id=%s)", org.name, org.id)
-        return org
+        return await self._transition(
+            company_id,
+            verb="suspend",
+            allowed_from=self._SUSPEND_FROM,
+            target=LLCCompanyStatus.PAUSED,
+            log_msg="LLC company suspended: %s (id=%s)",
+            pause_reason=reason,
+            paused_at=now_utc(),
+        )
 
     async def offboard(self, company_id: uuid.UUID) -> Organization:
         """Transition company to OFFBOARDING status.
@@ -220,32 +245,26 @@ class CompanyService(LLCServiceBase):
         ``_ARCHIVE_FROM`` source but no transition ever set it, leaving it
         unreachable.
         """
-        org = await self._get_or_404(company_id)
-        if org.llc_status not in self._OFFBOARD_FROM:
-            raise ValueError(
-                f"Cannot offboard company in '{org.llc_status}' state "
-                f"(allowed from: {', '.join(sorted(self._OFFBOARD_FROM))})"
-            )
-        org.llc_status = LLCCompanyStatus.OFFBOARDING.value
-        await self.session.flush()
-        logger.info("LLC company offboarding started: %s (id=%s)", org.name, org.id)
-        return org
+        return await self._transition(
+            company_id,
+            verb="offboard",
+            allowed_from=self._OFFBOARD_FROM,
+            target=LLCCompanyStatus.OFFBOARDING,
+            log_msg="LLC company offboarding started: %s (id=%s)",
+        )
 
     async def archive(self, company_id: uuid.UUID) -> Organization:
         """Transition company to ARCHIVED status.
 
         Only allowed from PAUSED or OFFBOARDING — raises ValueError otherwise.
         """
-        org = await self._get_or_404(company_id)
-        if org.llc_status not in self._ARCHIVE_FROM:
-            raise ValueError(
-                f"Cannot archive company in '{org.llc_status}' state "
-                f"(allowed from: {', '.join(sorted(self._ARCHIVE_FROM))})"
-            )
-        org.llc_status = LLCCompanyStatus.ARCHIVED.value
-        await self.session.flush()
-        logger.info("LLC company archived: %s (id=%s)", org.name, org.id)
-        return org
+        return await self._transition(
+            company_id,
+            verb="archive",
+            allowed_from=self._ARCHIVE_FROM,
+            target=LLCCompanyStatus.ARCHIVED,
+            log_msg="LLC company archived: %s (id=%s)",
+        )
 
     # ------------------------------------------------------------------
     # Tree / ancestry
