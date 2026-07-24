@@ -267,9 +267,12 @@ class TestEnvironmentCacheScoping:
         assert resolved == str(default_root)
 
     async def test_explicit_source_id_unchanged_by_alignment(self, tmp_path):
-        """A real source_id resolves identically whether via resolve_source_root
-        directly (pre-fix) or via resolve_scan_root (post-fix) -- only the
-        None/default case differs."""
+        """A real, resolvable source_id resolves identically whether via
+        resolve_source_root directly (pre-fix) or via resolve_scan_root
+        (post-fix). Behavior differs only in two cases: source_id=None (now
+        resolves the DEFAULT source), and an UNRESOLVABLE source (fallback root
+        is now get_project_root() vs the old resolve_project_root(); identical
+        in a dev checkout, differs in the deployed layout -- tracked in #12393)."""
         from api.codebase_analytics.endpoints import environment, shared
 
         root_a = tmp_path / "proj_a"
