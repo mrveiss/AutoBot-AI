@@ -428,6 +428,8 @@ async def get_kb_ancestry_collections(
     return [
         KbAncestryCollection(
             collection_name=collection_name,
+            # codeql[py/stack-trace-exposure] False positive: the ValueError above is caught and
+            # re-raised as a generic HTTPException; no exception data flows into this response.
             company_id=collection_name.split(":")[0],
             weight=weight,
         )
