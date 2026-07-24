@@ -134,20 +134,75 @@ def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyS
     return CompanyService(session=session)
 
 
+def _is_platform_admin(current_user: dict) -> bool:
+    """Platform-admin detection mirroring ``get_tenant_context`` (#12233).
+
+    The collection routes (list/create) carry no ``company_id`` path param, so
+    they authenticate with ``get_current_user`` (not ``require_org_context``)
+    and derive admin status from the JWT the same way the tenant-context
+    dependency does: an explicit ``is_platform_admin`` flag or ``role == "admin"``.
+    """
+    return bool(current_user.get("is_platform_admin")) or current_user.get("role") == "admin"
+
+
+def _current_user_id(current_user: dict) -> str:
+    """Return the caller's user id, or raise 401 when absent (#12233)."""
+    raw = current_user.get("user_id") or current_user.get("id") or current_user.get("sub")
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    return str(raw)
+
+
 @router.get("/", response_model=List[CompanyRead])
-async def list_companies(svc: CompanyService = Depends(_get_service)) -> List[CompanyRead]:
-    """List top-level companies (parent_org_id IS NULL)."""
+async def list_companies(
+    svc: CompanyService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
+    membership_svc: MembershipService = Depends(_get_membership_service),
+) -> List[CompanyRead]:
+    """List top-level companies (parent_org_id IS NULL) visible to the caller.
+
+    Tenant scope (#12233): previously unauthenticated and returned *every*
+    tenant's root company — cross-tenant enumeration of names/budgets. Now
+    authenticated; non-admins see only companies they are a member of, while
+    platform admins still see all roots. Membership is the same tenant
+    primitive ``get_tenant_context`` uses to authorise ``X-Organization-Id``.
+    """
     companies = await svc.list_root_companies()
-    return [_to_read(c) for c in companies]
+    if _is_platform_admin(current_user):
+        return [_to_read(c) for c in companies]
+    user_id = _current_user_id(current_user)
+    visible = [c for c in companies if await membership_svc.is_member(svc.session, str(c.id), user_id)]
+    return [_to_read(c) for c in visible]
 
 
 @router.post("/", response_model=CompanyRead, status_code=status.HTTP_201_CREATED)
 async def create_company(
     body: CompanyCreate,
     svc: CompanyService = Depends(_get_service),
+    current_user: dict = Depends(get_current_user),
+    membership_svc: MembershipService = Depends(_get_membership_service),
 ) -> CompanyRead:
+    """Create a company (root, or a sub-company under an owned parent).
+
+    Tenant scope (#12233): previously unauthenticated — any caller could create
+    a company and, by supplying ``parent_org_id``, graft one under *another*
+    tenant's company. Now authenticated; a non-admin may only create a
+    sub-company under a parent they belong to (cross-tenant parent → 404, so the
+    parent's existence is not disclosed). Root creation (no ``parent_org_id``,
+    the creation-wizard flow) is open to any authenticated user. The creator is
+    recorded as the company ``OWNER`` so they can immediately access it and it
+    surfaces in their tenant-scoped ``list_companies``.
+    """
+    user_id = _current_user_id(current_user)
+    if body.parent_org_id is not None and not _is_platform_admin(current_user):
+        if not await membership_svc.is_member(svc.session, str(body.parent_org_id), user_id):
+            # 404 (not 403): a cross-tenant caller must not distinguish "not my
+            # company" from "doesn't exist" — identical semantics to
+            # assert_company_access (#12238).
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.create(body)
+        await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
         await svc.session.commit()
         for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
             await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
@@ -365,7 +420,11 @@ async def archive_company(
 async def get_company_tree(
     company_id: uuid.UUID,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyTreeNode:
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         return await svc.get_sub_company_tree(company_id)
     except CompanyNotFoundError:
@@ -376,7 +435,11 @@ async def get_company_tree(
 async def get_company_ancestry(
     company_id: uuid.UUID,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[CompanyAncestor]:
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         ancestors = await svc.get_ancestry(company_id)
         return [
@@ -409,6 +472,8 @@ class KbAncestryCollection(BaseModel):
 async def get_kb_ancestry_collections(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[KbAncestryCollection]:
     """Return the resolved KB collection chain for a company (GH#8241).
 
@@ -416,6 +481,8 @@ async def get_kb_ancestry_collections(
     be applied when merging search results. Useful for inspecting what context
     a sub-company agent inherits.
     """
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     from llc.kb.inheritance import KbInheritanceResolver
 
     # get_query_collections only needs the session; no RAG assembler required (GH#8570).
@@ -447,7 +514,11 @@ async def list_members(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     svc: MembershipService = Depends(_get_membership_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     from sqlalchemy import select  # noqa: PLC0415
 
     from user_management.models.user import User  # noqa: PLC0415
@@ -470,7 +541,11 @@ async def add_member(
     body: MemberAddRequest,
     session: AsyncSession = Depends(get_async_session),
     svc: MembershipService = Depends(_get_membership_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         membership = await svc.add_member(session, str(company_id), str(body.user_id), body.role)
         await session.commit()
@@ -486,7 +561,11 @@ async def remove_member(
     user_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     svc: MembershipService = Depends(_get_membership_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         await svc.remove_member(session, str(company_id), str(user_id))
         await session.commit()
@@ -513,8 +592,13 @@ async def set_pm_config(
     company_id: uuid.UUID,
     body: PMConfigSetRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> PMConfigRead:
     """Store encrypted PM credentials for a company (GH#8257)."""
+    # Issue #12233: tenant authz — writing another tenant's PM credentials is a
+    # cross-tenant compromise; caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     import json
 
     from sqlalchemy import select, update
@@ -538,8 +622,12 @@ async def set_pm_config(
 async def test_pm_config(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Test connectivity to the configured external PM system (GH#8257)."""
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     import json
 
     from sqlalchemy import select
@@ -883,6 +971,8 @@ async def search_agents(
     company_id: uuid.UUID,
     q: str = Query(..., min_length=1, description="Search query for agent capabilities"),
     limit: int = Query(10, ge=1, le=100, description="Max results"),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> Dict[str, Any]:
     """Search agents in company by capabilities using RAG.
 
@@ -897,6 +987,8 @@ async def search_agents(
     Returns:
         List of matching agents with capability metadata.
     """
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         from knowledge import get_knowledge_base
         from llc.kb import AgentCapabilityIndexer
@@ -949,6 +1041,8 @@ def _get_portability_service(session: AsyncSession = Depends(get_async_session))
 async def export_template(
     company_id: uuid.UUID,
     svc: PortabilityService = Depends(_get_portability_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> JSONResponse:
     """Export a portable structural template for the company.
 
@@ -956,6 +1050,9 @@ async def export_template(
     goals, active routines, projects, portfolios, and up to 20 seed work items.
     Secret values are never exported — only ``{{SECRET_NAME}}`` placeholders.
     """
+    # Issue #12233: tenant authz — exporting another tenant's structure is a
+    # cross-tenant data leak; caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     payload = await svc.export_template(company_id)
     filename = f"company_{company_id}_template.json"
     return JSONResponse(
@@ -968,12 +1065,17 @@ async def export_template(
 async def export_snapshot(
     company_id: uuid.UUID,
     svc: PortabilityService = Depends(_get_portability_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> JSONResponse:
     """Export a full-state snapshot for backup/migration.
 
     Extends the template export with all work items, sprint history, and KB
     collection names (not content).
     """
+    # Issue #12233: tenant authz — a full-state snapshot of another tenant is a
+    # cross-tenant data leak; caller's org must match company_id unless admin.
+    assert_company_access(ctx, company_id)  # shared guard (#12238)
     payload = await svc.export_snapshot(company_id)
     filename = f"company_{company_id}_snapshot.json"
     return JSONResponse(

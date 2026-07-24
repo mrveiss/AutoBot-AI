@@ -133,3 +133,229 @@ async def test_delete_cross_tenant_is_404_and_untouched():
         resp = await client.delete(f"/api/llc/companies/{other}")
     assert resp.status_code == 404
     svc.delete.assert_not_called()
+
+
+# ===========================================================================
+# Collection routes: list / create (#12233).
+#
+# These carry no ``company_id`` path param, so they authenticate with
+# ``get_current_user`` and scope by membership (not ``require_org_context``):
+#   - list   → non-admins see only companies they are a member of.
+#   - create → a sub-company may only be grafted under an owned parent; the
+#              creator is recorded as OWNER. Root creation is open to any
+#              authenticated user (the creation-wizard flow).
+# ===========================================================================
+
+
+def _collection_app(
+    svc,
+    membership_svc,
+    *,
+    is_platform_admin: bool = False,
+    unauth: bool = False,
+) -> FastAPI:
+    app = FastAPI()
+    app.include_router(companies.router, prefix="/api/llc")
+    app.dependency_overrides[companies._get_service] = lambda: svc
+    app.dependency_overrides[companies._get_membership_service] = lambda: membership_svc
+
+    def _cur() -> dict:
+        if unauth:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        user = {"id": str(_USER_ID), "user_id": str(_USER_ID)}
+        if is_platform_admin:
+            user["role"] = "admin"
+        return user
+
+    app.dependency_overrides[get_current_user] = _cur
+    return app
+
+
+def _list_svc() -> MagicMock:
+    svc = MagicMock()
+    svc.session = AsyncMock()
+    svc.list_root_companies = AsyncMock(return_value=[_org()])
+    return svc
+
+
+def _create_svc() -> MagicMock:
+    svc = MagicMock()
+    svc.session = AsyncMock()
+    svc.create = AsyncMock(return_value=_org())
+    return svc
+
+
+def _membership(is_member: bool = True) -> MagicMock:
+    m = MagicMock()
+    m.is_member = AsyncMock(return_value=is_member)
+    m.add_member = AsyncMock()
+    return m
+
+
+# --- list_companies ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_requires_authentication():
+    svc = _list_svc()
+    app = _collection_app(svc, _membership(), unauth=True)
+    async with _client(app) as client:
+        resp = await client.get("/api/llc/companies/")
+    assert resp.status_code == 401
+    svc.list_root_companies.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_list_member_sees_own_company():
+    svc = _list_svc()
+    app = _collection_app(svc, _membership(is_member=True))
+    async with _client(app) as client:
+        resp = await client.get("/api/llc/companies/")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_non_member_sees_nothing():
+    """Cross-tenant enumeration is closed: a non-member gets an empty list."""
+    svc = _list_svc()
+    app = _collection_app(svc, _membership(is_member=False))
+    async with _client(app) as client:
+        resp = await client.get("/api/llc/companies/")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_platform_admin_sees_all():
+    svc = _list_svc()
+    membership = _membership(is_member=False)  # admin bypasses membership entirely
+    app = _collection_app(svc, membership, is_platform_admin=True)
+    async with _client(app) as client:
+        resp = await client.get("/api/llc/companies/")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+    membership.is_member.assert_not_called()
+
+
+# --- create_company ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_requires_authentication():
+    svc = _create_svc()
+    app = _collection_app(svc, _membership(), unauth=True)
+    async with _client(app) as client:
+        resp = await client.post("/api/llc/companies/", json={"name": "NewCo"})
+    assert resp.status_code == 401
+    svc.create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_root_records_creator_as_owner(monkeypatch):
+    from llc.models.enums import MembershipRole
+
+    monkeypatch.setattr(companies._kb_manager, "ensure_collection", AsyncMock())
+    svc = _create_svc()
+    membership = _membership()
+    app = _collection_app(svc, membership)
+    async with _client(app) as client:
+        resp = await client.post("/api/llc/companies/", json={"name": "NewCo"})
+    assert resp.status_code == 201, resp.text
+    svc.create.assert_awaited_once()
+    membership.add_member.assert_awaited_once()
+    # creator is added to the just-created company as OWNER
+    args = membership.add_member.await_args.args
+    assert args[1] == str(_ORG_ID)
+    assert args[2] == str(_USER_ID)
+    assert args[3] == MembershipRole.OWNER
+
+
+@pytest.mark.asyncio
+async def test_create_sub_company_cross_tenant_parent_is_404():
+    """A non-member cannot graft a sub-company under another tenant's company."""
+    svc = _create_svc()
+    membership = _membership(is_member=False)
+    app = _collection_app(svc, membership)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/llc/companies/",
+            json={"name": "Sub", "parent_org_id": str(uuid.uuid4())},
+        )
+    assert resp.status_code == 404
+    svc.create.assert_not_called()
+    membership.add_member.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_sub_company_owned_parent_ok(monkeypatch):
+    monkeypatch.setattr(companies._kb_manager, "ensure_collection", AsyncMock())
+    svc = _create_svc()
+    membership = _membership(is_member=True)
+    app = _collection_app(svc, membership)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/llc/companies/",
+            json={"name": "Sub", "parent_org_id": str(uuid.uuid4())},
+        )
+    assert resp.status_code == 201, resp.text
+    svc.create.assert_awaited_once()
+
+
+# ===========================================================================
+# Path-scoped route guard — export_snapshot as a representative (#12233).
+# Every {company_id} route now enforces get_current_user + require_org_context
+# + assert_company_access; the export routes leak a full tenant snapshot.
+# ===========================================================================
+
+
+def _export_svc() -> MagicMock:
+    svc = MagicMock()
+    svc.export_snapshot = AsyncMock(return_value={"company_id": str(_ORG_ID)})
+    return svc
+
+
+def _export_app(svc, *, org_id: uuid.UUID = _ORG_ID, unauth: bool = False) -> FastAPI:
+    app = FastAPI()
+    app.include_router(companies.router, prefix="/api/llc")
+    app.dependency_overrides[companies._get_portability_service] = lambda: svc
+
+    def _cur() -> dict:
+        if unauth:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        return {"id": str(_USER_ID), "user_id": str(_USER_ID)}
+
+    def _ctx() -> TenantContext:
+        return TenantContext(org_id=org_id, user_id=_USER_ID, is_platform_admin=False)
+
+    app.dependency_overrides[get_current_user] = _cur
+    app.dependency_overrides[require_org_context] = _ctx
+    return app
+
+
+@pytest.mark.asyncio
+async def test_export_snapshot_requires_authentication():
+    svc = _export_svc()
+    async with _client(_export_app(svc, unauth=True)) as client:
+        resp = await client.post(f"/api/llc/companies/{_ORG_ID}/export/snapshot")
+    assert resp.status_code == 401
+    svc.export_snapshot.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_export_snapshot_cross_tenant_is_404_and_untouched():
+    svc = _export_svc()
+    other = uuid.uuid4()
+    async with _client(_export_app(svc)) as client:
+        resp = await client.post(f"/api/llc/companies/{other}/export/snapshot")
+    assert resp.status_code == 404
+    svc.export_snapshot.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_export_snapshot_same_tenant_ok():
+    svc = _export_svc()
+    async with _client(_export_app(svc)) as client:
+        resp = await client.post(f"/api/llc/companies/{_ORG_ID}/export/snapshot")
+    assert resp.status_code == 200
+    svc.export_snapshot.assert_awaited_once()
