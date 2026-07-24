@@ -732,7 +732,10 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "تعذّر حذف المحادثة. يُرجى المحاولة مرة أخرى."
+    }
   },
   "settings": {
     "title": "الإعدادات",
