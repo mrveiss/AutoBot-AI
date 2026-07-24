@@ -4,6 +4,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 import io
+from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -62,6 +63,81 @@ async def test_list_recordings(client, tmp_path):
     r2 = await client.get(f"/api/transcriber/projects/{pid}/recordings")
     assert r2.status_code == 200
     assert len(r2.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_upload_recording_with_relative_upload_dir(tmp_path, monkeypatch):
+    """GH#12310: a *relative* upload dir (the shipped default) must still yield 202.
+
+    Production set ``transcriber_upload_dir`` to a cwd-relative path, but
+    ``create_recording`` rejects non-absolute filepaths, so every upload 500'd
+    and left an orphaned file behind. The route now resolves the dir to an
+    absolute path before writing/inserting.
+    """
+    monkeypatch.chdir(tmp_path)
+    rel_upload = "data/transcriber/uploads"
+    (tmp_path / rel_upload).mkdir(parents=True)
+
+    a = FastAPI()
+    db = Database(str(tmp_path / "test.db"))
+    await db.connect()
+
+    async def override_db():
+        return db
+
+    a.dependency_overrides[get_db] = override_db
+    a.state.transcriber_upload_dir = rel_upload  # relative, exactly as shipped
+    a.include_router(projects_router, prefix="/api/transcriber")
+    a.include_router(recordings_router, prefix="/api/transcriber")
+
+    async with AsyncClient(transport=ASGITransport(app=a), base_url="http://test") as c:
+        r = await c.post("/api/transcriber/projects", json={"name": "P", "description": ""})
+        pid = r.json()["id"]
+        # Deferred `from tasks.transcriber_tasks import transcribe_recording`
+        # in the handler — patch the source module to skip the Celery broker.
+        with patch("tasks.transcriber_tasks.transcribe_recording", MagicMock()):
+            r2 = await c.post(
+                f"/api/transcriber/projects/{pid}/recordings",
+                files={"file": ("rel.wav", io.BytesIO(b"RIFF" + b"\x00" * 100), "audio/wav")},
+            )
+
+    assert r2.status_code == 202, r2.text
+    rid = r2.json()["id"]
+    rec = await db.get_recording(rid)
+    # Stored filepath is absolute and the audio landed under the resolved dir.
+    assert rec is not None
+    stored = rec["filepath"]
+    assert stored.startswith("/"), stored
+    saved = tmp_path / rel_upload
+    files = list(saved.iterdir())
+    assert len(files) == 1, files
+    assert files[0].read_bytes().startswith(b"RIFF")
+
+
+@pytest.mark.asyncio
+async def test_failed_insert_unlinks_orphan(client, tmp_path, monkeypatch):
+    """GH#12310: a DB insert failure must not leak the partial upload file."""
+    import transcriber.routes.recordings as rec_mod
+
+    # Locate the resolved upload dir the fixture wired up.
+    r = await client.post("/api/transcriber/projects", json={"name": "P", "description": ""})
+    pid = r.json()["id"]
+
+    async def boom(*args, **kwargs):
+        raise ValueError("filepath must be absolute, got: 'x'")
+
+    monkeypatch.setattr(rec_mod.Database, "create_recording", boom, raising=True)
+    # The ASGI test transport re-raises the handler exception (no server-side
+    # 500 wrapper); in production this surfaces as HTTP 500. Either way the
+    # partial upload must be cleaned up.
+    with pytest.raises(ValueError):
+        await client.post(
+            f"/api/transcriber/projects/{pid}/recordings",
+            files={"file": ("orphan.wav", io.BytesIO(b"RIFF" + b"\x00" * 10), "audio/wav")},
+        )
+    # No orphan left behind in the upload dir.
+    upload_dir = tmp_path / "uploads"
+    assert list(upload_dir.iterdir()) == []
 
 
 @pytest.mark.asyncio
