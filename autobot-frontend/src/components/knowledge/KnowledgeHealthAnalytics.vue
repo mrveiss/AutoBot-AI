@@ -311,8 +311,8 @@ const capitalize = (str: string): string => {
   return str && str.length > 0 ? str.charAt(0).toUpperCase() + str.slice(1) : str || ''
 }
 
-// Load stats on mount (category fact counts are fetched by VectorStatsSection
-// on its own useKnowledgeStats instance — the composable state is per-instance)
+// Load stats on mount. Category fact counts are fetched by VectorStatsSection;
+// useKnowledgeStats is a shared-singleton (#11658) so that state is shared.
 onMounted(async () => {
   await refreshStats()
 })
