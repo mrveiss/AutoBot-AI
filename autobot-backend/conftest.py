@@ -395,6 +395,11 @@ if "llm_shared" not in sys.modules:
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
     _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
+    # #11541: pre-request cumulative token budget gate — base_provider imports it
+    # at module level (`from .token_budget import get_token_budget_gate`); light
+    # dep (autobot_shared.env_utils/logging_manager/singleton_factory + .models),
+    # load real before base_provider so the gate isn't a MagicMock stub.
+    _real_load_and_bind("llm_shared.token_budget", _llm_root / "token_budget.py")
     _real_load_and_bind("llm_shared.base_provider", _llm_root / "base_provider.py")
     _real_load_and_bind("llm_shared.model_param_registry", _llm_root / "model_param_registry.py")
     _real_load_and_bind("llm_shared.provider_registry", _llm_root / "provider_registry.py")
