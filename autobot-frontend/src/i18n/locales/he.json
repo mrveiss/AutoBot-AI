@@ -197,6 +197,22 @@
     "systemHealth": "בריאות המערכת",
     "advancedControl": "בקרה מתקדמת"
   },
+  "llcCompanyStatus": {
+    "onboarding": "קליטה",
+    "active": "פעילה",
+    "paused": "מושהית",
+    "offboarding": "סגירה",
+    "archived": "בארכיון",
+    "activate": "הפעלה",
+    "suspend": "השהיה",
+    "offboard": "סגירה",
+    "archive": "העברה לארכיון",
+    "confirmTitle": "אישור שינוי סטטוס",
+    "confirmOffboard": "לסגור את \"{name}\"? פעולה זו מתחילה את סגירת החברה.",
+    "confirmArchive": "להעביר את \"{name}\" לארכיון? זהו מצב סופי שלא ניתן לבטלו.",
+    "confirm": "אישור",
+    "updateError": "לא ניתן היה לשנות את סטטוס החברה."
+  },
   "llcMembers": {
     "title": "חברים",
     "subtitle": "נהל את האנשים השייכים לחברה זו ואת התפקידים שלהם.",

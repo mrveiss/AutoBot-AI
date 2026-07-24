@@ -7652,6 +7652,22 @@
     "systemHealth": "صحة النظام",
     "advancedControl": "التحكم المتقدم"
   },
+  "llcCompanyStatus": {
+    "onboarding": "الإعداد",
+    "active": "نشطة",
+    "paused": "متوقفة مؤقتًا",
+    "offboarding": "الإنهاء",
+    "archived": "مؤرشفة",
+    "activate": "تفعيل",
+    "suspend": "إيقاف مؤقت",
+    "offboard": "إنهاء",
+    "archive": "أرشفة",
+    "confirmTitle": "تأكيد تغيير الحالة",
+    "confirmOffboard": "إنهاء «{name}»؟ يبدأ هذا في إغلاق الشركة.",
+    "confirmArchive": "أرشفة «{name}»؟ هذه حالة نهائية ولا يمكن التراجع عنها.",
+    "confirm": "تأكيد",
+    "updateError": "تعذّر تغيير حالة الشركة."
+  },
   "llcMembers": {
     "title": "الأعضاء",
     "subtitle": "إدارة الأشخاص المنتمين إلى هذه الشركة وأدوارهم.",

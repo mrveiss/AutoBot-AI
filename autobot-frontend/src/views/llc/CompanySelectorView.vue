@@ -7,12 +7,16 @@
   Lists companies from GET /api/llc/companies/, stores the selection in
   the llcCompany Pinia store, then forwards to the company dashboard (or
   the ?redirect= destination set by the llcCompanyParamGuard).
+  GH#12231: each row exposes a CompanyStatusControl (status badge + the
+  valid activate/suspend/offboard/archive transitions for its state).
 -->
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useLlcCompanyStore, type LlcCompany } from '@/stores/useLlcCompanyStore'
 import { useRuntimeFeaturesStore } from '@/stores/useRuntimeFeaturesStore'
+import CompanyStatusControl from '@/components/llc/CompanyStatusControl.vue'
+import type { CompanyStatusResult } from '@/composables/llc/useCompanyStatusApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,6 +39,11 @@ async function selectCompany(company: LlcCompany): Promise<void> {
   // Enter the company's PM workspace (LlcCompanyLayout with sidebar → backlog,
   // boards, sprints…), not the sidebar-less standalone /llc/dashboard.
   await router.push(`/llc/companies/${company.id}`)
+}
+
+// #12231: reflect a status transition on the selector badge without a refetch.
+function onStatusUpdated(updated: CompanyStatusResult): void {
+  companyStore.applyStatus(updated.id, updated.llc_status)
 }
 
 onMounted(async () => {
@@ -85,7 +94,7 @@ onMounted(async () => {
     </div>
 
     <ul v-else class="company-list">
-      <li v-for="company in companyStore.companies" :key="company.id">
+      <li v-for="company in companyStore.companies" :key="company.id" class="company-row">
         <button
           type="button"
           class="company-card"
@@ -103,10 +112,12 @@ onMounted(async () => {
               {{ company.description }}
             </span>
           </span>
-          <span v-if="company.llc_status" class="company-status">
-            {{ company.llc_status }}
-          </span>
         </button>
+        <CompanyStatusControl
+          class="company-row-status"
+          :company="company"
+          @updated="onStatusUpdated"
+        />
       </li>
     </ul>
 
@@ -203,27 +214,40 @@ onMounted(async () => {
   gap: 0.5rem;
 }
 
+/* #12231: card + its status control stack together as one row */
+.company-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: var(--bg-card);
+}
+
 .company-card {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.875rem 1rem;
   text-align: left;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-default);
-  background: var(--bg-card);
+  background: none;
+  border: none;
+  padding: 0;
   cursor: pointer;
 }
 
-.company-card:hover {
+.company-row:hover {
   border-color: var(--color-accent-border, var(--color-accent, var(--coselector-accent)));
   background: var(--bg-hover);
 }
 
 .company-card.active {
-  border-color: var(--color-accent, var(--coselector-accent));
-  background: var(--color-accent-subtle, var(--coselector-accent-subtle));
+  color: var(--color-accent, var(--coselector-accent));
+}
+
+.company-row-status {
+  padding-left: 1.375rem;
 }
 
 .company-dot {
@@ -252,18 +276,6 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.company-status {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.125rem 0.5rem;
-  border-radius: var(--radius-full);
-  background: var(--color-accent-subtle, var(--coselector-accent-subtle));
-  color: var(--color-accent-text, var(--color-accent, var(--coselector-accent)));
-  flex: none;
 }
 
 .selector-create {

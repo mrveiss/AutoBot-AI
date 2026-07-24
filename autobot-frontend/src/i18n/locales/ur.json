@@ -197,6 +197,22 @@
     "systemHealth": "سسٹم کی صحت",
     "advancedControl": "ایڈوانسڈ کنٹرول"
   },
+  "llcCompanyStatus": {
+    "onboarding": "آن بورڈنگ",
+    "active": "فعال",
+    "paused": "معطل",
+    "offboarding": "اختتام",
+    "archived": "محفوظ شدہ",
+    "activate": "فعال کریں",
+    "suspend": "معطل کریں",
+    "offboard": "اختتام کریں",
+    "archive": "محفوظ کریں",
+    "confirmTitle": "اسٹیٹس کی تبدیلی کی تصدیق کریں",
+    "confirmOffboard": "«{name}» کو اختتام کریں؟ یہ کمپنی کو بند کرنے کا آغاز کرتا ہے۔",
+    "confirmArchive": "«{name}» کو محفوظ کریں؟ یہ ایک حتمی حالت ہے اور اسے واپس نہیں کیا جا سکتا۔",
+    "confirm": "تصدیق کریں",
+    "updateError": "کمپنی کا اسٹیٹس تبدیل نہیں کیا جا سکا۔"
+  },
   "llcMembers": {
     "title": "اراکین",
     "subtitle": "اس کمپنی سے تعلق رکھنے والے افراد اور ان کے کرداروں کا انتظام کریں۔",
