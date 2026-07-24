@@ -71,6 +71,8 @@ def mock_rag_service():
             ),
         )
     )
+    # get_metrics is awaited by GraphRAGService.get_metrics(); must be AsyncMock
+    rag.get_metrics = AsyncMock(return_value={"searches": 0})
     return rag
 
 
@@ -192,8 +194,9 @@ async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_
         max_results=5,
     )
 
-    # Verify graph traversal was called
-    mock_memory_graph.get_related_entities.assert_called_once()
+    # Verify graph traversal was called (start_entity plus extracted entities
+    # each become a starting point, so it may be called more than once)
+    mock_memory_graph.get_related_entities.assert_called()
 
     # Verify graph metrics
     assert metrics.graph_expansion_enabled is True
