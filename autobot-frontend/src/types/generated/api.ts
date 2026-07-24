@@ -48812,11 +48812,29 @@ export interface paths {
         };
         /**
          * List Companies
-         * @description List top-level companies (parent_org_id IS NULL).
+         * @description List top-level companies (parent_org_id IS NULL) visible to the caller.
+         *
+         *     Tenant scope (#12233): previously unauthenticated and returned *every*
+         *     tenant's root company — cross-tenant enumeration of names/budgets. Now
+         *     authenticated; non-admins see only companies they are a member of, while
+         *     platform admins still see all roots. Membership is the same tenant
+         *     primitive ``get_tenant_context`` uses to authorise ``X-Organization-Id``.
          */
         get: operations["list_companies_api_llc_companies__get"];
         put?: never;
-        /** Create Company */
+        /**
+         * Create Company
+         * @description Create a company (root, or a sub-company under an owned parent).
+         *
+         *     Tenant scope (#12233): previously unauthenticated — any caller could create
+         *     a company and, by supplying ``parent_org_id``, graft one under *another*
+         *     tenant's company. Now authenticated; a non-admin may only create a
+         *     sub-company under a parent they belong to (cross-tenant parent → 404, so the
+         *     parent's existence is not disclosed). Root creation (no ``parent_org_id``,
+         *     the creation-wizard flow) is open to any authenticated user. The creator is
+         *     recorded as the company ``OWNER`` so they can immediately access it and it
+         *     surfaces in their tenant-scoped ``list_companies``.
+         */
         post: operations["create_company_api_llc_companies__post"];
         delete?: never;
         options?: never;
