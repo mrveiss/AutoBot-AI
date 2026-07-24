@@ -20134,6 +20134,8 @@ export interface paths {
          *     Issue #281: Refactored from 146 lines to use extracted helper methods.
          *     Issue #1088: Further refactored with _load_modules_from_chromadb and
          *     _scan_filesystem_imports helpers.
+         *     Issue #12330: Scope the filesystem scan to the requested source's clone path
+         *     so one project cannot see another's dependency graph.
          *
          *     Returns:
          *     - modules: List of all modules/files in the codebase
@@ -20248,6 +20250,8 @@ export interface paths {
          *
          *     This enables bidirectional navigation in the import tree UI.
          *     (Issue #315 - refactored to reduce nesting)
+         *     Issue #12330: Scope the scan to the requested source's clone path so one
+         *     project cannot see another's import tree.
          */
         get: operations["get_import_tree_api_analytics_codebase_analytics_import_tree_get"];
         put?: never;
@@ -20351,6 +20355,9 @@ export interface paths {
          *
          *     Issue #281/#665/#711: Refactored with caching.
          *     Issue #713: Enhanced with import-aware cross-module resolution.
+         *     Issue #12330: Scope the scan to the requested source's clone path so one
+         *     project cannot see another's call graph. The cache key is derived from the
+         *     resolved root (path-hashed) so each source keeps a distinct cache entry.
          */
         get: operations["get_call_graph_api_analytics_codebase_analytics_call_graph_get"];
         put?: never;
@@ -20594,6 +20601,7 @@ export interface paths {
          * @description Get all backend API endpoints.
          *
          *     Returns list of all FastAPI route definitions found in the backend.
+         *     Issue #12330: Scoped to the selected source's clone path.
          */
         get: operations["get_api_endpoints_api_analytics_codebase_api_endpoints_get"];
         put?: never;
@@ -20616,6 +20624,7 @@ export interface paths {
          * @description Get all frontend API calls.
          *
          *     Returns list of all API calls found in frontend TypeScript/Vue files.
+         *     Issue #12330: Scoped to the selected source's clone path.
          */
         get: operations["get_frontend_api_calls_api_analytics_codebase_api_calls_get"];
         put?: never;
@@ -20644,6 +20653,9 @@ export interface paths {
          *     - Orphaned endpoints (unused)
          *     - Missing endpoints (called but not defined)
          *     - Coverage percentage
+         *
+         *     Issue #12330: Analysis is scoped to the selected source's clone path and
+         *     cached per-source so one project's coverage never leaks into another's.
          */
         get: operations["get_endpoint_coverage_api_analytics_codebase_endpoint_coverage_get"];
         put?: never;
@@ -20667,6 +20679,7 @@ export interface paths {
          *
          *     Returns full analysis including all endpoints, calls, and mismatches.
          *     Use /endpoint-coverage for a summary only.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_endpoint_analysis_full_api_analytics_codebase_endpoint_analysis_get"];
         put?: never;
@@ -20690,6 +20703,7 @@ export interface paths {
          *
          *     These are backend endpoints that have no matching frontend calls.
          *     They may be unused code that can be removed.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_orphaned_endpoints_api_analytics_codebase_orphaned_endpoints_get"];
         put?: never;
@@ -20713,6 +20727,7 @@ export interface paths {
          *
          *     These are frontend API calls that have no matching backend endpoint.
          *     They may indicate bugs or deprecated endpoint usage.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_missing_endpoints_api_analytics_codebase_missing_endpoints_get"];
         put?: never;
@@ -20735,6 +20750,7 @@ export interface paths {
          * @description Get actively used endpoints with their call counts.
          *
          *     Returns endpoints that are both defined in backend and called from frontend.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_used_endpoints_api_analytics_codebase_used_endpoints_get"];
         put?: never;
@@ -20756,9 +20772,12 @@ export interface paths {
         put?: never;
         /**
          * Refresh Endpoint Cache
-         * @description Force refresh the endpoint analysis cache.
+         * @description Force refresh the endpoint analysis cache for a source.
          *
          *     Call this after making code changes to get updated results.
+         *     Issue #12330: Rebuilds only the requested source's entry, scoped to that
+         *     source's clone path, so refreshing one project does not evict or overwrite
+         *     another project's cached analysis.
          */
         post: operations["refresh_endpoint_cache_api_analytics_codebase_refresh_endpoint_cache_post"];
         delete?: never;
@@ -20778,6 +20797,8 @@ export interface paths {
          * Get Environment Analysis
          * @description Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
          *     Issue #665: Refactored to use extracted helpers for cache, analysis, and result building.
+         *     Issue #12330: Scope the scan to the selected source's clone path so one project
+         *     cannot see another's hardcoded-value analysis.
          */
         get: operations["get_environment_analysis_api_analytics_codebase_env_analysis_get"];
         put?: never;
@@ -20801,6 +20822,7 @@ export interface paths {
          *
          *     Returns actionable recommendations for creating/updating .env files
          *     based on detected hardcoded values.
+         *     Issue #12330: Scoped to the selected source's clone path.
          *
          *     Args:
          *         path: Root path to analyze
@@ -20829,6 +20851,7 @@ export interface paths {
          * @description Export full environment analysis results without truncation (Issue #631).
          *     Issue #665: Refactored to use extracted helpers for filtering and sorting.
          *     Issue #2735: Cache load and severity validation extracted to helpers.
+         *     Issue #12330: Scoped to the selected source's cached analysis.
          */
         get: operations["export_env_analysis_api_analytics_codebase_env_analysis_export_get"];
         put?: never;
@@ -127559,7 +127582,10 @@ export interface operations {
     };
     get_dependencies_api_analytics_codebase_analytics_dependencies_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope dependency scan to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127573,6 +127599,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127693,7 +127728,10 @@ export interface operations {
     };
     get_import_tree_api_analytics_codebase_analytics_import_tree_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope import tree to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127707,6 +127745,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127830,7 +127877,7 @@ export interface operations {
             query?: {
                 /** @description Force refresh, bypass cache */
                 refresh?: boolean;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope call graph to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -128150,7 +128197,10 @@ export interface operations {
     };
     get_api_endpoints_api_analytics_codebase_api_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128166,11 +128216,23 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_frontend_api_calls_api_analytics_codebase_api_calls_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128184,6 +128246,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -128191,7 +128262,7 @@ export interface operations {
     get_endpoint_coverage_api_analytics_codebase_endpoint_coverage_get: {
         parameters: {
             query?: {
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope coverage to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -128222,7 +128293,10 @@ export interface operations {
     };
     get_endpoint_analysis_full_api_analytics_codebase_endpoint_analysis_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope analysis to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128236,13 +128310,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_orphaned_endpoints_api_analytics_codebase_orphaned_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128256,13 +128342,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_missing_endpoints_api_analytics_codebase_missing_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128276,13 +128374,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_used_endpoints_api_analytics_codebase_used_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128298,11 +128408,23 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     refresh_endpoint_cache_api_analytics_codebase_refresh_endpoint_cache_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: refresh the selected source's cache entry */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128316,6 +128438,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -128335,7 +128466,7 @@ export interface operations {
                 llm_model?: string;
                 /** @description Priority level to filter: 'high', 'medium', 'low', or 'all' */
                 filter_priority?: string;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope analysis to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -128369,7 +128500,7 @@ export interface operations {
             query?: {
                 /** @description Root path to analyze (defaults to project root) */
                 path?: string;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope recommendations to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -128409,7 +128540,7 @@ export interface operations {
                 limit?: number;
                 /** @description Include recommendations in export */
                 include_recommendations?: boolean;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: export the selected code source's analysis */
                 source_id?: string | null;
             };
             header?: never;
