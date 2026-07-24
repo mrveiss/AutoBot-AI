@@ -232,26 +232,27 @@ async def get_cached_analysis():
     """
     Get the most recent cached analysis results.
 
-    Returns the last analysis if available, or 404 if no cached results exist.
+    Returns the last analysis if available, or a graceful "no_data" 200
+    response (Issue #12365) if no cached results exist or cache retrieval
+    fails — consistent with the other analytics `/cached` endpoints.
     """
     try:
         detector = await _get_detector()
         cached = await detector.get_cached_report()
-
-        if cached:
-            return JSONResponse(content={"success": True, "cached": True, "data": cached})
-        else:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "success": False,
-                    "message": "No cached analysis available. Run /analyze first.",
-                },
-            )
-
     except Exception as e:
-        logger.error("Failed to retrieve cached analysis: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to retrieve cache")
+        logger.warning("Anti-pattern cache retrieval failed, returning no_data: %s", e)
+        cached = None
+
+    if cached:
+        return JSONResponse(content={"success": True, "cached": True, "data": cached})
+
+    return JSONResponse(
+        content={
+            "success": False,
+            "status": "no_data",
+            "message": "No cached analysis available. Run /analyze first.",
+        },
+    )
 
 
 @router.post("/god-classes", response_model=DataResponse[AntiPatternGodClassesResultResponse])
