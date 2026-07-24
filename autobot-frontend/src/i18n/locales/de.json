@@ -732,7 +732,10 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "Der Chat konnte nicht gelöscht werden. Bitte versuchen Sie es erneut."
+    }
   },
   "settings": {
     "title": "Einstellungen",

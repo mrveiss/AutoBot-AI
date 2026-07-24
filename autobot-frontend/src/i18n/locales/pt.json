@@ -732,7 +732,10 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "Não foi possível excluir o chat. Tente novamente."
+    }
   },
   "settings": {
     "title": "Configurações",

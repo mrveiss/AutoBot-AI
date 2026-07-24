@@ -5552,7 +5552,10 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "چیٹ حذف نہیں ہو سکی۔ براہ کرم دوبارہ کوشش کریں۔"
+    }
   },
   "serviceMessages": {
     "metadata": "Metadata",

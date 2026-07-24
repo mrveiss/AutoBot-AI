@@ -5552,7 +5552,10 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "לא ניתן היה למחוק את הצ'אט. אנא נסה שוב."
+    }
   },
   "serviceMessages": {
     "metadata": "Metadata",
