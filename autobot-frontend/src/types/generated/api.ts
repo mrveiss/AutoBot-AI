@@ -48858,7 +48858,9 @@ export interface paths {
          *
          *     Issue #12211: this is the dedicated transition the CompanyUpdate schema
          *     defers to (``llc_status`` is intentionally not PATCH-able) — without it a
-         *     company was stuck in ONBOARDING forever.
+         *     company was stuck in ONBOARDING forever. Tenant access is enforced the same
+         *     way as ``get_org_chart``/``reorder_backlog``: the caller's org must match
+         *     *company_id* unless they are a platform admin.
          */
         post: operations["activate_company_api_llc_companies__company_id__activate_post"];
         delete?: never;
@@ -48879,6 +48881,8 @@ export interface paths {
         /**
          * Suspend Company
          * @description Transition a company to PAUSED (from ONBOARDING or ACTIVE). Issue #12211.
+         *
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
          */
         post: operations["suspend_company_api_llc_companies__company_id__suspend_post"];
         delete?: never;
@@ -48899,6 +48903,8 @@ export interface paths {
         /**
          * Archive Company
          * @description Transition a company to ARCHIVED (from PAUSED or OFFBOARDING). Issue #12211.
+         *
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
          */
         post: operations["archive_company_api_llc_companies__company_id__archive_post"];
         delete?: never;
