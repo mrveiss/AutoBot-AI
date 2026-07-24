@@ -14,31 +14,65 @@ Provides endpoints to:
 """
 
 import asyncio
+from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
 
+from .shared import resolve_scan_root
+
 logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Cache for analysis results
+# Cache for analysis results.
+# Issue #12356: Keyed by source_id (or "default") to prevent cross-project
+# leakage -- a single global "latest" entry returned one project's cross-language
+# patterns for every other selected source.
 _analysis_cache: dict = {}
 # Lock for thread-safe access to _analysis_cache (Issue #559)
 _analysis_cache_lock = asyncio.Lock()
 
 
-def _get_detector() -> CrossLanguagePatternDetector:
-    """Get or create the pattern detector instance."""
+def _cache_key(source_id: str | None) -> str:
+    """Cache key for a source. Issue #12356: scope per project, not global."""
+    return source_id or "default"
+
+
+def _get_detector(
+    project_root: Path | None = None,
+    source_id: str | None = None,
+    use_llm: bool = True,
+    use_cache: bool = True,
+) -> CrossLanguagePatternDetector:
+    """Get or create the pattern detector instance.
+
+    Issue #12356: Bind the detector to the requested source's clone path and
+    scope tag so it scans the selected project and keys its ChromaDB pattern
+    collection/query + embedding cache per source, rather than defaulting to
+    AutoBot's own root and a shared, unscoped collection.
+    """
     return CrossLanguagePatternDetector(
-        use_llm=True,
-        use_cache=True,
+        project_root=str(project_root) if project_root else None,
+        use_llm=use_llm,
+        use_cache=use_cache,
         embedding_model="nomic-embed-text",
+        source_id=source_id,
     )
+
+
+async def _get_cached_analysis(source_id: str | None):
+    """Return the cached analysis for a source, or None (Issue #12356).
+
+    Reads only the requested source's entry so one project's cached patterns
+    are never returned for another selected source.
+    """
+    async with _analysis_cache_lock:
+        return _analysis_cache.get(_cache_key(source_id))
 
 
 @router.post("/cross-language/analyze")
@@ -50,7 +84,7 @@ def _get_detector() -> CrossLanguagePatternDetector:
 async def run_cross_language_analysis(
     use_llm: bool = True,
     use_cache: bool = True,
-    source_id: str | None = None,
+    source_id: str | None = Query(None, description="#12356: scope analysis to the selected code source"),
 ) -> JSONResponse:
     """
     Run full cross-language pattern analysis.
@@ -64,20 +98,28 @@ async def run_cross_language_analysis(
     Args:
         use_llm: Whether to use LLM for semantic analysis (default: True)
         use_cache: Whether to cache results (default: True)
+        source_id: Scope the scan and cache to the selected code source
+            (Issue #12356). Falls back to AutoBot's own root only when no source
+            is resolvable.
 
     Returns:
         Complete analysis results with all detected patterns
     """
-    detector = CrossLanguagePatternDetector(
+    # Issue #12356: scan the requested source's clone path (not AutoBot's own
+    # root) and key both the detector and this cache entry per source.
+    scan_root = await resolve_scan_root(source_id)
+    detector = _get_detector(
+        project_root=scan_root,
+        source_id=source_id,
         use_llm=use_llm,
         use_cache=use_cache,
     )
 
     analysis = await detector.run_analysis()
 
-    # Cache the result (thread-safe, Issue #559)
+    # Cache the result per source (thread-safe, Issue #559 / #12356)
     async with _analysis_cache_lock:
-        _analysis_cache["latest"] = analysis
+        _analysis_cache[_cache_key(source_id)] = analysis
 
     return JSONResponse(
         {
@@ -93,27 +135,29 @@ async def run_cross_language_analysis(
     operation="get_cross_language_summary",
     error_code_prefix="CODEBASE",
 )
-async def get_cross_language_summary() -> JSONResponse:
+async def get_cross_language_summary(
+    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get summary of latest cross-language analysis.
 
     Returns cached results if available, otherwise returns empty status.
     Use POST /cross-language/analyze to trigger a new analysis.
+    Issue #12356: Reads only the selected source's cached analysis.
     """
-    # Check cache first (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" not in _analysis_cache:
-            # Return empty status instead of auto-running full analysis
-            # Full analysis can take minutes and should only be triggered
-            # via POST /analyze endpoint explicitly
-            return JSONResponse(
-                {
-                    "status": "empty",
-                    "message": "No analysis available. Click 'Full Scan' to run analysis.",
-                    "has_cached_data": False,
-                }
-            )
-        analysis = _analysis_cache["latest"]
+    # Check cache first (thread-safe, Issue #559 / #12356: per-source)
+    analysis = await _get_cached_analysis(source_id)
+    if analysis is None:
+        # Return empty status instead of auto-running full analysis
+        # Full analysis can take minutes and should only be triggered
+        # via POST /analyze endpoint explicitly
+        return JSONResponse(
+            {
+                "status": "empty",
+                "message": "No analysis available. Click 'Full Scan' to run analysis.",
+                "has_cached_data": False,
+            }
+        )
 
     return JSONResponse(
         {
@@ -162,23 +206,25 @@ async def get_cross_language_summary() -> JSONResponse:
     operation="get_dto_mismatches",
     error_code_prefix="CODEBASE",
 )
-async def get_dto_mismatches() -> JSONResponse:
+async def get_dto_mismatches(
+    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get DTO/type mismatches between backend and frontend.
 
     Returns mismatches where Python models and TypeScript interfaces differ.
+    Issue #12356: Reads only the selected source's cached analysis.
     """
-    # Check cache (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" not in _analysis_cache:
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "No analysis available. Run /cross-language/analyze first.",
-                },
-                status_code=400,
-            )
-        analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559 / #12356: per-source)
+    analysis = await _get_cached_analysis(source_id)
+    if analysis is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            },
+            status_code=400,
+        )
 
     return JSONResponse(
         {
@@ -195,23 +241,25 @@ async def get_dto_mismatches() -> JSONResponse:
     operation="get_validation_duplications",
     error_code_prefix="CODEBASE",
 )
-async def get_validation_duplications() -> JSONResponse:
+async def get_validation_duplications(
+    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get duplicated validation logic across languages.
 
     Returns validation rules that exist in both Python and TypeScript.
+    Issue #12356: Reads only the selected source's cached analysis.
     """
-    # Check cache (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" not in _analysis_cache:
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "No analysis available. Run /cross-language/analyze first.",
-                },
-                status_code=400,
-            )
-        analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559 / #12356: per-source)
+    analysis = await _get_cached_analysis(source_id)
+    if analysis is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            },
+            status_code=400,
+        )
 
     return JSONResponse(
         {
@@ -228,25 +276,28 @@ async def get_validation_duplications() -> JSONResponse:
     operation="get_api_contract_mismatches",
     error_code_prefix="CODEBASE",
 )
-async def get_api_contract_mismatches() -> JSONResponse:
+async def get_api_contract_mismatches(
+    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get API contract mismatches between backend and frontend.
 
     Returns endpoints that are:
     - Orphaned (backend has, frontend doesn't call)
     - Missing (frontend calls, backend doesn't have)
+
+    Issue #12356: Reads only the selected source's cached analysis.
     """
-    # Check cache (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" not in _analysis_cache:
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "No analysis available. Run /cross-language/analyze first.",
-                },
-                status_code=400,
-            )
-        analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559 / #12356: per-source)
+    analysis = await _get_cached_analysis(source_id)
+    if analysis is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            },
+            status_code=400,
+        )
 
     orphaned = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "orphaned_endpoint"]
     missing = [m for m in analysis.api_contract_mismatches if m.mismatch_type == "missing_endpoint"]
@@ -272,6 +323,7 @@ async def get_api_contract_mismatches() -> JSONResponse:
 async def get_semantic_matches(
     min_similarity: float = 0.7,
     limit: int = 50,
+    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
 ) -> JSONResponse:
     """
     Get semantically similar patterns across languages.
@@ -282,18 +334,18 @@ async def get_semantic_matches(
     Args:
         min_similarity: Minimum similarity score (0.0-1.0, default: 0.7)
         limit: Maximum number of matches to return (default: 50)
+        source_id: Scope to the selected code source (Issue #12356)
     """
-    # Check cache (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" not in _analysis_cache:
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "No analysis available. Run /cross-language/analyze first.",
-                },
-                status_code=400,
-            )
-        analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559 / #12356: per-source)
+    analysis = await _get_cached_analysis(source_id)
+    if analysis is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            },
+            status_code=400,
+        )
 
     # Filter by similarity threshold
     filtered_matches = [m for m in analysis.pattern_matches if m.similarity_score >= min_similarity]
@@ -324,6 +376,7 @@ async def get_patterns_by_category(
     category: str | None = None,
     severity: str | None = None,
     limit: int = 100,
+    source_id: str | None = Query(None, description="#12356: scope to the selected code source"),
 ) -> JSONResponse:
     """
     Get detected patterns filtered by category and/or severity.
@@ -332,18 +385,18 @@ async def get_patterns_by_category(
         category: Filter by category (api_contract, data_types, validation, etc.)
         severity: Filter by severity (critical, high, medium, low, info)
         limit: Maximum patterns to return (default: 100)
+        source_id: Scope to the selected code source (Issue #12356)
     """
-    # Check cache (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" not in _analysis_cache:
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "No analysis available. Run /cross-language/analyze first.",
-                },
-                status_code=400,
-            )
-        analysis = _analysis_cache["latest"]
+    # Check cache (thread-safe, Issue #559 / #12356: per-source)
+    analysis = await _get_cached_analysis(source_id)
+    if analysis is None:
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "No analysis available. Run /cross-language/analyze first.",
+            },
+            status_code=400,
+        )
 
     patterns = analysis.patterns
 
@@ -376,17 +429,19 @@ async def get_patterns_by_category(
     operation="clear_cross_language_cache",
     error_code_prefix="CODEBASE",
 )
-async def clear_cross_language_cache() -> JSONResponse:
+async def clear_cross_language_cache(
+    source_id: str | None = Query(None, description="#12356: clear only this source's cache entry"),
+) -> JSONResponse:
     """
     Clear the cross-language analysis cache.
 
     Call this after making code changes to get fresh results.
+    Issue #12356: Clears only the requested source's entry so clearing one
+    project's cache does not evict another project's cached analysis.
     """
-    global _analysis_cache
-
-    # Clear cache (thread-safe, Issue #559)
+    # Clear cache (thread-safe, Issue #559 / #12356: per-source)
     async with _analysis_cache_lock:
-        _analysis_cache = {}
+        _analysis_cache.pop(_cache_key(source_id), None)
 
     return JSONResponse(
         {
