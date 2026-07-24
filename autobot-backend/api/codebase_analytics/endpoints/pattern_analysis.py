@@ -138,9 +138,7 @@ async def _clear_checkpoint(task_id: str) -> None:
 
 
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
-async def start_pattern_analysis(
-    request: PatternAnalysisRequest, http_request: Request
-) -> PatternAnalysisStatus:
+async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: Request) -> PatternAnalysisStatus:
     """Enqueue code pattern analysis as a Celery task (GH#6505, GH#8436)."""
     # #12375: source_id arrives in the request BODY here, so the router-level
     # require_source_access dependency (which reads path/query params only)

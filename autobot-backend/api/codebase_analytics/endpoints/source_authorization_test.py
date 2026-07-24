@@ -104,9 +104,7 @@ class TestAuthorizeSourceAccess:
             "api.codebase_analytics.source_storage.get_source",
             AsyncMock(return_value=src),
         ):
-            await shared.authorize_source_access(
-                src.id, {"username": "service:slm", "role": "admin", "service": True}
-            )
+            await shared.authorize_source_access(src.id, {"username": "service:slm", "role": "admin", "service": True})
 
     async def test_subonly_token_denied_on_foreign_private(self):
         """#12375 item c: an authenticated admin whose token carries only sub/username
@@ -246,13 +244,14 @@ class TestPatternAnalyzeBodyAuthz:
 
         req = pa.PatternAnalysisRequest(source_id="s1", path="/tmp/proj")
         delay = _FakeDelay()
-        with patch.object(pa.run_pattern_analysis, "delay", delay), patch.object(
-            pa, "store_latest_task_id", AsyncMock()
-        ), patch(
-            "auth_middleware.get_current_user", AsyncMock(return_value=user)
-        ), patch(
-            "api.codebase_analytics.source_storage.get_source",
-            AsyncMock(return_value=src),
+        with (
+            patch.object(pa.run_pattern_analysis, "delay", delay),
+            patch.object(pa, "store_latest_task_id", AsyncMock()),
+            patch("auth_middleware.get_current_user", AsyncMock(return_value=user)),
+            patch(
+                "api.codebase_analytics.source_storage.get_source",
+                AsyncMock(return_value=src),
+            ),
         ):
             result = await pa.start_pattern_analysis(req, _FakeRequest())
         return result, delay
