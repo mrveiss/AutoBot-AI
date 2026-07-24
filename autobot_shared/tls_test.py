@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from autobot_shared.tls import _is_loopback_target, get_internal_tls_context
+from autobot_shared.tls import MIN_TLS_VERSION, _is_loopback_target, get_internal_tls_context
 
 
 class TestGetInternalTlsContext:
@@ -26,6 +26,26 @@ class TestGetInternalTlsContext:
         """Default call returns an ssl.SSLContext."""
         ctx = get_internal_tls_context()
         assert isinstance(ctx, ssl.SSLContext)
+
+    def test_minimum_tls_version_is_v1_2(self) -> None:
+        """Canonical constant pins the minimum TLS version to 1.2 (#12285)."""
+        assert MIN_TLS_VERSION == ssl.TLSVersion.TLSv1_2
+
+    def test_default_context_rejects_tls_below_1_2(self) -> None:
+        """Default (strict) context enforces the minimum TLS version (#12285)."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AUTOBOT_SKIP_TLS_VERIFY", None)
+            os.environ.pop("AUTOBOT_TLS_CA_PATH", None)
+            ctx = get_internal_tls_context()
+        assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
+
+    def test_loopback_context_still_enforces_min_tls_version(self) -> None:
+        """Even the permissive loopback path keeps TLS >= 1.2 (#12285)."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AUTOBOT_SKIP_TLS_VERIFY", None)
+            os.environ.pop("AUTOBOT_TLS_CA_PATH", None)
+            ctx = get_internal_tls_context("https://127.0.0.1:8000")
+        assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
 
     def test_verification_enabled_by_default(self) -> None:
         """Without any env vars, verification is not disabled."""
