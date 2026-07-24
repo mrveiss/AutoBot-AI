@@ -7650,6 +7650,7 @@
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "Saúde do sistema",
+    "providerFallback": "Fallback de provedor",
     "advancedControl": "Controle avançado"
   },
   "llcCompanyStatus": {
@@ -8623,6 +8624,22 @@
       "error": "Falha ao carregar a saúde do sistema",
       "refresh": "Atualizar",
       "noSources": "Nenhuma fonte de conteúdo configurada"
+    },
+    "providerFallback": {
+      "title": "Fallback de provedor",
+      "subtitle": "Atividade ao vivo de fallback de provedores e modelos LLM",
+      "status": "Estado",
+      "stateHealthy": "Nenhum fallback ativo",
+      "stateDegraded": "Fallback ativo",
+      "active": "Fallbacks ativos",
+      "chains": "Cadeias configuradas",
+      "timeline": "Atividade ao vivo",
+      "switched": "Alternado",
+      "exhausted": "Esgotado",
+      "refresh": "Atualizar",
+      "loading": "Carregando estado de fallback…",
+      "noData": "Nenhuma atividade de fallback de provedor",
+      "none": "nenhum"
     }
   },
   "components": {

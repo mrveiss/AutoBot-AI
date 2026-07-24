@@ -7650,6 +7650,7 @@
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
     "systemHealth": "Santé du système",
+    "providerFallback": "Basculement de fournisseur",
     "advancedControl": "Contrôle avancé"
   },
   "llcCompanyStatus": {
@@ -8623,6 +8624,22 @@
       "error": "Échec du chargement de la santé du système",
       "refresh": "Actualiser",
       "noSources": "Aucune source de contenu configurée"
+    },
+    "providerFallback": {
+      "title": "Basculement de fournisseur",
+      "subtitle": "Activité en direct des basculements de fournisseurs et modèles LLM",
+      "status": "Statut",
+      "stateHealthy": "Aucun basculement actif",
+      "stateDegraded": "Basculement actif",
+      "active": "Basculements actifs",
+      "chains": "Chaînes configurées",
+      "timeline": "Activité en direct",
+      "switched": "Basculé",
+      "exhausted": "Épuisé",
+      "refresh": "Actualiser",
+      "loading": "Chargement de l'état de basculement…",
+      "noData": "Aucune activité de basculement de fournisseur",
+      "none": "aucun"
     }
   },
   "components": {

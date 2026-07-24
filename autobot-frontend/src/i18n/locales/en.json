@@ -7657,6 +7657,7 @@
     "adminSandbox": "Sandbox",
     "budgetPolicies": "Budget Policies",
     "systemHealth": "System Health",
+    "providerFallback": "Provider Fallback",
     "advancedControl": "Advanced Control",
     "sharedLinks": "Shared Chat Links",
     "companyOs": "Company OS",
@@ -8623,6 +8624,22 @@
       "error": "Failed to load system health",
       "refresh": "Refresh",
       "noSources": "No content sources configured"
+    },
+    "providerFallback": {
+      "title": "Provider Fallback",
+      "subtitle": "Live LLM provider and model fallback activity",
+      "status": "Status",
+      "stateHealthy": "No active fallbacks",
+      "stateDegraded": "Fallback active",
+      "active": "Active fallbacks",
+      "chains": "Configured chains",
+      "timeline": "Live activity",
+      "switched": "Switched",
+      "exhausted": "Exhausted",
+      "refresh": "Refresh",
+      "loading": "Loading fallback status…",
+      "noData": "No provider fallback activity",
+      "none": "none"
     }
   },
   "components": {
