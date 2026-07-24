@@ -216,12 +216,15 @@
     user: root
   tags: ['time_sync', 'monitoring']
 
-- name: "Time Sync | Create logrotate configuration"
-  template:
-    src: time-sync-logrotate.j2
-    dest: "/etc/logrotate.d/autobot-time-sync"
-    mode: '0644'
-  tags: ['time_sync', 'logging']
+# #12294: time-sync.log is rotated by the unified /var/log/autobot/*.log
+# config (owned by the common role), not a per-file config. Reuse that single
+# canonical config here so standalone time-sync deploys still get rotation and
+# there is no duplicate logrotate entry for time-sync.log.
+- name: "Time Sync | Configure unified /var/log/autobot log rotation (#12294)"
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: logrotate
+  tags: ['time_sync', 'logging', 'logrotate']
 
 - name: "Time Sync | Final status check and report"
   block:

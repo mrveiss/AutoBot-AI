@@ -1,0 +1,38 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+---
+# Unified log rotation for /var/log/autobot/*.log (issue #12294).
+#
+# Shared task file: included by the common role on every provisioned node,
+# and reused by the time_sync role via `include_role: name=common
+# tasks_from=logrotate` so standalone time-sync deploys get the same single
+# canonical config. Kept self-contained (no role-var dependencies) so it is
+# safe to include from any play.
+
+- name: "Logrotate | Ensure logrotate is installed"
+  ansible.builtin.package:
+    name: logrotate
+    state: present
+  become: true
+  tags: ['common', 'logging', 'logrotate']
+
+- name: "Logrotate | Install unified /var/log/autobot rotation config (#12294)"
+  ansible.builtin.template:
+    src: autobot-logrotate.j2
+    dest: /etc/logrotate.d/autobot
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  tags: ['common', 'logging', 'logrotate']
+
+# The old per-file config only rotated time-sync.log. It is now superseded by
+# the unified `autobot` config above, whose `/var/log/autobot/*.log` glob also
+# covers time-sync.log. Remove it so logrotate does not report a duplicate log
+# entry for time-sync.log (which would make it exit non-zero).
+- name: "Logrotate | Remove superseded per-file time-sync config (#12294)"
+  ansible.builtin.file:
+    path: /etc/logrotate.d/autobot-time-sync
+    state: absent
+  become: true
+  tags: ['common', 'logging', 'logrotate']
