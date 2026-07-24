@@ -125,7 +125,7 @@ class TestPluginSourceUrl:
 
     def test_contains_github(self):
         url = _plugin_source_url("test")
-        assert "github.com" in url or "http" in url
+        assert "github.com" in url or "http" in url  # codeql[py/incomplete-url-substring-sanitization]
 
     def test_different_slugs_differ(self):
         assert _plugin_source_url("a") != _plugin_source_url("b")
