@@ -178,6 +178,15 @@ class GoalService(LLCServiceBase):
                 else:
                     setattr(goal, key, value)
         await session.flush()
+        # GH#12209: SQLAlchemy's default eager_defaults="auto" only fetches
+        # onupdate-computed columns (updated_at) via RETURNING on INSERT, not
+        # UPDATE (see Mapper._prefer_eager_defaults vs the strict `is True`
+        # check gating UPDATE RETURNING in orm/persistence.py). Without this
+        # refresh, `updated_at` stays expired after flush(); the first sync
+        # attribute access outside a greenlet context (Pydantic's
+        # `GoalResponse.model_validate` in the router) raises MissingGreenlet.
+        # Refresh it here, inside the awaited/greenlet-safe scope.
+        await session.refresh(goal, attribute_names=["updated_at"])
         # Fix #2: Index after commit, not after flush
         self._schedule_post_commit_index(session, goal)
         return goal
