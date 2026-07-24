@@ -169,7 +169,13 @@ async def create_company(
 async def get_company(
     company_id: uuid.UUID,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
+    # Issue #12233: tenant authz — caller's org must match company_id unless
+    # platform admin (same guard as get_org_chart / the status transitions).
+    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.get(company_id)
         return _to_read(org)
@@ -182,7 +188,12 @@ async def update_company(
     company_id: uuid.UUID,
     body: CompanyUpdate,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         org = await svc.update(company_id, body)
         await svc.session.commit()
@@ -208,7 +219,12 @@ async def update_company(
 async def delete_company(
     company_id: uuid.UUID,
     svc: CompanyService = Depends(_get_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    if str(ctx.org_id) != str(company_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     try:
         await svc.delete(company_id)
         await svc.session.commit()
