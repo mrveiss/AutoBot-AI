@@ -142,11 +142,13 @@ class ApiService {
   // Research Agent API
   // #12326: backend serves this at POST /api/agent/research/comprehensive
   // (autobot-backend/api/agent.py:1126). The bare /research/comprehensive path 404'd.
-  async performResearch(query: string, focus = 'general', maxResults = 5): Promise<ApiResponse> {
+  // Body maps to ResearchTaskRequest (autobot-backend/api/schemas_agent.py:1625):
+  // required field is `research_query`; the backend has no `focus`/`max_results`
+  // concept, so those legacy args are ignored. `include_web`/`include_code_search`
+  // default server-side (True/False).
+  async performResearch(query: string): Promise<ApiResponse> {
     return this.post(`${getApiBase()}/agent/research/comprehensive`, {
-      query,
-      focus,
-      max_results: maxResults
+      research_query: query
     })
   }
 
