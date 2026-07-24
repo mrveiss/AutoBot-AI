@@ -88,13 +88,35 @@
   become_user: postgres
   loop: "{{ databases }}"
 
-- name: Save credentials to file
-  ansible.builtin.template:
-    src: db-credentials.env.j2
-    dest: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+# #12224: db-credentials.env is SHARED between the SLM phase (SLM_*) and the
+# managed-backend phase (AUTOBOT_*). The previous `template` module rewrote the
+# WHOLE file with only the current prefix, so on a co-located box the second
+# phase erased the first phase's keys (e.g. SLM_DATABASE_URL) — the SLM control
+# plane then lost its creds and crash-looped on the next restart. Write each
+# prefix as its own marked block so both coexist and neither clobbers the other;
+# this also lets "Reuse existing database password" find the prior password, so
+# a redeploy no longer regenerates it and env/Postgres never diverge.
+- name: "Save credentials to file (per-prefix block, #12224)"
+  ansible.builtin.blockinfile:
+    path: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+    marker: "# {mark} {{ db_env_prefix }} DB CREDENTIALS (managed by postgresql role)"
+    create: true
     owner: "{{ autobot_user }}"
     group: "{{ autobot_group }}"
     mode: '0600'
+    block: |
+      {{ db_env_prefix }}_DB_HOST={{ db_host | default('127.0.0.1') }}
+      {{ db_env_prefix }}_DB_PORT={{ postgresql_port }}
+      {{ db_env_prefix }}_DB_USER={{ db_user }}
+      {{ db_env_prefix }}_DB_PASSWORD={{ db_password }}
+      {{ db_env_prefix }}_DB_NAME={{ databases | first }}
+      {% for db in databases %}
+      {{ db_env_prefix }}_DB_{{ db | upper | replace('-', '_') }}={{ db }}
+      {% endfor %}
+      {{ db_env_prefix }}_DATABASE_URL=postgresql+asyncpg://{{ db_user }}:{{ db_password }}@{{ db_host | default('127.0.0.1') }}:{{ postgresql_port }}/{{ databases | first }}
+      {% for db in databases[1:] %}
+      {{ db | upper | replace('-', '_') }}_DATABASE_URL=postgresql+asyncpg://{{ db_user }}:{{ db_password }}@{{ db_host | default('127.0.0.1') }}:{{ postgresql_port }}/{{ db }}
+      {% endfor %}
   become: true
   no_log: true
 
