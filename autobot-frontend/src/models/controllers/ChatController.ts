@@ -7,6 +7,7 @@ import apiClient from '@/utils/ApiClient'
 import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
+import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 
@@ -815,93 +816,71 @@ export class ChatController {
     fileAction?: 'delete' | 'transfer_kb' | 'transfer_shared',
     fileOptions?: Record<string, unknown>
   ): Promise<void> {
+    // Step 1: Delete from the backend FIRST. Removing the chat locally is only safe
+    // once the server confirms the delete — otherwise the client and server diverge
+    // and the "deleted" chat reappears on reload (#12327).
     try {
-
-      // CRITICAL FIX: Enhanced deletion with proper error handling and persistence
-      let backendDeleteSucceeded = false
-      let storeDeleteSucceeded = false
-
-      // Step 1: Try to delete from backend
-      try {
-        await chatRepository.deleteChat(sessionId, fileAction, fileOptions)
-        if (fileAction) {
-          logger.debug(`File action executed: ${fileAction}`, fileOptions)
-        }
-        backendDeleteSucceeded = true
-        logger.debug('Chat successfully deleted from backend:', sessionId)
-      } catch (error: unknown) {
-        logger.error('Backend deletion failed:', error)
-        // Don't throw yet - we'll handle this based on error type
-
-        // If it's a 404 (chat not found), still proceed with local deletion
-        const errStatus = (error as { status?: number }).status
-        if (errStatus === 404) {
-          logger.warn('Chat not found on backend, proceeding with local deletion')
-          backendDeleteSucceeded = true // Treat as success since it's already gone
-        } else {
-          // For other errors, show user error but still try local deletion
-          logger.warn('Backend deletion failed, but proceeding with local deletion to maintain consistency')
-          this.getAppStore()?.setGlobalError(`Backend deletion failed: ${extractErrorMessage(error, 'Unknown error')}. Chat removed locally.`)
-        }
+      await chatRepository.deleteChat(sessionId, fileAction, fileOptions)
+      if (fileAction) {
+        logger.debug(`File action executed: ${fileAction}`, fileOptions)
       }
-
-      // Step 2: Always try to remove from store for consistency
-      try {
-        // Store current sessions count for verification
-        const beforeCount = this.chatStore.sessions.length
-
-        // Delete from store
-        this.chatStore.deleteSession(sessionId)
-
-        // Verify deletion occurred
-        const afterCount = this.chatStore.sessions.length
-        if (afterCount < beforeCount) {
-          storeDeleteSucceeded = true
-          logger.debug('Chat successfully deleted from store:', sessionId)
-
-          // CRITICAL FIX: Force persistence to ensure localStorage is updated immediately
-          // Since Pinia persistence is automatic, we'll add a small delay to ensure it completes
-          await new Promise(resolve => setTimeout(resolve, 100))
-
-          // Verify persistence by checking localStorage directly
-          try {
-            const persistedData = localStorage.getItem('autobot-chat-store')
-            if (persistedData) {
-              const parsed = JSON.parse(persistedData)
-              const persistedSession = parsed.sessions?.find(
-                (s: { id?: string }) => s.id === sessionId
-              )
-              if (!persistedSession) {
-                logger.debug('Chat deletion confirmed in localStorage')
-              } else {
-                logger.warn('Chat still exists in localStorage - persistence may have failed')
-              }
-            }
-          } catch (persistError) {
-            logger.warn('Could not verify localStorage persistence:', persistError)
-          }
-
-        } else {
-          logger.warn('Store deletion did not reduce session count - session may not have existed')
-          storeDeleteSucceeded = true // If it wasn't there, consider it a success
-        }
-      } catch (error: unknown) {
-        logger.error('Store deletion failed:', error)
-        throw new Error(`Failed to delete chat from local storage: ${extractErrorMessage(error, 'Unknown error')}`)
-      }
-
-      // Step 3: Report final status
-      if (storeDeleteSucceeded) {
-        logger.debug(`Chat session ${sessionId} successfully deleted (Backend: ${backendDeleteSucceeded ? 'Success' : 'Failed'}, Store: Success)`)
-      } else {
-        throw new Error('Failed to delete chat from local storage')
-      }
-
+      logger.debug('Chat successfully deleted from backend:', sessionId)
     } catch (error: unknown) {
-      logger.error('Failed to delete chat session:', error)
-      this.getAppStore()?.setGlobalError(`Failed to delete chat: ${extractErrorMessage(error, 'Unknown error')}`)
-      throw error // Re-throw to let caller handle
-    } finally {
+      const errStatus = (error as { status?: number }).status
+      if (errStatus !== 404) {
+        // #12327: the backend rejected or never received the delete. Do NOT remove
+        // the chat locally — keep it in place and surface an unambiguous failure so
+        // the user can retry, instead of reporting a success that never happened.
+        logger.error('Backend deletion failed; keeping chat locally:', error)
+        this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.deleteFailed'))
+        throw error
+      }
+      // 404 → the chat is already gone on the backend, so reconciling local state is
+      // correct. Fall through to the local removal below.
+      logger.warn('Chat not found on backend, reconciling local deletion:', sessionId)
+    }
+
+    // Step 2: Backend delete confirmed (or the chat was already gone) — remove it from
+    // the local store and persisted state.
+    try {
+      const beforeCount = this.chatStore.sessions.length
+
+      this.chatStore.deleteSession(sessionId)
+
+      const afterCount = this.chatStore.sessions.length
+      if (afterCount < beforeCount) {
+        logger.debug('Chat successfully deleted from store:', sessionId)
+
+        // Pinia persistence is automatic; give it a tick to flush to localStorage
+        // before verifying below.
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        // Verify persistence by checking localStorage directly
+        try {
+          const persistedData = localStorage.getItem('autobot-chat-store')
+          if (persistedData) {
+            const parsed = JSON.parse(persistedData)
+            const persistedSession = parsed.sessions?.find(
+              (s: { id?: string }) => s.id === sessionId
+            )
+            if (!persistedSession) {
+              logger.debug('Chat deletion confirmed in localStorage')
+            } else {
+              logger.warn('Chat still exists in localStorage - persistence may have failed')
+            }
+          }
+        } catch (persistError) {
+          logger.warn('Could not verify localStorage persistence:', persistError)
+        }
+      } else {
+        logger.warn('Store deletion did not reduce session count - session may not have existed')
+      }
+
+      logger.debug(`Chat session ${sessionId} successfully deleted`)
+    } catch (error: unknown) {
+      logger.error('Store deletion failed:', error)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.deleteFailed'))
+      throw new Error(`Failed to delete chat from local storage: ${extractErrorMessage(error, 'Unknown error')}`)
     }
   }
 

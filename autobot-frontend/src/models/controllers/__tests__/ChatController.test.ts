@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ChatController } from '../ChatController'
 import * as chatRepository from '@/models/repositories'
 import { useChatStore } from '@/stores/useChatStore'
+import { useAppStore } from '@/stores/useAppStore'
 
 // Mock the repositories
 vi.mock('@/models/repositories', () => ({
@@ -184,6 +185,72 @@ describe('ChatController', () => {
 
       const [, , sentOptions] = vi.mocked(chatRepository.chatRepository.sendMessage).mock.calls[0]
       expect(sentOptions).not.toHaveProperty('company_id')
+    })
+  })
+
+  describe('deleteChatSession backend-failure handling (#12327)', () => {
+    // Build a store exposing a deleteSession spy and a sessions list so the
+    // controller's local-removal step can be observed.
+    function deletableStore() {
+      return {
+        deleteSession: vi.fn(),
+        sessions: [{ id: 's1' }],
+        currentSessionId: 's1'
+      }
+    }
+
+    it('keeps the chat locally and surfaces an error when the backend delete fails', async () => {
+      const store = deletableStore()
+      vi.mocked(useChatStore).mockReturnValue(
+        store as unknown as ReturnType<typeof useChatStore>
+      )
+      const setGlobalError = vi.fn()
+      vi.mocked(useAppStore).mockReturnValue(
+        { setGlobalError } as unknown as ReturnType<typeof useAppStore>
+      )
+      // A network failure has no HTTP status — the mirror of the reported case.
+      vi.mocked(chatRepository.chatRepository.deleteChat).mockRejectedValue(
+        new Error('Network Error')
+      )
+
+      await expect(controller.deleteChatSession('s1')).rejects.toThrow('Network Error')
+
+      // The chat must NOT be removed locally, and the user must be told it failed.
+      expect(store.deleteSession).not.toHaveBeenCalled()
+      expect(setGlobalError).toHaveBeenCalledTimes(1)
+    })
+
+    it('removes the chat locally when the backend delete succeeds', async () => {
+      const store = deletableStore()
+      vi.mocked(useChatStore).mockReturnValue(
+        store as unknown as ReturnType<typeof useChatStore>
+      )
+      vi.mocked(chatRepository.chatRepository.deleteChat).mockResolvedValue(
+        undefined as never
+      )
+
+      await controller.deleteChatSession('s1')
+
+      expect(chatRepository.chatRepository.deleteChat).toHaveBeenCalledWith(
+        's1',
+        undefined,
+        undefined
+      )
+      expect(store.deleteSession).toHaveBeenCalledWith('s1')
+    })
+
+    it('reconciles local state when the backend returns 404 (already gone)', async () => {
+      const store = deletableStore()
+      vi.mocked(useChatStore).mockReturnValue(
+        store as unknown as ReturnType<typeof useChatStore>
+      )
+      vi.mocked(chatRepository.chatRepository.deleteChat).mockRejectedValue(
+        Object.assign(new Error('Not Found'), { status: 404 })
+      )
+
+      await controller.deleteChatSession('s1')
+
+      expect(store.deleteSession).toHaveBeenCalledWith('s1')
     })
   })
 
