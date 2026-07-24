@@ -1,8 +1,11 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 /**
- * useSecretsAuditApi — thin fetch wrappers for infrastructure-host and
- * workflow-usage endpoints used by SecretsManager.
+ * useSecretsInfraApi — thin fetch wrappers for infrastructure-host and
+ * secrets-usage endpoints used by SecretsManager. Renamed from
+ * useSecretsAuditApi (#12160): it fetches infra hosts, not audit logs — the
+ * old name collided with the real composables/useSecretsAuditApi (audit-log
+ * entries).
  *
  * Extracted from SecretsManager.vue (issue #6081).
  */
@@ -35,7 +38,7 @@ export interface SecretsUsageResponse {
   secrets_usage: Record<string, unknown[]>;
 }
 
-export function useSecretsAuditApi() {
+export function useSecretsInfraApi() {
   /** Fetch legacy infrastructure hosts from the old API. */
   async function fetchInfraHosts(): Promise<InfraHostsResponse> {
     const backendUrl = getBackendUrl();

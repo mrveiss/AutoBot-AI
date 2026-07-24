@@ -796,7 +796,7 @@ import { useChatStore } from '@/stores/useChatStore';
 import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
-import { useSecretsAuditApi } from '@/composables/security/useSecretsAuditApi';
+import { useSecretsInfraApi } from '@/composables/security/useSecretsInfraApi';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import { BaseModal } from '@autobot/ui'
@@ -804,7 +804,7 @@ import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n();
 const logger = createLogger('SecretsManager');
-const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsAuditApi();
+const { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost } = useSecretsInfraApi();
 
 // Infrastructure-host connection metadata stored alongside a secret.
 interface SecretMetadata {
