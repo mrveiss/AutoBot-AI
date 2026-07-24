@@ -70,6 +70,9 @@ from knowledge.schemas.documents import (
     DocsStatsResponse,
     DocsWatcherControlResponse,
     DocsWatcherStatusResponse,
+    SystemDocContentResponse,
+    SystemDocsCategoriesResponse,
+    SystemDocsCategoryResponse,
 )
 from knowledge.schemas.facts import (
     AddFactResponse,
@@ -2764,6 +2767,79 @@ async def get_documentation_stats(
             "categories_count": len(set(doc.get("category", "general") for doc in all_docs)),
         },
     }
+
+
+# =============================================================================
+# System Docs viewer (Issue #12314)
+#
+# Powers the Knowledge -> System Docs page. Serves the on-disk ``docs/`` tree
+# directly (no ChromaDB/Redis dependency) so the page is always populated.
+# Declaration order matters: the literal ``categories`` and ``category/...``
+# routes MUST precede the ``{doc_id}`` catch-all so they are not shadowed.
+# =============================================================================
+
+
+@router.get("/system-docs/categories", response_model=SystemDocsCategoriesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_system_doc_categories",
+    error_code_prefix="KNOWLEDGE",
+)
+async def list_system_doc_categories(
+    current_user: dict = Depends(get_current_user),
+):
+    """List system documentation categories with per-category counts.
+
+    Issue #12314: backs ``fetchDocCategories`` in the System Docs viewer.
+    """
+    from services.knowledge.system_docs_service import list_categories
+
+    categories = await asyncio.to_thread(list_categories)
+    return {"categories": categories}
+
+
+@router.get("/system-docs/category/{category_path}", response_model=SystemDocsCategoryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_system_doc_category",
+    error_code_prefix="KNOWLEDGE",
+)
+async def list_system_doc_category(
+    category_path: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List documents in a system-docs category (metadata only, no content).
+
+    Issue #12314: backs ``fetchCategoryDocs``. Unknown/invalid categories
+    resolve to an empty list rather than an error.
+    """
+    from services.knowledge.system_docs_service import list_category_docs
+
+    docs = await asyncio.to_thread(list_category_docs, category_path)
+    return {"docs": docs}
+
+
+@router.get("/system-docs/{doc_id}", response_model=SystemDocContentResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_doc",
+    error_code_prefix="KNOWLEDGE",
+)
+async def get_system_doc(
+    doc_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return a single system document with its full markdown content.
+
+    Issue #12314: backs ``fetchDocContent``. ``doc_id`` is the opaque hash
+    id emitted by the list endpoints, so no client path reaches the disk.
+    """
+    from services.knowledge.system_docs_service import get_doc
+
+    doc = await asyncio.to_thread(get_doc, doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="System document not found")
+    return {"doc": doc}
 
 
 @router.get("/docs/watcher/status", response_model=DocsWatcherStatusResponse)
