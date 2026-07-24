@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_import_tree_analysis
 from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
 
-from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, get_project_root
+from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -121,7 +121,9 @@ def _deduplicate_imports(imports: List[Dict]) -> List[Dict]:
     operation="get_import_tree",
     error_code_prefix="CODEBASE",
 )
-async def get_import_tree():
+async def get_import_tree(
+    source_id: str | None = Query(None, description="#12330: scope import tree to the selected code source"),
+):
     """
     Get bidirectional file import relationships for tree visualization.
 
@@ -131,8 +133,10 @@ async def get_import_tree():
 
     This enables bidirectional navigation in the import tree UI.
     (Issue #315 - refactored to reduce nesting)
+    Issue #12330: Scope the scan to the requested source's clone path so one
+    project cannot see another's import tree.
     """
-    project_root = get_project_root()
+    project_root = await resolve_scan_root(source_id)
     # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
     python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
 

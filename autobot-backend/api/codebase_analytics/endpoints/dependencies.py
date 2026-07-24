@@ -23,7 +23,7 @@ from utils.celery_task_status import celery_result_to_status, get_latest_task_re
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
-from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, get_project_root
+from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -382,12 +382,19 @@ def _build_visualization_graph(
 async def _load_modules_from_chromadb(
     code_collection,
     modules: Dict[str, Dict],
+    source_id: str | None = None,
 ) -> None:
-    """Helper for get_dependencies. Load module map from ChromaDB. Ref: #1088."""
+    """Helper for get_dependencies. Load module map from ChromaDB. Ref: #1088.
+
+    Issue #12330: Filter by source_id to prevent cross-project leakage; without
+    it the query returns modules indexed for every registered source.
+    """
     try:
+        type_filter = {"type": {"$in": ["function", "class"]}}
+        where = {"$and": [type_filter, {"source_id": source_id}]} if source_id else type_filter
         results = get_all_paginated(
             code_collection,
-            where={"type": {"$in": ["function", "class"]}},
+            where=where,
             include=["metadatas"],
         )
         seen_files: set = set()
@@ -444,13 +451,17 @@ async def _scan_filesystem_imports(
     operation="get_dependencies",
     error_code_prefix="CODEBASE",
 )
-async def get_dependencies():
+async def get_dependencies(
+    source_id: str | None = Query(None, description="#12330: scope dependency scan to the selected code source"),
+):
     """
     Get file dependency analysis showing imports and module relationships.
 
     Issue #281: Refactored from 146 lines to use extracted helper methods.
     Issue #1088: Further refactored with _load_modules_from_chromadb and
     _scan_filesystem_imports helpers.
+    Issue #12330: Scope the filesystem scan to the requested source's clone path
+    so one project cannot see another's dependency graph.
 
     Returns:
     - modules: List of all modules/files in the codebase
@@ -459,6 +470,13 @@ async def get_dependencies():
     - circular_dependencies: Detected circular import issues
     - external_dependencies: Third-party package dependencies
     """
+    # Issue #12330: Resolve the default source once so both the ChromaDB module
+    # load and the filesystem scan below are scoped to the same project.
+    if not source_id:
+        from api.codebase_analytics.source_storage import get_default_source_id
+
+        source_id = await get_default_source_id()
+
     code_collection = await asyncio.to_thread(get_code_collection)
     modules: Dict[str, Dict] = {}
     import_relationships: List[Dict] = []
@@ -466,9 +484,9 @@ async def get_dependencies():
     runtime_rels: List[Dict] = []
 
     if code_collection:
-        await _load_modules_from_chromadb(code_collection, modules)
+        await _load_modules_from_chromadb(code_collection, modules, source_id=source_id)
 
-    project_root = get_project_root()
+    project_root = await resolve_scan_root(source_id, use_default=False)
     await _scan_filesystem_imports(
         project_root,
         modules,

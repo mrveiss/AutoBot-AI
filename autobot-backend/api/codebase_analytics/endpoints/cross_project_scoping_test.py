@@ -1,0 +1,172 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""
+Regression tests for cross-project analytics data leakage (Issue #12330).
+
+Several Codebase Analytics endpoints accepted a ``source_id`` "for API
+consistency" but ignored it, scanning AutoBot's own project root regardless of
+the selected code source. As a result opening one project's analytics could
+show another project's call graph / endpoint coverage / dependency graph.
+
+These tests assert the scoping fix: a request for project A can never see
+project B's data, while a same-project request still works.
+"""
+
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+def _write_module(directory: Path, filename: str, body: str) -> None:
+    (directory / filename).write_text(body, encoding="utf-8")
+
+
+class TestResolveScanRoot:
+    """Unit tests for the shared source-scoping helper."""
+
+    async def test_scopes_to_requested_source(self, tmp_path):
+        """Different source_ids resolve to their own clone paths (no shared root)."""
+        from api.codebase_analytics.endpoints import shared
+
+        root_a = tmp_path / "proj_a"
+        root_b = tmp_path / "proj_b"
+        root_a.mkdir()
+        root_b.mkdir()
+
+        async def fake_resolve(source_id):
+            return {"A": root_a, "B": root_b}.get(source_id)
+
+        with patch.object(shared, "resolve_source_root", side_effect=fake_resolve):
+            resolved_a = await shared.resolve_scan_root("A")
+            resolved_b = await shared.resolve_scan_root("B")
+
+        assert resolved_a == root_a
+        assert resolved_b == root_b
+        assert resolved_a != resolved_b
+
+    async def test_falls_back_to_project_root_when_unresolved(self):
+        """No source and no default → AutoBot project root (legacy behavior)."""
+        from api.codebase_analytics.endpoints import shared
+
+        with (
+            patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)),
+            patch(
+                "api.codebase_analytics.source_storage.get_default_source_id",
+                AsyncMock(return_value=None),
+            ),
+        ):
+            resolved = await shared.resolve_scan_root(None)
+
+        assert resolved == shared.get_project_root()
+
+    async def test_uses_default_source_when_source_id_missing(self, tmp_path):
+        """When no source_id is given the default source is scoped, not the global root."""
+        from api.codebase_analytics.endpoints import shared
+
+        default_root = tmp_path / "default_proj"
+        default_root.mkdir()
+
+        async def fake_resolve(source_id):
+            return default_root if source_id == "DEFAULT" else None
+
+        with (
+            patch.object(shared, "resolve_source_root", side_effect=fake_resolve),
+            patch(
+                "api.codebase_analytics.source_storage.get_default_source_id",
+                AsyncMock(return_value="DEFAULT"),
+            ),
+        ):
+            resolved = await shared.resolve_scan_root(None)
+
+        assert resolved == default_root
+
+
+class TestCallGraphIsolation:
+    """End-to-end: the call graph returned for A must not contain B's code."""
+
+    async def test_call_graph_scoped_to_source(self, tmp_path):
+        from api.codebase_analytics.endpoints import call_graph, shared
+
+        root_a = tmp_path / "proj_a"
+        root_b = tmp_path / "proj_b"
+        root_a.mkdir()
+        root_b.mkdir()
+        _write_module(root_a, "mod_a.py", "def alpha_unique_fn():\n    return 1\n")
+        _write_module(root_b, "mod_b.py", "def beta_unique_fn():\n    return 2\n")
+
+        async def fake_resolve(source_id):
+            return {"A": root_a, "B": root_b}.get(source_id)
+
+        # Scope resolution to our temp sources; cache writes are best-effort and
+        # swallowed if Redis is unavailable, so no Redis is required.
+        with patch.object(shared, "resolve_source_root", side_effect=fake_resolve):
+            resp_a = await call_graph.get_call_graph(refresh=True, source_id="A")
+            resp_b = await call_graph.get_call_graph(refresh=True, source_id="B")
+
+        names_a = _all_function_names(resp_a)
+        names_b = _all_function_names(resp_b)
+
+        # Same-project data is present...
+        assert "alpha_unique_fn" in names_a
+        assert "beta_unique_fn" in names_b
+        # ...and cross-project data never leaks across the boundary.
+        assert "beta_unique_fn" not in names_a
+        assert "alpha_unique_fn" not in names_b
+
+
+class TestEndpointCoverageCacheScoping:
+    """The endpoint-coverage in-memory cache must be keyed per source."""
+
+    async def test_cache_key_is_per_source(self):
+        from api.codebase_analytics.endpoints.api_endpoints import _cache_key
+
+        assert _cache_key(None) == "default"
+        assert _cache_key("A") == "A"
+        assert _cache_key("A") != _cache_key("B")
+
+    async def test_analysis_cached_and_not_shared_between_sources(self, tmp_path):
+        from api.codebase_analytics.endpoints import api_endpoints
+
+        root_a = tmp_path / "cov_a"
+        root_b = tmp_path / "cov_b"
+        root_a.mkdir()
+        root_b.mkdir()
+
+        async def fake_resolve(source_id, use_default=True):
+            return {"A": root_a, "B": root_b}.get(source_id, api_endpoints.Path("/tmp"))
+
+        analysis_a = MagicMock(name="analysis_A")
+        analysis_b = MagicMock(name="analysis_B")
+
+        def fake_checker(project_root=None):
+            checker = MagicMock()
+            checker.run_full_analysis = MagicMock(return_value=analysis_a if project_root == root_a else analysis_b)
+            return checker
+
+        api_endpoints._analysis_cache.clear()
+        with (
+            patch.object(api_endpoints, "resolve_scan_root", side_effect=fake_resolve),
+            patch.object(api_endpoints, "_get_checker", side_effect=fake_checker),
+        ):
+            result_a = await api_endpoints._get_or_run_analysis("A")
+            result_b = await api_endpoints._get_or_run_analysis("B")
+            # Second call for A must hit the per-source cache (no re-scan).
+            cached_a = await api_endpoints._get_or_run_analysis("A")
+
+        assert result_a is analysis_a
+        assert result_b is analysis_b
+        assert result_a is not result_b
+        assert cached_a is analysis_a
+        assert api_endpoints._analysis_cache["A"] is analysis_a
+        assert api_endpoints._analysis_cache["B"] is analysis_b
+
+
+def _all_function_names(response) -> set:
+    """Collect every function name from a call-graph JSONResponse."""
+    data = json.loads(response.body)
+    graph = data.get("call_graph", {})
+    names = {node.get("name") for node in graph.get("nodes", [])}
+    names |= {node.get("name") for node in data.get("orphaned_functions", [])}
+    return names

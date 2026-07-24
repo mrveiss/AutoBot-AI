@@ -175,6 +175,42 @@ async def resolve_source_root(source_id: "str | None") -> "Path | None":
     return None
 
 
+async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -> Path:
+    """Resolve the filesystem root a source-scoped analytics scan must read.
+
+    Issue #12330: Several filesystem-scanning analytics endpoints accepted a
+    ``source_id`` "for API consistency" but ignored it, scanning AutoBot's own
+    project root regardless of the selected code source -- cross-project data
+    leakage. This resolves the requested source's clone path so scans are scoped
+    to the caller's project.
+
+    When ``source_id`` is falsy and ``use_default`` is True, the default (most
+    recently indexed) source is resolved first to avoid silently mixing projects
+    (matches the stats.py/report.py pattern, #2653). Falls back to the AutoBot
+    project root only when no source can be resolved (e.g. dev checkout with no
+    registered sources).
+
+    Args:
+        source_id: The requested source identifier, or None.
+        use_default: When True, resolve the default source if source_id is None.
+
+    Returns:
+        Path to the resolved source clone directory, or the AutoBot project root.
+    """
+    if not source_id and use_default:
+        try:
+            from api.codebase_analytics.source_storage import get_default_source_id
+
+            source_id = await get_default_source_id()
+        except Exception as exc:
+            logger.debug("resolve_scan_root: default source lookup failed: %s", exc)
+
+    source_root = await resolve_source_root(source_id)
+    if source_root:
+        return source_root
+    return get_project_root()
+
+
 # Project root helper
 def get_project_root() -> Path:
     """
