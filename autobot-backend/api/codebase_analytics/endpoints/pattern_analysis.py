@@ -14,7 +14,7 @@ import json
 from typing import Any, Dict, List
 
 from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from autobot_shared.logging_manager import get_logger
@@ -138,8 +138,20 @@ async def _clear_checkpoint(task_id: str) -> None:
 
 
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
-async def start_pattern_analysis(request: PatternAnalysisRequest) -> PatternAnalysisStatus:
+async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: Request) -> PatternAnalysisStatus:
     """Enqueue code pattern analysis as a Celery task (GH#6505, GH#8436)."""
+    # #12375: source_id arrives in the request BODY here, so the router-level
+    # require_source_access dependency (which reads path/query params only)
+    # cannot gate it. Authorize the caller against it in-handler, mirroring the
+    # index endpoint, so one admin cannot scope a task to another's private source.
+    if request.source_id:
+        from auth_middleware import get_current_user  # noqa: PLC0415
+
+        from .shared import authorize_source_access  # noqa: PLC0415
+
+        user = await get_current_user(http_request)
+        await authorize_source_access(request.source_id, user)
+
     celery_result = run_pattern_analysis.delay(request.model_dump())
     prefix = f"{_REDIS_PREFIX}{request.source_id}:" if request.source_id else _REDIS_PREFIX
     await store_latest_task_id(prefix, celery_result.id)

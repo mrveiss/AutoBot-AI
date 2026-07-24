@@ -8,6 +8,8 @@ Shared utilities and constants for codebase analytics endpoints
 
 from pathlib import Path
 
+from fastapi import HTTPException, Request, status
+
 from autobot_shared.logging_manager import get_logger
 
 # Logger
@@ -209,6 +211,80 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -
     if source_root:
         return source_root
     return get_project_root()
+
+
+# Sentinel ownership id for an authenticated, non-service caller whose token
+# carries no derivable identity. It can never equal a real ``owner_id``, so
+# ``_is_visible`` denies another owner's PRIVATE source while still allowing
+# public/shared/unowned ones — i.e. fail-closed, rather than the see-all that a
+# bare ``None`` would grant (#12375 review item c).
+_NO_OWNER_ID = "\x00::codebase-analytics::no-owner::"
+
+
+def _caller_owner_id(user: "dict | None") -> "str | None":
+    """Derive the caller's ownership identity from an auth user dict (#12358).
+
+    Mirrors how ``owner_id`` is written when a source is created (see
+    ``llc/api/sprints.py``): the user ``id``, falling back to the legacy
+    ``user_id`` key.
+
+    Only the internal service API key — which ``auth_middleware`` mints as
+    ``{"service": True}`` with no id — is trusted for unscoped access (returns
+    ``None`` → ``_is_visible`` see-all). Any *other* authenticated caller with no
+    derivable id (e.g. an SLM-minted token carrying identity only in ``sub``)
+    fails closed to ``_NO_OWNER_ID`` so admin role alone cannot expose another
+    owner's PRIVATE source (#12375 review item c).
+    """
+    if not user:
+        return None
+    caller = str(user.get("id") or user.get("user_id") or "")
+    if caller:
+        return caller
+    if user.get("service"):
+        return None
+    return _NO_OWNER_ID
+
+
+async def authorize_source_access(source_id: "str | None", user: "dict | None") -> None:
+    """Enforce that ``user`` may access the code source ``source_id`` (#12358).
+
+    The codebase-analytics router is admin-gated, but an individual source can be
+    PRIVATE to a specific owner; admin role alone must not expose one admin's
+    private source to another. This reuses ``_is_visible`` — the same
+    owner/shared/public model ``list_sources`` uses — so authorization stays
+    consistent rather than inventing a parallel check.
+
+    No-op when ``source_id`` is falsy (the scan then falls back to the caller's
+    default source or the AutoBot project root). Raises 404 (never 403) on an
+    unknown or unauthorized source so cross-tenant source existence is not
+    disclosed, matching the repository's cross-tenant 404 convention.
+    """
+    if not source_id:
+        return
+    from api.codebase_analytics.source_storage import _is_visible, get_source
+
+    source = await get_source(source_id)
+    if source is None or not _is_visible(source, _caller_owner_id(user)):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Code source not found",
+        )
+
+
+async def require_source_access(request: Request) -> None:
+    """FastAPI dependency: authorize the request's ``source_id`` against the caller.
+
+    Applied at the analytics router level (#12358) so every source-scoped
+    endpoint enforces per-source ownership on top of the admin gate. Reads
+    ``source_id`` from the path or query string; endpoints that take source_id
+    in the request body (the index and pattern-analyze endpoints) authorize it
+    inside their own handlers via ``authorize_source_access`` (#12375).
+    """
+    from auth_middleware import get_current_user  # noqa: PLC0415
+
+    user = await get_current_user(request)
+    source_id = request.path_params.get("source_id") or request.query_params.get("source_id")
+    await authorize_source_access(source_id, user)
 
 
 # Project root helper
