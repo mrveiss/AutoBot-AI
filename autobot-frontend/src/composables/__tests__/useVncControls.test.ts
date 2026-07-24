@@ -33,25 +33,25 @@ describe('useVncControls session_id threading', () => {
     const { mouseClick } = useVncControls()
     await mouseClick({ x: 1, y: 2 })
 
-    expect(mockPost).toHaveBeenCalledWith('/vnc/click', { x: 1, y: 2, session_id: 'default' })
+    expect(mockPost).toHaveBeenCalledWith('/api/vnc/click', { x: 1, y: 2, session_id: 'default' })
   })
 
   it('threads an explicit session_id through mouseClick/keyboardType/specialKey/scroll/drag', async () => {
     const { mouseClick, keyboardType, specialKey, mouseScroll, mouseDrag } = useVncControls('chat-42')
 
     await mouseClick({ x: 1, y: 2 })
-    expect(mockPost).toHaveBeenLastCalledWith('/vnc/click', { x: 1, y: 2, session_id: 'chat-42' })
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/click', { x: 1, y: 2, session_id: 'chat-42' })
 
     await keyboardType('hello')
-    expect(mockPost).toHaveBeenLastCalledWith('/vnc/type', { text: 'hello', session_id: 'chat-42' })
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/type', { text: 'hello', session_id: 'chat-42' })
 
     await specialKey('Return')
-    expect(mockPost).toHaveBeenLastCalledWith('/vnc/key', { key: 'Return', session_id: 'chat-42' })
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/key', { key: 'Return', session_id: 'chat-42' })
 
     await mouseScroll({ direction: 'up' })
-    expect(mockPost).toHaveBeenLastCalledWith('/vnc/scroll', { direction: 'up', session_id: 'chat-42' })
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/scroll', { direction: 'up', session_id: 'chat-42' })
 
     await mouseDrag({ x1: 0, y1: 0, x2: 5, y2: 5 })
-    expect(mockPost).toHaveBeenLastCalledWith('/vnc/drag', { x1: 0, y1: 0, x2: 5, y2: 5, session_id: 'chat-42' })
+    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/drag', { x1: 0, y1: 0, x2: 5, y2: 5, session_id: 'chat-42' })
   })
 })
