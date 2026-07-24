@@ -571,6 +571,41 @@ class FactsMixin:
             # is not initialized
             await asyncio.to_thread(self.redis_client.sadd, "user:facts:%s" % owner_id, fact_id)
 
+    async def _record_failed_vectorization(self, fact_id: str, reason: str) -> None:
+        """Record a vectorization failure as queryable, retriable state (Issue #12312).
+
+        Embedding generation can fail transiently (backend crash-loop, timeout). The
+        fact content is already persisted; only its vector is missing. Rather than
+        silently drop the vector (log-only, unrecoverable), mark the fact so it is:
+
+        * **queryable** — ``vectorization_status=failed`` (plus error + timestamp) on
+          the ``fact:<id>`` hash, so affected records can be found without log forensics;
+        * **retriable / auto-backfilled** — added to the background reconciler's pending
+          set (``kb:vectorize:pending``, #11296) which re-vectorizes it every cycle until
+          it succeeds and is marked ``completed``.
+        """
+        from background_vectorization import PENDING_SET_KEY
+
+        logger.error(
+            "Vectorization FAILED for fact %s — vector NOT stored; marked failed and queued for retry. Reason: %s",
+            fact_id,
+            reason,
+        )
+        try:
+            fact_key = "fact:%s" % fact_id
+            await asyncio.to_thread(
+                self.redis_client.hset,
+                fact_key,
+                mapping={
+                    "vectorization_status": "failed",
+                    "vectorization_error": reason,
+                    "vectorization_failed_at": datetime.now(tz=timezone.utc).isoformat(),
+                },
+            )
+            await asyncio.to_thread(self.redis_client.sadd, PENDING_SET_KEY, fact_id)
+        except Exception as exc:
+            logger.error("Could not record vectorization failure for fact %s: %s", fact_id, exc)
+
     async def _vectorize_fact_in_chromadb(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
         """
         Vectorize and store fact in ChromaDB vector store.
@@ -595,6 +630,14 @@ class FactsMixin:
         # Issue #165: Generate embedding using NPU worker with fallback
         # ChromaVectorStore.add() expects nodes with embeddings already set
         embedding = await _generate_embedding_with_npu_fallback(content)
+
+        # Issue #12312: An empty embedding means generation failed upstream (backend
+        # blip, timeout). Do NOT silently drop the vector and log success — record a
+        # queryable, retriable failure so the background reconciler backfills it once
+        # the backend recovers.
+        if not embedding:
+            await self._record_failed_vectorization(fact_id, "embedding generation returned an empty result")
+            return
 
         # Issue #8391: Route through VectorWriteBuffer when available (LSM-style batching).
         # Falls back to direct LlamaIndex add() when buffer is not yet started.
@@ -867,6 +910,15 @@ class FactsMixin:
 
         # Issue #165: Generate embedding using NPU worker with fallback
         embedding = await _generate_embedding_with_npu_fallback(content)
+
+        # Issue #12312: The stale vector was already deleted above; if embedding
+        # generation failed the fact is now unvectorized. Record a queryable,
+        # retriable failure instead of silently dropping and logging success.
+        if not embedding:
+            await self._record_failed_vectorization(
+                fact_id, "embedding generation returned an empty result (re-vectorize)"
+            )
+            return
 
         # Issue #8405: Route through VectorWriteBuffer when available, like _vectorize_fact_in_chromadb.
         write_buffer = getattr(self, "_write_buffer", None)
