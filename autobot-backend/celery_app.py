@@ -172,14 +172,20 @@ celery_app.conf.update(
     task_send_sent_event=True,
 )
 
-# Auto-discover tasks from tasks and workers modules
-celery_app.autodiscover_tasks(["tasks", "workers"])
-# GH#6480: pricing refresh task lives in services/, not tasks/ — import explicitly so
-# workers register it. autodiscover_tasks only scans the listed packages.
+# GH#12318: register every task package. autodiscover_tasks defaults to
+# related_name="tasks", i.e. it imports "<pkg>.tasks" (tasks/tasks.py,
+# workers/tasks.py) — neither exists, so the call was a silent no-op and only
+# explicitly-imported modules registered. Beat then dispatched names (credential
+# reconcile, snapshot cleanup, LLC sprint auto-close, audit daemons) to workers
+# that never registered them ("Received unregistered task of type ...") and the
+# jobs never ran. related_name=None imports each PACKAGE __init__ instead, which
+# re-exports its task modules (tasks/__init__.py, workers/__init__.py,
+# llc/scheduler/__init__.py), so their @celery_app.task / @shared_task
+# decorators all run at worker/beat startup.
+celery_app.autodiscover_tasks(["tasks", "workers", "llc.scheduler"], related_name=None)
+# GH#6480: pricing refresh lives in services/, outside the discovered packages —
+# import explicitly so workers register pricing.refresh_daily.
 import services.pricing_refresh  # noqa: F401
-
-# GH#4463: Mobile device tasks module
-import tasks.mobile_device_tasks  # noqa: F401
 from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 # =========================================================================
@@ -288,13 +294,27 @@ celery_app.conf.beat_schedule = {
     },
 }
 
-import llc.scheduler.project_disposal_sweep  # noqa: F401
-import tasks.audit_log_retention  # noqa: F401
 
-# GH#8995: import retention tasks so Celery registers them at worker startup
-import tasks.chat_retention  # noqa: F401
-import tasks.file_retention  # noqa: F401
-import tasks.knowledge_retention  # noqa: F401
+# GH#12318: fail loudly if Beat is configured to dispatch a task no worker will
+# ever register. Force task discovery (import_default_modules runs the lazy
+# autodiscover callbacks), then assert every beat_schedule entry resolves to a
+# registered task. Previously such mismatches surfaced only as "Received
+# unregistered task of type ..." in a log nobody reads, and four scheduled
+# maintenance jobs silently never ran.
+def _assert_beat_tasks_registered() -> None:
+    celery_app.loader.import_default_modules()
+    registered = set(celery_app.tasks)
+    scheduled = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
+    missing = sorted(scheduled - registered)
+    if missing:
+        logger.critical(
+            "Beat-scheduled tasks are NOT registered and will be dropped as "
+            "'Received unregistered task of type ...': %s",
+            missing,
+        )
+
+
+_assert_beat_tasks_registered()
 
 # GH#4459: Register web-push task_success signal so tasks that pass user_id
 # in their kwargs trigger a browser push notification on completion.
