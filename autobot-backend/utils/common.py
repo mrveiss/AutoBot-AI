@@ -426,10 +426,13 @@ class DatabaseUtils:
             Number of rows, 0 if error
         """
         try:
-            _validate_sql_identifier(table_name, "table name")
+            # A table name cannot be a bind parameter; validate it against a
+            # strict allowlist (letters/digits/underscore) before interpolation
+            # so metacharacters can never reach the SQL engine. (#12284, #2845)
+            safe_table = _validate_sql_identifier(table_name, "table name")
+            query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608 - identifier allowlisted
             cursor = conn.cursor()
-            # nosemgrep: autobot-sql-string-format
-            cursor.execute(f"SELECT COUNT(*) FROM {table_name}")  # nosec B608
+            cursor.execute(query)
             result = cursor.fetchone()
             return result[0] if result else 0
         except Exception:

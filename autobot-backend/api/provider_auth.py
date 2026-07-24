@@ -351,7 +351,10 @@ async def oauth_callback(
 
     try:
         # Public-client PKCE: the verifier (server-stored) replaces a client secret.
-        resp = await exchange_code(
+        # SSRF mitigated: token_url passed _validate_outbound_url() (https + host
+        # allowlist + port pin) and _pinned_connector() pins the pre-resolved public
+        # IP (defeats DNS-rebind); redirects disabled in exchange_code. (#12278)
+        resp = await exchange_code(  # codeql[py/full-ssrf]
             provider_cfg,
             stored["client_id"],
             "",  # nosec B106 - PKCE public client: no client_secret
@@ -419,7 +422,10 @@ async def device_initiate(
     payload = {"client_id": req.client_id, "scope": req.scope}
     try:
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http:
-            async with http.post(
+            # SSRF mitigated: device_authorization_url passed _validate_outbound_url()
+            # (https + host allowlist + port pin) and connector pins the pre-resolved
+            # public IP (defeats DNS-rebind); redirects disabled. (#12278)
+            async with http.post(  # codeql[py/full-ssrf]
                 req.device_authorization_url,
                 data=payload,
                 headers={"Accept": "application/json"},
@@ -493,7 +499,10 @@ async def device_poll(
     timeout = aiohttp.ClientTimeout(total=30.0)
     try:
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http:
-            async with http.post(
+            # SSRF mitigated: token_url passed _validate_outbound_url() (https + host
+            # allowlist + port pin) and connector pins the pre-resolved public IP
+            # (defeats DNS-rebind); redirects disabled. (#12278)
+            async with http.post(  # codeql[py/full-ssrf]
                 req.token_url,
                 data=payload,
                 headers={"Accept": "application/json"},

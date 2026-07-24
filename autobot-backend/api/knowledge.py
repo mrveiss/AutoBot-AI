@@ -3048,7 +3048,7 @@ async def create_watch_folder(
         logger.error("Error creating watch folder: %s", e)
         return {
             "success": False,
-            "message": f"Error: {str(e)}",
+            "message": "Failed to create watch folder due to an internal error",
         }
 
 
@@ -3124,7 +3124,7 @@ async def delete_watch_folder(
         logger.error("Error deleting watch folder: %s", e)
         return {
             "success": False,
-            "message": f"Error: {str(e)}",
+            "message": "Failed to delete watch folder due to an internal error",
         }
 
 
@@ -3164,7 +3164,7 @@ async def control_watch_folder(
         logger.error("Error controlling watch folder: %s", e)
         return {
             "success": False,
-            "message": f"Error: {str(e)}",
+            "message": "Failed to update watch folder due to an internal error",
         }
 
 
