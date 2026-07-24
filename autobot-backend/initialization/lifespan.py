@@ -390,7 +390,10 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     try:
         from transcriber.database import Database
 
-        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
+        # Resolve to an absolute path: ``create_recording`` rejects relative
+        # filepaths, and relying on cwd is fragile across launch contexts
+        # (GH#12310 — every upload 500'd because the default was relative).
+        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber")).resolve()
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / "uploads").mkdir(exist_ok=True)
         (data_dir / "processed").mkdir(exist_ok=True)
