@@ -7701,6 +7701,22 @@
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
   },
+  "llcCompanyStatus": {
+    "onboarding": "Onboarding",
+    "active": "Active",
+    "paused": "Paused",
+    "offboarding": "Offboarding",
+    "archived": "Archived",
+    "activate": "Activate",
+    "suspend": "Suspend",
+    "offboard": "Offboard",
+    "archive": "Archive",
+    "confirmTitle": "Confirm status change",
+    "confirmOffboard": "Offboard \"{name}\"? This starts winding the company down.",
+    "confirmArchive": "Archive \"{name}\"? This is a terminal state and cannot be undone.",
+    "confirm": "Confirm",
+    "updateError": "Could not change the company status."
+  },
   "llcMembers": {
     "title": "Members",
     "subtitle": "Manage the people who belong to this company and their roles.",

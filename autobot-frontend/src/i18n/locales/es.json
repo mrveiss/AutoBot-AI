@@ -7652,6 +7652,22 @@
     "systemHealth": "Salud del sistema",
     "advancedControl": "Control avanzado"
   },
+  "llcCompanyStatus": {
+    "onboarding": "Incorporación",
+    "active": "Activa",
+    "paused": "Pausada",
+    "offboarding": "Baja",
+    "archived": "Archivada",
+    "activate": "Activar",
+    "suspend": "Pausar",
+    "offboard": "Dar de baja",
+    "archive": "Archivar",
+    "confirmTitle": "Confirmar cambio de estado",
+    "confirmOffboard": "¿Dar de baja «{name}»? Esto inicia el cierre de la empresa.",
+    "confirmArchive": "¿Archivar «{name}»? Este es un estado final y no se puede deshacer.",
+    "confirm": "Confirmar",
+    "updateError": "No se pudo cambiar el estado de la empresa."
+  },
   "llcMembers": {
     "title": "Miembros",
     "subtitle": "Gestione las personas que pertenecen a esta empresa y sus roles.",

@@ -7652,6 +7652,22 @@
     "systemHealth": "Kondycja systemu",
     "advancedControl": "Sterowanie zaawansowane"
   },
+  "llcCompanyStatus": {
+    "onboarding": "Wdrażanie",
+    "active": "Aktywna",
+    "paused": "Wstrzymana",
+    "offboarding": "Wygaszanie",
+    "archived": "Zarchiwizowana",
+    "activate": "Aktywuj",
+    "suspend": "Wstrzymaj",
+    "offboard": "Wygaś",
+    "archive": "Archiwizuj",
+    "confirmTitle": "Potwierdź zmianę statusu",
+    "confirmOffboard": "Wygasić „{name}”? Rozpoczyna to zamykanie firmy.",
+    "confirmArchive": "Zarchiwizować „{name}”? To stan końcowy, którego nie można cofnąć.",
+    "confirm": "Potwierdź",
+    "updateError": "Nie udało się zmienić statusu firmy."
+  },
   "llcMembers": {
     "title": "Czlonkowie",
     "subtitle": "Zarzadzaj osobami nalezacymi do tej firmy i ich rolami.",

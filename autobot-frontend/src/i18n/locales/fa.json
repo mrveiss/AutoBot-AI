@@ -197,6 +197,22 @@
     "systemHealth": "سلامت سیستم",
     "advancedControl": "کنترل پیشرفته"
   },
+  "llcCompanyStatus": {
+    "onboarding": "راه‌اندازی",
+    "active": "فعال",
+    "paused": "متوقف‌شده",
+    "offboarding": "خروج",
+    "archived": "بایگانی‌شده",
+    "activate": "فعال‌سازی",
+    "suspend": "توقف موقت",
+    "offboard": "خروج",
+    "archive": "بایگانی",
+    "confirmTitle": "تأیید تغییر وضعیت",
+    "confirmOffboard": "خروج «{name}»؟ این کار تعطیلی شرکت را آغاز می‌کند.",
+    "confirmArchive": "بایگانی «{name}»؟ این یک وضعیت نهایی است و قابل بازگشت نیست.",
+    "confirm": "تأیید",
+    "updateError": "تغییر وضعیت شرکت ممکن نشد."
+  },
   "llcMembers": {
     "title": "اعضا",
     "subtitle": "افراد متعلق به این شرکت و نقش‌های آن‌ها را مدیریت کنید.",

@@ -7652,6 +7652,22 @@
     "systemHealth": "Sistēmas veselība",
     "advancedControl": "Papildu vadība"
   },
+  "llcCompanyStatus": {
+    "onboarding": "Uzsākšana",
+    "active": "Aktīvs",
+    "paused": "Apturēts",
+    "offboarding": "Slēgšana",
+    "archived": "Arhivēts",
+    "activate": "Aktivizēt",
+    "suspend": "Apturēt",
+    "offboard": "Slēgt",
+    "archive": "Arhivēt",
+    "confirmTitle": "Apstiprināt statusa maiņu",
+    "confirmOffboard": "Slēgt “{name}”? Tas sāk uzņēmuma darbības izbeigšanu.",
+    "confirmArchive": "Arhivēt “{name}”? Šis ir gala stāvoklis, un to nevar atsaukt.",
+    "confirm": "Apstiprināt",
+    "updateError": "Neizdevās mainīt uzņēmuma statusu."
+  },
   "llcMembers": {
     "title": "Dalibnieki",
     "subtitle": "Parvaldiet sis kompanijas dalibniekus un vinu lomas.",

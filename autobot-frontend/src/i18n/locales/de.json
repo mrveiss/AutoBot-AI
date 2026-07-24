@@ -7652,6 +7652,22 @@
     "systemHealth": "Systemzustand",
     "advancedControl": "Erweiterte Steuerung"
   },
+  "llcCompanyStatus": {
+    "onboarding": "Einführung",
+    "active": "Aktiv",
+    "paused": "Pausiert",
+    "offboarding": "Abwicklung",
+    "archived": "Archiviert",
+    "activate": "Aktivieren",
+    "suspend": "Pausieren",
+    "offboard": "Abwickeln",
+    "archive": "Archivieren",
+    "confirmTitle": "Statusänderung bestätigen",
+    "confirmOffboard": "„{name}“ abwickeln? Damit wird das Unternehmen heruntergefahren.",
+    "confirmArchive": "„{name}“ archivieren? Dies ist ein Endzustand und kann nicht rückgängig gemacht werden.",
+    "confirm": "Bestätigen",
+    "updateError": "Der Unternehmensstatus konnte nicht geändert werden."
+  },
   "llcMembers": {
     "title": "Mitglieder",
     "subtitle": "Verwalten Sie die Personen dieses Unternehmens und ihre Rollen.",
