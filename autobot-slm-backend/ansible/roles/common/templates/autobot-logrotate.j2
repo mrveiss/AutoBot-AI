@@ -1,0 +1,40 @@
+# AutoBot log rotation — covers ALL service logs under /var/log/autobot.
+# Managed by Ansible (common role). Do not edit on the host; changes are
+# overwritten on the next deploy. See issue #12294.
+#
+# Every AutoBot systemd unit writes stdout/stderr with `StandardOutput=append:`
+# / `StandardError=append:`, so the writing process holds the log file
+# descriptor open. `copytruncate` is REQUIRED — it truncates the existing
+# file in place instead of renaming it, so the open fd keeps writing to the
+# same (now-empty) file. Without it, services would keep appending to the
+# rotated-away inode and the live *.log would stop growing until restart.
+#
+# `create` is intentionally omitted: with copytruncate the original file is
+# preserved, so each log keeps its own owner (mixed autobot:autobot and
+# root:root across services).
+
+/var/log/autobot/*.log {
+    # Rotate on the daily tick...
+    daily
+    # ...but also rotate immediately once a file exceeds this size, so a
+    # crash-looping service (e.g. backend-error.log dumping a full startup
+    # trace every ~45s) is capped rather than growing to hundreds of MB
+    # before the next daily run.
+    maxsize 100M
+
+    # Keep 7 rotations.
+    rotate 7
+
+    # Compress rotated logs (delay one cycle so the most recent rotation
+    # stays readable/uncompressed for incident response).
+    compress
+    delaycompress
+
+    # Skip empty logs and tolerate absent files (not every service runs on
+    # every node).
+    notifempty
+    missingok
+
+    # Truncate in place — mandatory for append: units (see header).
+    copytruncate
+}

@@ -253,6 +253,13 @@
   become: true
   tags: ['common', 'logging']
 
+# #12294: Rotate ALL /var/log/autobot/*.log, not just time-sync.log. Without
+# this, backend-error.log / chromadb.log / ai-stack / tts / npu logs grow
+# unbounded and can fill /var, taking down every service at once.
+- name: "Common | Configure unified /var/log/autobot log rotation (#12294)"
+  ansible.builtin.include_tasks: logrotate.yml
+  tags: ['common', 'logging', 'logrotate']
+
 - name: "Common | Display configuration summary"
   debug:
     msg:
