@@ -46,7 +46,7 @@ export function useImageGeneration() {
     error.value = null
     try {
       const result = await apiClient.post<ImageGenerationResult>(
-        '/image-generation/generate',
+        '/api/image-generation/generate',
         params,
       )
       if (!result.success) {
@@ -64,7 +64,7 @@ export function useImageGeneration() {
 
   async function fetchProviders(): Promise<void> {
     try {
-      const data = await apiClient.get<{ providers: ProviderStatus[] }>('/image-generation/providers')
+      const data = await apiClient.get<{ providers: ProviderStatus[] }>('/api/image-generation/providers')
       providers.value = data.providers ?? []
     } catch {
       providers.value = []

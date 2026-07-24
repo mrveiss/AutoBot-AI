@@ -60,7 +60,7 @@ export function useVncControls(sessionId: string = 'default') {
   async function mouseClick(params: MouseClickParams): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/click', { ...params, session_id: sessionId }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/api/vnc/click', { ...params, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Mouse click failed:', err)
       error.value = extractErrorMessage(err, 'Mouse click failed')
@@ -71,7 +71,7 @@ export function useVncControls(sessionId: string = 'default') {
   async function keyboardType(text: string): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/type', { text, session_id: sessionId }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/api/vnc/type', { text, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Keyboard type failed:', err)
       error.value = extractErrorMessage(err, 'Keyboard type failed')
@@ -82,7 +82,7 @@ export function useVncControls(sessionId: string = 'default') {
   async function specialKey(key: string): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/key', { key, session_id: sessionId }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/api/vnc/key', { key, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Special key failed:', err)
       error.value = extractErrorMessage(err, 'Special key failed')
@@ -93,7 +93,7 @@ export function useVncControls(sessionId: string = 'default') {
   async function mouseScroll(params: MouseScrollParams): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/scroll', { ...params, session_id: sessionId }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/api/vnc/scroll', { ...params, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Mouse scroll failed:', err)
       error.value = extractErrorMessage(err, 'Mouse scroll failed')
@@ -104,7 +104,7 @@ export function useVncControls(sessionId: string = 'default') {
   async function mouseDrag(params: MouseDragParams): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/drag', { ...params, session_id: sessionId }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/api/vnc/drag', { ...params, session_id: sessionId }))
     } catch (err: unknown) {
       logger.error('Mouse drag failed:', err)
       error.value = extractErrorMessage(err, 'Mouse drag failed')
@@ -115,7 +115,7 @@ export function useVncControls(sessionId: string = 'default') {
   async function captureScreenshot(): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.get<VncActionResponse>('/vnc/screenshot'))
+      return await wrap(() => ApiClient.get<VncActionResponse>('/api/vnc/screenshot'))
     } catch (err: unknown) {
       logger.error('Screenshot capture failed:', err)
       error.value = extractErrorMessage(err, 'Screenshot capture failed')
@@ -126,7 +126,7 @@ export function useVncControls(sessionId: string = 'default') {
   async function syncClipboard(content: string): Promise<VncActionResponse> {
     error.value = null
     try {
-      return await wrap(() => ApiClient.post<VncActionResponse>('/vnc/clipboard', { content }))
+      return await wrap(() => ApiClient.post<VncActionResponse>('/api/vnc/clipboard', { content }))
     } catch (err: unknown) {
       logger.error('Clipboard sync failed:', err)
       error.value = extractErrorMessage(err, 'Clipboard sync failed')

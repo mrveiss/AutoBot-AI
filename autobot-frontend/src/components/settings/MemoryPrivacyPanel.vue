@@ -148,7 +148,7 @@ async function loadMemories() {
   loading.value = true
   loaded.value = false
   try {
-    const data = await apiClient.get<{ memories: MemoryItem[] }>('/memory/privacy/list')
+    const data = await apiClient.get<{ memories: MemoryItem[] }>('/api/memory/privacy/list')
     memories.value = data.memories || []
     loaded.value = true
     logger.debug('MemoryPrivacyPanel: loaded %d items', memories.value.length)
@@ -169,7 +169,7 @@ async function forgetItem(item: MemoryItem) {
   if (!ok) return
   deletingIds.value = new Set([...deletingIds.value, item.memory_id])
   try {
-    await apiClient.delete(`/memory/privacy/${item.store}/${encodeURIComponent(item.memory_id)}`)
+    await apiClient.delete(`/api/memory/privacy/${item.store}/${encodeURIComponent(item.memory_id)}`)
     memories.value = memories.value.filter(m => m.memory_id !== item.memory_id)
     showToast(t('settings.memoryPrivacy.forgotten'), 'success')
     logger.info('MemoryPrivacyPanel: forgot %s from %s', item.memory_id, item.store)
