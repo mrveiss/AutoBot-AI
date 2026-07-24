@@ -194,6 +194,9 @@ class NPUSemanticSearch:
         self.ai_accelerator = None
         # Use Issue #65 P0 optimized EmbeddingCache (60-80% improvement for repeated queries)
         self.embedding_cache = get_embedding_cache()
+        # Issue #12251: cache key is (model, text); this engine embeds with the
+        # configured default embedding model via the NPU/Ollama fallback path.
+        self._embedding_model = config.llm.embedding_model
         self.search_results_cache = {}  # Cache for complete search results
         self.cache_max_size = _SEARCH_CACHE_MAX_SIZE
         self.cache_ttl_seconds = _SEARCH_CACHE_TTL
@@ -566,7 +569,7 @@ class NPUSemanticSearch:
     ) -> Tuple[np.ndarray, str]:
         """Generate embedding using optimal hardware with L1+L2 caching. Issue #65 P0, #8159."""
         # L1: in-process cache (fastest)
-        cached_embedding = await self.embedding_cache.get(text)
+        cached_embedding = await self.embedding_cache.get(text, model=self._embedding_model)
         if cached_embedding is not None:
             self._l1_hits += 1
             logger.debug("L1 cache hit for query: %s...", text[:50])
@@ -577,7 +580,7 @@ class NPUSemanticSearch:
         if l2_result is not None:
             self._l2_hits += 1
             logger.debug("L2 cache hit for query: %s...", text[:50])
-            await self.embedding_cache.put(text, l2_result.tolist())  # warm L1
+            await self.embedding_cache.put(text, l2_result.tolist(), model=self._embedding_model)  # warm L1
             return l2_result, "l2_cached"
 
         # Miss: generate via NPU/GPU/CPU
@@ -588,7 +591,7 @@ class NPUSemanticSearch:
             logger.warning("Optimized embedding generation failed: %s, using fallback", e)
             embedding, device_name = await self._generate_fallback_embedding(text)
 
-        await self.embedding_cache.put(text, embedding.tolist())
+        await self.embedding_cache.put(text, embedding.tolist(), model=self._embedding_model)
         await self._l2_cache_set(text, embedding)
         return embedding, device_name
 
