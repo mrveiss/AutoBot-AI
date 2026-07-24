@@ -90,7 +90,9 @@ _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
 _resolve_app_log_filename = _mod._resolve_app_log_filename
-_redact_app_log_line = _mod._redact_app_log_line
+# Redaction is now the canonical autobot_shared util (#12242); monitoring calls it directly.
+from autobot_shared.security.redaction import redact_text as _redact_app_log_line  # noqa: E402
+
 _parse_app_log_line = _mod._parse_app_log_line
 _filter_app_log_entries = _mod._filter_app_log_entries
 _paginate_app_log_entries = _mod._paginate_app_log_entries
