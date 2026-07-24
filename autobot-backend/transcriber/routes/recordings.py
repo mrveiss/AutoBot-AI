@@ -39,7 +39,9 @@ _ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
 
 
 def _upload_dir(request: Request) -> Path:
-    return Path(request.app.state.transcriber_upload_dir)
+    # Resolve to absolute: create_recording rejects relative filepaths and the
+    # configured dir may be relative under some launch contexts (GH#12310).
+    return Path(request.app.state.transcriber_upload_dir).resolve()
 
 
 def _user_id(request: Request) -> str:
@@ -65,7 +67,13 @@ async def upload_recording(
     async with aiofiles.open(dest, "wb") as f:
         while chunk := await file.read(65536):
             await f.write(chunk)
-    rid = await db.create_recording(project_id, file.filename or safe_name, str(dest), user_id=_user_id(request))
+    # The file is on disk before the DB row exists; unlink the partial upload
+    # if the insert fails so a rejected recording never leaks an orphan (GH#12310).
+    try:
+        rid = await db.create_recording(project_id, file.filename or safe_name, str(dest), user_id=_user_id(request))
+    except Exception:
+        dest.unlink(missing_ok=True)
+        raise
     logger.info(
         "Recording uploaded: recording_id=%s project_id=%s filename=%s",
         rid,

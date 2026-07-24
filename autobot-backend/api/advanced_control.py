@@ -42,12 +42,18 @@ from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority  # canonical enum (#10626)
+from metrics.system_monitor import evaluate_resource_thresholds
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["advanced_control"])
+
+# Map the resource classifier's verdict to this control plane's health vocabulary
+# (#12243). "warning" (approaching a threshold) is a soft degrade; "critical"
+# (over a threshold) is unhealthy.
+_RESOURCE_STATUS_TO_HEALTH = {"ok": "healthy", "warning": "degraded", "critical": "unhealthy"}
 
 
 # Desktop Streaming Endpoints
@@ -415,11 +421,28 @@ async def get_system_status(
     # boot epoch). timestamp is when this snapshot was taken; uptime_seconds is a
     # duration (now - boot).
     now = time.time()
+    # #12243: derive status from the metrics this response actually reports rather
+    # than a hardcoded "healthy". Grade the already-collected resource_usage against
+    # the canonical thresholds; if desktop streaming (this panel's core capability)
+    # is unavailable, that is at least a degraded control plane.
+    resource_verdict = evaluate_resource_thresholds(
+        {
+            "cpu_percent": resource_usage["cpu_percent"],
+            "memory_percent": resource_usage["memory_percent"],
+            "disk_percent": resource_usage["disk_usage"],
+        }
+    )
+    status = _RESOURCE_STATUS_TO_HEALTH[resource_verdict["status"]]
+    streaming_available = bool(get_desktop_streaming().vnc_manager.vnc_available)
+    if not streaming_available and status == "healthy":
+        status = "degraded"
+
     system_status = {
-        "status": "healthy",
+        "status": status,
         "timestamp": now,
         "uptime_seconds": now - psutil.boot_time(),
         "streaming_capabilities": get_desktop_streaming().get_system_capabilities(),
+        "resource_alerts": resource_verdict["critical_alerts"] + resource_verdict["warnings"],
     }
 
     response = SystemMonitoringResponse(
@@ -482,9 +505,13 @@ async def get_system_health(
     try:
         dsm = get_desktop_streaming()
         tm = get_takeover_manager()
+        # #12243: reflect the real subsystem state instead of a constant "healthy".
+        # Desktop streaming (VNC) is this control plane's core capability — when it
+        # is unavailable the panel is degraded, not healthy.
+        streaming_available = dsm.vnc_manager.vnc_available
         health_status = {
-            "status": "healthy",
-            "desktop_streaming_available": dsm.vnc_manager.vnc_available,
+            "status": "healthy" if streaming_available else "degraded",
+            "desktop_streaming_available": streaming_available,
             "novnc_available": dsm.vnc_manager.novnc_available,
             "active_streaming_sessions": len(dsm.vnc_manager.active_sessions),
             "pending_takeovers": len(await tm.get_pending_requests()),
