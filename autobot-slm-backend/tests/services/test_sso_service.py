@@ -106,6 +106,9 @@ def test_pkce_challenge_s256_matches_rfc7636():
     verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
     expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
     assert _pkce_challenge_s256(verifier) == expected
+    # RFC 7636 Appendix B literal reference value — independent oracle proving the
+    # transform is the spec-mandated SHA-256 S256 method (CodeQL alert #920 FP).
+    assert _pkce_challenge_s256(verifier) == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
 
 
 def test_pkce_challenge_is_url_safe_and_unpadded():

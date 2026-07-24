@@ -72,7 +72,11 @@ def _extract_redirect_url(saml_result: Any) -> str | None:
 
 def _pkce_challenge_s256(verifier: str) -> str:
     """Derive the RFC 7636 S256 code_challenge from a code_verifier."""
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    # RFC 7636 §4.2 mandates SHA-256 for the S256 code_challenge transform. `verifier`
+    # is an ephemeral, high-entropy code_verifier — not a stored password — so a slow
+    # password KDF is inapplicable and would break OAuth PKCE interoperability (CodeQL
+    # false positive: it misclassifies the verifier as password material).
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()  # codeql[py/weak-sensitive-data-hashing]
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
