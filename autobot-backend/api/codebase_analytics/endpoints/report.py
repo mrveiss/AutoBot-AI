@@ -1556,6 +1556,13 @@ async def _get_pattern_analysis(
             enable_regex_detection=True,
             enable_complexity_analysis=True,
             similarity_threshold=0.8,
+            # #12372: the report consumes the returned PatternAnalysisReport
+            # directly and never reads the ChromaDB cache, so disable embedding
+            # storage. Otherwise Phase 4 would persist THIS source's code into the
+            # global, source-unscoped `code_patterns` collection — re-introducing
+            # a cross-source write on the very path this PR scopes. The read-side
+            # source_id filter for that store is tracked separately in #12384.
+            enable_embedding_storage=False,
         )
 
         report = await asyncio.wait_for(

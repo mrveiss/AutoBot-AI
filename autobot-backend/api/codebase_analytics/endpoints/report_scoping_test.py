@@ -21,7 +21,7 @@ returns another source's (or AutoBot's own) tree.
 """
 
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -196,3 +196,35 @@ class TestReportPipelineSourceIsolation:
             await report_mod.generate_analysis_report(source_id="unresolvable-source", quick=False)
 
         assert captured["pattern_root"] == get_project_root()
+
+
+# ---------------------------------------------------------------------------
+# Write-side leak: the report path must NOT persist the scanned source's code
+# into the global, source-unscoped `code_patterns` ChromaDB collection (#12372
+# review item c). Now that _get_pattern_analysis scans arbitrary source roots,
+# embedding storage must be disabled so one source's code isn't written into a
+# shared store another source's report could read (read-side filter → #12384).
+# ---------------------------------------------------------------------------
+class TestPatternAnalysisNoGlobalWrite:
+    """Issue #12372: _get_pattern_analysis must disable embedding storage."""
+
+    async def test_get_pattern_analysis_disables_embedding_storage(self):
+        from api.codebase_analytics.endpoints import report as report_mod
+
+        captured: dict = {}
+
+        def fake_analyzer(**kwargs):
+            captured.update(kwargs)
+            analyzer = MagicMock()
+            # Stop right after construction — we only assert the kwargs; a raise
+            # routes through _get_pattern_analysis's except → returns None.
+            analyzer.analyze_directory = AsyncMock(side_effect=RuntimeError("stop"))
+            return analyzer
+
+        with patch.object(report_mod, "CodePatternAnalyzer", side_effect=fake_analyzer):
+            result = await report_mod._get_pattern_analysis(project_root="/srv/sources/b")
+
+        assert result is None  # analyze stopped; no crash
+        # The report consumes the returned object directly and never reads the
+        # ChromaDB cache, so persistence must be OFF to avoid a cross-source write.
+        assert captured.get("enable_embedding_storage") is False
