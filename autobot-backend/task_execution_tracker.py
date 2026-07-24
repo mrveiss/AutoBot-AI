@@ -55,7 +55,7 @@ class TaskExecutionTracker:
 
         logger.info("Task Execution Tracker initialized")
 
-    def _create_and_start_task(
+    async def _create_and_start_task(
         self,
         task_name: str,
         description: str,
@@ -77,9 +77,10 @@ class TaskExecutionTracker:
             metadata: Additional metadata
 
         Returns:
-            Created task ID. Issue #620.
+            Created task ID. Issue #620. Issue #12185: uses the MemoryManager
+            async task-write variants, which own the sync-SQLite offload.
         """
-        task_id = self.memory_manager.create_task_record(
+        task_id = await self.memory_manager.acreate_task_record(
             task_name=task_name,
             description=description,
             priority=priority,
@@ -88,7 +89,7 @@ class TaskExecutionTracker:
             parent_task_id=parent_task_id,
             metadata=metadata,
         )
-        self.memory_manager.start_task(task_id)
+        await self.memory_manager.astart_task(task_id)
         return task_id
 
     def _register_active_task(
@@ -124,7 +125,7 @@ class TaskExecutionTracker:
         worker thread so it never blocks the event loop.
         """
         if task_id in self.active_tasks:
-            await asyncio.to_thread(self.memory_manager.complete_task, task_id, outputs=task_context.outputs)
+            await self.memory_manager.acomplete_task(task_id, outputs=task_context.outputs)
         self.active_tasks.pop(task_id, None)
         await self._execute_task_callbacks(task_id, "completed")
 
@@ -235,14 +236,13 @@ class TaskExecutionTracker:
                 result = await some_agent_operation()
                 return result
 
-        Issue #12101: the create->start sequence in ``_create_and_start_task``
-        performs sync SQLite MemoryManager writes, so it is offloaded to a
-        worker thread via a single asyncio.to_thread call to avoid blocking
-        the event loop while keeping the sequence atomic.
+        Issue #12185: the create->start sequence in ``_create_and_start_task``
+        performs sync SQLite MemoryManager writes; it now uses the async
+        task-write variants, which own the offload, instead of an inline
+        asyncio.to_thread wrapper.
         """
         # Create and start task (Issue #620: uses helper)
-        task_id = await asyncio.to_thread(
-            self._create_and_start_task,
+        task_id = await self._create_and_start_task(
             task_name,
             description,
             priority,
@@ -261,8 +261,8 @@ class TaskExecutionTracker:
 
         except Exception as e:
             logger.error("Task %s failed: %s", task_id, e)
-            # Issue #12101: offload sync SQLite MemoryManager write.
-            await asyncio.to_thread(self.memory_manager.fail_task, task_id, f"Task failed: {type(e).__name__}")
+            # Issue #12185: async task-write variant owns the sync-SQLite offload.
+            await self.memory_manager.afail_task(task_id, f"Task failed: {type(e).__name__}")
             self.active_tasks.pop(task_id, None)
             await self._execute_task_callbacks(task_id, "completed")
             raise

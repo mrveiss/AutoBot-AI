@@ -3,17 +3,16 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Tests for async-path MemoryManager offloading in ContextAwareDecisionSystem
-(#12101).
+Tests for async-path MemoryManager offloading in ContextAwareDecisionSystem.
 
-``MemoryManager.create_task_record/start_task/complete_task`` are sync
-SQLite writes. ``_store_decision_in_memory`` is an async method called on
-the event loop, so the create->start->complete sequence must be offloaded
-via a single ``asyncio.to_thread`` call rather than calling the sync
-MemoryManager methods directly.
+``MemoryManager`` task-write methods are sync SQLite writes that block the
+event loop (#12101). Issue #12185 moved the offload into the MemoryManager
+async task-write variants; ``_store_decision_in_memory`` now awaits those
+variants (``acreate_task_record`` / ``astart_task`` / ``acomplete_task``)
+rather than wrapping the sync methods in an inline ``asyncio.to_thread`` call.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -57,41 +56,40 @@ def _make_context() -> DecisionContext:
     )
 
 
-@pytest.mark.asyncio
-async def test_store_decision_offloads_memory_writes_to_thread():
-    """_store_decision_in_memory must offload the create->start->complete
-    sequence via asyncio.to_thread instead of blocking the event loop."""
-    memory_manager = MagicMock()
-    memory_manager.create_task_record.return_value = "task-1"
-    system = ContextAwareDecisionSystem(memory_manager=memory_manager)
-
-    decision = _make_decision()
-    context = _make_context()
-
-    with patch("context_aware_decision.system.asyncio.to_thread") as mock_to_thread:
-
-        async def _immediate(func, *args, **kwargs):
-            return func(*args, **kwargs)
-
-        mock_to_thread.side_effect = _immediate
-
-        await system._store_decision_in_memory(decision, context)
-
-    mock_to_thread.assert_called_once()
-    assert mock_to_thread.call_args.args[0] == system._record_decision_in_memory
-    memory_manager.create_task_record.assert_called_once()
-    memory_manager.start_task.assert_called_once_with("task-1")
-    memory_manager.complete_task.assert_called_once()
+def _memory_manager_with_async_writes() -> MagicMock:
+    mm = MagicMock()
+    mm.acreate_task_record = AsyncMock(return_value="task-1")
+    mm.astart_task = AsyncMock(return_value=True)
+    mm.acomplete_task = AsyncMock(return_value=True)
+    return mm
 
 
 @pytest.mark.asyncio
-async def test_store_decision_swallows_errors_without_blocking():
-    """Errors during the offloaded write are logged, not raised (matches
-    prior behavior of the inline try/except)."""
-    memory_manager = MagicMock()
-    memory_manager.create_task_record.side_effect = RuntimeError("db locked")
+async def test_store_decision_uses_async_task_write_variants():
+    """_store_decision_in_memory must await the create->start->complete sequence
+    through the async task-write variants (which own the offload), never the
+    loop-blocking sync methods directly."""
+    memory_manager = _memory_manager_with_async_writes()
     system = ContextAwareDecisionSystem(memory_manager=memory_manager)
 
     await system._store_decision_in_memory(_make_decision(), _make_context())
 
-    memory_manager.create_task_record.assert_called_once()
+    memory_manager.acreate_task_record.assert_awaited_once()
+    memory_manager.astart_task.assert_awaited_once_with("task-1")
+    memory_manager.acomplete_task.assert_awaited_once()
+    # The sync (loop-blocking) methods must never be called directly.
+    memory_manager.create_task_record.assert_not_called()
+    memory_manager.start_task.assert_not_called()
+    memory_manager.complete_task.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_store_decision_swallows_errors_without_blocking():
+    """Errors during the write are logged, not raised (inline try/except)."""
+    memory_manager = _memory_manager_with_async_writes()
+    memory_manager.acreate_task_record = AsyncMock(side_effect=RuntimeError("db locked"))
+    system = ContextAwareDecisionSystem(memory_manager=memory_manager)
+
+    await system._store_decision_in_memory(_make_decision(), _make_context())
+
+    memory_manager.acreate_task_record.assert_awaited_once()

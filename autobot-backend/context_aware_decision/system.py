@@ -98,14 +98,15 @@ class ContextAwareDecisionSystem:
         if len(self.decision_history) > self.max_history:
             self.decision_history = self.decision_history[-self.max_history :]
 
-    def _record_decision_in_memory(self, decision: Decision, context: DecisionContext) -> None:
-        """Create, start, and complete the decision's task record (sync).
+    async def _record_decision_in_memory(self, decision: Decision, context: DecisionContext) -> None:
+        """Create, start, and complete the decision's task record.
 
-        Issue #12101: extracted so ``_store_decision_in_memory`` can offload
-        the create->start->complete sequence via a single asyncio.to_thread
-        call instead of three separate event-loop-blocking sync calls.
+        Issue #12101: extracted so ``_store_decision_in_memory`` records the
+        create->start->complete sequence off the event loop.
+        Issue #12185: uses the MemoryManager async task-write variants, which own
+        the sync-SQLite offload internally (no inline asyncio.to_thread needed).
         """
-        task_id = self.memory_manager.create_task_record(
+        task_id = await self.memory_manager.acreate_task_record(
             task_name=f"Decision: {decision.decision_type.value}",
             description=(f"Contextual decision making: " f"{decision.chosen_action.get('action', 'unknown')}"),
             priority=TaskPriority.MEDIUM,
@@ -126,8 +127,8 @@ class ContextAwareDecisionSystem:
             },
         )
 
-        self.memory_manager.start_task(task_id)
-        self.memory_manager.complete_task(
+        await self.memory_manager.astart_task(task_id)
+        await self.memory_manager.acomplete_task(
             task_id,
             outputs={
                 "chosen_action": decision.chosen_action,
@@ -139,11 +140,11 @@ class ContextAwareDecisionSystem:
     async def _store_decision_in_memory(self, decision: Decision, context: DecisionContext) -> None:
         """Store decision and context in enhanced memory system.
 
-        Issue #12101: offloads the sync SQLite MemoryManager writes to a
-        worker thread so they never block the event loop.
+        Issue #12185: the create->start->complete sequence uses the MemoryManager
+        async task-write variants, which own the sync-SQLite offload.
         """
         try:
-            await asyncio.to_thread(self._record_decision_in_memory, decision, context)
+            await self._record_decision_in_memory(decision, context)
         except Exception as e:
             logger.error("Failed to store decision in memory: %s", e)
 

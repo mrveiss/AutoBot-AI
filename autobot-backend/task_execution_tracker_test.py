@@ -3,98 +3,86 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Tests for async-path MemoryManager offloading in TaskExecutionTracker (#12101).
+Tests for async-path MemoryManager offloading in TaskExecutionTracker.
 
-Sync ``MemoryManager`` methods block the event loop when called directly
-from async code. These tests assert that the async paths (``track_task``
-and ``_finalize_task``) offload the writes via ``asyncio.to_thread`` instead
-of calling the sync MemoryManager methods directly on the loop.
+Sync ``MemoryManager`` task-write methods block the event loop when called
+directly from async code (#12101). Issue #12185 moved the offload into the
+MemoryManager async task-write variants (``acreate_task_record`` /
+``astart_task`` / ``acomplete_task`` / ``afail_task``), which own the
+``asyncio.to_thread`` hop internally. These tests assert the tracker's async
+paths (``track_task`` / ``_finalize_task``) use those async variants and never
+call the loop-blocking sync methods directly.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from task_execution_tracker import TaskExecutionTracker
+from task_execution_tracker import TaskExecutionContext, TaskExecutionTracker
 
 
 def _make_tracker() -> TaskExecutionTracker:
-    """Build a tracker with a mocked, synchronous MemoryManager."""
+    """Build a tracker with a mocked MemoryManager exposing async task-writes."""
     memory_manager = MagicMock()
-    memory_manager.create_task_record.return_value = "task-123"
+    memory_manager.acreate_task_record = AsyncMock(return_value="task-123")
+    memory_manager.astart_task = AsyncMock(return_value=True)
+    memory_manager.acomplete_task = AsyncMock(return_value=True)
+    memory_manager.afail_task = AsyncMock(return_value=True)
     return TaskExecutionTracker(memory_manager=memory_manager)
 
 
 @pytest.mark.asyncio
-async def test_track_task_offloads_create_and_start_to_thread():
-    """track_task's create+start sequence must go through asyncio.to_thread,
-    not call the sync MemoryManager methods directly on the event loop."""
+async def test_track_task_uses_async_task_write_variants():
+    """track_task's create+start+complete sequence must go through the async
+    task-write variants (which own the offload)."""
     tracker = _make_tracker()
 
     async with tracker.track_task("name", "desc") as task_context:
         task_context.set_outputs({"ok": True})
 
-    tracker.memory_manager.create_task_record.assert_called_once()
-    tracker.memory_manager.start_task.assert_called_once_with("task-123")
-    tracker.memory_manager.complete_task.assert_called_once()
+    tracker.memory_manager.acreate_task_record.assert_awaited_once()
+    tracker.memory_manager.astart_task.assert_awaited_once_with("task-123")
+    tracker.memory_manager.acomplete_task.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_track_task_offloads_fail_task_to_thread_on_exception():
-    """On exception, fail_task must be offloaded via asyncio.to_thread."""
+async def test_track_task_fails_via_async_variant_on_exception():
+    """On exception, afail_task must be awaited."""
     tracker = _make_tracker()
 
     with pytest.raises(RuntimeError):
         async with tracker.track_task("name", "desc"):
             raise RuntimeError("boom")
 
-    tracker.memory_manager.fail_task.assert_called_once()
-    assert tracker.memory_manager.fail_task.call_args.args[0] == "task-123"
+    tracker.memory_manager.afail_task.assert_awaited_once()
+    assert tracker.memory_manager.afail_task.await_args.args[0] == "task-123"
 
 
 @pytest.mark.asyncio
-async def test_track_task_uses_to_thread_not_direct_call():
-    """Explicitly assert asyncio.to_thread is the mechanism used to reach
-    the sync MemoryManager API, confirming the event loop is never blocked."""
+async def test_track_task_never_calls_sync_task_writes_directly():
+    """The loop-blocking sync task-write methods must never be called directly;
+    the async variants are used instead so the event loop is never blocked."""
     tracker = _make_tracker()
 
-    with patch("task_execution_tracker.asyncio.to_thread") as mock_to_thread:
-        mock_to_thread.return_value = "task-999"
+    async with tracker.track_task("name", "desc") as task_context:
+        task_context.set_outputs({"ok": True})
 
-        async def _immediate(func, *args, **kwargs):
-            return func(*args, **kwargs)
-
-        mock_to_thread.side_effect = _immediate
-
-        async with tracker.track_task("name", "desc") as task_context:
-            task_context.set_outputs({"ok": True})
-
-    assert mock_to_thread.call_count >= 1
-    called_funcs = [call.args[0] for call in mock_to_thread.call_args_list]
-    assert tracker._create_and_start_task in called_funcs
-    assert tracker.memory_manager.complete_task in called_funcs
+    tracker.memory_manager.create_task_record.assert_not_called()
+    tracker.memory_manager.start_task.assert_not_called()
+    tracker.memory_manager.complete_task.assert_not_called()
+    tracker.memory_manager.acreate_task_record.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_finalize_task_offloads_complete_task_to_thread():
-    """_finalize_task must offload the complete_task write via to_thread."""
+async def test_finalize_task_uses_acomplete_task():
+    """_finalize_task must await acomplete_task (not the sync complete_task)."""
     tracker = _make_tracker()
     tracker.active_tasks["task-123"] = {"task_name": "x", "agent_type": None, "inputs": None}
-
-    from task_execution_tracker import TaskExecutionContext
 
     task_context = TaskExecutionContext(tracker, "task-123")
     task_context.set_outputs({"result": "done"})
 
-    with patch("task_execution_tracker.asyncio.to_thread") as mock_to_thread:
+    await tracker._finalize_task("task-123", task_context)
 
-        async def _immediate(func, *args, **kwargs):
-            return func(*args, **kwargs)
-
-        mock_to_thread.side_effect = _immediate
-
-        await tracker._finalize_task("task-123", task_context)
-
-    mock_to_thread.assert_called_once()
-    assert mock_to_thread.call_args.args[0] == tracker.memory_manager.complete_task
-    tracker.memory_manager.complete_task.assert_called_once_with("task-123", outputs={"result": "done"})
+    tracker.memory_manager.acomplete_task.assert_awaited_once_with("task-123", outputs={"result": "done"})
+    tracker.memory_manager.complete_task.assert_not_called()
