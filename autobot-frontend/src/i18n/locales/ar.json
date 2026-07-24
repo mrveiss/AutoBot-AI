@@ -7662,6 +7662,12 @@
     "advancedControl": "التحكم المتقدم"
   },
   "llcCompanyStatus": {
+    "showArchived": "عرض المؤرشفة",
+    "delete": "حذف",
+    "confirmDeleteTitle": "حذف الشركة",
+    "confirmDelete": "حذف «{name}»؟ سيؤدي هذا إلى إزالة الشركة المؤرشفة وبياناتها. لا يمكن التراجع عن ذلك من هنا.",
+    "deleteError": "تعذّر حذف الشركة.",
+    "deleteHasChildren": "لهذه الشركة شركات فرعية. أزِلها أو انقل ارتباطها قبل حذفها.",
     "onboarding": "الإعداد",
     "active": "نشطة",
     "paused": "متوقفة مؤقتًا",

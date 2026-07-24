@@ -7662,6 +7662,12 @@
     "advancedControl": "Control avanzado"
   },
   "llcCompanyStatus": {
+    "showArchived": "Mostrar archivadas",
+    "delete": "Eliminar",
+    "confirmDeleteTitle": "Eliminar empresa",
+    "confirmDelete": "¿Eliminar «{name}»? Se eliminará la empresa archivada y sus datos. Esto no se puede deshacer desde aquí.",
+    "deleteError": "No se pudo eliminar la empresa.",
+    "deleteHasChildren": "Esta empresa tiene subempresas. Quítelas o reasígnelas antes de eliminarla.",
     "onboarding": "Incorporación",
     "active": "Activa",
     "paused": "Pausada",

@@ -48887,6 +48887,10 @@ export interface paths {
          *     authenticated; non-admins see only companies they are a member of, while
          *     platform admins still see all roots. Membership is the same tenant
          *     primitive ``get_tenant_context`` uses to authorise ``X-Organization-Id``.
+         *
+         *     Archive visibility (#12212): ARCHIVED companies are excluded unless
+         *     ``include_archived`` is set, keeping the default list free of retired
+         *     companies while leaving them recoverable via the "show archived" toggle.
          */
         get: operations["list_companies_api_llc_companies__get"];
         put?: never;
@@ -165862,7 +165866,10 @@ export interface operations {
     };
     list_companies_api_llc_companies__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Include ARCHIVED companies (hidden by default so retired entries do not clutter the list). */
+                include_archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -165876,6 +165883,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -455,3 +455,39 @@ class TestDeleteOrphanFix:
         await svc.delete(org.id)
 
         org.soft_delete.assert_called_once()
+
+
+class TestListRootCompaniesArchiveFilter:
+    """#12212: ARCHIVED root companies are hidden from the default list but are
+    surfaced again when ``include_archived=True`` (recovery / "show archived")."""
+
+    def _capture_service(self):
+        """Return (svc, captured) where captured['stmt'] is the executed query."""
+        captured: dict = {}
+
+        async def _execute(stmt):
+            captured["stmt"] = stmt
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        return _make_service(session=session), captured
+
+    @pytest.mark.asyncio
+    async def test_default_excludes_archived(self):
+        svc, captured = self._capture_service()
+        await svc.list_root_companies()
+        sql = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+        # An llc_status != 'archived' predicate must be present by default.
+        assert "llc_status" in sql
+        assert "archived" in sql
+
+    @pytest.mark.asyncio
+    async def test_include_archived_drops_status_filter(self):
+        svc, captured = self._capture_service()
+        await svc.list_root_companies(include_archived=True)
+        sql = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+        # With include_archived the status predicate is gone (archived rows returned).
+        assert "'archived'" not in sql

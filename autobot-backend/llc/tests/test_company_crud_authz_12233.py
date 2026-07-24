@@ -230,6 +230,28 @@ async def test_list_non_member_sees_nothing():
 
 
 @pytest.mark.asyncio
+async def test_list_hides_archived_by_default():
+    """#12212: without ?include_archived the service is asked to exclude ARCHIVED."""
+    svc = _list_svc()
+    app = _collection_app(svc, _membership(is_member=True))
+    async with _client(app) as client:
+        resp = await client.get("/api/llc/companies/")
+    assert resp.status_code == 200
+    svc.list_root_companies.assert_awaited_once_with(include_archived=False)
+
+
+@pytest.mark.asyncio
+async def test_list_include_archived_forwarded():
+    """#12212: ?include_archived=true surfaces archived companies (recovery view)."""
+    svc = _list_svc()
+    app = _collection_app(svc, _membership(is_member=True))
+    async with _client(app) as client:
+        resp = await client.get("/api/llc/companies/?include_archived=true")
+    assert resp.status_code == 200
+    svc.list_root_companies.assert_awaited_once_with(include_archived=True)
+
+
+@pytest.mark.asyncio
 async def test_list_platform_admin_sees_all():
     svc = _list_svc()
     membership = _membership(is_member=False)  # admin bypasses membership entirely

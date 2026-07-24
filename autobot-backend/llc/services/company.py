@@ -125,14 +125,17 @@ class CompanyService(LLCServiceBase):
         logger.info("LLC company updated: %s (id=%s)", org.name, org.id)
         return org
 
-    async def list_root_companies(self) -> List[Organization]:
-        """Return all top-level companies (parent_org_id IS NULL)."""
-        result = await self.session.execute(
-            select(Organization)
-            .where(Organization.parent_org_id.is_(None))
-            .where(Organization.deleted_at.is_(None))
-            .order_by(Organization.name)
-        )
+    async def list_root_companies(self, include_archived: bool = False) -> List[Organization]:
+        """Return all top-level companies (parent_org_id IS NULL).
+
+        ARCHIVED companies are hidden by default (#12212) so retired/abandoned
+        entries do not clutter the selector; pass ``include_archived=True`` to
+        surface them again (the "show archived" toggle) so they stay recoverable.
+        """
+        stmt = select(Organization).where(Organization.parent_org_id.is_(None)).where(Organization.deleted_at.is_(None))
+        if not include_archived:
+            stmt = stmt.where(Organization.llc_status != LLCCompanyStatus.ARCHIVED.value)
+        result = await self.session.execute(stmt.order_by(Organization.name))
         return list(result.scalars().all())
 
     async def list_children(self, parent_id: uuid.UUID) -> List[Organization]:

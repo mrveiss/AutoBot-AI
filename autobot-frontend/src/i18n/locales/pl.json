@@ -7662,6 +7662,12 @@
     "advancedControl": "Sterowanie zaawansowane"
   },
   "llcCompanyStatus": {
+    "showArchived": "Pokaż zarchiwizowane",
+    "delete": "Usuń",
+    "confirmDeleteTitle": "Usuń firmę",
+    "confirmDelete": "Usunąć „{name}”? Spowoduje to usunięcie zarchiwizowanej firmy i jej danych. Tej operacji nie można tu cofnąć.",
+    "deleteError": "Nie udało się usunąć firmy.",
+    "deleteHasChildren": "Ta firma ma firmy podrzędne. Usuń je lub zmień ich przypisanie przed usunięciem.",
     "onboarding": "Wdrażanie",
     "active": "Aktywna",
     "paused": "Wstrzymana",

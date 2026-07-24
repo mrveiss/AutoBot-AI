@@ -7662,6 +7662,12 @@
     "advancedControl": "Papildu vadība"
   },
   "llcCompanyStatus": {
+    "showArchived": "Rādīt arhivētos",
+    "delete": "Dzēst",
+    "confirmDeleteTitle": "Dzēst uzņēmumu",
+    "confirmDelete": "Dzēst “{name}”? Tiks noņemts arhivētais uzņēmums un tā dati. To no šejienes nevar atsaukt.",
+    "deleteError": "Neizdevās dzēst uzņēmumu.",
+    "deleteHasChildren": "Šim uzņēmumam ir meitasuzņēmumi. Pirms dzēšanas noņemiet vai pārsaistiet tos.",
     "onboarding": "Uzsākšana",
     "active": "Aktīvs",
     "paused": "Apturēts",

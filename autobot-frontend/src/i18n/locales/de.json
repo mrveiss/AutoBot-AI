@@ -7662,6 +7662,12 @@
     "advancedControl": "Erweiterte Steuerung"
   },
   "llcCompanyStatus": {
+    "showArchived": "Archivierte anzeigen",
+    "delete": "Löschen",
+    "confirmDeleteTitle": "Unternehmen löschen",
+    "confirmDelete": "„{name}“ löschen? Das archivierte Unternehmen und seine Daten werden entfernt. Dies kann hier nicht rückgängig gemacht werden.",
+    "deleteError": "Unternehmen konnte nicht gelöscht werden.",
+    "deleteHasChildren": "Dieses Unternehmen hat Tochterunternehmen. Entfernen oder verschieben Sie diese vor dem Löschen.",
     "onboarding": "Einführung",
     "active": "Aktiv",
     "paused": "Pausiert",
