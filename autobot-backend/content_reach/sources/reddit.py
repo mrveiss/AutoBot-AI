@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+from urllib.parse import urlparse
 
 import httpx
 
@@ -28,6 +29,17 @@ logger = logging.getLogger(__name__)
 
 # Reddit API user-agent string.
 _USER_AGENT = "autobot-content-reach/1.0"
+
+
+def _is_reddit_url(url: str) -> bool:
+    """Return True only if *url*'s parsed hostname is reddit.com or a reddit.com subdomain.
+
+    Uses urlparse so a hostname boundary is enforced: a substring check like
+    ``"reddit.com" in url`` would wrongly match ``https://reddit.com.evil.com/``
+    or ``https://evil.com/?x=reddit.com`` (CodeQL py/incomplete-url-substring-sanitization).
+    """
+    host = (urlparse(url).hostname or "").lower()
+    return host == "reddit.com" or host.endswith(".reddit.com")
 
 
 class RedditJsonBackend(ContentBackend):
@@ -54,7 +66,7 @@ class RedditJsonBackend(ContentBackend):
         """Fetch Reddit posts; raise BackendError on network, HTTP, or parse failure."""
         headers = {"User-Agent": _USER_AGENT}
 
-        if request.url and "reddit.com" in request.url:
+        if request.url and _is_reddit_url(request.url):
             await ensure_public_url(request.url)
             url = request.url if request.url.endswith(".json") else request.url + ".json"
             try:
