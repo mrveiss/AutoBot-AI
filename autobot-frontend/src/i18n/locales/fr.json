@@ -7954,7 +7954,15 @@
       "count": "{count} tableaux",
       "loading": "Chargement des tableaux…",
       "empty": "Aucun tableau pour le moment — les tableaux sont créés par projet (Kanban) et par sprint (Sprint).",
-      "created": "Créé le {date}"
+      "created": "Créé le {date}",
+      "newKanban": "Nouveau tableau Kanban",
+      "createTitle": "Créer un tableau Kanban",
+      "project": "Projet",
+      "selectProject": "Sélectionner un projet…",
+      "loadingProjects": "Chargement des projets…",
+      "noProjects": "Aucun projet pour le moment — créez d'abord un projet.",
+      "creating": "Création…",
+      "create": "Créer le tableau"
     },
     "kanban": {
       "title": "Tableau Kanban",

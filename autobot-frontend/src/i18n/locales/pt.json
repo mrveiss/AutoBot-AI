@@ -7954,7 +7954,15 @@
       "count": "{count} quadros",
       "loading": "Carregando quadros…",
       "empty": "Ainda não há quadros — os quadros são criados por projeto (Kanban) e por sprint (Sprint).",
-      "created": "Criado em {date}"
+      "created": "Criado em {date}",
+      "newKanban": "Novo quadro Kanban",
+      "createTitle": "Criar quadro Kanban",
+      "project": "Projeto",
+      "selectProject": "Selecionar um projeto…",
+      "loadingProjects": "Carregando projetos…",
+      "noProjects": "Ainda não há projetos — crie um projeto primeiro.",
+      "creating": "Criando…",
+      "create": "Criar quadro"
     },
     "kanban": {
       "title": "Quadro Kanban",

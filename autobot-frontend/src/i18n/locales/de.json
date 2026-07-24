@@ -7954,7 +7954,15 @@
       "count": "{count} Boards",
       "loading": "Boards werden geladen…",
       "empty": "Noch keine Boards — Boards werden pro Projekt (Kanban) und pro Sprint (Sprint) erstellt.",
-      "created": "Erstellt am {date}"
+      "created": "Erstellt am {date}",
+      "newKanban": "Neues Kanban-Board",
+      "createTitle": "Kanban-Board erstellen",
+      "project": "Projekt",
+      "selectProject": "Projekt auswählen…",
+      "loadingProjects": "Projekte werden geladen…",
+      "noProjects": "Noch keine Projekte — erstellen Sie zuerst ein Projekt.",
+      "creating": "Wird erstellt…",
+      "create": "Board erstellen"
     },
     "kanban": {
       "title": "Kanban-Board",
