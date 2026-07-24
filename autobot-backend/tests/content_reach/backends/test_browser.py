@@ -133,7 +133,7 @@ async def test_browser_search_builds_ddg_url(monkeypatch):
 
     # The URL passed to research_url must be the DDG search URL with encoded query
     assert stub_manager.last_url is not None
-    assert "duckduckgo.com" in stub_manager.last_url
+    assert "duckduckgo.com" in stub_manager.last_url  # codeql[py/incomplete-url-substring-sanitization]
     # Accept both + and %20 encoding — urllib.parse.quote_plus uses +
     assert "cats" in stub_manager.last_url
     assert "dogs" in stub_manager.last_url
