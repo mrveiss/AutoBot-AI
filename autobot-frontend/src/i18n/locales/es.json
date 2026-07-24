@@ -7954,7 +7954,15 @@
       "count": "{count} tableros",
       "loading": "Cargando tableros…",
       "empty": "Aún no hay tableros — los tableros se crean por proyecto (Kanban) y por sprint (Sprint).",
-      "created": "Creado el {date}"
+      "created": "Creado el {date}",
+      "newKanban": "Nuevo tablero Kanban",
+      "createTitle": "Crear tablero Kanban",
+      "project": "Proyecto",
+      "selectProject": "Seleccionar un proyecto…",
+      "loadingProjects": "Cargando proyectos…",
+      "noProjects": "Aún no hay proyectos — crea un proyecto primero.",
+      "creating": "Creando…",
+      "create": "Crear tablero"
     },
     "kanban": {
       "title": "Tablero Kanban",
