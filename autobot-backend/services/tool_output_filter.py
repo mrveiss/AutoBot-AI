@@ -395,9 +395,12 @@ def classify_tool(command: str) -> str:
     return categories.get(cmd, "other")
 
 
-async def record_filter_savings(command: str, original: str, filtered: str) -> None:
-    """Track bytes saved by filter category in Redis analytics (fire-and-forget)."""
-    savings = len(original) - len(filtered)
+async def record_filter_savings(command: str, savings: int) -> None:
+    """Track *savings* bytes for *command*'s category in Redis analytics (fire-and-forget).
+
+    ``savings`` must be the total bytes removed across every reduction stage
+    (soft filter + terminal hard cap) — see :meth:`ToolOutputFilter.filter`.
+    """
     if savings <= 0:
         return
     category = classify_tool(command)
@@ -463,26 +466,39 @@ class ToolOutputFilter:
 
         rule = self._match_rule(command)
         if rule is None:
-            return cap_unmatched_output(command, output, exit_code)
+            result = cap_unmatched_output(command, output, exit_code)
+            self._schedule_savings(command, len(output) - len(result))
+            return result
 
         filtered = self._apply(rule, output, exit_code)
-        pre_hint_filtered = filtered  # snapshot before tee hint for accurate savings
-
-        savings = len(output) - len(pre_hint_filtered)
-        if savings > 200:
+        # Content-level savings, pre-hint (#5895) — the tee-hint pointer is
+        # navigational overhead, not filtered-away content, so it isn't
+        # counted against the metric.
+        content_savings = len(output) - len(filtered)
+        if content_savings > 200:
             hint = tee_and_hint(output, command.strip().split()[0], exit_code)
             if hint and filtered:
                 filtered = filtered + "\n" + hint
 
-        try:
-            asyncio.get_running_loop().create_task(record_filter_savings(command, output, pre_hint_filtered))
-        except RuntimeError:
-            pass
-
         # Issue #11543: terminal guard — a matched rule can still leave output
         # above the ceiling (huge diff, hundreds of failures). Cap the final
         # result regardless of match so nothing above the cap reaches history.
-        return _hard_cap(command, filtered, output, exit_code)
+        pre_cap_len = len(filtered)
+        result = _hard_cap(command, filtered, output, exit_code)
+
+        # Issue #12239: the hard cap can trim a matched rule's own output
+        # further — that delta was previously dropped from the metric,
+        # under-counting the true savings whenever the cap fired on a match.
+        hard_cap_savings = max(pre_cap_len - len(result), 0)
+        self._schedule_savings(command, content_savings + hard_cap_savings)
+        return result
+
+    def _schedule_savings(self, command: str, savings: int) -> None:
+        """Fire-and-forget savings recording; no-op outside a running event loop."""
+        try:
+            asyncio.get_running_loop().create_task(record_filter_savings(command, savings))
+        except RuntimeError:
+            pass
 
     def filter_blocks(self, output: str, handler: BlockHandler, exit_code: int = 0) -> str:
         """Filter structured block output using *handler* (ESLint, mypy, docker build, etc.)."""
