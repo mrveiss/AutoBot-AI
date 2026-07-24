@@ -90,8 +90,11 @@ def test_quote_sqlite_identifier_neutralises_injection():
     conn = sqlite3.connect(":memory:")
     try:
         conn.execute("CREATE TABLE t (id INTEGER)")
-        conn.execute(f"CREATE VIEW {quoted} AS SELECT 1")
-        conn.execute(f"DROP VIEW IF EXISTS {quoted}")
+        # `quoted` is the escaped output of the function under test; the identifier
+        # is safely double-quoted (metacharacters inert) and can't be bind-parameterized. (#12284)
+        conn.execute(f"CREATE VIEW {quoted} AS SELECT 1")  # nosemgrep: autobot-sql-string-format
+        # Same quoted identifier; the assertion below proves the payload never executed. (#12284)
+        conn.execute(f"DROP VIEW IF EXISTS {quoted}")  # nosemgrep: autobot-sql-string-format
         conn.commit()
         # Table t survived: the injected drop never executed.
         assert conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='t'").fetchone() is not None
