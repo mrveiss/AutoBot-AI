@@ -50,6 +50,7 @@ from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
 from llm_shared.fallback_chain import get_fallback_chain_manager
+from llm_shared.fallback_events import emit_fallback_event
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.rate_limit_backoff import extract_rate_limit_info
 from llm_shared.tiered_routing import TierConfig, TieredModelRouter
@@ -314,6 +315,15 @@ class LLMService:
                         primary_provider=primary_provider_name,
                         fallback_provider=provider.provider_name,
                     )
+                    await emit_fallback_event(
+                        conversation_id=conversation_id,
+                        primary_model=primary_model_name,
+                        fallback_model=current_model,
+                        primary_provider=primary_provider_name,
+                        fallback_provider=provider.provider_name,
+                        chain_tried=list(attempted_models),
+                        request_id=request.request_id,
+                    )
                 # #10597: cache successful responses for identical future requests.
                 if cache_key and response.content:
                     await self._optimized_store_cache(cache_key, response, request.request_id)
@@ -362,6 +372,10 @@ class LLMService:
                 response.error,
                 " → ".join(attempted_models),
             )
+            if len(attempted_models) > 1:
+                await self._emit_exhausted_fallback(
+                    conversation_id, attempted_models, current_model, request.request_id
+                )
             self._track_usage(response, conversation_id)
             return response
 
@@ -372,6 +386,8 @@ class LLMService:
             len(attempted_models),
             " → ".join(attempted_models),
         )
+        if len(attempted_models) > 1:
+            await self._emit_exhausted_fallback(conversation_id, attempted_models, current_model, request.request_id)
         return _build_error_response(
             request,
             f"All fallback models exhausted ({len(attempted_models)} attempts)",
@@ -483,6 +499,15 @@ class LLMService:
                         primary_provider=primary_provider_name,
                         fallback_provider=provider.provider_name,
                     )
+                    await emit_fallback_event(
+                        conversation_id=conversation_id,
+                        primary_model=primary_model_name,
+                        fallback_model=current_model,
+                        primary_provider=primary_provider_name,
+                        fallback_provider=provider.provider_name,
+                        chain_tried=list(attempted_models),
+                        request_id=request.request_id,
+                    )
                 return
 
             except Exception as exc:
@@ -538,6 +563,10 @@ class LLMService:
                     exc,
                     " → ".join(attempted_models),
                 )
+                if len(attempted_models) > 1:
+                    await self._emit_exhausted_fallback(
+                        conversation_id, attempted_models, current_model, request.request_id
+                    )
                 raise
 
         # Max attempts reached
@@ -547,6 +576,8 @@ class LLMService:
             len(attempted_models),
             " → ".join(attempted_models),
         )
+        if len(attempted_models) > 1:
+            await self._emit_exhausted_fallback(conversation_id, attempted_models, current_model, request.request_id)
         raise RuntimeError(f"All fallback models exhausted ({len(attempted_models)} attempts)")
 
     # ------------------------------------------------------------------
@@ -627,6 +658,29 @@ class LLMService:
                 exc,
                 exc_info=True,
             )
+
+    @staticmethod
+    async def _emit_exhausted_fallback(
+        conversation_id: str | None,
+        attempted_models: list,
+        current_model: str | None,
+        request_id: str,
+    ) -> None:
+        """Emit PROVIDER_FALLBACK(exhausted=True). #11995: chat()/stream() never
+        tracked the exhaustion case at all (only successful fallbacks were)."""
+        primary_attempt = attempted_models[0]
+        primary_provider_name = primary_attempt.split(":")[0]
+        primary_model_name = primary_attempt.split(":", 1)[1] if ":" in primary_attempt else ""
+        await emit_fallback_event(
+            conversation_id=conversation_id,
+            primary_model=primary_model_name,
+            fallback_model=current_model,
+            primary_provider=primary_provider_name,
+            fallback_provider=attempted_models[-1].split(":")[0],
+            chain_tried=list(attempted_models),
+            exhausted=True,
+            request_id=request_id,
+        )
 
     def get_stats(self) -> Dict[str, Any]:
         """Return service-level statistics."""
