@@ -105,6 +105,8 @@ const displaySettingsConfig = computed<{ key: keyof DisplaySettings; label: stri
   { key: 'showDebug', label: t('chat.sidebar.showDebug') },
   { key: 'showSources', label: t('chat.sidebar.showSources') },
   { key: 'autoScroll', label: t('chat.sidebar.autoScroll') },
+  // #11997: opt-in provider-fallback chip (default OFF)
+  { key: 'showFallbackChip', label: t('chat.sidebar.showFallbackChip') },
 ])
 const localMode = ref(contextOverflowMode.value)
 const localEffort = ref(reasoningEffort.value)

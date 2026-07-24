@@ -16,6 +16,9 @@ export interface DisplaySettings {
   showDebug: boolean
   showSources: boolean
   autoScroll: boolean
+  // #11997: opt-in end-user provider-fallback chip (default OFF, preserving the
+  // 'invisible by default' design intent of umbrella #11994).
+  showFallbackChip: boolean
 }
 
 const getDefaultSettings = (): DisplaySettings => ({
@@ -25,7 +28,8 @@ const getDefaultSettings = (): DisplaySettings => ({
   showPlanning: true, // Issue #352: Enable by default for multi-step task visibility
   showDebug: false,   // Keep debug hidden by default (verbose)
   showSources: true,  // Changed: Show sources by default for transparency
-  autoScroll: true
+  autoScroll: true,
+  showFallbackChip: false // #11997: opt-in, off by default (invisible unless enabled)
 })
 
 const loadDisplaySettings = (): DisplaySettings => {

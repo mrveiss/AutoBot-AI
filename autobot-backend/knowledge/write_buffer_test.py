@@ -71,6 +71,25 @@ class TestWriteRejectsEmptyEmbedding:
         # _write_count is incremented only for accepted entries
         assert buf._write_count == 0
 
+    @pytest.mark.asyncio
+    async def test_write_returns_false_on_drop_and_logs(self, caplog):
+        """Issue #12312: a dropped write is reported (return False) and logged, not silent."""
+        import logging
+
+        flush_fn = AsyncMock()
+        buf = VectorWriteBuffer(flush_fn=flush_fn, flush_size=1)
+        with caplog.at_level(logging.WARNING):
+            dropped = await buf.write(id="bad", embedding=[], document="text")
+        assert dropped is False
+        assert any("dropping id=" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_write_returns_true_when_buffered(self):
+        """Issue #12312: a successful write returns True so callers can distinguish."""
+        flush_fn = AsyncMock()
+        buf = VectorWriteBuffer(flush_fn=flush_fn, flush_size=100)
+        assert await buf.write(id="good", embedding=VALID_EMBEDDING, document="text") is True
+
 
 # ---------------------------------------------------------------------------
 # make_chromadb_flush_fn — flush-time guard (Issue #10941)
