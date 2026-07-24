@@ -9,12 +9,12 @@ Two guards:
 
 1. Real-engine tests (``TestTransitionSurvivesSyncSerialization``) drive the
    *actual* ``CompanyService`` against an in-memory aiosqlite ``AsyncSession``
-   so SQLAlchemy's real attribute-expiry behaviour is exercised. The mapper
-   default ``eager_defaults="auto"`` only RETURNING-fetches the onupdate
-   ``updated_at`` on INSERT, not UPDATE — so post-flush ``updated_at`` stays
-   expired and the router's ``_to_read(org)`` serialization (a sync attribute
-   read) raises ``MissingGreenlet``. Without the ``session.refresh(org,
-   ["updated_at"])`` fix these tests fail exactly as production did.
+   so SQLAlchemy's real attribute-expiry behaviour is exercised. Base sets
+   ``eager_defaults=True`` (#12322), so the onupdate ``updated_at`` is fetched
+   inline via the UPDATE's RETURNING clause and stays fresh post-flush — the
+   router's ``_to_read(org)`` serialization (a sync attribute read) never
+   raises ``MissingGreenlet``. Without that setting these tests fail exactly as
+   production did (#12209/#12309).
 
 2. A router ordering test (``test_transition_serializes_before_commit``)
    proves the response is built *before* ``commit()`` so a serialization
@@ -23,16 +23,17 @@ Two guards:
 """
 
 import uuid
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import String, event, select
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import Mapped, mapped_column
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.api import companies
@@ -49,6 +50,22 @@ from user_management.services import TenantContext
 @compiles(JSONB, "sqlite")
 def _compile_jsonb_as_json_on_sqlite(element, compiler, **kw):  # noqa: ANN001
     return "JSON"
+
+
+class _EagerDefaultsProbe(Base):
+    """Dedicated throwaway model for the #12322 durability guard.
+
+    Inherits Base (and therefore ``eager_defaults=True`` plus the shared
+    ``created_at``/``updated_at`` columns) but is NOT registered with the LLC
+    e2e harness, so no other test can mutate its column defaults to client-side
+    Python values. That keeps the guard exercising the *real* server-side
+    onupdate + RETURNING path regardless of test ordering.
+    """
+
+    __tablename__ = "eager_defaults_probe_12322"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
 
 
 async def _seed_company(session_factory, llc_status: str = "onboarding") -> uuid.UUID:
@@ -117,19 +134,55 @@ class TestTransitionSurvivesSyncSerialization:
         assert read.name == "Renamed"
         assert read.updated_at is not None
 
-    @pytest.mark.asyncio
-    async def test_updated_at_is_expired_without_refresh(self, session_factory):
-        """Documents the root cause: after an UPDATE flush the onupdate
-        ``updated_at`` is expired, so a *sync* read raises MissingGreenlet.
-        Guards against a future regression that drops the refresh.
-        """
-        company_id = await _seed_company(session_factory, llc_status="onboarding")
-        async with session_factory() as session:
-            org = (await session.execute(select(Organization).where(Organization.id == company_id))).scalar_one()
-            org.llc_status = "active"
-            await session.flush()  # UPDATE, no refresh
-            with pytest.raises(MissingGreenlet):
-                _ = org.updated_at  # noqa: F841 — sync access of expired attr
+
+@pytest.mark.asyncio
+async def test_eager_defaults_populates_updated_at_on_update_without_refresh():
+    """#12322 durability guard for Base's ``eager_defaults=True``.
+
+    On a dedicated table (immune to cross-test mutation) prove that after an
+    UPDATE ``flush()`` — with NO manual ``session.refresh`` — the onupdate
+    ``updated_at`` is populated (not expired), so a *sync* attribute read does
+    not raise ``MissingGreenlet``. Also asserts the UPDATE actually carried a
+    ``RETURNING updated_at`` clause on the sqlite test dialect, which is the
+    exact mechanism that kills the recurring bug class (#12209/#12309). A
+    regression that drops ``eager_defaults`` fails this test.
+    """
+    engine = create_async_engine("sqlite+aiosqlite://")
+    update_statements: list[str] = []
+
+    @event.listens_for(engine.sync_engine, "before_cursor_execute")
+    def _capture(conn, cursor, statement, parameters, context, executemany):  # noqa: ANN001
+        if statement.lstrip().upper().startswith("UPDATE"):
+            update_statements.append(statement)
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=[_EagerDefaultsProbe.__table__])
+    sf = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+
+    row_id = uuid.uuid4().hex
+    async with sf() as session:
+        session.add(_EagerDefaultsProbe(id=row_id, name="orig"))
+        await session.flush()
+        assert session.get_bind().dialect.update_returning is True
+        await session.commit()
+
+    async with sf() as session:
+        probe = (
+            await session.execute(select(_EagerDefaultsProbe).where(_EagerDefaultsProbe.id == row_id))
+        ).scalar_one()
+        before = probe.updated_at
+        probe.name = "changed"
+        await session.flush()  # UPDATE, no manual refresh
+        fresh = probe.updated_at  # sync access must NOT raise MissingGreenlet
+        await session.commit()
+
+    await engine.dispose()
+
+    assert isinstance(fresh, datetime)
+    assert fresh >= before
+    # The onupdate column was fetched inline with the UPDATE, not via a later
+    # refresh SELECT — that RETURNING is what keeps updated_at unexpired.
+    assert any("RETURNING" in s.upper() and "UPDATED_AT" in s.upper() for s in update_statements)
 
 
 class TestCommitOnlyOnSuccess:

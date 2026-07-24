@@ -117,13 +117,11 @@ class CompanyService(LLCServiceBase):
                 setattr(org, field, value)
 
         await self.session.flush()
-        # GH#12309 (same class as #12209): SQLAlchemy's eager_defaults="auto"
-        # only RETURNING-fetches the onupdate-computed `updated_at` on INSERT,
-        # not UPDATE, so it stays expired after flush(). The router then reads
-        # it while serializing the response — a sync lazy load outside the
-        # greenlet context that raises MissingGreenlet (HTTP 500). Refresh it
-        # here, inside the awaited/greenlet-safe scope.
-        await self.session.refresh(org, attribute_names=["updated_at"])
+        # #12322: `updated_at` is populated inline by the UPDATE's RETURNING
+        # clause (Base sets ``eager_defaults=True``), so it is never expired
+        # after flush() and the router's sync response serialization is safe.
+        # The previous per-call ``session.refresh(org, ["updated_at"])`` (#12309)
+        # is now redundant and removed.
         logger.info("LLC company updated: %s (id=%s)", org.name, org.id)
         return org
 
@@ -209,13 +207,11 @@ class CompanyService(LLCServiceBase):
         for field, value in field_updates.items():
             setattr(org, field, value)
         await self.session.flush()
-        # GH#12309 (same class as #12209): the onupdate-computed `updated_at`
-        # stays expired after an UPDATE flush (eager_defaults="auto" fetches it
-        # via RETURNING only on INSERT). Without this refresh the router's
-        # response serialization triggers a sync lazy load outside the greenlet
-        # context -> MissingGreenlet -> HTTP 500 (while the transition has
-        # already been flushed). Refresh inside the greenlet-safe scope.
-        await self.session.refresh(org, attribute_names=["updated_at"])
+        # #12322: the onupdate `updated_at` is populated inline by the UPDATE's
+        # RETURNING clause (Base sets ``eager_defaults=True``), so it is never
+        # expired after flush() and the router's sync response serialization is
+        # safe. The previous per-call ``session.refresh(org, ["updated_at"])``
+        # (#12309) is now redundant and removed.
         logger.info(log_msg, org.name, org.id)
         return org
 
