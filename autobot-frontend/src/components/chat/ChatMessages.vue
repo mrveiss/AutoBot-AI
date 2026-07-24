@@ -1499,7 +1499,7 @@ onUnmounted(() => {
 
 .message-wrapper.type-terminal_output .message-text {
   @apply font-mono text-sm leading-relaxed whitespace-pre-wrap;
-  color: #d4d4d4;
+  color: var(--terminal-text-output);
 }
 
 .message-wrapper.type-terminal_output .message-content {
