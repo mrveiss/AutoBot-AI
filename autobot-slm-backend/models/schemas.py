@@ -32,8 +32,17 @@ class TokenResponse(BaseModel):
     """JWT token response."""
 
     access_token: str
+    # #12216: also expose the JWT under `token` so a client written against the
+    # core backend (whose login returns `token`) reads the SLM response correctly.
+    token: str | None = None
     token_type: str = "bearer"
     expires_in: int
+
+    @model_validator(mode="after")
+    def _mirror_token_field(self) -> "TokenResponse":
+        if self.token is None:
+            self.token = self.access_token
+        return self
 
 
 class MfaChallengeResponse(BaseModel):

@@ -9,7 +9,7 @@ Agent config, memory, and LLM schemas.
 import uuid
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
@@ -1416,9 +1416,18 @@ class LoginResponse(BaseModel):
     message: str
     user: dict | None = None
     token: str | None = None
+    # #12216: also expose the JWT under `access_token` (the OAuth2 name and the
+    # SLM backend's field) so a cross-backend client reads it correctly.
+    access_token: str | None = None
     session_id: str | None = None
     password_warning: PasswordWarning | None = None
     """Soft warning when the submitted password is weak (non-blocking, #10199)."""
+
+    @model_validator(mode="after")
+    def _mirror_access_token_field(self) -> "LoginResponse":
+        if self.access_token is None:
+            self.access_token = self.token
+        return self
 
 
 class LogoutRequest(BaseModel):
