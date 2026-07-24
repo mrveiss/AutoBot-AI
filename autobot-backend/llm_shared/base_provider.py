@@ -31,6 +31,7 @@ from .models import LLMRequest, LLMResponse
 from .observability import registry as obs_registry
 from .provider_auth import ApiKeyAuth, ProviderAuthError, ProviderAuthStrategy
 from .rate_limit_backoff import extract_rate_limit_info, get_backoff_handler, raise_if_rate_limited
+from .token_budget import get_token_budget_gate
 
 logger = get_logger(__name__)
 
@@ -182,7 +183,13 @@ class BaseProvider(ABC):
         )
 
     async def _guarded_completion(self, request: LLMRequest) -> LLMResponse:
-        """Run ``_chat_completion_impl`` through the provider circuit breaker (GH#11488).
+        """Run ``_chat_completion_impl`` through the token budget gate and the
+        provider circuit breaker (GH#11488, GH#11541).
+
+        GH#11541: a pre-flight cumulative token budget check runs first —
+        over-budget requests short-circuit with an error response and never
+        reach the breaker, so the gate cannot affect breaker failure stats
+        (the breaker contract is untouched).
 
         Error responses count as breaker failures — except rate limits, which
         the backoff handler owns (GH#8502) and which prove the provider is up.
@@ -191,6 +198,12 @@ class BaseProvider(ABC):
         surfaces like any provider error; registry-level avoidance of
         breaker-open providers is tracked separately.)
         """
+        budget_block = await get_token_budget_gate().evaluate(request)
+        if budget_block is not None:
+            self._total_requests += 1
+            self._total_errors += 1
+            return budget_block
+
         breaker = self._completion_circuit_breaker()
         start = time.monotonic()
 
@@ -202,14 +215,17 @@ class BaseProvider(ABC):
             return response
 
         try:
-            return await breaker.call_async(_run)
+            response = await breaker.call_async(_run)
         except _CompletionErrorSignal as signal:
-            return signal.response
+            response = signal.response
         except CircuitBreakerOpenError as exc:
             logger.warning("Provider %s circuit breaker open; failing fast", self.provider_name)
             return self._breaker_error_response(request, f"circuit breaker open: {exc}", start)
         except TimeoutError as exc:
             return self._breaker_error_response(request, str(exc), start)
+
+        await get_token_budget_gate().record(request, response)
+        return response
 
     @abstractmethod
     async def _chat_completion_impl(self, request: LLMRequest) -> LLMResponse:
