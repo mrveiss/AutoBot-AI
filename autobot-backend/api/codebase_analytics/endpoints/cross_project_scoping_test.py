@@ -87,8 +87,7 @@ class TestCallGraphIsolation:
     """End-to-end: the call graph returned for A must not contain B's code."""
 
     async def test_call_graph_scoped_to_source(self, tmp_path):
-        from api.codebase_analytics.endpoints import call_graph
-        from api.codebase_analytics.endpoints import shared
+        from api.codebase_analytics.endpoints import call_graph, shared
 
         root_a = tmp_path / "proj_a"
         root_b = tmp_path / "proj_b"
@@ -143,9 +142,7 @@ class TestEndpointCoverageCacheScoping:
 
         def fake_checker(project_root=None):
             checker = MagicMock()
-            checker.run_full_analysis = MagicMock(
-                return_value=analysis_a if project_root == root_a else analysis_b
-            )
+            checker.run_full_analysis = MagicMock(return_value=analysis_a if project_root == root_a else analysis_b)
             return checker
 
         api_endpoints._analysis_cache.clear()
