@@ -268,6 +268,34 @@ EXTRACT_STRUCTURED_DATA_SCHEMA: dict = {
     "required": ["url", "schema"],
 }
 
+# Issue #11540: goal-directed extraction from the *current* live page (the
+# session already sitting behind a login / mid-form, reached via navigate +
+# click_index/fill_index) — unlike extract_structured_data above, which
+# always re-fetches the URL from scratch and so can never see that state.
+EXTRACT_CONTENT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "goal": {
+            "type": "string",
+            "description": (
+                "What to extract from the current live page, e.g. 'the order "
+                "confirmation number' or 'all product prices listed here'. "
+                "Extraction is goal-directed — not a raw page dump."
+            ),
+        },
+    },
+    "required": ["goal"],
+}
+
+# Issue #11540: hardcoded, read-only JS for extract_content's live-page
+# snapshot — plain property reads (no assignment), so it can never match a
+# BLOCKED_JS_PATTERNS entry (those all target writes: ``.innerHTML =``,
+# ``window.location =``, cookie/storage access, etc.). Passed straight to the
+# browser VM's existing ``evaluate`` action, not a new browser primitive.
+_EXTRACT_CONTENT_SNAPSHOT_SCRIPT = (
+    "({url: window.location.href, title: document.title, html: document.documentElement.outerHTML})"
+)
+
 # Browser tool schemas — co-located with BROWSER_TOOL_NAMES (Issue #4726).
 NAVIGATE_SCHEMA: dict = {
     "type": "object",
@@ -463,6 +491,8 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "crawl_site": CRAWL_SITE_SCHEMA,
     "map_site": MAP_SITE_SCHEMA,
     "extract_structured_data": EXTRACT_STRUCTURED_DATA_SCHEMA,
+    # Issue #11540: goal-directed extraction from the current live page.
+    "extract_content": EXTRACT_CONTENT_SCHEMA,
     # #10932: Unified content_reach gateway (5 source chains).
     "content_reach": CONTENT_REACH_SCHEMA,
     # #11501: LLC board/CEO-chat work-object tools (create_task, update_goal,
@@ -555,12 +585,19 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
 # Issue #7509: web research tools — direct internal dispatch via web_fetch.
 WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
 
+# Issue #11540: goal-directed extraction from the browser session's *current*
+# page — reads whatever the live DOM already shows, never re-fetches a URL.
+LIVE_PAGE_EXTRACT_TOOL_NAMES: frozenset[str] = frozenset({"extract_content"})
+
 # GH#11489: builtin tools sharing the uniform dispatch gate (invalid-call
 # counter reset → Issue #4529 schema validation → handler). ``_builtin_route``
 # maps each name to its handler, so adding a tool here needs no new branch at
 # the ``_dispatch_tool_call`` seam.
 _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
-    BROWSER_TOOL_NAMES | WEB_RESEARCH_TOOL_NAMES | frozenset({"web_search", "execute_command"})
+    BROWSER_TOOL_NAMES
+    | WEB_RESEARCH_TOOL_NAMES
+    | LIVE_PAGE_EXTRACT_TOOL_NAMES
+    | frozenset({"web_search", "execute_command"})
 )
 
 # GH#11160: maps a declared approval category (a work item's
@@ -2541,6 +2578,118 @@ class ToolHandlerMixin:
         json_str = json.dumps(result["data"], indent=2, ensure_ascii=False)
         return f"## Extracted data from {url}\n\n```json\n{json_str}\n```"
 
+    # ------------------------------------------------------------------
+    # Issue #11540: goal-directed extraction from the *current* live page
+    # ------------------------------------------------------------------
+
+    async def _handle_extract_content_tool(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        session_id: str = "",
+    ):
+        """Dispatch the extract_content builtin. Issue #11540.
+
+        Unlike WEB_RESEARCH_TOOL_NAMES (always re-fetches a URL), this reads
+        whatever page the browser session is already on — post-login,
+        post-click, post-form-fill — so it works behind auth walls a fresh
+        fetch could never reach.
+        """
+        params = tool_call.get("params", {})
+        goal = params.get("goal", "")
+        logger.info("[Issue #11540] extract_content: goal=%s", goal[:100])
+
+        yield WorkflowMessage(
+            type="tool_execution",
+            content=f"Extracting from the live page: {goal[:100]}",
+            metadata={"tool": "extract_content"},
+        )
+
+        try:
+            result = await self._exec_extract_content(params, session_id)
+            execution_results.append({"tool": "extract_content", "status": "success", "output": result})
+            yield WorkflowMessage(
+                type="command_output",
+                content=result,
+                metadata={"tool": "extract_content", "status": "success"},
+            )
+        except Exception as exc:
+            logger.error("[Issue #11540] extract_content failed: %s", exc)
+            execution_results.append({"tool": "extract_content", "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"extract_content failed: {exc}",
+                metadata={"tool": "extract_content", "error": True},
+            )
+
+    async def _capture_live_page_snapshot(self, session_id: str) -> tuple[str, str]:
+        """Read (html, url) off the browser session's *current* page. Issue #11540.
+
+        Reuses the existing browser VM ``evaluate`` action — the same one
+        ``evaluate`` tool calls use — with a hardcoded, read-only script (no
+        assignment, so ``is_script_safe()`` is a non-issue). No re-fetch: this
+        sees whatever page the session already reached via navigate/clicks.
+        """
+        from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
+
+        vm_response = await send_to_browser_vm(
+            "evaluate",
+            {"script": _EXTRACT_CONTENT_SNAPSHOT_SCRIPT},
+            session_id=session_id or DEFAULT_BROWSER_SESSION_ID,
+        )
+        inner = vm_response.get("result", vm_response)
+        page = inner.get("result") or {}
+        return page.get("html", ""), page.get("url", "")
+
+    async def _answer_goal_from_markdown(self, markdown: str, url: str, goal: str) -> str:
+        """Run the goal-directed LLM sub-extraction over already-fetched markdown. Issue #11540.
+
+        Reuses the same schema-driven LLM sub-call ``extract_structured_data``
+        uses (``llm_shared.structured_ops.extract``, #11520) with a single
+        free-text ``answer`` field described by the goal instead of a full
+        JSON Schema, and the same content-firewall gate ``extract_url()``
+        applies (#10552) before any web content reaches the LLM. ``extract()``
+        auto-chunks input over ``AUTOBOT_EXTRACT_CHUNK_THRESHOLD`` chars — the
+        context-budget-aware cap in place of OpenManus's fixed 2000-char clip.
+        """
+        from llm_shared.structured_ops import extract
+        from security.content_firewall import ContentSource, get_content_firewall
+
+        fw_verdict = await get_content_firewall().inspect(
+            markdown, source=ContentSource.WEB, context_label=url or "live_page"
+        )
+        if fw_verdict.blocked:
+            return f"extract_content blocked by content firewall (risk={fw_verdict.risk.value})"
+
+        answer_schema = {
+            "type": "object",
+            "properties": {"answer": {"type": "string", "description": goal}},
+            "required": ["answer"],
+        }
+        data = await extract(fw_verdict.content, answer_schema)
+        answer = data.get("answer", "") if isinstance(data, dict) else str(data)
+        header = f"## Extracted from live page{f': {url}' if url else ''}\n\nGoal: {goal}\n\n"
+        return header + (answer or "*(nothing relevant found)*")
+
+    async def _exec_extract_content(self, params: dict, session_id: str = "") -> str:
+        """Goal-directed extraction from the browser session's live page. Issue #11540.
+
+        Orchestrates the two halves above: capture the live DOM snapshot,
+        then run the goal-directed LLM sub-extraction over it.
+        """
+        from web_fetch.extractors import extract_markdown
+
+        goal = (params.get("goal") or "").strip()
+        if not goal:
+            return "extract_content requires a 'goal' describing what to extract."
+
+        html_content, url = await self._capture_live_page_snapshot(session_id)
+        if not html_content:
+            return "extract_content: no live page content — navigate to a page first."
+
+        _title, markdown = extract_markdown(html_content)
+        return await self._answer_goal_from_markdown(markdown, url, goal)
+
     async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.
 
@@ -3045,6 +3194,8 @@ class ToolHandlerMixin:
             return self._handle_web_search_tool(tool_call, execution_results, session_id)
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
+        if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
+            return self._handle_extract_content_tool(tool_call, execution_results, session_id)
         if tool_name == "execute_command":
             return self._dispatch_execute_command(
                 tool_call,
