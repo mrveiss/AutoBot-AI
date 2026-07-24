@@ -127,6 +127,16 @@ class AutoBotMemoryGraphCore:
         self._lock: asyncio.Lock = asyncio.Lock()
         self.index_name: str = f"{config.index_prefix}:idx"
 
+    @property
+    def initialized(self) -> bool:
+        """Public readiness flag — True once ``initialize()`` has completed.
+
+        Exposes the private ``_initialized`` state so callers (e.g. the
+        Graph-RAG health probe, #12316) can read readiness without touching a
+        private attribute or triggering ``AttributeError``.
+        """
+        return self._initialized
+
     def ensure_initialized(self) -> None:
         """Sync guard — raise if ``initialize()`` has not been awaited.
 

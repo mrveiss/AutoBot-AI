@@ -318,7 +318,7 @@ class UserService(BaseService):
 
         # Get paginated results
         query = (
-            base_query.options(selectinload(User.roles).selectinload(UserRole.role))
+            base_query.options(selectinload(User.user_roles).selectinload(UserRole.role))
             .order_by(User.created_at.desc())
             .limit(limit)
             .offset(offset)
