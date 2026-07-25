@@ -43,11 +43,10 @@ work is tracked in a dedicated follow-up issue referenced from the #12439 PR.
 
 from datetime import datetime, timezone
 
-from celery_app import celery_app
-
 from api.schemas_workflows import BatchJob, BatchJobStatus, BatchLogEntry
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from celery_app import celery_app
 from services.batch_job_store import (
     SCHEDULES_ALL_KEY,
     deserialize_job,
