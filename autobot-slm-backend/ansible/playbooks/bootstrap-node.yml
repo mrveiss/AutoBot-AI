@@ -47,7 +47,7 @@
     autobot_log_dir: "/var/log/autobot"
     autobot_cert_dir: "/etc/autobot/certs"
     # Issue #2828: Use shared key path — accessible to any user in autobot group
-    ssh_pubkey_path: "/etc/autobot/ssh/autobot_key.pub"
+    ssh_pubkey_path: "{{ autobot_ssh_key_path | default('/etc/autobot/ssh/autobot_key') }}.pub"
 
   pre_tasks:
     - name: "Verify target is a Debian/Ubuntu system"

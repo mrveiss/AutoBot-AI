@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.ssot_config import config
 from models.database import (
     Certificate,
     CodeStatus,
@@ -2740,7 +2741,7 @@ async def get_node_service_order(
 # Node SSH Exec endpoint (Issue #933)
 # =============================================================================
 
-_DEFAULT_SSH_KEY = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_DEFAULT_SSH_KEY = config.path.ssh_key_path  # canonical inter-node key (#12429)
 _DEFAULT_SSH_USER = os.environ.get("SLM_SSH_USER", "autobot")
 
 

@@ -34,6 +34,7 @@ from typing_extensions import Annotated
 
 from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.security.redaction import redact_mapping
+from autobot_shared.ssot_config import config
 from config import settings
 from models.database import CodeSource, CodeStatus
 from models.database import ComponentSyncJob as ComponentSyncJobModel
@@ -2697,7 +2698,7 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     if is_local_source:
         logger.info("SLM self-sync: code source is local at %s, using direct rsync", repo_path)
     else:
-        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+        ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
         if not _ssh_key_usable(ssh_key):
             logger.error("SLM self-sync failed: SSH key not usable at %s", ssh_key)
             return

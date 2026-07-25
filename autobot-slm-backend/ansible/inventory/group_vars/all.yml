@@ -4,6 +4,17 @@
 # Global variables for all AutoBot VMs
 
 # ==========================================
+# CANONICAL INTER-NODE SSH KEY (#12429)
+# ==========================================
+# Single source of truth for the fleet private key used by SLM -> node SSH,
+# deploy, code-sync and service orchestration. Every inventory
+# (ansible_ssh_private_key_file) and every pubkey lookup resolves THIS var
+# instead of a per-file literal. Mirrors backend ssot_config.path.ssh_key_path
+# (env AUTOBOT_SSH_KEY_PATH / legacy SLM_SSH_KEY). ansible.cfg keeps the same
+# literal as its bootstrap default because INI cannot template a var.
+autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
+
+# ==========================================
 # AUTOBOT APPLICATION CONFIGURATION
 # ==========================================
 

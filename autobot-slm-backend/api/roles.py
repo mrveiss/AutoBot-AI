@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.ssot_config import config
 from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from services.auth import get_current_user
 from services.database import get_db
@@ -655,7 +656,7 @@ async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
     """Run a command on a node via SSH. Returns (success, output)."""
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: S108
+    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",

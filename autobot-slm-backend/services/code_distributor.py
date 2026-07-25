@@ -20,6 +20,7 @@ from typing import Tuple
 
 from sqlalchemy import select
 
+from autobot_shared.ssot_config import config
 from models.database import Setting
 from services.database import db_service
 from services.ssh_utils import _ssh_key_usable
@@ -33,7 +34,7 @@ DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 # Remote agent installation path on managed nodes
 REMOTE_AGENT_PATH = "/opt/slm-agent"
 # SSH key for connecting to managed nodes
-SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
 
 class CodeDistributor:

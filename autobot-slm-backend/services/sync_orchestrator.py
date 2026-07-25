@@ -18,6 +18,7 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_config import config
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
 from services.ssh_utils import _ssh_key_usable
@@ -44,7 +45,7 @@ class SyncNodeContext:
 
 # Code cache directory
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
-SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
 
 class SyncOrchestrator:
