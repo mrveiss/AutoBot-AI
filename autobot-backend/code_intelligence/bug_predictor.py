@@ -1323,7 +1323,10 @@ class BugPredictor(_BaseClass):
 
         await self._learn_bug_patterns_async()
 
-        all_files = list(root.rglob(pattern))
+        # #12406: offload the recursive tree walk too — with an unlimited file
+        # limit rglob() traverses the whole source tree, and this runs in an
+        # async request handler, so keep it off the event loop.
+        all_files = await asyncio.to_thread(lambda: list(root.rglob(pattern)))
         total_files = len(all_files)
         files = all_files[:limit] if limit > 0 else all_files
 
