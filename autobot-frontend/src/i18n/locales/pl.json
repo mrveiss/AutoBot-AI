@@ -746,7 +746,10 @@
       "serverError": "Wystąpił błąd serwera. Spróbuj ponownie za chwilę.",
       "networkFailed": "Połączenie sieciowe nie powiodło się. Sprawdź połączenie z internetem.",
       "timeout": "Upłynął limit czasu żądania. Spróbuj ponownie z krótszą wiadomością.",
-      "sendFailed": "Nie udało się wysłać wiadomości: {error}"
+      "sendFailed": "Nie udało się wysłać wiadomości: {error}",
+      "sendFailedAfterRetries": "Nie udało się wysłać wiadomości po {attempts} próbach: {error}. Sprawdź połączenie i spróbuj ponownie.",
+      "invalidFormatDetail": "Nieprawidłowy format wiadomości: {error}. Sprawdź swoje dane i spróbuj ponownie.",
+      "networkFailedRetry": "Połączenie sieciowe nie powiodło się. Sprawdź połączenie z internetem i spróbuj ponownie."
     }
   },
   "settings": {

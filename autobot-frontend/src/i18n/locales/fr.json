@@ -746,7 +746,10 @@
       "serverError": "Une erreur du serveur s'est produite. Veuillez réessayer dans un instant.",
       "networkFailed": "Échec de la connexion réseau. Veuillez vérifier votre connexion Internet.",
       "timeout": "La requête a expiré. Veuillez réessayer avec un message plus court.",
-      "sendFailed": "Impossible d'envoyer le message : {error}"
+      "sendFailed": "Impossible d'envoyer le message : {error}",
+      "sendFailedAfterRetries": "Impossible d'envoyer le message après {attempts} tentatives : {error}. Veuillez vérifier votre connexion et réessayer.",
+      "invalidFormatDetail": "Format de message invalide : {error}. Veuillez vérifier votre saisie et réessayer.",
+      "networkFailedRetry": "Échec de la connexion réseau. Veuillez vérifier votre connexion Internet et réessayer."
     }
   },
   "settings": {

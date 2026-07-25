@@ -746,7 +746,10 @@
       "serverError": "Se produjo un error del servidor. Inténtalo de nuevo en un momento.",
       "networkFailed": "Error de conexión de red. Comprueba tu conexión a Internet.",
       "timeout": "Se agotó el tiempo de espera de la solicitud. Inténtalo de nuevo con un mensaje más corto.",
-      "sendFailed": "No se pudo enviar el mensaje: {error}"
+      "sendFailed": "No se pudo enviar el mensaje: {error}",
+      "sendFailedAfterRetries": "No se pudo enviar el mensaje después de {attempts} intentos: {error}. Comprueba tu conexión e inténtalo de nuevo.",
+      "invalidFormatDetail": "Formato de mensaje no válido: {error}. Comprueba tu entrada e inténtalo de nuevo.",
+      "networkFailedRetry": "Error de conexión de red. Comprueba tu conexión a Internet e inténtalo de nuevo."
     }
   },
   "settings": {

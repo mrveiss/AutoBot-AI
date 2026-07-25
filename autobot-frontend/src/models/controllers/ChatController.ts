@@ -185,7 +185,10 @@ export class ChatController {
 
       // Add helpful error message for user
       this.chatStore.addMessage({
-        content: `Failed to send message after ${this.retryAttempts} attempts: ${lastError?.message || 'Unknown error'}. Please check your connection and try again.`,
+        content: i18n.global.t('chat.errors.sendFailedAfterRetries', {
+          attempts: this.retryAttempts,
+          error: lastError?.message || 'Unknown error'
+        }),
         sender: 'system',
         type: 'utility'
       })
@@ -224,14 +227,14 @@ export class ChatController {
 
       // If it's a 422 validation error, don't retry
       if (errStatus === 422) {
-        throw new Error(`Invalid message format: ${errMsg}. Please check your input and try again.`)
+        throw new Error(i18n.global.t('chat.errors.invalidFormatDetail', { error: errMsg }))
       }
 
       // If it's a network error, add context
       const errName = (error as { name?: string }).name
       const errCode = (error as { code?: string }).code
       if (errName === 'NetworkError' || errCode === 'NETWORK_ERROR') {
-        throw new Error(`Network connection failed. Please check your internet connection and try again.`)
+        throw new Error(i18n.global.t('chat.errors.networkFailedRetry'))
       }
 
       throw error

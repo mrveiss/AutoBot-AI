@@ -746,7 +746,10 @@
       "serverError": "Ocorreu um erro no servidor. Tente novamente em um instante.",
       "networkFailed": "Falha na conexão de rede. Verifique sua conexão com a internet.",
       "timeout": "A solicitação expirou. Tente novamente com uma mensagem mais curta.",
-      "sendFailed": "Não foi possível enviar a mensagem: {error}"
+      "sendFailed": "Não foi possível enviar a mensagem: {error}",
+      "sendFailedAfterRetries": "Não foi possível enviar a mensagem após {attempts} tentativas: {error}. Verifique sua conexão e tente novamente.",
+      "invalidFormatDetail": "Formato de mensagem inválido: {error}. Verifique sua entrada e tente novamente.",
+      "networkFailedRetry": "Falha na conexão de rede. Verifique sua conexão com a internet e tente novamente."
     }
   },
   "settings": {

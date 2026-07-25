@@ -746,7 +746,10 @@
       "serverError": "Radās servera kļūda. Lūdzu, mēģiniet vēlreiz pēc brīža.",
       "networkFailed": "Neizdevās tīkla savienojums. Lūdzu, pārbaudiet interneta savienojumu.",
       "timeout": "Pieprasījuma noildze. Lūdzu, mēģiniet vēlreiz ar īsāku ziņojumu.",
-      "sendFailed": "Neizdevās nosūtīt ziņojumu: {error}"
+      "sendFailed": "Neizdevās nosūtīt ziņojumu: {error}",
+      "sendFailedAfterRetries": "Neizdevās nosūtīt ziņojumu pēc {attempts} mēģinājumiem: {error}. Lūdzu, pārbaudiet savienojumu un mēģiniet vēlreiz.",
+      "invalidFormatDetail": "Nederīgs ziņojuma formāts: {error}. Lūdzu, pārbaudiet ievadi un mēģiniet vēlreiz.",
+      "networkFailedRetry": "Neizdevās tīkla savienojums. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz."
     }
   },
   "settings": {
