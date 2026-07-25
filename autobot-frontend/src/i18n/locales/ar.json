@@ -734,7 +734,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "تعذّر حذف المحادثة. يُرجى المحاولة مرة أخرى."
+      "deleteFailed": "تعذّر حذف المحادثة. يُرجى المحاولة مرة أخرى.",
+      "createFailed": "تعذّر إنشاء المحادثة: {error}",
+      "loadSessionsFailed": "تعذّر تحميل جلسات المحادثة: {error}",
+      "loadMessagesFailed": "تعذّر تحميل الرسائل: {error}",
+      "saveFailed": "تعذّر حفظ المحادثة: {error}",
+      "resetFailed": "تعذّر إعادة تعيين المحادثة: {error}",
+      "clearFailed": "تعذّر مسح المحادثات: {error}",
+      "invalidFormat": "تنسيق الرسالة غير صالح. يُرجى التحقق من إدخالك والمحاولة مرة أخرى.",
+      "serviceUnavailable": "خدمة المحادثة غير متوفرة. يُرجى تحديث الصفحة والمحاولة مرة أخرى.",
+      "serverError": "حدث خطأ في الخادم. يُرجى المحاولة مرة أخرى بعد لحظة.",
+      "networkFailed": "فشل الاتصال بالشبكة. يُرجى التحقق من اتصالك بالإنترنت.",
+      "timeout": "انتهت مهلة الطلب. يُرجى المحاولة مرة أخرى برسالة أقصر.",
+      "sendFailed": "تعذّر إرسال الرسالة: {error}"
     }
   },
   "settings": {

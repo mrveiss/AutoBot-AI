@@ -734,7 +734,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "Nie udało się usunąć czatu. Spróbuj ponownie."
+      "deleteFailed": "Nie udało się usunąć czatu. Spróbuj ponownie.",
+      "createFailed": "Nie udało się utworzyć czatu: {error}",
+      "loadSessionsFailed": "Nie udało się załadować sesji czatu: {error}",
+      "loadMessagesFailed": "Nie udało się załadować wiadomości: {error}",
+      "saveFailed": "Nie udało się zapisać czatu: {error}",
+      "resetFailed": "Nie udało się zresetować czatu: {error}",
+      "clearFailed": "Nie udało się wyczyścić czatów: {error}",
+      "invalidFormat": "Nieprawidłowy format wiadomości. Sprawdź swoje dane i spróbuj ponownie.",
+      "serviceUnavailable": "Usługa czatu jest niedostępna. Odśwież stronę i spróbuj ponownie.",
+      "serverError": "Wystąpił błąd serwera. Spróbuj ponownie za chwilę.",
+      "networkFailed": "Połączenie sieciowe nie powiodło się. Sprawdź połączenie z internetem.",
+      "timeout": "Upłynął limit czasu żądania. Spróbuj ponownie z krótszą wiadomością.",
+      "sendFailed": "Nie udało się wysłać wiadomości: {error}"
     }
   },
   "settings": {

@@ -734,7 +734,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "Neizdevās izdzēst sarunu. Lūdzu, mēģiniet vēlreiz."
+      "deleteFailed": "Neizdevās izdzēst sarunu. Lūdzu, mēģiniet vēlreiz.",
+      "createFailed": "Neizdevās izveidot sarunu: {error}",
+      "loadSessionsFailed": "Neizdevās ielādēt sarunu sesijas: {error}",
+      "loadMessagesFailed": "Neizdevās ielādēt ziņojumus: {error}",
+      "saveFailed": "Neizdevās saglabāt sarunu: {error}",
+      "resetFailed": "Neizdevās atiestatīt sarunu: {error}",
+      "clearFailed": "Neizdevās notīrīt sarunas: {error}",
+      "invalidFormat": "Nederīgs ziņojuma formāts. Lūdzu, pārbaudiet ievadi un mēģiniet vēlreiz.",
+      "serviceUnavailable": "Sarunu pakalpojums nav pieejams. Lūdzu, atsvaidziniet lapu un mēģiniet vēlreiz.",
+      "serverError": "Radās servera kļūda. Lūdzu, mēģiniet vēlreiz pēc brīža.",
+      "networkFailed": "Neizdevās tīkla savienojums. Lūdzu, pārbaudiet interneta savienojumu.",
+      "timeout": "Pieprasījuma noildze. Lūdzu, mēģiniet vēlreiz ar īsāku ziņojumu.",
+      "sendFailed": "Neizdevās nosūtīt ziņojumu: {error}"
     }
   },
   "settings": {

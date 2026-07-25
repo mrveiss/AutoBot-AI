@@ -5560,7 +5560,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "چیٹ حذف نہیں ہو سکی۔ براہ کرم دوبارہ کوشش کریں۔"
+      "deleteFailed": "چیٹ حذف نہیں ہو سکی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "createFailed": "چیٹ بنائی نہیں جا سکی: {error}",
+      "loadSessionsFailed": "چیٹ سیشنز لوڈ نہیں ہو سکے: {error}",
+      "loadMessagesFailed": "پیغامات لوڈ نہیں ہو سکے: {error}",
+      "saveFailed": "چیٹ محفوظ نہیں ہو سکی: {error}",
+      "resetFailed": "چیٹ ری سیٹ نہیں ہو سکی: {error}",
+      "clearFailed": "چیٹس صاف نہیں ہو سکیں: {error}",
+      "invalidFormat": "پیغام کی شکل غلط ہے۔ براہ کرم اپنی ان پٹ چیک کریں اور دوبارہ کوشش کریں۔",
+      "serviceUnavailable": "چیٹ سروس دستیاب نہیں ہے۔ براہ کرم صفحہ ریفریش کریں اور دوبارہ کوشش کریں۔",
+      "serverError": "سرور کی خرابی پیش آئی۔ براہ کرم ایک لمحے میں دوبارہ کوشش کریں۔",
+      "networkFailed": "نیٹ ورک کنکشن ناکام ہو گیا۔ براہ کرم اپنا انٹرنیٹ کنکشن چیک کریں۔",
+      "timeout": "درخواست کا وقت ختم ہو گیا۔ براہ کرم مختصر پیغام کے ساتھ دوبارہ کوشش کریں۔",
+      "sendFailed": "پیغام بھیجا نہیں جا سکا: {error}"
     }
   },
   "serviceMessages": {

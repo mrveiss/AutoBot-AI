@@ -734,7 +734,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "Não foi possível excluir o chat. Tente novamente."
+      "deleteFailed": "Não foi possível excluir o chat. Tente novamente.",
+      "createFailed": "Não foi possível criar o chat: {error}",
+      "loadSessionsFailed": "Não foi possível carregar as sessões de chat: {error}",
+      "loadMessagesFailed": "Não foi possível carregar as mensagens: {error}",
+      "saveFailed": "Não foi possível salvar o chat: {error}",
+      "resetFailed": "Não foi possível redefinir o chat: {error}",
+      "clearFailed": "Não foi possível limpar os chats: {error}",
+      "invalidFormat": "Formato de mensagem inválido. Verifique sua entrada e tente novamente.",
+      "serviceUnavailable": "Serviço de chat indisponível. Atualize a página e tente novamente.",
+      "serverError": "Ocorreu um erro no servidor. Tente novamente em um instante.",
+      "networkFailed": "Falha na conexão de rede. Verifique sua conexão com a internet.",
+      "timeout": "A solicitação expirou. Tente novamente com uma mensagem mais curta.",
+      "sendFailed": "Não foi possível enviar a mensagem: {error}"
     }
   },
   "settings": {
