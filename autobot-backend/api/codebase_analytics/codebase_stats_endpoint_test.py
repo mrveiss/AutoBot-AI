@@ -13,7 +13,7 @@ Tests the following functionality:
 """
 
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -266,8 +266,8 @@ class TestRecreateChromaDBCollection:
         mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            return_value=mock_client,
+            "knowledge.backends.get_async_default_client",
+            new=AsyncMock(return_value=mock_client),
         ):
             result = await _recreate_chromadb_collection("test-task")
 
@@ -293,8 +293,8 @@ class TestRecreateChromaDBCollection:
         mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            return_value=mock_client,
+            "knowledge.backends.get_async_default_client",
+            new=AsyncMock(return_value=mock_client),
         ):
             result = await _recreate_chromadb_collection("test-task")
 
@@ -307,12 +307,9 @@ class TestRecreateChromaDBCollection:
         """Should return None if ChromaDB client fails entirely."""
         from api.codebase_analytics.scanner import _recreate_chromadb_collection
 
-        async def async_client_fails(*args, **kwargs):
-            raise ConnectionError("ChromaDB unavailable")
-
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            side_effect=async_client_fails,
+            "knowledge.backends.get_async_default_client",
+            new=AsyncMock(side_effect=ConnectionError("ChromaDB unavailable")),
         ):
             result = await _recreate_chromadb_collection("test-task")
 

@@ -1584,7 +1584,8 @@ class MiscConfig(BaseSettings):
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
     codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
     codebase_index_parallel_files: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_FILES")
-    codebase_parallel_mode: str = Field(default="", alias="CODEBASE_PARALLEL_MODE")
+    # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
+    codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
     config: str = Field(default="", alias="CONFIG")
     # #11681: restore pre-#7437 default (500) — 0 silently disabled the content cache
