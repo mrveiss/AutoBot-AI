@@ -13,16 +13,26 @@
 
 // RMS threshold for speech detection (0.0-1.0 range for float32 samples)
 const SPEECH_THRESHOLD = 0.015
-// Number of consecutive frames to confirm speech start/stop
+// Consecutive above-threshold frames to confirm speech START.
 const ONSET_FRAMES = 3
-const OFFSET_FRAMES = 8
+// Consecutive sub-threshold frames to confirm speech STOP (silence window).
+// Derived from the single `silenceThreshold` knob and supplied via
+// processorOptions.offsetFrames (#12505). Falls back to ~800ms at a typical
+// 48kHz render rate (800ms / (128/48000*1000) ~= 300 frames) when no option
+// is passed - the previous hardcoded 8 (~21ms) cut speech off between words.
+const DEFAULT_OFFSET_FRAMES = 300
 
 class VadProcessor extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super()
     this._aboveCount = 0
     this._belowCount = 0
     this._speaking = false
+    const opts = options && options.processorOptions
+    this._offsetFrames =
+      opts && typeof opts.offsetFrames === 'number' && opts.offsetFrames > 0
+        ? opts.offsetFrames
+        : DEFAULT_OFFSET_FRAMES
   }
 
   process(inputs) {
@@ -46,7 +56,7 @@ class VadProcessor extends AudioWorkletProcessor {
     } else {
       this._belowCount++
       this._aboveCount = 0
-      if (this._speaking && this._belowCount >= OFFSET_FRAMES) {
+      if (this._speaking && this._belowCount >= this._offsetFrames) {
         this._speaking = false
         this.port.postMessage({ type: 'vad', speaking: false, rms })
       }
