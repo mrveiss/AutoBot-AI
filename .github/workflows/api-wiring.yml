@@ -72,17 +72,17 @@ jobs:
             # #12381: also dump the SLM control-plane backend's route table
             # (separate FastAPI app, :8000) and union it in — otherwise every
             # getSLMUrl()/slmFetch() call is false-flagged as unwired.
-            SLM_ARGS=""
+            SLM_ARGS=()
             export PYTHONPATH="$PWD:$PWD/autobot-slm-backend:${PYTHONPATH:-}"
             if python scripts/audit_api_wiring.py --dump-slm-openapi slm_openapi.json; then
               echo "::notice::SLM OpenAPI dump succeeded — unioning SLM route table."
-              SLM_ARGS="--slm-openapi slm_openapi.json"
+              SLM_ARGS=(--slm-openapi slm_openapi.json)
             else
               echo "::warning::SLM app build failed — auditing against autobot-backend routes only."
             fi
             export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
 
-            python scripts/audit_api_wiring.py --openapi openapi.json $SLM_ARGS \
+            python scripts/audit_api_wiring.py --openapi openapi.json "${SLM_ARGS[@]}" \
               --baseline scripts/api_wiring_baseline.txt --fail-on-unwired
           else
             echo "::warning::App build failed in CI — falling back to static (heuristic) audit."
