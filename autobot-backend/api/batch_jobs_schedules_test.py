@@ -103,6 +103,7 @@ _leaf_stub("autobot_shared.models.pagination", PaginationParams=MagicMock())
 _pkg_stub("autobot_shared.security")
 _leaf_stub("autobot_shared.security.path_validator", validate_path=MagicMock())
 
+
 def _pydantic_model(name: str) -> type:
     return type(name, (BaseModel,), {"__annotations__": {}})
 
