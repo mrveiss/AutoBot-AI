@@ -9,14 +9,20 @@ import type { BackendSettings as BackendConfig } from '@/types/settings'
 import { getApiBase } from '@/config/ssot-config'
 
 /**
- * Backend `/api/system/health` response shape (#5212, updated #6909).
+ * Backend `/api/system/health` response shape (#5212, updated #6909, #12459).
  *
  * Issue #6909: status and component values use probe vocabulary
  * ("ok" | "degraded" | "down") — the legacy "healthy"/"unhealthy" mapping
  * was retired on the backend. Frontend callers that previously checked
  * `status === 'healthy'` must now check `status === 'ok'`.
+ *
+ * Issue #12459: individual probes can also report `not_applicable`
+ * (expected-absent on this deployment, e.g. single-node/dev-only) or
+ * `idle` (lazy singleton not yet used) — neither counts toward the
+ * aggregate `HealthCheckResponse.status`, which stays `ok | degraded | down`.
  */
 export type HealthStatus = 'ok' | 'degraded' | 'down'
+export type ComponentHealthStatus = HealthStatus | 'not_applicable' | 'idle'
 
 export interface HealthCheckResponse {
   status: HealthStatus
@@ -25,7 +31,7 @@ export interface HealthCheckResponse {
     status: string
     message?: string
   }
-  components?: Record<string, HealthStatus>
+  components?: Record<string, ComponentHealthStatus>
 }
 
 /**
