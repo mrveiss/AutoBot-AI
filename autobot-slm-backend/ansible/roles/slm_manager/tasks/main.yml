@@ -414,6 +414,127 @@
   tags: ['slm', 'secrets']
 
 # ==========================================================
+# #12297: Reconcile stale DB-URL landmines in slm-secrets.env
+#
+# systemd loads db-credentials.env then slm-secrets.env (last wins), so any
+# *_DATABASE_URL planted in slm-secrets.env (e.g. by a manual #12224 recovery)
+# overrides the role-managed value forever and eventually goes stale — the
+# residual outage described in #12297. Strip such a line ONLY when
+# db-credentials.env already provides that key with a MATCHING value (a
+# redundant duplicate of the role-managed value). A DIFFERING value is treated
+# as a deliberate remote-DB override for a non-co-located topology and is LEFT
+# untouched, so legitimate remote overrides survive. This runs AFTER the
+# postgresql role (Arm 1) has written db-credentials.env, and the strip loop
+# only iterates keys db-credentials.env actually provides — so a URL is never
+# removed unless a role-managed replacement already exists (sequencing guard).
+# ==========================================================
+- name: "SLM | #12297: stat db-credentials.env"
+  ansible.builtin.stat:
+    path: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+  register: _slm_dbcreds_stat
+  tags: ['slm', 'secrets']
+
+- name: "SLM | #12297: stat slm-secrets.env"
+  ansible.builtin.stat:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+  register: _slm_secrets_file_stat
+  tags: ['slm', 'secrets']
+
+- name: "SLM | #12297: reconcile slm-secrets.env DB-URLs against db-credentials.env"
+  when:
+    - _slm_dbcreds_stat.stat.exists
+    - _slm_secrets_file_stat.stat.exists
+  tags: ['slm', 'secrets']
+  block:
+    - name: "SLM | #12297: slurp db-credentials.env"
+      ansible.builtin.slurp:
+        src: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+      register: _slm_dbcreds_raw
+      no_log: true
+
+    - name: "SLM | #12297: slurp slm-secrets.env"
+      ansible.builtin.slurp:
+        src: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+      register: _slm_secrets_raw
+      no_log: true
+
+    - name: "SLM | #12297: parse role-managed DB-URLs (db-credentials.env)"
+      ansible.builtin.set_fact:
+        _slm_dbcreds_urls: >-
+          {{ dict(_slm_dbcreds_raw.content | b64decode
+                  | regex_findall('(?m)^([A-Z0-9_]+_DATABASE_URL)=(.*)$')) }}
+      no_log: true
+
+    - name: "SLM | #12297: parse secrets DB-URLs (slm-secrets.env)"
+      ansible.builtin.set_fact:
+        _slm_secrets_urls: >-
+          {{ dict(_slm_secrets_raw.content | b64decode
+                  | regex_findall('(?m)^([A-Z0-9_]+_DATABASE_URL)=(.*)$')) }}
+      no_log: true
+
+    # Duplicate-only strip: remove a DB-URL from slm-secrets.env ONLY when the
+    # role-managed db-credentials.env provides the SAME key with an identical
+    # value. Differing (deliberate remote-override) values are preserved.
+    - name: "SLM | #12297: strip stale DUPLICATE DB-URLs from slm-secrets.env"
+      ansible.builtin.lineinfile:
+        path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+        regexp: "^{{ item | regex_escape }}=.*$"
+        state: absent
+      loop: "{{ _slm_dbcreds_urls.keys() | list }}"
+      when: >-
+        item in _slm_secrets_urls
+        and (_slm_secrets_urls[item] | trim) == (_slm_dbcreds_urls[item] | trim)
+      no_log: true
+      notify: restart slm backend
+
+    # ---- Regression guard (#12297) ----
+    - name: "SLM | #12297: assert db-credentials.env carries all three SLM DB URLs"
+      ansible.builtin.assert:
+        that:
+          - "'SLM_DATABASE_URL' in _slm_dbcreds_urls"
+          - "'SLM_USERS_DATABASE_URL' in _slm_dbcreds_urls"
+          - "'AUTOBOT_USERS_DATABASE_URL' in _slm_dbcreds_urls"
+        fail_msg: >-
+          db-credentials.env is missing an SLM DB URL — Arm 1 (postgresql role)
+          must run before slm_manager. Present keys: {{ _slm_dbcreds_urls.keys() | list }}
+        success_msg: "db-credentials.env carries all three SLM DB URLs (#12297)."
+
+    - name: "SLM | #12297: re-read slm-secrets.env after strip"
+      ansible.builtin.slurp:
+        src: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+      register: _slm_secrets_after
+      no_log: true
+
+    - name: "SLM | #12297: parse slm-secrets DB-URLs after strip"
+      ansible.builtin.set_fact:
+        _slm_secrets_urls_after: >-
+          {{ dict(_slm_secrets_after.content | b64decode
+                  | regex_findall('(?m)^([A-Z0-9_]+_DATABASE_URL)=(.*)$')) }}
+      no_log: true
+
+    # A key=value token present in BOTH dicts (identical key AND value) is a
+    # residual stale duplicate. intersect of the JSON-encoded {key,value} items
+    # yields exactly those; a deliberate differing override is not in the set.
+    - name: "SLM | #12297: compute residual stale-duplicate DB-URLs"
+      ansible.builtin.set_fact:
+        _slm_stale_dupes: >-
+          {{ (_slm_secrets_urls_after | dict2items | map('to_json') | list)
+             | intersect(_slm_dbcreds_urls | dict2items | map('to_json') | list) }}
+      no_log: true
+
+    - name: "SLM | #12297: assert no STALE duplicate DB-URL remains in slm-secrets.env"
+      ansible.builtin.assert:
+        that:
+          - _slm_stale_dupes | length == 0
+        # Render KEYS ONLY — items are JSON {key,value} strings whose value is
+        # the full postgresql+asyncpg URL (contains the DB password). Never emit
+        # the value to Ansible stdout/logs (#12297 security review).
+        fail_msg: >-
+          slm-secrets.env still carries stale duplicate DB-URL key(s) that must be
+          stripped: {{ _slm_stale_dupes | map('from_json') | map(attribute='key') | list }}
+        success_msg: "slm-secrets.env has no stale duplicate DB-URL (#12297)."
+
+# ==========================================================
 # Backend systemd service
 # ==========================================================
 - name: "SLM | Deploy backend systemd service"
