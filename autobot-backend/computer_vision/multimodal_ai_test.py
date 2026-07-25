@@ -30,10 +30,12 @@ from multimodal_processor import (  # noqa: E402
     ModalInput,
     ModalityType,
     ProcessingIntent,
-    multimodal_processor,
 )
+from multimodal_processor import processor as multimodal_processor  # noqa: E402
 from tests.test_helpers import get_test_backend_url  # noqa: E402
-from voice_processing_system import AudioInput, voice_processing_system  # noqa: E402
+from voice_processing_system import AudioInput, get_voice_processing_system  # noqa: E402
+
+voice_processing_system = get_voice_processing_system()
 
 
 def test_api_connectivity():
