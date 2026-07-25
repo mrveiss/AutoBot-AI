@@ -7245,7 +7245,8 @@
     "custom": "custom",
     "stopListening": "Stop listening",
     "stop": "Stop",
-    "confirmDeleteVoiceTitle": "صوتی پروفائل حذف کریں"
+    "confirmDeleteVoiceTitle": "صوتی پروفائل حذف کریں",
+    "tapToEnableAudio": "آڈیو چلانے کو فعال کرنے کے لیے کہیں بھی ٹیپ کریں"
   },
   "auth": {
     "login": {

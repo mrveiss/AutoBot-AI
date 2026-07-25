@@ -925,7 +925,8 @@
     "creating": "Notiek izveide...",
     "confirmDeleteVoice": "Vai dzēst balsi \"{name}\"?",
     "languageVoicesActive": "{count} valodai konfigurēta balss(-es).",
-    "confirmDeleteVoiceTitle": "Dzēst balss profilu"
+    "confirmDeleteVoiceTitle": "Dzēst balss profilu",
+    "tapToEnableAudio": "Pieskarieties jebkur, lai iespējotu audio atskaņošanu"
   },
   "analytics": {
     "title": "Analytics",

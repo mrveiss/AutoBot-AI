@@ -925,7 +925,8 @@
     "creating": "Creating...",
     "confirmDeleteVoice": "Delete voice \"{name}\"?",
     "languageVoicesActive": "{count} language-specific voice(s) configured",
-    "confirmDeleteVoiceTitle": "حذف ملف الصوت"
+    "confirmDeleteVoiceTitle": "حذف ملف الصوت",
+    "tapToEnableAudio": "انقر في أي مكان لتمكين تشغيل الصوت"
   },
   "analytics": {
     "title": "التحليلات",
