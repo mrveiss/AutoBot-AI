@@ -16,7 +16,7 @@ from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_process_init
+from celery.signals import beat_init, worker_process_init
 from kombu import Queue
 
 from autobot_shared.logging_manager import get_logger as _get_logger
@@ -315,6 +315,39 @@ def _assert_beat_tasks_registered() -> None:
 
 
 _assert_beat_tasks_registered()
+
+
+# GH#12354: complement to _assert_beat_tasks_registered() (#12353, which guards
+# the forward direction — every scheduled task is registered). This guards the
+# reverse: prune any entry the on-disk PersistentScheduler store is still
+# carrying whose task is no longer declared in beat_schedule, e.g. a
+# renamed/removed task lingering in the shelve file. Celery's own
+# PersistentScheduler already does an equivalent merge by entry NAME on every
+# clean startup, but silently; this makes it explicit, task-name-based (not
+# just key-based), and loud, running on the beat_init signal — i.e. only in
+# the actual `celery beat` process, after Celery has finished setting up its
+# scheduler (celery.beat.Service.start() accesses self.scheduler, which runs
+# setup_schedule(), before it sends beat_init).
+@beat_init.connect
+def _reconcile_persisted_beat_schedule(sender=None, **kwargs) -> None:
+    scheduler = getattr(sender, "scheduler", None)
+    if scheduler is None:
+        logger.warning("beat_init: no scheduler on sender %r — skipping reconciliation (#12354)", sender)
+        return
+
+    from utils.celery_beat_reconcile import reconcile_schedule
+
+    valid_tasks = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
+    pruned = reconcile_schedule(scheduler.schedule, valid_tasks)
+    if pruned:
+        scheduler.sync()
+    logger.info(
+        "beat_init: %d schedule entries active after reconciliation (%d pruned: %s) — GH#12354",
+        len(scheduler.schedule),
+        len(pruned),
+        pruned,
+    )
+
 
 # GH#4459: Register web-push task_success signal so tasks that pass user_id
 # in their kwargs trigger a browser push notification on completion.
