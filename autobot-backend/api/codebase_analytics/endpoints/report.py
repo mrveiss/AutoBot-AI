@@ -1312,6 +1312,7 @@ def _build_analysis_task_list(
                 _get_bug_prediction(
                     project_root=str(scan_root) if scan_root else None,
                     use_semantic=use_semantic,
+                    source_id=source_id,
                 ),
             )
         )
@@ -1673,6 +1674,7 @@ async def _get_bug_prediction(
     project_root: str | None = None,
     limit: int = BUG_PREDICTION_FILE_LIMIT,
     use_semantic: bool = False,
+    source_id: str | None = None,
 ) -> PredictionResult | None:
     """
     Get bug prediction data for the project (Issue #505).
@@ -1683,10 +1685,15 @@ async def _get_bug_prediction(
     - use_semantic=True enables LLM-based bug pattern matching
     - Uses ChromaDB for vector similarity and Redis for caching
 
+    Issue #12384: Threads source_id into the detector so a report requested
+    for one source never reads another source's (or AutoBot's own) learned
+    bug patterns from the shared ``bug_pattern_vectors`` collection.
+
     Args:
         project_root: Root directory to analyze (defaults to current directory)
         limit: Maximum number of files to analyze
         use_semantic: Enable semantic analysis via LLM embeddings (Issue #554)
+        source_id: Code source this analysis is scoped to (Issue #12384).
 
     Returns:
         PredictionResult or None if analysis fails or times out
@@ -1701,7 +1708,8 @@ async def _get_bug_prediction(
         # default thread pool starvation
 
         # Issue #554: Pass semantic analysis flag
-        predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic)
+        # Issue #12384: Pass source_id for ChromaDB metadata/query scoping
+        predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic, source_id=source_id)
 
         result = await asyncio.wait_for(
             asyncio.get_running_loop().run_in_executor(

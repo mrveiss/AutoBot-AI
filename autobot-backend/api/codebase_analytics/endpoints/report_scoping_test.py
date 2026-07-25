@@ -43,8 +43,12 @@ class TestBuildAnalysisTaskListScoping:
         # is *awaited* -- calling the patched function merely schedules that
         # execution. The task list must therefore be awaited, not just
         # constructed, to observe what each sub-analysis was called with.
-        def fake_bug_prediction(project_root=None, use_semantic=False):
-            captured["bug_prediction"] = {"project_root": project_root, "use_semantic": use_semantic}
+        def fake_bug_prediction(project_root=None, use_semantic=False, source_id=None):
+            captured["bug_prediction"] = {
+                "project_root": project_root,
+                "use_semantic": use_semantic,
+                "source_id": source_id,
+            }
             return None
 
         def fake_api_endpoint(project_root=None):
@@ -85,6 +89,7 @@ class TestBuildAnalysisTaskListScoping:
 
         # None of the sub-analyses fall back to AutoBot's own root/no source.
         assert captured["bug_prediction"]["project_root"] == str(scan_root)
+        assert captured["bug_prediction"]["source_id"] == "B"
         assert captured["api_endpoint"]["project_root"] == scan_root
         assert captured["duplicate"]["project_root"] == scan_root
         assert captured["cross_language"]["project_root"] == scan_root
@@ -121,7 +126,7 @@ class TestReportPipelineSourceIsolation:
             captured.setdefault(source_id, {})["api_root"] = project_root
             return None
 
-        async def fake_get_bug_prediction(project_root=None, use_semantic=False):
+        async def fake_get_bug_prediction(project_root=None, use_semantic=False, source_id=None):
             captured.setdefault(source_id, {})["bug_root"] = project_root
             return None
 
