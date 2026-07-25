@@ -54,7 +54,7 @@ The themed tables below break down the capabilities inside the core and these mo
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
 | Voice conversation mode | Shipped | [voice-conversation-mode-design](../archives/plans/2026-02-20-voice-conversation-mode-design.md) | [#9874][i-voice] | Walkie-talkie, hands-free, duplex, and realtime-WebRTC modes (`/voice` WS + `useVoiceConversation`) |
-| Streaming TTS (per-sentence) | Shipped | [archives/plans](../archives/_index.md) | [#9874][i-voice] | Real-time pipelined per-sentence text-to-speech (`_tts_queue_worker`, `AUTOBOT_TTS_PIPELINE_DEPTH`) |
+| Streaming TTS (per-sentence) | Shipped | [archives/plans](../archives/_index.md) | [#9874][i-voice] | Real-time per-sentence text-to-speech with sub-second time-to-first-chunk (`_tts_queue_worker`, worker `generate_audio_stream`, #12501) |
 | Chat knowledge management | Shipped | [CHAT_KNOWLEDGE_MANAGEMENT](CHAT_KNOWLEDGE_MANAGEMENT.md) | [#9874][i-voice] | Chat-scoped knowledge, file associations, conversation→KB compilation (11 endpoints) |
 
 ## Knowledge, RAG & Memory

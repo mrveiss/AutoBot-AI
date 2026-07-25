@@ -170,7 +170,13 @@
 - name: "TTS Worker | Install pocket-tts and audio dependencies"
   ansible.builtin.pip:
     name:
-      - pocket-tts
+      # pocket-tts>=2.0.0 is required for TTSModel.generate_audio_stream()
+      # (incremental audio-chunk streaming used by /tts/synthesize/stream,
+      # #12501) — verified present on 1.1.1, 2.0.0, and 2.1.0 (latest at
+      # pin time). Floor pinned to the earliest version validated against
+      # the worker's streaming code path, rather than an unbounded
+      # latest-wins resolve.
+      - pocket-tts>=2.0.0
       - soundfile>=0.12.0
       - numpy>=1.24.0
       - scipy>=1.10.0
