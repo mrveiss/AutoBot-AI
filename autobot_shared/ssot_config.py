@@ -1407,6 +1407,17 @@ class MiscConfig(BaseSettings):
     )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
+    chromadb_auth_token: str = Field(
+        default="",
+        alias="AUTOBOT_CHROMADB_AUTH_TOKEN",
+        description=(
+            "Shared-secret token for ChromaDB CHROMA_SERVER_AUTHN_* token auth (#12513). "
+            "Provisioned as a deploy secret (docker-compose root .env / Ansible vault "
+            "var, same pattern as AUTOBOT_JWT_SECRET) — never hardcoded. Empty string "
+            "(default) means the deployment has server auth disabled (dev/local): "
+            "clients then connect without sending auth headers, matching the server."
+        ),
+    )
     chromadb_collection: str = Field(default="", alias="AUTOBOT_CHROMADB_COLLECTION")
     chromadb_path: str = Field(default="", alias="AUTOBOT_CHROMADB_PATH")
     cloud_batch_window_ms: str = Field(default="", alias="AUTOBOT_CLOUD_BATCH_WINDOW_MS")
