@@ -832,14 +832,15 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
             agent["agent_id"], f"no LLC adapter registered for type {adapter_type!r}"
         ) from None
 
-    # GH#9793: skip dispatch when the required CLI binary is absent from PATH.
+    # GH#9793: skip dispatch when the required CLI binary can't be resolved
+    # (PATH, configured override, or common install locations — GH#12478).
     # Converts every-heartbeat FAILED runs into a clean degraded state (GH#9951).
     if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"],
-            f"adapter {adapter_type!r} requires CLI "
-            f"{adapter._required_cli!r} which is not on PATH",  # type: ignore[union-attr]
-        )
+        message = adapter.cli_not_found_message()  # type: ignore[union-attr]
+        # GH#12478: this is a genuine deployment misconfiguration, not routine
+        # degraded-agent noise — warn so it's visible without polling run history.
+        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], message)
+        raise HeartbeatDispatchSkipped(agent["agent_id"], message)
 
     return await _dispatch_registry_adapter(adapter, agent, context)
 

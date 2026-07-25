@@ -31,7 +31,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import shutil
 import time
 import uuid
 from dataclasses import replace
@@ -40,12 +39,14 @@ from typing import Optional
 from autobot_shared.cli_tool_flags import sanitize_tool_names
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter
+from .subprocess_base import resolve_cli_binary as _resolve_cli_binary
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
     extract_usage,
@@ -92,10 +93,21 @@ def _stderr_path(output_file: str) -> str:
     return f"{output_file}.stderr.log"
 
 
+# GH#12478: `claude` often lands off the service account's PATH (e.g. a
+# per-user npm/curl install into ~/.local/bin). Resolution order: the
+# AUTOBOT_CLAUDE_CLI_PATH override, then PATH, then common per-user install
+# locations — see resolve_cli_binary(). Kept as the exact message the
+# heartbeat-skip path surfaces (CLAUDE_CLI_NOT_FOUND_MESSAGE) for consistency
+# between the invoke-time RuntimeError and the pre-dispatch skip reason.
+CLAUDE_CLI_NOT_FOUND_MESSAGE = (
+    "claude CLI not found on PATH or configured location; install it or set AUTOBOT_CLAUDE_CLI_PATH"
+)
+
+
 def _resolve_claude_cli() -> str:
-    path = shutil.which("claude")
+    path = _resolve_cli_binary("claude", _ssot_config.path.claude_cli_path or None)
     if path is None:
-        raise RuntimeError("claude CLI not found on PATH. " "Install Claude Code and ensure 'claude' is on PATH.")
+        raise RuntimeError(CLAUDE_CLI_NOT_FOUND_MESSAGE)
     return path
 
 
@@ -105,6 +117,14 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
     _LOG_NAME = "ClaudeCodeAdapter"
     _state_path = staticmethod(_state_path)
     _required_cli = "claude"  # GH#9793: CLI-availability gate in heartbeat dispatch
+
+    def _configured_cli_path(self) -> Optional[str]:
+        """AUTOBOT_CLAUDE_CLI_PATH override, if set (GH#12478)."""
+        return _ssot_config.path.claude_cli_path or None
+
+    def cli_not_found_message(self) -> str:
+        """Actionable, config-aware message when `claude` cannot be resolved (GH#12478)."""
+        return CLAUDE_CLI_NOT_FOUND_MESSAGE
 
     @staticmethod
     def _tool_permission_args(cfg: dict) -> list[str]:

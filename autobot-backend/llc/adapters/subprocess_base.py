@@ -28,7 +28,7 @@ import os
 import pathlib
 import shutil
 import time
-from typing import Callable, Optional
+from typing import Callable, Iterable, Optional
 
 from autobot_shared.logging_manager import get_logger
 
@@ -42,6 +42,66 @@ SIGTERM_GRACE_SECONDS = 10
 ADAPTER_TIMEOUT_SECONDS = 3600  # per-adapter default (preserves current behavior)
 DEFAULT_TIMEOUT_SECONDS = 3600  # fallback when a state file omits timeout_seconds
 DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108 - test/controlled code uses tmpdir intentionally
+
+# Per-user CLI install locations that a systemd service account's PATH typically
+# does NOT include (GH#12478). Checked, in order, after a bare `shutil.which()`
+# miss — e.g. the Claude Code CLI's curl installer lands in ~/.local/bin, and its
+# npm installer lands in an npm global bin dir that is rarely on a service PATH.
+_COMMON_CLI_INSTALL_DIRS: tuple[str, ...] = (
+    "~/.local/bin",
+    "/usr/local/bin",
+    "~/.npm-global/bin",
+)
+
+
+def _common_cli_search_dirs() -> list[str]:
+    """Common install dirs, plus the npm global bin dir when NPM_CONFIG_PREFIX is set."""
+    dirs = list(_COMMON_CLI_INSTALL_DIRS)
+    npm_prefix = os.environ.get("NPM_CONFIG_PREFIX")
+    if npm_prefix:
+        dirs.insert(0, str(pathlib.PurePosixPath(npm_prefix) / "bin"))
+    return dirs
+
+
+def resolve_cli_binary(
+    binary_name: str,
+    configured_path: Optional[str] = None,
+    common_dirs: Optional[Iterable[str]] = None,
+) -> Optional[str]:
+    """Resolve *binary_name* to an absolute path via a robust 3-tier fallback (GH#12478).
+
+    Resolution order:
+
+    1. ``configured_path`` — an explicit operator-supplied override (e.g. an
+       ssot_config field). Used only if it exists on disk and is executable.
+    2. ``shutil.which(binary_name)`` — standard PATH lookup.
+    3. Common per-user CLI install locations that a service account's PATH often
+       excludes (``~/.local/bin``, ``/usr/local/bin``, the npm global bin dir).
+
+    Returns ``None`` when the binary cannot be found anywhere so the caller can
+    raise/log a clear, actionable error instead of silently skipping the run.
+    """
+    if configured_path:
+        candidate = pathlib.Path(configured_path).expanduser()
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+        logger.warning(
+            "Configured CLI path %r for %r does not exist or is not executable; "
+            "falling back to PATH / common install locations",
+            configured_path,
+            binary_name,
+        )
+
+    found = shutil.which(binary_name)
+    if found:
+        return found
+
+    for directory in common_dirs if common_dirs is not None else _common_cli_search_dirs():
+        candidate = pathlib.Path(directory).expanduser() / binary_name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+
+    return None
 
 
 def resolve_timeout(cfg: dict) -> int:
@@ -70,18 +130,43 @@ class SubprocessLifecycleAdapter:
     # Subclasses declare this; None means no external CLI required (GH#9793).
     _required_cli: Optional[str] = None
 
-    # CLI availability gate (GH#9793) ----------------------------------------
+    # CLI availability gate (GH#9793, robust resolution GH#12478) -----------
+    def _configured_cli_path(self) -> Optional[str]:
+        """Optional explicit CLI path override (e.g. from ssot_config).
+
+        Default: not configured. Subclasses that expose an operator override
+        (e.g. ``ClaudeCodeAdapter`` → ``AUTOBOT_CLAUDE_CLI_PATH``) return it here
+        so both :meth:`is_cli_available` and the adapter's own invoke-time
+        resolution agree on the same resolved binary.
+        """
+        return None
+
     def is_cli_available(self) -> bool:
-        """Return True if the adapter's required CLI binary is on PATH.
+        """Return True if the adapter's required CLI binary can be resolved.
 
         Called by the heartbeat scheduler before dispatch so that runs are
         skipped (logged) rather than dispatched and immediately FAILED when the
-        CLI is absent from the container image.  Adapters with no required CLI
-        (``_required_cli is None``) always return True.
+        CLI is absent. Resolution checks, in order: the configured override
+        path, ``PATH``, then common per-user install locations (GH#12478).
+        Adapters with no required CLI (``_required_cli is None``) always
+        return True.
         """
         if self._required_cli is None:
             return True
-        return shutil.which(self._required_cli) is not None
+        return resolve_cli_binary(self._required_cli, self._configured_cli_path()) is not None
+
+    def cli_not_found_message(self) -> str:
+        """Actionable message when ``_required_cli`` cannot be resolved anywhere (GH#12478).
+
+        Used by the heartbeat scheduler to log/record a clear reason instead of a
+        bare "not on PATH" skip. Subclasses with a configured-path override
+        (e.g. ``ClaudeCodeAdapter``) override this to name the specific env var.
+        """
+        return (
+            f"{self._required_cli!r} CLI not found on PATH or common install "
+            "locations (~/.local/bin, /usr/local/bin, npm global bin); "
+            "install it and ensure it's on the service account's PATH."
+        )
 
     # Invoke ----------------------------------------------------------------
     async def invoke(self, agent_config: dict, context: dict) -> str:
@@ -186,6 +271,7 @@ __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "DEFAULT_OUTPUT_DIR",
     "resolve_timeout",
+    "resolve_cli_binary",
     "is_subprocess_adapter",
 ]
 
