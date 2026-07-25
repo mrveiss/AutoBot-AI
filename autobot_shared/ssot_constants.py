@@ -401,6 +401,21 @@ class PathConstants:
     # Temp/generated-files dir cleaned by tasks.cleanup_generated_files (#10385-adjacent)
     TEMP_DIR: Path = DATA_DIR / "temp"
 
+    @classmethod
+    def get_config_path(cls, *parts: str) -> Path:
+        """Get configuration file path (GH#12467: restored, dropped in GH#7440 consolidation)"""
+        return cls.CONFIG_DIR.joinpath(*parts)
+
+    @classmethod
+    def get_data_path(cls, *parts: str) -> Path:
+        """Get data file path (GH#12467: restored, dropped in GH#7440 consolidation)"""
+        return cls.DATA_DIR.joinpath(*parts)
+
+    @classmethod
+    def get_log_path(cls, *parts: str) -> Path:
+        """Get log file path (GH#12467: restored, dropped in GH#7440 consolidation)"""
+        return cls.LOGS_DIR.joinpath(*parts)
+
 
 PATH = PathConstants()
 
