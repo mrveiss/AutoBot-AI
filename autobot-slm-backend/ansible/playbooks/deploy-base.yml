@@ -169,7 +169,7 @@
     - name: Set up authorized_keys for autobot user (if public key provided)
       authorized_key:
         user: "{{ autobot_user }}"
-        key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
+        key: "{{ lookup('file', autobot_ssh_key_path ~ '.pub') }}"
         state: present
       ignore_errors: true  # In case key doesn't exist yet
 

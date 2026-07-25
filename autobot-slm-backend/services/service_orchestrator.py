@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_config import config
 from models.database import Node, Service, ServiceStatus
 
 logger = logging.getLogger(__name__)
@@ -276,7 +277,7 @@ class ServiceOrchestrator:
 
     def __init__(self):
         self.registry = ServiceRegistry()
-        self.ssh_key = Path.home() / ".ssh" / "id_rsa"
+        self.ssh_key = Path(config.path.ssh_key_path)  # canonical inter-node key (#12429)
         self.ssh_user = "autobot"
         self._ssh_semaphore = asyncio.Semaphore(self._SSH_MAX_CONCURRENT)
 

@@ -20,6 +20,7 @@ from typing import Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
@@ -954,9 +955,12 @@ class DeploymentService:
             The public key content, or empty string if unavailable.
         """
         # Default SSH key paths for the autobot user
-        ssh_dir = Path.home() / ".ssh"
-        pubkey_path = ssh_dir / "id_rsa.pub"
-        privkey_path = ssh_dir / "id_rsa"
+        # Canonical inter-node fleet key (#12429) — same identity Ansible and
+        # every SSH caller resolve, so the pubkey deployed to nodes matches the
+        # private key later used to connect.
+        privkey_path = ssot_config.path.ssh_key
+        pubkey_path = Path(ssot_config.path.ssh_pubkey_path)
+        ssh_dir = privkey_path.parent
 
         # Try to read existing public key
         if pubkey_path.exists():

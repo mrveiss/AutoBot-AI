@@ -1270,6 +1270,16 @@ class PathConfig(BaseSettings):
     # Override via AUTOBOT_VNC_PASSWD_FILE env var.
     vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
+    # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
+    # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
+    # service orchestration). Absolute path — never relative to base_dir. Legacy
+    # per-module SLM_SSH_KEY env override is still honoured via AliasChoices so
+    # existing deployments keep working while resolution collapses to one place.
+    ssh_key_path: str = Field(
+        default="/etc/autobot/ssh/autobot_key",
+        validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
+    )
+
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
         p = Path(relative)
@@ -1311,6 +1321,16 @@ class PathConfig(BaseSettings):
     def vnc_passwd_path(self) -> Path:
         """Absolute path to the x11vnc password file."""
         return Path(self.vnc_passwd_file)
+
+    @property
+    def ssh_key(self) -> Path:
+        """Absolute path to the canonical inter-node SSH private key (#12429)."""
+        return Path(self.ssh_key_path)
+
+    @property
+    def ssh_pubkey_path(self) -> str:
+        """Path to the canonical inter-node SSH public key (private key + .pub)."""
+        return f"{self.ssh_key_path}.pub"
 
 
 class MiscConfig(BaseSettings):

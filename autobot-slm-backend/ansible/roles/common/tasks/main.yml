@@ -102,10 +102,10 @@
 - name: "Common | Configure SSH key authentication"
   authorized_key:
     user: autobot
-    key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
+    key: "{{ lookup('file', autobot_ssh_key_path ~ '.pub') }}"
     state: present
   become: true
-  when: lookup('file', '/etc/autobot/ssh/autobot_key.pub', errors='ignore') is not none
+  when: lookup('file', autobot_ssh_key_path ~ '.pub', errors='ignore') is not none
   tags: ['common', 'ssh']
 
 - name: "Common | Reset UFW to clean state (Issue #895)"
