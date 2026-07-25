@@ -19,6 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List
 
+from croniter import CroniterError, croniter
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_workflows import (
@@ -46,6 +47,21 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
+from services.batch_job_store import (
+    deserialize_job as _deserialize_job,
+)
+from services.batch_job_store import (
+    get_job_key as _get_job_key,
+)
+from services.batch_job_store import (
+    get_logs_key as _get_logs_key,
+)
+from services.batch_job_store import (
+    get_schedule_key as _get_schedule_key,
+)
+from services.batch_job_store import (
+    serialize_job as _serialize_job,
+)
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
@@ -59,37 +75,16 @@ router = APIRouter(tags=["batch-jobs", "management"])
 # =============================================================================
 # Helper Functions
 # =============================================================================
-
-
-def _get_job_key(job_id: str) -> str:
-    """Generate Redis key for job data"""
-    return f"batch:job:{job_id}"
+#
+# Issue #12439: _get_job_key / _get_logs_key / _serialize_job / _deserialize_job
+# are re-exported from services.batch_job_store (the canonical implementation
+# shared with tasks/batch_job_tasks.py) so this module keeps its existing
+# private-name call sites and test seams unchanged.
 
 
 def _get_template_key(template_id: str) -> str:
     """Generate Redis key for template data"""
     return f"batch:template:{template_id}"
-
-
-def _get_schedule_key(schedule_id: str) -> str:
-    """Generate Redis key for schedule data"""
-    return f"batch:schedule:{schedule_id}"
-
-
-def _get_logs_key(job_id: str) -> str:
-    """Generate Redis key for job logs"""
-    return f"batch:logs:{job_id}"
-
-
-def _serialize_job(job: BatchJob) -> str:
-    """Serialize job to JSON string"""
-    return job.model_dump_json()
-
-
-def _deserialize_job(data: str) -> BatchJob:
-    """Deserialize job from JSON string"""
-    job_dict = json.loads(data)
-    return BatchJob(**job_dict)
 
 
 # =============================================================================
@@ -283,6 +278,54 @@ async def delete_batch_job(
 
     logger.info("Deleted batch job %s", job_id)
     return {"status": "success", "job_id": job_id, "message": "Job deleted"}
+
+
+@router.post("/{job_id}/run", response_model=BatchJob)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="run_batch_job",
+    error_code_prefix="BATCH_JOBS",
+)
+async def run_batch_job_now(
+    job_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Trigger on-demand execution of a batch job.
+
+    Issue #12439: shares the exact same Celery entry point
+    (``tasks.run_batch_job``) as the scheduled dispatcher, so manual "run
+    now" and cron-driven execution go through one execution path.
+
+    Args:
+        job_id: Job ID
+
+    Returns:
+        BatchJob: Current job state (status unchanged until the worker
+        picks up the task and transitions it to running).
+    """
+    redis_client = get_redis_client(database="main")
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Redis service unavailable")
+
+    job_key = _get_job_key(job_id)
+    job_data = redis_client.get(job_key)
+    if not job_data:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    job = _deserialize_job(job_data.decode("utf-8"))
+    if job.status == BatchJobStatus.running:
+        raise HTTPException(status_code=409, detail=f"Job {job_id} is already running")
+
+    # Issue #12439: local import — tasks.batch_job_tasks pulls in the full
+    # tasks/__init__.py registration chain; deferring it to call-time keeps
+    # this module's own import surface light (matches the existing
+    # fast_app_factory_fix local-import pattern used elsewhere in this file).
+    from tasks.batch_job_tasks import run_batch_job
+
+    run_batch_job.delay(job_id)
+    logger.info("Queued on-demand run of batch job %s", job_id)
+    return job
 
 
 @router.get("/{job_id}/logs", response_model=List[BatchLogEntry])
@@ -523,13 +566,22 @@ async def create_batch_schedule(
     if not redis_client.exists(job_key):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
+    # Issue #12439: a brand-new schedule must fire on its next cron tick, not
+    # immediately — dispatch_due_batch_schedules() treats next_run <= now as
+    # due, so seeding next_run=now made every new schedule fire on the very
+    # next beat tick regardless of cron_expression.
+    try:
+        next_run = croniter(cron_expression, datetime.now(tz=timezone.utc)).get_next(datetime)
+    except (CroniterError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid cron_expression: {exc}")
+
     schedule_id = str(uuid.uuid4())
     schedule = BatchSchedule(
         schedule_id=schedule_id,
         job_id=job_id,
         cron_expression=cron_expression,
         enabled=enabled,
-        next_run=datetime.now(tz=timezone.utc),
+        next_run=next_run,
     )
 
     schedule_key = _get_schedule_key(schedule_id)
@@ -572,8 +624,20 @@ async def update_batch_schedule(
 
     schedule = BatchSchedule(**json.loads(schedule_data.decode("utf-8")))
     updates = update.model_dump(exclude_unset=True)
+
+    # Issue #12439: recompute next_run when the cron expression changes or the
+    # schedule is (re-)enabled, so it fires on its next cron tick rather than
+    # the stale next_run left over from before the edit/while disabled.
+    recompute_next_run = "cron_expression" in updates or updates.get("enabled") is True
+
     for field, value in updates.items():
         setattr(schedule, field, value)
+
+    if recompute_next_run:
+        try:
+            schedule.next_run = croniter(schedule.cron_expression, datetime.now(tz=timezone.utc)).get_next(datetime)
+        except (CroniterError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid cron_expression: {exc}")
 
     redis_client.set(schedule_key, schedule.model_dump_json())
 

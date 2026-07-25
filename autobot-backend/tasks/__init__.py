@@ -21,6 +21,7 @@ from .analytics_tasks import (
     run_security_analysis,
 )
 from .audit_log_retention import cleanup_expired_audit_logs
+from .batch_job_tasks import dispatch_due_batch_schedules, run_batch_job
 from .chat_retention import cleanup_expired_chats
 from .credential_reconcile import reconcile_credentials
 from .file_retention import cleanup_expired_files
@@ -86,4 +87,7 @@ __all__ = [
     "cleanup_expired_snapshots",
     "cleanup_stale_mobile_devices",
     "transcribe_recording",
+    # GH#12439: batch job scheduling + execution plumbing
+    "run_batch_job",
+    "dispatch_due_batch_schedules",
 ]
