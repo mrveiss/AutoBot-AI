@@ -117,7 +117,7 @@ class NPUWorkerManager(AsyncInitializable):
 
     async def _initialize_impl(self) -> bool:
         """Load worker configurations from YAML (deferred from __init__ to avoid blocking I/O)."""
-        await asyncio.to_thread(self._load_workers_from_config)
+        await self._load_workers_from_config()
         return True
 
     def _parse_single_worker(self, worker_data: dict) -> bool:
@@ -138,16 +138,25 @@ class NPUWorkerManager(AsyncInitializable):
             logger.error("Failed to load worker config: %s", e)
             return False
 
-    def _load_workers_from_config(self) -> None:
-        """Load worker configurations from YAML file"""
+    def _read_config_file(self) -> Dict[str, Any]:
+        """Blocking YAML read (Issue #12526: run via asyncio.to_thread, never on the event loop)."""
+        with open(self.config_file, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    async def _load_workers_from_config(self) -> None:
+        """Load worker configurations from YAML file.
+
+        Issue #12526: made async so the config-missing branch can actually
+        `await self._save_workers_to_config()` instead of discarding the
+        coroutine. Blocking file I/O is offloaded via `asyncio.to_thread`.
+        """
         try:
-            if not self.config_file.exists():
+            if not await asyncio.to_thread(self.config_file.exists):
                 logger.warning("Worker config file not found: %s", self.config_file)
-                self._save_workers_to_config()
+                await self._save_workers_to_config()
                 return
 
-            with open(self.config_file, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
+            data = await asyncio.to_thread(self._read_config_file)
 
             # Load workers using helper (Issue #315: reduced nesting)
             workers_data = data.get("workers", [])
