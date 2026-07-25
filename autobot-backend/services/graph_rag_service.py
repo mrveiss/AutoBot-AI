@@ -599,15 +599,22 @@ class GraphRAGService:
         Determine starting points for graph traversal.
 
         Issue #281: Extracted from _expand_via_graph.
+        Issue #12389: Deduplicated by entity name (first occurrence wins) so
+        `_fetch_related_entities_parallel` doesn't call `get_related_entities`
+        redundantly on the same node.
         """
-        start_points = []
-        if start_entity:
+        start_points: List[Tuple[str, float]] = []
+        seen_entity_names: set[str] = set()
+
+        if start_entity and start_entity not in seen_entity_names:
             start_points.append((start_entity, 1.0))
+            seen_entity_names.add(start_entity)
 
         for match in entity_matches[:3]:  # Limit to top 3
             entity_name = match.entity.get("name")
-            if entity_name:
+            if entity_name and entity_name not in seen_entity_names:
                 start_points.append((entity_name, match.relevance_score))
+                seen_entity_names.add(entity_name)
 
         return start_points
 
