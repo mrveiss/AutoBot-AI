@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = get_logger(__name__)
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
-_HTML_EXTENSIONS = _HTML_EXTENSIONS
+_HTML_EXTENSIONS = (".html", ".htm")
 
 import os
 import sys
