@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from api.system_health import (
-    ComponentHealth,
     _PROBES,
+    ComponentHealth,
     _aggregate_status,
     collect_system_health,
     register_health_probe,
