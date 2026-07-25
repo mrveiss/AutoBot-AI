@@ -36,6 +36,7 @@ from utils.async_chromadb_client import (
     get_async_chromadb_client,
     wrap_collection_async,
 )
+from utils.chromadb_auth import chroma_client_auth_kwargs
 
 if TYPE_CHECKING:
     import chromadb  # noqa: F401
@@ -46,12 +47,17 @@ logger = get_logger(__name__)
 # Host remains os.getenv-based: empty string = use local PersistentClient (dev mode).
 _CHROMADB_HOST = _ssot_config.vm.chromadb
 _CHROMADB_PORT = _ssot_config.port.chromadb
+# Issue #12513: whether server auth (CHROMA_SERVER_AUTHN_*) is configured.
+# Folded into the client cache key so a deploy that later sets the token
+# rebuilds the client instead of reusing a pre-auth cached instance.
+_CHROMADB_AUTH_ENABLED = bool(_ssot_config.misc.chromadb_auth_token)
 
 # Module-level client cache (singleton per key) — mirrors _async_client_cache so
 # the sync client isn't rebuilt, and legacy migrations re-run, on every call (#10601).
-# Key: (endpoint_or_path, allow_reset, anonymized_telemetry) — #10625 folds the
-# settings into the key so a different-settings request builds the right client.
-_sync_client_cache: Dict[Tuple[str, bool, bool], Any] = {}
+# Key: (endpoint_or_path, allow_reset, anonymized_telemetry, auth_enabled) — #10625/
+# #12513 fold the settings into the key so a different-settings request builds
+# the right client.
+_sync_client_cache: Dict[Tuple[str, bool, bool, bool], Any] = {}
 
 # Module exports
 __all__ = [
@@ -345,6 +351,7 @@ def get_chromadb_client(
         f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else (db_path or "data/chromadb"),
         allow_reset,
         anonymized_telemetry,
+        _CHROMADB_AUTH_ENABLED,
     )
     cached = _sync_client_cache.get(cache_key)
     if cached is not None:
@@ -357,6 +364,7 @@ def get_chromadb_client(
                 port=_CHROMADB_PORT,
                 settings=ChromaSettings(
                     anonymized_telemetry=anonymized_telemetry,
+                    **chroma_client_auth_kwargs(),
                 ),
             )
             logger.info(

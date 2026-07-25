@@ -15,6 +15,13 @@ WorkingDirectory={{ chromadb_install_dir }}
 Environment="PYTHONUNBUFFERED=1"
 Environment="ANONYMIZED_TELEMETRY=FALSE"
 Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
+{% if chromadb_auth_token %}
+# #12513: CHROMA_SERVER_AUTHN_* token auth. Only rendered when
+# chromadb_auth_token is set (group_vars/vault) — chroma fails to start if the
+# provider is configured with no credentials, so this must stay conditional.
+Environment="CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.token_authn.TokenAuthenticationServerProvider"
+Environment="CHROMA_SERVER_AUTHN_CREDENTIALS={{ chromadb_auth_token }}"
+{% endif %}
 EnvironmentFile=-/opt/autobot/autobot-db-stack/.env
 
 ExecStart={{ chromadb_install_dir }}/venv/bin/chroma run \

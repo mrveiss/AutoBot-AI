@@ -12,6 +12,13 @@ Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
 Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python"
+{% if chromadb_auth_token %}
+# #12513: CHROMA_SERVER_AUTHN_* token auth. Only rendered when
+# chromadb_auth_token is set (group_vars/vault) — chroma fails to start if the
+# provider is configured with no credentials, so this must stay conditional.
+Environment="CHROMA_SERVER_AUTHN_PROVIDER=chromadb.auth.token_authn.TokenAuthenticationServerProvider"
+Environment="CHROMA_SERVER_AUTHN_CREDENTIALS={{ chromadb_auth_token }}"
+{% endif %}
 EnvironmentFile=/etc/autobot/autobot-ai-stack.env
 ExecStart={{ ai_install_dir }}/venv/bin/chroma run --host {{ chromadb_host }} --port {{ chromadb_port }} --path {{ chromadb_persist_dir }}
 Restart=always

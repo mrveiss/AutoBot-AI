@@ -60,3 +60,8 @@ redis_health_check_delay: 5          # Seconds between retries
 chromadb_port: 8100
 chromadb_install_dir: /opt/autobot/autobot-db-stack/chromadb
 chromadb_data_dir: /opt/autobot/autobot-db-stack/chromadb/data
+# CHROMA_SERVER_AUTHN_* token auth (#12513). Empty (default) = auth disabled,
+# matching pre-#12513 behaviour. Override via group_vars/vault — never commit
+# a real value. Must match backend_chromadb_auth_token (backend role) so the
+# client credentials match the server.
+chromadb_auth_token: ""
