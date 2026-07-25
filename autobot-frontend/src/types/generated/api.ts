@@ -30542,6 +30542,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/batch-jobs/{job_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Batch Job Now
+         * @description Trigger on-demand execution of a batch job.
+         *
+         *     Issue #12439: shares the exact same Celery entry point
+         *     (``tasks.run_batch_job``) as the scheduled dispatcher, so manual "run
+         *     now" and cron-driven execution go through one execution path.
+         *
+         *     Args:
+         *         job_id: Job ID
+         *
+         *     Returns:
+         *         BatchJob: Current job state (status unchanged until the worker
+         *         picks up the task and transitions it to running).
+         */
+        post: operations["run_batch_job_now_api_batch_jobs__job_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/batch-jobs/{job_id}/logs": {
         parameters: {
             query?: never;
@@ -141285,6 +141316,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchJobDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_batch_job_now_api_batch_jobs__job_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchJob"];
                 };
             };
             /** @description Validation Error */

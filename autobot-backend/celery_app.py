@@ -295,6 +295,14 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
         "kwargs": {"dry_run": False},
     },
+    # GH#12439: single-tick dispatcher — scans BatchSchedule records every
+    # minute and enqueues tasks.run_batch_job for each due+enabled schedule
+    # (claims by advancing next_run before enqueue; skips a schedule whose
+    # job is already running).
+    "batch-schedules-tick": {
+        "task": "tasks.dispatch_due_batch_schedules",
+        "schedule": crontab(minute="*"),
+    },
     # Issue #12365: daily off-peak population of the analytics /cached stores
     # (bug-prediction, security-score, anti-pattern, dependencies, duplicates,
     # import-tree). Schedule configurable via AUTOBOT_ANALYTICS_CACHE_POPULATION_SCHEDULE.
