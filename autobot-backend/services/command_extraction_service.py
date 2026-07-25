@@ -241,7 +241,7 @@ async def _slm_exec(
     node_id: str,
     command: str,
     timeout: int = 30,
-    slm_url: str = "",
+    slm_url: str | None = None,
     auth_token: str = "",
 ) -> Tuple[bool, str, str]:
     """
@@ -253,13 +253,14 @@ async def _slm_exec(
         node_id: SLM node identifier
         command: Shell command to run
         timeout: Command timeout in seconds
-        slm_url: SLM base URL (falls back to SLM_URL env var)
+        slm_url: SLM base URL (falls back to SLM_URL env var when omitted;
+            pass "" explicitly to force the "not configured" error path)
         auth_token: Bearer token (falls back to SLM_AUTH_TOKEN env var)
 
     Returns:
         Tuple of (success, stdout, stderr)
     """
-    base = (slm_url or _DEFAULT_SLM_URL).rstrip("/")
+    base = (slm_url if slm_url is not None else _DEFAULT_SLM_URL).rstrip("/")
     token = auth_token or _DEFAULT_SLM_TOKEN
     if not base:
         logger.error("SLM_URL not configured — cannot exec on node %s", node_id)
