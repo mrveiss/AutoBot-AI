@@ -275,23 +275,32 @@ async def get_redis_status(manager: RedisServiceManager = Depends(get_service_ma
 async def probe_redis_service(
     request: Request | None = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for Redis service-manager health."""
+    """Issue #3333 / #12459: probe registration for Redis service-manager health.
+
+    #12459: ``detail`` previously echoed the bare ``overall_status`` word
+    ("degraded"), which is not diagnosable when Redis itself pings fine —
+    the real cause (SLM couldn't confirm systemd state, connectivity down,
+    slow response, ...) lives in ``HealthStatus.recommendations`` but was
+    never surfaced. Join it into ``detail`` so a "degraded" result always
+    says *which* check failed.
+    """
     try:
         manager = await get_service_manager()
         health = await manager.get_health()
         overall = (health.overall_status or "").lower()
+        reasons = "; ".join(health.recommendations or []) or None
         if overall in ("healthy", "ok"):
             return ComponentHealth(name="redis_service", status="ok")
         if overall in ("degraded", "warning"):
             return ComponentHealth(
                 name="redis_service",
                 status="degraded",
-                detail=health.overall_status,
+                detail=reasons or health.overall_status,
             )
         return ComponentHealth(
             name="redis_service",
             status="down",
-            detail=health.overall_status or "service unhealthy",
+            detail=reasons or health.overall_status or "service unhealthy",
         )
     except Exception as exc:
         return ComponentHealth(

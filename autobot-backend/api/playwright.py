@@ -85,11 +85,14 @@ async def get_playwright_status():
 async def probe_playwright(
     request: Request | None = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for playwright module.
+    """Issue #3333 / #12459: probe registration for playwright module.
 
     Lightweight check: inspect the module-level singleton without forcing
     creation (which would require env-var resolution and a network probe).
-    ``ok`` if already initialized; ``degraded`` if not yet initialized.
+    ``ok`` if already initialized; ``idle`` if not yet initialized — the
+    browser-automation worker is opt-in (used only when a research/browser
+    task runs) so a fresh boot with no such task yet is expected, not a
+    failure.
     """
     try:
         from services import playwright_service as _ps_mod
@@ -97,8 +100,8 @@ async def probe_playwright(
         if getattr(_ps_mod, "_playwright_service", None) is None:
             return ComponentHealth(
                 name="playwright",
-                status="degraded",
-                detail="service not yet initialized",
+                status="idle",
+                detail="service not yet initialized (lazy singleton, not yet used)",
             )
         return ComponentHealth(name="playwright", status="ok")
     except Exception as exc:
