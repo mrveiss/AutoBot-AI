@@ -185,9 +185,16 @@ def _build_single_pattern_metadata(pattern_type: str, code_content: str, metadat
     Returns:
         Sanitized metadata dictionary
     """
+    # Issue #12408: default source_id to "default" here too, matching
+    # _build_single_pattern_data's id-hash default -- otherwise a caller
+    # that omits source_id gets a record whose id was hashed with "default"
+    # but whose metadata lacks source_id, so build_source_scoped_where's
+    # equality filter (which matches on the "default" sentinel) never finds
+    # it: fail-closed invisible + id/metadata mismatch.
     full_metadata = {
         "pattern_type": pattern_type,
         "code_length": len(code_content),
+        "source_id": metadata.get("source_id", "default"),
         **metadata,
     }
     return sanitize_metadata(full_metadata)
@@ -265,10 +272,16 @@ def _prepare_pattern_metadata(pattern: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Sanitized metadata dictionary ready for ChromaDB storage
     """
+    # Issue #12408: default source_id to "default" here too, matching
+    # _prepare_pattern_data's id-hash default -- see _build_single_pattern_metadata
+    # above for why the asymmetry is a fail-closed-invisible + id/metadata
+    # mismatch bug (flagged in the #12405 review).
+    metadata = pattern.get("metadata", {})
     full_metadata = {
         "pattern_type": pattern["pattern_type"],
         "code_length": len(pattern["code_content"]),
-        **pattern.get("metadata", {}),
+        "source_id": metadata.get("source_id", "default"),
+        **metadata,
     }
     return sanitize_metadata(full_metadata)
 
@@ -512,13 +525,29 @@ async def get_pattern_stats(collection=None, source_id: str | None = None) -> Di
         return {"error": "Failed to retrieve pattern stats"}
 
 
-async def clear_patterns(collection=None) -> bool:
-    """Clear all patterns from the collection.
+async def clear_patterns(collection=None, source_id: str | None = None) -> bool:
+    """Clear all patterns for a single source from the collection.
 
-    WARNING: This is destructive and cannot be undone.
+    Issue #12408: Scoped to ``source_id`` (default sentinel when None,
+    mirroring ``build_source_scoped_where``) so a clear for one source can
+    never delete another source's (or AutoBot's own) stored patterns.
+    Previously this had NO source filter at all -- ``collection.get()``/
+    ``collection.delete()`` operated over every id in the shared
+    ``code_patterns`` collection, so clearing one source wiped every source.
+
+    Uses ``collection.delete(where=...)`` directly rather than a get-then-
+    delete-by-ids round trip: all three backend adapters used by this
+    codebase (``chromadb_adapter``, ``async_chromadb_adapter``,
+    ``memory_adapter``) forward ``where`` straight through to the
+    underlying store's native where-delete, so there is no need to first
+    enumerate matching ids (and no SQL-variable-limit concern, since the
+    ``where`` clause itself is bounded, unlike an ``ids=[...]`` IN-list).
+
+    WARNING: This is destructive and cannot be undone for the scoped source.
 
     Args:
         collection: Optional pre-fetched collection
+        source_id: Code source to scope the clear to (Issue #12408).
 
     Returns:
         True if successful, False otherwise
@@ -529,14 +558,10 @@ async def clear_patterns(collection=None) -> bool:
             if collection is None:
                 return False
 
-        # Get all IDs and delete them
-        count = await collection.count()
-        if count > 0:
-            results = await collection.get(limit=count, include=[])
-            if results.get("ids"):
-                await collection.delete(ids=results["ids"])
+        where_filter = build_source_scoped_where(source_id)
+        await collection.delete(where=where_filter)
 
-        logger.info("Cleared %d patterns from collection", count)
+        logger.info("Cleared patterns for source_id=%s", source_id or "default")
         return True
 
     except Exception as e:
