@@ -1,7 +1,11 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 ---
-# Unified log rotation for /var/log/autobot/*.log (issue #12294).
+# Unified log rotation for AutoBot logs (issues #12294, #12464).
+#
+# Covers both /var/log/autobot/*.log (#12294) and /opt/autobot/logs/*.log
+# (#12464 — native backend/slm/nginx runtime logs) from a single
+# /etc/logrotate.d/autobot config so every log directory is capped uniformly.
 #
 # Shared task file: included by the common role on every provisioned node,
 # and reused by the time_sync role via `include_role: name=common
@@ -16,7 +20,7 @@
   become: true
   tags: ['common', 'logging', 'logrotate']
 
-- name: "Logrotate | Install unified /var/log/autobot rotation config (#12294)"
+- name: "Logrotate | Install unified AutoBot rotation config (#12294, #12464)"
   ansible.builtin.template:
     src: autobot-logrotate.j2
     dest: /etc/logrotate.d/autobot

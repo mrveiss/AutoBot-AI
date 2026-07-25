@@ -1,13 +1,16 @@
-# AutoBot log rotation — covers ALL service logs under /var/log/autobot.
+# AutoBot log rotation — covers ALL service logs under /var/log/autobot AND
+# the application/runtime logs under /opt/autobot/logs.
 # Managed by Ansible (common role). Do not edit on the host; changes are
-# overwritten on the next deploy. See issue #12294.
+# overwritten on the next deploy. See issues #12294 and #12464.
 #
 # Every AutoBot systemd unit writes stdout/stderr with `StandardOutput=append:`
 # / `StandardError=append:`, so the writing process holds the log file
-# descriptor open. `copytruncate` is REQUIRED — it truncates the existing
-# file in place instead of renaming it, so the open fd keeps writing to the
-# same (now-empty) file. Without it, services would keep appending to the
-# rotated-away inode and the live *.log would stop growing until restart.
+# descriptor open. Long-running services under /opt/autobot/logs (backend,
+# slm-backend, nginx) likewise keep their log fds open for the process
+# lifetime. `copytruncate` is REQUIRED in both cases — it truncates the
+# existing file in place instead of renaming it, so the open fd keeps writing
+# to the same (now-empty) file. Without it, services would keep appending to
+# the rotated-away inode and the live *.log would stop growing until restart.
 #
 # `create` is intentionally omitted: with copytruncate the original file is
 # preserved, so each log keeps its own owner (mixed autobot:autobot and
@@ -36,5 +39,29 @@
     missingok
 
     # Truncate in place — mandatory for append: units (see header).
+    copytruncate
+}
+
+# /opt/autobot/logs is where the native (non-container) deployment writes its
+# runtime logs: backend-error.log, slm-backend-error.log and nginx-access.log
+# / nginx-error.log (see roles/backend_services, backend.env.j2 and the
+# frontend nginx site config `access_log`/`error_log` directives). #12464:
+# nothing rotated this directory, so backend-error.log reached ~718 MB and the
+# nginx/slm error logs tens of MB — a disk-exhaustion risk. Same policy as the
+# /var/log/autobot glob above so every AutoBot log is capped uniformly.
+#
+# nginx keeps its access/error log fds open for the worker lifetime; nginx does
+# support `nginx -s reopen`, but copytruncate is used here for a single uniform
+# strategy across every file in the directory (backend + slm + nginx) and needs
+# no per-service reload wiring. The brief copy/truncate race can drop a few log
+# lines during rotation, which is an acceptable trade for an error/access log.
+/opt/autobot/logs/*.log {
+    daily
+    maxsize 100M
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    missingok
     copytruncate
 }
