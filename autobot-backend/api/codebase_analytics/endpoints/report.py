@@ -55,7 +55,6 @@ from ..models import APIEndpointAnalysis
 from ..storage import get_code_collection
 from .shared import (
     filter_problems_by_file_existence,
-    get_project_root,
     resolve_project_root,
     resolve_source_root,
 )
