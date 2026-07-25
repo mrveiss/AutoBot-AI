@@ -227,14 +227,27 @@ export class ChatController {
 
       // If it's a 422 validation error, don't retry
       if (errStatus === 422) {
-        throw new Error(i18n.global.t('chat.errors.invalidFormatDetail', { error: errMsg }))
+        // #12401: keep .status on the re-wrapped error so the outer
+        // getUserFriendlyErrorMessage() categorizes it as invalidFormat instead
+        // of falling through to the generic sendFailed (which would double-wrap
+        // this detail message).
+        throw Object.assign(
+          new Error(i18n.global.t('chat.errors.invalidFormatDetail', { error: errMsg })),
+          { status: 422 }
+        )
       }
 
       // If it's a network error, add context
       const errName = (error as { name?: string }).name
       const errCode = (error as { code?: string }).code
       if (errName === 'NetworkError' || errCode === 'NETWORK_ERROR') {
-        throw new Error(i18n.global.t('chat.errors.networkFailedRetry'))
+        // #12401: keep name==='NetworkError' on the re-wrapped error so the outer
+        // getUserFriendlyErrorMessage() surfaces networkFailed instead of the
+        // generic sendFailed.
+        throw Object.assign(
+          new Error(i18n.global.t('chat.errors.networkFailedRetry')),
+          { name: 'NetworkError' }
+        )
       }
 
       throw error
