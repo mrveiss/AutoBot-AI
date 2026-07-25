@@ -89,7 +89,12 @@ vi.mock('@/utils/debugUtils', () => {
   }
 })
 
-import { useVoiceConversation } from '../useVoiceConversation'
+import {
+  useVoiceConversation,
+  DEFAULT_SILENCE_THRESHOLD_MS,
+  _silenceMsToRedemptionMs,
+  _silenceMsToOffsetFrames,
+} from '../useVoiceConversation'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
@@ -148,5 +153,43 @@ describe('useVoiceConversation — watcher single-registration (#12153)', () => 
     expect(conversation.errorMessage.value).toContain('Chrome, Edge, or Safari 15+')
 
     conversation.isActive.value = false
+  })
+})
+
+describe('useVoiceConversation — endpointing single-knob wiring (#12505)', () => {
+  it('defaults the silence-tolerance knob to a conversational value, not the old ~250ms cutoff', () => {
+    // The bug was a 250ms Silero redemption / ~21ms worklet window that
+    // finalized on a natural sub-second pause. The single knob must default
+    // well above that (≥ ~500ms) so a conversational half-second pause is
+    // tolerated.
+    expect(DEFAULT_SILENCE_THRESHOLD_MS).toBe(800)
+    expect(DEFAULT_SILENCE_THRESHOLD_MS).toBeGreaterThanOrEqual(500)
+    // The default the composable actually exposes matches the constant.
+    const conversation = useVoiceConversation()
+    expect(conversation.silenceThreshold.value).toBe(DEFAULT_SILENCE_THRESHOLD_MS)
+  })
+
+  it('wires the knob into Silero redemptionMs — the endpointer is no longer dead config', () => {
+    // Identity within the slider range: the knob IS the redemption window.
+    expect(_silenceMsToRedemptionMs(DEFAULT_SILENCE_THRESHOLD_MS)).toBe(800)
+    expect(_silenceMsToRedemptionMs(1500)).toBe(1500)
+    // Clamped to the supported UI slider range (500-3000ms).
+    expect(_silenceMsToRedemptionMs(100)).toBe(500)
+    expect(_silenceMsToRedemptionMs(9999)).toBe(3000)
+    // Crucially, it is NEVER the old too-short 250ms cutoff.
+    expect(_silenceMsToRedemptionMs(DEFAULT_SILENCE_THRESHOLD_MS)).toBeGreaterThan(250)
+  })
+
+  it('wires the knob into the AudioWorklet silence window (OFFSET_FRAMES), matching redemption tolerance', () => {
+    // frames = round(ms / (128/sampleRate*1000)). At 48kHz a render quantum
+    // is 128/48000*1000 ≈ 2.667ms, so 800ms ≈ 300 frames — vastly longer
+    // than the old hardcoded 8 frames (~21ms).
+    const frames48k = _silenceMsToOffsetFrames(DEFAULT_SILENCE_THRESHOLD_MS, 48000)
+    expect(frames48k).toBe(300)
+    expect(frames48k).toBeGreaterThan(8)
+    // At 16kHz the render quantum is 8ms, so 800ms = 100 frames.
+    expect(_silenceMsToOffsetFrames(DEFAULT_SILENCE_THRESHOLD_MS, 16000)).toBe(100)
+    // Never collapses below one frame even for tiny values.
+    expect(_silenceMsToOffsetFrames(1, 48000)).toBeGreaterThanOrEqual(1)
   })
 })
