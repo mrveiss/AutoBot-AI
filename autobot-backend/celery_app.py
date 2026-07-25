@@ -145,6 +145,9 @@ celery_app.conf.update(
         "analytics.run_bug_prediction_analysis": {"queue": "analytics"},
         "analytics.run_security_analysis": {"queue": "analytics"},
         "analytics.run_dashboard_analysis": {"queue": "analytics"},
+        # Issue #12365: anti-pattern background analysis + daily cache population
+        "analytics.run_anti_pattern_analysis": {"queue": "analytics"},
+        "analytics.populate_all_caches": {"queue": "analytics"},
         # GH#11262: priority tiers on the shared default queue (audit > maintenance).
         **_PRIORITY_TASK_ROUTES,
     },
@@ -291,6 +294,13 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.cleanup_expired_kb_entries",
         "schedule": crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
         "kwargs": {"dry_run": False},
+    },
+    # Issue #12365: daily off-peak population of the analytics /cached stores
+    # (bug-prediction, security-score, anti-pattern, dependencies, duplicates,
+    # import-tree). Schedule configurable via AUTOBOT_ANALYTICS_CACHE_POPULATION_SCHEDULE.
+    "analytics-cache-population-daily": {
+        "task": "analytics.populate_all_caches",
+        "schedule": crontab_from_string(ssot_config.analytics_cache_population_schedule),
     },
 }
 

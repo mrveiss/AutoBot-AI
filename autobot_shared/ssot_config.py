@@ -2011,6 +2011,30 @@ class AutoBotConfig(BaseSettings):
         ),
     )
 
+    # Issue #12365: daily off-peak population of the analytics /cached stores
+    # (bug-prediction, security-score, anti-pattern, dependencies, duplicates,
+    # import-tree) so panels serve a populated cache instead of always being
+    # empty. 05:30 UTC sits after the 01:00-05:00 data-retention/knowledge/
+    # pricing/audit maintenance block and before the 06:15 testgaps audit.
+    analytics_cache_population_schedule: str = Field(
+        default="30 5 * * *",
+        alias="AUTOBOT_ANALYTICS_CACHE_POPULATION_SCHEDULE",
+        description=(
+            "Cron schedule for analytics.populate_all_caches (daily off-peak "
+            "population of the analytics /cached stores). Default 05:30 UTC "
+            "nightly. 5-field cron: 'm h dom mon dow'."
+        ),
+    )
+    analytics_cache_population_stagger_seconds: int = Field(
+        default=300,
+        alias="AUTOBOT_ANALYTICS_CACHE_POPULATION_STAGGER_SECONDS",
+        description=(
+            "Seconds between each analytics module's population dispatch, so "
+            "6 modules (one up to ~280s) don't all run simultaneously and "
+            "spike CPU/IO. Default 300s (5 min) between modules."
+        ),
+    )
+
     # Issue #858: Handle PORT env var from uvicorn without breaking port config
     @field_validator("port", mode="before")
     @classmethod
