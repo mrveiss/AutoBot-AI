@@ -200,9 +200,8 @@ class TestBeatScheduleRegistration:
     def test_configured_hour_is_off_peak(self):
         """Sanity-check the default schedule lands in the existing off-peak
         maintenance window (00:00-06:00 UTC), not business hours."""
-        from utils.celery_schedules import crontab_from_string
-
         from autobot_shared.ssot_config import AutoBotConfig
+        from utils.celery_schedules import crontab_from_string
 
         default_schedule = AutoBotConfig.model_fields["analytics_cache_population_schedule"].default
         parsed = crontab_from_string(default_schedule)
