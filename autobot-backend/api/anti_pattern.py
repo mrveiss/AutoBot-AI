@@ -124,25 +124,30 @@ _detector_lock = asyncio.Lock()
 
 
 async def _get_detector():
-    """Get or create the anti-pattern detector instance (lazy initialization, thread-safe)"""
+    """Get or create the anti-pattern detector instance (lazy initialization, thread-safe).
+
+    Issue #12365: previously loaded ``tools/code-analysis-suite/src/anti_pattern_detector.py``
+    via ``importlib.util.spec_from_file_location`` — that directory was deleted during the
+    #781/#926 repo restructuring (#12436), so every call raised FileNotFoundError and every
+    ``/api/anti-pattern/*`` endpoint (including ``/cached``) was broken. The canonical
+    successor is ``code_analysis.src.anti_pattern_detector`` (a normal importable package,
+    no dashes in its path, no importlib hack needed — see ``code_intelligence/
+    anti_pattern_detector.py``'s facade re-export, GH#6757).
+
+    Also wires a real async Redis client into the detector: the class defaults
+    ``redis_client=None``, which makes its own ``_cache_results``/``get_cached_report``
+    no-ops, so ``/analyze`` never actually populated the store ``/cached`` reads.
+    """
     global _detector_instance
     if _detector_instance is None:
         async with _detector_lock:
             # Double-check after acquiring lock
             if _detector_instance is None:
-                import importlib.util
-                import os
+                from autobot_shared.redis_client import get_async_redis_client
+                from code_analysis.src.anti_pattern_detector import AntiPatternDetector
 
-                # Import using file path since directory has dashes
-                module_path = os.path.join(
-                    os.path.dirname(__file__),
-                    "../../tools/code-analysis-suite/src/anti_pattern_detector.py",
-                )
-                spec = importlib.util.spec_from_file_location("anti_pattern_detector", module_path)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-
-                _detector_instance = module.AntiPatternDetector()
+                redis_client = await get_async_redis_client(database="analytics")
+                _detector_instance = AntiPatternDetector(redis_client=redis_client)
     return _detector_instance
 
 
