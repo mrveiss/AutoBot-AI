@@ -103,31 +103,17 @@ _leaf_stub("autobot_shared.models.pagination", PaginationParams=MagicMock())
 _pkg_stub("autobot_shared.security")
 _leaf_stub("autobot_shared.security.path_validator", validate_path=MagicMock())
 
+def _pydantic_model(name: str) -> type:
+    return type(name, (BaseModel,), {"__annotations__": {}})
+
+
 if "api.schemas_workflows" not in sys.modules:
-    from typing import Optional
-
-    class _BatchSchedule(BaseModel):
-        schedule_id: str
-        job_id: str
-        cron_expression: str
-        enabled: bool
-        next_run: datetime
-
-    class _BatchScheduleUpdate(BaseModel):
-        enabled: Optional[bool] = None
-        cron_expression: Optional[str] = None
-
-    def _pydantic_model(name: str) -> type:
-        return type(name, (BaseModel,), {"__annotations__": {}})
-
     _sw = types.ModuleType("api.schemas_workflows")
     _sw.__path__ = []
     _sw.__package__ = "api"
 
     _sw.BatchJobStatus = BatchJobStatus  # type: ignore[attr-defined]
     _sw.BatchJobType = BatchJobType  # type: ignore[attr-defined]
-    _sw.BatchSchedule = _BatchSchedule  # type: ignore[attr-defined]
-    _sw.BatchScheduleUpdate = _BatchScheduleUpdate  # type: ignore[attr-defined]
 
     # NOTE: this list must stay a superset-compatible match with the stub list
     # in tests/test_health_probe_data_contract.py — both files guard their
@@ -145,7 +131,9 @@ if "api.schemas_workflows" not in sys.modules:
         "BatchJobList",
         "BatchLoadResponse",
         "BatchLogEntry",
+        "BatchSchedule",
         "BatchScheduleDeleteResponse",
+        "BatchScheduleUpdate",
         "BatchStatusResponse",
         "BatchTemplate",
         "BatchTemplateDeleteResponse",
@@ -165,6 +153,45 @@ if "api.schemas_workflows" not in sys.modules:
     _sw_mock = MagicMock()
     _sw.__getattr__ = lambda attr: _sw_mock  # type: ignore[attr-defined]
     sys.modules["api.schemas_workflows"] = _sw
+
+# Issue #12380 review fix: this file and tests/test_health_probe_data_contract.py
+# both stub sys.modules["api.schemas_workflows"], gated on "not already present"
+# — so whichever test file collects first wins the base stub for the whole
+# session. Neither file's base stub loop builds real-field BatchSchedule /
+# BatchScheduleUpdate (both use the field-less `_pydantic_model` placeholder).
+# This file's tests construct real BatchSchedule/BatchScheduleUpdate instances
+# and read their fields (cron_expression, enabled, ...), so — regardless of
+# which file collected first — force real-field versions onto the *shared*
+# stub module here, before `import api.batch_jobs` below binds names from it.
+# Collection (module import) always completes for every test file before any
+# test *executes*, so this reassignment is visible to api.batch_jobs's own
+# `from api.schemas_workflows import BatchSchedule, BatchScheduleUpdate` no
+# matter which file the pytest run happens to collect first. Guarded by a
+# `__spec__ is None` check so a genuine (non-stub) real module is never
+# clobbered — hand-built `types.ModuleType()` stubs never populate `__spec__`
+# (stays None), while every real import-system-loaded module gets a concrete
+# `ModuleSpec`. NOTE: `hasattr(mod, "__file__")` is NOT a reliable stub-check
+# here — both this file's and the health-probe file's stub set a catch-all
+# `module.__getattr__` fallback (for arbitrary unlisted schema names), which
+# makes `hasattr(mod, "__file__")` always True (returns a MagicMock) even
+# though `__file__` was never actually set.
+_schemas_workflows_mod = sys.modules["api.schemas_workflows"]
+if _schemas_workflows_mod.__spec__ is None:
+    from typing import Optional
+
+    class _BatchSchedule(BaseModel):
+        schedule_id: str
+        job_id: str
+        cron_expression: str
+        enabled: bool
+        next_run: datetime
+
+    class _BatchScheduleUpdate(BaseModel):
+        enabled: Optional[bool] = None
+        cron_expression: Optional[str] = None
+
+    _schemas_workflows_mod.BatchSchedule = _BatchSchedule  # type: ignore[attr-defined]
+    _schemas_workflows_mod.BatchScheduleUpdate = _BatchScheduleUpdate  # type: ignore[attr-defined]
 
 _pkg_stub("constants")
 _leaf_stub(
