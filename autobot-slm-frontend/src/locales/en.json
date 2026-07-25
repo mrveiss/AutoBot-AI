@@ -786,6 +786,7 @@
       "nodeStatusAria": "Node {hostname}, status: {status}",
       "packagesCount": "{count} pkg{plural}",
       "reEnrollNode": "Re-enroll Node",
+      "recoverConnection": "Recover Connection",
       "restartNodeAria": "Restart {hostname}",
       "secondsAgo": "{seconds}s ago",
       "serviceHealthSummaryAria": "Service health summary",
