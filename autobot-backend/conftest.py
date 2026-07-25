@@ -1008,7 +1008,11 @@ def _real_load_light_services() -> None:
     services_dir = backend_root / "services"
     for svc_path in sorted(services_dir.glob("*.py")):
         name = svc_path.stem
-        if name in _SERVICES_REAL_LOAD_SKIP or name.endswith(("_test", "_examples")):
+        if (
+            name in _SERVICES_REAL_LOAD_SKIP
+            or name.startswith("test_")
+            or name.endswith(("_test", "_examples"))
+        ):
             continue
         _real_load_and_bind(f"services.{name}", svc_path)
 
