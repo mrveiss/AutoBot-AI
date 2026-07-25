@@ -724,15 +724,23 @@ async def get_cached_patterns(
 
 
 @router.post("/patterns/storage/clear")
-async def clear_pattern_storage() -> Dict[str, str]:
-    """Clear all stored patterns from ChromaDB.
+async def clear_pattern_storage(
+    source_id: str | None = Query(default=None, description="Code source to scope the clear to (Issue #12408)"),
+) -> Dict[str, str]:
+    """Clear stored patterns for a single source from ChromaDB.
 
-    WARNING: This is destructive and cannot be undone.
+    Issue #12408: Always scopes the clear to source_id (default sentinel
+    when None, matching every other ``/patterns/*`` endpoint's convention --
+    e.g. ``get_pattern_storage_stats``, ``search_similar_patterns_endpoint``)
+    so clearing one source's patterns can never delete another source's (or
+    AutoBot's own) stored patterns.
+
+    WARNING: This is destructive and cannot be undone for the scoped source.
     """
     try:
         from code_intelligence.pattern_analysis.storage import clear_patterns
 
-        success = await clear_patterns()
+        success = await clear_patterns(source_id=source_id)
 
         if success:
             return {"message": "Pattern storage cleared successfully"}
