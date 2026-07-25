@@ -1,0 +1,65 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Known/tracked unwired frontend API calls (#12381).
+#
+# One normalized path per line (the same form audit_api_wiring.py prints
+# under "== UNWIRED FRONTEND CALLS ==": /api/... with {p} in place of any
+# runtime-resolved segment). Blank lines and #-comments are ignored.
+#
+# These are NOT SLM-backend routing false positives — they genuinely have no
+# backend anywhere, per the live-verified triage in #12326 (comment) and the
+# owner-decision issues that track them (build the backend, or remove the
+# dead UI control). Listing them here lets --fail-on-unwired gate on NEW
+# drift only, instead of blocking on findings already tracked elsewhere.
+# When #12378/#12364 are dispositioned (backend built or control removed),
+# remove the corresponding lines.
+
+# --- #12378: browser-automation panel (aspirational, no backend) ---
+/api/browser/automation/run
+/api/browser/click
+/api/browser/close
+/api/browser/execute
+/api/browser/launch
+/api/browser/navigate
+/api/browser/screenshot
+/api/browser/session/{p}
+/api/browser/type
+
+# --- #12378: dev-speedup panel (aspirational, no backend) ---
+/api/dev-speedup/boilerplate
+/api/dev-speedup/format
+/api/dev-speedup/lint-fix
+/api/dev-speedup/optimize
+/api/dev-speedup/quick-search
+/api/dev-speedup/refactor-suggest
+/api/dev-speedup/snippet-generate
+/api/dev-speedup/test-generate
+
+# --- #12378: system restart / shutdown / backup (aspirational, no backend) ---
+/api/system/backup/create
+/api/system/backup/list
+/api/system/backup/restore/{p}
+/api/system/backup/{p}
+/api/system/restart
+/api/system/shutdown
+
+# --- #12378: misc aspirational calls, no backend ---
+/api/multimodal/health
+/api/service-monitor/resources
+/api/knowledge/verification/approve
+/api/knowledge_base/category/{p}
+/api/knowledge_base/documents/{p}
+/api/knowledge_base/documents/{p}/similar
+/api/transcriber/recordings/{p}/progress
+
+# --- #12364: analytics/code-intelligence redesign, deferred ---
+/api/code-intelligence/analysis/{p}
+/api/code-intelligence/batch-analyze
+/api/code-intelligence/compare
+/api/code-intelligence/history
+/api/code-intelligence/quality-score
+/api/code-intelligence/trends
+/api/analytics/bug-prediction
+/api/cost/by-agent
+/api/cost/by-agent/{p}/budget

@@ -22,6 +22,19 @@ Two modes for obtaining the backend route table:
      Regex-scans @router/@app decorators and include_router(prefix=...) calls.
      Prefix resolution is heuristic; treat results as triage, not gospel.
 
+SLM control-plane backend (#12381): some frontend calls (getSLMUrl()/
+slmFetch()) target autobot-slm-backend (:8000), not autobot-backend (:8001).
+Union its route table in with --slm-openapi, produced the same way:
+    python scripts/audit_api_wiring.py --dump-slm-openapi slm_openapi.json
+    python scripts/audit_api_wiring.py --openapi openapi.json \
+        --slm-openapi slm_openapi.json --fail-on-unwired
+
+Baseline (#12381): calls with no backend anywhere yet (tracked product
+decisions, e.g. #12378/#12364) can be excluded from --fail-on-unwired without
+hiding them from the report:
+    python scripts/audit_api_wiring.py --openapi openapi.json \
+        --baseline scripts/api_wiring_baseline.txt --fail-on-unwired
+
 Exit codes: 0 = clean, 1 = unwired frontend calls found, 2 = unmounted routers
 found (combinable: 3 = both). Suitable as a CI gate.
 
@@ -42,6 +55,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKEND = REPO_ROOT / "autobot-backend"
+# #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts
+# its own '/api'-prefixed route table, entirely separate from autobot-backend
+# (:8001). Frontend calls made via getSLMUrl()/slmFetch() resolve against
+# THIS app, not the one BACKEND builds — see dump_slm_openapi().
+SLM_BACKEND = REPO_ROOT / "autobot-slm-backend"
 FRONTEND_SRC = REPO_ROOT / "autobot-frontend" / "src"
 
 # Frontend files we never treat as real consumers
@@ -111,6 +129,39 @@ def dump_openapi(out_path: str) -> int:
     out.write_text(json.dumps(spec, indent=1))
     print(
         f"[dump-openapi] wrote {len(spec.get('paths', {}))} paths "
+        f"(+{len(spec.get('x-websocket-paths', []))} websocket) to {out}"
+    )
+    return 0
+
+
+def dump_slm_openapi(out_path: str) -> int:
+    """Import the SLM backend app and dump app.openapi() (#12381).
+
+    Mirrors dump_openapi() but imports the module-level ``app`` from
+    autobot-slm-backend/main.py instead of calling autobot-backend's
+    app_factory.create_app(). Both backends mount their routers under the
+    same ``/api`` prefix (verified: autobot-slm-backend/main.py:617-677 all
+    use ``prefix="/api"``), so the resulting path sets are directly unionable
+    with backend_paths_from_openapi() output — no extra prefix normalization
+    needed.
+    """
+    out = Path(out_path).resolve()
+    sys.path.insert(0, str(SLM_BACKEND))
+    os.chdir(SLM_BACKEND)
+    try:
+        from main import app  # type: ignore
+        spec = app.openapi()
+        # Same WebSocket-route workaround as dump_openapi() (GH#9864).
+        from starlette.routing import WebSocketRoute  # type: ignore
+        spec["x-websocket-paths"] = sorted(
+            {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[dump-slm-openapi] FAILED to build app: {e}", file=sys.stderr)
+        return 1
+    out.write_text(json.dumps(spec, indent=1))
+    print(
+        f"[dump-slm-openapi] wrote {len(spec.get('paths', {}))} paths "
         f"(+{len(spec.get('x-websocket-paths', []))} websocket) to {out}"
     )
     return 0
@@ -327,12 +378,58 @@ def matches(fe: str, backend: set[str]) -> bool:
     return False
 
 
+# ---------------------------------------------------------------- baseline ----
+
+def load_baseline(path: str | None) -> set[str]:
+    """Load a committed list of known/tracked-unwired frontend paths (#12381).
+
+    One normalized path per line (the same ``/api/...`` form printed under
+    ``== UNWIRED FRONTEND CALLS ==``); blank lines and ``#``-comments ignored.
+    Calls in the baseline are still *reported* (as tracked) but excluded from
+    the ``--fail-on-unwired`` exit code — the standard gradually-fixed-lint
+    baseline pattern, so the gate only fails on NEW drift.
+    """
+    if not path:
+        return set()
+    p = Path(path)
+    if not p.exists():
+        return set()
+    baseline: set[str] = set()
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        baseline.add(line)
+    return baseline
+
+
+def partition_baseline(
+    unwired: dict[str, set[str]], baseline: set[str]
+) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+    """Split unwired calls into (tracked, new) by baseline membership."""
+    tracked = {p: files for p, files in unwired.items() if p in baseline}
+    new = {p: files for p, files in unwired.items() if p not in baseline}
+    return tracked, new
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--openapi", help="openapi.json path or URL (authoritative mode)")
     ap.add_argument("--dump-openapi", metavar="OUT",
                     help="import app_factory.create_app() and dump spec, then exit")
+    ap.add_argument("--slm-openapi", metavar="FILE",
+                    help="second openapi.json (SLM control-plane backend, "
+                         "autobot-slm-backend) whose paths are UNIONed into the known "
+                         "backend route table (#12381) — produce it with "
+                         "--dump-slm-openapi first")
+    ap.add_argument("--dump-slm-openapi", metavar="OUT",
+                    help="import autobot-slm-backend/main.py's app and dump spec, "
+                         "then exit")
+    ap.add_argument("--baseline", metavar="FILE",
+                    help="file of known/tracked unwired frontend paths (one per line) "
+                         "excluded from the --fail-on-unwired exit code (#12381) — "
+                         "still reported, just not gated")
     ap.add_argument("--dead-surface", action="store_true",
                     help="also report backend paths with no frontend consumer")
     ap.add_argument("--fail-on-unwired", action="store_true",
@@ -346,9 +443,16 @@ def main() -> int:
     if args.dump_openapi:
         return dump_openapi(args.dump_openapi)
 
+    if args.dump_slm_openapi:
+        return dump_slm_openapi(args.dump_slm_openapi)
+
     if args.openapi:
         backend = backend_paths_from_openapi(args.openapi)
         mode = "AUTHORITATIVE (openapi)"
+        if args.slm_openapi:
+            slm_backend = backend_paths_from_openapi(args.slm_openapi)
+            backend |= slm_backend
+            mode += f" + SLM ({len(slm_backend)} paths unioned)"
     else:
         backend, _ = backend_paths_static()
         mode = "STATIC (regex, heuristic — prefer --openapi)"
@@ -357,10 +461,19 @@ def main() -> int:
     print(f"mode: {mode}")
     print(f"backend paths: {len(backend)} | frontend distinct /api/ paths: {len(fe)}\n")
 
-    unwired = {p: files for p, files in sorted(fe.items()) if not matches(p, backend)}
+    unwired_all = {p: files for p, files in sorted(fe.items()) if not matches(p, backend)}
     if args.only_prefix:
-        unwired = {p: files for p, files in unwired.items() if p.startswith(args.only_prefix)}
+        unwired_all = {p: files for p, files in unwired_all.items()
+                       if p.startswith(args.only_prefix)}
         print(f"(scoped to {args.only_prefix})")
+    baseline = load_baseline(args.baseline)
+    tracked, unwired = partition_baseline(unwired_all, baseline)
+    if tracked:
+        print(f"== TRACKED UNWIRED CALLS (baselined, non-gating): {len(tracked)} ==")
+        for p, files in tracked.items():
+            print(f"  {p}")
+            for f in sorted(files)[:3]:
+                print(f"      <- {f}")
     print(f"== UNWIRED FRONTEND CALLS: {len(unwired)} ==")
     for p, files in unwired.items():
         print(f"  {p}")
