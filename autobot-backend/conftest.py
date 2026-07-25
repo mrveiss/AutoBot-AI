@@ -639,10 +639,10 @@ except Exception:
 
 # orchestration.causal_error_recovery / causal_error_analyzer stubs (#7431).
 # orchestration/__init__.py imports CausalErrorRecovery from causal_error_recovery,
-# which cascades through agent_loop → tools → code_intelligence — a chain of
+# which cascades through agent_loop → code_intelligence — a chain of
 # modules with Python-3.10-incompatible annotations or missing config keys.
-# Stub these modules so the lightweight types-only tests (workflow_planning_test,
-# workflow_integration_test) can collect without needing the full backend stack.
+# Stub these modules so the lightweight types-only tests can collect without
+# needing the full backend stack.
 for _causal_mod in [
     "orchestration.causal_error_recovery",
     "orchestration.causal_error_analyzer",
@@ -650,12 +650,24 @@ for _causal_mod in [
     "agent_loop",
     "agent_loop.loop",
     "agent_loop.think_tool",
-    "tools.parallel",
-    "tools.parallel.executor",
     "code_intelligence",
 ]:
     if _causal_mod not in sys.modules:
         sys.modules[_causal_mod] = _make_pkg_stub(_causal_mod)
+
+# code_intelligence.code_generation.diff real-load (#12438) — tools/parallel/executor.py
+# imports the real DiffGenerator (self-contained: stdlib difflib only) to build CODE_DIFF
+# artifacts. code_intelligence itself is stubbed above (its __init__ has Python-3.10-
+# incompatible annotations), so real-load this leaf submodule bypassing that __init__.
+# NOTE: tools.parallel / tools.parallel.executor are intentionally NOT in the stub list
+# above — they are self-contained aside from this one dependency and executor_artifacts_test.py
+# needs the real ParallelToolExecutor/DiffGenerator behaviour.
+if "code_intelligence.code_generation" not in sys.modules:
+    sys.modules["code_intelligence.code_generation"] = _make_pkg_stub("code_intelligence.code_generation")
+_real_load_and_bind(
+    "code_intelligence.code_generation.diff",
+    backend_root / "code_intelligence" / "code_generation" / "diff.py",
+)
 
 # code_intelligence submodule stubs — code_intelligence itself is stubbed above
 # (its __init__ has Python-3.10-incompatible annotations), so submodule imports
