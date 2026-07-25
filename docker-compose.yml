@@ -135,17 +135,19 @@ services:
     environment:
       - ANONYMIZED_TELEMETRY=False
       - IS_PERSISTENT=TRUE
-      # #12513: CHROMA_SERVER_AUTHN_* token auth. Two independently-set vars
-      # (not one derived value) because Compose interpolation has no
-      # "${VAR:+alt}" operator (only :-/:? — see compose-spec
-      # interpolation.md) and chroma crashes at boot if the provider is set
-      # with no credentials configured. Both default empty = auth disabled,
-      # matching pre-#12513 behaviour (dev/local, unauthenticated HttpClient).
-      # To enable: set AUTOBOT_CHROMADB_AUTH_TOKEN (the shared secret, also
-      # read by autobot-backend/autobot-worker below) AND
-      # AUTOBOT_CHROMADB_AUTHN_PROVIDER=chromadb.auth.token_authn.TokenAuthenticationServerProvider
-      # in the root .env (never commit real values).
-      - CHROMA_SERVER_AUTHN_PROVIDER=${AUTOBOT_CHROMADB_AUTHN_PROVIDER:-}
+      # #12513: CHROMA_SERVER_AUTHN_* token auth, driven by a SINGLE knob
+      # (AUTOBOT_CHROMADB_AUTH_TOKEN — same var name as the ssot_config field
+      # and the client-side env var below) via Compose's "${VAR:+alt}"
+      # substitution operator. This is deliberately atomic: the provider line
+      # only ever gets a value when the token is also set, so it's never
+      # possible to have the provider configured with empty credentials
+      # (chroma crashes at boot on that combination) or a token sent by
+      # clients while the server silently stays unauthenticated. Unset token
+      # = both lines empty = auth disabled, matching pre-#12513 behaviour
+      # (dev/local, unauthenticated HttpClient). To enable: set
+      # AUTOBOT_CHROMADB_AUTH_TOKEN in the root .env (never commit real
+      # values) — both lines below populate together.
+      - CHROMA_SERVER_AUTHN_PROVIDER=${AUTOBOT_CHROMADB_AUTH_TOKEN:+chromadb.auth.token_authn.TokenAuthenticationServerProvider}
       - CHROMA_SERVER_AUTHN_CREDENTIALS=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
     healthcheck:
       # The chroma 1.x image is minimal (no curl/wget); use bash /dev/tcp to hit
