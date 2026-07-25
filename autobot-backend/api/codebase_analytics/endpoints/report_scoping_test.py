@@ -131,7 +131,6 @@ class TestFetchProblemsFromChromaDBFallback:
             ),
             patch.object(report_mod, "filter_problems_by_file_existence", side_effect=fake_filter),
             patch.object(report_mod, "resolve_project_root", return_value=str(deployed_root)),
-            patch.object(report_mod, "get_project_root", return_value=wrong_root),
         ):
             report_mod._fetch_problems_from_chromadb(source_id=None, source_root=None)
 
@@ -268,7 +267,6 @@ class TestReportPipelineSourceIsolation:
             patch.object(report_mod, "_get_api_endpoint_analysis", new=AsyncMock(return_value=None)),
             patch.object(report_mod, "_get_bug_prediction", new=AsyncMock(return_value=None)),
             patch.object(report_mod, "resolve_project_root", return_value=str(deployed_root)),
-            patch.object(report_mod, "get_project_root", return_value=wrong_root),
         ):
             await report_mod.generate_analysis_report(source_id="unresolvable-source", quick=False)
 

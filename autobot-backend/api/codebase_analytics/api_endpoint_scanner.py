@@ -17,7 +17,7 @@ from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
-from .endpoints.shared import get_project_root
+from .endpoints.shared import resolve_project_root
 from .models import (
     APIEndpointAnalysis,
     APIEndpointItem,
@@ -127,7 +127,11 @@ class BackendEndpointScanner:
     API_PREFIX = "/api"
 
     def __init__(self, project_root: Path | None = None):
-        self.project_root = project_root or get_project_root()
+        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # #10730) rather than get_project_root() (hardcoded parents[4], which
+        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+        # standalone rsync layout).
+        self.project_root = project_root or Path(resolve_project_root())
         self.backend_path = self.project_root / "api"
         self._router_prefixes: Dict[str, str] = {}
         # Map module name to router prefix (e.g., "chat" -> "", "system" -> "/system")
@@ -750,7 +754,11 @@ class FrontendAPICallScanner:
     """Scans frontend TypeScript/Vue files for API calls."""
 
     def __init__(self, project_root: Path | None = None):
-        self.project_root = project_root or get_project_root()
+        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # #10730) rather than get_project_root() (hardcoded parents[4], which
+        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+        # standalone rsync layout).
+        self.project_root = project_root or Path(resolve_project_root())
         self.frontend_path = self.project_root / "autobot-frontend" / "src"
 
     def scan_all_calls(self) -> List[FrontendAPICallItem]:
@@ -1088,7 +1096,11 @@ class APIEndpointChecker:
     """
 
     def __init__(self, project_root: Path | None = None):
-        self.project_root = project_root or get_project_root()
+        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # #10730) rather than get_project_root() (hardcoded parents[4], which
+        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+        # standalone rsync layout).
+        self.project_root = project_root or Path(resolve_project_root())
         self.backend_scanner = BackendEndpointScanner(self.project_root)
         self.frontend_scanner = FrontendAPICallScanner(self.project_root)
 
