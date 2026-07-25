@@ -159,11 +159,9 @@ export function useBatchProcessingApi() {
 
     async toggleSchedule(scheduleId: string, enabled: boolean): Promise<BatchSchedule | null> {
       try {
-        // #12326: corrected prefix to /batch-jobs/schedules. NOTE: backend does
-        // not yet expose PATCH /api/batch-jobs/schedules/{id} (only GET/POST on
-        // the collection and DELETE on the item) — this toggle 405s until the
-        // backend route lands. Tracked in #12380.
-        return await api.patch(`${getApiBase()}/batch-jobs/schedules/${scheduleId}`, { enabled })
+        // #12326: corrected prefix to /batch-jobs/schedules.
+        // #12380: backend PATCH /api/batch-jobs/schedules/{id} added.
+        return await api.patch<BatchSchedule>(`${getApiBase()}/batch-jobs/schedules/${scheduleId}`, { enabled })
       } catch (error: unknown) {
         logger.error('Failed to update batch schedule', error)
         showSubtleErrorNotification('Error', 'Failed to update batch schedule', 'error')

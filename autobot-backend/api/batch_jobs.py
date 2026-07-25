@@ -35,6 +35,7 @@ from api.schemas_workflows import (
     BatchLogEntry,
     BatchSchedule,
     BatchScheduleDeleteResponse,
+    BatchScheduleUpdate,
     BatchStatusResponse,
     BatchTemplate,
     BatchTemplateDeleteResponse,
@@ -536,6 +537,47 @@ async def create_batch_schedule(
     redis_client.sadd("batch:schedules:all", schedule_id)
 
     logger.info("Created batch schedule %s for job %s", schedule_id, job_id)
+    return schedule
+
+
+@router.patch("/schedules/{schedule_id}", response_model=BatchSchedule)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_batch_schedule",
+    error_code_prefix="BATCH_JOBS",
+)
+async def update_batch_schedule(
+    schedule_id: str,
+    update: BatchScheduleUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Partially update a batch job schedule (e.g. toggle ``enabled``).
+
+    Issue #12380: frontend's ``toggleSchedule`` PATCHes this route with
+    ``{ enabled }`` to flip a schedule on/off; only fields present on the
+    request body are applied, matching PATCH semantics.
+
+    Issue #744: Requires authenticated user.
+    """
+    redis_client = get_redis_client(database="main")
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Redis service unavailable")
+
+    schedule_key = _get_schedule_key(schedule_id)
+    schedule_data = redis_client.get(schedule_key)
+
+    if not schedule_data:
+        raise HTTPException(status_code=404, detail=f"Schedule {schedule_id} not found")
+
+    schedule = BatchSchedule(**json.loads(schedule_data.decode("utf-8")))
+    updates = update.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(schedule, field, value)
+
+    redis_client.set(schedule_key, schedule.model_dump_json())
+
+    logger.info("Updated batch schedule %s: %s", schedule_id, updates)
     return schedule
 
 

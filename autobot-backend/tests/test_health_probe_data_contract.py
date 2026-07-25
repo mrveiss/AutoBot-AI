@@ -168,6 +168,7 @@ if "api.schemas_workflows" not in sys.modules:
         "BatchLogEntry",
         "BatchSchedule",
         "BatchScheduleDeleteResponse",
+        "BatchScheduleUpdate",
         "BatchStatusResponse",
         "BatchTemplate",
         "BatchTemplateDeleteResponse",
