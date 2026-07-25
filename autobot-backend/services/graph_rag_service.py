@@ -606,15 +606,19 @@ class GraphRAGService:
         start_points: List[Tuple[str, float]] = []
         seen_entity_names: set[str] = set()
 
-        if start_entity and start_entity not in seen_entity_names:
+        # #12389: dedup on the CASE-FOLDED name to match the downstream
+        # case-insensitive node resolution (autobot_memory_graph matches on
+        # .lower()), so "Redis"/"redis" collapse to one get_related_entities
+        # traversal. The original-cased name is kept in the tuple (resolves fine).
+        if start_entity and start_entity.casefold() not in seen_entity_names:
             start_points.append((start_entity, 1.0))
-            seen_entity_names.add(start_entity)
+            seen_entity_names.add(start_entity.casefold())
 
         for match in entity_matches[:3]:  # Limit to top 3
             entity_name = match.entity.get("name")
-            if entity_name and entity_name not in seen_entity_names:
+            if entity_name and entity_name.casefold() not in seen_entity_names:
                 start_points.append((entity_name, match.relevance_score))
-                seen_entity_names.add(entity_name)
+                seen_entity_names.add(entity_name.casefold())
 
         return start_points
 

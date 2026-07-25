@@ -253,6 +253,36 @@ async def test_graph_starting_points_dedup_by_entity_name(graph_rag_service, moc
 
 
 @pytest.mark.asyncio
+async def test_graph_starting_points_dedup_is_case_insensitive(graph_rag_service) -> None:
+    """Issue #12389: dedup keys on the case-folded name to match the downstream
+    case-insensitive node resolution, so 'Redis Config' and 'redis config'
+    collapse to a single starting point (no redundant traversal)."""
+    entity_matches = [
+        EntityMatch(
+            entity={"name": "redis config", "id": "e1"},
+            relevance_score=0.9,
+            graph_distance=0,
+            relationship_path=[],
+        ),
+        EntityMatch(
+            entity={"name": "Other Entity", "id": "e2"},
+            relevance_score=0.7,
+            graph_distance=0,
+            relationship_path=[],
+        ),
+    ]
+
+    start_points = graph_rag_service._get_graph_starting_points(
+        start_entity="Redis Config",
+        entity_matches=entity_matches,
+    )
+
+    # "Redis Config" (start) and "redis config" (match) differ only in case →
+    # collapse to one; the original-cased start_entity is kept.
+    assert start_points == [("Redis Config", 1.0), ("Other Entity", 0.7)]
+
+
+@pytest.mark.asyncio
 async def test_graph_aware_search_no_expansion_without_entities(
     graph_rag_service, mock_rag_service, mock_memory_graph
 ) -> None:
