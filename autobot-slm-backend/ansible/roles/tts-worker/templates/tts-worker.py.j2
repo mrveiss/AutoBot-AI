@@ -14,6 +14,7 @@ import io
 import json
 import logging
 import os
+import threading
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -325,7 +326,7 @@ def _run_synthesis(text: str, voice_id: str) -> bytes:
     return _to_wav_bytes(audio, _model.sample_rate)
 
 
-def _run_synthesis_stream(text: str, voice_id: str):
+def _run_synthesis_stream(text: str, voice_id: str, cancel_flag: "threading.Event | None" = None):
     """Synchronous generator yielding ~250ms mini-WAV chunks (#12501).
 
     Iterates the model's incremental ``generate_audio_stream``, accumulating
@@ -337,6 +338,12 @@ def _run_synthesis_stream(text: str, voice_id: str):
     This is a BLOCKING generator — ``generate_audio_stream`` runs model
     inference on the calling thread. Callers on the event loop must drive
     it from a worker thread; see ``_stream_synthesis_async``.
+
+    ``cancel_flag`` (a ``threading.Event``, NOT an ``asyncio.Event`` — this
+    runs off the event loop) is checked at the top of every frame iteration
+    so a barge-in can stop generation at the next decoded frame (~10-20ms
+    away) instead of running to the end of the abandoned utterance while
+    holding the model lock (#12501).
     """
     voice_state = _get_voice_state(voice_id)
     sample_rate = _model.sample_rate
@@ -345,6 +352,8 @@ def _run_synthesis_stream(text: str, voice_id: str):
     buffered: list = []
     buffered_samples = 0
     for frame in _model.generate_audio_stream(voice_state, text):
+        if cancel_flag is not None and cancel_flag.is_set():
+            break
         buffered.append(frame)
         buffered_samples += frame.shape[0]
         if buffered_samples >= target_samples:
@@ -375,13 +384,25 @@ async def _stream_synthesis_async(text: str, voice_id: str):
     the generator to completion in a worker thread (``run_in_executor``)
     and hand each mini-WAV chunk back to the loop through an
     ``asyncio.Queue``.
+
+    A ``threading.Event`` cancel flag is set in ``finally`` whenever this
+    async generator is torn down early (GeneratorExit via the caller's
+    ``aclosing``/barge-in, CancelledError, or an error) — Python cannot
+    preempt a running thread, so without this the worker thread would keep
+    iterating ``generate_audio_stream`` to the end of the abandoned
+    utterance while HOLDING the pocket_tts model lock, making the user's
+    next (barge-in) query wait behind it. Setting the flag lets
+    ``_run_synthesis_stream`` break out at the next yielded frame
+    (~10-20ms) instead, so the model lock is freed almost immediately and
+    the worker is not left generating audio no one will hear.
     """
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue = asyncio.Queue()
+    cancel_flag = threading.Event()
 
     def _produce() -> None:
         try:
-            for wav_chunk in _run_synthesis_stream(text, voice_id):
+            for wav_chunk in _run_synthesis_stream(text, voice_id, cancel_flag=cancel_flag):
                 loop.call_soon_threadsafe(queue.put_nowait, wav_chunk)
         except Exception as e:  # re-raised on the loop side below
             loop.call_soon_threadsafe(queue.put_nowait, e)
@@ -398,6 +419,10 @@ async def _stream_synthesis_async(text: str, voice_id: str):
                 raise item
             yield item
     finally:
+        # Signal the worker thread to stop at the next frame BEFORE
+        # awaiting it, so it doesn't run to the end of the abandoned
+        # utterance while holding the model lock (#12501).
+        cancel_flag.set()
         await producer
 
 

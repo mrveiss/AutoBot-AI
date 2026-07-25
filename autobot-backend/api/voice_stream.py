@@ -80,8 +80,11 @@ async def _stream_chunks_pipelined(
     last, keeping the WS protocol consistent (#1535, #1536).
     *cancel_event* is checked BETWEEN chunks so barge-in can interrupt
     mid-stream (#1527); the underlying HTTP stream to the worker is
-    always closed via ``aclosing`` so a cancelled/disconnected client
-    does not leave the worker generating audio no one will hear.
+    always closed via ``aclosing``, which the worker's
+    ``_stream_synthesis_async`` uses to set a cooperative
+    ``threading.Event`` cancel flag — so a cancelled/disconnected client
+    does not leave the worker generating (and holding the model lock for)
+    audio no one will hear (#12501).
     """
     await _send_json(ws, {"type": "tts_start", "text": text})
 

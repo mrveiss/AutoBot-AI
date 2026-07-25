@@ -18,6 +18,7 @@ these tests run without any optional heavy dependencies.
 import array
 import asyncio
 import io
+import threading
 import time
 import wave
 
@@ -71,12 +72,15 @@ def _to_wav_bytes(samples, sample_rate, fixed_scale=None):
     return buf.getvalue()
 
 
-def _run_synthesis_stream(frames, sample_rate):
-    """Mirrors tts-worker.py.j2 ``_run_synthesis_stream``'s batching loop exactly."""
+def _run_synthesis_stream(frames, sample_rate, cancel_flag=None):
+    """Mirrors tts-worker.py.j2 ``_run_synthesis_stream``'s batching loop exactly,
+    including the cooperative ``cancel_flag`` check (#12501)."""
     target_samples = int(sample_rate * _STREAM_CHUNK_MS / 1000)
     buffered = []
     buffered_samples = 0
     for frame in frames:
+        if cancel_flag is not None and cancel_flag.is_set():
+            break
         buffered.append(frame)
         buffered_samples += frame.shape[0]
         if buffered_samples >= target_samples:
@@ -94,13 +98,20 @@ _STREAM_DONE = object()
 
 
 async def _stream_synthesis_async(sync_gen_factory):
-    """Mirrors tts-worker.py.j2 ``_stream_synthesis_async``'s thread bridge exactly."""
+    """Mirrors tts-worker.py.j2 ``_stream_synthesis_async``'s thread bridge exactly,
+    including the cooperative-cancellation ``threading.Event`` (#12501).
+
+    ``sync_gen_factory`` is called with the ``cancel_flag`` (mirrors the
+    real ``_run_synthesis_stream(text, voice_id, cancel_flag=cancel_flag)``
+    call).
+    """
     loop = asyncio.get_event_loop()
     queue: asyncio.Queue = asyncio.Queue()
+    cancel_flag = threading.Event()
 
     def _produce() -> None:
         try:
-            for item in sync_gen_factory():
+            for item in sync_gen_factory(cancel_flag):
                 loop.call_soon_threadsafe(queue.put_nowait, item)
         except Exception as e:
             loop.call_soon_threadsafe(queue.put_nowait, e)
@@ -117,6 +128,9 @@ async def _stream_synthesis_async(sync_gen_factory):
                 raise item
             yield item
     finally:
+        # Signal the worker thread to stop at the next frame BEFORE
+        # awaiting it (#12501) — mirrors the real ordering exactly.
+        cancel_flag.set()
         await producer
 
 
@@ -228,7 +242,7 @@ class TestFixedScaleWavOutput:
 class TestStreamSynthesisAsyncBridge:
     @pytest.mark.asyncio
     async def test_yields_chunks_in_order(self):
-        def _blocking_gen():
+        def _blocking_gen(cancel_flag):
             for i in range(3):
                 yield f"chunk-{i}".encode()
 
@@ -242,7 +256,7 @@ class TestStreamSynthesisAsyncBridge:
         its worker thread — otherwise streaming would offer no latency
         benefit over the whole-blob endpoint for concurrent requests."""
 
-        def _blocking_gen():
+        def _blocking_gen(cancel_flag):
             for i in range(3):
                 time.sleep(0.05)  # simulate blocking model inference
                 yield f"chunk-{i}".encode()
@@ -266,7 +280,7 @@ class TestStreamSynthesisAsyncBridge:
 
     @pytest.mark.asyncio
     async def test_exception_in_generator_propagates_to_consumer(self):
-        def _failing_gen():
+        def _failing_gen(cancel_flag):
             yield b"ok-chunk"
             raise RuntimeError("model exploded")
 
@@ -276,3 +290,88 @@ class TestStreamSynthesisAsyncBridge:
                 received.append(chunk)
 
         assert received == [b"ok-chunk"]
+
+
+# ---------------------------------------------------------------------------
+# Tests: cooperative worker-thread cancellation on barge-in (#12501)
+# ---------------------------------------------------------------------------
+
+
+class TestCooperativeCancellation:
+    def test_run_synthesis_stream_breaks_out_when_cancel_flag_set(self):
+        """cancel_flag set mid-generation makes _run_synthesis_stream break
+        at the next frame instead of iterating the whole (here: 10,000-
+        frame) 'utterance' — freeing the model lock promptly on barge-in."""
+        sample_rate = 24000
+        frame_size = 480
+        cancel_flag = threading.Event()
+        consumed = []
+
+        def _many_frames():
+            for i in range(10_000):
+                consumed.append(i)
+                yield _FakeFrame([0.1] * frame_size)
+                if i == 5:
+                    cancel_flag.set()  # simulate barge-in arriving after frame 5
+
+        chunks = list(_run_synthesis_stream(_many_frames(), sample_rate, cancel_flag=cancel_flag))
+
+        # Far fewer than the full 10,000-frame "utterance" was consumed —
+        # the loop broke out promptly rather than running to completion.
+        assert len(consumed) < 20
+        # Whatever was buffered before cancellation is still flushed as a
+        # final partial chunk — no audio silently dropped, generator just
+        # stops early.
+        assert len(chunks) <= 1
+
+    @pytest.mark.asyncio
+    async def test_async_bridge_barge_in_stops_worker_thread_early(self):
+        """End-to-end (mirrors the real WS barge-in path): the consumer
+        takes exactly one chunk then aborts via aclose() — the worker
+        thread must stop at the next frame of a slow, effectively-endless
+        'utterance' instead of running it to completion while holding the
+        model lock (#12501)."""
+        sample_rate = 24000
+        frame_size = 480
+        consumed = []
+
+        def _slow_long_frames():
+            for i in range(10_000):
+                consumed.append(i)
+                time.sleep(0.001)  # simulate per-frame decode latency
+                yield _FakeFrame([0.1] * frame_size)
+
+        def _factory(cancel_flag):
+            return _run_synthesis_stream(_slow_long_frames(), sample_rate, cancel_flag=cancel_flag)
+
+        gen = _stream_synthesis_async(_factory)
+        first_chunk = await gen.__anext__()
+        await gen.aclose()  # simulates barge-in: consumer stops early
+
+        assert isinstance(first_chunk, bytes)
+        # Nowhere near 10,000 frames — the worker thread broke out promptly
+        # once aclose() set the cancel flag, instead of iterating the whole
+        # abandoned "utterance" while holding the model lock.
+        assert len(consumed) < 100
+
+    @pytest.mark.asyncio
+    async def test_async_bridge_sets_cancel_flag_before_awaiting_producer(self):
+        """The cancel flag is set BEFORE awaiting the producer thread on
+        early close, and await producer genuinely waits for the thread to
+        observe it and finish (#12501)."""
+        flag_seen_by_thread = {}
+
+        def _gen_factory(cancel_flag):
+            yield b"chunk-0"
+            # Give the consumer time to receive chunk-0 and call aclose()
+            # before checking the flag, so this isn't a timing race.
+            time.sleep(0.03)
+            flag_seen_by_thread["was_set"] = cancel_flag.is_set()
+            yield b"chunk-1"
+
+        gen = _stream_synthesis_async(_gen_factory)
+        first = await gen.__anext__()
+        await gen.aclose()
+
+        assert first == b"chunk-0"
+        assert flag_seen_by_thread.get("was_set") is True
