@@ -7245,7 +7245,8 @@
     "custom": "custom",
     "stopListening": "Stop listening",
     "stop": "Stop",
-    "confirmDeleteVoiceTitle": "מחיקת פרופיל קול"
+    "confirmDeleteVoiceTitle": "מחיקת פרופיל קול",
+    "tapToEnableAudio": "הקש בכל מקום כדי להפעיל את השמעת האודיו"
   },
   "auth": {
     "login": {

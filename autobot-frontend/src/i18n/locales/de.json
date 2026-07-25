@@ -925,7 +925,8 @@
     "creating": "Erstellen...",
     "confirmDeleteVoice": "Stimme „{name}“ löschen?",
     "languageVoicesActive": "{count} sprachspezifische(n) Stimme(n) konfiguriert",
-    "confirmDeleteVoiceTitle": "Stimmprofil löschen"
+    "confirmDeleteVoiceTitle": "Stimmprofil löschen",
+    "tapToEnableAudio": "Tippen Sie irgendwo, um die Audiowiedergabe zu aktivieren"
   },
   "analytics": {
     "title": "Analytik",

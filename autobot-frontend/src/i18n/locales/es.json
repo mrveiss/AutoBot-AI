@@ -925,7 +925,8 @@
     "creating": "Creando...",
     "confirmDeleteVoice": "¿Eliminar la voz \"{name}\"?",
     "languageVoicesActive": "Voces específicas del idioma {count} configuradas",
-    "confirmDeleteVoiceTitle": "Eliminar perfil de voz"
+    "confirmDeleteVoiceTitle": "Eliminar perfil de voz",
+    "tapToEnableAudio": "Toca en cualquier lugar para habilitar la reproducción de audio"
   },
   "analytics": {
     "title": "Analítica",

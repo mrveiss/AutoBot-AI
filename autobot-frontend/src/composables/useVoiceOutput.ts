@@ -16,6 +16,7 @@ import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { usePreferences } from '@/composables/usePreferences'
 import { useToast } from '@/composables/useToast'
 import { getBackendWsUrl, getApiBase } from '@/config/ssot-config'
+import i18n from '@/i18n'
 
 const logger = createLogger('useVoiceOutput')
 
@@ -142,12 +143,59 @@ function _getOrCreateContext(): AudioContext {
   return _audioContext
 }
 
+// #12503: browser autoplay policy only unlocks a suspended AudioContext from
+// inside a real user gesture. The WS streaming path plays from an onmessage
+// handler (not a gesture), so a resume() there leaves the context suspended and
+// every scheduled buffer is silent. When we detect that at playback time, arm a
+// one-time global gesture listener that resumes the context so the NEXT reply
+// plays, and surface a "tap to enable audio" hint instead of a silent, stuck
+// "speaking" indicator.
+const _GESTURE_UNLOCK_EVENTS = ['pointerdown', 'keydown', 'touchstart'] as const
+let _gestureUnlockHandler: (() => void) | null = null
+
+function _disarmGestureUnlock(): void {
+  if (!_gestureUnlockHandler) return
+  for (const evt of _GESTURE_UNLOCK_EVENTS) {
+    window.removeEventListener(evt, _gestureUnlockHandler)
+  }
+  _gestureUnlockHandler = null
+}
+
+function _armGestureUnlock(): void {
+  if (_gestureUnlockHandler) return
+  const handler = (): void => {
+    _disarmGestureUnlock()
+    const ctx = _audioContext
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch((e) => logger.warn('AudioContext resume failed:', e))
+    }
+  }
+  _gestureUnlockHandler = handler
+  for (const evt of _GESTURE_UNLOCK_EVENTS) {
+    window.addEventListener(evt, handler, { passive: true })
+  }
+}
+
+// #12503: suppress repeat "tap to enable audio" hints within a short window so
+// a burst of tts_audio chunks against a suspended context surfaces it once.
+let _tapHintNotifiedAt = 0
+function _notifyTapToEnableAudio(): void {
+  const now = Date.now()
+  if (now - _tapHintNotifiedAt < _NO_VOICES_NOTIFY_COOLDOWN) return
+  _tapHintNotifiedAt = now
+  logger.warn('AudioContext suspended at playback — awaiting user gesture to unlock')
+  useToast().showToast(i18n.global.t('voice.tapToEnableAudio'), 'info')
+}
+
 /** Call from a user-gesture handler to unlock audio for the session. */
 function unlockAudio(): void {
   const ctx = _getOrCreateContext()
   if (ctx.state === 'suspended') {
     ctx.resume().catch((e) => logger.warn('AudioContext resume failed:', e))
   }
+  // A fresh gesture just unlocked (or is unlocking) the context — no need to
+  // keep a pending one-time listener armed.
+  _disarmGestureUnlock()
 }
 
 function _stopCurrentAudio(): void {
@@ -172,7 +220,18 @@ function _stopCurrentAudio(): void {
 
 async function _playAudioBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
   const ctx = _getOrCreateContext()
-  if (ctx.state === 'suspended') await ctx.resume()
+  if (ctx.state === 'suspended') {
+    await ctx.resume().catch((e) => logger.warn('AudioContext resume failed:', e))
+  }
+  if (ctx.state === 'suspended') {
+    // #12503: still suspended outside a user gesture — playback would be silent
+    // and onended would never fire, hanging this promise and sticking the
+    // indicator. Re-arm a gesture listener, hint the user, and return quietly.
+    _armGestureUnlock()
+    _notifyTapToEnableAudio()
+    isSpeaking.value = false
+    return
+  }
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
   const source = ctx.createBufferSource()
   source.buffer = audioBuffer
@@ -202,7 +261,19 @@ async function _playAudioBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
  */
 async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
   const ctx = _getOrCreateContext()
-  if (ctx.state === 'suspended') await ctx.resume()
+  if (ctx.state === 'suspended') {
+    // A resume() from the WS onmessage handler is not a user gesture; try once,
+    // then bail if the context stays suspended (#12503).
+    await ctx.resume().catch((e) => logger.warn('AudioContext resume failed:', e))
+  }
+  if (ctx.state === 'suspended') {
+    // Autoplay policy still blocks playback — no audio will be heard. Re-arm a
+    // one-time gesture listener + surface a hint, and DON'T set isSpeaking so the
+    // indicator can't stick with no sound (#12503).
+    _armGestureUnlock()
+    _notifyTapToEnableAudio()
+    return
+  }
 
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
   const source = ctx.createBufferSource()
@@ -232,20 +303,32 @@ async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
   }
 
   source.start(startTime)
+  // #12503: flag "speaking" only once a buffer is actually scheduled on a
+  // RUNNING context — never before decode/resume — so the indicator reflects
+  // real audio and a suspended/failed chunk cannot leave it stuck on.
+  isSpeaking.value = true
 }
 
 /** Decode base64 audio and schedule for gapless playback (#1527). */
-function _playAudioChunkFromBase64(base64Data: string): void {
+async function _playAudioChunkFromBase64(base64Data: string): Promise<void> {
+  let bytes: Uint8Array<ArrayBuffer>
   try {
     const binary = atob(base64Data)
-    const bytes = new Uint8Array(binary.length)
+    bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i)
     }
-    isSpeaking.value = true
-    _scheduleGaplessChunk(bytes.buffer)
   } catch (e) {
-    logger.error('playAudioChunk error:', e)
+    logger.error('playAudioChunk decode error:', e)
+    return
+  }
+  try {
+    // #12503: await + catch so a decode/scheduling rejection is handled, not
+    // swallowed, and never leaves the "speaking" indicator stuck.
+    await _scheduleGaplessChunk(bytes.buffer)
+  } catch (e) {
+    logger.error('playAudioChunk playback error:', e)
+    if (_activeChunkCount <= 0) isSpeaking.value = false
   }
 }
 
@@ -321,7 +404,7 @@ function _connectTtsWs(): Promise<WebSocket> {
       }
       // Internal: audio playback owned here.
       if (msg.type === 'tts_audio' && msg.data) {
-        _playAudioChunkFromBase64(msg.data)
+        void _playAudioChunkFromBase64(msg.data)
       } else if (msg.type === 'error') {
         logger.warn('Voice WS server error:', msg.message)
       }
@@ -451,7 +534,7 @@ export function useVoiceOutput() {
 
   /** Queue a base64-encoded WAV chunk for sequential playback (#1031). */
   function playAudioChunk(base64Data: string): void {
-    _playAudioChunkFromBase64(base64Data)
+    void _playAudioChunkFromBase64(base64Data)
   }
 
   /** Stop any current or queued audio immediately (#1031). */

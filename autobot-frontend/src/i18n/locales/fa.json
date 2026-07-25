@@ -7245,7 +7245,8 @@
     "custom": "custom",
     "stopListening": "Stop listening",
     "stop": "Stop",
-    "confirmDeleteVoiceTitle": "حذف نمایه صدا"
+    "confirmDeleteVoiceTitle": "حذف نمایه صدا",
+    "tapToEnableAudio": "برای فعال‌سازی پخش صدا هر جایی را لمس کنید"
   },
   "auth": {
     "login": {
