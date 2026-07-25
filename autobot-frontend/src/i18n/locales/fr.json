@@ -8133,7 +8133,10 @@
       "viewArtifact": "Voir",
       "noActivity": "Aucune activité enregistrée.",
       "noHandoffBrief": "Aucune note de transfert disponible.",
-      "loadingBrief": "Chargement de la note..."
+      "loadingBrief": "Chargement de la note...",
+      "errors": {
+        "saveFailed": "Impossible d'enregistrer votre modification. Veuillez réessayer."
+      }
     },
     "orgChart": {
       "title": "Organigramme",

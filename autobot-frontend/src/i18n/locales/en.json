@@ -8122,7 +8122,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "Couldn't save your change. Please try again."
+      }
     },
     "orgChart": {
       "title": "Org Chart",

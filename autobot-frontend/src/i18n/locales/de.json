@@ -8133,7 +8133,10 @@
       "viewArtifact": "Anzeigen",
       "noActivity": "Keine Aktivität aufgezeichnet.",
       "noHandoffBrief": "Kein Übergabe-Briefing verfügbar.",
-      "loadingBrief": "Briefing wird geladen..."
+      "loadingBrief": "Briefing wird geladen...",
+      "errors": {
+        "saveFailed": "Ihre Änderung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
+      }
     },
     "orgChart": {
       "title": "Organigramm",

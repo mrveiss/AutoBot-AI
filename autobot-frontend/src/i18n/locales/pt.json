@@ -8133,7 +8133,10 @@
       "viewArtifact": "Ver",
       "noActivity": "Nenhuma atividade registrada.",
       "noHandoffBrief": "Nenhum resumo de transferência disponível.",
-      "loadingBrief": "Carregando resumo..."
+      "loadingBrief": "Carregando resumo...",
+      "errors": {
+        "saveFailed": "Não foi possível salvar sua alteração. Tente novamente."
+      }
     },
     "orgChart": {
       "title": "Organograma",

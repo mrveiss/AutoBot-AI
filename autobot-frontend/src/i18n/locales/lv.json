@@ -8133,7 +8133,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "Neizdevās saglabāt izmaiņas. Lūdzu, mēģiniet vēlreiz."
+      }
     },
     "orgChart": {
       "title": "Org Chart",
