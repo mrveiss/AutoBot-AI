@@ -309,6 +309,7 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { extractCompleteSentences } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
@@ -477,7 +478,7 @@ const onToolDenied = async (comment?: string): Promise<void> => {
 // Voice output (#928)
 const {
   voiceOutputEnabled, isSpeaking, toggleVoiceOutput,
-  speak: _speak, speakStreaming, flushStreaming,
+  speak: _speak, speakStreaming, flushStreaming, stopSpeaking,
 } = useVoiceOutput()
 
 // Voice conversation (#1029)
@@ -1265,7 +1266,7 @@ watch(
       const m = msgs[i]
       if (m.sender !== 'assistant' || !m.content) continue
       if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
-      return { id: m.id, content: m.content }
+      return { id: m.id, content: m.content, typing: store.isTyping }
     }
     return null
   },
@@ -1279,20 +1280,32 @@ watch(
     // etc.) and should not be re-spoken. Only reset to 0 when isTyping so newly
     // generated content is picked up from the start.
     if (current.id !== _lastStreamingMsgId) {
+      // New reply detected. When a fresh reply is streaming in, stop the previous
+      // reply's audio and drop its queued fallback sentences (#12502) so the new
+      // reply replaces the old one — same-reply sentences still queue sequentially
+      // below and never abort each other. Historical/session-switch messages
+      // (not typing) must NOT stop anything.
+      if (store.isTyping) stopSpeaking()
       _lastStreamingMsgId = current.id
       _lastSpokenIdx = store.isTyping ? 0 : current.content.length
     }
 
     if (store.isTyping && current.content) {
-      // During streaming: extract and speak completed sentences
+      // During streaming: extract and speak completed sentences. Advance the
+      // cursor by the EXACT consumed span (incl. inter-sentence whitespace), not
+      // by the summed sentence lengths, which drift over multi-paragraph replies
+      // and drop/duplicate slices (#12502).
       const newText = current.content.slice(_lastSpokenIdx)
-      const sentences = _extractCompleteSentences(newText)
-      for (const s of sentences) {
-        speakStreaming(s)
-        _lastSpokenIdx += s.length
-      }
+      const { sentences, consumed } = extractCompleteSentences(
+        newText,
+        _MIN_TTS_SENTENCE_CHARS,
+      )
+      for (const s of sentences) speakStreaming(s)
+      _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
-      // Stream ended: flush any remaining text
+      // Stream ended: ALWAYS flush the remaining tail (all text after the cursor).
+      // Lists, code blocks and unpunctuated endings have no terminal ". "/"! "/"? "
+      // so they only ever reach TTS via this remainder flush (#12502).
       const remainder = current.content.slice(_lastSpokenIdx).trim()
       if (remainder) speakStreaming(remainder)
       flushStreaming()
@@ -1311,21 +1324,6 @@ watch(
 // buffer them until they combine with the next sentence or flush as a remainder.
 const _MIN_TTS_SENTENCE_CHARS = 20
 
-/** Extract sentences terminated by ". ", "! ", or "? " — remainder stays buffered. */
-function _extractCompleteSentences(text: string): string[] {
-  const sentences: string[] = []
-  const terminators = /(?<=[.!?])\s+/g
-  let lastEnd = 0
-  let match
-  while ((match = terminators.exec(text)) !== null) {
-    const candidate = text.slice(lastEnd, match.index + 1)
-    if (candidate.length >= _MIN_TTS_SENTENCE_CHARS) {
-      sentences.push(candidate)
-      lastEnd = match.index + match[0].length
-    }
-  }
-  return sentences
-}
 </script>
 
 <style scoped>
