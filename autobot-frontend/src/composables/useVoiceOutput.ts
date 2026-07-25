@@ -74,6 +74,16 @@ const wsConnected = ref<boolean>(false)
 // Module-level so a new speak() call can abort the previous one.
 let _speakController: AbortController | null = null
 
+// #12502: sequential fallback queue. When the TTS WebSocket is unavailable,
+// speakStreaming() falls back to per-sentence HTTP synthesis. Routing each
+// sentence through speak() aborted the in-flight utterance, so only the LAST
+// sentence of a reply was heard. Instead, enqueue sentences and drain them
+// sequentially (await each before starting the next) so the full reply is
+// spoken. An intentional stop / new reply clears _speakQueue and aborts
+// _speakController via _stopCurrentAudio(), which breaks the drain loop.
+const _speakQueue: string[] = []
+let _speakDraining = false
+
 /**
  * #9999: Surface the "no voices available" message once per cooldown window.
  * Uses the app's standard toast mechanism so the operator gets feedback
@@ -141,6 +151,11 @@ function unlockAudio(): void {
 }
 
 function _stopCurrentAudio(): void {
+  // #12502: an intentional stop / new reply must cancel ALL pending audio —
+  // drop any queued fallback sentences and abort the in-flight synthesis so the
+  // drain loop stops instead of continuing to speak a superseded reply.
+  _speakQueue.length = 0
+  _speakController?.abort()
   if (_currentSource) {
     try { _currentSource.stop() } catch { /* already stopped */ }
     _currentSource = null
@@ -319,6 +334,82 @@ function _connectTtsWs(): Promise<WebSocket> {
   return _ttsWsConnecting
 }
 
+/**
+ * Synthesize `text` via the HTTP TTS endpoint and play it to completion.
+ * Shared by the one-shot speak() and the sequential fallback drainer (#12502).
+ * The caller owns the AbortController so it can cancel this request.
+ */
+async function _synthesizeAndPlay(text: string, signal: AbortSignal): Promise<void> {
+  const { effectiveVoiceId } = useVoiceProfiles()
+  const { language: prefLang } = usePreferences()
+  const language = prefLang.value || ''
+  const formData = new FormData()
+  formData.append('text', text)
+  if (effectiveVoiceId.value) {
+    formData.append('voice_id', effectiveVoiceId.value)
+  }
+  if (language) {
+    formData.append('language', language)
+  }
+  const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, { // fetchWithAuth retained: binary audio blob + FormData body — exempt (#6256)
+    method: 'POST',
+    body: formData,
+    signal,
+  })
+  if (!response.ok) {
+    logger.warn('TTS synthesize failed:', response.status)
+    // #9999: 404/503 here means no TTS service/voices on this deployment.
+    if (response.status === 404 || response.status === 503) {
+      _notifyNoVoices()
+    }
+    return
+  }
+  const blob = await response.blob()
+  const arrayBuffer = await blob.arrayBuffer()
+  await _playAudioBuffer(arrayBuffer)
+  // Issue #1146: clear isSpeaking so watch(isSpeaking) in useVoiceConversation fires
+  isSpeaking.value = false
+}
+
+/**
+ * Drain the fallback queue, playing one sentence at a time to completion (#12502).
+ * Never aborts the in-flight utterance itself, so a burst of enqueued sentences
+ * plays end-to-end. Only an external stop (which clears the queue + aborts the
+ * controller) ends the loop early.
+ */
+async function _drainSpeakQueue(): Promise<void> {
+  _speakDraining = true
+  try {
+    while (_speakQueue.length > 0) {
+      const next = _speakQueue.shift() as string
+      _speakController = new AbortController()
+      try {
+        await _synthesizeAndPlay(next, _speakController.signal)
+      } catch (e) {
+        if (e instanceof DOMException && (e as DOMException).name === 'AbortError') {
+          // Intentional stop / new reply cleared the queue — stop draining.
+          break
+        }
+        logger.error('queued speak() error:', e)
+        isSpeaking.value = false
+      }
+    }
+  } finally {
+    _speakDraining = false
+  }
+}
+
+/**
+ * Enqueue a sentence for sequential HTTP playback (#12502). Used by the
+ * speakStreaming() fallback so per-sentence calls never abort each other.
+ */
+function _enqueueFallbackSpeak(text: string): void {
+  if (!text.trim()) return
+  _speakQueue.push(text)
+  if (_speakDraining) return
+  void _drainSpeakQueue()
+}
+
 export function useVoiceOutput() {
   function toggleVoiceOutput(): void {
     voiceOutputEnabled.value = !voiceOutputEnabled.value
@@ -334,6 +425,10 @@ export function useVoiceOutput() {
     }
   }
 
+  // One-shot speak: aborts any in-flight/queued audio first (intentional-abort
+  // semantics for a new one-shot utterance / manual replacement). Per-sentence
+  // streaming does NOT go through here — it uses speakStreaming() + the
+  // sequential fallback queue so sentences never abort each other (#12502).
   async function speak(text: string, force?: boolean): Promise<void> {
     if ((!force && !voiceOutputEnabled.value) || !text.trim()) return
     if (isSpeaking.value) _stopCurrentAudio()
@@ -344,38 +439,9 @@ export function useVoiceOutput() {
 
     _speakController?.abort()
     _speakController = new AbortController()
-    const signal = _speakController.signal
 
     try {
-      const { effectiveVoiceId } = useVoiceProfiles()
-      const { language: prefLang } = usePreferences()
-      const language = prefLang.value || ''
-      const formData = new FormData()
-      formData.append('text', text)
-      if (effectiveVoiceId.value) {
-        formData.append('voice_id', effectiveVoiceId.value)
-      }
-      if (language) {
-        formData.append('language', language)
-      }
-      const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, { // fetchWithAuth retained: binary audio blob + FormData body — exempt (#6256)
-        method: 'POST',
-        body: formData,
-        signal,
-      })
-      if (!response.ok) {
-        logger.warn('TTS synthesize failed:', response.status)
-        // #9999: 404/503 here means no TTS service/voices on this deployment.
-        if (response.status === 404 || response.status === 503) {
-          _notifyNoVoices()
-        }
-        return
-      }
-      const blob = await response.blob()
-      const arrayBuffer = await blob.arrayBuffer()
-      await _playAudioBuffer(arrayBuffer)
-      // Issue #1146: clear isSpeaking so watch(isSpeaking) in useVoiceConversation fires
-      isSpeaking.value = false
+      await _synthesizeAndPlay(text, _speakController.signal)
     } catch (e) {
       if (e instanceof DOMException && (e as DOMException).name === 'AbortError') return
       logger.error('speak() error:', e)
@@ -410,8 +476,10 @@ export function useVoiceOutput() {
         language,
       }))
     } catch {
-      logger.warn('TTS WS unavailable, falling back to HTTP speak()')
-      await speak(text, true)
+      // #12502: enqueue for sequential playback — calling speak() per sentence
+      // aborted the in-flight utterance, so only the last sentence was heard.
+      logger.warn('TTS WS unavailable, falling back to queued HTTP synthesis')
+      _enqueueFallbackSpeak(text.trim())
     }
   }
 
