@@ -8133,7 +8133,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "تعذّر حفظ التغيير. يُرجى المحاولة مرة أخرى."
+      }
     },
     "orgChart": {
       "title": "Org Chart",

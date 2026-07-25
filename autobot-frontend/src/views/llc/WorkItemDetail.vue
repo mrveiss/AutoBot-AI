@@ -18,6 +18,9 @@
         </button>
       </div>
 
+      <!-- Save-failure banner (#12348): an optimistic edit could not be persisted. -->
+      <div v-if="saveError" class="save-error" role="alert">{{ saveError }}</div>
+
       <!-- Goal ancestry breadcrumb -->
       <div v-if="goalAncestry.length > 0" class="goal-breadcrumb">
         <template v-for="(g, i) in goalAncestry" :key="g.id">
@@ -303,6 +306,8 @@ const titleInput = ref<HTMLInputElement | null>(null)
 const descInput = ref<HTMLTextAreaElement | null>(null)
 const origTitle = ref('')
 const origDesc = ref('')
+// #12348: message shown when an optimistic edit could not be persisted.
+const saveError = ref<string | null>(null)
 
 const comments = ref<Comment[]>([])
 const artifacts = ref<Artifact[]>([])
@@ -403,7 +408,10 @@ function cancelTitle() {
 async function saveTitle() {
   editingTitle.value = false
   if (localItem.value.title === origTitle.value) return
-  await patchItem({ title: localItem.value.title })
+  const prev = origTitle.value
+  await patchItem({ title: localItem.value.title }, () => {
+    localItem.value.title = prev
+  })
 }
 
 function startEditDesc() {
@@ -415,23 +423,37 @@ function startEditDesc() {
 async function saveDesc() {
   editingDesc.value = false
   if (localItem.value.description === origDesc.value) return
-  await patchItem({ description: localItem.value.description })
+  const prev = origDesc.value
+  await patchItem({ description: localItem.value.description }, () => {
+    localItem.value.description = prev
+  })
 }
 
 async function saveAC() {
   // GH#10852: persist per-criterion completion (parallel-indexed to
   // acceptance_criteria) so checkbox state survives reload.
+  // #12348: snapshot the last-persisted completion so a rejected save rolls the
+  // checkbox back rather than leaving it visually toggled.
+  const prevDone = localItem.value.acceptance_criteria_done ?? []
   const done = (localItem.value.acceptance_criteria ?? []).map((_, i) => checkedAC.value[i] ?? false)
-  await patchItem({ acceptance_criteria_done: done })
+  await patchItem({ acceptance_criteria_done: done }, () => {
+    checkedAC.value = (localItem.value.acceptance_criteria ?? []).map((_, i) => prevDone[i] ?? false)
+  })
 }
 
-async function patchItem(patch: Partial<WorkItem>) {
+async function patchItem(patch: Partial<WorkItem>, rollback?: () => void) {
   try {
     const updated = await api.patch<WorkItem>(`/api/llc/work-items/${props.item.id}`, patch)
     Object.assign(localItem.value, updated)
+    saveError.value = null
     emit('updated', localItem.value)
   } catch (err) {
+    // #12348: the edit was applied optimistically via v-model before this call.
+    // The backend rejected it, so roll the local state back to its last-persisted
+    // value and surface the failure instead of showing a change that never saved.
     logger.error('Failed to patch item', err)
+    rollback?.()
+    saveError.value = t('llc.workItem.errors.saveFailed')
   }
 }
 
@@ -550,6 +572,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.save-error {
+  margin: 0.5rem 1.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 0.8rem;
+}
+
 .work-item-detail-overlay {
   position: fixed;
   inset: 0;
