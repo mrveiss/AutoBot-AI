@@ -102,7 +102,7 @@ def _membership() -> MagicMock:
 async def test_create_commits_after_kb_and_serialize(monkeypatch):
     """Happy path: KB ensured + response serialized, then exactly one commit."""
     ensure = AsyncMock()
-    monkeypatch.setattr(companies._kb_manager, "ensure_collection", ensure)
+    monkeypatch.setattr(companies.KbCollectionManager, "ensure_collection", ensure)
     svc = _create_svc()
     membership = _membership()
     async with _client(_app(svc, membership)) as client:
@@ -118,7 +118,7 @@ async def test_create_commits_after_kb_and_serialize(monkeypatch):
 async def test_create_kb_failure_rolls_back_no_commit(monkeypatch):
     """A KB failure must roll the INSERT back and never commit (#12323)."""
     monkeypatch.setattr(
-        companies._kb_manager,
+        companies.KbCollectionManager,
         "ensure_collection",
         AsyncMock(side_effect=RuntimeError("chroma down")),
     )
@@ -135,7 +135,7 @@ async def test_create_kb_failure_rolls_back_no_commit(monkeypatch):
 @pytest.mark.asyncio
 async def test_create_serialize_failure_rolls_back_no_commit(monkeypatch):
     """A serialization failure before commit also rolls back (#12323)."""
-    monkeypatch.setattr(companies._kb_manager, "ensure_collection", AsyncMock())
+    monkeypatch.setattr(companies.KbCollectionManager, "ensure_collection", AsyncMock())
     monkeypatch.setattr(
         companies,
         "_to_read",

@@ -280,7 +280,7 @@ async def test_create_requires_authentication():
 async def test_create_root_records_creator_as_owner(monkeypatch):
     from llc.models.enums import MembershipRole
 
-    monkeypatch.setattr(companies._kb_manager, "ensure_collection", AsyncMock())
+    monkeypatch.setattr(companies.KbCollectionManager, "ensure_collection", AsyncMock())
     svc = _create_svc()
     membership = _membership()
     app = _collection_app(svc, membership)
@@ -314,7 +314,7 @@ async def test_create_sub_company_cross_tenant_parent_is_404():
 
 @pytest.mark.asyncio
 async def test_create_sub_company_owned_parent_ok(monkeypatch):
-    monkeypatch.setattr(companies._kb_manager, "ensure_collection", AsyncMock())
+    monkeypatch.setattr(companies.KbCollectionManager, "ensure_collection", AsyncMock())
     svc = _create_svc()
     membership = _membership(is_member=True)
     app = _collection_app(svc, membership)
