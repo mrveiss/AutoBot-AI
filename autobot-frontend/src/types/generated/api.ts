@@ -2089,7 +2089,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/system/system/health/probes": {
+    "/api/system/health/probes": {
         parameters: {
             query?: never;
             header?: never;
@@ -2109,7 +2109,7 @@ export interface paths {
          *     Public endpoint — no auth required (matches /api/system/health).
          *     Cheap call: returns sorted list of strings, no probe execution.
          */
-        get: operations["get_system_health_probes_api_system_system_health_probes_get"];
+        get: operations["get_system_health_probes_api_system_health_probes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2394,7 +2394,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/system/system/backup/status": {
+    "/api/system/backup/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -2408,7 +2408,7 @@ export interface paths {
          *     Issue #3294: Monitoring endpoint for automated backup health.
          *     Requires admin authentication.
          */
-        get: operations["get_backup_status_api_system_system_backup_status_get"];
+        get: operations["get_backup_status_api_system_backup_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -104620,7 +104620,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_probes_api_system_system_health_probes_get: {
+    get_system_health_probes_api_system_health_probes_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -104904,7 +104904,7 @@ export interface operations {
             };
         };
     };
-    get_backup_status_api_system_system_backup_status_get: {
+    get_backup_status_api_system_backup_status_get: {
         parameters: {
             query?: never;
             header?: never;

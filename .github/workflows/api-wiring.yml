@@ -22,8 +22,10 @@ on:
     branches: [ main, Dev_new_gui ]
     paths: &paths
       - 'autobot-backend/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
       - 'autobot-frontend/src/**'
       - 'scripts/audit_api_wiring.py'
+      - 'scripts/api_wiring_baseline.txt'
       - 'requirements*.txt'
       - '.github/workflows/api-wiring.yml'
   pull_request:
@@ -52,6 +54,7 @@ jobs:
           cache-dependency-path: |
             requirements*.txt
             autobot-backend/requirements*.txt
+            autobot-slm-backend/requirements*.txt
 
       - name: Install backend dependencies (best-effort)
         continue-on-error: true
@@ -59,14 +62,42 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -r requirements-ci.txt --prefer-binary || true
 
+      - name: Install SLM backend dependencies (best-effort)
+        # #12381: --dump-slm-openapi imports autobot-slm-backend/main.py, which
+        # needs its OWN requirements (croniter, authlib, ldap3, pysaml2, pyotp,
+        # ...) — requirements-ci.txt only covers autobot-backend. Without this,
+        # the SLM dump always fails ("No module named 'croniter'") and the SLM
+        # route union never happens, leaving every getSLMUrl()/slmFetch() call
+        # false-flagged as unwired. Best-effort/non-fatal like the step above —
+        # dump_slm_openapi() already degrades gracefully if something's still
+        # missing (audits against autobot-backend routes only).
+        continue-on-error: true
+        run: |
+          python -m pip install -r autobot-slm-backend/requirements.txt --prefer-binary || true
+
       - name: Run API wiring audit
         run: |
           set -o pipefail
-          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
           mkdir -p data logs static config
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
           if python scripts/audit_api_wiring.py --dump-openapi openapi.json; then
             echo "::notice::Authoritative OpenAPI dump succeeded — auditing against real route table."
-            python scripts/audit_api_wiring.py --openapi openapi.json --fail-on-unwired
+
+            # #12381: also dump the SLM control-plane backend's route table
+            # (separate FastAPI app, :8000) and union it in — otherwise every
+            # getSLMUrl()/slmFetch() call is false-flagged as unwired.
+            SLM_ARGS=()
+            export PYTHONPATH="$PWD:$PWD/autobot-slm-backend:${PYTHONPATH:-}"
+            if python scripts/audit_api_wiring.py --dump-slm-openapi slm_openapi.json; then
+              echo "::notice::SLM OpenAPI dump succeeded — unioning SLM route table."
+              SLM_ARGS=(--slm-openapi slm_openapi.json)
+            else
+              echo "::warning::SLM app build failed — auditing against autobot-backend routes only."
+            fi
+            export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+
+            python scripts/audit_api_wiring.py --openapi openapi.json "${SLM_ARGS[@]}" \
+              --baseline scripts/api_wiring_baseline.txt --fail-on-unwired
           else
             echo "::warning::App build failed in CI — falling back to static (heuristic) audit."
             python scripts/audit_api_wiring.py
