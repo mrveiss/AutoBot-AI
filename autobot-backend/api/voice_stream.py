@@ -22,7 +22,7 @@ Protocol (JSON messages):
   Server -> Client:
     {"type": "state", "state": "idle|listening|processing|speaking"}
     {"type": "tts_start", "text": "..."}   - TTS synthesis beginning
-    {"type": "tts_audio", "data": "<base64>", "chunk": N, "total": N}
+    {"type": "tts_audio", "data": "<base64>", "chunk": N}
     {"type": "tts_end"}                     - TTS playback complete
     {"type": "error", "message": "..."}
     {"type": "pong"}
@@ -30,13 +30,12 @@ Protocol (JSON messages):
 
 import asyncio
 import base64
-from collections import deque
+from contextlib import aclosing
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from api.ws_security import enforce_ws_origin
-from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id
@@ -44,38 +43,6 @@ from services.tts_client import get_tts_client
 
 logger = get_logger(__name__)
 router = APIRouter()
-
-# Maximum TTS text length per chunk (characters). Override via AUTOBOT_TTS_MAX_CHUNK_CHARS.
-_MAX_TTS_CHUNK_CHARS = env_int_clamped("AUTOBOT_TTS_MAX_CHUNK_CHARS", 200, 50, 1000)
-
-
-def _split_text_for_tts(text: str) -> list[str]:
-    """Split long text into sentence-boundary chunks for streaming TTS."""
-    if len(text) <= _MAX_TTS_CHUNK_CHARS:
-        return [text]
-
-    chunks: list[str] = []
-    remaining = text
-    while remaining:
-        if len(remaining) <= _MAX_TTS_CHUNK_CHARS:
-            chunks.append(remaining)
-            break
-        # Find sentence boundary within limit
-        candidate = remaining[:_MAX_TTS_CHUNK_CHARS]
-        last_break = max(
-            candidate.rfind(". "),
-            candidate.rfind("! "),
-            candidate.rfind("? "),
-        )
-        if last_break > 50:
-            split_at = last_break + 2
-        else:
-            # Fall back to word boundary
-            last_space = candidate.rfind(" ")
-            split_at = last_space if last_space > 0 else _MAX_TTS_CHUNK_CHARS
-        chunks.append(remaining[:split_at].strip())
-        remaining = remaining[split_at:].strip()
-    return [c for c in chunks if c]
 
 
 async def _send_json(ws: WebSocket, data: dict) -> bool:
@@ -89,60 +56,6 @@ async def _send_json(ws: WebSocket, data: dict) -> bool:
     return False
 
 
-async def _cancel_pending_task(task: "asyncio.Task | None") -> None:
-    """Cancel a task if it exists and is not yet done. Ref: #2735."""
-    if task and not task.done():
-        task.cancel()
-
-
-# Pipelining depth for TTS streaming (#6752, tuned in #6811).
-# Pocket TTS calls run via run_in_executor and serialize on the GIL/model lock,
-# so depth>2 only adds queue contention without true parallelism. depth=2 lets
-# chunk N+1 synthesize while the client plays chunk N — enough to absorb
-# typical jitter without piling backlog. Override with AUTOBOT_TTS_PIPELINE_DEPTH
-# (clamped to 1..8 to prevent ops typos OOMing the worker).
-def _resolve_tts_pipeline_depth() -> int:
-    return env_int_clamped("AUTOBOT_TTS_PIPELINE_DEPTH", 2, 1, 8)
-
-
-_TTS_PIPELINE_DEPTH = _resolve_tts_pipeline_depth()
-
-
-async def _send_one_chunk(
-    ws: WebSocket,
-    i: int,
-    total: int,
-    task: "asyncio.Task",
-    cancel_event: asyncio.Event,
-) -> bool:
-    """Await one pre-fetched TTS task and send the resulting audio.
-
-    Returns True to continue the stream, False to stop (cancel, empty audio,
-    send failure, or synthesis error). The caller owns pipeline maintenance —
-    this helper only consumes one slot.
-    """
-    if cancel_event.is_set():
-        logger.debug("TTS cancelled at chunk %d/%d", i, total)
-        return False
-
-    try:
-        wav_bytes = await task
-    except asyncio.CancelledError:
-        return False
-    except Exception as e:
-        logger.error("TTS error chunk %d: %s", i, e)
-        await _send_json(ws, {"type": "error", "message": f"TTS synthesis failed: {e}"})
-        return False
-
-    if not wav_bytes:
-        return False
-    if cancel_event.is_set():
-        return False
-
-    audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
-    return await _send_json(ws, {"type": "tts_audio", "data": audio_b64, "chunk": i + 1, "total": total})
-
-
 async def _stream_chunks_pipelined(
     ws: WebSocket,
     text: str,
@@ -150,75 +63,51 @@ async def _stream_chunks_pipelined(
     voice_id: str = "",
     language: str = "",
 ) -> None:
-    """Split text and stream TTS audio with N-chunks-ahead pipelining (#6752).
+    """Stream TTS audio for *text*, forwarding each ~250ms mini-WAV chunk
+    from the worker the instant it is produced (#12501).
 
-    Maintains a sliding window of up to ``_TTS_PIPELINE_DEPTH`` pre-fetched
-    synthesis tasks. As each chunk is sent, a new task is scheduled to keep
-    the window full — hiding per-chunk TTS latency up to depth*chunk_duration
-    of jitter without changing the wire protocol.
+    The TTS worker now streams incrementally (pocket-tts
+    ``generate_audio_stream``, see ``tts_client.synthesize_stream``), so
+    the client-side text pre-splitting and N-chunks-ahead pipelining this
+    function used to do (#6752) are no longer needed for latency: the
+    first audio arrives well under a second regardless of utterance
+    length, straight from the worker's own chunking.
 
     Shared by both ``_synthesize_and_stream`` (full-duplex ``speak``)
     and ``_tts_queue_worker`` (streaming ``speak_sentence``).
 
-    Sends ``tts_start`` before the first chunk and ``tts_end`` after the last,
-    keeping the WS protocol consistent (#1535, #1536). Respects
-    *cancel_event* for barge-in interruption (#1527).
+    Sends ``tts_start`` before the first chunk and ``tts_end`` after the
+    last, keeping the WS protocol consistent (#1535, #1536).
+    *cancel_event* is checked BETWEEN chunks so barge-in can interrupt
+    mid-stream (#1527); the underlying HTTP stream to the worker is
+    always closed via ``aclosing`` so a cancelled/disconnected client
+    does not leave the worker generating audio no one will hear.
     """
-    chunks = _split_text_for_tts(text)
-    total = len(chunks)
-
     await _send_json(ws, {"type": "tts_start", "text": text})
 
-    if not chunks:
+    if not text:
         await _send_json(ws, {"type": "tts_end"})
         return
 
     tts = get_tts_client()
-
-    # Seed the pipeline with up to _TTS_PIPELINE_DEPTH synthesis tasks. Tasks
-    # remain ordered by chunk index in the deque.
-    pending: "deque[asyncio.Task]" = deque()
-    next_to_schedule = 0
-    while next_to_schedule < total and len(pending) < _TTS_PIPELINE_DEPTH:
-        if cancel_event.is_set():
-            break
-        pending.append(
-            asyncio.create_task(
-                tts.synthesize(
-                    chunks[next_to_schedule],
-                    voice_id=voice_id,
-                    language=language,
-                )
-            )
-        )
-        next_to_schedule += 1
-
-    sent_index = 0
-    while pending:
-        task = pending.popleft()
-        # Top up the window before awaiting so the next chunk starts
-        # synthesizing immediately while we wait for this one to send.
-        if next_to_schedule < total and not cancel_event.is_set():
-            pending.append(
-                asyncio.create_task(
-                    tts.synthesize(
-                        chunks[next_to_schedule],
-                        voice_id=voice_id,
-                        language=language,
-                    )
-                )
-            )
-            next_to_schedule += 1
-
-        ok = await _send_one_chunk(ws, sent_index, total, task, cancel_event)
-        sent_index += 1
-        if not ok:
-            # Cancel any still-pending pre-fetches so we do not waste worker
-            # time after a cancel / disconnect / error.
-            for t in pending:
-                await _cancel_pending_task(t)
-            pending.clear()
-            break
+    index = 0
+    try:
+        async with aclosing(tts.synthesize_stream(text, voice_id=voice_id, language=language)) as stream:
+            async for wav_bytes in stream:
+                if cancel_event.is_set():
+                    logger.debug("TTS cancelled mid-stream at chunk %d", index)
+                    break
+                if not wav_bytes:
+                    continue
+                audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
+                if not await _send_json(ws, {"type": "tts_audio", "data": audio_b64, "chunk": index + 1}):
+                    break
+                index += 1
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.error("TTS streaming error: %s", e)
+        await _send_json(ws, {"type": "error", "message": f"TTS synthesis failed: {e}"})
 
     await _send_json(ws, {"type": "tts_end"})
 
@@ -239,7 +128,7 @@ async def _tts_queue_worker(
     queue: asyncio.Queue,
     cancel_event: asyncio.Event,
 ) -> None:
-    """Drain sentence queue, streaming each with pipelining (#1319).
+    """Drain sentence queue, streaming each sentence's audio as it arrives (#1319, #12501).
 
     Receives (text, voice_id, language) tuples; None is the flush
     sentinel (no-op since _stream_chunks_pipelined sends tts_end).
