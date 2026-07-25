@@ -18,15 +18,19 @@ under test, then monkeypatch the sync ``get_redis_client`` per-test with an
 in-memory fake.
 """
 
+import importlib.util
 import json
 import sys
 import types
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from pydantic import BaseModel
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 
 class BatchJobStatus(str, Enum):
@@ -108,13 +112,35 @@ def _pydantic_model(name: str) -> type:
     return type(name, (BaseModel,), {"__annotations__": {}})
 
 
-if "api.schemas_workflows" not in sys.modules:
+def _stub_schemas_workflows() -> None:
+    """Minimal hand-rolled fallback used only if the real module (below)
+    can't be loaded in this environment. Builds real-field BatchSchedule /
+    BatchScheduleUpdate classes directly (rather than the field-less
+    ``_pydantic_model`` placeholder) since this file's tests construct real
+    instances and read their fields (cron_expression, enabled, ...).
+    """
+    from typing import Optional
+
     _sw = types.ModuleType("api.schemas_workflows")
     _sw.__path__ = []
     _sw.__package__ = "api"
 
     _sw.BatchJobStatus = BatchJobStatus  # type: ignore[attr-defined]
     _sw.BatchJobType = BatchJobType  # type: ignore[attr-defined]
+
+    class _BatchSchedule(BaseModel):
+        schedule_id: str
+        job_id: str
+        cron_expression: str
+        enabled: bool
+        next_run: datetime
+
+    class _BatchScheduleUpdate(BaseModel):
+        enabled: Optional[bool] = None
+        cron_expression: Optional[str] = None
+
+    _sw.BatchSchedule = _BatchSchedule  # type: ignore[attr-defined]
+    _sw.BatchScheduleUpdate = _BatchScheduleUpdate  # type: ignore[attr-defined]
 
     # NOTE: this list must stay a superset-compatible match with the stub list
     # in tests/test_health_probe_data_contract.py — both files guard their
@@ -126,15 +152,13 @@ if "api.schemas_workflows" not in sys.modules:
         "APIBatchRequest",
         "APIBatchResponse",
         "BatchChatInitResponse",
-        "BatchJob",
         "BatchJobCreate",
         "BatchJobDeleteResponse",
         "BatchJobList",
+        "BatchJob",
         "BatchLoadResponse",
         "BatchLogEntry",
-        "BatchSchedule",
         "BatchScheduleDeleteResponse",
-        "BatchScheduleUpdate",
         "BatchStatusResponse",
         "BatchTemplate",
         "BatchTemplateDeleteResponse",
@@ -155,44 +179,50 @@ if "api.schemas_workflows" not in sys.modules:
     _sw.__getattr__ = lambda attr: _sw_mock  # type: ignore[attr-defined]
     sys.modules["api.schemas_workflows"] = _sw
 
-# Issue #12380 review fix: this file and tests/test_health_probe_data_contract.py
-# both stub sys.modules["api.schemas_workflows"], gated on "not already present"
-# — so whichever test file collects first wins the base stub for the whole
-# session. Neither file's base stub loop builds real-field BatchSchedule /
-# BatchScheduleUpdate (both use the field-less `_pydantic_model` placeholder).
-# This file's tests construct real BatchSchedule/BatchScheduleUpdate instances
-# and read their fields (cron_expression, enabled, ...), so — regardless of
-# which file collected first — force real-field versions onto the *shared*
-# stub module here, before `import api.batch_jobs` below binds names from it.
-# Collection (module import) always completes for every test file before any
-# test *executes*, so this reassignment is visible to api.batch_jobs's own
-# `from api.schemas_workflows import BatchSchedule, BatchScheduleUpdate` no
-# matter which file the pytest run happens to collect first. Guarded by a
-# `__spec__ is None` check so a genuine (non-stub) real module is never
-# clobbered — hand-built `types.ModuleType()` stubs never populate `__spec__`
-# (stays None), while every real import-system-loaded module gets a concrete
-# `ModuleSpec`. NOTE: `hasattr(mod, "__file__")` is NOT a reliable stub-check
-# here — both this file's and the health-probe file's stub set a catch-all
-# `module.__getattr__` fallback (for arbitrary unlisted schema names), which
-# makes `hasattr(mod, "__file__")` always True (returns a MagicMock) even
-# though `__file__` was never actually set.
-_schemas_workflows_mod = sys.modules["api.schemas_workflows"]
-if _schemas_workflows_mod.__spec__ is None:
-    from typing import Optional
 
-    class _BatchSchedule(BaseModel):
-        schedule_id: str
-        job_id: str
-        cron_expression: str
-        enabled: bool
-        next_run: datetime
+def _real_load_schemas_workflows() -> None:
+    """Real-load api/schemas_workflows.py (#12463 root-cause fix).
 
-    class _BatchScheduleUpdate(BaseModel):
-        enabled: Optional[bool] = None
-        cron_expression: Optional[str] = None
+    ``sys.modules["api.schemas_workflows"]`` is process-global: dozens of
+    route files (approval_gates, marketplace_sources, validation_dashboard,
+    advanced_control, collaboration, ...) do
+    ``from api.schemas_workflows import <RealResponseModel>``. The previous
+    approach here hand-built a fake module with a hardcoded name allowlist
+    plus a catch-all ``__getattr__`` returning a *single shared* bare
+    ``MagicMock()`` for any name not on the list. Once this file (or its
+    tests/test_health_probe_data_contract.py sibling) was collected before
+    the real module, every unrelated route file's response_model= for a name
+    not on the list resolved to that shared MagicMock, and FastAPI rejected
+    it at route-registration time (``FastAPIError: Invalid args for response
+    field!``) — poisoning ~9 unrelated collectors in full-suite runs.
 
-    _schemas_workflows_mod.BatchSchedule = _BatchSchedule  # type: ignore[attr-defined]
-    _schemas_workflows_mod.BatchScheduleUpdate = _BatchScheduleUpdate  # type: ignore[attr-defined]
+    schemas_workflows.py only pulls in lightweight deps (pydantic,
+    constants.path_constants, autobot_shared time/service_message helpers,
+    models.approval — all already resolvable via conftest.py's baseline
+    stubs), so real-loading it is safe and removes the whole class of bug.
+    Falls back to a minimal hand-rolled stub if it genuinely can't load.
+    """
+    if "api.schemas_workflows" in sys.modules:
+        return
+    spec = importlib.util.spec_from_file_location(
+        "api.schemas_workflows", _BACKEND_ROOT / "api" / "schemas_workflows.py"
+    )
+    if spec is None or spec.loader is None:
+        _stub_schemas_workflows()
+        return
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["api.schemas_workflows"] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        del sys.modules["api.schemas_workflows"]
+        _stub_schemas_workflows()
+    else:
+        if "api" in sys.modules:
+            sys.modules["api"].schemas_workflows = mod  # type: ignore[attr-defined]
+
+
+_real_load_schemas_workflows()
 
 _pkg_stub("constants")
 _leaf_stub(

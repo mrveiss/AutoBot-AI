@@ -70,24 +70,53 @@ _make_knowledge_submodule_stubs()
 
 
 def _make_services_stub() -> types.ModuleType:
-    """Return a thin stub for the ``services`` package hierarchy."""
-    services_mod = types.ModuleType("services")
-    services_mod.__path__ = []  # type: ignore[attr-defined]
-    services_mod.__package__ = "services"
+    """Return a thin stub for the ``services`` package hierarchy.
 
-    llm_mod = types.ModuleType("services.llm_service")
-    llm_mod.__package__ = "services"
-    llm_mod.get_llm_service = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+    #12463: guarded per-name so this never *unconditionally* overwrites a
+    module the root ``autobot-backend/conftest.py`` already set up. That
+    root conftest stubs ``services``/``services.llm_service`` with a real
+    on-disk ``__path__`` plus a catch-all ``__getattr__`` fallback (so
+    ``services.mesh_brain`` / ``services.agents`` / any attribute resolves),
+    and real-loads ``services.slm_client`` from disk in ``pytest_configure``
+    (giving it ``_SERVICE_JWT_TTL_HOURS`` etc). Blindly replacing those with
+    this file's narrower stand-ins — which lack the catch-all and the real
+    ``__path__`` — poisoned ``sys.modules`` for the rest of the pytest
+    session: every later-collected file needing an attribute or submodule
+    not on this file's short hand list failed with a confusing, unrelated-
+    looking ``ImportError``/``ModuleNotFoundError``.
 
-    slm_mod = types.ModuleType("services.slm_client")
-    slm_mod.__package__ = "services"
-    slm_mod.get_slm_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
+    The parent-package bind (``services_mod.llm_service = ...``) below is
+    still required EVERY time, even when reusing an already-present
+    ``sys.modules`` entry: ``unittest.mock.patch("services.llm_service.X")``
+    resolves the dotted path via ``getattr(sys.modules["services"],
+    "llm_service")`` — NOT via ``sys.modules["services.llm_service"]``
+    directly (mirrors the root conftest's own ``_real_load_and_bind`` /
+    #11532 note). The root conftest's stub loop never does this bind for
+    ``services.llm_service``, so skipping it here left ``patch()`` silently
+    resolving the *package's* generic catch-all mock instead of the real
+    submodule — an inert patch (#12463).
+    """
+    if "services" not in sys.modules:
+        services_mod = types.ModuleType("services")
+        services_mod.__path__ = []  # type: ignore[attr-defined]
+        services_mod.__package__ = "services"
+        sys.modules["services"] = services_mod
+    services_mod = sys.modules["services"]
 
-    services_mod.llm_service = llm_mod  # type: ignore[attr-defined]
-    services_mod.slm_client = slm_mod  # type: ignore[attr-defined]
-    sys.modules["services"] = services_mod
-    sys.modules["services.llm_service"] = llm_mod
-    sys.modules["services.slm_client"] = slm_mod
+    if "services.llm_service" not in sys.modules:
+        llm_mod = types.ModuleType("services.llm_service")
+        llm_mod.__package__ = "services"
+        llm_mod.get_llm_service = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+        sys.modules["services.llm_service"] = llm_mod
+    services_mod.llm_service = sys.modules["services.llm_service"]  # type: ignore[attr-defined]
+
+    if "services.slm_client" not in sys.modules:
+        slm_mod = types.ModuleType("services.slm_client")
+        slm_mod.__package__ = "services"
+        slm_mod.get_slm_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
+        sys.modules["services.slm_client"] = slm_mod
+    services_mod.slm_client = sys.modules["services.slm_client"]  # type: ignore[attr-defined]
+
     return services_mod
 
 

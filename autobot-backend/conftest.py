@@ -1089,3 +1089,72 @@ def pytest_configure(config):  # noqa: ANN001
     _real_load_and_bind("services.llm_api_key_service", backend_root / "services" / "llm_api_key_service.py")
     _real_load_and_bind("services.llm_cost_tracker", backend_root / "services" / "llm_cost_tracker.py")
     _real_load_light_services()
+
+
+# #12463: cascade hardening for manually-installed stub modules.
+#
+# CPython's import machinery already removes a module from ``sys.modules``
+# itself when its ``exec_module()`` raises mid-import — a genuinely
+# half-built REAL module does NOT persist in the cache, so it does not need
+# this hook. What DOES persist and poison later collectors is a module a
+# test file installed by hand (e.g. ``sys.modules["x"] = types.ModuleType(...)``
+# or ``sys.modules["x"] = MagicMock()``) *before* the surrounding collection
+# failed for some other reason — that manual assignment bypasses the normal
+# import protocol entirely, so nothing ever cleans it up. The next file that
+# needs the real ``x`` gets the abandoned stub instead of a fresh import
+# attempt, and fails with a confusing, unrelated-looking error (``cannot
+# import name X from Y`` / ``No module named Y.Z``).
+#
+# This hook does NOT mask the real failure — the file whose collection
+# actually failed still reports its own (correct) error via the normal
+# CollectReport. It only prevents that failure from poisoning other files'
+# imports of the same stub: on a FAILED Module collection, any module newly
+# present in sys.modules is evicted ONLY if it looks like a manual/uninitialized
+# stub rather than a healthy, fully-imported real module — see
+# ``_looks_like_uninitialized_stub`` — so a real module that happened to
+# import cleanly earlier in the same (later-failing) file is left alone and
+# is not re-executed (double-running its import-time side effects) by a
+# subsequent file's fresh import.
+#
+# Keyed by nodeid (not a plain stack) because ``pytest_collectreport`` fires
+# for every collector level (Dir/Package/Module/...), not just Module — a
+# stack would pop the wrong snapshot for non-Module reports interleaved
+# between a Module's collectstart and its own collectreport.
+_module_collect_snapshots: dict = {}
+
+
+def _looks_like_uninitialized_stub(mod) -> bool:  # noqa: ANN001
+    """True if *mod* was never legitimately finished importing.
+
+    A module the real import system completed has a real ``ModuleSpec``
+    whose ``_initializing`` flag is ``False`` by the time ``exec_module()``
+    returns. A module installed by hand (``sys.modules[name] = MagicMock()``
+    / ``types.ModuleType(name)`` never passed through ``exec_module``) either
+    has no ``__spec__`` at all or one still flagged ``_initializing`` (import
+    machinery normally clears that flag on success; a manual stand-in never
+    sets it, so it reads as truthy-missing via ``getattr(..., False)`` — the
+    only way this is ``True`` is a bare ``ModuleSpec()`` some hand-rolled
+    stub constructed itself, which is exactly the anti-pattern being
+    targeted here).
+    """
+    spec = getattr(mod, "__spec__", None)
+    return spec is None or getattr(spec, "_initializing", False)
+
+
+def pytest_collectstart(collector) -> None:  # noqa: ANN001
+    """Snapshot sys.modules before a Module collector imports its file."""
+    if type(collector).__name__ == "Module":
+        _module_collect_snapshots[collector.nodeid] = set(sys.modules.keys())
+
+
+def pytest_collectreport(report) -> None:  # noqa: ANN001
+    """On a failed Module collection, evict any uninitialized-stub module it left behind."""
+    before = _module_collect_snapshots.pop(report.nodeid, None)
+    if before is None:
+        return
+    if report.failed:
+        for _name in set(sys.modules.keys()) - before:
+            _mod = sys.modules.get(_name)
+            if _mod is not None and not _looks_like_uninitialized_stub(_mod):
+                continue  # healthy real module — leave it cached, don't re-run its import
+            sys.modules.pop(_name, None)
