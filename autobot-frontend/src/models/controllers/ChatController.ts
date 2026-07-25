@@ -244,22 +244,22 @@ export class ChatController {
     const message = extractErrorMessage(error, 'Unknown error')
 
     if (status === 422) {
-      return 'Invalid message format. Please check your input and try again.'
+      return i18n.global.t('chat.errors.invalidFormat')
     }
     if (status === 404) {
-      return 'Chat service not available. Please refresh the page and try again.'
+      return i18n.global.t('chat.errors.serviceUnavailable')
     }
     if (status === 500) {
-      return 'Server error occurred. Please try again in a moment.'
+      return i18n.global.t('chat.errors.serverError')
     }
     if (name === 'NetworkError') {
-      return 'Network connection failed. Please check your internet connection.'
+      return i18n.global.t('chat.errors.networkFailed')
     }
     if (message.includes('timeout')) {
-      return 'Request timed out. Please try again with a shorter message.'
+      return i18n.global.t('chat.errors.timeout')
     }
 
-    return `Failed to send message: ${message}`
+    return i18n.global.t('chat.errors.sendFailed', { error: message })
   }
 
   /**
@@ -645,7 +645,7 @@ export class ChatController {
     } catch (error) {
       // Backend create failed - don't create local session if backend fails
       logger.error('Failed to create chat session on backend:', error)
-      this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.createFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
     }
 
@@ -690,7 +690,7 @@ export class ChatController {
     } catch (error: unknown) {
       logger.error('Failed to load chat sessions:', error)
       // Don't throw error, allow app to continue with local sessions
-      this.getAppStore()?.setGlobalError(`Failed to load chat sessions: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadSessionsFailed', { error: extractErrorMessage(error, 'Unknown error') }))
     } finally {
     }
   }
@@ -753,7 +753,7 @@ export class ChatController {
 
     } catch (error: unknown) {
       logger.error('Failed to load messages:', error)
-      this.getAppStore()?.setGlobalError(`Failed to load messages: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadMessagesFailed', { error: extractErrorMessage(error, 'Unknown error') }))
     } finally {
     }
   }
@@ -777,7 +777,7 @@ export class ChatController {
 
     } catch (error: unknown) {
       logger.error('Failed to save chat session:', error)
-      this.getAppStore()?.setGlobalError(`Failed to save chat: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.saveFailed', { error: extractErrorMessage(error, 'Unknown error') }))
     }
   }
 
@@ -919,7 +919,7 @@ export class ChatController {
       }
 
     } catch (error: unknown) {
-      this.getAppStore()?.setGlobalError(`Failed to reset chat: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.resetFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
     }
   }
@@ -952,7 +952,7 @@ export class ChatController {
       logger.debug('All chats cleared successfully')
 
     } catch (error: unknown) {
-      this.getAppStore()?.setGlobalError(`Failed to clear chats: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.clearFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
     } finally {
     }

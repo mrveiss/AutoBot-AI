@@ -5560,7 +5560,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "حذف گفتگو ممکن نشد. لطفاً دوباره تلاش کنید."
+      "deleteFailed": "حذف گفتگو ممکن نشد. لطفاً دوباره تلاش کنید.",
+      "createFailed": "ایجاد گفتگو ممکن نشد: {error}",
+      "loadSessionsFailed": "بارگذاری جلسات گفتگو ممکن نشد: {error}",
+      "loadMessagesFailed": "بارگذاری پیام‌ها ممکن نشد: {error}",
+      "saveFailed": "ذخیره گفتگو ممکن نشد: {error}",
+      "resetFailed": "بازنشانی گفتگو ممکن نشد: {error}",
+      "clearFailed": "پاک کردن گفتگوها ممکن نشد: {error}",
+      "invalidFormat": "قالب پیام نامعتبر است. لطفاً ورودی خود را بررسی کرده و دوباره تلاش کنید.",
+      "serviceUnavailable": "سرویس گفتگو در دسترس نیست. لطفاً صفحه را تازه‌سازی کرده و دوباره تلاش کنید.",
+      "serverError": "خطای سرور رخ داد. لطفاً لحظه‌ای دیگر دوباره تلاش کنید.",
+      "networkFailed": "اتصال شبکه ناموفق بود. لطفاً اتصال اینترنت خود را بررسی کنید.",
+      "timeout": "زمان درخواست به پایان رسید. لطفاً با پیام کوتاه‌تری دوباره تلاش کنید.",
+      "sendFailed": "ارسال پیام ممکن نشد: {error}"
     }
   },
   "serviceMessages": {

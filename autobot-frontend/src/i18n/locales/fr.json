@@ -734,7 +734,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "Impossible de supprimer la conversation. Veuillez réessayer."
+      "deleteFailed": "Impossible de supprimer la conversation. Veuillez réessayer.",
+      "createFailed": "Impossible de créer la conversation : {error}",
+      "loadSessionsFailed": "Impossible de charger les sessions de conversation : {error}",
+      "loadMessagesFailed": "Impossible de charger les messages : {error}",
+      "saveFailed": "Impossible d'enregistrer la conversation : {error}",
+      "resetFailed": "Impossible de réinitialiser la conversation : {error}",
+      "clearFailed": "Impossible de supprimer les conversations : {error}",
+      "invalidFormat": "Format de message invalide. Veuillez vérifier votre saisie et réessayer.",
+      "serviceUnavailable": "Service de conversation indisponible. Veuillez actualiser la page et réessayer.",
+      "serverError": "Une erreur du serveur s'est produite. Veuillez réessayer dans un instant.",
+      "networkFailed": "Échec de la connexion réseau. Veuillez vérifier votre connexion Internet.",
+      "timeout": "La requête a expiré. Veuillez réessayer avec un message plus court.",
+      "sendFailed": "Impossible d'envoyer le message : {error}"
     }
   },
   "settings": {

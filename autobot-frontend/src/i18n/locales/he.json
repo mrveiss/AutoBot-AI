@@ -5560,7 +5560,19 @@
     "lightweightMode": "Lightweight mode",
     "lightweightModeTooltip": "lightweight Mode tooltip",
     "errors": {
-      "deleteFailed": "לא ניתן היה למחוק את הצ'אט. אנא נסה שוב."
+      "deleteFailed": "לא ניתן היה למחוק את הצ'אט. אנא נסה שוב.",
+      "createFailed": "לא ניתן היה ליצור את הצ'אט: {error}",
+      "loadSessionsFailed": "לא ניתן היה לטעון את הפעלות הצ'אט: {error}",
+      "loadMessagesFailed": "לא ניתן היה לטעון את ההודעות: {error}",
+      "saveFailed": "לא ניתן היה לשמור את הצ'אט: {error}",
+      "resetFailed": "לא ניתן היה לאפס את הצ'אט: {error}",
+      "clearFailed": "לא ניתן היה לנקות את הצ'אטים: {error}",
+      "invalidFormat": "פורמט הודעה לא חוקי. אנא בדוק את הקלט ונסה שוב.",
+      "serviceUnavailable": "שירות הצ'אט אינו זמין. אנא רענן את הדף ונסה שוב.",
+      "serverError": "אירעה שגיאת שרת. אנא נסה שוב בעוד רגע.",
+      "networkFailed": "החיבור לרשת נכשל. אנא בדוק את חיבור האינטרנט שלך.",
+      "timeout": "תם הזמן הקצוב לבקשה. אנא נסה שוב עם הודעה קצרה יותר.",
+      "sendFailed": "לא ניתן היה לשלוח את ההודעה: {error}"
     }
   },
   "serviceMessages": {
