@@ -5,7 +5,7 @@
 import unittest
 from datetime import timedelta
 
-from notification_suppression import (
+from services.notification_suppression import (
     NotificationFilter,
     NotificationReason,
     NotificationSuppressionConfig,
