@@ -119,7 +119,7 @@ class TestMultiModalWorkflowIntegration:
             mock_result = MagicMock()
             mock_result.success = True
             mock_result.confidence = 0.9
-            mock_result.results = {
+            mock_result.result_data = {
                 "intent": "screenshot_analysis",
                 "next_actions": ["take_screenshot", "analyze_ui"],
                 "confidence": 0.9,
@@ -131,7 +131,7 @@ class TestMultiModalWorkflowIntegration:
             # Verify text processing
             assert text_result.success
             assert text_result.confidence > 0.8
-            assert "screenshot_analysis" in str(text_result.results)
+            assert "screenshot_analysis" in str(text_result.result_data)
 
         # Step 2: Take screenshot (simulated with test image)
         test_screenshot = self.create_test_image(1920, 1080, "white")
@@ -149,7 +149,7 @@ class TestMultiModalWorkflowIntegration:
             mock_result = MagicMock()
             mock_result.success = True
             mock_result.confidence = 0.88
-            mock_result.results = {
+            mock_result.result_data = {
                 "ui_elements": [
                     {
                         "type": "button",
@@ -175,7 +175,7 @@ class TestMultiModalWorkflowIntegration:
 
             # Verify screenshot analysis
             assert screenshot_result.success
-            assert len(screenshot_result.results.get("ui_elements", [])) > 0
+            assert len(screenshot_result.result_data.get("ui_elements", [])) > 0
 
         # Step 3: Make contextual decision based on analysis
         decision = await context_aware_decision_system.make_contextual_decision(
@@ -214,7 +214,7 @@ class TestMultiModalWorkflowIntegration:
             mock_result = MagicMock()
             mock_result.success = True
             mock_result.confidence = 0.9
-            mock_result.results = {
+            mock_result.result_data = {
                 "image_analysis": {
                     "ui_elements": [{"type": "menu", "confidence": 0.9}],
                     "context": "settings_screen",
@@ -234,7 +234,7 @@ class TestMultiModalWorkflowIntegration:
             # Verify combined processing
             assert combined_result.success
             assert combined_result.confidence > 0.8
-            results = combined_result.results
+            results = combined_result.result_data
             assert "image_analysis" in results
             assert "audio_analysis" in results
             assert results.get("correlation_score", 0) > 0.8
@@ -310,7 +310,7 @@ class TestMultiModalWorkflowIntegration:
                     mock_result = MagicMock()
                     mock_result.success = True
                     mock_result.confidence = 0.85
-                    mock_result.results = {
+                    mock_result.result_data = {
                         "processed": True,
                         "modality": input_data.modality_type.value,
                         "stream_index": input_data.metadata.get("stream_index"),
@@ -357,7 +357,7 @@ class TestMultiModalWorkflowIntegration:
             mock_result = MagicMock()
             mock_result.success = True
             mock_result.confidence = 0.85
-            mock_result.results = {
+            mock_result.result_data = {
                 "context_type": "web_automation",
                 "task": "form_submission",
                 "established": True,
@@ -383,7 +383,7 @@ class TestMultiModalWorkflowIntegration:
             mock_result = MagicMock()
             mock_result.success = True
             mock_result.confidence = 0.85
-            mock_result.results = {
+            mock_result.result_data = {
                 "form_elements": [
                     {"type": "input", "label": "username"},
                     {"type": "input", "label": "password"},
@@ -397,7 +397,7 @@ class TestMultiModalWorkflowIntegration:
             visual_result = await multimodal_processor.process(visual_context)
             assert visual_result.success
             # Verify context preservation
-            assert "previous_context" in visual_result.results
+            assert "previous_context" in visual_result.result_data
 
         # Step 3: Add audio instructions
         audio_data = self.create_test_audio(2.5)
@@ -463,7 +463,7 @@ class TestMultiModalWorkflowIntegration:
                 text_result = await multimodal_processor.process(text_input)
                 # Should either succeed with fallback or fail gracefully
                 if not text_result.success:
-                    assert "error" in text_result.results
+                    assert "error" in text_result.result_data
             except Exception as e:
                 # Should be controlled exception
                 assert isinstance(e, (ValueError, UnicodeError))
@@ -501,7 +501,7 @@ class TestMultiModalWorkflowIntegration:
                 image_result = await multimodal_processor.process(image_input)
                 # Should recover or fail gracefully
                 if image_result and image_result.success:
-                    assert image_result.results.get("error_recovered", False)
+                    assert image_result.result_data.get("error_recovered", False)
             except Exception as e:
                 # Should be controlled exception
                 assert isinstance(e, (IOError, ValueError))
@@ -558,7 +558,7 @@ class TestMultiModalWorkflowIntegration:
                     mock_result = MagicMock()
                     mock_result.success = True
                     mock_result.confidence = 0.8
-                    mock_result.results = {"processed": True, "request_id": request_id}
+                    mock_result.result_data = {"processed": True, "request_id": request_id}
                     mock_process.return_value = mock_result
 
                     return await multimodal_processor.process(input_data)
@@ -578,7 +578,7 @@ class TestMultiModalWorkflowIntegration:
                     mock_result = MagicMock()
                     mock_result.success = True
                     mock_result.confidence = 0.8
-                    mock_result.results = {"processed": True, "request_id": request_id}
+                    mock_result.result_data = {"processed": True, "request_id": request_id}
                     mock_process.return_value = mock_result
 
                     return await multimodal_processor.process(input_data)
