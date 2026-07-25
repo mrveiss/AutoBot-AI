@@ -61,5 +61,3 @@
 /api/code-intelligence/quality-score
 /api/code-intelligence/trends
 /api/analytics/bug-prediction
-/api/cost/by-agent
-/api/cost/by-agent/{p}/budget
