@@ -25,7 +25,7 @@ from api.schemas_agent import (
     PromptInjectionRequest,
     QueryAnalysisRequest,
 )
-from api.system_health import register_singleton_probe
+from api.system_health import ComponentHealth, register_health_probe
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from llm_self_awareness import get_llm_self_awareness
@@ -347,4 +347,32 @@ async def export_awareness_data(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-register_singleton_probe("llm_awareness", get_llm_self_awareness)
+@register_health_probe("llm_awareness")
+async def _probe_llm_awareness(request=None) -> ComponentHealth:
+    """Issue #3333 / #12458: probe registration for the LLM self-awareness singleton.
+
+    The optional ``PhaseValidator`` dependency (``autobot-infrastructure``) is
+    not deployed to ``autobot-backend`` — its absence is expected and must
+    not force this probe (and therefore the overall system-health rollup) to
+    ``down``. Report ``ok`` either way; surface a detail note when the
+    optional validation sub-component is unavailable so operators can see
+    it without it counting as a failure.
+    """
+    try:
+        awareness = get_llm_self_awareness()
+        if awareness is None:
+            return ComponentHealth(name="llm_awareness", status="down", detail="singleton returned None")
+        if getattr(awareness.state_tracker, "validator", None) is None:
+            return ComponentHealth(
+                name="llm_awareness",
+                status="ok",
+                detail="llm_awareness validation unavailable (optional component not installed)",
+            )
+        return ComponentHealth(name="llm_awareness", status="ok")
+    except Exception as exc:
+        reason = str(exc).strip() or "no detail"
+        return ComponentHealth(
+            name="llm_awareness",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}: {reason[:160]}",
+        )

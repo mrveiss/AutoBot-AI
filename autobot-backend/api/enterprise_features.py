@@ -27,7 +27,7 @@ from api.schemas_workflows import (
     FeatureEnableRequest,
     PerformanceOptimizationRequest,
 )
-from api.system_health import register_singleton_probe
+from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -481,7 +481,41 @@ async def bulk_enable_features(request: BulkFeatureRequest):
         raise HTTPException(status_code=500, detail="Bulk enablement failed")
 
 
-register_singleton_probe("enterprise_features", get_enterprise_manager)
+@register_health_probe("enterprise_features")
+async def _probe_enterprise_features(request=None) -> ComponentHealth:
+    """Issue #3333 / #12459: probe registration for the enterprise-feature manager.
+
+    ``EnterpriseFeatureManager`` requires a full 6-VM topology
+    (``AUTOBOT_*_HOST``/``AUTOBOT_*_PORT``) to build its VM map. On a
+    single-node/co-located install that topology is intentionally absent —
+    this is expected, not a failure, and must not force overall
+    system-health to ``down``. A genuinely broken manager (any error other
+    than the topology ``ValueError``) still reports ``down``.
+    """
+    try:
+        instance = get_enterprise_manager()
+        if instance is None:
+            return ComponentHealth(name="enterprise_features", status="down", detail="singleton returned None")
+        return ComponentHealth(name="enterprise_features", status="ok")
+    except ValueError as exc:
+        if "VM topology configuration missing" in str(exc):
+            return ComponentHealth(
+                name="enterprise_features",
+                status="not_applicable",
+                detail="multi-VM topology not configured (expected on single-node)",
+            )
+        return ComponentHealth(
+            name="enterprise_features",
+            status="down",
+            detail=f"probe error: ValueError: {str(exc).strip()[:160]}",
+        )
+    except Exception as exc:
+        reason = str(exc).strip() or "no detail"
+        return ComponentHealth(
+            name="enterprise_features",
+            status="down",
+            detail=f"probe error: {type(exc).__name__}: {reason[:160]}",
+        )
 
 
 @router.post("/performance/optimize", response_model=DataResponse[EnterprisePerformanceOptimizeResponse])

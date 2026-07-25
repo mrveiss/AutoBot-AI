@@ -551,15 +551,32 @@ class RedisServiceManager:
         return "critical"
 
     def _generate_health_recommendations(
-        self, service_running: bool, connectivity: bool, response_time_ms: float
+        self,
+        service_running: bool,
+        connectivity: bool,
+        response_time_ms: float,
+        service_status: str = "unknown",
     ) -> List[str]:
         """
         Generate health recommendations based on current state.
 
         (Issue #398: extracted helper)
+        Issue #12459: ``service_running`` collapses "confirmed stopped" and
+        "SLM couldn't confirm systemd state" (``service_status == "unknown"``)
+        into the same falsy value, so this used to claim the service "is not
+        running" even when direct Redis connectivity proved it clearly was.
+        Distinguish the SLM-unreachable-but-reachable case so the message is
+        accurate instead of misleading (#12459 health-probe audit).
         """
         recommendations = []
-        if not service_running:
+        if service_status == "unknown" and connectivity:
+            recommendations.append(
+                "Service manager (SLM) could not confirm systemd status for "
+                "redis-stack-server, but Redis itself responded to a direct "
+                "ping — this is a service-management visibility gap, not a "
+                "Redis outage"
+            )
+        elif not service_running:
             recommendations.append("Redis Stack service is not running - consider starting it")
         if not connectivity and service_running:
             recommendations.append("Redis Stack service running but not responding - check logs")
@@ -582,7 +599,9 @@ class RedisServiceManager:
 
             connectivity, response_time_ms = await self._check_redis_connectivity()
             overall_status = self._determine_health_status(service_running, connectivity, status.status)
-            recommendations = self._generate_health_recommendations(service_running, connectivity, response_time_ms)
+            recommendations = self._generate_health_recommendations(
+                service_running, connectivity, response_time_ms, status.status
+            )
 
             return HealthStatus(
                 overall_status=overall_status,
