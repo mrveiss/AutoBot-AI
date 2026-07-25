@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import services.redis_service_manager as redis_service_manager_module
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
 
 
@@ -51,8 +52,12 @@ class TestInit:
         assert mgr is not None
 
     def test_defaults_from_env(self, monkeypatch) -> None:
-        monkeypatch.setenv("SLM_URL", "https://slm.test")
-        monkeypatch.setenv("REDIS_NODE_ID", "04-DBs")
+        # _DEFAULT_SLM_URL / _DEFAULT_REDIS_NODE_ID are resolved once at module
+        # import time from ssot_config (itself an lru_cache'd singleton), so
+        # monkeypatch.setenv() after import has no effect on them. Patch the
+        # module-level constants directly to exercise the actual fallback path.
+        monkeypatch.setattr(redis_service_manager_module, "_DEFAULT_SLM_URL", "https://slm.test")
+        monkeypatch.setattr(redis_service_manager_module, "_DEFAULT_REDIS_NODE_ID", "04-DBs")
         mgr = RedisServiceManager()
         assert mgr.slm_url == "https://slm.test"
         assert mgr.slm_node_id == "04-DBs"
@@ -181,11 +186,14 @@ class TestCheckRedisConnectivity:
 
     @pytest.mark.asyncio
     async def test_returns_true_on_successful_ping(self, manager) -> None:
+        # _check_redis_connectivity imports get_async_redis_client locally from
+        # autobot_shared.redis_client (not a services.redis_service_manager
+        # module attribute), so the patch target must be the source module.
         mock_client = AsyncMock()
         mock_client.ping = AsyncMock()
         with patch(
-            "services.redis_service_manager.get_redis_client",
-            return_value=mock_client,
+            "autobot_shared.redis_client.get_async_redis_client",
+            AsyncMock(return_value=mock_client),
         ):
             connected, response_ms = await manager._check_redis_connectivity()
         assert connected is True
@@ -196,8 +204,8 @@ class TestCheckRedisConnectivity:
         mock_client = AsyncMock()
         mock_client.ping = AsyncMock(side_effect=Exception("connection refused"))
         with patch(
-            "services.redis_service_manager.get_redis_client",
-            return_value=mock_client,
+            "autobot_shared.redis_client.get_async_redis_client",
+            AsyncMock(return_value=mock_client),
         ):
             connected, response_ms = await manager._check_redis_connectivity()
         assert connected is False
