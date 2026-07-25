@@ -518,8 +518,10 @@ class TestProcessFilesParallel:
         from api.codebase_analytics.scanner import _process_files_parallel
 
         # Use actual files from the project
-        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
-        test_files = list(project_root.glob("backend/api/codebase_analytics/*.py"))[:3]
+        # This test file lives in codebase_analytics/, so its own directory is a
+        # guaranteed source of real .py files to exercise the parallel path (#12392).
+        project_root = Path(__file__).resolve().parent
+        test_files = list(project_root.glob("*.py"))[:3]
 
         if not test_files:
             pytest.skip("No test files found")
@@ -542,8 +544,8 @@ class TestAnalyzeSingleFile:
         """Test _analyze_single_file returns FileAnalysisResult."""
         from api.codebase_analytics.scanner import _analyze_single_file
 
-        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
-        test_file = project_root / "backend" / "api" / "codebase_analytics" / "types.py"
+        project_root = Path(__file__).resolve().parent
+        test_file = project_root / "types.py"
 
         if not test_file.exists():
             pytest.skip("Test file not found")
@@ -563,7 +565,7 @@ class TestAnalyzeSingleFile:
         """Test nonexistent file returns base result without processing."""
         from api.codebase_analytics.scanner import _analyze_single_file
 
-        project_root = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}")
+        project_root = Path(__file__).resolve().parent
         fake_file = project_root / "nonexistent_file_12345.py"
 
         result = await _analyze_single_file(
