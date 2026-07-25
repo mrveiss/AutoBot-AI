@@ -72,9 +72,8 @@
 # actual fetch call itself. Matches the "base-URL constants and cache-key
 # maps" false-positive class documented in the #12326 comment thread.
 /api/user/profile
-# Real WebSocket handlers the audit's WS-route enumeration doesn't yet resolve
-# (sub-router parametrized WS routes) — wired to real handlers, not dead. Tracked
-# for enumeration improvement in #12432.
-/api/advanced-control/ws/desktop/{p}
-/api/advanced-control/ws/monitoring
-/api/overseer/ws/{p}
+# #12432: the 3 sub-router parametrized WS routes previously baselined here
+# (advanced-control/ws/monitoring, advanced-control/ws/desktop/{p},
+# overseer/ws/{p}) now resolve correctly — the WS enumeration walks
+# registry-configured (data-driven config-tuple) mount prefixes, not just
+# literal include_router(prefix=...) calls — and were removed from this file.

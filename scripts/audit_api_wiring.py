@@ -194,6 +194,50 @@ def backend_paths_from_openapi(src: str) -> set[str]:
 
 
 ROUTER_PREFIX_RE = re.compile(r"APIRouter\([^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S)
+# #12432: feature/core routers are mounted via *data-driven config tuples* in
+# initialization/router_registry/*.py — e.g.
+#   ("api.advanced_control", "/advanced-control", ["advanced-control"], "advanced_control")
+# in feature_routers.py, or
+#   (overseer_router, "/overseer", ["overseer", "agent"], "overseer")
+# + a top-level ``from api.overseer_handlers import router as overseer_router``
+# in core_routers.py — never a literal ``include_router(prefix=...)`` call
+# (app_factory.py does that generically: ``prefix=f"/api{prefix}"``), so
+# INCLUDE_ROUTER_RE never sees these prefixes at all. Without resolving them,
+# a sub-router's routes (including websocket ones) get NO prefix, not merely
+# the wrong one — e.g. advanced_control.py's ``/ws/monitoring`` never becomes
+# ``/advanced-control/ws/monitoring``.
+ROUTER_CONFIG_ENTRY_RE = re.compile(
+    r"\(\s*(?:[\'\"](?P<mod>api(?:\.\w+)+)[\'\"]|(?P<var>[A-Za-z_]\w*))"
+    r"\s*,\s*(?:[\'\"]router[\'\"]\s*,\s*)?[\'\"](?P<prefix>[^\'\"]*)[\'\"]\s*,\s*\["
+)
+ROUTER_IMPORT_ALIAS_RE = re.compile(r"from\s+(api(?:\.\w+)+)\s+import\s+router\s+as\s+(\w+)")
+
+
+def _registry_module_prefixes(root: Path) -> dict[str, str]:
+    """Map ``api/<module>.py`` -> its registry-configured mount prefix (#12432).
+
+    Scans ``initialization/router_registry/*.py`` for the config-tuple
+    patterns described above, resolving variable-alias entries (core_routers.py
+    style) via their ``from api.X import router as X_router`` import line.
+    Returns {} for backends (e.g. autobot-slm-backend) with no such directory.
+    """
+    registry_dir = root / "initialization" / "router_registry"
+    if not registry_dir.is_dir():
+        return {}
+    alias_to_module: dict[str, str] = {}
+    entries: list[tuple[str, str]] = []
+    for py in registry_dir.glob("*.py"):
+        txt = py.read_text(encoding="utf-8", errors="ignore")
+        alias_to_module.update({alias: mod for mod, alias in ROUTER_IMPORT_ALIAS_RE.findall(txt)})
+        entries.extend(
+            (m.group("mod") or m.group("var"), m.group("prefix")) for m in ROUTER_CONFIG_ENTRY_RE.finditer(txt)
+        )
+    module_prefix: dict[str, str] = {}
+    for mod_or_var, prefix in entries:
+        mod = mod_or_var if mod_or_var.startswith("api.") else alias_to_module.get(mod_or_var)
+        if mod:
+            module_prefix[mod.replace(".", "/") + ".py"] = prefix.rstrip("/")
+    return module_prefix
 
 
 def _scan_route_decorators(
@@ -222,18 +266,27 @@ def _scan_route_decorators(
 
 
 def _combine_prefixed_paths(
-    raw_routes: dict[str, list[str]], module_prefix: dict[str, str], prefixes: set[str]
+    raw_routes: dict[str, list[str]],
+    module_prefix: dict[str, str],
+    prefixes: set[str],
+    registry_prefixes: dict[str, str] | None = None,
 ) -> set[str]:
-    """Combine each module's raw route strings with its own APIRouter prefix
-    and every known mount prefix (loose — mount-prefix combos aren't scoped
-    per-module, matching the pre-existing heuristic)."""
+    """Combine each module's raw route strings with its own APIRouter prefix,
+    its registry-resolved mount prefix if any (#12432 — precise, per-module),
+    and every known literal mount prefix (loose — mount-prefix combos aren't
+    scoped per-module, matching the pre-existing heuristic)."""
     paths: set[str] = set()
+    registry_prefixes = registry_prefixes or {}
     for sp, routes in raw_routes.items():
         own = module_prefix.get(sp, "")
+        reg = next((p for suffix, p in registry_prefixes.items() if sp.endswith("/" + suffix)), None)
         for r in routes:
             base = own + ("" if (r.startswith("/") or not r) else "/") + r
-            for candidate in {r, base}:
-                paths.add(norm_path(candidate) if candidate else norm_path(own or "/"))
+            candidates = {r, base}
+            if reg is not None:
+                candidates.add(reg + ("" if (r.startswith("/") or not r) else "/") + r)
+            for candidate in candidates:
+                paths.add(norm_path(candidate) if candidate else norm_path(own or reg or "/"))
                 for pre in prefixes:
                     paths.add(norm_path(pre + (candidate if candidate.startswith("/")
                                                else "/" + candidate if candidate else "")))
@@ -244,11 +297,15 @@ def backend_paths_static(root: Path = BACKEND) -> tuple[set[str], dict[str, list
     """Best-effort static scan. Returns (normalized paths, module->raw routes)."""
     raw, module_prefix, prefixes = _scan_route_decorators(root)
     raw_routes = {sp: [path for _method, path in entries] for sp, entries in raw.items()}
-    return _combine_prefixed_paths(raw_routes, module_prefix, prefixes), raw_routes
+    registry_prefixes = _registry_module_prefixes(root)
+    return (
+        _combine_prefixed_paths(raw_routes, module_prefix, prefixes, registry_prefixes),
+        raw_routes,
+    )
 
 
 def static_websocket_paths(root: Path) -> set[str]:
-    """Static-scan websocket-only paths under `root` (#12381).
+    """Static-scan websocket-only paths under `root` (#12381, #12432).
 
     Runtime WebSocketRoute introspection of a live app is unreliable across
     FastAPI versions: fastapi>=0.139's lazy ``_IncludedRouter`` wrapping means
@@ -259,7 +316,10 @@ def static_websocket_paths(root: Path) -> set[str]:
     prefix-combination algorithm as backend_paths_static() — is both simpler
     and version-independent. No `add_websocket_route()`/programmatic
     registrations exist in this codebase (verified by grep), so decorator
-    scanning has full coverage.
+    scanning has full coverage. #12432: also resolves data-driven registry
+    mount prefixes (see _registry_module_prefixes) so sub-router WS routes
+    (advanced_control.py, overseer_handlers.py, ...) get their real prefix
+    instead of none at all.
     """
     raw, module_prefix, prefixes = _scan_route_decorators(root)
     ws_routes = {
@@ -267,7 +327,8 @@ def static_websocket_paths(root: Path) -> set[str]:
         for sp, entries in raw.items()
     }
     ws_routes = {sp: paths for sp, paths in ws_routes.items() if paths}
-    return _combine_prefixed_paths(ws_routes, module_prefix, prefixes)
+    registry_prefixes = _registry_module_prefixes(root)
+    return _combine_prefixed_paths(ws_routes, module_prefix, prefixes, registry_prefixes)
 
 
 def _module_served_by_openapi(txt: str, backend: set[str]) -> bool:
