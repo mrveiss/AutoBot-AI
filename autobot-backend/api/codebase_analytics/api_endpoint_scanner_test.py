@@ -26,9 +26,7 @@ class TestProjectRootFallbackUsesResolveProjectRoot:
         deployed_root = tmp_path / "opt_autobot" / "code_source"
         wrong_root = tmp_path / "opt_autobot"
 
-        with patch.object(
-            scanner_mod, "resolve_project_root", return_value=str(deployed_root)
-        ):
+        with patch.object(scanner_mod, "resolve_project_root", return_value=str(deployed_root)):
             backend_scanner = scanner_mod.BackendEndpointScanner(project_root=None)
 
         assert backend_scanner.project_root == deployed_root
@@ -38,9 +36,7 @@ class TestProjectRootFallbackUsesResolveProjectRoot:
         deployed_root = tmp_path / "opt_autobot" / "code_source"
         wrong_root = tmp_path / "opt_autobot"
 
-        with patch.object(
-            scanner_mod, "resolve_project_root", return_value=str(deployed_root)
-        ):
+        with patch.object(scanner_mod, "resolve_project_root", return_value=str(deployed_root)):
             frontend_scanner = scanner_mod.FrontendAPICallScanner(project_root=None)
 
         assert frontend_scanner.project_root == deployed_root
@@ -50,9 +46,7 @@ class TestProjectRootFallbackUsesResolveProjectRoot:
         deployed_root = tmp_path / "opt_autobot" / "code_source"
         wrong_root = tmp_path / "opt_autobot"
 
-        with patch.object(
-            scanner_mod, "resolve_project_root", return_value=str(deployed_root)
-        ):
+        with patch.object(scanner_mod, "resolve_project_root", return_value=str(deployed_root)):
             checker = scanner_mod.APIEndpointChecker(project_root=None)
 
         assert checker.project_root == deployed_root
@@ -63,9 +57,7 @@ class TestProjectRootFallbackUsesResolveProjectRoot:
         be consulted at all (the resolved branch is untouched)."""
         explicit_root = tmp_path / "explicit"
 
-        with patch.object(
-            scanner_mod, "resolve_project_root", side_effect=AssertionError("should not be called")
-        ):
+        with patch.object(scanner_mod, "resolve_project_root", side_effect=AssertionError("should not be called")):
             backend_scanner = scanner_mod.BackendEndpointScanner(project_root=explicit_root)
 
         assert backend_scanner.project_root == explicit_root
