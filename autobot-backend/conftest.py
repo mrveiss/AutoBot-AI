@@ -492,6 +492,39 @@ if "llm_shared" not in sys.modules:
         if hasattr(_hw_mod, "TORCH_AVAILABLE"):
             _llm_stub.TORCH_AVAILABLE = _hw_mod.TORCH_AVAILABLE  # type: ignore[attr-defined]
 
+    # #12438: Real-load llm_shared.pricing — auto-refresh pricing sources (GH#6480).
+    # Self-contained aside from autobot_shared.logging_manager (already patched)
+    # and autobot_shared.redis_client (real module); the llm_shared stub's empty
+    # __path__ otherwise breaks every provider-source import and its colocated
+    # services/pricing_refresh_test.py. Dependency order: sources → redis_store
+    # → per-provider sources → package __init__.
+    _real_load_and_bind("llm_shared.pricing.sources", _llm_root / "pricing" / "sources.py")
+    _real_load_and_bind("llm_shared.pricing.redis_store", _llm_root / "pricing" / "redis_store.py")
+    _real_load_and_bind("llm_shared.pricing.anthropic_source", _llm_root / "pricing" / "anthropic_source.py")
+    _real_load_and_bind("llm_shared.pricing.openai_source", _llm_root / "pricing" / "openai_source.py")
+    _real_load_and_bind("llm_shared.pricing.google_source", _llm_root / "pricing" / "google_source.py")
+    _real_load_and_bind("llm_shared.pricing.deepseek_source", _llm_root / "pricing" / "deepseek_source.py")
+    _real_load_and_bind("llm_shared.pricing.vertexai_source", _llm_root / "pricing" / "vertexai_source.py")
+    _real_load_and_bind("llm_shared.pricing", _llm_root / "pricing" / "__init__.py")
+    # The submodule real-loads above ran before "llm_shared.pricing" existed in
+    # sys.modules, so _real_load_and_bind's own parent-bind was a no-op for them
+    # (and __init__.py's "from llm_shared.pricing.X import Y" doesn't re-trigger
+    # it either, since those submodules were already sys.modules-cached). Bind
+    # them explicitly now so patch("llm_shared.pricing.redis_store.X") resolves
+    # via getattr(llm_shared.pricing, "redis_store") instead of raising
+    # AttributeError.
+    _pricing_pkg = sys.modules["llm_shared.pricing"]
+    for _pricing_sub in (
+        "sources",
+        "redis_store",
+        "anthropic_source",
+        "openai_source",
+        "google_source",
+        "deepseek_source",
+        "vertexai_source",
+    ):
+        setattr(_pricing_pkg, _pricing_sub, sys.modules[f"llm_shared.pricing.{_pricing_sub}"])
+
     # llm_shared.cache — provide symbols consumed by services.llm_service
     _cache_stub = sys.modules["llm_shared.cache"]
     _cache_stub.CachedResponse = MagicMock()  # type: ignore[attr-defined]

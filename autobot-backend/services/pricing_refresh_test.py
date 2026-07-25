@@ -187,7 +187,7 @@ async def test_refresh_writes_new_pricing_to_redis():
     mock_store.set_many = fake_set_many
     mock_store.set_refresh_status = fake_set_status
 
-    with patch("services.pricing_refresh.PricingRedisStore", return_value=mock_store):
+    with patch("llm_shared.pricing.redis_store.PricingRedisStore", return_value=mock_store):
         summary = await _refresh_all()
 
     assert "anthropic" in summary
@@ -229,30 +229,21 @@ async def test_cost_tracker_uses_redis_pricing_when_available():
     # 1M input tokens + 1M output tokens at cheap price = 0.01 + 0.02 = 0.03
     # Hardcoded would give 15.00 + 75.00 = 90.00
     with patch.object(tracker, "_store_usage_record", AsyncMock(return_value=True)):
-        cost = None
-
-        async def capture_record(*args, **kwargs):
-            nonlocal cost
-            # intercept at the record-creation step
-            record = await tracker._build_and_persist_record(
-                "anthropic",
-                "claude-opus-4-0",
-                1_000_000,
-                1_000_000,
-                None,
-                None,
-                None,
-                None,
-                None,
-                True,
-                None,
-                None,
-            )
-            cost = record.cost_usd
-            return True
-
-        with patch.object(tracker, "_store_usage_record", capture_record):
-            await capture_record()
+        record = await tracker._build_and_persist_record(
+            "anthropic",
+            "claude-opus-4-0",
+            1_000_000,
+            1_000_000,
+            None,
+            None,
+            None,
+            None,
+            None,
+            True,
+            None,
+            None,
+        )
+        cost = record.cost_usd
 
     assert cost is not None
     assert abs(cost - 0.03) < 1e-5, f"Expected 0.03 but got {cost}"
