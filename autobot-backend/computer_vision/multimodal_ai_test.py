@@ -73,8 +73,8 @@ async def test_multimodal_processor():
     text_input = ModalInput(
         input_id="test_text_1",
         modality_type=ModalityType.TEXT,
-        processing_intent=ProcessingIntent.CONTENT_GENERATION,
-        content="Generate a summary of AutoBot's capabilities",
+        intent=ProcessingIntent.CONTENT_GENERATION,
+        data="Generate a summary of AutoBot's capabilities",
         metadata={"source": "test"},
         timestamp=asyncio.get_running_loop().time(),
     )
@@ -98,8 +98,8 @@ async def test_multimodal_processor():
         image_input = ModalInput(
             input_id="test_image_1",
             modality_type=ModalityType.IMAGE,
-            processing_intent=ProcessingIntent.SCREEN_ANALYSIS,
-            content=test_image_bytes,
+            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            data=test_image_bytes,
             metadata={"source": "synthetic_test"},
             timestamp=asyncio.get_running_loop().time(),
         )
@@ -117,8 +117,8 @@ async def test_multimodal_processor():
         combined_input = ModalInput(
             input_id="test_combined_1",
             modality_type=ModalityType.COMBINED,
-            processing_intent=ProcessingIntent.DECISION_MAKING,
-            content={
+            intent=ProcessingIntent.DECISION_MAKING,
+            data={
                 "text": "Analyze this screen for automation opportunities",
                 "image": base64.b64encode(test_image_bytes).decode("utf-8"),
             },
@@ -373,8 +373,8 @@ async def test_integration():
         modal_input = ModalInput(
             input_id="integration_test_1",
             modality_type=ModalityType.IMAGE,
-            processing_intent=ProcessingIntent.AUTOMATION_TASK,
-            content=test_image_bytes,
+            intent=ProcessingIntent.AUTOMATION_TASK,
+            data=test_image_bytes,
             metadata={"integration_test": True},
             timestamp=asyncio.get_running_loop().time(),
         )
