@@ -584,6 +584,19 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     return stale
 
 
+def _invalidate_stale_components_cache() -> None:
+    """Bust the stale_components cache (#12451).
+
+    POST /code-sync/pull advances code_source/local_version but never told
+    this TTL cache, so /status could keep serving a pre-pull drift snapshot
+    ("up to date") for up to _STALE_COMPONENTS_TTL_SECONDS right after an
+    operator pull actually drifted a component. Resetting ts (not eagerly
+    recomputing) keeps pull() fast; the next /status call pays the
+    recompute cost exactly once — no thundering herd on repeated polls.
+    """
+    _stale_components_cache["ts"] = -_STALE_COMPONENTS_TTL_SECONDS - 1.0
+
+
 @router.get("/status", response_model=CodeSyncStatusResponse)
 async def get_sync_status(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -3857,6 +3870,7 @@ async def pull_from_source(
     if success and commit:
         await _update_version_setting(db, commit)
         await db.commit()
+        _invalidate_stale_components_cache()
 
     return {
         "success": success,
