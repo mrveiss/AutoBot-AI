@@ -58,7 +58,17 @@ class KnownProbes(str, enum.Enum):
 # component cannot hold the aggregator hostage.
 _PROBE_TIMEOUT_S = 2.0
 
-HealthStatus = Literal["ok", "degraded", "down"]
+# Issue #12459: "ok"/"degraded"/"down" alone cannot express an EXPECTED
+# absence (single-node topology, dev-only tooling intentionally off,
+# lazy singleton not yet touched). Forcing those into "degraded"/"down"
+# trains operators to ignore a noisy health page and can mask a real
+# failure. Two additional states are excluded from the aggregate rollup
+# (see ``_aggregate_status``) but are still visible per-component:
+#   not_applicable — the check genuinely does not apply here (single-node
+#                    multi-VM config, a dev-only feature intentionally off).
+#   idle           — a lazy singleton that will initialize on first use;
+#                    "not yet used" is not a failure.
+HealthStatus = Literal["ok", "degraded", "down", "not_applicable", "idle"]
 
 
 class ComponentHealth(BaseModel):
@@ -144,6 +154,9 @@ async def _run_probe(name: str, fn: ProbeFn, request: Request | None) -> Compone
 
 
 def _aggregate_status(components: list[ComponentHealth]) -> HealthStatus:
+    # Issue #12459: "not_applicable" and "idle" are deliberately excluded from
+    # both branches below — an expected-absent or not-yet-used component must
+    # not drag a healthy single-node deployment's overall status down.
     if any(c.status == "down" for c in components):
         return "down"
     if any(c.status == "degraded" for c in components):
