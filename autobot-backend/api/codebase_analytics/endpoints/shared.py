@@ -376,7 +376,7 @@ def filter_problems_by_file_existence(
     if not problems:
         return problems
 
-    base = Path(root_path) if root_path else get_project_root()
+    base = Path(root_path) if root_path else Path(resolve_project_root())
 
     validated: list[dict] = []
     dropped = 0

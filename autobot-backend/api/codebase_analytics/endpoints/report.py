@@ -1550,7 +1550,12 @@ async def _get_pattern_analysis(
         PatternAnalysisReport or None if analysis fails
     """
     try:
-        if project_root and Path(project_root).resolve() != get_project_root().resolve():
+        # #12399: compare against resolve_project_root() (deployed-layout-aware),
+        # matching the scan_root fallback — otherwise in the deployed layout an
+        # AutoBot self-report (project_root == code_source) fails this identity
+        # check and scans the full repo instead of PATH.BACKEND_DIR, dropping the
+        # #2655 timeout optimization.
+        if project_root and Path(project_root).resolve() != Path(resolve_project_root()).resolve():
             scan_target = str(project_root)
         else:
             scan_target = str(PATH.BACKEND_DIR)
