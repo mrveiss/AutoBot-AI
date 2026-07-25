@@ -1077,7 +1077,10 @@ class BugPredictor(_BaseClass):
             and time.monotonic() - self._bug_history_cache_time > _BUG_HISTORY_CACHE_TTL
         ):
             self._bug_history_cache = None
-            self._build_bug_history_cache()
+            # Issue #12406: _build_bug_history_cache shells out to `git log`
+            # (subprocess.run) -- offload so this reachable-again async path
+            # doesn't block the event loop on cache-miss.
+            await asyncio.to_thread(self._build_bug_history_cache)
 
         bug_patterns = self._collect_bug_patterns_from_cache()
         if not bug_patterns:
@@ -1219,8 +1222,13 @@ class BugPredictor(_BaseClass):
         Returns:
             FileRiskAssessment with complete risk analysis
         """
-        # Get base assessment using synchronous method
-        assessment = self.analyze_file(file_path)
+        # Issue #12406: was a direct sync call blocking the event loop --
+        # analyze_file() reads file contents and (on cache miss) shells out to
+        # `git log` (see _build_bug_history_cache/_build_change_frequency_cache).
+        # Offload to a thread so analyze_directory_async is genuinely safe to
+        # await directly from an async request handler (mirrors the #7467
+        # to_thread fix for path.read_text just below in this file).
+        assessment = await asyncio.to_thread(self.analyze_file, file_path)
 
         # Add semantic analysis if enabled
         if self.use_semantic_analysis:
@@ -1315,7 +1323,10 @@ class BugPredictor(_BaseClass):
 
         await self._learn_bug_patterns_async()
 
-        all_files = list(root.rglob(pattern))
+        # #12406: offload the recursive tree walk too — with an unlimited file
+        # limit rglob() traverses the whole source tree, and this runs in an
+        # async request handler, so keep it off the event loop.
+        all_files = await asyncio.to_thread(lambda: list(root.rglob(pattern)))
         total_files = len(all_files)
         files = all_files[:limit] if limit > 0 else all_files
 
