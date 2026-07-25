@@ -69,7 +69,11 @@ async def upload_recording(
     # GH#12331: enforce MAX_FILE_SIZE during streaming (never buffer the whole
     # upload in memory) — abort and delete the partial file the instant the
     # cumulative byte count crosses the cap, regardless of proxy limits.
+    # GH#12417: `finally` (not `except Exception`) so a client disconnect mid-upload
+    # — which raises asyncio.CancelledError, a BaseException, not an Exception —
+    # still triggers cleanup instead of orphaning the partial file.
     total_bytes = 0
+    upload_complete = False
     try:
         async with aiofiles.open(dest, "wb") as f:
             while chunk := await file.read(_CHUNK_SIZE):
@@ -80,9 +84,10 @@ async def upload_recording(
                         f"File exceeds maximum upload size of {MAX_FILE_SIZE // (1024 * 1024)}MB",
                     )
                 await f.write(chunk)
-    except Exception:
-        dest.unlink(missing_ok=True)
-        raise
+        upload_complete = True
+    finally:
+        if not upload_complete:
+            dest.unlink(missing_ok=True)
     # The file is on disk before the DB row exists; unlink the partial upload
     # if the insert fails so a rejected recording never leaks an orphan (GH#12310).
     try:

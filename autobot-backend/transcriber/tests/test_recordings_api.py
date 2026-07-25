@@ -3,7 +3,9 @@
 # autobot-backend/transcriber/tests/test_recordings_api.py
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
+import asyncio
 import io
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,7 +14,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from transcriber.database import Database
-from transcriber.deps import get_db
+from transcriber.deps import DEFAULT_USER, get_db
 from transcriber.routes.projects import router as projects_router
 from transcriber.routes.recordings import router as recordings_router
 
@@ -185,6 +187,43 @@ async def test_upload_recording_at_limit_succeeds(client, tmp_path, monkeypatch)
     files = list(upload_dir.iterdir())
     assert len(files) == 1
     assert len(files[0].read_bytes()) == 104
+
+
+@pytest.mark.asyncio
+async def test_upload_recording_cancelled_mid_write_cleans_up(tmp_path):
+    """GH#12417: a client disconnect mid-upload raises asyncio.CancelledError,
+    a BaseException (not Exception) — the partial file must still be unlinked
+    and the CancelledError must still propagate (never swallowed)."""
+    import transcriber.routes.recordings as rec_mod
+
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    db = Database(str(tmp_path / "test.db"))
+    await db.connect()
+    pid = await db.create_project("P", "", user_id=DEFAULT_USER)
+
+    class FlakyFile:
+        filename = "cancelled.wav"
+
+        def __init__(self):
+            self._reads = 0
+
+        async def read(self, n):
+            self._reads += 1
+            if self._reads == 1:
+                return b"RIFF" + b"\x00" * 10
+            raise asyncio.CancelledError()
+
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(transcriber_upload_dir=str(upload_dir))),
+        state=SimpleNamespace(),
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await rec_mod.upload_recording(pid, request, FlakyFile(), db)
+
+    # No orphan left behind — cleanup ran despite the BaseException.
+    assert list(upload_dir.iterdir()) == []
 
 
 @pytest.mark.asyncio
