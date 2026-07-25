@@ -11,7 +11,9 @@ Note: Deployment tasks removed - now managed by SLM server (#729)
 System tasks (RBAC, updates) maintained as stubs for backward compatibility.
 """
 
+from .analytics_cache_population import populate_all_caches
 from .analytics_tasks import (
+    run_anti_pattern_analysis,
     run_bug_prediction_analysis,
     run_dashboard_analysis,
     run_dependency_analysis,
@@ -67,6 +69,9 @@ __all__ = [
     "run_bug_prediction_analysis",
     "run_security_analysis",
     "run_dashboard_analysis",
+    # anti-pattern background analysis + daily cache population (Issue #12365)
+    "run_anti_pattern_analysis",
+    "populate_all_caches",
     # workspace cleanup (GH#6471)
     "cleanup_stale_workspaces",
     # memory tasks

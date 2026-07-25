@@ -21450,6 +21450,9 @@ export interface paths {
          *     Issue #665: Refactored to use extracted helpers.
          *     Issue #12384: Scopes the query to source_id so one source's summary never
          *     aggregates another source's (or AutoBot's own) stored patterns.
+         *     Issue #12365: A store-read failure (e.g. ChromaDB unavailable) degrades to a
+         *     graceful no_data 200 instead of a 500, matching the sibling analytics
+         *     /cached endpoints -- the panel can show "no data yet" instead of erroring.
          *     Returns summary data from stored patterns, not requiring full analysis.
          */
         get: operations["get_cached_pattern_summary_api_analytics_codebase_patterns_cached_summary_get"];
@@ -21476,6 +21479,8 @@ export interface paths {
          *     Issue #665: Refactored to use extracted helpers.
          *     Issue #12384: Always scopes the query to source_id (default sentinel when
          *     None) so one source's cached patterns never include another source's.
+         *     Issue #12365: A store-read failure degrades to a graceful no_data 200
+         *     instead of a 500, matching the sibling analytics /cached endpoints.
          *     Supports filtering by pattern_type and severity, with pagination.
          */
         get: operations["get_cached_patterns_api_analytics_codebase_patterns_cached_patterns_get"];

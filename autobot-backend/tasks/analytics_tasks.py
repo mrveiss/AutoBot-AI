@@ -337,6 +337,35 @@ def run_security_analysis(self, path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 6b. Anti-pattern detection (api/anti_pattern.py) — Issue #12365
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(bind=True, name="analytics.run_anti_pattern_analysis")
+def run_anti_pattern_analysis(self, root_path: str) -> dict:
+    """Celery wrapper for anti-pattern background analysis (#12365).
+
+    Unlike the other analytics tasks above, ``AntiPatternDetector.analyze()``
+    writes its own result directly into its Redis cache (keyed
+    ``anti_pattern_analysis:latest``) as part of the call -- no separate
+    store-write step is needed here, matching what ``POST /api/anti-pattern/
+    analyze`` already does synchronously today.
+    """
+    started = datetime.now(tz=timezone.utc).isoformat()
+    _progress(self, "Starting anti-pattern analysis", 10.0, started)
+
+    async def _work():
+        from api.anti_pattern import _get_detector
+
+        detector = await _get_detector()
+        _progress(self, "Analyzing codebase", 40.0, started)
+        report = await detector.analyze(root_path=root_path)
+        return report.to_dict()
+
+    return _wrap(_run_async(_work()), started)
+
+
+# ---------------------------------------------------------------------------
 # 7. Dashboard overview (api/analytics.py)
 # ---------------------------------------------------------------------------
 

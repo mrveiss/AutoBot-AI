@@ -470,9 +470,11 @@ def _build_empty_pattern_summary() -> Dict[str, Any]:
     Build empty pattern summary response.
 
     Issue #665: Extracted from get_cached_pattern_summary to reduce duplication.
+    Issue #12365: status="no_data" matches the sibling analytics /cached convention
+    (bug-prediction, dependencies, duplicates, import-tree, security/score).
     """
     return {
-        "status": "empty",
+        "status": "no_data",
         "total_patterns": 0,
         "severity_distribution": {},
         "pattern_type_distribution": {},
@@ -536,6 +538,9 @@ async def get_cached_pattern_summary(
     Issue #665: Refactored to use extracted helpers.
     Issue #12384: Scopes the query to source_id so one source's summary never
     aggregates another source's (or AutoBot's own) stored patterns.
+    Issue #12365: A store-read failure (e.g. ChromaDB unavailable) degrades to a
+    graceful no_data 200 instead of a 500, matching the sibling analytics
+    /cached endpoints -- the panel can show "no data yet" instead of erroring.
     Returns summary data from stored patterns, not requiring full analysis.
     """
     try:
@@ -574,8 +579,8 @@ async def get_cached_pattern_summary(
         }
 
     except Exception as e:
-        logger.error("Cached summary failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.warning("Cached pattern summary read failed, returning no_data (#12365): %s", e)
+        return _build_empty_pattern_summary()
 
 
 def _build_empty_patterns_response() -> Dict[str, Any]:
@@ -583,12 +588,14 @@ def _build_empty_patterns_response() -> Dict[str, Any]:
     Build empty patterns response for when no data exists.
 
     Issue #665: Extracted from get_cached_patterns to reduce duplication.
+    Issue #12365: status="no_data" matches the sibling analytics /cached
+    convention (bug-prediction, dependencies, duplicates, import-tree, anti-pattern).
 
     Returns:
         Empty patterns response dictionary.
     """
     return {
-        "status": "empty",
+        "status": "no_data",
         "patterns": [],
         "total": 0,
     }
@@ -675,6 +682,8 @@ async def get_cached_patterns(
     Issue #665: Refactored to use extracted helpers.
     Issue #12384: Always scopes the query to source_id (default sentinel when
     None) so one source's cached patterns never include another source's.
+    Issue #12365: A store-read failure degrades to a graceful no_data 200
+    instead of a 500, matching the sibling analytics /cached endpoints.
     Supports filtering by pattern_type and severity, with pagination.
     """
     try:
@@ -719,8 +728,8 @@ async def get_cached_patterns(
         }
 
     except Exception as e:
-        logger.error("Cached patterns fetch failed: %s", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.warning("Cached patterns read failed, returning no_data (#12365): %s", e)
+        return _build_empty_patterns_response()
 
 
 @router.post("/patterns/storage/clear")
