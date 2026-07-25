@@ -560,7 +560,7 @@ async def test_robots_cache_cleared_when_max_reached(monkeypatch):
 
     # After clear + add new, cache should contain exactly 1 entry.
     assert len(guard_mod._robots_cache) == 1
-    assert "http://new-domain.com" in guard_mod._robots_cache  # codeql[py/incomplete-url-substring-sanitization]
+    assert "http://new-domain.com" in guard_mod._robots_cache
 
 
 @pytest.mark.asyncio

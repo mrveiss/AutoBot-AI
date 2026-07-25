@@ -913,7 +913,7 @@ class TriggerService:
                 f"{_SECRET_PREFIX}{trigger_id}",
                 _TRIGGER_TTL_SECONDS,
                 stored,
-            )  # codeql[py/clear-text-storage-sensitive-data]
+            )
         except Exception as exc:
             logger.warning("_store_webhook_secret failed for %s: %s", trigger_id, exc)
 

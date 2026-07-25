@@ -99,19 +99,16 @@ class AuthenticationMiddleware:
             return secret
 
         # 3. Generate and store a secure random secret
-        logger.warning(  # codeql[py/clear-text-logging-sensitive-data]
-            "No secure JWT secret found. Generating secure random secret."
-        )
+        logger.warning("No secure JWT secret found. Generating secure random secret.")
         secure_secret = secrets.token_urlsafe(64)  # 512-bit secret
 
         # Store in configuration for consistency across restarts
         try:
             # Update the config in memory using the correct method
             config.set_nested("security_config.jwt_secret", secure_secret)
-            logger.info("Generated and stored secure JWT secret")  # noqa: codeql[py/clear-text-logging-sensitive-data]
+            logger.info("Generated and stored secure JWT secret")
             return secure_secret
         except Exception as e:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to store JWT secret in config: %s", e)
             # Still return the secure secret even if we can't store it
             return secure_secret

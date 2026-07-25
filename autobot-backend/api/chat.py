@@ -2453,7 +2453,7 @@ async def translate_text(
         },
     )
     result = await agent.handle_translate(req)
-    return JSONResponse(content=result, media_type="application/json; charset=utf-8")  # codeql[py/stack-trace-exposure]
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")
 
 
 @router.post("/detect-language", response_model=DetectLanguageData)
@@ -2478,7 +2478,7 @@ async def detect_language(
         payload={"text": body.text},
     )
     result = await agent.handle_detect_language(req)
-    return JSONResponse(content=result, media_type="application/json; charset=utf-8")  # codeql[py/stack-trace-exposure]
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")
 
 
 @router.post("/chat/summarize", response_model=DataResponse[Dict[str, Any]])

@@ -1138,12 +1138,12 @@ def _validate_evolution_repo_path(repo_path_str: str):
             status="error",
             message=f"Repository path not found: {repo_path_str}",
         )
-    if not (repo_path / ".git").exists():  # codeql[py/path-injection]
+    if not (repo_path / ".git").exists():
         return None, EvolutionAnalysisResponse(
             status="error",
             message=f"Not a git repository: {repo_path_str}",
         )
-    return repo_path, None  # codeql[py/path-injection]
+    return repo_path, None
 
 
 @router.post("/analyze", response_model=EvolutionAnalysisResponse)

@@ -126,7 +126,7 @@ class TestOktaEndSessionEndpoint:
     def test_okta_end_session_uses_domain(self):
         template = _get_template("okta", domain="example.okta.com")
         endpoint = template["end_session_endpoint"]
-        assert "example.okta.com" in endpoint  # codeql[py/incomplete-url-substring-sanitization]
+        assert "example.okta.com" in endpoint
         assert "/oauth2/v1/logout" in endpoint
 
 
@@ -138,7 +138,7 @@ class TestMicrosoftEntraEndSessionEndpoint:
     def test_entra_end_session_uses_common_tenant(self):
         template = _get_template("microsoft_entra", domain="common")
         url = template["end_session_endpoint"]
-        assert "login.microsoftonline.com" in url  # codeql[py/incomplete-url-substring-sanitization]
+        assert "login.microsoftonline.com" in url
         assert "common" in url
         assert "oauth2/v2.0/logout" in url
 

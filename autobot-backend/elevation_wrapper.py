@@ -170,7 +170,6 @@ class ElevationWrapper:
     async def _execute_normal(self, command: str) -> Dict:
         """Execute command without elevation"""
         try:
-            # codeql[py/command-line-injection]
             # by ElevationManager policy check before reaching this method.
             process = await asyncio.create_subprocess_shell(
                 command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE

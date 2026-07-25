@@ -81,7 +81,7 @@ if __name__ == "__main__":
         port = config.tls.backend_tls_port
         logger.info("🔒 TLS enabled - using HTTPS on port %s", port)
         logger.info("🔒 TLS cert: %s", ssl_certfile)
-        logger.info("🔒 TLS key: %s", ssl_keyfile)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("🔒 TLS key: %s", ssl_keyfile)
 
     # Log configuration
     logger.info("📡 Host: %s", host)

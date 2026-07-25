@@ -341,4 +341,4 @@ async def _track_secret_usage(
     db.add(usage)
     await db.commit()
 
-    logger.info("Tracked secret usage: activity=%s", activity_type)  # codeql[py/clear-text-logging-sensitive-data]
+    logger.info("Tracked secret usage: activity=%s", activity_type)

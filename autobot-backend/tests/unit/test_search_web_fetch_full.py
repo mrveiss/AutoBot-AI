@@ -186,7 +186,7 @@ class TestFormatFullSearchResults:
         ]
         output = _format_full_search_results("test query", entries)
         assert "Example" in output
-        assert "https://example.com" in output  # codeql[py/incomplete-url-substring-sanitization]
+        assert "https://example.com" in output
         assert "# Hello" in output
 
     def test_failed_entry_shows_fetch_error(self) -> None:

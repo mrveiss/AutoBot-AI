@@ -376,7 +376,7 @@ async def migrate_role(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Role '{role_name}' has no ansible_playbook configured",
         )
-    result = await run_role_full_procedure(role, migrate_req.target_node_id)  # codeql[py/stack-trace-exposure]
+    result = await run_role_full_procedure(role, migrate_req.target_node_id)
     if result.get("error") == "playbook_not_found":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

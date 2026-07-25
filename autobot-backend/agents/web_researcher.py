@@ -158,7 +158,7 @@ class CaptchaSolver:
     async def solve_recaptcha(self, site_key: str, page_url: str, invisible: bool = False) -> str | None:
         """Solve reCAPTCHA using solving service."""
         if not self.api_key:
-            logger.warning("No CAPTCHA API key configured")  # codeql[py/clear-text-logging-sensitive-data]
+            logger.warning("No CAPTCHA API key configured")
             return None
         try:
             if self.service == "2captcha":

@@ -259,7 +259,7 @@ class ExternalSkillImporter:
             await _run_git("checkout", ref, cwd=clone_dir)
         else:
             logger.info("Cloning %s (ref=%s) -> %s", url, ref, clone_dir)
-            # codeql[py/full-ssrf] SSRF mitigated: url validated by _validate_git_url() enforcing
+            # SSRF mitigated: url validated by _validate_git_url() enforcing
             # https/ssh scheme and blocking private IP ranges
             await _run_git("clone", "--depth=1", "--branch", ref, url, clone_dir)
 
@@ -328,7 +328,7 @@ class ExternalSkillImporter:
             # SSRF mitigated: _validate_catalog_url() enforces scheme+public host and
             # the connector pins the pre-resolved public IP (defeats DNS-rebind);
             # redirects disabled. codeql[py/full-ssrf] (#12278)
-            async with session.get(url, params=params, allow_redirects=False) as response:  # codeql[py/full-ssrf]
+            async with session.get(url, params=params, allow_redirects=False) as response:
                 if response.status != 200:
                     raise RuntimeError(f"Catalog fetch failed: HTTP {response.status} from {url}")
                 data = await response.json()

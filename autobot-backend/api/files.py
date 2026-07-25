@@ -1264,7 +1264,7 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="Path is not a directory")
     try:
-        entries = sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))  # codeql[py/path-injection]
+        entries = sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
         return {"files": [_entry_to_file_item(e) for e in entries]}
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -1291,6 +1291,6 @@ async def admin_read_file(path: str) -> dict:
     try:
         # #7467: was sync `target.read_text(...)` blocking the event loop.
         content = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
-        return {"content": content}  # codeql[py/path-injection]
+        return {"content": content}
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")

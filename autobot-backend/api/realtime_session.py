@@ -210,7 +210,7 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
         await telemetry.check_caps(session_id)
     except CapBreachError as exc:
         await telemetry.session_end(session_id=session_id, reason=exc.reason)
-        # codeql[py/stack-trace-exposure] CapBreachError carries an intentional, hardcoded
+        # CapBreachError carries an intentional, hardcoded
         # client-facing cap-breach notice (e.g. "session ended: N minute limit reached"), not a stack trace.
         return {"status": "cap_breach", "reason": exc.reason.value, "message": str(exc)}
     return {"status": "ok"}

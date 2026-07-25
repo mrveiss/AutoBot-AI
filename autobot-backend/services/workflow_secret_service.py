@@ -196,7 +196,6 @@ class WorkflowSecretService:
             updated_by=owner_id,
         )
         if updated:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.info("Workflow secret updated: name=%s owner=%s", name, owner_id)
         return updated
 
@@ -225,7 +224,6 @@ class WorkflowSecretService:
             deleted_by=owner_id,
         )
         if deleted:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.info("Workflow secret deleted: name=%s owner=%s", name, owner_id)
         return deleted
 

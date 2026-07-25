@@ -359,7 +359,7 @@ def get_architecture_family(
                 "Unknown model_type %r for model %r — falling back to pattern match. "
                 "Add an entry to _MODEL_TYPE_MAP or set architecture_family in llm_models.yaml.",
                 model_type,
-                model,  # codeql[py/clear-text-logging-sensitive-data]
+                model,
             )
 
     # 3. Pattern-match fallback
@@ -369,7 +369,7 @@ def get_architecture_family(
             logger.warning(
                 "architecture_family for model %r inferred from pattern %r → %r. "
                 "Set architecture_family explicitly in llm_models.yaml to suppress this warning.",
-                model,  # codeql[py/clear-text-logging-sensitive-data]
+                model,
                 pattern,
                 family,
             )

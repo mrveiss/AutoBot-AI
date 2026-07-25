@@ -372,7 +372,7 @@ async def share_secret_with_session(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error sharing secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.error("Error sharing secret: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to share secret",

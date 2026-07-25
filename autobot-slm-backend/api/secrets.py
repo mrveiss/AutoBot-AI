@@ -238,7 +238,7 @@ async def apply_secret(
             ),
         )
 
-    return await _run_apply_secrets(payload.key, dependent_roles, target_node_ids)  # codeql[py/stack-trace-exposure]
+    return await _run_apply_secrets(payload.key, dependent_roles, target_node_ids)
 
 
 async def _find_node_ids_for_roles(db: AsyncSession, role_names: List[str]) -> List[str]:
