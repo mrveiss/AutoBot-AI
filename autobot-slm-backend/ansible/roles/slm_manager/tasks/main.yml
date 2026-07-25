@@ -526,9 +526,12 @@
       ansible.builtin.assert:
         that:
           - _slm_stale_dupes | length == 0
+        # Render KEYS ONLY — items are JSON {key,value} strings whose value is
+        # the full postgresql+asyncpg URL (contains the DB password). Never emit
+        # the value to Ansible stdout/logs (#12297 security review).
         fail_msg: >-
-          slm-secrets.env still carries DB-URL(s) that duplicate the role-managed
-          db-credentials.env value (stale landmine not stripped): {{ _slm_stale_dupes }}
+          slm-secrets.env still carries stale duplicate DB-URL key(s) that must be
+          stripped: {{ _slm_stale_dupes | map('from_json') | map(attribute='key') | list }}
         success_msg: "slm-secrets.env has no stale duplicate DB-URL (#12297)."
 
 # ==========================================================
