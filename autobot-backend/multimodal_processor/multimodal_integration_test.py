@@ -26,9 +26,11 @@ from multimodal_processor import (
     ModalInput,
     ModalityType,
     ProcessingIntent,
-    multimodal_processor,
 )
-from voice_processing_system import AudioInput, voice_processing_system
+from multimodal_processor import processor as multimodal_processor
+from voice_processing_system import AudioInput, get_voice_processing_system
+
+voice_processing_system = get_voice_processing_system()
 
 
 class TestMultiModalWorkflowIntegration:
