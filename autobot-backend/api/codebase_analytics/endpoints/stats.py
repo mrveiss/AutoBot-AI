@@ -25,7 +25,7 @@ from ..storage import get_code_collection, get_redis_connection
 from .shared import (
     _in_memory_storage,
     filter_problems_by_file_existence,
-    get_project_root,
+    resolve_project_root,
     resolve_source_root,
 )
 
@@ -442,7 +442,11 @@ def _fetch_problems_from_chromadb(
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
     # Issue #2724: Validate file paths against the indexed repository root.
-    root = source_root if source_root else get_project_root()
+    # Issue #12399: Fall back to resolve_project_root() (deployed-layout-aware,
+    # #10730) rather than get_project_root() (hardcoded parents[4], which
+    # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+    # standalone rsync layout).
+    root = source_root if source_root else Path(resolve_project_root())
     return filter_problems_by_file_existence(problems, root)
 
 
