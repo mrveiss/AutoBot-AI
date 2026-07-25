@@ -149,8 +149,18 @@ class CodePatternAnalyzer:
         exclude_dirs: Set[str] | None = None,
         cc_threshold: int = 10,
         mi_threshold: float = 50,
+        source_id: str | None = None,
     ):
-        """Initialize the code pattern analyzer. Issue #620."""
+        """Initialize the code pattern analyzer. Issue #620.
+
+        Args:
+            source_id: Code source this analysis is scoped to (Issue #12384).
+                Tagged onto every stored ``code_patterns`` ChromaDB record so
+                the read-side query filter can scope matches to a single
+                project -- without it, patterns from different sources
+                sharing the global collection could cross-match. Mirrors the
+                #12356/#12374 cross-language-patterns fix.
+        """
         self._init_feature_flags(
             enable_clone_detection,
             enable_anti_pattern_detection,
@@ -161,6 +171,9 @@ class CodePatternAnalyzer:
             exclude_dirs,
         )
         self._init_sub_analyzers(cc_threshold, mi_threshold)
+        # Issue #12384: scope tag for chroma metadata written by this instance.
+        self.source_id = source_id
+        self._source_tag = source_id or "default"
 
     # Batch size for per-file analysis (tunable)
     BATCH_SIZE = 50
@@ -877,6 +890,10 @@ class CodePatternAnalyzer:
     async def _prepare_duplicate_pattern_for_storage(self, dup: DuplicatePattern) -> Dict[str, Any] | None:
         """Prepare a duplicate pattern for ChromaDB storage. Issue #620.
 
+        Issue #12384: Tags the pattern's metadata with ``source_id`` so the
+        read-side query filter (endpoints/pattern_analysis.py) can scope
+        matches to this project.
+
         Args:
             dup: Duplicate pattern to prepare
 
@@ -895,11 +912,16 @@ class CodePatternAnalyzer:
                 "start_line": dup.locations[0].start_line if dup.locations else 0,
                 "occurrence_count": dup.occurrence_count,
                 "severity": dup.severity.value,
+                "source_id": self._source_tag,
             },
         }
 
     async def _prepare_regex_pattern_for_storage(self, regex_opp: Any) -> Dict[str, Any] | None:
         """Prepare a regex opportunity pattern for ChromaDB storage. Issue #620.
+
+        Issue #12384: Tags the pattern's metadata with ``source_id`` so the
+        read-side query filter (endpoints/pattern_analysis.py) can scope
+        matches to this project.
 
         Args:
             regex_opp: Regex opportunity pattern to prepare
@@ -919,6 +941,7 @@ class CodePatternAnalyzer:
                 "start_line": (regex_opp.locations[0].start_line if regex_opp.locations else 0),
                 "suggested_regex": regex_opp.suggested_regex,
                 "severity": regex_opp.severity.value,
+                "source_id": self._source_tag,
             },
         }
 
