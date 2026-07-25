@@ -1280,6 +1280,15 @@ class PathConfig(BaseSettings):
         validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
     )
 
+    # Explicit override for the `claude` CLI binary used by the LLC claude_code
+    # adapter (GH#12478). Empty string means "not configured" — the adapter falls
+    # back to shutil.which("claude") then common per-user install locations before
+    # raising a clear error. Set this when the service account's PATH does not
+    # include the directory the Claude Code CLI was installed into (e.g. a
+    # per-user npm/curl install landed in ~/.local/bin, which systemd services
+    # typically don't inherit).
+    claude_cli_path: str = Field(default="", alias="AUTOBOT_CLAUDE_CLI_PATH")
+
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
         p = Path(relative)
