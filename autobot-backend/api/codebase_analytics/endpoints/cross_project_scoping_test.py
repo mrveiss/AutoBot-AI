@@ -61,6 +61,30 @@ class TestResolveScanRoot:
 
         assert resolved == shared.get_project_root()
 
+    async def test_unresolved_fallback_uses_deployed_layout_aware_root(self, tmp_path):
+        """Issue #12393: unresolved-source fallback must use resolve_project_root()
+        (git-walk-up / deployed code_source probe, #10730), not the plain
+        parents[4] get_project_root() -- which resolves to /opt/autobot (not the
+        analyzable repo) in the deployed standalone rsync layout."""
+        from api.codebase_analytics.endpoints import shared
+
+        deployed_root = tmp_path / "opt_autobot" / "code_source"
+        wrong_root = tmp_path / "opt_autobot"
+
+        with (
+            patch.object(shared, "resolve_source_root", AsyncMock(return_value=None)),
+            patch(
+                "api.codebase_analytics.source_storage.get_default_source_id",
+                AsyncMock(return_value=None),
+            ),
+            patch.object(shared, "resolve_project_root", return_value=str(deployed_root)),
+            patch.object(shared, "get_project_root", return_value=wrong_root),
+        ):
+            resolved = await shared.resolve_scan_root(None)
+
+        assert resolved == deployed_root
+        assert resolved != wrong_root
+
     async def test_uses_default_source_when_source_id_missing(self, tmp_path):
         """When no source_id is given the default source is scoped, not the global root."""
         from api.codebase_analytics.endpoints import shared

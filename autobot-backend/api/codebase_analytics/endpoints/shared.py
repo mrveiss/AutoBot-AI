@@ -188,16 +188,24 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -
 
     When ``source_id`` is falsy and ``use_default`` is True, the default (most
     recently indexed) source is resolved first to avoid silently mixing projects
-    (matches the stats.py/report.py pattern, #2653). Falls back to the AutoBot
-    project root only when no source can be resolved (e.g. dev checkout with no
-    registered sources).
+    (matches the stats.py/report.py pattern, #2653). Falls back to the resolved
+    AutoBot project root only when no source can be resolved (e.g. dev checkout
+    with no registered sources).
+
+    Issue #12393: The fallback uses ``resolve_project_root()`` (the git-walk-up /
+    deployed ``code_source`` probe, #10730) rather than the plain
+    ``get_project_root()`` (hardcoded ``parents[4]``). In the deployed standalone
+    rsync layout ``parents[4]`` resolves to ``/opt/autobot`` -- not a git repo --
+    so the plain helper silently scanned the wrong tree in production. In a dev
+    checkout the two are equivalent, so this fallback is unchanged there.
 
     Args:
         source_id: The requested source identifier, or None.
         use_default: When True, resolve the default source if source_id is None.
 
     Returns:
-        Path to the resolved source clone directory, or the AutoBot project root.
+        Path to the resolved source clone directory, or the resolved AutoBot
+        project root.
     """
     if not source_id and use_default:
         try:
@@ -210,7 +218,7 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -
     source_root = await resolve_source_root(source_id)
     if source_root:
         return source_root
-    return get_project_root()
+    return Path(resolve_project_root())
 
 
 # Sentinel ownership id for an authenticated, non-service caller whose token
