@@ -47,21 +47,11 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from autobot_shared.redis_client import get_async_redis_client, get_redis_client
-from services.batch_job_store import (
-    deserialize_job as _deserialize_job,
-)
-from services.batch_job_store import (
-    get_job_key as _get_job_key,
-)
-from services.batch_job_store import (
-    get_logs_key as _get_logs_key,
-)
-from services.batch_job_store import (
-    get_schedule_key as _get_schedule_key,
-)
-from services.batch_job_store import (
-    serialize_job as _serialize_job,
-)
+from services.batch_job_store import deserialize_job as _deserialize_job
+from services.batch_job_store import get_job_key as _get_job_key
+from services.batch_job_store import get_logs_key as _get_logs_key
+from services.batch_job_store import get_schedule_key as _get_schedule_key
+from services.batch_job_store import serialize_job as _serialize_job
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["batch-jobs", "management"])
