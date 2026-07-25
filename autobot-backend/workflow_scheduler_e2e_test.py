@@ -14,7 +14,9 @@ from autobot_shared.ssot_config import config
 sys.path.append(config.project_root)
 
 from tests.test_helpers import get_test_backend_url
-from workflow_scheduler import WorkflowPriority, WorkflowStatus, workflow_scheduler
+from workflow_scheduler import WorkflowPriority, WorkflowStatus, get_workflow_scheduler
+
+workflow_scheduler = get_workflow_scheduler()
 
 
 async def test_workflow_scheduling():
