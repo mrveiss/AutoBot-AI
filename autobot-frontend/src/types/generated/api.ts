@@ -21630,6 +21630,13 @@ export interface paths {
         /**
          * Create Code Source
          * @description Register a new code source.
+         *
+         *     Issue #12377: captures owner_id from the caller so HTTP-created sources
+         *     are privately scoped like the LLC-created ones (source_service's
+         *     create_github_source(owner_id=...), api/llc/sprints.py::attach_project_repo).
+         *     Uses the same caller-identity derivation (_caller_owner_id) that #12375's
+         *     require_source_access dependency authorizes reads against, so create and
+         *     read agree on what "owned by the caller" means.
          */
         post: operations["create_code_source_api_analytics_codebase_sources_post"];
         delete?: never;
