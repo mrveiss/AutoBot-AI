@@ -141,6 +141,53 @@ async def test_failed_insert_unlinks_orphan(client, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_upload_recording_rejects_oversized_and_cleans_up(client, tmp_path, monkeypatch):
+    """GH#12331: uploads exceeding MAX_FILE_SIZE are rejected with 413 during
+    streaming (never buffered in memory) and the partial file is deleted."""
+    import transcriber.routes.recordings as rec_mod
+
+    monkeypatch.setattr(rec_mod, "MAX_FILE_SIZE", 10)
+
+    r = await client.post("/api/transcriber/projects", json={"name": "P", "description": ""})
+    pid = r.json()["id"]
+
+    oversized = b"RIFF" + b"\x00" * 100  # 104 bytes > 10-byte patched cap
+    r2 = await client.post(
+        f"/api/transcriber/projects/{pid}/recordings",
+        files={"file": ("too_big.wav", io.BytesIO(oversized), "audio/wav")},
+    )
+    assert r2.status_code == 413, r2.text
+
+    # No partial file left behind in the upload dir.
+    upload_dir = tmp_path / "uploads"
+    assert list(upload_dir.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_upload_recording_at_limit_succeeds(client, tmp_path, monkeypatch):
+    """GH#12331: an upload at or under MAX_FILE_SIZE is written through untouched."""
+    import transcriber.routes.recordings as rec_mod
+
+    monkeypatch.setattr(rec_mod, "MAX_FILE_SIZE", 104)
+
+    r = await client.post("/api/transcriber/projects", json={"name": "P", "description": ""})
+    pid = r.json()["id"]
+
+    exact = b"RIFF" + b"\x00" * 100  # exactly 104 bytes == patched cap
+    with patch("tasks.transcriber_tasks.transcribe_recording", MagicMock()):
+        r2 = await client.post(
+            f"/api/transcriber/projects/{pid}/recordings",
+            files={"file": ("exact.wav", io.BytesIO(exact), "audio/wav")},
+        )
+    assert r2.status_code == 202, r2.text
+
+    upload_dir = tmp_path / "uploads"
+    files = list(upload_dir.iterdir())
+    assert len(files) == 1
+    assert len(files[0].read_bytes()) == 104
+
+
+@pytest.mark.asyncio
 async def test_delete_recording(client, tmp_path):
     r = await client.post("/api/transcriber/projects", json={"name": "P", "description": ""})
     pid = r.json()["id"]
