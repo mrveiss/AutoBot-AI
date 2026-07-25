@@ -31,7 +31,14 @@ from typing import Dict, Mapping
 _AUTH_HEADER_RE = re.compile(r"(?i)(authorization\s*[:=]\s*).+")
 
 # ``api_key=…`` / ``token: …`` / ``secret=…`` / ``password=…`` key/value pairs.
-_SECRET_KV_RE = re.compile(r"(?i)\b(api[_-]?key|token|secret|password|passwd)\b(\s*[:=]\s*)([^\s,;\"']+)")
+# The optional ``[a-z0-9_]*[_-]?`` prefix also matches prefixed keys such as
+# ``client_secret=``, ``access_token:``, ``db_password=`` (#12333) — anchored
+# so the secret word must sit immediately before the ``[:=]``, so ordinary
+# prose (``the password reset flow``) and near-miss keys
+# (``password_hash_algorithm=``) are never matched.
+_SECRET_KV_RE = re.compile(
+    r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b(\s*[:=]\s*)([^\s,;\"']+)"
+)
 
 # ---------------------------------------------------------------------------
 # Mapping redaction (union of the former code_sync._mask_secret_extra_vars)
