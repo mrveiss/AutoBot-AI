@@ -23,7 +23,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
 
 from ..analyzers import normalize_hardcode_record
-from .shared import resolve_project_root
+from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -48,19 +48,13 @@ def _env_cache_key(source_id: str | None) -> str:
 async def _resolve_env_scan_root(source_id: str | None) -> str:
     """Resolve the filesystem root to analyze for a source (Issue #12330).
 
-    Uses the selected source's clone path when available, otherwise falls back
-    to the AutoBot project root (resolve_project_root, deployed-layout aware) to
-    preserve existing behavior when no source is selected.
+    Issue #12359: Delegates to the shared ``resolve_scan_root`` used by
+    call-graph/import-tree/dependencies so a ``source_id=None`` request
+    resolves the caller's DEFAULT registered source first, instead of
+    falling straight through to AutoBot's own project root. Keeps env
+    analysis consistent with the sibling scan-root-scoped endpoints.
     """
-    from .shared import resolve_source_root
-
-    source_root = await resolve_source_root(source_id)
-    return str(source_root) if source_root else _get_project_root()
-
-
-def _get_project_root() -> str:
-    """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_project_root()
+    return str(await resolve_scan_root(source_id))
 
 
 def _validate_env_path_security(path: str, project_root: str) -> JSONResponse | None:

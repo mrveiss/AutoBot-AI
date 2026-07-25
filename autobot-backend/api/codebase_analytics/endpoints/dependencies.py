@@ -388,6 +388,12 @@ async def _load_modules_from_chromadb(
 
     Issue #12330: Filter by source_id to prevent cross-project leakage; without
     it the query returns modules indexed for every registered source.
+
+    Migration note (#12359): records indexed BEFORE this source-scoping fix
+    landed have no ``source_id`` metadata field, so this filter silently
+    drops them from the dependency graph rather than surfacing under the
+    wrong project (fail-closed -- the safe direction). Those pre-scoping
+    records don't reappear until their source is reindexed.
     """
     try:
         type_filter = {"type": {"$in": ["function", "class"]}}
