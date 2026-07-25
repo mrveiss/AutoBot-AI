@@ -1235,7 +1235,6 @@ class BlueGreenService:
                 "-o",
                 "StrictHostKeyChecking=accept-new",
                 "-o",
-                "-o",
                 "ConnectTimeout=10",
                 "-o",
                 "BatchMode=yes",
