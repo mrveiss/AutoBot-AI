@@ -18,8 +18,27 @@ import pytest
 
 from advanced_rag_optimizer import RAGMetrics, SearchResult
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
-from services.rag_config import RAGConfig, get_rag_config, update_rag_config
+from services.rag_config import (
+    RAGConfig,
+    get_rag_config,
+    reset_rag_config,
+    update_rag_config,
+)
 from services.rag_service import RAGService
+
+
+@pytest.fixture(autouse=True)
+def _reset_rag_config_singleton():
+    """Isolate the module-level RAG config singleton between tests (#12539).
+
+    ``test_update_config`` mutates ``_rag_config_instance`` (e.g. sets
+    ``enable_reranking=False``) via ``update_rag_config`` and never restores it,
+    leaking the mutated instance into later suites.  Reset before and after each
+    test so ``get_rag_config()`` always rebuilds fresh defaults.
+    """
+    reset_rag_config()
+    yield
+    reset_rag_config()
 
 
 class TestKnowledgeBaseAdapter:

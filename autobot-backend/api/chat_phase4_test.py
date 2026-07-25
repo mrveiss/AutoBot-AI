@@ -231,23 +231,54 @@ class TestChatMetricsRecorder:
 class TestSSOTStrictMode:
     """AUTOBOT_CHAT_SSOT_STRICT=true must reject missing session_id."""
 
-    def test_strict_mode_flag_reads_env(self):
+    @pytest.fixture(autouse=True)
+    def _restore_chat_module(self, monkeypatch):
+        """Restore api.chat + the ssot_config cache after each test (#12539).
+
+        ``test_strict_mode_flag_reads_env`` / ``test_default_mode_is_lenient``
+        clear the ssot_config lru_cache and ``importlib.reload(api.chat)`` under a
+        patched env.  Without restoration the reloaded module leaks its mutated
+        ``_CHAT_SSOT_STRICT`` value (and a config built from the patched env) into
+        later suites.  Undo the env, clear the config cache and reload api.chat
+        back to its pristine, unpatched state on teardown.
+        """
+        yield
         import importlib
 
-        with patch.dict("os.environ", {"AUTOBOT_CHAT_SSOT_STRICT": "true"}):
-            import api.chat as chat_module
+        from autobot_shared.ssot_config import reload_config
 
-            importlib.reload(chat_module)
-            assert chat_module._CHAT_SSOT_STRICT is True
+        monkeypatch.undo()
+        reload_config()
+        import api.chat as chat_module
 
-    def test_default_mode_is_lenient(self):
+        importlib.reload(chat_module)
+
+    def test_strict_mode_flag_reads_env(self, monkeypatch):
         import importlib
 
-        with patch.dict("os.environ", {"AUTOBOT_CHAT_SSOT_STRICT": "false"}):
-            import api.chat as chat_module
+        from autobot_shared.ssot_config import reload_config
 
-            importlib.reload(chat_module)
-            assert chat_module._CHAT_SSOT_STRICT is False
+        # ``api.chat`` reads ``config.chat_ssot_strict`` (the ssot_config
+        # singleton), so the config lru_cache must be cleared *after* patching
+        # the env for the reload to observe the new value.
+        monkeypatch.setenv("AUTOBOT_CHAT_SSOT_STRICT", "true")
+        reload_config()
+        import api.chat as chat_module
+
+        importlib.reload(chat_module)
+        assert chat_module._CHAT_SSOT_STRICT is True
+
+    def test_default_mode_is_lenient(self, monkeypatch):
+        import importlib
+
+        from autobot_shared.ssot_config import reload_config
+
+        monkeypatch.setenv("AUTOBOT_CHAT_SSOT_STRICT", "false")
+        reload_config()
+        import api.chat as chat_module
+
+        importlib.reload(chat_module)
+        assert chat_module._CHAT_SSOT_STRICT is False
 
     def test_strict_validate_session_id_raises_on_none(self):
         with patch("api.chat._CHAT_SSOT_STRICT", True):
