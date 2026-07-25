@@ -977,6 +977,42 @@ def set_test_environment():
     os.environ.update(original_env)
 
 
+# #12438: Modules deliberately handled elsewhere in this conftest — skip them in
+# the generalized real-load loop so it doesn't clobber their configured stubs or
+# double-load the ones already loaded via _real_load_and_bind above.
+_SERVICES_REAL_LOAD_SKIP = frozenset(
+    {
+        "__init__",
+        "llm_service",  # deliberate heavy stub (Redis/npu chain — see block near L206)
+        "personality_service",  # deliberate stub carrying SUPPORTED_LANGUAGES symbol
+        "llm_api_key_service",  # real-loaded in pytest_configure below
+        "llm_cost_tracker",  # real-loaded in pytest_configure below
+        "tool_output_filter",  # real-loaded at import time (#11248)
+        "npu_client",  # real-loaded at import time (#12114)
+        "npu_profile_suggester",  # real-loaded at import time (#11731)
+    }
+)
+
+
+def _real_load_light_services() -> None:
+    """#12438: Real-load every light ``services/*.py`` submodule tests import at
+    module level, generalizing the one-at-a-time #12114/#11248/#11731 real-loads.
+
+    conftest stubs the whole ``services`` package as a MagicMock, so any
+    module-level ``from services.<mod> import ...`` errored collection with
+    ``No module named 'services.<mod>'`` even though the file exists on disk.
+    ``_real_load_and_bind`` already falls back to a package stub on any import
+    failure, so heavy or side-effectful modules stay stubbed automatically — no
+    hand-listing needed.  Runs from pytest_configure, after every stub is set.
+    """
+    services_dir = backend_root / "services"
+    for svc_path in sorted(services_dir.glob("*.py")):
+        name = svc_path.stem
+        if name in _SERVICES_REAL_LOAD_SKIP or name.startswith("test_") or name.endswith(("_test", "_examples")):
+            continue
+        _real_load_and_bind(f"services.{name}", svc_path)
+
+
 def pytest_configure(config):  # noqa: ANN001
     """#11248/#11532: real-load lightweight service modules whose unit tests need the
     real helpers, AFTER every module-level stub above is in place.
@@ -997,3 +1033,4 @@ def pytest_configure(config):  # noqa: ANN001
     """
     _real_load_and_bind("services.llm_api_key_service", backend_root / "services" / "llm_api_key_service.py")
     _real_load_and_bind("services.llm_cost_tracker", backend_root / "services" / "llm_cost_tracker.py")
+    _real_load_light_services()
