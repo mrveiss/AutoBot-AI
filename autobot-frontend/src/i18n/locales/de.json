@@ -746,7 +746,10 @@
       "serverError": "Ein Serverfehler ist aufgetreten. Bitte versuchen Sie es in einem Moment erneut.",
       "networkFailed": "Netzwerkverbindung fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung.",
       "timeout": "Zeitüberschreitung der Anfrage. Bitte versuchen Sie es mit einer kürzeren Nachricht erneut.",
-      "sendFailed": "Nachricht konnte nicht gesendet werden: {error}"
+      "sendFailed": "Nachricht konnte nicht gesendet werden: {error}",
+      "sendFailedAfterRetries": "Nachricht konnte nach {attempts} Versuchen nicht gesendet werden: {error}. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "invalidFormatDetail": "Ungültiges Nachrichtenformat: {error}. Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut.",
+      "networkFailedRetry": "Netzwerkverbindung fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut."
     }
   },
   "settings": {

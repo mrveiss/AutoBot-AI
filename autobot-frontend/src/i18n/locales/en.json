@@ -746,7 +746,10 @@
       "serverError": "Server error occurred. Please try again in a moment.",
       "networkFailed": "Network connection failed. Please check your internet connection.",
       "timeout": "Request timed out. Please try again with a shorter message.",
-      "sendFailed": "Failed to send message: {error}"
+      "sendFailed": "Failed to send message: {error}",
+      "sendFailedAfterRetries": "Failed to send message after {attempts} attempts: {error}. Please check your connection and try again.",
+      "invalidFormatDetail": "Invalid message format: {error}. Please check your input and try again.",
+      "networkFailedRetry": "Network connection failed. Please check your internet connection and try again."
     }
   },
   "settings": {
