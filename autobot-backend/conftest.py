@@ -1089,3 +1089,43 @@ def pytest_configure(config):  # noqa: ANN001
     _real_load_and_bind("services.llm_api_key_service", backend_root / "services" / "llm_api_key_service.py")
     _real_load_and_bind("services.llm_cost_tracker", backend_root / "services" / "llm_cost_tracker.py")
     _real_load_light_services()
+
+
+# #12463: cascade hardening. Python inserts a module into ``sys.modules``
+# *before* running its ``exec_module()`` — so when a test file's import chain
+# raises mid-import (e.g. a route file's ``response_model=`` rejects a bad
+# type, or any other genuine bug), the half-populated module object stays
+# cached under its name.  Every LATER-collected file that imports the same
+# name (directly or transitively, e.g. ``initialization``, ``services.*``)
+# then gets the broken cached module instead of a fresh import attempt, and
+# fails with a confusing, unrelated-looking error (``cannot import name X
+# from Y`` / ``No module named Y.Z``) instead of the real one.
+#
+# This hook does NOT mask the real failure — the file whose collection
+# actually failed still reports its own (correct) error via the normal
+# CollectReport.  It only prevents that failure from POISONING every other
+# file's import of the same half-built module: any module newly inserted
+# into ``sys.modules`` during a FAILED Module collection is evicted, so the
+# next file that needs it gets a clean re-import.
+#
+# Keyed by nodeid (not a plain stack) because ``pytest_collectreport`` fires
+# for every collector level (Dir/Package/Module/...), not just Module — a
+# stack would pop the wrong snapshot for non-Module reports interleaved
+# between a Module's collectstart and its own collectreport.
+_module_collect_snapshots: dict = {}
+
+
+def pytest_collectstart(collector) -> None:  # noqa: ANN001
+    """Snapshot sys.modules before a Module collector imports its file."""
+    if type(collector).__name__ == "Module":
+        _module_collect_snapshots[collector.nodeid] = set(sys.modules.keys())
+
+
+def pytest_collectreport(report) -> None:  # noqa: ANN001
+    """On a failed Module collection, evict any module it newly cached."""
+    before = _module_collect_snapshots.pop(report.nodeid, None)
+    if before is None:
+        return
+    if report.failed:
+        for _name in set(sys.modules.keys()) - before:
+            sys.modules.pop(_name, None)
