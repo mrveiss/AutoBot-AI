@@ -114,7 +114,7 @@ class RedisServiceManager:
             service_name: Systemd service name (default: 'redis-stack-server')
             enable_audit_logging: Enable audit logging (default: True)
         """
-        self.slm_url = (slm_url or _DEFAULT_SLM_URL).rstrip("/")
+        self.slm_url = (slm_url if slm_url is not None else _DEFAULT_SLM_URL).rstrip("/")
         self.slm_node_id = slm_node_id or _DEFAULT_REDIS_NODE_ID
         self.service_name = service_name
         self.enable_audit_logging = enable_audit_logging
