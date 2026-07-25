@@ -4824,6 +4824,8 @@ export interface paths {
          * @description Get facts grouped by category for browsing with caching.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #12394: paginated via ``limit``/``offset`` (applied per category) —
+         *     the response was previously unbounded across all categories.
          */
         get: operations["get_facts_by_category_api_knowledge_base_facts_by_category_get"];
         put?: never;
