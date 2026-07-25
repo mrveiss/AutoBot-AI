@@ -263,6 +263,20 @@ if "services.npu_profile_suggester" not in sys.modules:
         "services.npu_profile_suggester",
         backend_root / "services" / "npu_profile_suggester.py",
     )
+# services.npu_client (#12114 / demonstrated by #12407) — the embedding client is
+# imported almost exclusively via lazy, function-level ``from services.npu_client
+# import ...`` calls in production code, so it is essentially never bound on the
+# ``services`` package stub at collection time.  Any test that is the first to do
+# ``patch("services.npu_client.<name>")`` therefore silently patches the stub's
+# catch-all MagicMock (an INERT patch) unless some earlier-collected module happened
+# to import it — making test outcomes depend on collection ORDER (#12407 had to work
+# around this with ``patch.object(npu_client_module, ...)``).  Real-load and bind it
+# here — light deps only (stdlib + aiohttp + autobot_shared; prometheus_client is
+# stubbed) — so the real module is always present and string-form patch() targets
+# the real globals.  Mirrors the #11248 tool_output_filter / #11731 npu_profile_suggester
+# pattern the module docstring recommends.
+if "services.npu_client" not in sys.modules:
+    _real_load_and_bind("services.npu_client", backend_root / "services" / "npu_client.py")
 # Provide the SUPPORTED_LANGUAGES symbol consumed by api.schemas_agent
 if not hasattr(sys.modules.get("services.personality_service", object()), "SUPPORTED_LANGUAGES"):
     sys.modules["services.personality_service"].SUPPORTED_LANGUAGES = {}  # type: ignore[attr-defined]
