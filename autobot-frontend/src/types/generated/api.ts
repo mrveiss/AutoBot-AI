@@ -62964,7 +62964,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ok" | "degraded" | "down";
+            status: "ok" | "degraded" | "down" | "not_applicable" | "idle";
             /** Detail */
             detail?: string | null;
             /** Latency Ms */
@@ -94638,7 +94638,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ok" | "degraded" | "down";
+            status: "ok" | "degraded" | "down" | "not_applicable" | "idle";
             /** Timestamp */
             timestamp: string;
         } & {
