@@ -13,11 +13,16 @@ import tempfile
 from pathlib import Path
 
 import pytest
-import torch
 
-from training.completion_model import CompletionModel
-from training.data_loader import Tokenizer
-from training.evaluator import CompletionEvaluator
+# Optional ML dependency (torch is in requirements-gpu.txt, never default reqs).
+# Skip cleanly when absent; run for real when torch IS installed (e.g. GPU CI).
+pytest.importorskip("torch.nn.functional", reason="torch not installed — optional ML dep")
+
+import torch  # noqa: E402 — after importorskip by design
+
+from training.completion_model import CompletionModel  # noqa: E402
+from training.data_loader import Tokenizer  # noqa: E402
+from training.evaluator import CompletionEvaluator  # noqa: E402
 
 # Module-level marker used by the malicious-pickle test below. A crafted
 # checkpoint whose __reduce__ targets this function would flip the flag if the
