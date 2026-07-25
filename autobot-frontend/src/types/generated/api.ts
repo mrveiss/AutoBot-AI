@@ -21420,6 +21420,9 @@ export interface paths {
          * @description Get statistics about stored patterns in ChromaDB.
          *
          *     Returns information about the code_patterns collection.
+         *
+         *     Issue #12384: Scopes the stats to source_id so one source's stats never
+         *     aggregate another source's (or AutoBot's own) stored patterns.
          */
         get: operations["get_pattern_storage_stats_api_analytics_codebase_patterns_storage_stats_get"];
         put?: never;
@@ -21443,6 +21446,8 @@ export interface paths {
          *
          *     Issue #208: Fast loading endpoint for already indexed patterns.
          *     Issue #665: Refactored to use extracted helpers.
+         *     Issue #12384: Scopes the query to source_id so one source's summary never
+         *     aggregates another source's (or AutoBot's own) stored patterns.
          *     Returns summary data from stored patterns, not requiring full analysis.
          */
         get: operations["get_cached_pattern_summary_api_analytics_codebase_patterns_cached_summary_get"];
@@ -21467,6 +21472,8 @@ export interface paths {
          *
          *     Issue #208: Fast loading of already indexed patterns without re-analysis.
          *     Issue #665: Refactored to use extracted helpers.
+         *     Issue #12384: Always scopes the query to source_id (default sentinel when
+         *     None) so one source's cached patterns never include another source's.
          *     Supports filtering by pattern_type and severity, with pagination.
          */
         get: operations["get_cached_patterns_api_analytics_codebase_patterns_cached_patterns_get"];
@@ -21512,6 +21519,10 @@ export interface paths {
          * @description Search for similar patterns using vector similarity.
          *
          *     This endpoint uses ChromaDB to find patterns similar to the provided code.
+         *
+         *     Issue #12384: Always scopes the query to source_id (default sentinel when
+         *     None) so a similarity search for one source never surfaces another
+         *     source's stored patterns.
          */
         get: operations["search_similar_patterns_endpoint_api_analytics_codebase_patterns_similar_get"];
         put?: never;
@@ -129365,7 +129376,10 @@ export interface operations {
     };
     get_pattern_storage_stats_api_analytics_codebase_patterns_storage_stats_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Code source to scope stats to (Issue #12384) */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -129383,11 +129397,23 @@ export interface operations {
                     };
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_cached_pattern_summary_api_analytics_codebase_patterns_cached_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Code source to scope the summary to (Issue #12384) */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -129403,6 +129429,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -129414,6 +129449,8 @@ export interface operations {
                 pattern_type?: string | null;
                 /** @description Filter by severity */
                 severity?: string | null;
+                /** @description Code source to scope results to (Issue #12384) */
+                source_id?: string | null;
                 /** @description Maximum results */
                 limit?: number;
                 /** @description Offset for pagination */
@@ -129476,6 +129513,8 @@ export interface operations {
                 code: string;
                 /** @description Filter by pattern type */
                 pattern_type?: string | null;
+                /** @description Code source to scope results to (Issue #12384) */
+                source_id?: string | null;
                 /** @description Maximum results */
                 limit?: number;
             };
