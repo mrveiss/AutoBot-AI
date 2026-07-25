@@ -855,12 +855,19 @@
     no_log: true
     tags: ['backend', 'config']
 
-  # #10636: db_password is set in-memory by the postgresql include above when it
-  # runs in this play. On a tag-filtered re-run that skips that include (or when
-  # the DB was provisioned by a separate playbook), read the backend's OWN creds
-  # file — autobot-db-credentials.env, never the SLM's db-credentials.env — so the
-  # .env still renders a valid AUTOBOT_POSTGRES_PASSWORD without clobbering the SLM.
-  - name: "Backend | Read AUTOBOT_DB_PASSWORD from backend creds file (fallback, #10636)"
+  # #10636 / #12520: autobot-db-credentials.env is the SINGLE role-managed
+  # authority for the autobot_app DB password. The postgresql include above
+  # ALTERs the autobot_app role in Postgres and records that exact value as
+  # AUTOBOT_DB_PASSWORD (reuse-existing so a redeploy never regenerates it —
+  # #12224). Read that authority UNCONDITIONALLY (never the SLM's
+  # db-credentials.env) so backend_postgres_password — and therefore the .env's
+  # AUTOBOT_POSTGRES_PASSWORD, which autobot-backend.service.j2 loads as the ONLY
+  # EnvironmentFile carrying it — is rendered FROM the role-managed credential and
+  # cannot drift from Postgres (#12520). Reading even when the in-memory
+  # db_password fact is present is safe: the role wrote both in the same include,
+  # so they are identical in a full run; on a tag-skip / separate-provisioning
+  # run the file is the only truth.
+  - name: "Backend | Read role-managed AUTOBOT_DB_PASSWORD (single authority, #10636, #12520)"
     ansible.builtin.shell:
       cmd: >-
         grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
@@ -869,17 +876,21 @@
     changed_when: false
     failed_when: false
     no_log: true
-    when: db_password is not defined
     tags: ['backend', 'config']
 
-  - name: "Backend | Set full-user-management .env facts (#10636)"
+  - name: "Backend | Set full-user-management .env facts (#10636, #12520)"
     ansible.builtin.set_fact:
       # autobot_internal_api_key is set earlier from slm-secrets.env (#11507) so both
       # env files render one value; do not re-set (and never blank) it here.
       autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
+      # #12520: role-managed creds file FIRST (the value actually applied to
+      # Postgres), then the in-memory db_password from this run, then a deliberate
+      # external override (a genuinely remote DB has no local creds file, so the
+      # override survives). This order makes the .env render structurally from the
+      # single role-managed authority; the assert below is the regression guard.
       backend_postgres_password: >-
-        {{ db_password
-           | default(_backend_db_password_file.stdout | default('') | trim, true)
+        {{ (_backend_db_password_file.stdout | default('') | trim)
+           | default(db_password | default(''), true)
            | default(backend_postgres_password | default(''), true) }}
     no_log: true
     tags: ['backend', 'config']
@@ -907,6 +918,89 @@
     register: _backend_env_stat
     failed_when: not _backend_env_stat.stat.exists
     tags: ['backend', 'config']
+
+  # ==========================================================
+  # #12520: Regression guard — the backend .env AUTOBOT_POSTGRES_PASSWORD MUST
+  # match the role-managed autobot-db-credentials.env AUTOBOT_DB_PASSWORD.
+  #
+  # The autobot_app DB password has ONE authority: the postgresql role, which
+  # ALTERs the autobot_app role in Postgres and records the value as
+  # AUTOBOT_DB_PASSWORD in autobot-db-credentials.env (reuse-existing, #12224).
+  # The backend systemd unit loads ONLY its private .env, whose
+  # AUTOBOT_POSTGRES_PASSWORD is rendered from backend_postgres_password. If that
+  # ever drifts from the role-managed value the backend bakes a wrong password
+  # and fails asyncpg auth on the next restart — the #12520 outage (same class
+  # as #12297). This turns that silent runtime failure into a hard, early deploy
+  # failure so the drift can never reach a restart.
+  #
+  # Scope: assert only for the co-located topology (local DB). When the backend
+  # targets a REMOTE Postgres (backend_postgres_host is not localhost),
+  # backend_postgres_password is a deliberate remote override that need not match
+  # any local creds file, so the check is skipped — mirrors #12297's
+  # "differing value = deliberate override, preserved".
+  #
+  # SECURITY: every message below renders BOOLEANS / KEY NAMES ONLY. A password
+  # value must NEVER reach Ansible stdout/logs (learned from the #12297 fail_msg
+  # leak): the parsed maps' VALUES are the DB password, so they are never emitted.
+  # ==========================================================
+  - name: "Backend | #12520: stat role-managed creds file"
+    ansible.builtin.stat:
+      path: "/etc/autobot/autobot-db-credentials.env"
+    register: _backend_dbcreds_stat
+    tags: ['backend', 'config']
+
+  - name: "Backend | #12520: verify .env DB password matches role-managed creds"
+    when:
+      - _backend_env_stat.stat.exists
+      - _backend_dbcreds_stat.stat.exists
+      - (backend_postgres_host | default('127.0.0.1')) in ['127.0.0.1', 'localhost', '::1']
+    tags: ['backend', 'config']
+    block:
+      - name: "Backend | #12520: slurp role-managed creds file"
+        ansible.builtin.slurp:
+          src: "/etc/autobot/autobot-db-credentials.env"
+        register: _backend_dbcreds_raw
+        no_log: true
+
+      - name: "Backend | #12520: slurp rendered backend .env"
+        ansible.builtin.slurp:
+          src: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
+        register: _backend_env_raw
+        no_log: true
+
+      - name: "Backend | #12520: parse role-managed AUTOBOT_DB_PASSWORD (key->value)"
+        ansible.builtin.set_fact:
+          _backend_dbcreds_map: >-
+            {{ dict(_backend_dbcreds_raw.content | b64decode
+                    | regex_findall('(?m)^(AUTOBOT_DB_PASSWORD)=(.*)$')) }}
+        no_log: true
+
+      - name: "Backend | #12520: parse rendered AUTOBOT_POSTGRES_PASSWORD (key->value)"
+        ansible.builtin.set_fact:
+          _backend_env_map: >-
+            {{ dict(_backend_env_raw.content | b64decode
+                    | regex_findall('(?m)^(AUTOBOT_POSTGRES_PASSWORD)=(.*)$')) }}
+        no_log: true
+
+      # KEYS / BOOLEANS ONLY in every message. The `that` expressions reference
+      # the map values by variable, and Ansible prints the LITERAL assertion
+      # string (variable names) on failure, never the resolved secret; fail_msg
+      # renders only key-presence booleans.
+      - name: "Backend | #12520: assert .env DB password matches role-managed creds"
+        ansible.builtin.assert:
+          that:
+            - "'AUTOBOT_DB_PASSWORD' in _backend_dbcreds_map"
+            - "'AUTOBOT_POSTGRES_PASSWORD' in _backend_env_map"
+            - (_backend_env_map['AUTOBOT_POSTGRES_PASSWORD'] | trim) == (_backend_dbcreds_map['AUTOBOT_DB_PASSWORD'] | trim)
+          fail_msg: >-
+            backend .env AUTOBOT_POSTGRES_PASSWORD drifted from the role-managed
+            autobot-db-credentials.env AUTOBOT_DB_PASSWORD
+            (role_pw_present={{ 'AUTOBOT_DB_PASSWORD' in _backend_dbcreds_map }},
+             env_pw_present={{ 'AUTOBOT_POSTGRES_PASSWORD' in _backend_env_map }}).
+            Re-run the backend postgresql include so both derive from the single
+            role-managed authority (#12520).
+          success_msg: "backend .env AUTOBOT_POSTGRES_PASSWORD matches role-managed creds (#12520)."
+        tags: ['backend', 'config']
 
   # MVA-1633: Explicit start to match the unconditional stop above. Without this,
   # idempotent tag-filtered runs (--tags backend,config) stop the service and
