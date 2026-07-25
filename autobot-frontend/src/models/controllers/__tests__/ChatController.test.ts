@@ -5,6 +5,7 @@ import { ChatController } from '../ChatController'
 import * as chatRepository from '@/models/repositories'
 import { useChatStore } from '@/stores/useChatStore'
 import { useAppStore } from '@/stores/useAppStore'
+import i18n from '@/i18n'
 
 // Mock the repositories
 vi.mock('@/models/repositories', () => ({
@@ -251,6 +252,73 @@ describe('ChatController', () => {
       await controller.deleteChatSession('s1')
 
       expect(store.deleteSession).toHaveBeenCalledWith('s1')
+    })
+  })
+
+  describe('sendMessage error categorization (#12401)', () => {
+    // A store with an existing session so the send path goes straight to the
+    // repository call (and its error handling) without minting a new session.
+    function sendReadyStore() {
+      return {
+        createNewSession: vi.fn((title: string, sessionId: string) => sessionId),
+        switchToSession: vi.fn(),
+        addMessage: vi.fn(() => 'user-msg-1'),
+        updateMessage: vi.fn(),
+        setTyping: vi.fn(),
+        sessions: [],
+        currentSession: null,
+        currentSessionId: 'session-1',
+        activeChatContext: {},
+        settings: { autoSave: false, persistHistory: true }
+      }
+    }
+
+    it('surfaces invalidFormat (not the generic sendFailed) for a 422 error', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        sendReadyStore() as unknown as ReturnType<typeof useChatStore>
+      )
+      const setGlobalError = vi.fn()
+      vi.mocked(useAppStore).mockReturnValue(
+        { setGlobalError } as unknown as ReturnType<typeof useAppStore>
+      )
+      // A 422 carries an HTTP status; #12401 must preserve it through the
+      // re-wrap so getUserFriendlyErrorMessage() can categorize it.
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockRejectedValue(
+        Object.assign(new Error('field required'), { status: 422 })
+      )
+      // Collapse the inter-retry backoff so the test is fast.
+      ;(controller as unknown as { retryDelay: number }).retryDelay = 0
+
+      await expect(controller.sendMessage('hello')).rejects.toBeTruthy()
+
+      // The categorized message surfaces exactly once — not the double-wrapped
+      // sendFailed that resulted before status was preserved.
+      expect(setGlobalError).toHaveBeenCalledTimes(1)
+      expect(setGlobalError).toHaveBeenCalledWith(
+        i18n.global.t('chat.errors.invalidFormat')
+      )
+    })
+
+    it('surfaces networkFailed (not the generic sendFailed) for a NetworkError', async () => {
+      vi.mocked(useChatStore).mockReturnValue(
+        sendReadyStore() as unknown as ReturnType<typeof useChatStore>
+      )
+      const setGlobalError = vi.fn()
+      vi.mocked(useAppStore).mockReturnValue(
+        { setGlobalError } as unknown as ReturnType<typeof useAppStore>
+      )
+      // A network failure carries name==='NetworkError'; #12401 must preserve it.
+      vi.mocked(chatRepository.chatRepository.sendMessage).mockRejectedValue(
+        Object.assign(new Error('connection refused'), { name: 'NetworkError' })
+      )
+      ;(controller as unknown as { retryDelay: number }).retryDelay = 0
+
+      await expect(controller.sendMessage('hello')).rejects.toBeTruthy()
+
+      expect(setGlobalError).toHaveBeenCalledTimes(1)
+      expect(setGlobalError).toHaveBeenCalledWith(
+        i18n.global.t('chat.errors.networkFailed')
+      )
     })
   })
 
