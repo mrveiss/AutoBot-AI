@@ -407,8 +407,11 @@ async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: i
 
     query = query.order_by(Node.hostname)
 
-    count_result = await db.execute(select(Node.id).where(query.whereclause or True))
-    total = len(count_result.all())
+    # Count the filtered set (the previous `query.whereclause or True`
+    # always collapsed to True, silently dropping the filter -> wrong
+    # total whenever a status filter was applied). Ref #12515.
+    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_result.scalar_one()
 
     query = query.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)

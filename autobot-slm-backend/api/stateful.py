@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
@@ -66,9 +66,10 @@ async def list_backups(
 
     query = query.order_by(Backup.created_at.desc())
 
-    # Get total count
-    count_result = await db.execute(select(Backup.id).where(query.whereclause or True))
-    total = len(count_result.all())
+    # Count the filtered set; `query.whereclause or True` always
+    # collapsed to True, dropping any filter -> wrong total (#12515).
+    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_result.scalar_one()
 
     # Apply pagination
     query = query.offset((page - 1) * per_page).limit(per_page)
@@ -195,9 +196,10 @@ async def list_replications(
 
     query = query.order_by(Replication.created_at.desc())
 
-    # Get total count
-    count_result = await db.execute(select(Replication.id).where(query.whereclause or True))
-    total = len(count_result.all())
+    # Count the filtered set; `query.whereclause or True` always
+    # collapsed to True, dropping any filter -> wrong total (#12515).
+    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_result.scalar_one()
 
     # Apply pagination
     query = query.offset((page - 1) * per_page).limit(per_page)
