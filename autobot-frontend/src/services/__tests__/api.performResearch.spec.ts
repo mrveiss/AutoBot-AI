@@ -14,7 +14,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { apiService } from '../api'
 
-vi.mock('@/config/ssot-config', () => ({
+// Keep the real module (ApiService also imports getConfig etc. from it) and
+// only pin getApiBase to '/api' so the asserted path is deterministic.
+vi.mock('@/config/ssot-config', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/ssot-config')>()),
   getApiBase: () => '/api'
 }))
 
