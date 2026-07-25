@@ -30661,7 +30661,17 @@ export interface paths {
         delete: operations["delete_batch_schedule_api_batch_jobs_schedules__schedule_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Batch Schedule
+         * @description Partially update a batch job schedule (e.g. toggle ``enabled``).
+         *
+         *     Issue #12380: frontend's ``toggleSchedule`` PATCHes this route with
+         *     ``{ enabled }`` to flip a schedule on/off; only fields present on the
+         *     request body are applied, matching PATCH semantics.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        patch: operations["update_batch_schedule_api_batch_jobs_schedules__schedule_id__patch"];
         trace?: never;
     };
     "/api/batch-jobs/status": {
@@ -57690,6 +57700,21 @@ export interface components {
             status: string;
             /** Schedule Id */
             schedule_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BatchScheduleUpdate
+         * @description Request body for PATCH /schedules/{schedule_id} — partial update.
+         *
+         *     Issue #12380: supports toggling ``enabled`` (frontend's primary use case)
+         *     plus ``cron_expression`` for trivial general partial-update support.
+         */
+        BatchScheduleUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Cron Expression */
+            cron_expression?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -141483,6 +141508,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchScheduleDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_batch_schedule_api_batch_jobs_schedules__schedule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchScheduleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchSchedule"];
                 };
             };
             /** @description Validation Error */
