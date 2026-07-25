@@ -4824,6 +4824,8 @@ export interface paths {
          * @description Get facts grouped by category for browsing with caching.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #12394: paginated via ``limit``/``offset`` (applied per category) —
+         *     the response was previously unbounded across all categories.
          */
         get: operations["get_facts_by_category_api_knowledge_base_facts_by_category_get"];
         put?: never;
@@ -72401,6 +72403,13 @@ export interface components {
          *
          *     Grouped facts keyed by category name. ``category_filter`` echoes the
          *     optional ``?category=`` query param for client-side confirmation.
+         *
+         *     Issue #12394: ``limit``/``offset`` are applied per category (each
+         *     category's fact index is paginated independently). ``total_facts`` is
+         *     the count actually returned in this page (sum across categories);
+         *     ``total_count`` is the true sum across all matching categories,
+         *     independent of pagination. ``has_more`` is True when at least one
+         *     category has additional facts beyond this page.
          */
         FactsByCategoryResponse: {
             /** Categories */
@@ -72412,6 +72421,26 @@ export interface components {
              * @default 0
              */
             total_facts: number;
+            /**
+             * Total Count
+             * @default 0
+             */
+            total_count: number;
+            /**
+             * Limit
+             * @default 0
+             */
+            limit: number;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Has More
+             * @default false
+             */
+            has_more: boolean;
             /** Category Filter */
             category_filter?: string | null;
             /** Error */
@@ -108332,6 +108361,7 @@ export interface operations {
             query?: {
                 category?: string | null;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
