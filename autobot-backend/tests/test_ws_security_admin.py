@@ -69,8 +69,10 @@ def test_authenticate_ws_admin_fail_closed_on_error():
 
 
 @pytest.mark.asyncio
-async def test_enforce_ws_admin_closes_4001_when_denied():
-    ws = SimpleNamespace(headers={}, close=AsyncMock())
+async def test_enforce_ws_admin_accepts_then_closes_4001_when_denied():
+    """#12366: rejection accepts the handshake before closing so the client
+    receives a real close frame (code + reason), not an HTTP 403."""
+    ws = SimpleNamespace(headers={}, accept=AsyncMock(), close=AsyncMock())
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
         patch("auth_middleware.get_auth_middleware") as gam,
@@ -78,13 +80,14 @@ async def test_enforce_ws_admin_closes_4001_when_denied():
     ):
         gam.return_value.get_user_from_request.return_value = {"role": "user"}
         assert await enforce_ws_admin(ws) is False
+    ws.accept.assert_awaited_once()
     ws.close.assert_awaited_once()
     assert ws.close.await_args.kwargs.get("code") == 4001
 
 
 @pytest.mark.asyncio
 async def test_enforce_ws_admin_allows_admin_without_closing():
-    ws = SimpleNamespace(headers={}, close=AsyncMock())
+    ws = SimpleNamespace(headers={}, accept=AsyncMock(), close=AsyncMock())
     with patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "0"}):
         assert await enforce_ws_admin(ws) is True
     ws.close.assert_not_awaited()
