@@ -1,10 +1,23 @@
 # CodeQL configuration for AutoBot
 # Configures scan paths and query packs for Python analysis.
 #
+# ── How false positives are suppressed (read before adding suppressions) ──────
+# Inline `# codeql[query-id]` / `# lgtm[query-id]` source comments are NON-FUNCTIONAL
+# for GitHub code scanning — they do NOT dismiss alerts (legacy LGTM.com syntax;
+# LGTM.com retired Dec 2022, and the github/codeql-action pipeline does not
+# propagate inline-comment suppressions to alert state). See #12307.
+#
+# Reviewed false positives are suppressed by EITHER:
+#   • dismissing the individual alert via the Security tab / REST API
+#     (per-line granularity, persists across runs, does not hide new alerts), OR
+#   • a query-filters / paths-ignore exclusion below
+#     (per-query / per-path granularity — ALSO hides future alerts of that query
+#      in that path, so justify each entry inline).
+#
+# Full guide: docs/developer/CODEQL_SUPPRESSION.md
+#
 # Note: Python CodeQL does not support custom sanitizer declarations via
 # data extensions (only sourceModel, sinkModel, summaryModel, typeModel).
-# False positives from custom sanitizers should be dismissed via the
-# GitHub Security tab or query filters instead.
 #
 # Related issue: #1826
 
