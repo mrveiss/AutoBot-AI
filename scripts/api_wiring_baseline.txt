@@ -72,3 +72,9 @@
 # actual fetch call itself. Matches the "base-URL constants and cache-key
 # maps" false-positive class documented in the #12326 comment thread.
 /api/user/profile
+# Real WebSocket handlers the audit's WS-route enumeration doesn't yet resolve
+# (sub-router parametrized WS routes) — wired to real handlers, not dead. Tracked
+# for enumeration improvement in #12432.
+/api/advanced-control/ws/desktop/{p}
+/api/advanced-control/ws/monitoring
+/api/overseer/ws/{p}
