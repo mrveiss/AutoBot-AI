@@ -117,7 +117,7 @@ export interface TreeNodeMetadata {
   title?: string
   source?: string
   content?: string
-  full_content?: string
+  // Issue #12370: full_content removed — lazy-loaded via GET /fact/{fact_key}.
   timestamp?: string
   created_at?: string
   category?: string

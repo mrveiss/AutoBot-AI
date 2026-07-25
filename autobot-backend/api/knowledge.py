@@ -2161,8 +2161,9 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> dict | None:
         return {
             "key": fact_key,
             "title": fact_title,
+            # Issue #12370: browse list ships only the snippet; the full
+            # document is lazy-loaded per fact via GET /fact/{fact_key}.
             "content": content[:500] + "..." if len(content) > 500 else content,
-            "full_content": content,
             "category": cat,
             "type": fact_type,
             "metadata": metadata,
@@ -2346,8 +2347,9 @@ async def _get_facts_by_category_legacy(kb, category: str | None, limit: int):
             {
                 "key": fact_key,
                 "title": title,
+                # Issue #12370: snippet only; full document lazy-loaded via
+                # GET /fact/{fact_key}.
                 "content": content[:500] + "..." if len(content) > 500 else content,
-                "full_content": content,
                 "category": fact_cat,
                 "type": fact_type,
                 "metadata": metadata,

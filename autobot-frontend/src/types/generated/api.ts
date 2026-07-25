@@ -72320,11 +72320,6 @@ export interface components {
              */
             content: string;
             /**
-             * Full Content
-             * @default
-             */
-            full_content: string;
-            /**
              * Category
              * @default
              */
