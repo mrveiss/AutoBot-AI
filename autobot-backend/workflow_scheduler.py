@@ -32,6 +32,23 @@ from autobot_types import TaskComplexity
 from constants.threshold_constants import RetryConfig, WorkflowConfig
 
 
+def _ensure_utc_aware(value: datetime) -> datetime:
+    """Tag a naive ``datetime`` as UTC; pass tz-aware values through unchanged.
+
+    Issue #12453: callers may hand ``schedule_workflow``/``reschedule_workflow``
+    a naive ``datetime`` (e.g. ``datetime.now()``) instead of an ISO string.
+    Unlike the string path (``parse_utc_iso``), naive ``datetime`` objects were
+    never normalized, so later comparisons against tz-aware ``now`` values
+    (``get_scheduler_status``, ``_process_scheduled_workflows``,
+    ``_calculate_priority_score``) raised
+    ``TypeError: can't compare offset-naive and offset-aware datetimes``.
+    Matches ``parse_utc_iso``'s "naive is assumed UTC" convention.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 class WorkflowPriority(Enum):
     """Workflow execution priority levels"""
 
@@ -474,6 +491,8 @@ class WorkflowScheduler:
                 scheduled_time = parse_utc_iso(scheduled_time)
             except ValueError:
                 scheduled_time = self._parse_time_string(scheduled_time)
+        else:
+            scheduled_time = _ensure_utc_aware(scheduled_time)
 
         # Parse priority and complexity
         if isinstance(priority, str):
@@ -706,6 +725,8 @@ class WorkflowScheduler:
         # Parse new time
         if isinstance(new_time, str):
             new_time = self._parse_time_string(new_time)
+        else:
+            new_time = _ensure_utc_aware(new_time)
 
         workflow.scheduled_time = new_time
 
