@@ -85,7 +85,7 @@ class TestChromaDBLoader:
         mock_client.get_or_create_collection.return_value = mock_collection
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
+            "knowledge.pipeline.loaders.chromadb_loader.get_async_default_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -102,7 +102,7 @@ class TestChromaDBLoader:
         mock_client.get_or_create_collection.return_value = mock_collection
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
+            "knowledge.pipeline.loaders.chromadb_loader.get_async_default_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -119,7 +119,7 @@ class TestChromaDBLoader:
         mock_client.get_or_create_collection.return_value = mock_collection
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
+            "knowledge.pipeline.loaders.chromadb_loader.get_async_default_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -134,7 +134,7 @@ class TestChromaDBLoader:
         mock_client = AsyncMock()
 
         with patch(
-            "backend.knowledge.pipeline.loaders.chromadb_loader." "get_async_chromadb_client",
+            "knowledge.pipeline.loaders.chromadb_loader.get_async_default_client",
             return_value=mock_client,
         ):
             from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
@@ -156,10 +156,14 @@ class TestRedisGraphLoader:
     async def test_load_entities(self, context_with_data):
         mock_redis = MagicMock()
         mock_json = MagicMock()
+        mock_json.set = AsyncMock()
         mock_redis.json.return_value = mock_json
+        mock_redis.set = AsyncMock()
+        mock_redis.sadd = AsyncMock()
+        mock_redis.zadd = AsyncMock()
 
         with patch(
-            "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
+            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
             return_value=mock_redis,
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
@@ -174,10 +178,14 @@ class TestRedisGraphLoader:
     async def test_load_relationships(self, context_with_data):
         mock_redis = MagicMock()
         mock_json = MagicMock()
+        mock_json.set = AsyncMock()
         mock_redis.json.return_value = mock_json
+        mock_redis.set = AsyncMock()
+        mock_redis.sadd = AsyncMock()
+        mock_redis.zadd = AsyncMock()
 
         with patch(
-            "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
+            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
             return_value=mock_redis,
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
@@ -195,10 +203,14 @@ class TestRedisGraphLoader:
 
         mock_redis = MagicMock()
         mock_json = MagicMock()
+        mock_json.set = AsyncMock()
         mock_redis.json.return_value = mock_json
+        mock_redis.set = AsyncMock()
+        mock_redis.sadd = AsyncMock()
+        mock_redis.zadd = AsyncMock()
 
         with patch(
-            "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
+            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
             return_value=mock_redis,
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
@@ -213,7 +225,7 @@ class TestRedisGraphLoader:
         mock_redis = MagicMock()
 
         with patch(
-            "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
+            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
             return_value=mock_redis,
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
@@ -230,10 +242,14 @@ class TestRedisGraphLoader:
 
         mock_redis = MagicMock()
         mock_json = MagicMock()
+        mock_json.set = AsyncMock()
         mock_redis.json.return_value = mock_json
+        mock_redis.set = AsyncMock()
+        mock_redis.sadd = AsyncMock()
+        mock_redis.zadd = AsyncMock()
 
         with patch(
-            "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
+            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
             return_value=mock_redis,
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
