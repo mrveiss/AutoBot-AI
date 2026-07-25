@@ -458,3 +458,142 @@ class TestSync:
                     await connector.sync(incremental=True)
 
         assert _url_to_source_id("https://c.com") not in written
+
+
+# ---------------------------------------------------------------------------
+# Issue #12486 — no-content pages surface a specific, diagnosable reason
+# ---------------------------------------------------------------------------
+
+from datetime import datetime as _dt  # noqa: E402
+
+from knowledge.connectors.web_crawler import (  # noqa: E402
+    _ingest_results_to_kb,
+    _no_content_reason,
+)
+from web_fetch import (  # noqa: E402
+    ERR_CONNECTION,
+    ERR_HTTP_ERROR,
+    ERR_ROBOTS_BLOCKED,
+    ERR_TIMEOUT,
+    WebFetcher,
+)
+
+
+def _running_sync_result() -> SyncResult:
+    return SyncResult(
+        connector_id="test-crawler",
+        started_at=_dt.utcnow(),
+        completed_at=None,
+        status="running",
+    )
+
+
+class TestNoContentReason:
+    """_no_content_reason maps a no-content FetchResult to a specific reason."""
+
+    def test_http_403_names_anti_bot_challenge(self) -> None:
+        r = FetchResult(url="https://cf.example", success=False, error_code=ERR_HTTP_ERROR, status_code=403)
+        msg = _no_content_reason(r)
+        assert "empty/failed" not in msg
+        assert "403" in msg and "https://cf.example" in msg
+
+    def test_http_429_named(self) -> None:
+        r = FetchResult(url="https://x", success=False, error_code=ERR_HTTP_ERROR, status_code=429)
+        assert "429" in _no_content_reason(r)
+
+    def test_http_500_named(self) -> None:
+        r = FetchResult(url="https://x", success=False, error_code=ERR_HTTP_ERROR, status_code=500)
+        assert "500" in _no_content_reason(r)
+
+    def test_robots_block_named(self) -> None:
+        r = FetchResult(url="https://x", success=False, error_code=ERR_ROBOTS_BLOCKED)
+        assert "robots" in _no_content_reason(r).lower()
+
+    def test_timeout_named(self) -> None:
+        r = FetchResult(url="https://x", success=False, error_code=ERR_TIMEOUT)
+        assert "timed out" in _no_content_reason(r).lower()
+
+    def test_connection_error_named(self) -> None:
+        r = FetchResult(url="https://x", success=False, error_code=ERR_CONNECTION, status_code=None)
+        msg = _no_content_reason(r).lower()
+        assert "connection" in msg or "network" in msg
+
+    def test_empty_after_extraction_named(self) -> None:
+        r = FetchResult(url="https://x", success=True, markdown="   ", status_code=200)
+        msg = _no_content_reason(r)
+        assert "empty/failed" not in msg
+        assert "empty after extraction" in msg.lower()
+
+
+class TestIngestReasonSurfacing:
+    """Successful pages ingest a document; failures surface a real reason (#12486)."""
+
+    async def test_reachable_page_yields_document(self) -> None:
+        """A successful fetch of a normal HTML page produces >=1 ingested doc."""
+        connector = WebCrawlerConnector(_make_config(["https://example.com"]))
+        connector._ingest_content = AsyncMock()
+        sync_result = _running_sync_result()
+        fr = FetchResult(
+            url="https://example.com",
+            success=True,
+            markdown="# Title\n\nReal readable body text for ingestion.",
+            title="Title",
+            status_code=200,
+        )
+        await _ingest_results_to_kb([fr], connector, sync_result)
+        assert sync_result.added == 1
+        assert sync_result.errors == []
+        connector._ingest_content.assert_awaited_once()
+
+    async def test_403_surfaces_status_not_opaque_empty(self) -> None:
+        connector = WebCrawlerConnector(_make_config(["https://cf.example"]))
+        connector._ingest_content = AsyncMock()
+        sync_result = _running_sync_result()
+        fr = FetchResult(url="https://cf.example", success=False, error_code=ERR_HTTP_ERROR, status_code=403)
+        await _ingest_results_to_kb([fr], connector, sync_result)
+        assert sync_result.added == 0
+        assert len(sync_result.errors) == 1
+        msg = sync_result.errors[0]
+        assert "empty/failed" not in msg
+        assert "403" in msg and "https://cf.example" in msg
+        connector._ingest_content.assert_not_awaited()
+
+    async def test_empty_after_extraction_surfaces_reason(self) -> None:
+        connector = WebCrawlerConnector(_make_config(["https://example.com"]))
+        connector._ingest_content = AsyncMock()
+        sync_result = _running_sync_result()
+        fr = FetchResult(url="https://example.com", success=True, markdown="", status_code=200)
+        await _ingest_results_to_kb([fr], connector, sync_result)
+        assert sync_result.added == 0
+        assert "empty/failed" not in sync_result.errors[0]
+        assert "empty after extraction" in sync_result.errors[0].lower()
+
+
+class TestFetchPageHttpErrorLabelling:
+    """_fetch_page_with_html labels HTTP-status failures as ERR_HTTP_ERROR (#12486)."""
+
+    async def test_403_labelled_http_error_with_status(self) -> None:
+        connector = WebCrawlerConnector(_make_config(["https://cf.example"]))
+        fetcher = WebFetcher(robots_cache=None)
+
+        async def _side_effect(url, timeout=30.0):
+            return "<html><head><title>Just a moment...</title></head><body></body></html>", 403
+
+        with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_html", side_effect=_side_effect):
+            fetch_result, raw_html = await connector._fetch_page_with_html(fetcher, "https://cf.example")
+        assert fetch_result.success is False
+        assert fetch_result.status_code == 403
+        assert fetch_result.error_code == ERR_HTTP_ERROR
+        assert raw_html == ""
+
+    async def test_connection_failure_labelled_connection(self) -> None:
+        connector = WebCrawlerConnector(_make_config(["https://x"]))
+        fetcher = WebFetcher(robots_cache=None)
+
+        async def _side_effect(url, timeout=30.0):
+            return None, None
+
+        with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_html", side_effect=_side_effect):
+            fetch_result, _ = await connector._fetch_page_with_html(fetcher, "https://x")
+        assert fetch_result.success is False
+        assert fetch_result.error_code == ERR_CONNECTION
