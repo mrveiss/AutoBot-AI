@@ -1032,6 +1032,26 @@ def set_test_environment():
     os.environ.update(original_env)
 
 
+@pytest.fixture(autouse=True)
+def _reset_synthesis_schema_cache():
+    """Clear the rag_service synthesis-schema singleton around every test (#12531).
+
+    ``services.rag_service._SYNTHESIS_SCHEMA_CACHE`` is a module-level singleton guarded
+    by ``if ... is None``: the first test that triggers a real load permanently caches
+    the on-disk schema, so later tests that patch ``load_synthesis_schema`` are silently
+    ignored. Resetting before and after each test keeps the cache from leaking across the
+    process regardless of which test populated it.
+    """
+    try:
+        import services.rag_service as _rag
+    except Exception:
+        yield
+        return
+    _rag.reset_synthesis_schema_cache()
+    yield
+    _rag.reset_synthesis_schema_cache()
+
+
 # #12438: Modules deliberately handled elsewhere in this conftest — skip them in
 # the generalized real-load loop so it doesn't clobber their configured stubs or
 # double-load the ones already loaded via _real_load_and_bind above.
