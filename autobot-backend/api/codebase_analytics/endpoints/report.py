@@ -1688,7 +1688,12 @@ async def _get_bug_prediction(
     """
     Get bug prediction data for the project (Issue #505).
 
-    Runs the analysis in a thread pool to avoid blocking the async event loop.
+    Issue #12406: Calls the async analysis path directly (this function is
+    already async, so no thread-pool wrapper is needed). The async path is
+    what exercises the source_id-scoped ``bug_pattern_vectors`` ChromaDB
+    collection when use_semantic=True; with use_semantic=False (the
+    pipeline default) it degrades to the same synchronous per-file
+    analysis as the old sync path, so this is a safe default baseline.
 
     Issue #554: Enhanced with optional semantic analysis:
     - use_semantic=True enables LLM-based bug pattern matching
@@ -1713,18 +1718,16 @@ async def _get_bug_prediction(
         # the project root, causing FileNotFoundError in git subprocess calls.
         root = project_root or str(PATH.PROJECT_ROOT)
 
-        # Issue #1233: Use dedicated analytics executor to prevent
-        # default thread pool starvation
-
         # Issue #554: Pass semantic analysis flag
         # Issue #12384: Pass source_id for ChromaDB metadata/query scoping
         predictor = BugPredictor(project_root=root, use_semantic_analysis=use_semantic, source_id=source_id)
 
+        # Issue #12406: analyze_directory_async is the path that writes/reads
+        # the source_id-scoped bug_pattern_vectors collection; the previous
+        # sync analyze_directory() call never reached it, making the #12384
+        # scoping dead code. Already async here, so no run_in_executor needed.
         result = await asyncio.wait_for(
-            asyncio.get_running_loop().run_in_executor(
-                get_analytics_executor(),
-                lambda: predictor.analyze_directory(pattern="*.py", limit=limit),
-            ),
+            predictor.analyze_directory_async(pattern="*.py", limit=limit),
             timeout=BUG_PREDICTION_TIMEOUT,
         )
 

@@ -304,3 +304,49 @@ class TestPatternAnalysisNoGlobalWrite:
         # The report consumes the returned object directly and never reads the
         # ChromaDB cache, so persistence must be OFF to avoid a cross-source write.
         assert captured.get("enable_embedding_storage") is False
+
+
+# ---------------------------------------------------------------------------
+# _get_bug_prediction must call the async analysis path so the source_id-
+# scoped `bug_pattern_vectors` ChromaDB collection (#12384) is actually
+# reachable -- the previous sync `analyze_directory()` call never learned or
+# queried it, making the #12384 scoping defensive dead code (#12406).
+# ---------------------------------------------------------------------------
+class TestGetBugPredictionUsesAsyncPath:
+    """Issue #12406: wire _get_bug_prediction to BugPredictor.analyze_directory_async."""
+
+    async def test_calls_analyze_directory_async_not_sync(self):
+        from api.codebase_analytics.endpoints import report as report_mod
+
+        fake_result = MagicMock(analyzed_files=3, high_risk_count=0)
+        fake_predictor = MagicMock()
+        fake_predictor.analyze_directory = MagicMock(side_effect=AssertionError("sync path must not be called"))
+        fake_predictor.analyze_directory_async = AsyncMock(return_value=fake_result)
+
+        with patch.object(report_mod, "BugPredictor", return_value=fake_predictor):
+            result = await report_mod._get_bug_prediction(
+                project_root="/srv/sources/b",
+                use_semantic=False,
+                source_id="B",
+            )
+
+        fake_predictor.analyze_directory_async.assert_awaited_once_with(
+            pattern="*.py", limit=report_mod.BUG_PREDICTION_FILE_LIMIT
+        )
+        fake_predictor.analyze_directory.assert_not_called()
+        assert result is fake_result
+
+    async def test_constructs_predictor_with_semantic_flag_and_source_id(self):
+        from api.codebase_analytics.endpoints import report as report_mod
+
+        with patch.object(report_mod, "BugPredictor") as fake_cls:
+            fake_predictor = fake_cls.return_value
+            fake_predictor.analyze_directory_async = AsyncMock(return_value=None)
+
+            await report_mod._get_bug_prediction(
+                project_root="/srv/sources/b",
+                use_semantic=True,
+                source_id="B",
+            )
+
+        fake_cls.assert_called_once_with(project_root="/srv/sources/b", use_semantic_analysis=True, source_id="B")
