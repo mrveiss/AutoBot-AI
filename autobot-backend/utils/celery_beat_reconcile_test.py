@@ -74,3 +74,21 @@ def test_empty_schedule_is_a_no_op():
 
     assert pruned == []
     assert schedule == {}
+
+
+def test_celery_internal_entries_are_never_pruned():
+    """#12354 review: Celery's own default entries (e.g. celery.backend_cleanup,
+    injected by install_default_entries under non-autoexpire result backends and
+    absent from beat_schedule) must be kept, not pruned."""
+    schedule = {
+        "celery.backend_cleanup": _FakeEntry(task="celery.backend_cleanup"),
+        "stale-app-task": _FakeEntry(task="tasks.long_gone"),
+        "current-task": _FakeEntry(task="tasks.current"),
+    }
+    valid_tasks = {"tasks.current"}  # neither celery.* nor the stale task
+
+    pruned = reconcile_schedule(schedule, valid_tasks)
+
+    # Only the app-declared stale task is pruned; the celery.* internal stays.
+    assert pruned == ["stale-app-task"]
+    assert set(schedule) == {"celery.backend_cleanup", "current-task"}

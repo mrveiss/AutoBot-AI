@@ -59,7 +59,17 @@ def reconcile_schedule(
         The sorted list of entry names that were pruned (empty when the
         persisted schedule already matches ``beat_schedule``).
     """
-    stale = sorted(name for name, entry in schedule.items() if entry.task not in valid_tasks)
+    # Never prune Celery's own internal periodic entries (e.g.
+    # ``celery.backend_cleanup``): ``install_default_entries()`` injects those
+    # straight into the scheduler under non-autoexpire result backends and they
+    # are never present in ``app.conf.beat_schedule``, so they must not count as
+    # stale — otherwise a backend change would silently disable result-expiry
+    # cleanup (#12354 review).
+    stale = sorted(
+        name
+        for name, entry in schedule.items()
+        if entry.task not in valid_tasks and not entry.task.startswith("celery.")
+    )
     for name in stale:
         logger.warning(
             "Beat startup reconciliation: pruning stale persisted schedule entry "
