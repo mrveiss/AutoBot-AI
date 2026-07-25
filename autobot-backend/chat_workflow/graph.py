@@ -1550,7 +1550,7 @@ async def get_redis_checkpointer() -> "AsyncRedisSaver":  # type: ignore[return]
         ttl_minutes = ssot.redis.checkpoint_ttl_minutes
     except Exception:
         redis_host = _ssot_config.redis_host
-        redis_port = _ssot_config.redis_port
+        redis_port = _ssot_config.port.redis
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         logger.warning(
             "SSOT config unavailable, using fallback Redis URI: %s",
