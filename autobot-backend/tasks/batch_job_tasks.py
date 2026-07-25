@@ -44,7 +44,6 @@ work is tracked in a dedicated follow-up issue referenced from the #12439 PR.
 from datetime import datetime, timezone
 
 from celery_app import celery_app
-from croniter import CroniterError, croniter
 
 from api.schemas_workflows import BatchJob, BatchJobStatus, BatchLogEntry
 from autobot_shared.logging_manager import get_logger
@@ -167,6 +166,21 @@ def dispatch_due_batch_schedules() -> dict:
     then enqueues ``run_batch_job`` unless the referenced job is already
     ``running`` (skip-if-running for overlaps).
     """
+    # #12439: lazy import — mirrors llc/scheduler/routine_scheduler.py's
+    # croniter handling. croniter is a hard requirement in requirements.txt,
+    # but startup-import-smoke deliberately runs with 29 optional deps
+    # (croniter included) NOT installed to verify the app still imports; a
+    # module-level `from croniter import croniter` here would be re-exported
+    # via tasks/__init__.py (imported at startup for task discovery) and
+    # hard-fail that check. Deferring the import to call-time — where
+    # croniter IS installed in every real deployment — fixes that without
+    # weakening the dependency.
+    try:
+        from croniter import CroniterError, croniter
+    except ImportError:
+        logger.warning("dispatch_due_batch_schedules: croniter not installed — schedule dispatch disabled")
+        return {"dispatched": 0, "skipped_disabled": 0, "skipped_running": 0, "not_due": 0}
+
     redis_client = get_redis_client(database=_REDIS_DATABASE)
     if not redis_client:
         logger.warning("dispatch_due_batch_schedules: Redis unavailable")

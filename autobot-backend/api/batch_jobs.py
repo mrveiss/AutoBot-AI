@@ -19,7 +19,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from croniter import CroniterError, croniter
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_workflows import (
@@ -85,6 +84,25 @@ router = APIRouter(tags=["batch-jobs", "management"])
 def _get_template_key(template_id: str) -> str:
     """Generate Redis key for template data"""
     return f"batch:template:{template_id}"
+
+
+def _require_croniter():
+    """Lazy-import croniter; raise 503 if the optional dep isn't installed.
+
+    Issue #12439: croniter is a hard requirement in requirements.txt, but
+    startup-import-smoke runs with it (and 28 other optional deps)
+    deliberately NOT installed to verify the app still imports. A
+    module-level ``from croniter import croniter`` here would hard-fail
+    that check since ``api/`` is imported at startup; deferring the import
+    to call-time (where croniter IS installed in every real deployment)
+    fixes that without weakening the dependency. Mirrors the local-import
+    pattern in llc/scheduler/routine_scheduler.py.
+    """
+    try:
+        from croniter import CroniterError, croniter
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Batch scheduling unavailable — croniter not installed")
+    return croniter, CroniterError
 
 
 # =============================================================================
@@ -570,6 +588,7 @@ async def create_batch_schedule(
     # immediately — dispatch_due_batch_schedules() treats next_run <= now as
     # due, so seeding next_run=now made every new schedule fire on the very
     # next beat tick regardless of cron_expression.
+    croniter, CroniterError = _require_croniter()
     try:
         next_run = croniter(cron_expression, datetime.now(tz=timezone.utc)).get_next(datetime)
     except (CroniterError, ValueError) as exc:
@@ -634,6 +653,7 @@ async def update_batch_schedule(
         setattr(schedule, field, value)
 
     if recompute_next_run:
+        croniter, CroniterError = _require_croniter()
         try:
             schedule.next_run = croniter(schedule.cron_expression, datetime.now(tz=timezone.utc)).get_next(datetime)
         except (CroniterError, ValueError) as exc:
