@@ -196,6 +196,17 @@ if "celery_app" not in sys.modules:
         import celery as _cel_pkg  # noqa: F401
 
         _test_app = _cel_pkg.Celery("test_autobot", broker="memory://", backend="cache+memory://")
+        # GH#12522: ``store_eager_result`` is bound onto each task class at
+        # *finalize* time (Task.from_config), and ``Task.bind`` only reads the
+        # conf value while the attribute is still ``None``. Any test that
+        # introspects ``celery_app.tasks`` (celery_beat_registration_test,
+        # analytics_cache_population_test, batch_job_tasks_test) finalizes this
+        # shared session app first, freezing ``store_eager_result=False`` before
+        # an eager-result test's fixture can flip the runtime conf -- a later
+        # ``AsyncResult`` then reads the stale PROGRESS meta and reports
+        # "running". Setting it at creation binds every task with terminal-result
+        # storage regardless of which test file finalizes the app first.
+        _test_app.conf.task_store_eager_result = True
     except (ImportError, Exception):
         # Fall back to the stub Celery that is already in sys.modules["celery"]
         _StubCeleryClass = sys.modules["celery"].Celery

@@ -22,6 +22,7 @@ register tasks on a lightweight in-process Celery app.
 from __future__ import annotations
 
 import importlib
+import logging
 import sys
 import types
 from unittest.mock import MagicMock
@@ -69,8 +70,16 @@ def _ensure_stub(name: str) -> types.ModuleType:
     return mod
 
 
+# GH#12522: ``get_logger`` must return a REAL stdlib logger, not a MagicMock.
+# ``_ensure_stub`` may hand back the already-imported real logging_manager
+# module, so overwriting ``get_logger`` here mutates a process-global that every
+# later import sees. A MagicMock return value made any module imported after
+# this conftest (e.g. api.codebase_analytics.chromadb_storage) log to a mock,
+# so ``caplog`` captured nothing and order-dependent log assertions failed. A
+# thin ``logging.getLogger`` factory keeps the heavy real logging_manager import
+# stubbed out while still emitting propagating records that caplog can capture.
 _logging_stub = _ensure_stub("autobot_shared.logging_manager")
-_logging_stub.get_logger = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+_logging_stub.get_logger = lambda name="autobot", *args, **kwargs: logging.getLogger(name)  # type: ignore[attr-defined]
 
 _async_compat_stub = _ensure_stub("autobot_shared.async_compat")
 _async_compat_stub.run_or_schedule = MagicMock()  # type: ignore[attr-defined]
