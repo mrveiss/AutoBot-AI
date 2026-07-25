@@ -30,12 +30,14 @@ from autobot_shared.logging_manager import get_logger
 from transcriber.database import Database
 from transcriber.deps import DEFAULT_USER, can_access, get_db
 from transcriber.models import RecordingOut
+from transcriber.upload_security import MAX_FILE_SIZE
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["transcriber-recordings"])
 
 _ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
+_CHUNK_SIZE = 65536
 
 
 def _upload_dir(request: Request) -> Path:
@@ -64,9 +66,23 @@ async def upload_recording(
         raise HTTPException(400, f"Unsupported audio format: {ext}")
     safe_name = f"{uuid.uuid4().hex}{ext}"
     dest = _upload_dir(request) / safe_name
-    async with aiofiles.open(dest, "wb") as f:
-        while chunk := await file.read(65536):
-            await f.write(chunk)
+    # GH#12331: enforce MAX_FILE_SIZE during streaming (never buffer the whole
+    # upload in memory) — abort and delete the partial file the instant the
+    # cumulative byte count crosses the cap, regardless of proxy limits.
+    total_bytes = 0
+    try:
+        async with aiofiles.open(dest, "wb") as f:
+            while chunk := await file.read(_CHUNK_SIZE):
+                total_bytes += len(chunk)
+                if total_bytes > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        413,
+                        f"File exceeds maximum upload size of {MAX_FILE_SIZE // (1024 * 1024)}MB",
+                    )
+                await f.write(chunk)
+    except Exception:
+        dest.unlink(missing_ok=True)
+        raise
     # The file is on disk before the DB row exists; unlink the partial upload
     # if the insert fails so a rejected recording never leaks an orphan (GH#12310).
     try:
@@ -139,8 +155,6 @@ async def delete_recording(recording_id: int, request: Request, db: Database = D
 
 
 # ── Audio path validation ─────────────────────────────────────────────────────
-
-_CHUNK_SIZE = 65536
 
 
 def _resolve_audio_path(filepath: str, upload_dir: Path) -> Path:

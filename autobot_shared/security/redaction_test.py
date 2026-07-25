@@ -77,6 +77,33 @@ class TestRedactText:
         line = "2026-07-23 10:00:00,123 INFO worker started successfully"
         assert redact_text(line) == line
 
+    @pytest.mark.parametrize(
+        "key",
+        ["client_secret", "access_token", "refresh_token", "db_password", "vault_token"],
+    )
+    def test_prefixed_secret_kv_is_redacted(self, key):
+        # #12333 — prefixed keys (client_secret=, access_token:, etc.) must be
+        # masked in free-text logs, not just via redact_mapping.
+        line = f"OAUTH {key}=SUPER-SECRET-VALUE issued"
+        redacted = redact_text(line)
+        assert "SUPER-SECRET-VALUE" not in redacted
+        assert f"{key}=***" in redacted
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "The password reset flow succeeded for user bob",
+            "we issued new tokens today for the demo",
+            "password_hash_algorithm=bcrypt",
+            "topsecret999 was mentioned but not assigned",
+            "the secret sauce recipe is great",
+        ],
+    )
+    def test_broadened_regex_does_not_over_redact(self, line):
+        # #12333 — the broadened prefix must not mask ordinary prose or
+        # near-miss keys that merely contain (but don't end in) a secret word.
+        assert redact_text(line) == line
+
 
 # ---------------------------------------------------------------------------
 # redact_mapping — kv/dict level (former _mask_secret_extra_vars)
