@@ -14,8 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.time_utils import now_utc, utc_timestamp
-from security.enterprise.threat_detection import (
+# Optional ML dependency: threat_detection.engine imports scikit-learn.
+# Skip cleanly when absent; run for real when sklearn IS installed.
+pytest.importorskip("sklearn", reason="scikit-learn not installed — optional ML dep")
+
+from autobot_shared.time_utils import now_utc, utc_timestamp  # noqa: E402
+from security.enterprise.threat_detection import (  # noqa: E402
     AnalysisContext,
     EventHistory,
     SecurityEvent,
