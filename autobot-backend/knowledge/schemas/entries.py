@@ -59,7 +59,8 @@ class FactByCategoryEntry(BaseModel):
     key: str
     title: str = "Untitled"
     content: str = Field("", description="Truncated to 500 chars + ellipsis")
-    full_content: str = ""
+    # Issue #12370: full_content intentionally omitted from the browse list —
+    # the entire document is lazy-loaded per fact via GET /fact/{fact_key}.
     category: str = ""
     type: str = "unknown"
     metadata: Dict[str, Any] = Field(default_factory=dict)

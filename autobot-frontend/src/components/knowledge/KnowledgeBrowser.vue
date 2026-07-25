@@ -318,7 +318,8 @@ interface KnowledgeFactLike {
   title?: string
   source?: string
   content?: string
-  full_content?: string
+  // Issue #12370: full_content removed from the browse list — lazy-loaded
+  // per fact via GET /fact/{fact_key}.
   timestamp?: string
   created_at?: string
   category?: string
@@ -565,19 +566,21 @@ const buildNestedTree = (facts: Record<string, unknown>[], category: string): Tr
         if (!current._files) current._files = []
         // Extract the actual fact ID from the Redis key (e.g., "fact:UUID" -> "UUID")
         const factId = fact.key ? fact.key.replace('fact:', '') : `fact-${category}-${factIdx}`
-        const fileContent = (fact.full_content || fact.content || '') as string
+        // Issue #12370: the browse list carries only the snippet (content).
+        // The full document is lazy-loaded on open via GET /fact/{fact_key}
+        // (see loadFileContent), so we never ship full_content in the list.
+        const snippet = (fact.content || '') as string
         current._files.push({
           id: factId, // Use actual fact ID from Redis, not synthetic ID
           name: part,
           type: 'file' as const,
           path: `/${category}/${filename}`,
           category: category,
-          size: fileContent.length,
-          content: fileContent,
+          size: snippet.length,
+          content: snippet,
           metadata: {
             ...fact.metadata,
-            key: fact.key,
-            full_content: fact.full_content
+            key: fact.key
           }
         })
       } else {
@@ -1067,11 +1070,11 @@ const loadFolderContents = async (folder: TreeNode) => {
 const loadFileContent = async (file: TreeNode) => {
   contentError.value = null
   await loadFileContentOp(async () => {
-    // First check if we have full_content in metadata
-    if (file.metadata?.full_content) {
-      fileContent.value = file.metadata.full_content
-    } else if (file.content && !file.content.endsWith('...')) {
-      // Use content if it's not truncated
+    // Issue #12370: the browse list no longer carries full_content. Short
+    // facts arrive whole in the snippet (no trailing ellipsis); anything
+    // truncated is lazy-loaded in full from the per-fact detail endpoint.
+    if (file.content && !file.content.endsWith('...')) {
+      // Snippet is the complete fact — use it directly.
       fileContent.value = file.content
     } else {
       // Need to fetch full content from Redis
@@ -1079,7 +1082,7 @@ const loadFileContent = async (file: TreeNode) => {
       const factKey = file.metadata?.key || file.path?.split('/').pop()
 
       if (factKey) {
-        // Fetch full fact data from backend
+        // Fetch full fact data from backend (GET /fact/{fact_key})
         const response = await fetchFactContent(factKey)
 
         if (response && response.content) {

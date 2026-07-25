@@ -221,7 +221,8 @@ export interface CategorizedFact {
   key: string
   title: string
   content: string
-  full_content?: string
+  // Issue #12370: full_content removed from the browse list — the full
+  // document is lazy-loaded per fact via GET /knowledge_base/fact/{fact_key}.
   category: string
   type: string
   metadata: Record<string, unknown>
