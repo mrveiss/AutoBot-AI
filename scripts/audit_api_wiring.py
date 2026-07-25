@@ -104,6 +104,17 @@ def norm_path(p: str) -> str:
 
 # ---------------------------------------------------------------- backend ----
 
+def _runtime_websocket_paths(app) -> set[str]:  # noqa: ANN001
+    """Best-effort runtime WebSocketRoute walk of ``app.routes``.
+
+    Works when the installed FastAPI/Starlette flattens included sub-router
+    routes onto ``app.routes`` (true through fastapi<0.139). It is NOT relied
+    on alone — see static_websocket_paths() for why (#12381).
+    """
+    from starlette.routing import WebSocketRoute  # type: ignore
+    return {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
+
+
 def dump_openapi(out_path: str) -> int:
     """Import the app and dump app.openapi() — authoritative route table."""
     # Resolve BEFORE chdir: a relative out_path must land where the caller
@@ -119,10 +130,15 @@ def dump_openapi(out_path: str) -> int:
         # FastAPI omits WebSocket routes from OpenAPI — record them in a
         # custom key so the audit can verify /api/ws* style frontend calls
         # against the real route table instead of flagging them (GH#9864).
-        from starlette.routing import WebSocketRoute  # type: ignore
-        spec["x-websocket-paths"] = sorted(
-            {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
-        )
+        # Union runtime introspection with a static source scan (#12381):
+        # fastapi>=0.139's lazy ``_IncludedRouter`` wrapping means
+        # include_router()'d routes are no longer flattened onto app.routes,
+        # so the runtime walk alone silently returns zero WS routes on newer
+        # FastAPI (confirmed in CI: "+0 websocket" despite 25 real handlers).
+        # The static scan is version-independent and is the source of truth;
+        # the runtime walk is kept as a supplementary safety net.
+        ws = _runtime_websocket_paths(app) | static_websocket_paths(BACKEND)
+        spec["x-websocket-paths"] = sorted(ws)
     except Exception as e:  # noqa: BLE001
         print(f"[dump-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
@@ -151,11 +167,9 @@ def dump_slm_openapi(out_path: str) -> int:
     try:
         from main import app  # type: ignore
         spec = app.openapi()
-        # Same WebSocket-route workaround as dump_openapi() (GH#9864).
-        from starlette.routing import WebSocketRoute  # type: ignore
-        spec["x-websocket-paths"] = sorted(
-            {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
-        )
+        # Same runtime+static WebSocket union as dump_openapi() (GH#9864, #12381).
+        ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
+        spec["x-websocket-paths"] = sorted(ws)
     except Exception as e:  # noqa: BLE001
         print(f"[dump-slm-openapi] FAILED to build app: {e}", file=sys.stderr)
         return 1
@@ -182,12 +196,17 @@ def backend_paths_from_openapi(src: str) -> set[str]:
 ROUTER_PREFIX_RE = re.compile(r"APIRouter\([^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S)
 
 
-def backend_paths_static() -> tuple[set[str], dict[str, list[str]]]:
-    """Best-effort static scan. Returns (normalized paths, module->raw routes)."""
-    raw_routes: dict[str, list[str]] = defaultdict(list)
+def _scan_route_decorators(
+    root: Path,
+) -> tuple[dict[str, list[tuple[str, str]]], dict[str, str], set[str]]:
+    """Regex-scan `root` for @router.<method>(...) decorators, APIRouter
+    prefixes, and include_router() mount prefixes. Returns
+    (module -> [(method, path), ...], module -> own prefix, mount prefixes).
+    """
+    raw: dict[str, list[tuple[str, str]]] = defaultdict(list)
     module_prefix: dict[str, str] = {}
     prefixes: set[str] = set()
-    for py in BACKEND.rglob("*.py"):
+    for py in root.rglob("*.py"):
         sp = str(py)
         if "__pycache__" in sp or "/tests/" in sp or sp.endswith("_test.py") or "/test_" in sp:
             continue
@@ -195,11 +214,19 @@ def backend_paths_static() -> tuple[set[str], dict[str, list[str]]]:
         mp = ROUTER_PREFIX_RE.search(txt)
         if mp:
             module_prefix[sp] = mp.group(1).rstrip("/")
-        for _m, path in ROUTE_DECORATOR_RE.findall(txt):
-            raw_routes[sp].append(path)
+        for method, path in ROUTE_DECORATOR_RE.findall(txt):
+            raw[sp].append((method, path))
         for _var, prefix in INCLUDE_ROUTER_RE.findall(txt):
             prefixes.add(prefix.rstrip("/"))
+    return raw, module_prefix, prefixes
 
+
+def _combine_prefixed_paths(
+    raw_routes: dict[str, list[str]], module_prefix: dict[str, str], prefixes: set[str]
+) -> set[str]:
+    """Combine each module's raw route strings with its own APIRouter prefix
+    and every known mount prefix (loose — mount-prefix combos aren't scoped
+    per-module, matching the pre-existing heuristic)."""
     paths: set[str] = set()
     for sp, routes in raw_routes.items():
         own = module_prefix.get(sp, "")
@@ -207,10 +234,40 @@ def backend_paths_static() -> tuple[set[str], dict[str, list[str]]]:
             base = own + ("" if (r.startswith("/") or not r) else "/") + r
             for candidate in {r, base}:
                 paths.add(norm_path(candidate) if candidate else norm_path(own or "/"))
-                for pre in prefixes:       # mount-prefix combinations (loose)
+                for pre in prefixes:
                     paths.add(norm_path(pre + (candidate if candidate.startswith("/")
                                                else "/" + candidate if candidate else "")))
-    return paths, raw_routes
+    return paths
+
+
+def backend_paths_static(root: Path = BACKEND) -> tuple[set[str], dict[str, list[str]]]:
+    """Best-effort static scan. Returns (normalized paths, module->raw routes)."""
+    raw, module_prefix, prefixes = _scan_route_decorators(root)
+    raw_routes = {sp: [path for _method, path in entries] for sp, entries in raw.items()}
+    return _combine_prefixed_paths(raw_routes, module_prefix, prefixes), raw_routes
+
+
+def static_websocket_paths(root: Path) -> set[str]:
+    """Static-scan websocket-only paths under `root` (#12381).
+
+    Runtime WebSocketRoute introspection of a live app is unreliable across
+    FastAPI versions: fastapi>=0.139's lazy ``_IncludedRouter`` wrapping means
+    ``app.routes`` no longer flattens include_router()'d routes, so a naive
+    ``isinstance(r, WebSocketRoute)`` walk silently finds nothing. Websocket
+    declarations are structurally simple (one ``@router.websocket(...)`` per
+    handler + static string prefixes), so a source scan — reusing the same
+    prefix-combination algorithm as backend_paths_static() — is both simpler
+    and version-independent. No `add_websocket_route()`/programmatic
+    registrations exist in this codebase (verified by grep), so decorator
+    scanning has full coverage.
+    """
+    raw, module_prefix, prefixes = _scan_route_decorators(root)
+    ws_routes = {
+        sp: [path for method, path in entries if method == "websocket"]
+        for sp, entries in raw.items()
+    }
+    ws_routes = {sp: paths for sp, paths in ws_routes.items() if paths}
+    return _combine_prefixed_paths(ws_routes, module_prefix, prefixes)
 
 
 def _module_served_by_openapi(txt: str, backend: set[str]) -> bool:

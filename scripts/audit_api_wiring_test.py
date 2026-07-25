@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -53,6 +54,93 @@ def test_slm_union_preserves_single_backend_behavior(tmp_path):
     backend_json = _write_openapi(tmp_path / "backend.json", ["/api/foo"])
     backend = audit.backend_paths_from_openapi(str(backend_json))
     assert backend == {"/api/foo"}
+
+
+# --------------------------------------------------------- websocket scan ----
+
+def test_static_websocket_paths_finds_prefixed_websocket_route(tmp_path_factory):
+    """A source-level scan finds @router.websocket() routes and combines them
+    with the router's own prefix AND any include_router() mount prefix — the
+    fix for CI's "+0 websocket" bug (fastapi>=0.139's lazy _IncludedRouter
+    wrapping breaks the old isinstance(r, WebSocketRoute) runtime walk, #12381).
+    """
+    # tmp_path_factory (not the function-scoped tmp_path fixture): tmp_path's
+    # own directory is named "test_<function-name>0", which would trip the
+    # "/test_" source-exclusion filter (correctly, for real repo paths like
+    # "api/test_foo.py") regardless of nesting depth beneath it.
+    src = tmp_path_factory.mktemp("ws_scan_fixture")
+    module = src / "advanced_control.py"
+    module.write_text(
+        'router = APIRouter(prefix="/advanced-control")\n'
+        '@router.websocket("/ws/desktop/{session_id}")\n'
+        "async def ws_desktop(websocket): ...\n"
+        '@router.get("/status")\n'
+        "async def status(): ...\n",
+        encoding="utf-8",
+    )
+    mount = src / "app_factory.py"
+    mount.write_text('app.include_router(advanced_control_router, prefix="/api")\n', encoding="utf-8")
+
+    ws_paths = audit.static_websocket_paths(src)
+    assert "/api/advanced-control/ws/desktop/{p}" in ws_paths
+    # The GET /status route must NOT be picked up by the websocket-only scan.
+    assert not any(p.endswith("/status") for p in ws_paths)
+
+
+def test_static_websocket_paths_ignores_test_files(tmp_path_factory):
+    src = tmp_path_factory.mktemp("ws_scan_fixture")
+    (src / "foo_test.py").write_text(
+        'router = APIRouter()\n@router.websocket("/ws")\nasync def h(websocket): ...\n',
+        encoding="utf-8",
+    )
+    assert audit.static_websocket_paths(src) == set()
+
+
+def test_dump_openapi_websocket_union_survives_empty_runtime_walk(monkeypatch, tmp_path, tmp_path_factory):
+    """Simulates the exact CI failure mode: a fake `app` whose .routes yields
+    zero WebSocketRoute instances (the fastapi>=0.139 _IncludedRouter case) —
+    x-websocket-paths must still be populated from the static scan."""
+    # tmp_path_factory — see comment in
+    # test_static_websocket_paths_finds_prefixed_websocket_route for why.
+    src = tmp_path_factory.mktemp("ws_scan_fixture")
+    ws_module = src / "ws_router.py"
+    ws_module.write_text(
+        'router = APIRouter()\n@router.websocket("/ws")\nasync def h(websocket): ...\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(audit, "BACKEND", src)
+
+    class _FakeApp:
+        routes = []  # simulates app.routes with everything hidden in _IncludedRouter
+
+        def openapi(self):
+            return {"paths": {"/api/foo": {}}}
+
+    fake_app = _FakeApp()
+
+    class _FakeAppFactoryModule:
+        @staticmethod
+        def create_app():
+            return fake_app
+
+    monkeypatch.setitem(sys.modules, "app_factory", _FakeAppFactoryModule)
+    monkeypatch.setattr(os, "chdir", lambda *_a, **_k: None)
+
+    out = tmp_path / "openapi.json"
+    rc = audit.dump_openapi(str(out))
+    assert rc == 0
+    spec = json.loads(out.read_text(encoding="utf-8"))
+    # No include_router(prefix="/api") mount in this fixture tree, so the
+    # static scan yields the bare route ("/ws") rather than a prefixed one —
+    # prefix combination itself is covered by
+    # test_static_websocket_paths_finds_prefixed_websocket_route above. The
+    # point here is that the union is non-empty despite the empty runtime walk.
+    assert "/ws" in spec["x-websocket-paths"]
+    assert _runtime_websocket_paths_returns_empty(fake_app)
+
+
+def _runtime_websocket_paths_returns_empty(fake_app) -> bool:
+    return audit._runtime_websocket_paths(fake_app) == set()
 
 
 # --------------------------------------------------------- baseline ----

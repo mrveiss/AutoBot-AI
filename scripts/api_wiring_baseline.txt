@@ -7,13 +7,16 @@
 # under "== UNWIRED FRONTEND CALLS ==": /api/... with {p} in place of any
 # runtime-resolved segment). Blank lines and #-comments are ignored.
 #
-# These are NOT SLM-backend routing false positives — they genuinely have no
-# backend anywhere, per the live-verified triage in #12326 (comment) and the
-# owner-decision issues that track them (build the backend, or remove the
-# dead UI control). Listing them here lets --fail-on-unwired gate on NEW
-# drift only, instead of blocking on findings already tracked elsewhere.
-# When #12378/#12364 are dispositioned (backend built or control removed),
-# remove the corresponding lines.
+# These are NOT SLM-backend routing false positives (those are fixed by
+# unioning --slm-openapi, no baseline needed) — each line here is either a
+# call that genuinely has no backend anywhere (per the live-verified triage
+# in #12326 comment + the owner-decision issues that track it: build the
+# backend, or remove the dead UI control) or a documented extraction false
+# positive (e.g. a cache-key config map, not a real call — see the #12381
+# section below). Listing them here lets --fail-on-unwired gate on NEW drift
+# only, instead of blocking on findings already tracked elsewhere. When
+# #12378/#12364 are dispositioned (backend built or control removed), remove
+# the corresponding lines.
 
 # --- #12378: browser-automation panel (aspirational, no backend) ---
 /api/browser/automation/run
@@ -61,3 +64,11 @@
 /api/code-intelligence/quality-score
 /api/code-intelligence/trends
 /api/analytics/bug-prediction
+
+# --- #12381: extraction false positive, not a live call ---
+# autobot-frontend/src/services/CacheService.ts:49 — `/api/user/profile` is a
+# key in the cache-TTL `strategies` lookup map (`getTTLForEndpoint()` does
+# `endpoint.includes(pattern)` against the REAL fetch URL elsewhere), not an
+# actual fetch call itself. Matches the "base-URL constants and cache-key
+# maps" false-positive class documented in the #12326 comment thread.
+/api/user/profile

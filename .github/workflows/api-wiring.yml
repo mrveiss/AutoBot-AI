@@ -54,12 +54,26 @@ jobs:
           cache-dependency-path: |
             requirements*.txt
             autobot-backend/requirements*.txt
+            autobot-slm-backend/requirements*.txt
 
       - name: Install backend dependencies (best-effort)
         continue-on-error: true
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -r requirements-ci.txt --prefer-binary || true
+
+      - name: Install SLM backend dependencies (best-effort)
+        # #12381: --dump-slm-openapi imports autobot-slm-backend/main.py, which
+        # needs its OWN requirements (croniter, authlib, ldap3, pysaml2, pyotp,
+        # ...) — requirements-ci.txt only covers autobot-backend. Without this,
+        # the SLM dump always fails ("No module named 'croniter'") and the SLM
+        # route union never happens, leaving every getSLMUrl()/slmFetch() call
+        # false-flagged as unwired. Best-effort/non-fatal like the step above —
+        # dump_slm_openapi() already degrades gracefully if something's still
+        # missing (audits against autobot-backend routes only).
+        continue-on-error: true
+        run: |
+          python -m pip install -r autobot-slm-backend/requirements.txt --prefer-binary || true
 
       - name: Run API wiring audit
         run: |
