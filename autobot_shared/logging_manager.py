@@ -14,6 +14,8 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
+from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
+
 if TYPE_CHECKING:
     from config.manager import ConfigManager
 
@@ -109,10 +111,14 @@ class LoggingManager:
                     logger.addHandler(handler)
 
                 # Add console handler for development
+                # #12488: split by level instead of a single bare stderr
+                # StreamHandler() so systemd's StandardOutput/StandardError
+                # append: split (INFO->*.log, WARNING+->*-error.log) matches
+                # what actually gets emitted.
                 if _get_config_manager().get("deployment.mode", "local") == "local":
-                    console_handler = logging.StreamHandler()
-                    console_handler.setFormatter(cls._get_formatter())
-                    logger.addHandler(console_handler)
+                    formatter = cls._get_formatter()
+                    logger.addHandler(build_stdout_handler(formatter))
+                    logger.addHandler(build_stderr_handler(formatter))
 
             # Set log level
             log_level = getattr(logging, _get_config_manager().get("logging.level", "INFO").upper())

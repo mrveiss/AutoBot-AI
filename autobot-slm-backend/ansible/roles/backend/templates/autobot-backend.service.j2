@@ -36,7 +36,11 @@ ExecStartPre={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/pyth
 # uvicorn waits indefinitely for lingering keep-alive/in-flight connections (nginx,
 # health probes), so `systemctl restart` sat in stop-sigterm for the full 15-min
 # TimeoutStopSec on every code-sync deploy — making the built-in restart look broken.
-ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }} --timeout-graceful-shutdown {{ backend_graceful_shutdown_sec | default(30) }}
+# #12488: --log-config splits uvicorn's own logger output by level (DEBUG/INFO
+# -> stdout, WARNING+ -> stderr) instead of uvicorn's default, which sends
+# everything except the access log (incl. INFO connection-lifecycle lines like
+# "WebSocket ... [accepted]") to stderr — see autobot_shared/uvicorn_log_config.json.
+ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }} --timeout-graceful-shutdown {{ backend_graceful_shutdown_sec | default(30) }} --log-config {{ backend_install_dir | dirname }}/autobot_shared/uvicorn_log_config.json
 Restart=always
 # #11668: escalate to SIGKILL promptly if uvicorn still hasn't exited, so a
 # code-sync restart never blocks on a hung shutdown. Mirrors autobot-celery.
