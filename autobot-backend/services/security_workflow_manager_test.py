@@ -220,7 +220,12 @@ class TestSecurityWorkflowManager:
     def manager(self, mock_redis):
         """Create manager with mocked Redis."""
         mgr = SecurityWorkflowManager()
-        mgr._redis_client = mock_redis
+        # Issue #12442: the mixin's lazy-init client attribute is `_redis`
+        # (see AsyncRedisClientMixin), not `_redis_client`. This fixture was
+        # stale after the migration to AsyncRedisClientMixin (#5946/#6061)
+        # and silently injected the mock into an attribute nobody read,
+        # which conftest previously masked (#12441).
+        mgr._redis = mock_redis
         return mgr
 
     @pytest.mark.asyncio
