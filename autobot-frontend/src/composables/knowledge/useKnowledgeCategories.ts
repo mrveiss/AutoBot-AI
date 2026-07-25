@@ -134,16 +134,19 @@ export const fetchCategory = (category: string): Promise<CategoryResponse> =>
  * Uses GET /api/knowledge_base/facts/by_category endpoint.
  * @param category - Optional category filter (null for all categories)
  * @param limit - Maximum number of facts per category (default: 100)
+ * @param offset - Pagination offset applied per category (Issue #12394, default: 0)
  */
 export const getCategorizedFacts = async (
   category: string | null = null,
-  limit: number = 100
+  limit: number = 100,
+  offset: number = 0
 ): Promise<CategorizedFactsResponse> => {
   const params = new URLSearchParams()
   if (category) {
     params.append('category', category)
   }
   params.append('limit', String(limit))
+  params.append('offset', String(offset))
 
   const url = `${getApiBase()}/knowledge_base/facts/by_category?${params.toString()}`
   const data = await apiClient.get<CategorizedFactsResponse>(url)
@@ -251,7 +254,8 @@ export interface UseKnowledgeCategoriesReturn {
   /** Fetch categorized facts, update `categorizedFacts` + state refs. */
   refreshCategorizedFacts: (
     category?: string | null,
-    limit?: number
+    limit?: number,
+    offset?: number
   ) => Promise<CategorizedFactsResponse>
   // Imperative passthroughs — BC with pre-#5149 callers
   fetchCategories: typeof fetchCategories
@@ -289,12 +293,13 @@ export function useKnowledgeCategories(): UseKnowledgeCategoriesReturn {
 
   const refreshCategorizedFacts = async (
     category: string | null = null,
-    limit: number = 100
+    limit: number = 100,
+    offset: number = 0
   ): Promise<CategorizedFactsResponse> => {
     error.value = null
     return wrap(async () => {
       try {
-        const data = await getCategorizedFacts(category, limit)
+        const data = await getCategorizedFacts(category, limit, offset)
         categorizedFacts.value = data
         return data
       } catch (err) {

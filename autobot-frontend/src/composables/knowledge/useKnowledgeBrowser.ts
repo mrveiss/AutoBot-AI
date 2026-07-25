@@ -52,6 +52,15 @@ export interface FactContentResponse {
   [key: string]: unknown
 }
 
+/**
+ * Options for a paginated `fetchFactsByCategory` page request.
+ * `limit`/`offset` are applied per category by the backend (Issue #12394).
+ */
+export interface FactsByCategoryPageOptions {
+  limit?: number
+  offset?: number
+}
+
 // ==================== Bare imperative API ====================
 
 /**
@@ -61,10 +70,22 @@ export const fetchMainCategories = (): Promise<MainCategoriesResponse> =>
   apiClient.get<MainCategoriesResponse>(`${getApiBase()}/knowledge_base/categories/main`)
 
 /**
- * Fetch all knowledge facts grouped by category for the browser tree.
+ * Fetch a page of knowledge facts grouped by category, for the browser tree.
+ *
+ * Issue #12394: paginated via `limit`/`offset` (applied per category by the
+ * backend, default page size matches the prior unbounded-default of 100).
+ * The response also carries `has_more` so callers can page further on demand.
  */
-export const fetchFactsByCategory = (): Promise<Record<string, unknown>> =>
-  apiClient.get<Record<string, unknown>>(`${getApiBase()}/knowledge_base/facts/by_category`)
+export const fetchFactsByCategory = (
+  options: FactsByCategoryPageOptions = {}
+): Promise<Record<string, unknown>> => {
+  const params = new URLSearchParams()
+  if (options.limit !== undefined) params.append('limit', String(options.limit))
+  if (options.offset !== undefined) params.append('offset', String(options.offset))
+  const query = params.toString()
+  const url = `${getApiBase()}/knowledge_base/facts/by_category${query ? `?${query}` : ''}`
+  return apiClient.get<Record<string, unknown>>(url)
+}
 
 /**
  * Fetch a paginated page of user knowledge entries.
