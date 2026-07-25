@@ -70,9 +70,14 @@ export function useCompanyStatusApi() {
     const api = useApiClient()
     const body = action === 'suspend' && reason ? { reason } : undefined
     try {
+      // #12368: send the TARGET row's id as the ``X-Organization-Id`` tenant
+      // scope so the backend ``assert_company_access`` guard authorises the
+      // transition regardless of which company is currently selected. Mirrors
+      // the archived-company delete path (useLlcCompanyStore.deleteCompany).
       return await api.post<CompanyStatusResult>(
         `/api/llc/companies/${companyId}/${action}`,
         body,
+        { headers: { 'X-Organization-Id': companyId } },
       )
     } catch (err) {
       logger.error(`Company ${action} failed for ${companyId}`, err)
