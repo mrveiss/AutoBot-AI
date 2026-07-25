@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -33,6 +33,7 @@ from ..source_models import (
 )
 from ..source_paths import CODE_SOURCES_BASE, make_clone_path
 from ..source_storage import get_source, list_sources, save_source
+from .shared import _caller_owner_id
 
 logger = get_logger(__name__)
 
@@ -244,8 +245,21 @@ async def list_code_sources():
     operation="create_source",
     error_code_prefix="CODEBASE",
 )
-async def create_code_source(request: CodeSourceCreateRequest):
-    """Register a new code source."""
+async def create_code_source(request: CodeSourceCreateRequest, http_request: Request):
+    """Register a new code source.
+
+    Issue #12377: captures owner_id from the caller so HTTP-created sources
+    are privately scoped like the LLC-created ones (source_service's
+    create_github_source(owner_id=...), api/llc/sprints.py::attach_project_repo).
+    Uses the same caller-identity derivation (_caller_owner_id) that #12375's
+    require_source_access dependency authorizes reads against, so create and
+    read agree on what "owned by the caller" means.
+    """
+    from auth_middleware import get_current_user  # noqa: PLC0415
+
+    user = await get_current_user(http_request)
+    owner_id = _caller_owner_id(user)
+
     if request.source_type == "github" and request.repo:
         source = await source_service.create_github_source(
             name=request.name,
@@ -253,6 +267,7 @@ async def create_code_source(request: CodeSourceCreateRequest):
             credential_id=request.credential_id,
             branch=request.branch,
             access=request.access,
+            owner_id=owner_id,
             auto_sync=True,
         )
     else:
@@ -263,6 +278,7 @@ async def create_code_source(request: CodeSourceCreateRequest):
             branch=request.branch,
             credential_id=request.credential_id,
             access=request.access,
+            owner_id=owner_id,
         )
         if source.source_type == "local" and source.repo:
             source.clone_path = source.repo
