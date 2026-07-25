@@ -445,15 +445,20 @@ async def get_pattern_report(
 
 
 @router.get("/patterns/storage/stats")
-async def get_pattern_storage_stats() -> Dict[str, Any]:
+async def get_pattern_storage_stats(
+    source_id: str | None = Query(default=None, description="Code source to scope stats to (Issue #12384)"),
+) -> Dict[str, Any]:
     """Get statistics about stored patterns in ChromaDB.
 
     Returns information about the code_patterns collection.
+
+    Issue #12384: Scopes the stats to source_id so one source's stats never
+    aggregate another source's (or AutoBot's own) stored patterns.
     """
     try:
         from code_intelligence.pattern_analysis.storage import get_pattern_stats
 
-        return await get_pattern_stats()
+        return await get_pattern_stats(source_id=source_id)
 
     except Exception as e:
         logger.error("Storage stats failed: %s", e)
@@ -522,11 +527,15 @@ def _aggregate_pattern_metadata(metadatas: List[Dict]) -> Dict[str, Any]:
 
 
 @router.get("/patterns/cached-summary")
-async def get_cached_pattern_summary() -> Dict[str, Any]:
+async def get_cached_pattern_summary(
+    source_id: str | None = Query(default=None, description="Code source to scope the summary to (Issue #12384)"),
+) -> Dict[str, Any]:
     """Get cached pattern summary from ChromaDB without re-analyzing.
 
     Issue #208: Fast loading endpoint for already indexed patterns.
     Issue #665: Refactored to use extracted helpers.
+    Issue #12384: Scopes the query to source_id so one source's summary never
+    aggregates another source's (or AutoBot's own) stored patterns.
     Returns summary data from stored patterns, not requiring full analysis.
     """
     try:
@@ -538,27 +547,25 @@ async def get_cached_pattern_summary() -> Dict[str, Any]:
         if collection is None:
             return _build_empty_pattern_summary()
 
-        count = await collection.count()
+        where_filter = _build_chromadb_where_filter(pattern_type=None, severity=None, source_id=source_id)
+
+        # Get metadata for aggregation (limit to 2000 for performance)
+        sample = await collection.get(
+            limit=2000,
+            where=where_filter,
+            include=["metadatas"],
+        )
+        count = len(sample.get("metadatas") or [])
         if count == 0:
             return _build_empty_pattern_summary()
 
-        # Get all metadata for aggregation (limit to 2000 for performance)
-        sample_size = min(count, 2000)
-        sample = await collection.get(
-            limit=sample_size,
-            include=["metadatas"],
-        )
-
         # Aggregate statistics (Issue #665: use helper)
-        if not sample.get("metadatas"):
-            return _build_empty_pattern_summary()
-
         stats = _aggregate_pattern_metadata(sample["metadatas"])
 
         return {
             "status": "success",
             "total_patterns": count,
-            "sampled_patterns": sample_size,
+            "sampled_patterns": count,
             "severity_distribution": stats["severity_counts"],
             "pattern_type_distribution": stats["type_counts"],
             "potential_loc_reduction": stats["total_loc_reduction"],
@@ -590,23 +597,25 @@ def _build_empty_patterns_response() -> Dict[str, Any]:
 def _build_chromadb_where_filter(
     pattern_type: str | None,
     severity: str | None,
-) -> Dict[str, Any] | None:
+    source_id: str | None = None,
+) -> Dict[str, Any]:
     """
     Build ChromaDB where filter from optional parameters.
 
     Issue #665: Extracted from get_cached_patterns to improve maintainability.
+    Issue #12384: ALWAYS includes a source_id condition (default sentinel when
+    None) so this filter can never be used to query the shared code_patterns
+    collection unscoped -- mirrors CodePatternAnalyzer's write-side tagging.
 
     Args:
         pattern_type: Optional pattern type filter.
         severity: Optional severity filter.
+        source_id: Code source to scope the query to (Issue #12384).
 
     Returns:
-        ChromaDB-compatible where filter dict, or None if no filters.
+        ChromaDB-compatible where filter dict.
     """
-    if not pattern_type and not severity:
-        return None
-
-    conditions = []
+    conditions = [{"source_id": source_id or "default"}]
     if pattern_type:
         conditions.append({"pattern_type": pattern_type})
     if severity:
@@ -651,6 +660,7 @@ def _format_pattern_results(
 async def get_cached_patterns(
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
     severity: str | None = Query(None, description="Filter by severity"),
+    source_id: str | None = Query(default=None, description="Code source to scope results to (Issue #12384)"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_PAGE_SIZE,
         ge=1,
@@ -663,6 +673,8 @@ async def get_cached_patterns(
 
     Issue #208: Fast loading of already indexed patterns without re-analysis.
     Issue #665: Refactored to use extracted helpers.
+    Issue #12384: Always scopes the query to source_id (default sentinel when
+    None) so one source's cached patterns never include another source's.
     Supports filtering by pattern_type and severity, with pagination.
     """
     try:
@@ -674,12 +686,17 @@ async def get_cached_patterns(
         if collection is None:
             return _build_empty_patterns_response()
 
-        count = await collection.count()
+        # Build where filter (Issue #665/#12384: use extracted helper)
+        where_filter = _build_chromadb_where_filter(pattern_type, severity, source_id)
+
+        # #1361: no scoped count() in the ChromaDB API -- bound the count
+        # fetch to stay under the SQLite backend's SQL-variable limit
+        # (mirrors get_pattern_stats()). total/has_more are an approximation
+        # capped at 1000 for a single source's very large pattern set.
+        count_sample = await collection.get(where=where_filter, limit=1000, include=[])
+        count = len(count_sample.get("ids") or [])
         if count == 0:
             return _build_empty_patterns_response()
-
-        # Build where filter (Issue #665: use extracted helper)
-        where_filter = _build_chromadb_where_filter(pattern_type, severity)
 
         # Query with filters
         results = await collection.get(
@@ -731,6 +748,7 @@ async def clear_pattern_storage() -> Dict[str, str]:
 async def search_similar_patterns_endpoint(
     code: str = Query(..., description="Code snippet to find similar patterns for"),
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
+    source_id: str | None = Query(default=None, description="Code source to scope results to (Issue #12384)"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
@@ -741,6 +759,10 @@ async def search_similar_patterns_endpoint(
     """Search for similar patterns using vector similarity.
 
     This endpoint uses ChromaDB to find patterns similar to the provided code.
+
+    Issue #12384: Always scopes the query to source_id (default sentinel when
+    None) so a similarity search for one source never surfaces another
+    source's stored patterns.
     """
     try:
         # Generate embedding for query code
@@ -756,6 +778,7 @@ async def search_similar_patterns_endpoint(
             query_embedding=query_embedding,
             pattern_type=pattern_type,
             n_results=limit,
+            source_id=source_id,
         )
 
         return results

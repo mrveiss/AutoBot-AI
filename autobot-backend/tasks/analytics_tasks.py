@@ -28,32 +28,39 @@ _PATTERN_CHECKPOINT_PREFIX = "pattern_complete_checkpoint:"
 _CHECKPOINT_TTL = 3600  # 1 h — recent-enough to resume from
 
 
-def _path_checkpoint_key(path: str) -> str:
-    return f"{_PATTERN_CHECKPOINT_PREFIX}{hashlib.sha256(path.encode()).hexdigest()[:16]}"
+def _path_checkpoint_key(path: str, source_id: str | None = None) -> str:
+    """Issue #12384: fold source_id into the checkpoint key. Without this, two
+    different sources resolving to the same scan path (e.g. both default to
+    AutoBot's own PATH.PROJECT_ROOT) would return each other's cached
+    analysis result -- bypassing the ChromaDB source_id tag entirely on a
+    checkpoint-hit retry.
+    """
+    tag = source_id or "default"
+    return f"{_PATTERN_CHECKPOINT_PREFIX}{hashlib.sha256(f'{tag}:{path}'.encode()).hexdigest()[:16]}"
 
 
-async def _load_path_checkpoint(path: str) -> dict | None:
-    """Return a previously-saved completed analysis result for *path*, or None (GH#8439)."""
+async def _load_path_checkpoint(path: str, source_id: str | None = None) -> dict | None:
+    """Return a previously-saved completed analysis result for *path*/*source_id*, or None (GH#8439)."""
     try:
         from autobot_shared.redis_client import get_async_redis_client
 
         redis = await get_async_redis_client(database="analytics")
         if not redis:
             return None
-        raw = await redis.get(_path_checkpoint_key(path))
+        raw = await redis.get(_path_checkpoint_key(path, source_id))
         return json.loads(raw) if raw else None
     except Exception:
         return None
 
 
-async def _save_path_checkpoint(path: str, result: dict) -> None:
-    """Persist *result* as the checkpoint for *path* (GH#8439)."""
+async def _save_path_checkpoint(path: str, result: dict, source_id: str | None = None) -> None:
+    """Persist *result* as the checkpoint for *path*/*source_id* (GH#8439)."""
     try:
         from autobot_shared.redis_client import get_async_redis_client
 
         redis = await get_async_redis_client(database="analytics")
         if redis:
-            await redis.set(_path_checkpoint_key(path), json.dumps(result, default=str), ex=_CHECKPOINT_TTL)
+            await redis.set(_path_checkpoint_key(path, source_id), json.dumps(result, default=str), ex=_CHECKPOINT_TTL)
     except Exception:
         pass
 
@@ -235,7 +242,7 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
 
     async def _work():
         # Resume from checkpoint if analysis for this path was recently completed.
-        saved = await _load_path_checkpoint(request.path)
+        saved = await _load_path_checkpoint(request.path, request.source_id)
         if saved:
             logger.info("run_pattern_analysis: resuming from checkpoint for path %s", request.path)
             _progress(self, "Loaded from checkpoint", 100.0, started)
@@ -252,13 +259,16 @@ def run_pattern_analysis(self, request_data: dict) -> dict:
             enable_regex_detection=request.enable_regex_detection,
             enable_complexity_analysis=request.enable_complexity_analysis,
             similarity_threshold=request.similarity_threshold,
+            # Issue #12384: tag every stored pattern with the requester's
+            # source_id so the read-side endpoints can scope queries to it.
+            source_id=request.source_id,
         )
         report = await asyncio.wait_for(
             analyzer.analyze_directory(request.path, progress_callback=_on_progress),
             timeout=_ANALYSIS_TIMEOUT,
         )
         result = report.to_dict()
-        await _save_path_checkpoint(request.path, result)
+        await _save_path_checkpoint(request.path, result, request.source_id)
         return result
 
     return _wrap(_run_async(_work()), started)
