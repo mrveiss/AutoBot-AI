@@ -103,17 +103,22 @@ def authenticate_ws_admin(websocket: WebSocket) -> bool:
 
 
 async def enforce_ws_admin(websocket: WebSocket) -> bool:
-    """Enforce admin auth and, on rejection, close the socket with ``4001``.
+    """Enforce admin auth and, on rejection, accept then close with ``4001``.
 
-    Convenience wrapper mirroring :func:`enforce_ws_origin`: call before
-    ``websocket.accept()`` and ``return`` when it yields ``False``.
+    Call before the endpoint's own ``websocket.accept()`` and ``return`` when
+    this yields ``False``. On rejection this accepts the handshake itself so
+    the client receives a real WS close frame (code + reason) instead of an
+    HTTP 403 that's indistinguishable from a missing route (#12366 — matches
+    ``live_events.py``'s accept-then-close convention).
 
     Returns ``True`` when the caller is an authenticated admin (or WS auth is
-    disabled for dev/test), ``False`` after having closed the socket ``4001``.
+    disabled for dev/test), ``False`` after having accepted then closed the
+    socket ``4001``.
     """
     if authenticate_ws_admin(websocket):
         return True
     try:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required (admin)")
     except Exception:  # already closed / handshake not completed
         pass

@@ -311,15 +311,17 @@ def _make_ws_client(db, user):
 
 
 def test_ws_analyze_rejects_unauthenticated():
-    """Test WS closes 4001 before accept when authentication fails."""
+    """Test WS accepts then closes 4001 when authentication fails (#12366)."""
     from starlette.websockets import WebSocketDisconnect
 
     client = _make_ws_client(_make_db(DEFAULT_RECORDING), user=None)
 
     with patch("api.transcripts.authenticate_websocket", AsyncMock(return_value=None)):
         with pytest.raises(WebSocketDisconnect) as exc_info:
-            with client.websocket_connect("/api/transcripts/456/analyze"):
-                pass
+            with client.websocket_connect("/api/transcripts/456/analyze") as ws:
+                # #12366: accept-then-close — the close frame is now a message
+                # to receive, not an immediate handshake-level rejection.
+                ws.receive_text()
 
     assert exc_info.value.code == 4001
 
