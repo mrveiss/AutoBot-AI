@@ -21496,9 +21496,15 @@ export interface paths {
         put?: never;
         /**
          * Clear Pattern Storage
-         * @description Clear all stored patterns from ChromaDB.
+         * @description Clear stored patterns for a single source from ChromaDB.
          *
-         *     WARNING: This is destructive and cannot be undone.
+         *     Issue #12408: Always scopes the clear to source_id (default sentinel
+         *     when None, matching every other ``/patterns/*`` endpoint's convention --
+         *     e.g. ``get_pattern_storage_stats``, ``search_similar_patterns_endpoint``)
+         *     so clearing one source's patterns can never delete another source's (or
+         *     AutoBot's own) stored patterns.
+         *
+         *     WARNING: This is destructive and cannot be undone for the scoped source.
          */
         post: operations["clear_pattern_storage_api_analytics_codebase_patterns_storage_clear_post"];
         delete?: never;
@@ -129486,7 +129492,10 @@ export interface operations {
     };
     clear_pattern_storage_api_analytics_codebase_patterns_storage_clear_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Code source to scope the clear to (Issue #12408) */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -129502,6 +129511,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
