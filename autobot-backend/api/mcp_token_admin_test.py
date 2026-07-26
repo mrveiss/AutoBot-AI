@@ -65,7 +65,7 @@ def test_create_token_success():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
@@ -92,7 +92,7 @@ def test_create_token_invalid_scope():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
@@ -109,7 +109,7 @@ def test_create_token_empty_scopes():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
@@ -118,10 +118,29 @@ def test_create_token_empty_scopes():
     assert resp.status_code == 422
 
 
+def test_create_token_superadmin_allowed():
+    """superadmin is accepted by the unified require_role gate (#12704)."""
+    superadmin = {"user_id": "u3", "role": "superadmin"}
+    redis_mock = _make_redis_mock()
+    with (
+        patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
+        patch(
+            "auth_rbac.get_auth_middleware",
+            return_value=MagicMock(get_user_from_request=MagicMock(return_value=superadmin)),
+        ),
+    ):
+        client = TestClient(app)
+        resp = client.post(
+            "/api/mcp/tokens",
+            json={"scopes": ["kb"], "label": ""},
+        )
+    assert resp.status_code == 201, resp.text
+
+
 def test_create_token_non_admin_rejected():
     non_admin = {"user_id": "u2", "role": "user"}
     with patch(
-        "api.mcp_token_admin.get_auth_middleware",
+        "auth_rbac.get_auth_middleware",
         return_value=MagicMock(get_user_from_request=MagicMock(return_value=non_admin)),
     ):
         client = TestClient(app, raise_server_exceptions=False)
@@ -144,7 +163,7 @@ def test_list_tokens_empty():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
@@ -185,7 +204,7 @@ def test_list_tokens_with_entries():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
@@ -215,7 +234,7 @@ def test_revoke_token_success():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
@@ -234,7 +253,7 @@ def test_revoke_token_not_found():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(return_value=redis_mock)),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
@@ -252,7 +271,7 @@ def test_create_token_redis_unavailable():
     with (
         patch("api.mcp_token_admin._get_redis", new=AsyncMock(side_effect=Exception("503 test"))),
         patch(
-            "api.mcp_token_admin.get_auth_middleware",
+            "auth_rbac.get_auth_middleware",
             return_value=MagicMock(get_user_from_request=MagicMock(return_value=_admin_user())),
         ),
     ):
