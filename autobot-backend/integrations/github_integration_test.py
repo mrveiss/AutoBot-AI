@@ -3,14 +3,14 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests — GitHubIntegration rate limiting (Issues #4097, #4162)
+Unit tests — GitHubIntegration rate limiting (Issues #4097, #4162, #6311)
 
 All HTTP calls are patched; no real network traffic.
 Covers:
-- Successful requests record quota
+- Successful requests delegate recording to the shared Redis-backed limiter
 - HTTP 429 triggers Retry-After enforcement and returns structured response
 - HTTP 403 secondary rate limit is handled gracefully
-- Local window exhaustion returns rate_limit_timeout error
+- Shared-limiter exhaustion returns a structured 429 rate_limit_exceeded error
 - X-RateLimit-Remaining=0 blocks subsequent requests
 - Connection errors return structured error dict
 """
@@ -186,21 +186,31 @@ async def test_x_ratelimit_remaining_zero_blocks_next_request():
 
 
 # ---------------------------------------------------------------------------
-# Local rate limit exhaustion → rate_limit_timeout error
+# Shared-limiter exhaustion → structured 429 rate_limit_exceeded error (#6311)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_acquire_timeout_returns_structured_error():
-    gh = GitHubIntegration(_make_config())
-    # Replace rate limiter with one that always raises TimeoutError on acquire
-    mock_limiter = MagicMock()
-    mock_limiter.acquire = AsyncMock(side_effect=asyncio.TimeoutError)
-    gh._rate_limiter = mock_limiter
+async def test_rate_limit_exceeded_returns_structured_error():
+    """When the shared Redis-backed limiter denies the request (#6311),
+    ``_github_request`` must short-circuit with a structured 429 dict — not
+    raise and not perform the HTTP call.
 
-    result = await gh._github_request("GET", "/repos/owner/repo")
+    Since #6311 the acquire decision comes from the module-level
+    ``_shared_rate_limiter`` (Redis-backed), not the per-instance in-memory
+    limiter; patch that path to simulate exhaustion.
+    """
+    gh = GitHubIntegration(_make_config())
+
+    with patch.object(
+        _gh_mod._shared_rate_limiter,
+        "acquire",
+        new=AsyncMock(return_value=False),
+    ):
+        result = await gh._github_request("GET", "/repos/owner/repo")
+
     assert result["status_code"] == 429
-    assert result["error"] == "rate_limit_timeout"
+    assert result["error"] == "rate_limit_exceeded"
 
 
 # ---------------------------------------------------------------------------
@@ -210,17 +220,22 @@ async def test_acquire_timeout_returns_structured_error():
 
 @pytest.mark.asyncio
 async def test_github_request_connection_error():
+    """A transport-level connection failure returns a structured error dict.
+
+    The response body deliberately reports a generic ``integration_error``
+    message (never the raw exception text) to avoid leaking internal details;
+    the machine-readable ``error`` field carries the ``connection_error`` code.
+    """
     gh = GitHubIntegration(_make_config())
-    with patch.object(gh._rate_limiter, "acquire", new=AsyncMock()):
-        with patch(
-            "aiohttp.ClientSession",
-            side_effect=aiohttp.ClientConnectionError("refused"),
-        ):
-            result = await gh._github_request("GET", "/repos/owner/repo")
+    with patch(
+        "aiohttp.ClientSession",
+        side_effect=aiohttp.ClientConnectionError("refused"),
+    ):
+        result = await gh._github_request("GET", "/repos/owner/repo")
 
     assert result["status_code"] == 0
     assert result["error"] == "connection_error"
-    assert "refused" in result["body"]["message"]
+    assert result["body"]["message"] == "integration_error"
 
 
 # ---------------------------------------------------------------------------
@@ -278,26 +293,33 @@ async def test_execute_action_unknown_returns_error_dict():
 
 
 # ---------------------------------------------------------------------------
-# Rate limiting: quota records after each request
+# Rate limiting: request dispatch delegates recording to the shared limiter
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_rate_limit_records_after_successful_request():
+    """Since #6311 the request slot is acquired+recorded atomically by the
+    shared Redis-backed limiter (``_shared_rate_limiter.acquire``), not the
+    per-instance in-memory limiter's local history.  Assert the successful
+    request delegated acquisition to the shared limiter with the token key.
+    """
     gh = GitHubIntegration(_make_config())
-    # Give fresh limiter so history is clean
-    fresh_limiter = IntegrationRateLimiter(requests_per_minute=100, requests_per_hour=5000)
-    gh._rate_limiter = fresh_limiter
 
     body = {"login": "u", "type": "User"}
-    with patch(
-        "aiohttp.ClientSession",
-        return_value=_build_response_mock(200, body),
-    ):
-        await gh._github_request("GET", "/user")
+    with patch.object(
+        _gh_mod._shared_rate_limiter,
+        "acquire",
+        new=AsyncMock(return_value=True),
+    ) as mock_acquire:
+        with patch(
+            "aiohttp.ClientSession",
+            return_value=_build_response_mock(200, body),
+        ):
+            await gh._github_request("GET", "/user")
 
-    state = fresh_limiter._get_state(gh._token_key)
-    assert len(state.history) == 1
+    mock_acquire.assert_awaited_once()
+    assert mock_acquire.await_args.args[0] == gh._token_key
 
 
 # ---------------------------------------------------------------------------
