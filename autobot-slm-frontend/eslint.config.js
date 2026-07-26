@@ -23,6 +23,7 @@ export default tseslint.config(
 
   globalIgnores([
     '**/dist/**',
+    '**/src/types/generated/**',
     '**/node_modules/**',
     '*.config.js',
     '*.config.ts',
