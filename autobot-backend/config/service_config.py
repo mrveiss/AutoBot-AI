@@ -173,7 +173,20 @@ class ServiceConfigMixin:
         return self.get_nested(section, {})
 
     def get_redis_config(self) -> Dict[str, Any]:
-        """Get Redis configuration from SSOT config (single source of truth)."""
+        """Get Redis configuration from SSOT config (single source of truth).
+
+        Issue #12748: CANONICAL core Redis connection config. Reached via
+        ConfigManager (unified_config_manager / global_config_manager /
+        config_manager), config.get_redis_config() (config/__init__.py, pure
+        delegate), and config.compat.get_redis_config(manager) (pure
+        delegate). config.__init__._ConfigStub.get_redis_config() mirrors
+        this shape for the circular-import re-entry path only.
+
+        NOT the same concern as services.config_service.ConfigService.
+        get_redis_config() (task-transport-scoped redis sub-config, distinct
+        db index db_tasks vs db_main here) — that is a different scope/owner
+        sharing only the function name, intentionally left unconverged.
+        """
         from autobot_shared.ssot_config import config as ssot
 
         return {

@@ -51,7 +51,12 @@ def get_llm_config(manager) -> Dict[str, Any]:
 
 
 def get_redis_config(manager) -> Dict[str, Any]:
-    """Get Redis configuration"""
+    """Get Redis configuration.
+
+    Issue #12748: pure pass-through to manager.get_redis_config() — not a
+    fork of the canonical (config.service_config.ServiceConfigMixin.
+    get_redis_config()); already converged by delegation.
+    """
     return manager.get_redis_config()
 
 
