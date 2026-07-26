@@ -70,6 +70,7 @@ from services.database import get_db
 from services.deploy_artifacts import rsync_artifact_excludes
 from services.drift_checker import (
     ALLOWED_COMPONENTS,
+    VISIBILITY_COMPONENTS,
     build_drift_report,
     get_default_deployed_dir,
     get_default_source_dir,
@@ -545,7 +546,7 @@ _stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "va
 
 
 async def _compute_stale_components(force: bool = False) -> list[str]:
-    """Return ALLOWED_COMPONENTS deployed on this box whose files drift from source.
+    """Return VISIBILITY_COMPONENTS deployed on this box whose files drift from source.
 
     Surfaces the #11820 gap: a co-located managed component can be stale (its
     deployed files differ from code_source) even when a node's code_version
@@ -554,6 +555,13 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     and the result is cached for _STALE_COMPONENTS_TTL_SECONDS to bound cost on
     the polled status path. Defensive: a failing component is logged and skipped,
     never breaking the status response.
+
+    #12450: scans VISIBILITY_COMPONENTS (ALLOWED_COMPONENTS plus the
+    read-only extras — ai-stack, npu-worker, browser-worker, slm-agent,
+    plugins) so an operator gets a drift signal for every deployed component,
+    not just the 5 with a resolve path. Reporting here does NOT imply those
+    extras can be resolved — /drift/resolve[-async] still gate on the
+    narrower ALLOWED_COMPONENTS.
 
     force=True bypasses the cache and re-scans immediately (#11512): callers
     that just resynced a component need the FRESH drift state, not a stale
@@ -565,7 +573,7 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
 
     stale: list[str] = []
     loop = asyncio.get_running_loop()
-    for component in sorted(ALLOWED_COMPONENTS):
+    for component in sorted(VISIBILITY_COMPONENTS):
         try:
             deployed_dir = get_default_deployed_dir(component)
             if not os.path.isdir(deployed_dir):
@@ -683,14 +691,17 @@ async def get_file_drift(
 
     Query params:
         component: Sub-directory to compare (default: autobot-slm-backend).
-                   Must be one of the allowed components (Issue #3427).
+                   Must be one of the visibility-scanned components (Issue
+                   #3427; extended to read-only extras by #12450). Components
+                   outside this set have no verified path map and are
+                   excluded rather than guessed.
 
     Returns a FileDriftReport with a list of drifted files and their checksums.
     """
-    if component not in ALLOWED_COMPONENTS:
+    if component not in VISIBILITY_COMPONENTS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid component '{component}'. Must be one of: {sorted(ALLOWED_COMPONENTS)}",
+            detail=f"Invalid component '{component}'. Must be one of: {sorted(VISIBILITY_COMPONENTS)}",
         )
 
     try:
@@ -736,6 +747,12 @@ async def resolve_drift(
 
     Body:
         component: Sub-directory under /opt/autobot/. Must be in ALLOWED_COMPONENTS.
+                   #12450: intentionally NOT VISIBILITY_COMPONENTS — the extra
+                   read-only components (ai-stack, npu-worker, browser-worker,
+                   slm-agent, plugins) have no per-component post-sync
+                   (pip/npm/docker/symlink) wired, so resolving them would
+                   rsync files but never install deps or restart the right
+                   service. Deferred pending owner sign-off.
 
     Returns DriftResolveResponse with success flag, rsync output, deps_changed
     flag, and a log of post-sync steps performed.

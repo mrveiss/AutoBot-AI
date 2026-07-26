@@ -77,6 +77,81 @@ ALLOWED_COMPONENTS = frozenset(
     }
 )
 
+# #12450: additional deployed components that have NO resolve/restart wiring
+# (no per-component post-sync — pip/npm/docker/symlink heterogeneity) but ARE
+# actively running deployed code with no builtin drift signal today. These are
+# READ-ONLY visibility — do NOT add them to ALLOWED_COMPONENTS, which gates
+# /drift/resolve[-async]. Whitelisting resolve for them would rsync files but
+# never install deps or restart the right service (see the parked root-cause
+# comment on #12450) — half-working and worse than the current 400.
+#
+# Every entry must be verified against its actual ansible deploy task before
+# being added here — see _NONSTANDARD_COMPONENT_PATHS below for the ones whose
+# layout isn't the standard code_source/<name> -> /opt/autobot/<name> shape.
+#
+# NOT included (confirmed unmappable, see #12450 PR notes):
+#   - autobot-tts-worker: deployed via a single Jinja2-templated file
+#     (tts-worker.py.j2 -> tts-worker.py), not a 1:1 sync of the repo's
+#     autobot-tts-worker/ directory — comparing them would report fake drift.
+#   - autobot-celery / celery-beat: no distinct deployed directory — both run
+#     FROM the autobot-backend deployed dir (systemd WorkingDirectory), so
+#     they are already covered by the existing "autobot-backend" entry.
+#   - autobot-plugins (the @autobot/vnc, @autobot/terminal npm workspace
+#     packages): synced into TWO deployed locations (autobot-frontend/ and
+#     autobot-slm-frontend/), so there is no single canonical deployed target
+#     to compare against — needs an owner decision on which (or both) to scan.
+EXTRA_VISIBILITY_COMPONENTS = frozenset(
+    {
+        "autobot-ai-stack",
+        "autobot-npu-worker",
+        "autobot-browser-worker",
+        "autobot-slm-agent",
+        "plugins",
+    }
+)
+
+# Union of the resolve-capable allowlist and the read-only extras — used by
+# the GET-only drift surfaces (/status stale_components, GET /drift). The
+# resolve/resolve-async endpoints must keep checking ALLOWED_COMPONENTS only
+# (#12450).
+VISIBILITY_COMPONENTS = ALLOWED_COMPONENTS | EXTRA_VISIBILITY_COMPONENTS
+
+# Source/deployed path overrides for components whose layout does not follow
+# the code_source/<component> -> <SLM_DEPLOYED_ROOT>/<component> convention
+# assumed by get_default_source_dir/get_default_deployed_dir (#12450). Paths
+# are relative to DEFAULT_REPO_PATH / SLM_DEPLOYED_ROOT respectively. Verified
+# against the live ansible deploy tasks — do not add an entry without tracing
+# it to the actual unarchive/copy/synchronize task.
+_NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
+    # ai-stack has no top-level code_source/autobot-ai-stack dir; it lives
+    # under autobot-infrastructure/ and deploys with --strip-components=4 so
+    # the ai-stack/ subtree contents land directly under the deployed root
+    # (ansible/playbooks/update-all-nodes.yml ~135-141, ~1060-1064).
+    "autobot-ai-stack": (
+        "autobot-infrastructure/shared/docker/ai-stack",
+        "autobot-ai-stack",
+    ),
+    # slm-agent has no top-level code_source/autobot-slm-agent dir either;
+    # its source of truth is the individual per-file `copy:` tasks in the
+    # slm_agent role, all of which live under files/slm/agent/ and land at
+    # <slm_agent_dir>/slm/agent/ (ansible/roles/slm_agent/tasks/main.yml
+    # ~132-213). config.yaml/role.json/version.json are Jinja2 templates
+    # (not raw source files) and are intentionally excluded from this scan.
+    "autobot-slm-agent": (
+        "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent",
+        "autobot-slm-agent/slm/agent",
+    ),
+    # plugins/ ships at the repo root, a SIBLING of autobot-backend/, and is
+    # rsynced into the backend's own plugins/ subdirectory rather than its
+    # own top-level /opt/autobot/plugins tree (ansible/roles/backend/tasks/
+    # main.yml #10294).
+    "plugins": (
+        "plugins",
+        "autobot-backend/plugins",
+    ),
+}
+
+
 # Directory names / suffixes to skip entirely during traversal. Sourced from the
 # canonical deploy-artifact vocabulary (#11459) so the drift walk and the
 # code_sync rsync excludes never disagree about what is an artifact — the
@@ -291,7 +366,9 @@ def get_default_deployed_dir(component: str = "autobot-slm-backend") -> str:
     """Return the expected deployed path for *component* under /opt/autobot.
 
     Reads ``SLM_DEPLOYED_ROOT`` from the environment so the path is
-    configurable without hardcoding.
+    configurable without hardcoding. Components listed in
+    ``_NONSTANDARD_COMPONENT_PATHS`` (#12450) use their verified override
+    sub-path instead of the standard ``<root>/<component>`` convention.
 
     Args:
         component: Sub-directory name under the deployed root.
@@ -300,7 +377,9 @@ def get_default_deployed_dir(component: str = "autobot-slm-backend") -> str:
         Absolute path string for the deployed component directory.
     """
     deployed_root = os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot")
-    return str(Path(deployed_root) / component)
+    override = _NONSTANDARD_COMPONENT_PATHS.get(component)
+    rel_path = override[1] if override else component
+    return str(Path(deployed_root) / rel_path)
 
 
 def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
@@ -308,6 +387,10 @@ def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
 
     Uses ``DEFAULT_REPO_PATH`` from ``services.git_tracker``, which resolves
     ``SLM_REPO_PATH`` with the same fallback, ensuring a single source of truth.
+    Components listed in ``_NONSTANDARD_COMPONENT_PATHS`` (#12450) use their
+    verified override sub-path instead of the standard
+    ``code_source/<component>`` convention (e.g. ai-stack, which lives under
+    ``autobot-infrastructure/``).
 
     Args:
         component: Sub-directory name inside the code_source repository.
@@ -315,7 +398,9 @@ def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
     Returns:
         Absolute path string for the source directory to compare against.
     """
-    candidate = Path(DEFAULT_REPO_PATH) / component
+    override = _NONSTANDARD_COMPONENT_PATHS.get(component)
+    rel_path = override[0] if override else component
+    candidate = Path(DEFAULT_REPO_PATH) / rel_path
     if not candidate.is_dir():
         raise ValueError(f"drift_checker: source component directory does not exist: {candidate}")
     return str(candidate)
