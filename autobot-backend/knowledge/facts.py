@@ -251,6 +251,16 @@ def get_embedding_metrics() -> Dict[str, int]:
 # loop keeps a strong reference until they finish (create_task otherwise GC-able).
 _ACCESS_TASKS: "set[asyncio.Task]" = set()
 
+# A1 (#12552): atomic usage bump. EXISTS + HINCRBY + HSET in one server-side
+# round-trip so a concurrent delete_fact can never resurrect a ghost hash
+# between the guard and the writes (both HINCRBY/HSET auto-create keys).
+_ACCESS_BUMP_LUA = (
+    "if redis.call('EXISTS', KEYS[1]) == 1 then "
+    "redis.call('HINCRBY', KEYS[1], 'access_count', 1) "
+    "redis.call('HSET', KEYS[1], 'last_accessed', ARGV[1]) "
+    "return 1 end return 0"
+)
+
 
 def _apply_usage_fields(decoded: Dict[str, Any], metadata: Dict[str, Any]) -> None:
     """Surface authoritative usage counters from the Redis hash into metadata.
@@ -878,32 +888,32 @@ class FactsMixin:
         if not ids:
             return
         try:
-            task = asyncio.create_task(self._bump_fact_access(ids))
-            _ACCESS_TASKS.add(task)
-            task.add_done_callback(_ACCESS_TASKS.discard)
+            loop = asyncio.get_running_loop()
         except RuntimeError:
             # No running loop (sync/test context): do it inline, still guarded.
             await self._bump_fact_access(ids)
+            return
+        task = loop.create_task(self._bump_fact_access(ids))
+        _ACCESS_TASKS.add(task)
+        task.add_done_callback(_ACCESS_TASKS.discard)
 
     async def _bump_fact_access(self, fact_ids: List[str]) -> None:
         """Atomically increment ``access_count`` and stamp ``last_accessed``.
 
-        Counters are top-level hash fields (authoritative), so ``HINCRBY`` is
-        atomic and the metadata JSON blob is never rewritten. Missing facts are
-        skipped so a deleted fact is never resurrected.
+        Counters are authoritative top-level hash fields, so the metadata JSON
+        blob is never rewritten. The EXISTS+HINCRBY+HSET is done as one atomic
+        Lua ``EVAL`` per fact, so a deleted fact is never resurrected by a bump
+        racing a concurrent ``delete_fact``. Duplicate ids collapse to one bump.
         """
         now_iso = datetime.now(tz=timezone.utc).isoformat()
+        unique_ids = list(dict.fromkeys(fact_ids))
 
         def _work() -> None:
-            for fid in fact_ids:
-                key = "fact:%s" % fid
+            for fid in unique_ids:
                 try:
-                    if not self.redis_client.exists(key):
-                        continue
-                    self.redis_client.hincrby(key, "access_count", 1)
-                    self.redis_client.hset(key, "last_accessed", now_iso)
+                    self.redis_client.eval(_ACCESS_BUMP_LUA, 1, "fact:%s" % fid, now_iso)
                 except Exception:
-                    continue
+                    logger.debug("record_fact_access: bump failed for %s (non-fatal)", fid)
 
         try:
             await asyncio.to_thread(_work)
