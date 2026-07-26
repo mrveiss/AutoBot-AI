@@ -4,6 +4,7 @@
 // Author: mrveiss
 import { ref, toValue, type MaybeRefOrGetter } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useAiAnalysis')
@@ -17,7 +18,12 @@ export interface AskOptions {
 
 /**
  * Composable for AI analysis SSE streaming
- * Handles fetch-based SSE stream parsing for transcriber AI analysis
+ * Handles fetch-based SSE stream parsing for transcriber AI analysis.
+ *
+ * Uses the `fetchWithAuth` bridge (not the retrying `apiClient.get`/`.post`
+ * convenience methods) so the JWT is attached consistently while the raw
+ * `Response.body` reader stays available for incremental SSE parsing and the
+ * long-lived stream is not aborted by a request timeout.
  */
 export function useAiAnalysis(recordingId: MaybeRefOrGetter<number>) {
   const streaming = ref(false)
@@ -33,7 +39,7 @@ export function useAiAnalysis(recordingId: MaybeRefOrGetter<number>) {
     const url = `${getBackendUrl()}/api/transcriber/recordings/${toValue(recordingId)}/ai/ask`
 
     try {
-      const resp = await fetch(url, {
+      const resp = await fetchWithAuth(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
