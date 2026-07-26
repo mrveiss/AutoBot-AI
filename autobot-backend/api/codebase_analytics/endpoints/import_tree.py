@@ -8,6 +8,7 @@ Import tree visualization endpoints
 
 import ast
 import asyncio
+import json
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -20,8 +21,15 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_import_tree_analysis
 from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.chromadb_client import get_all_paginated
 
-from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, resolve_scan_root
+from ..storage import get_code_collection
+from .shared import (
+    INTERNAL_MODULE_PREFIXES,
+    STDLIB_MODULES,
+    resolve_scan_root,
+    trigger_auto_index_if_unindexed,
+)
 
 logger = get_logger(__name__)
 
@@ -29,14 +37,32 @@ router = APIRouter()
 
 _REDIS_PREFIX = "import_task:"
 
+# Issue #12330: directories excluded from both the indexed and live-walk scans.
+_EXCLUDED_SCAN_DIRS = {
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "archive",
+    "dist",
+    "build",
+}
 
-def _build_module_to_file_mapping(python_files: List[Path], project_root: Path) -> Dict[str, str]:
-    """Build module path to file path mapping (Issue #315)."""
+
+def _build_module_to_file_mapping_from_paths(rel_paths: List[str]) -> Dict[str, str]:
+    """Build module path to file path mapping from relative path strings.
+
+    Issue #315: original extraction. Issue #12364: split out the pure
+    string-manipulation core so the indexed-store path (which only has
+    relative path strings, not filesystem ``Path`` objects) can reuse it.
+    """
     module_to_file: Dict[str, str] = {}
 
-    for py_file in python_files[:500]:
+    for rel_path in rel_paths[:500]:
         try:
-            rel_path = str(py_file.relative_to(project_root))
             module_path = rel_path.replace("/", ".").replace(".py", "")
             module_to_file[module_path] = rel_path
 
@@ -50,6 +76,21 @@ def _build_module_to_file_mapping(python_files: List[Path], project_root: Path) 
             continue
 
     return module_to_file
+
+
+def _build_module_to_file_mapping(python_files: List[Path], project_root: Path) -> Dict[str, str]:
+    """Build module path to file path mapping from filesystem paths (Issue #315).
+
+    Live-walk fallback only (#12364) -- resolves each Path to a relative
+    string then delegates to the shared string-based mapper.
+    """
+    rel_paths: List[str] = []
+    for py_file in python_files[:500]:
+        try:
+            rel_paths.append(str(py_file.relative_to(project_root)))
+        except Exception:
+            continue
+    return _build_module_to_file_mapping_from_paths(rel_paths)
 
 
 def _process_import_node(module_name: str, module_to_file: Dict[str, str]) -> Tuple[Dict, str | None]:
@@ -115,6 +156,73 @@ def _deduplicate_imports(imports: List[Dict]) -> List[Dict]:
     return unique_imports
 
 
+async def _load_import_tree_from_index(
+    source_id: str | None,
+) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]] | None:
+    """Build the bidirectional import tree from indexed ChromaDB "import" docs.
+
+    Issue #12364: Primary data path. Returns ``None`` when the index has no
+    import documents for this source (unindexed / mid-index) so the caller
+    can fall back to the live filesystem walk instead of returning an empty
+    tree for a source that simply hasn't been indexed yet.
+    """
+    code_collection = await asyncio.to_thread(get_code_collection)
+    if not code_collection:
+        return None
+
+    where = {"$and": [{"type": "import"}, {"source_id": source_id}]} if source_id else {"type": "import"}
+    results = await asyncio.to_thread(get_all_paginated, code_collection, where=where, include=["metadatas"])
+    metadatas = results.get("metadatas", [])
+    if not metadatas:
+        return None
+
+    raw_imports: Dict[str, List[str]] = {}
+    for metadata in metadatas:
+        file_path = metadata.get("file_path")
+        if not file_path:
+            continue
+        try:
+            raw_imports[file_path] = json.loads(metadata.get("imports") or "[]")
+        except (json.JSONDecodeError, TypeError):
+            raw_imports[file_path] = []
+
+    module_to_file = _build_module_to_file_mapping_from_paths(list(raw_imports.keys()))
+
+    file_imports: Dict[str, List[Dict]] = {}
+    file_imported_by: Dict[str, List[Dict]] = {}
+    for rel_path, imports in raw_imports.items():
+        file_imports[rel_path] = []
+        for module_name in imports:
+            import_info, target_file = _process_import_node(module_name, module_to_file)
+            file_imports[rel_path].append(import_info)
+            _add_imported_by_relation(file_imported_by, target_file, rel_path, module_name)
+
+    return file_imports, file_imported_by
+
+
+async def _scan_import_tree_live(source_id: str | None) -> Tuple[Dict[str, List[Dict]], Dict[str, List[Dict]]]:
+    """Live filesystem walk (fallback path, #12364).
+
+    Used only when the indexed store has no import data yet for this
+    source -- e.g. a freshly-registered source whose background index job
+    (triggered by ``trigger_auto_index_if_unindexed``) hasn't completed. Not
+    deleted per the no-code-deletion policy: this is the graceful-degradation
+    path, not dead code.
+    """
+    project_root = await resolve_scan_root(source_id)
+    # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
+    python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
+    python_files = [f for f in python_files if not any(excluded in f.parts for excluded in _EXCLUDED_SCAN_DIRS)]
+
+    file_imports: Dict[str, List[Dict]] = {}
+    file_imported_by: Dict[str, List[Dict]] = {}
+    module_to_file = _build_module_to_file_mapping(python_files, project_root)
+    for py_file in python_files[:500]:
+        await _analyze_file_imports(py_file, project_root, module_to_file, file_imports, file_imported_by)
+
+    return file_imports, file_imported_by
+
+
 @router.get("/analytics/import-tree")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -135,36 +243,28 @@ async def get_import_tree(
     (Issue #315 - refactored to reduce nesting)
     Issue #12330: Scope the scan to the requested source's clone path so one
     project cannot see another's import tree.
+    Issue #12364: Reads from the indexed store first (single source of truth,
+    sub-second); falls back to the live filesystem walk -- and kicks off a
+    background index job -- only when the index has no data for this source.
     """
-    project_root = await resolve_scan_root(source_id)
-    # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
-    python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
+    effective_source_id = source_id
+    if not effective_source_id:
+        from api.codebase_analytics.source_storage import get_default_source_id
 
-    # Filter out unwanted directories
-    excluded_dirs = {
-        ".git",
-        "__pycache__",
-        "node_modules",
-        ".venv",
-        "venv",
-        "env",
-        ".env",
-        "archive",
-        "dist",
-        "build",
-    }
-    python_files = [f for f in python_files if not any(excluded in f.parts for excluded in excluded_dirs)]
+        effective_source_id = await get_default_source_id()
 
-    # Data structures
-    file_imports: Dict[str, List[Dict]] = {}
-    file_imported_by: Dict[str, List[Dict]] = {}
-
-    # Build module to file mapping (Issue #315 - extracted)
-    module_to_file = _build_module_to_file_mapping(python_files, project_root)
-
-    # Analyze imports (Issue #315 - simplified loop)
-    for py_file in python_files[:500]:
-        await _analyze_file_imports(py_file, project_root, module_to_file, file_imports, file_imported_by)
+    indexed = await _load_import_tree_from_index(effective_source_id)
+    if indexed is not None:
+        file_imports, file_imported_by = indexed
+        storage_type = "chromadb"
+    else:
+        logger.info(
+            "Import-tree index empty for source %s -- falling back to live walk (#12364)",
+            effective_source_id,
+        )
+        await trigger_auto_index_if_unindexed(effective_source_id)
+        file_imports, file_imported_by = await _scan_import_tree_live(effective_source_id)
+        storage_type = "live_walk"
 
     # Build result with bidirectional relationships
     import_tree = _build_import_tree(file_imports, file_imported_by)
@@ -174,6 +274,7 @@ async def get_import_tree(
             "status": "success",
             "import_tree": import_tree,
             "summary": _build_summary(import_tree),
+            "storage_type": storage_type,
         }
     )
 
