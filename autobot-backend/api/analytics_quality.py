@@ -21,6 +21,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
+from api.analytics_shared import no_data_response
 from api.analytics_shared import resolve_source_root_or_404 as _resolve_source_root_or_404
 from api.schemas_analytics import (
     AnalyticsQualityExportData,
@@ -766,25 +767,6 @@ async def calculate_real_quality_metrics(
     }
 
 
-def _no_data_response(
-    message: str = "No analysis data. Run codebase indexing first.",
-) -> dict:
-    """
-    Standardized no-data response for quality endpoints.
-
-    Issue #543: Replaces demo data with proper no_data status.
-    """
-    return {
-        "status": "no_data",
-        "message": message,
-        "metrics": {},
-        "patterns": [],
-        "complexity": {},
-        "stats": {},
-        "trends": [],
-    }
-
-
 # Issue #665: Category type mapping for drill-down filtering
 _CATEGORY_TYPE_MAP: dict[str, set[str]] = {
     "maintainability": {"code_smell", "long_function", "complexity", "technical_debt"},
@@ -1074,11 +1056,25 @@ async def get_health_score(
 
     # Issue #543: Handle no data case
     if data is None:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     metrics = data.get("metrics", {})
     if not metrics:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     health = calculate_health_score(metrics)
 
@@ -1118,11 +1114,25 @@ async def get_quality_metrics(
 
     # Issue #543: Handle no data case
     if data is None:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     raw_metrics = data.get("metrics", {})
     if not raw_metrics:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     metrics = []
     for cat, value in raw_metrics.items():
@@ -1176,7 +1186,14 @@ async def get_pattern_distribution(
 
     # Issue #543: Handle no data case
     if data is None:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     patterns = data.get("patterns", [])
 
@@ -1233,7 +1250,14 @@ async def get_complexity_metrics(
 
     # Issue #543: Handle no data case
     if data is None:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     complexity = data.get("complexity", {})
 
@@ -1353,7 +1377,14 @@ async def get_quality_trends(
     data = await get_quality_data_from_storage(source_root=source_root, source_id=source_id)
 
     if data is None:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     cutoff = datetime.now(tz=timezone.utc) - timedelta(days=int(period[:-1]))
     filtered_trends = _filter_trends_by_period(data.get("trends", []), cutoff)
@@ -1392,11 +1423,25 @@ async def get_quality_snapshot(
 
     # Issue #543: Handle no data case
     if data is None:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     metrics = data.get("metrics", {})
     if not metrics:
-        return _no_data_response()
+        return no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     health = calculate_health_score(metrics)
     patterns = data.get("patterns", [])
@@ -1447,7 +1492,14 @@ async def _drill_down_runtime_risk(limit: int = 50) -> dict[str, Any]:
 
     risk_map = await build_runtime_risk_map()
     if not risk_map:
-        return _no_data_response("No runtime failure data available.")
+        return no_data_response(
+            "No runtime failure data available.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
     sorted_files = sorted(risk_map.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     return {
         "status": "success",
@@ -1491,7 +1543,14 @@ async def drill_down_category(
     problems, stats = await _get_problems_from_chromadb(source_root=source_root)
 
     if not problems:
-        return _no_data_response("No analysis data for category drill-down.")
+        return no_data_response(
+            "No analysis data for category drill-down.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
 
     # Issue #665: Use extracted helper functions
     category_problems = _filter_problems_by_category(problems, category, severity)
@@ -1534,11 +1593,29 @@ async def export_quality_report(
     data = await get_quality_data_from_storage()
 
     if data is None:
-        return JSONResponse(content=_no_data_response())
+        return JSONResponse(
+            content=no_data_response(
+                "No analysis data. Run codebase indexing first.",
+                metrics={},
+                patterns=[],
+                complexity={},
+                stats={},
+                trends=[],
+            )
+        )
 
     metrics = data.get("metrics", {})
     if not metrics:
-        return JSONResponse(content=_no_data_response())
+        return JSONResponse(
+            content=no_data_response(
+                "No analysis data. Run codebase indexing first.",
+                metrics={},
+                patterns=[],
+                complexity={},
+                stats={},
+                trends=[],
+            )
+        )
 
     health = calculate_health_score(metrics)
 

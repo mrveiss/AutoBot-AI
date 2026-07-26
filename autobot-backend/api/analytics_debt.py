@@ -24,6 +24,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
+from api.analytics_shared import no_data_response
 from api.schemas_analytics import (
     AnalyticsDebtByCategoryResponse,
     AnalyticsDebtCalculateResponse,
@@ -47,27 +48,6 @@ router = APIRouter(tags=["technical-debt", "analytics"])  # Prefix set in router
 
 # Redis key prefix
 DEBT_PREFIX = "debt:"
-
-
-def _no_data_response(
-    message: str = "No technical debt analysis data. Run codebase indexing first.",
-) -> dict:
-    """
-    Standardized no-data response for debt analytics (Issue #543).
-
-    Args:
-        message: Custom message explaining why no data is available
-
-    Returns:
-        Dictionary with no_data status and empty structures
-    """
-    return {
-        "status": "no_data",
-        "message": message,
-        "summary": {},
-        "items": [],
-        "total_hours": 0,
-    }
 
 
 class DebtCategory(str, Enum):
@@ -546,7 +526,14 @@ async def get_debt_summary(admin_check: bool = Depends(check_admin_permission)):
         )
 
     # Return no_data response if no analysis exists (Issue #543)
-    return JSONResponse(_no_data_response("No debt analysis found. Run POST /calculate first."))
+    return JSONResponse(
+        no_data_response(
+            "No debt analysis found. Run POST /calculate first.",
+            summary={},
+            items=[],
+            total_hours=0,
+        )
+    )
 
 
 @router.get("/by-category/{category}", response_model=DataResponse[AnalyticsDebtByCategoryResponse])
