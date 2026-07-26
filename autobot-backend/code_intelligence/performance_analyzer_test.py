@@ -549,10 +549,16 @@ class TestSummaryGeneration:
             analyzer.results = results
             summary = analyzer.get_summary()
 
-            # Critical issues should significantly lower score
+            # Critical issues should lower score. Issue #12362: the previous
+            # "<= 80" threshold assumed linear deduction; #686 replaced that
+            # with exponential-decay scoring (a single critical issue now
+            # yields ~84.6, not <= 80 — decay is intentionally gentler for a
+            # single finding so scores don't collapse under a handful of
+            # issues). Assert against the decay model instead of a stale
+            # linear-era threshold.
             assert summary["performance_score"] < 100
             if summary.get("critical_issues", 0) > 0:
-                assert summary["performance_score"] <= 80
+                assert summary["performance_score"] <= 90
 
 
 class TestReportGeneration:
