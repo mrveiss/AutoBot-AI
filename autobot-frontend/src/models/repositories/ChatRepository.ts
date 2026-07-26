@@ -1,12 +1,19 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import axios from 'axios'
-import type { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios'
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { readStoredAuthToken } from '@/utils/authToken'
+import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
+
+/**
+ * Minimal per-request config mirroring the subset of axios options this
+ * repository relied on (#12363 Phase 2 — axios retired for fetchWithAuth).
+ */
+interface RequestConfig {
+  params?: Record<string, string>
+  timeout?: number
+}
 
 // Create scoped logger for ChatRepository
 const logger = createLogger('ChatRepository')
@@ -139,51 +146,12 @@ interface BackendMessageEntry {
  * Handles communication with backend chat endpoints
  */
 export class ChatRepository {
-  private axios: AxiosInstance
   private baseURL: string
+  /** Request timeout for chat operations (ms). */
+  private static readonly REQUEST_TIMEOUT_MS = 60000
 
   constructor(baseURL?: string) {
     this.baseURL = baseURL || import.meta.env.VITE_API_URL || getBackendUrl()
-    this.axios = axios.create({
-      baseURL: this.baseURL,
-      timeout: 60000, // 60 second timeout for chat operations
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-
-    // Inject auth token on every request
-    this.axios.interceptors.request.use(config => {
-      const token = this._getAuthToken()
-      if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`
-      }
-      return config
-    })
-
-    // Add response interceptor — redirect to login on 401 (#967)
-    this.axios.interceptors.response.use(
-      response => response,
-      error => {
-        logger.error('Request failed:', error)
-        if (
-          error?.response?.status === 401 &&
-          typeof window !== 'undefined' &&
-          !window.location.pathname.includes('/login')
-        ) {
-          logger.warn('401 Unauthorized — clearing auth and redirecting to login')
-          localStorage.removeItem('autobot_auth')
-          localStorage.removeItem('autobot_user')
-          const redirect = encodeURIComponent(window.location.pathname)
-          window.location.href = `/login?redirect=${redirect}`
-        }
-        return Promise.reject(error)
-      }
-    )
-  }
-
-  private _getAuthToken(): string | null {
-    return readStoredAuthToken()
   }
 
   /**
@@ -273,21 +241,24 @@ export class ChatRepository {
     onChunk?: (chunk: ChatStreamResponse) => void
   ): Promise<void> {
     try {
-      const response = await this.axios.post(
-        `${getApiBase()}/chat`,
+      const response = await fetchWithAuth(
+        `${this.baseURL}${getApiBase()}/chat`,
         {
-          message,
-          chat_id: chatId,
-          stream: true
-        },
-        {
-          responseType: 'stream',
-          adapter: 'fetch' // Use fetch adapter for streaming
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, chat_id: chatId, stream: true }),
         }
       )
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      if (!response.body) {
+        throw new Error('Streaming response has no readable body')
+      }
+
       // Handle streaming response
-      const reader = response.data.getReader()
+      const reader = response.body.getReader()
       const decoder = new TextDecoder()
 
       while (true) {
@@ -330,12 +301,15 @@ export class ChatRepository {
       // local UUID-A but backend creates UUID-B, and any subsequent
       // /api/chats/{id}/message calls land in different sessions — that's the
       // root of #6745 "answer arrived in different session".
-      const response = await this.post(`${getApiBase()}/chat/sessions`, {
-        id,
-        title: title || 'New Chat',
-        metadata: metadata || {}
-      })
-      return response.data?.data || response.data
+      const response = await this.post<{ data?: ChatSession } & Record<string, unknown>>(
+        `${getApiBase()}/chat/sessions`,
+        {
+          id,
+          title: title || 'New Chat',
+          metadata: metadata || {}
+        }
+      )
+      return (response.data?.data || response.data) as ChatSession
     } catch (error: unknown) {
       logger.error('Failed to create new chat:', error)
       throw error
@@ -350,11 +324,18 @@ export class ChatRepository {
   // Get list of all chat sessions (for compatibility with controller)
   async getChatList(): Promise<ChatSession[]> {
     try {
-      const response = await this.get(`${getApiBase()}/chat/sessions`)
-      // Fix: axios wraps response in .data, and API response has { data: { sessions: [...] } }
+      const response = await this.get<{
+        sessions?: BackendSessionEntry[]
+        data?: { sessions?: BackendSessionEntry[] }
+      }>(`${getApiBase()}/chat/sessions`)
+      // API response may be { sessions: [...] } or { data: { sessions: [...] } }
       const sessions = response.data?.data?.sessions || response.data?.sessions || []
 
-      // Transform backend session format to frontend store format
+      // Transform backend session format to frontend store format.
+      // NOTE: the mapped objects use the store's camelCase/Date shape
+      // (createdAt/updatedAt/isActive) rather than the declared `ChatSession`
+      // wire type — a pre-existing discrepancy that was masked while axios typed
+      // `.data` as `any` (#12363 Phase 2). Runtime shape is unchanged.
       return sessions.map((session: BackendSessionEntry) => ({
         id: session.id || session.chatId,
         title: session.title || session.name || `Chat ${session.id?.slice(0, 8)}`,
@@ -362,7 +343,7 @@ export class ChatRepository {
         createdAt: new Date(session.createdAt || session.createdTime || Date.now()),
         updatedAt: new Date(session.updatedAt || session.lastModified || Date.now()),
         isActive: false // Will be set by store when session is selected
-      }))
+      })) as unknown as ChatSession[]
     } catch (error: unknown) {
       logger.error('Failed to get chat list:', error)
       return [] // Return empty array on error to prevent app crash
@@ -372,7 +353,7 @@ export class ChatRepository {
   // Get single session by ID
   async getSession(sessionId: string): Promise<ChatSession> {
     try {
-      const response = await this.get(`${getApiBase()}/chat/sessions/${sessionId}`)
+      const response = await this.get<ChatSession>(`${getApiBase()}/chat/sessions/${sessionId}`)
       return response.data
     } catch (error: unknown) {
       logger.error('Failed to get session:', error)
@@ -384,7 +365,10 @@ export class ChatRepository {
   async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
     try {
       logger.debug(`Fetching messages for session: ${sessionId}`)
-      const response = await this.get(`${getApiBase()}/chat/sessions/${sessionId}`)
+      const response = await this.get<{
+        messages?: BackendMessageEntry[]
+        data?: { messages?: BackendMessageEntry[] }
+      }>(`${getApiBase()}/chat/sessions/${sessionId}`)
       const data = response.data
       logger.debug(`Raw API response:`, JSON.stringify(data).substring(0, 200))
 
@@ -481,7 +465,7 @@ export class ChatRepository {
     chatId: string,
     fileAction?: 'delete' | 'transfer_kb' | 'transfer_shared',
     fileOptions?: Record<string, unknown>
-  ): Promise<AxiosResponse> {
+  ): Promise<unknown> {
     try {
       const params: Record<string, string> = {}
 
@@ -503,7 +487,7 @@ export class ChatRepository {
 
   // Reset chat (clear current session)
   // Issue #552: Fixed path - backend uses /api/chat/reset
-  async resetChat(): Promise<AxiosResponse> {
+  async resetChat(): Promise<unknown> {
     try {
       const response = await this.post(`${getApiBase()}/chat/reset`)
       return response.data || response
@@ -517,15 +501,15 @@ export class ChatRepository {
   // Issue #552: Fixed path - backend uses /api/chat/sessions
   async getChatHistory(): Promise<{ messages: ChatMessage[] }> {
     try {
-      const response = await this.get(`${getApiBase()}/chat/sessions`)
-      return response.data || response
+      const response = await this.get<{ messages: ChatMessage[] }>(`${getApiBase()}/chat/sessions`)
+      return (response.data || response) as { messages: ChatMessage[] }
     } catch (error: unknown) {
       logger.warn('Failed to get chat history (legacy):', error)
       return { messages: [] }
     }
   }
 
-  async saveChatMessages(params: { chatId: string; messages: ChatMessage[]; name?: string }): Promise<AxiosResponse> {
+  async saveChatMessages(params: { chatId: string; messages: ChatMessage[]; name?: string }): Promise<unknown> {
     try {
       // CRITICAL FIX Issue #259: Wrap messages in 'data' object to match backend expectation
       // Backend expects: { data: { messages: [...], name: "..." } }
@@ -553,8 +537,8 @@ export class ChatRepository {
   async getSessionFacts(sessionId: string): Promise<SessionFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.get(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts`)
-      return response.data || response
+      const response = await this.get<SessionFactsResponse>(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts`)
+      return (response.data || response) as SessionFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to get session facts:', error)
       throw error
@@ -572,32 +556,118 @@ export class ChatRepository {
   ): Promise<PreserveFactsResponse> {
     try {
       // Issue #552: Fixed path - backend uses /api/chat-knowledge/chat/sessions/*
-      const response = await this.post(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`, {
+      const response = await this.post<PreserveFactsResponse>(`${getApiBase()}/chat-knowledge/chat/sessions/${sessionId}/facts/preserve`, {
         fact_ids: factIds,
         preserve
       })
-      return response.data || response
+      return (response.data || response) as PreserveFactsResponse
     } catch (error: unknown) {
       logger.error('Failed to preserve session facts:', error)
       throw error
     }
   }
 
-  // Helper methods for axios operations
-  private async get(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> {
-    return this.axios.get(url, config)
+  // ==========================================================================
+  // Request layer (#12363 Phase 2) — fetch-based, replaces the former axios
+  // instance. Returns an ApiResponse<T> envelope (preserving the prior
+  // `.data` access pattern) and keeps the previous behaviour: Bearer-token
+  // injection (via fetchWithAuth), 60s timeout, throw-on-non-2xx, and
+  // 401 -> clear-auth + redirect-to-login (#967).
+  // ==========================================================================
+
+  private async _request<T = unknown>(
+    method: string,
+    url: string,
+    data?: unknown,
+    config?: RequestConfig,
+  ): Promise<ApiResponse<T>> {
+    let fullUrl = `${this.baseURL}${url}`
+    if (config?.params) {
+      const query = new URLSearchParams(config.params).toString()
+      if (query) fullUrl += `?${query}`
+    }
+
+    const controller = new AbortController()
+    const timeoutMs = config?.timeout ?? ChatRepository.REQUEST_TIMEOUT_MS
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+    try {
+      const init: RequestInit = {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      }
+      if (data !== undefined) {
+        init.body = JSON.stringify(data)
+      }
+
+      const response = await fetchWithAuth(fullUrl, init)
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        let errorBody: unknown
+        try {
+          errorBody = await response.json()
+        } catch {
+          errorBody = await response.text().catch(() => undefined)
+        }
+        const error = new Error(
+          `HTTP ${response.status}: ${response.statusText}`,
+        ) as Error & { response?: { status: number; data: unknown } }
+        error.response = { status: response.status, data: errorBody }
+        throw error
+      }
+
+      const contentType = response.headers.get('content-type') || ''
+      const body: unknown = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text()
+
+      return {
+        data: body as T,
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      }
+    } catch (error: unknown) {
+      clearTimeout(timeoutId)
+      logger.error('Request failed:', error)
+      this._redirectOnUnauthorized(error)
+      throw error
+    }
   }
 
-  private async post(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse> {
-    return this.axios.post(url, data, config)
+  /** Clear stored auth and redirect to login on a 401, mirroring the old interceptor (#967). */
+  private _redirectOnUnauthorized(error: unknown): void {
+    const status = (error as { response?: { status?: number } })?.response?.status
+    if (
+      status === 401 &&
+      typeof window !== 'undefined' &&
+      !window.location.pathname.includes('/login')
+    ) {
+      logger.warn('401 Unauthorized — clearing auth and redirecting to login')
+      localStorage.removeItem('autobot_auth')
+      localStorage.removeItem('autobot_user')
+      const redirect = encodeURIComponent(window.location.pathname)
+      window.location.href = `/login?redirect=${redirect}`
+    }
   }
 
-  private async delete(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse> {
-    return this.axios.delete(url, config)
+  private get<T = unknown>(url: string, config?: RequestConfig): Promise<ApiResponse<T>> {
+    return this._request<T>('GET', url, undefined, config)
   }
 
-  private async put(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<AxiosResponse> {
-    return this.axios.put(url, data, config)
+  private post<T = unknown>(url: string, data?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
+    return this._request<T>('POST', url, data, config)
+  }
+
+  private delete<T = unknown>(url: string, config?: RequestConfig): Promise<ApiResponse<T>> {
+    return this._request<T>('DELETE', url, undefined, config)
+  }
+
+  private put<T = unknown>(url: string, data?: unknown, config?: RequestConfig): Promise<ApiResponse<T>> {
+    return this._request<T>('PUT', url, data, config)
   }
 }
 

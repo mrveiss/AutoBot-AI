@@ -15,7 +15,6 @@
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import type { AxiosError } from 'axios'
 
 const logger = createLogger('useCompanyTemplates')
 
@@ -88,7 +87,7 @@ export function useCompanyTemplates() {
       templates.value = response
       return response
     } catch (err) {
-      const msg = (err as AxiosError)?.message ?? String(err)
+      const msg = (err as Error)?.message ?? String(err)
       logger.error('Failed to list built-in templates', err)
       error.value = `Failed to load templates: ${msg}`
       throw err
@@ -106,7 +105,7 @@ export function useCompanyTemplates() {
       )
       return response
     } catch (err) {
-      const msg = (err as AxiosError)?.message ?? String(err)
+      const msg = (err as Error)?.message ?? String(err)
       logger.error(`Failed to get template ${templateKey}`, err)
       error.value = `Failed to load template: ${msg}`
       throw err
@@ -128,7 +127,7 @@ export function useCompanyTemplates() {
       )
       return response
     } catch (err) {
-      const msg = (err as AxiosError)?.message ?? String(err)
+      const msg = (err as Error)?.message ?? String(err)
       logger.error(`Failed to import template ${templateId}`, err)
       error.value = `Failed to import template: ${msg}`
       throw err
