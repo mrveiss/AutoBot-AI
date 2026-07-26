@@ -7,13 +7,19 @@
 # Fixes MVA-291: replaces setup_daily_health_check.sh crontab/tmp approach
 ---
 
+# #12425: autobot_log_dir defaults to the SHARED /var/log/autobot (common
+# role, owner autobot:autobot). Creating it here as root:root clobbered that
+# ownership on every run of this role, leaving no autobot-* service user
+# able to write (the common role's autobot:autobot/02775 is the canonical
+# ownership every role sharing this dir must converge to — see
+# common/tasks/main.yml and tts-worker/npu-worker for the same fix).
 - name: "Health Check Cron | Ensure log directory exists"
   ansible.builtin.file:
     path: "{{ autobot_log_dir }}"
     state: directory
-    owner: root
-    group: root
-    mode: "0755"
+    owner: "{{ 'autobot' if autobot_log_dir == '/var/log/autobot' else 'root' }}"
+    group: "{{ 'autobot' if autobot_log_dir == '/var/log/autobot' else 'root' }}"
+    mode: "{{ '02775' if autobot_log_dir == '/var/log/autobot' else '0755' }}"
   tags: ["monitoring", "health_check"]
 
 - name: "Health Check Cron | Deploy wrapper script to stable path"

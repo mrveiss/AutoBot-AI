@@ -287,10 +287,12 @@ async def test_run_subprocess_falls_back_without_systemd(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_run_subprocess_falls_back_when_log_file_prep_fails(tmp_path):
-    """systemd-run is available, but the log file can't be prepared: still
-    falls back to the direct pipe-attached exec rather than detaching without
-    file-backed output (which would just trade one crash risk for another)."""
+async def test_run_subprocess_falls_back_to_attached_when_all_log_paths_fail(tmp_path):
+    """systemd-run is available, but NEITHER the canonical NOR the #12425
+    fallback log path can be prepared (e.g. the uid-scoped tmp dir is also
+    unwritable): only then does the run fall back to the direct
+    pipe-attached exec rather than detaching without file-backed output
+    (which would just trade one crash risk for another)."""
     ex = _executor(tmp_path)
     cmd = ["/usr/bin/ansible-playbook", "-i", "inv.yml", "update-all-nodes.yml"]
     env = {"PATH": "/usr/bin"}
@@ -304,13 +306,74 @@ async def test_run_subprocess_falls_back_when_log_file_prep_fails(tmp_path):
 
     with patch.object(_pe.PlaybookExecutor, "_self_update_detach_available", return_value=True):
         with patch.object(_pe.PlaybookExecutor, "_prepare_self_update_log_file", return_value=None):
-            with patch.object(asyncio, "create_subprocess_exec", side_effect=_fake_create_subprocess_exec):
-                result = await ex._run_subprocess(cmd, env, progress_callback=None, detach=True)
+            with patch.object(_pe.PlaybookExecutor, "_write_fresh_log_file", return_value=None):
+                with patch.object(asyncio, "create_subprocess_exec", side_effect=_fake_create_subprocess_exec):
+                    result = await ex._run_subprocess(cmd, env, progress_callback=None, detach=True)
 
     assert result["returncode"] == 0
     assert captured["args"] == tuple(cmd)
     assert captured["kwargs"]["stdout"] == asyncio.subprocess.PIPE
     assert captured["kwargs"]["stderr"] == asyncio.subprocess.STDOUT
+
+
+@pytest.mark.asyncio
+async def test_run_subprocess_still_detaches_via_fallback_log_path(tmp_path):
+    """#12425: the canonical /var/log/autobot path can be unwritable (e.g.
+    owned by a different autobot-* service user) while systemd-run is fully
+    available. That must NOT silently drop to the known-broken attached run
+    (#11492) — it must retry under the uid-scoped fallback path and still
+    detach."""
+    ex = _executor(tmp_path)
+    cmd = ["/usr/bin/ansible-playbook", "-i", "inv.yml", "update-all-nodes.yml"]
+    env = {"PATH": "/usr/bin"}
+    fallback_log_path = tmp_path / "fallback" / "self-update-ansible.log"
+
+    captured = {}
+
+    async def _fake_create_subprocess_exec(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return _FakeProcess(returncode=0)
+
+    with patch.object(_pe.PlaybookExecutor, "_self_update_detach_available", return_value=True):
+        with patch.object(_pe.PlaybookExecutor, "_prepare_self_update_log_file", return_value=None):
+            with patch.object(_pe, "SELF_UPDATE_LOG_FALLBACK_PATH", fallback_log_path):
+                with patch.object(asyncio, "create_subprocess_exec", side_effect=_fake_create_subprocess_exec):
+                    result = await ex._run_subprocess(cmd, env, progress_callback=None, detach=True)
+
+    assert result["returncode"] == 0
+    argv = captured["args"]
+    # Still wrapped + detached, not the pipe-attached exec.
+    assert argv[0] == "sudo"
+    assert argv[2] == "systemd-run"
+    tail = list(argv[argv.index("--") + 1 :])
+    assert str(fallback_log_path) in tail[2]
+    assert tail[3:] == cmd
+    assert captured["kwargs"]["stdout"] == asyncio.subprocess.DEVNULL
+    assert captured["kwargs"]["stderr"] == asyncio.subprocess.DEVNULL
+    # The fallback log file was actually created, truncated, and locked down.
+    assert fallback_log_path.read_text(encoding="utf-8") == ""
+    assert oct(fallback_log_path.stat().st_mode & 0o777) == "0o600"
+
+
+def test_write_fresh_log_file_creates_truncates_and_chmods(tmp_path):
+    log_path = tmp_path / "sub" / "fresh.log"
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text("stale prior run content\n", encoding="utf-8")
+
+    result = _pe.PlaybookExecutor._write_fresh_log_file(log_path)
+
+    assert result == log_path
+    assert log_path.read_text(encoding="utf-8") == ""
+    assert oct(log_path.stat().st_mode & 0o777) == "0o600"
+
+
+def test_write_fresh_log_file_returns_none_on_failure(tmp_path):
+    blocked = tmp_path / "not_a_dir"
+    blocked.write_text("x", encoding="utf-8")
+    log_path = blocked / "fresh.log"
+
+    assert _pe.PlaybookExecutor._write_fresh_log_file(log_path) is None
 
 
 @pytest.mark.asyncio
