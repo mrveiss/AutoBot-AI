@@ -20,6 +20,7 @@ import { ref } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { useLoadingState } from '@/composables/useLoadingState'
+import { extractErrorMessage } from '@/utils/errorExtract'
 
 const logger = createLogger('useVncControls')
 
@@ -45,12 +46,6 @@ export interface VncActionResponse {
   status: 'success' | 'error'
   message: string
   image_data?: string
-}
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message
-  if (typeof err === 'string') return err
-  return fallback
 }
 
 export function useVncControls(sessionId: string = 'default') {
