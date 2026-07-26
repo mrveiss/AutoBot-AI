@@ -18,6 +18,7 @@
 
 import slmApiClient from '@/utils/ApiClient'
 import { useAuthStore } from '@/stores/auth'
+import { createAuthGuard } from '@/utils/slmAuthGuard'
 
 export interface MFASetupResponse {
   secret: string
@@ -43,21 +44,10 @@ export interface MFAVerifyResponse {
 export function useMfaApi() {
   const authStore = useAuthStore()
 
-  // The canonical client intentionally skips its session-clearing 401 handler
-  // for auth/MFA endpoints (a 401 there is a credential failure, not a rejected
-  // session). MFA management historically logged the user out on any 401 — the
-  // previous axios response interceptor called `authStore.logout()` — so we
-  // preserve that exact behavior explicitly here and re-throw as before.
-  async function withAuthGuard<T>(op: () => Promise<T>): Promise<T> {
-    try {
-      return await op()
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith('HTTP 401')) {
-        authStore.logout()
-      }
-      throw error
-    }
-  }
+  // Preserve the historic "logout on 401" behaviour: the canonical client skips
+  // its session-clearing 401 handler for /mfa/ (auth) endpoints, so the guard
+  // re-applies it explicitly (shared helper — see utils/slmAuthGuard.ts).
+  const withAuthGuard = createAuthGuard(authStore.logout)
 
   async function setupMFA(): Promise<MFASetupResponse> {
     return withAuthGuard(() => slmApiClient.post<MFASetupResponse>('/mfa/setup'))

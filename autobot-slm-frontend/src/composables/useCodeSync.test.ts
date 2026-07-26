@@ -49,15 +49,7 @@ vi.mock('./useRoles', () => ({
 }))
 
 import { useCodeSync } from './useCodeSync'
-
-// Minimal Response-like stub for the rawRequest-based methods.
-function mockResponse(status: number, body: unknown): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  } as unknown as Response
-}
+import { mockResponse } from './slmApiClient.testHelper'
 
 describe('useCodeSync — async drift/resolve job (#11303)', () => {
   beforeEach(() => {

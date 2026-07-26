@@ -10,7 +10,7 @@
  */
 
 import { ref, reactive } from 'vue'
-import { slmApiClient } from '@/utils/ApiClient'
+import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 
 export interface Role {
   name: string
@@ -119,105 +119,16 @@ export interface DecommissionPreflight {
 }
 
 // =============================================================================
-// slmApiClient adapter (#12420 Phase 2 batch 7)
+// slmApiClient adapter (#12420 Phase 2 batch 7 → consolidated in #12654)
 //
-// useRoles historically owned its own `axios.create()` instance (base URL built
-// from getSlmApiBase(), a request interceptor injecting the SLM bearer token, no
-// response interceptor). This adapter routes every call through the canonical
-// `slmApiClient` — where the auth token, base URL and centralised 401 handling
-// now live — while reproducing the axios surface the methods below depend on so
-// their bodies, and all consumers, stay unchanged:
-//
-//   * methods `await client.<verb>(endpoint, body?)` and read `response.data`
-//     → the adapter returns `{ data }`.
-//   * every catch reads `err.response?.data?.detail || err.message` → the
-//     adapter throws an axios-shaped error carrying `response.status` +
-//     `response.data` (and a `message` of `HTTP <n>` as the secondary fallback);
-//     a network/timeout rejection surfaces the raw Error (no `.response`), so
-//     `err.message` remains the fallback exactly as with axios.
-//
-// It delegates to `slmApiClient.rawRequest` (not the get/post/... helpers) on
-// purpose: rawRequest is the single seam that injects the bearer token + base
-// URL and runs the 401 handler, WITHOUT the helpers' GET retry/back-off or the
-// `HTTP <n>: <msg>` error transform — preserving the original single-shot,
-// structured-error behaviour every method relies on.
+// useRoles historically owned its own axios instance; the Phase-2 migration
+// routed every call through the canonical `slmApiClient` via a thin axios-compat
+// adapter. That adapter now lives in `utils/slmApiCompat.ts` (shared with
+// useSlmApi). `arrays: true` preserves this composable's serialisation of array
+// params as repeated `key[]=value` (syncRole's `node_ids`).
 // =============================================================================
 
-interface AxiosLikeResponse<T> {
-  data: T
-}
-
-// Serialise an axios-style params object onto the endpoint, matching axios's
-// default serialisation: scalars as `key=value`, arrays as repeated `key[]=value`
-// (URLSearchParams encodes the brackets to `%5B%5D`, exactly as axios does). Only
-// removeRole (scalar) and syncRole (scalar + array) pass a params object.
-function withParams(endpoint: string, params?: Record<string, unknown>): string {
-  if (!params) return endpoint
-  const usp = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null) continue
-    if (Array.isArray(value)) {
-      for (const item of value) usp.append(`${key}[]`, String(item))
-    } else {
-      usp.append(key, String(value))
-    }
-  }
-  const qs = usp.toString()
-  if (!qs) return endpoint
-  return endpoint.includes('?') ? `${endpoint}&${qs}` : `${endpoint}?${qs}`
-}
-
-async function adapterRequest<T>(
-  method: string,
-  endpoint: string,
-  body?: unknown
-): Promise<AxiosLikeResponse<T>> {
-  const response = await slmApiClient.rawRequest(endpoint, { method, body })
-
-  if (!response.ok) {
-    let data: unknown = null
-    try {
-      data = await response.json()
-    } catch {
-      /* non-JSON error body — leave data null, mirroring axios */
-    }
-    const error = new Error(`HTTP ${response.status}`) as Error & {
-      response: { status: number; data: unknown }
-    }
-    // Reproduce the axios error shape the catch blocks read (err.response.data.detail).
-    error.response = { status: response.status, data }
-    throw error
-  }
-
-  if (response.status === 204) return { data: {} as T }
-  const contentType = response.headers.get('content-type')
-  if (contentType && contentType.includes('application/json')) {
-    return { data: (await response.json()) as T }
-  }
-  return { data: {} as T }
-}
-
-// Axios-compatible facade over slmApiClient consumed by every method below.
-const client = {
-  get: <T = unknown>(
-    endpoint: string,
-    config?: { params?: Record<string, unknown> }
-  ): Promise<AxiosLikeResponse<T>> =>
-    adapterRequest<T>('GET', withParams(endpoint, config?.params)),
-  post: <T = unknown>(
-    endpoint: string,
-    body?: unknown,
-    config?: { params?: Record<string, unknown> }
-  ): Promise<AxiosLikeResponse<T>> =>
-    adapterRequest<T>('POST', withParams(endpoint, config?.params), body ?? undefined),
-  put: <T = unknown>(endpoint: string, body?: unknown): Promise<AxiosLikeResponse<T>> =>
-    adapterRequest<T>('PUT', endpoint, body),
-  delete: <T = unknown>(
-    endpoint: string,
-    config?: { params?: Record<string, unknown> }
-  ): Promise<AxiosLikeResponse<T>> =>
-    adapterRequest<T>('DELETE', withParams(endpoint, config?.params)),
-}
+const client = makeAxiosCompatClient({ arrays: true })
 
 export function useRoles() {
   const roles = ref<Role[]>([])

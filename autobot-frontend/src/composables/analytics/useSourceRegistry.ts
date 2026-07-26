@@ -17,7 +17,6 @@ import { useRoute } from 'vue-router'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
 import apiClient from '@/utils/ApiClient'
-import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import type { ToastType } from '@/composables/useToast'
 
@@ -45,17 +44,13 @@ export interface SourceSavePayload {
   credential_id: string | null
 }
 
-async function _getBackendUrl(): Promise<string> {
-  return appConfig.getServiceUrl('backend')
-}
-
 /**
  * Load credentials available for source authentication.
  * Extracted from AddSourceModal.vue (#6069).
  */
 export async function fetchSourceSecrets(): Promise<RegistrySecret[]> {
-  const backendUrl = await _getBackendUrl()
-  const data = await apiClient.get<{ secrets?: RegistrySecret[] }>(`${backendUrl}/api/secrets`)
+  // Base URL resolved by apiClient (#12363); relative path proxied by nginx/Vite.
+  const data = await apiClient.get<{ secrets?: RegistrySecret[] }>(`/api/secrets`)
   return data.secrets ?? []
 }
 
@@ -73,9 +68,8 @@ export async function shareCodeSource(
   sourceId: string,
   payload: SourceSharePayload,
 ): Promise<CodeSource> {
-  const backendUrl = await _getBackendUrl()
   return await apiClient.post<CodeSource>(
-    `${backendUrl}/api/analytics/codebase/sources/${sourceId}/share`,
+    `/api/analytics/codebase/sources/${sourceId}/share`,
     payload,
   )
 }
@@ -89,10 +83,9 @@ export async function saveCodeSource(
   payload: SourceSavePayload,
   id?: string,
 ): Promise<CodeSource> {
-  const backendUrl = await _getBackendUrl()
   const url = id
-    ? `${backendUrl}/api/analytics/codebase/sources/${id}`
-    : `${backendUrl}/api/analytics/codebase/sources`
+    ? `/api/analytics/codebase/sources/${id}`
+    : `/api/analytics/codebase/sources`
   return id
     ? await apiClient.put<CodeSource>(url, payload)
     : await apiClient.post<CodeSource>(url, payload)

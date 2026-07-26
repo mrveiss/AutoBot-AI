@@ -4,13 +4,14 @@
 // Author: mrveiss
 
 /**
- * Response-builder helpers for the useSlmApi ↔ slmApiClient seam (#12420 Phase 2).
+ * Shared Response-builder helpers for the slmApiClient seam (#12420 Phase 2,
+ * consolidated in #12654).
  *
- * useSlmApi's adapter routes every call through `slmApiClient.rawRequest`, which
- * resolves a Fetch `Response`. Tests mock that seam per-file (so the vi.mock
- * factory hoists correctly) and use these builders to produce Response-shaped
- * stubs the adapter understands — driving the `response.data` unwrap and the
- * reproduced axios error shape.
+ * The composables that route through `slmApiClient.rawRequest` resolve a Fetch
+ * `Response`. Their tests mock that seam per-file (so the vi.mock factory hoists
+ * correctly) and use these builders to produce Response-shaped stubs the adapter
+ * (and the rawRequest-based useCodeSync methods) understand — driving the
+ * `response.data` unwrap and the reproduced axios error shape.
  */
 
 /** A minimal Fetch-Response stub the adapter understands. */
@@ -38,4 +39,13 @@ export function jsonResponse(body: unknown, status = 200): Response {
 /** Non-2xx JSON error response (the adapter surfaces body as err.response.data). */
 export function errorResponse(status: number, body: unknown): Response {
   return makeResponse(status, body, 'application/json')
+}
+
+/**
+ * `(status, body)` Response stub for the rawRequest-based useCodeSync methods,
+ * which inspect only `response.ok`/`response.status`/`response.json()`. A thin
+ * wrapper over `makeResponse` so every test file shares one builder.
+ */
+export function mockResponse(status: number, body: unknown): Response {
+  return makeResponse(status, body)
 }

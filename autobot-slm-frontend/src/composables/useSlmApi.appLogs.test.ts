@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { jsonResponse } from './useSlmApi.testHelper'
+import { jsonResponse } from './slmApiClient.testHelper'
 
 const mockRaw = vi.fn()
 
