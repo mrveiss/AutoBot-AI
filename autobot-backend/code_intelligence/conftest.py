@@ -109,6 +109,25 @@ _real_sa = sys.modules.get("code_intelligence.security_analyzer")
 if _real_sa is not None:
     setattr(sys.modules["code_intelligence"], "security_analyzer", _real_sa)
 
+# Replace the code_intelligence.performance_analyzer stub with the real module
+# (#12362). The top-level conftest stubs it as a MagicMock (heavy __init__
+# chain avoidance) alongside security_analyzer/bug_predictor, but — unlike
+# those two — it was never real-loaded here, so every standalone test in
+# performance_analyzer_test.py silently exercised MagicMock attributes
+# instead of the real PerformanceAnalyzer. Mirrors the security_analyzer
+# real-load above.
+_load_real(
+    "code_intelligence.performance_analyzer",
+    _backend_root / "code_intelligence" / "performance_analyzer.py",
+)
+
+# Expose the real performance_analyzer on the code_intelligence namespace so
+# that `from code_intelligence.performance_analyzer import X` and
+# `patch("code_intelligence.performance_analyzer.Y")` resolve the real module.
+_real_pa = sys.modules.get("code_intelligence.performance_analyzer")
+if _real_pa is not None:
+    setattr(sys.modules["code_intelligence"], "performance_analyzer", _real_pa)
+
 # Replace the code_intelligence.bug_predictor stub with the real module (#12421).
 # The top-level conftest stubs it as a MagicMock (heavy __init__ chain avoidance),
 # so STANDALONE `from code_intelligence.bug_predictor import BugPredictor` in

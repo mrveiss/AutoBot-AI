@@ -21,6 +21,7 @@ from .ast_visitor import SecurityASTVisitor
 from .constants import (
     OWASP_MAPPING,
     PLACEHOLDER_PATTERNS,
+    WEAK_ENCRYPTION,
     SecuritySeverity,
     VulnerabilityType,
 )
@@ -225,12 +226,60 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
+    # Issue #12362: Map import-statement module names to the WEAK_ENCRYPTION
+    # constants.py key. WEAK_ENCRYPTION was already defined (des/3des/rc4/
+    # blowfish -> message/CWE) but never wired to a check — mirrors the
+    # legacy code_analysis.src.security_analyzer's "insecure_crypto" category
+    # (that analyzer's regex flagged bare `DES|RC4|MD4` substrings; this
+    # scopes detection to actual cipher-module imports for lower noise).
+    _WEAK_ENCRYPTION_IMPORT_PATTERN = re.compile(
+        r"(?:from\s+Crypto\.Cipher\s+import\s+(?P<from_name>DES3|DES|ARC4|Blowfish)\b"
+        r"|Crypto\.Cipher\.(?P<attr_name>DES3|DES|ARC4|Blowfish)\b)"
+    )
+    _WEAK_ENCRYPTION_MODULE_TO_KEY = {
+        "DES3": "3des",
+        "DES": "des",
+        "ARC4": "rc4",
+        "Blowfish": "blowfish",
+    }
+
+    def _check_weak_encryption(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
+        """Check for weak/broken symmetric encryption algorithm usage."""
+        findings: List[SecurityFinding] = []
+
+        for match in self._WEAK_ENCRYPTION_IMPORT_PATTERN.finditer(content):
+            module_name = match.group("from_name") or match.group("attr_name")
+            key = self._WEAK_ENCRYPTION_MODULE_TO_KEY[module_name]
+            msg, cwe_id = WEAK_ENCRYPTION[key]
+            line_num = content[: match.start()].count("\n") + 1
+            code = lines[line_num - 1] if line_num <= len(lines) else ""
+
+            findings.append(
+                SecurityFinding(
+                    vulnerability_type=VulnerabilityType.WEAK_ENCRYPTION,
+                    severity=SecuritySeverity.HIGH,
+                    file_path=file_path,
+                    line_start=line_num,
+                    line_end=line_num,
+                    description=f"Weak encryption algorithm: {module_name}. {msg}",
+                    recommendation="Use AES-256-GCM via cryptography.hazmat.primitives.ciphers",
+                    owasp_category=OWASP_MAPPING[VulnerabilityType.WEAK_ENCRYPTION],
+                    cwe_id=cwe_id,
+                    current_code=code.strip(),
+                    secure_alternative="from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes",
+                    confidence=0.85,
+                )
+            )
+
+        return findings
+
     def _regex_analysis(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Perform regex-based security analysis."""
         findings: List[SecurityFinding] = []
         findings.extend(self._check_hardcoded_secrets(file_path, content, lines))
         findings.extend(self._check_sql_injection(file_path, content, lines))
         findings.extend(self._check_path_traversal(file_path, content, lines))
+        findings.extend(self._check_weak_encryption(file_path, content, lines))
         return findings
 
     def analyze_directory(self, directory: str | None = None) -> List[SecurityFinding]:

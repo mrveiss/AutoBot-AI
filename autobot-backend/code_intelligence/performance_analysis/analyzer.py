@@ -196,6 +196,63 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
             )
         return findings
 
+    # Issue #12362: Resource-acquisition calls that leak when not used as a
+    # context manager or explicitly released. Mirrors the "memory_leaks"
+    # category from the legacy code_analysis.src.performance_analyzer, which
+    # had no equivalent in this canonical package (MEMORY_LEAK_RISK was
+    # defined in types.py but never emitted).
+    _UNCLOSED_RESOURCE_PATTERNS = (
+        (r"open\s*\([^)]*\)(?!\s*(?:\.close\(\)|as\s+\w+))", "open()", "f.close() or a 'with' block"),
+        (
+            r"subprocess\.Popen\s*\([^)]*\)(?!\s*(?:\.wait\(\)|\.communicate\(\)|as\s+\w+))",
+            "subprocess.Popen()",
+            "proc.wait()/.communicate() or a 'with' block",
+        ),
+        (
+            r"(?:sqlite3|psycopg2|pymysql)\.connect\s*\([^)]*\)(?!\s*(?:\.close\(\)|as\s+\w+))",
+            "database connect()",
+            "conn.close() or a 'with' block",
+        ),
+    )
+
+    def _check_unclosed_resources(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
+        """
+        Check for resource-acquiring calls not scoped by a context manager.
+
+        Issue #12362: Fills the MEMORY_LEAK_RISK detection gap left when the
+        legacy analyzer's regex-based "memory_leaks" category was not carried
+        over during the #381 god-class refactor.
+        """
+        findings: List[PerformanceIssue] = []
+
+        for pattern, call_desc, fix in self._UNCLOSED_RESOURCE_PATTERNS:
+            for match in re.finditer(pattern, content):
+                # Skip matches already inside a 'with' statement on the same line.
+                line_num = content[: match.start()].count("\n") + 1
+                code = lines[line_num - 1] if line_num <= len(lines) else ""
+                if re.match(r"\s*with\b", code):
+                    continue
+
+                findings.append(
+                    PerformanceIssue(
+                        issue_type=PerformanceIssueType.MEMORY_LEAK_RISK,
+                        severity=PerformanceSeverity.MEDIUM,
+                        file_path=file_path,
+                        line_start=line_num,
+                        line_end=line_num,
+                        description=f"{call_desc} not scoped by a context manager or explicitly released",
+                        recommendation=f"Use {fix} to guarantee release on all code paths",
+                        estimated_complexity="Unbounded resource growth",
+                        estimated_impact="File descriptor / connection exhaustion under load",
+                        current_code=code.strip(),
+                        confidence=0.55,
+                        potential_false_positive=True,
+                        false_positive_reason="Static regex cannot confirm the handle is released later in the same scope",
+                    )
+                )
+
+        return findings
+
     def _check_string_concat_in_loop(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
         """
         Check for += with strings in loop-like context.
@@ -246,6 +303,9 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
 
         # Check for string concat in loops (Issue #620: uses helper)
         findings.extend(self._check_string_concat_in_loop(file_path, content, lines))
+
+        # Check for unclosed resources (Issue #12362: uses helper)
+        findings.extend(self._check_unclosed_resources(file_path, content, lines))
 
         return findings
 
