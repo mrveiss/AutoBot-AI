@@ -24,7 +24,6 @@ Each field value is a JSON-encoded run document.
 """
 
 import json
-from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import uuid4
 
@@ -35,6 +34,7 @@ from pydantic import BaseModel, Field
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 
@@ -118,10 +118,6 @@ def _user_hash_key(user_id: str) -> str:
     return f"benchmark:runs:user:{user_id}"
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 async def _require_redis(user_id: str):
     redis = await get_async_redis_client(database=REDIS_DB)
     if redis is None:
@@ -159,7 +155,7 @@ async def create_run(
         "promptSetId": payload.promptSetId,
         "results": [r.model_dump() for r in payload.results],
         "models": [r.model for r in payload.results],
-        "createdAt": _now_iso(),
+        "createdAt": utc_timestamp(),
     }
     await redis.hset(_user_hash_key(user_id), run["id"], json.dumps(run))
     logger.info("Saved benchmark run %s for user %s", run["id"], user_id)
