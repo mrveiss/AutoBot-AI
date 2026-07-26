@@ -9,13 +9,15 @@
  * Provides REST API integration for Two-Factor Authentication (2FA/MFA)
  * management via the SLM backend.
  * Issue #576 - User Management System Phase 5 (2FA/MFA).
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()` and injects the SLM bearer token
+ * (same `slm_access_token` storage the auth store reads), so call sites pass
+ * endpoints relative to the API base and receive parsed JSON directly.
  */
 
-import axios, { type AxiosInstance } from 'axios'
+import slmApiClient from '@/utils/ApiClient'
 import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
-
-const SLM_API_BASE = getSlmApiBase()
 
 export interface MFASetupResponse {
   secret: string
@@ -41,73 +43,67 @@ export interface MFAVerifyResponse {
 export function useMfaApi() {
   const authStore = useAuthStore()
 
-  const client: AxiosInstance = axios.create({
-    baseURL: SLM_API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000,
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
+  // The canonical client intentionally skips its session-clearing 401 handler
+  // for auth/MFA endpoints (a 401 there is a credential failure, not a rejected
+  // session). MFA management historically logged the user out on any 401 — the
+  // previous axios response interceptor called `authStore.logout()` — so we
+  // preserve that exact behavior explicitly here and re-throw as before.
+  async function withAuthGuard<T>(op: () => Promise<T>): Promise<T> {
+    try {
+      return await op()
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('HTTP 401')) {
         authStore.logout()
       }
-      return Promise.reject(error)
+      throw error
     }
-  )
+  }
 
   async function setupMFA(): Promise<MFASetupResponse> {
-    const response = await client.post<MFASetupResponse>('/mfa/setup')
-    return response.data
+    return withAuthGuard(() => slmApiClient.post<MFASetupResponse>('/mfa/setup'))
   }
 
   async function verifySetup(
     code: string
   ): Promise<{ success: boolean; message: string }> {
-    const response = await client.post<{ success: boolean; message: string }>(
-      '/mfa/verify-setup',
-      { code }
+    return withAuthGuard(() =>
+      slmApiClient.post<{ success: boolean; message: string }>(
+        '/mfa/verify-setup',
+        { code }
+      )
     )
-    return response.data
   }
 
   async function verifyLogin(
     code: string,
     tempToken: string
   ): Promise<MFAVerifyResponse> {
-    const response = await client.post<MFAVerifyResponse>(
-      '/mfa/verify-login',
-      { code, temp_token: tempToken }
+    return withAuthGuard(() =>
+      slmApiClient.post<MFAVerifyResponse>('/mfa/verify-login', {
+        code,
+        temp_token: tempToken,
+      })
     )
-    return response.data
   }
 
   async function disableMFA(password: string): Promise<void> {
-    await client.post('/mfa/disable', { password })
+    await withAuthGuard(() => slmApiClient.post('/mfa/disable', { password }))
   }
 
   async function getMFAStatus(): Promise<MFAStatusResponse> {
-    const response = await client.get<MFAStatusResponse>('/mfa/status')
-    return response.data
+    return withAuthGuard(() =>
+      slmApiClient.get<MFAStatusResponse>('/mfa/status')
+    )
   }
 
   async function regenerateBackupCodes(
     password: string
   ): Promise<{ backup_codes: string[] }> {
-    const response = await client.post<{ backup_codes: string[] }>(
-      '/mfa/backup-codes',
-      { password }
+    return withAuthGuard(() =>
+      slmApiClient.post<{ backup_codes: string[] }>('/mfa/backup-codes', {
+        password,
+      })
     )
-    return response.data
   }
 
   return {
