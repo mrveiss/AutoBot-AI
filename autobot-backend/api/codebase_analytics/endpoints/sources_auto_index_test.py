@@ -37,9 +37,7 @@ class TestAutoIndexLocalSource:
         save_mock.assert_awaited_once()
 
     async def test_nonexistent_path_is_a_noop(self, tmp_path):
-        source = CodeSource(
-            name="local-proj", source_type="local", clone_path=str(tmp_path / "does-not-exist")
-        )
+        source = CodeSource(name="local-proj", source_type="local", clone_path=str(tmp_path / "does-not-exist"))
 
         with (
             patch.object(sources_ep, "save_source", AsyncMock()) as save_mock,
@@ -53,9 +51,7 @@ class TestAutoIndexLocalSource:
     async def test_github_source_is_a_noop(self, tmp_path):
         clone_dir = tmp_path / "gh_repo"
         clone_dir.mkdir()
-        source = CodeSource(
-            name="gh-proj", source_type="github", repo="org/repo", clone_path=str(clone_dir)
-        )
+        source = CodeSource(name="gh-proj", source_type="github", repo="org/repo", clone_path=str(clone_dir))
 
         with (
             patch.object(sources_ep, "save_source", AsyncMock()) as save_mock,

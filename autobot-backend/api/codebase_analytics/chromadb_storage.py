@@ -785,9 +785,7 @@ async def _prepare_batch_data(
 
     files = analysis_results.get("files", {})
     python_file_count = sum(1 for file_path in files if file_path.endswith(".py"))
-    total_items = (
-        len(analysis_results["all_functions"]) + len(analysis_results["all_classes"]) + python_file_count + 1
-    )
+    total_items = len(analysis_results["all_functions"]) + len(analysis_results["all_classes"]) + python_file_count + 1
 
     await update_progress(
         operation="Preparing functions",
