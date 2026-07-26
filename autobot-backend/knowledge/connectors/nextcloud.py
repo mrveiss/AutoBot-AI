@@ -53,10 +53,6 @@ NS_NC = "{http://nextcloud.org/ns}"
 # Default supported file extensions
 DEFAULT_FILE_EXTENSIONS = ["pdf", "docx", "odt", "md", "txt"]
 
-# Redis key prefix for storing last-modified timestamps
-_REDIS_TS_PREFIX = "connector:nextcloud:ts:"
-_REDIS_TS_TTL = 86400 * 30  # 30 days
-
 
 def _is_supported_file(path: str, extensions: List[str]) -> bool:
     """Check if file extension is in the supported list."""
@@ -66,36 +62,9 @@ def _is_supported_file(path: str, extensions: List[str]) -> bool:
     return ext in extensions
 
 
-async def _load_ts(connector_id: str, source_id: str) -> Optional[str]:
-    """Load last-modified timestamp from Redis for incremental sync."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
-        value = redis.get(key)
-        if hasattr(value, "__await__"):
-            value = await value
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        return value
-    except Exception as exc:
-        logger.warning("Redis load_ts failed for %s: %s", source_id, exc)
-        return None
-
-
-async def _store_ts(connector_id: str, source_id: str, ts: str) -> None:
-    """Store last-modified timestamp to Redis for incremental sync."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
-        result = redis.set(key, ts, ex=_REDIS_TS_TTL)
-        if hasattr(result, "__await__"):
-            await result
-    except Exception as exc:
-        logger.warning("Redis store_ts failed for %s: %s", source_id, exc)
+# Issue #12659: _load_ts()/_store_ts() moved to AbstractConnector — this
+# connector's Redis prefix ("connector:nextcloud:ts:") matches the base
+# class default derived from connector_type, so no override is needed.
 
 
 @ConnectorRegistry.register("nextcloud")
@@ -205,8 +174,7 @@ class NextcloudConnector(AbstractConnector):
                             self.logger.warning("Binary content for %s - may need extraction", source_id)
                             content = content_bytes.decode("utf-8", errors="replace")
 
-                        await _store_ts(
-                            self.config.connector_id,
+                        await self._store_ts(
                             source_id,
                             resp.headers.get("Last-Modified", ""),
                         )
@@ -233,7 +201,7 @@ class NextcloudConnector(AbstractConnector):
         # Re-discover all sources and compare timestamps
         sources = await self.discover_sources()
         for src in sources:
-            stored_ts = await _load_ts(self.config.connector_id, src.source_id)
+            stored_ts = await self._load_ts(src.source_id)
             current_ts = src.last_modified.isoformat()
 
             if not stored_ts:

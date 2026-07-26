@@ -128,8 +128,8 @@ class TestSlackConnectorChangeDetection:
         history_body = {"ok": True, "messages": [{"ts": "1000.001", "user": "U1", "text": "hi"}]}
         with (
             patch.object(connector, "_slack_post", new_callable=AsyncMock) as mock_post,
-            patch("knowledge.connectors.slack._load_ts", new=AsyncMock(return_value=None)),
-            patch("knowledge.connectors.slack._store_ts", new=AsyncMock()),
+            patch.object(connector, "_load_ts", new=AsyncMock(return_value=None)),
+            patch.object(connector, "_store_ts", new=AsyncMock()),
         ):
             mock_post.return_value = {"status_code": 200, "body": history_body}
             changes = await connector.detect_changes(since=None)
