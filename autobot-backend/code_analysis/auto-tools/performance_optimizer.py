@@ -22,8 +22,9 @@ import re  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
 from typing import Dict, List, Tuple  # noqa: E402
 
-from autobot_shared.ssot_config import config  # noqa: E402
 from tool_base import ConsoleLogToolBase  # noqa: E402
+
+from autobot_shared.ssot_config import config  # noqa: E402
 
 
 class ConsoleLogCleaner(ConsoleLogToolBase):
