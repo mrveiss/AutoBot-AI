@@ -82,6 +82,7 @@ from code_intelligence.security import (
     SecuritySeverity,
     get_vulnerability_types,
 )
+from code_intelligence.shared.scoring import get_grade_from_score
 from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_security_analysis
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
@@ -293,29 +294,6 @@ REDIS_OPTIMIZATION_CATEGORIES = (
 # =============================================================================
 # Helper Functions for Score Grading (Issue #315 - extracted/refactored)
 # =============================================================================
-
-
-def _calculate_grade_from_score(score: float) -> str:
-    """
-    Calculate letter grade from numeric score.
-
-    (Issue #315 - extracted/refactored)
-
-    Args:
-        score: Numeric score from 0-100
-
-    Returns:
-        Letter grade: A, B, C, D, or F
-    """
-    if score >= 90:
-        return "A"
-    if score >= 80:
-        return "B"
-    if score >= 70:
-        return "C"
-    if score >= 60:
-        return "D"
-    return "F"
 
 
 def _get_redis_status_message(score: float) -> str:
@@ -914,7 +892,7 @@ async def get_codebase_health_score(
         score = _calculate_health_score(report.anti_patterns)
 
         # Determine grade using extracted helper
-        grade = _calculate_grade_from_score(score)
+        grade = get_grade_from_score(score)
 
         return JSONResponse(
             status_code=200,
@@ -1160,7 +1138,7 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
     results = await asyncio.to_thread(optimizer.analyze_directory, path)
 
     score = _calculate_redis_health_score(results)
-    grade = _calculate_grade_from_score(score)
+    grade = get_grade_from_score(score)
     status = _get_redis_status_message(score)
 
     return {
@@ -1362,7 +1340,7 @@ async def get_security_score(
 
         # Generate grade and status using extracted helpers
         score = summary["security_score"]
-        grade = _calculate_grade_from_score(score)
+        grade = get_grade_from_score(score)
         status = _get_security_status_message(score)
 
         return JSONResponse(

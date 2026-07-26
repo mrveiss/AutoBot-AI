@@ -713,6 +713,20 @@ _real_load_and_bind(
     backend_root / "code_intelligence" / "code_generation" / "diff.py",
 )
 
+# code_intelligence.shared.scoring real-load (#12686) — api/analytics_code.py,
+# api/code_intelligence.py, api/analytics_reporting.py, and services/analytics_service.py
+# import get_grade_from_score from code_intelligence.shared.scoring at module level
+# (canonicalized 5 duplicate score->grade forks onto this shared helper). scoring.py is
+# self-contained (stdlib only: math, typing), so real-load this leaf submodule bypassing
+# code_intelligence.shared's own __init__ (which pulls ASTCache/FileListCache — heavier
+# deps not needed here), same pattern as code_intelligence.code_generation.diff above.
+if "code_intelligence.shared" not in sys.modules:
+    sys.modules["code_intelligence.shared"] = _make_pkg_stub("code_intelligence.shared")
+_real_load_and_bind(
+    "code_intelligence.shared.scoring",
+    backend_root / "code_intelligence" / "shared" / "scoring.py",
+)
+
 # code_intelligence submodule stubs — code_intelligence itself is stubbed above
 # (its __init__ has Python-3.10-incompatible annotations), so submodule imports
 # from api/*.py need their own stubs with the right symbol names.
