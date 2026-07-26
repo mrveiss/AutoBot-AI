@@ -65,7 +65,7 @@
             <span class="metric-label">{{ $t('workflow.agentObservability.failed') }}</span>
           </div>
           <div class="metric">
-            <span class="metric-value">{{ formatDuration(agent.avgDuration) }}</span>
+            <span class="metric-value">{{ formatDuration(agent.avgDuration, { style: 'secondsCompact', zeroText: '--' }) }}</span>
             <span class="metric-label">{{ $t('workflow.agentObservability.avgTime') }}</span>
           </div>
         </div>
@@ -101,6 +101,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { formatDuration } from '@/utils/formatHelpers'
 import type { AgentPerformance, AgentCapability } from '@/composables/useWorkflowBuilder';
 import Icon from '@/components/ui/Icon.vue'
 
@@ -173,13 +174,6 @@ function formatPercent(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds === 0) return '--';
-  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const min = Math.floor(seconds / 60);
-  return `${min}m ${Math.round(seconds % 60)}s`;
-}
 </script>
 
 <style scoped>

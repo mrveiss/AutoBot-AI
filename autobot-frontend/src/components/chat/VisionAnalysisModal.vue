@@ -11,6 +11,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
+import { formatFileSize } from '@/utils/formatHelpers'
 import { ref, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -93,12 +94,6 @@ function clearFile(): void {
   }
   analysisResult.value = null
   if (fileInput.value) fileInput.value.value = ''
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
 async function analyzeImage(): Promise<void> {
@@ -201,7 +196,7 @@ onUnmounted(() => {
             <img :src="previewUrl" :alt="$t('chat.vision.preview')" class="preview-image" loading="lazy" />
             <div class="file-info">
               <span class="filename">{{ selectedFile.name }}</span>
-              <span class="filesize">{{ formatFileSize(selectedFile.size) }}</span>
+              <span class="filesize">{{ formatFileSize(selectedFile.size, { units: ['B', 'KB', 'MB'], decimals: 1, keepTrailingZeros: true, integerBase: true }) }}</span>
             </div>
             <button @click.stop="clearFile" class="btn-clear">
               <Icon name="times" />

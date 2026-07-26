@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { createLogger } from '@/utils/debugUtils'
+import { formatUptime } from '@/utils/formatHelpers'
 
 const logger = createLogger('AdminMonitoringView')
 /**
@@ -93,14 +94,6 @@ const healthIcon = computed(() => {
 })
 
 // Methods
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
-}
 
 function formatDate(dateStr: string): string {
   return formatDateTime(dateStr)

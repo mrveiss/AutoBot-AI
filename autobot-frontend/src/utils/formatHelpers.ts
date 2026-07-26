@@ -192,23 +192,112 @@ export function formatTimeAgo(timestamp: Date | string | number): string {
   }
 }
 
+// ==================== DURATION FORMATTING ====================
+
 /**
- * Format duration between two timestamps in human-readable form
+ * Numeric duration formatting style.
  *
- * @param startTime - ISO timestamp string or null
- * @param endTime - ISO timestamp string or null (if null, uses Date.now())
- * @returns Formatted duration (e.g., "1.5s", "2m 30s", "1h 15m") or "-" if no start
+ * Each style reproduces the exact rendered output of a group of former local
+ * `formatDuration` copies (see #12737 fork-convergence). Input unit is implied
+ * by the style:
+ * - `msSeconds2dp`  (ms): `<1000` → "{n}ms" (0 decimals), else "{n/1000}s" (2 decimals)
+ * - `secondsCompact` (s): `<1` → "{n*1000}ms", `<60` → "{n}s" (1 decimal),
+ *                          else "{floor(n/60)}m {round(n%60)}s"
+ * - `clock`          (s): "M:SS" (minutes:zero-padded-seconds)
+ * - `msMinutes`     (ms): `<1000` → "{n}ms" (raw), `<60000` → "{n/1000}s" (1 decimal),
+ *                          else "{n/60000}m"
+ */
+export type DurationStyle = 'msSeconds2dp' | 'secondsCompact' | 'clock' | 'msMinutes'
+
+/**
+ * Options for the numeric ({@link DurationStyle}) form of {@link formatDuration}.
+ */
+export interface FormatDurationOptions {
+  /** Selects the numeric formatting style / input unit. */
+  style: DurationStyle
+  /** Text for null / undefined / NaN input (default `'—'`). */
+  nullText?: string
+  /** Text for an exact zero value; when omitted, zero follows the normal ladder. */
+  zeroText?: string
+  /** Rounding for the top tier of `clock` / `msMinutes` styles (default `'round'`). */
+  rounding?: 'round' | 'floor'
+}
+
+/**
+ * Format a numeric duration in the given {@link DurationStyle}.
+ * Internal helper backing the numeric overload of {@link formatDuration}.
+ */
+function formatDurationValue(
+  value: number | null | undefined,
+  options: FormatDurationOptions
+): string {
+  const nullText = options.nullText ?? '—'
+  if (value === null || value === undefined || Number.isNaN(value)) return nullText
+  if (value === 0 && options.zeroText !== undefined) return options.zeroText
+
+  const roundFn = options.rounding === 'floor' ? Math.floor : Math.round
+
+  switch (options.style) {
+    case 'msSeconds2dp':
+      if (value < 1000) return `${value.toFixed(0)}ms`
+      return `${(value / 1000).toFixed(2)}s`
+    case 'secondsCompact':
+      if (value < 1) return `${Math.round(value * 1000)}ms`
+      if (value < 60) return `${value.toFixed(1)}s`
+      return `${Math.floor(value / 60)}m ${Math.round(value % 60)}s`
+    case 'clock': {
+      const total = roundFn(value)
+      const mins = Math.floor(total / 60)
+      const secs = total % 60
+      return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
+    case 'msMinutes':
+      if (value < 1000) return `${value}ms`
+      if (value < 60000) return `${(value / 1000).toFixed(1)}s`
+      return `${roundFn(value / 60000)}m`
+    default:
+      return nullText
+  }
+}
+
+/**
+ * Format a duration in human-readable form.
+ *
+ * Two forms:
+ * 1. **Range** (ISO timestamps): `formatDuration(startTime, endTime)` — renders
+ *    "{ms}ms" / "{s}s" / "{m}m {s}s" / "{h}h {m}m", or `'-'` when no start.
+ * 2. **Numeric** ({@link DurationStyle}): `formatDuration(value, { style, ... })` —
+ *    formats a single ms/seconds value, reproducing each converged call site's
+ *    exact output (see {@link DurationStyle}).
  *
  * @example
  * ```typescript
  * formatDuration('2025-01-01T00:00:00Z', '2025-01-01T00:01:30Z') // "1m 30s"
  * formatDuration(null, null) // "-"
+ * formatDuration(1500, { style: 'msSeconds2dp' }) // "1.50s"
+ * formatDuration(90, { style: 'clock' }) // "1:30"
  * ```
  */
 export function formatDuration(
   startTime: string | null | undefined,
   endTime: string | null | undefined
+): string
+export function formatDuration(
+  value: number | null | undefined,
+  options: FormatDurationOptions
+): string
+export function formatDuration(
+  a: string | number | null | undefined,
+  b?: string | null | undefined | FormatDurationOptions
 ): string {
+  // Numeric form: second argument is an options object.
+  if (b !== null && typeof b === 'object') {
+    return formatDurationValue(a as number | null | undefined, b)
+  }
+
+  // Range form (unchanged legacy behavior).
+  const startTime = a as string | null | undefined
+  const endTime = b as string | null | undefined
   if (!startTime) return '-'
 
   const start = new Date(startTime).getTime()
@@ -228,15 +317,90 @@ export function formatDuration(
   return `${hours}h ${mins}m`
 }
 
+// ==================== UPTIME FORMATTING ====================
+
+/**
+ * Options for {@link formatUptime}.
+ */
+export interface FormatUptimeOptions {
+  /** Text for null / undefined / NaN / negative input (default `'—'`). */
+  nullText?: string
+  /** Text for an exact zero value; when omitted, zero renders as `'0m'`. */
+  zeroText?: string
+  /** Include minutes on the days line (`'Xd Yh Zm'` vs `'Xd Yh'`) (default `false`). */
+  daysIncludeMinutes?: boolean
+}
+
+/**
+ * Format an uptime given in seconds as a coarse `d`/`h`/`m` string.
+ *
+ * Renders `'Xd Yh'` when days > 0 (or `'Xd Yh Zm'` with `daysIncludeMinutes`),
+ * `'Yh Zm'` when hours > 0, otherwise `'Zm'`.
+ *
+ * @example
+ * ```typescript
+ * formatUptime(0)      // "0m"
+ * formatUptime(3661)   // "1h 1m"
+ * formatUptime(90061)  // "1d 1h"
+ * ```
+ */
+export function formatUptime(
+  seconds: number | null | undefined,
+  options: FormatUptimeOptions = {}
+): string {
+  const nullText = options.nullText ?? '—'
+  if (seconds === null || seconds === undefined || Number.isNaN(seconds) || seconds < 0) {
+    return nullText
+  }
+  if (seconds === 0 && options.zeroText !== undefined) return options.zeroText
+
+  const total = Math.floor(seconds)
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const mins = Math.floor((total % 3600) / 60)
+
+  if (days > 0) {
+    return options.daysIncludeMinutes ? `${days}d ${hours}h ${mins}m` : `${days}d ${hours}h`
+  }
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
+}
+
 // ==================== FILE SIZE FORMATTING ====================
 
 /**
- * Format bytes to human-readable file size
+ * Options for {@link formatFileSize} / {@link formatBytes}.
  *
- * Consolidates 10 different implementations across the codebase.
+ * Defaults reproduce the canonical output exactly: trimmed decimals (via
+ * `parseFloat`), a `'Bytes'`-based ladder, `'0 Bytes'` for zero and `'Invalid'`
+ * for negatives. Options let each converged call site reproduce its own output.
+ */
+export interface FormatBytesOptions {
+  /** Decimal places for scaled units (default `2`). */
+  decimals?: number
+  /** Unit ladder (default `['Bytes','KB','MB','GB','TB','PB']`). */
+  units?: readonly string[]
+  /** Text for a zero-byte value (default `'0 ' + units[0]`). */
+  zeroText?: string
+  /** Text for negative values (default `'Invalid'`). */
+  invalidText?: string
+  /** Text for null / undefined input (default same as `invalidText`). */
+  nullText?: string
+  /** Keep trailing zeros instead of trimming via `parseFloat` (default `false`). */
+  keepTrailingZeros?: boolean
+  /** Render the base unit (`units[0]`) as an integer with no decimals (default `false`). */
+  integerBase?: boolean
+}
+
+const DEFAULT_BYTE_UNITS = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'] as const
+
+/**
+ * Format bytes to a human-readable file size.
+ *
+ * Consolidates many local implementations across both frontends (#12737).
  *
  * @param bytes - File size in bytes
- * @param decimals - Number of decimal places (default: 2)
+ * @param decimalsOrOptions - Decimal places (number) or {@link FormatBytesOptions}
  * @returns Formatted file size string (e.g., "1.5 MB")
  *
  * @example
@@ -245,22 +409,43 @@ export function formatDuration(
  * formatFileSize(1024) // "1 KB"
  * formatFileSize(1536) // "1.5 KB"
  * formatFileSize(1048576) // "1 MB"
+ * formatFileSize(1024, { units: ['B','KB','MB'], zeroText: '0 B' }) // "1 KB"
  * ```
  */
-export function formatFileSize(bytes: number, decimals: number = 2): string {
-  if (bytes === 0) return '0 Bytes'
-  if (bytes < 0) return 'Invalid'
+export function formatFileSize(
+  bytes: number | null | undefined,
+  decimalsOrOptions: number | FormatBytesOptions = 2
+): string {
+  const opts: FormatBytesOptions =
+    typeof decimalsOrOptions === 'number' ? { decimals: decimalsOrOptions } : decimalsOrOptions
+
+  const units = opts.units ?? DEFAULT_BYTE_UNITS
+  const invalidText = opts.invalidText ?? 'Invalid'
+  const zeroText = opts.zeroText ?? `0 ${units[0]}`
+
+  if (bytes === null || bytes === undefined) return opts.nullText ?? invalidText
+  if (bytes === 0) return zeroText
+  if (bytes < 0) return invalidText
 
   const k = 1024
+  const decimals = opts.decimals ?? 2
   const dm = decimals < 0 ? 0 : decimals
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB']
 
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-
   // Prevent array overflow for extremely large numbers
-  const sizeIndex = Math.min(i, sizes.length - 1)
+  const sizeIndex = Math.min(i, units.length - 1)
+  const value = bytes / Math.pow(k, sizeIndex)
 
-  return parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(dm)) + ' ' + sizes[sizeIndex]
+  let text: string
+  if (opts.integerBase && sizeIndex === 0) {
+    text = String(bytes)
+  } else if (opts.keepTrailingZeros) {
+    text = value.toFixed(dm)
+  } else {
+    text = String(parseFloat(value.toFixed(dm)))
+  }
+
+  return `${text} ${units[sizeIndex]}`
 }
 
 /**
@@ -376,6 +561,7 @@ export default {
   formatISOString,
   formatTimeAgo,
   formatDuration,
+  formatUptime,
 
   // File Size
   formatFileSize,
