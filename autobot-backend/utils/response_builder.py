@@ -40,6 +40,7 @@ Usage:
 
 from typing import Any, Dict, List, TypeVar
 
+from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 
 from autobot_shared.time_utils import utc_timestamp as get_timestamp
@@ -53,6 +54,7 @@ def success_response(
     message: str | None = None,
     status_code: int = 200,
     headers: Dict[str, str] | None = None,
+    **extra_fields: Any,
 ) -> JSONResponse:
     """
     Build a standardized success response.
@@ -62,6 +64,7 @@ def success_response(
         message: Optional human-readable success message
         status_code: HTTP status code (default: 200)
         headers: Optional response headers
+        **extra_fields: Additional top-level fields merged into the response
 
     Returns:
         JSONResponse with standardized format
@@ -74,6 +77,7 @@ def success_response(
         "error_code": None,
         "timestamp": get_timestamp(),
     }
+    content.update(extra_fields)
 
     return JSONResponse(
         content=content,
@@ -89,6 +93,7 @@ def error_response(
     error_code: str | None = None,
     details: Metadata | None = None,
     headers: Dict[str, str] | None = None,
+    **extra_fields: Any,
 ) -> JSONResponse:
     """
     Build a standardized error response.
@@ -99,6 +104,7 @@ def error_response(
         error_code: Optional machine-readable error code (e.g., "VALIDATION_ERROR")
         details: Optional additional error details
         headers: Optional response headers
+        **extra_fields: Additional top-level fields merged into the response
 
     Returns:
         JSONResponse with standardized format
@@ -115,6 +121,8 @@ def error_response(
     if details:
         content["details"] = details
 
+    content.update(extra_fields)
+
     return JSONResponse(
         content=content,
         status_code=status_code,
@@ -130,6 +138,7 @@ def paginated_response(
     page_size: int = 20,
     message: str | None = None,
     headers: Dict[str, str] | None = None,
+    **extra_fields: Any,
 ) -> JSONResponse:
     """
     Build a standardized paginated response.
@@ -141,6 +150,7 @@ def paginated_response(
         page_size: Number of items per page
         message: Optional message
         headers: Optional response headers
+        **extra_fields: Additional top-level fields merged into the response
 
     Returns:
         JSONResponse with pagination metadata
@@ -167,6 +177,7 @@ def paginated_response(
         "error_code": None,
         "timestamp": get_timestamp(),
     }
+    content.update(extra_fields)
 
     return JSONResponse(
         content=content,
@@ -229,6 +240,54 @@ def not_found_response(
         error=message,
         status_code=404,
         error_code="NOT_FOUND",
+    )
+
+
+def bad_request_response(
+    error: str = "Invalid request",
+    error_code: str | None = None,
+    details: Metadata | None = None,
+) -> JSONResponse:
+    """
+    Build a standardized 400 Bad Request response.
+
+    Args:
+        error: Human-readable error message
+        error_code: Optional machine-readable error code
+        details: Optional additional error details
+
+    Returns:
+        JSONResponse with 400 status
+    """
+    return error_response(
+        error=error,
+        status_code=400,
+        error_code=error_code,
+        details=details,
+    )
+
+
+def conflict_response(
+    error: str = "Resource conflict",
+    error_code: str | None = None,
+    details: Metadata | None = None,
+) -> JSONResponse:
+    """
+    Build a standardized 409 Conflict response.
+
+    Args:
+        error: Human-readable error message
+        error_code: Optional machine-readable error code
+        details: Optional conflict details
+
+    Returns:
+        JSONResponse with 409 status
+    """
+    return error_response(
+        error=error,
+        status_code=409,
+        error_code=error_code,
+        details=details,
     )
 
 
@@ -337,3 +396,42 @@ def service_unavailable_response(
         error_code="SERVICE_UNAVAILABLE",
         headers=headers,
     )
+
+
+# ============================================================================
+# HTTPException Compatibility (for raising instead of returning)
+#
+# Use inside dependencies / helpers that cannot `return` a JSONResponse
+# (e.g. FastAPI dependency functions), where FastAPI must see an exception
+# to short-circuit the request.
+# ============================================================================
+
+
+def raise_not_found(message: str = "Resource not found") -> None:
+    """Raise HTTPException for 404 Not Found."""
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
+
+
+def raise_bad_request(message: str = "Invalid request") -> None:
+    """Raise HTTPException for 400 Bad Request."""
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+
+def raise_unauthorized(message: str = "Unauthorized") -> None:
+    """Raise HTTPException for 401 Unauthorized."""
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=message)
+
+
+def raise_forbidden(message: str = "Forbidden") -> None:
+    """Raise HTTPException for 403 Forbidden."""
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message)
+
+
+def raise_internal_error(message: str = "Internal server error") -> None:
+    """Raise HTTPException for 500 Internal Server Error."""
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
+
+
+def raise_conflict(message: str = "Resource conflict") -> None:
+    """Raise HTTPException for 409 Conflict."""
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)

@@ -116,17 +116,14 @@ const expiringSoonCount = computed(() => expiringCredentials.value.length)
  */
 async function authenticate(username: string, password: string): Promise<boolean> {
   try {
-    const formData = new URLSearchParams()
-    formData.append('username', username)
-    formData.append('password', password)
-
-    // Token-acquisition endpoint: credential-based, so skip bearer injection.
-    const response = await slm.rawRequest('/api/auth/token', {
+    // Canonical SLM login (Issue #1922): JSON body to /api/auth/login.
+    // Credential-based, so skip bearer injection.
+    const response = await slm.rawRequest('/api/auth/login', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: formData,
+      body: JSON.stringify({ username, password }),
       skipAuth: true,
     })
 
@@ -135,6 +132,16 @@ async function authenticate(username: string, password: string): Promise<boolean
     }
 
     const data = await response.json()
+    // Login may return a TokenResponse (has access_token) or an
+    // MfaChallengeResponse (requires_mfa, no token). Only the token path
+    // authenticates here; an MFA challenge is surfaced as a non-fatal failure
+    // rather than crashing (full MFA flow not handled by this composable).
+    if (!data?.access_token) {
+      if (data?.requires_mfa) {
+        logger.warn('SLM login requires MFA; TLS credential flow cannot complete unattended')
+      }
+      return false
+    }
     authToken.value = data.access_token
     return true
   } catch (err: unknown) {
