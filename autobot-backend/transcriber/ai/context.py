@@ -5,11 +5,7 @@
 # Author: mrveiss
 """Build transcript context string for LLM analysis."""
 
-
-def _fmt_ts(seconds: float) -> str:
-    m, s = divmod(int(seconds), 60)
-    h, m = divmod(m, 60)
-    return f"{h:02d}:{m:02d}:{s:02d}"
+from transcriber.util import format_timestamp as _fmt_ts
 
 
 def build_context(segments: list[dict], *, max_chars: int = 30_000) -> str:

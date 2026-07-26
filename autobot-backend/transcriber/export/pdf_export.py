@@ -9,15 +9,11 @@ import html as html_lib
 
 from autobot_shared.logging_manager import get_logger
 
+from transcriber.util import format_timestamp as _fmt_ts
+
 logger = get_logger(__name__)
 
 _SPEAKER_COLORS = ["#1a73e8", "#d93425", "#188a38", "#fbbc04", "#8a2be2"]
-
-
-def _fmt_ts(seconds: float) -> str:
-    m, s = divmod(int(seconds), 60)
-    h, m = divmod(m, 60)
-    return f"{h:02d}:{m:02d}:{s:02d}"
 
 
 def build_pdf(
