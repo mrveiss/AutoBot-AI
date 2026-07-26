@@ -8,13 +8,17 @@
  *
  * Provides REST API integration for LLM provider configuration
  * management via the SLM backend. Admin-only.
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()`, injects the SLM bearer token
+ * (same `slm_access_token` storage the auth store reads), and centrally handles
+ * 401 for these non-auth endpoints by clearing the session and redirecting to
+ * `/login` — matching the previous per-composable axios interceptor that called
+ * `authStore.logout()`. Call sites therefore pass endpoints relative to the API
+ * base and receive parsed JSON directly (no axios `.data`).
  */
 
-import axios, { type AxiosInstance } from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
-
-const SLM_API_BASE = getSlmApiBase()
+import slmApiClient from '@/utils/ApiClient'
 
 export interface LLMProviderConfig {
   name: string
@@ -67,63 +71,24 @@ export interface LLMApplyResponse {
 }
 
 export function useLlmConfigApi() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: SLM_API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000,
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
-
   async function getConfig(): Promise<LLMConfigResponse> {
-    const response = await client.get<LLMConfigResponse>('/settings/admin/llm')
-    return response.data
+    return slmApiClient.get<LLMConfigResponse>('/settings/admin/llm')
   }
 
   async function saveConfig(config: LLMConfig): Promise<LLMConfigResponse> {
-    const response = await client.put<LLMConfigResponse>(
-      '/settings/admin/llm',
-      config
-    )
-    return response.data
+    return slmApiClient.put<LLMConfigResponse>('/settings/admin/llm', config)
   }
 
   async function testConnection(
     request: LLMTestRequest
   ): Promise<LLMTestResponse> {
-    const response = await client.post<LLMTestResponse>(
-      '/settings/admin/llm/test',
-      request
-    )
-    return response.data
+    return slmApiClient.post<LLMTestResponse>('/settings/admin/llm/test', request)
   }
 
-  async function applyToFleet(
-    nodeIds?: string[]
-  ): Promise<LLMApplyResponse> {
-    const response = await client.post<LLMApplyResponse>(
-      '/settings/admin/llm/apply',
-      { node_ids: nodeIds || null }
-    )
-    return response.data
+  async function applyToFleet(nodeIds?: string[]): Promise<LLMApplyResponse> {
+    return slmApiClient.post<LLMApplyResponse>('/settings/admin/llm/apply', {
+      node_ids: nodeIds || null,
+    })
   }
 
   return {

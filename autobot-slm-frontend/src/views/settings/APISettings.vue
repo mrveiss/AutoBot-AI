@@ -12,6 +12,7 @@
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import config, { getBackendUrl, getGrafanaUrl, getPrometheusUrl, getSlmApiBase } from '@/config/ssot-config'
+import slmApiClient from '@/utils/ApiClient'
 
 const authStore = useAuthStore()
 const testingConnection = ref(false)
@@ -31,9 +32,12 @@ async function testConnection(): Promise<void> {
 
   try {
     const startTime = Date.now()
-    const response = await fetch(`${getSlmApiBase()}/health`, {
-      headers: authStore.getAuthHeaders(),
-    })
+    // Migrated onto slmApiClient (#12420 Phase 2): rawRequest injects the SLM
+    // bearer token and resolves the base URL, while returning the raw Response
+    // so we can read response.ok/status exactly as before. Note: the WebSocket
+    // URL below is a display-only ws:// builder with no client surface — left
+    // untouched.
+    const response = await slmApiClient.rawRequest('/health', { method: 'GET' })
 
     const responseTime = Date.now() - startTime
 

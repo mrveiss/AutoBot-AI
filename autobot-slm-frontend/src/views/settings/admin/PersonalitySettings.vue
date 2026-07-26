@@ -15,14 +15,13 @@
  */
 
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import slmApiClient from '@/utils/ApiClient'
 import {
   usePersonality,
   TONE_OPTIONS,
   type PersonalityProfile,
   type ProfileCreate,
 } from '@/composables/usePersonality'
-import { getSlmApiBase } from '@/config/ssot-config'
 
 const {
   profiles,
@@ -38,7 +37,6 @@ const {
   resetProfile,
   toggleEnabled,
 } = usePersonality()
-const authStore = useAuthStore()
 
 // ---- local state ----
 const selectedId = ref<string | null>(null)
@@ -52,16 +50,18 @@ const confirmDeleteId = ref<string | null>(null)
 // ---- voice list for personality voice assignment (#1135) ----
 const voiceList = ref<{ id: string; name: string; builtin: boolean }[]>([])
 
+type VoiceEntry = { id: string; name: string; builtin: boolean }
+
 async function fetchVoices() {
   try {
-    const token = authStore.token || localStorage.getItem('autobot_access_token') || ''
-    const res = await fetch(`${getSlmApiBase()}/voice/voices`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    if (res.ok) {
-      const data = await res.json()
-      voiceList.value = Array.isArray(data) ? data : (data.voices || [])
-    }
+    // Migrated onto slmApiClient (#12420 Phase 2): the client resolves the base
+    // URL and injects the SLM bearer token. suppressErrorLog preserves the
+    // historic silent-failure behavior (selector shows empty when unavailable).
+    const data = await slmApiClient.get<VoiceEntry[] | { voices?: VoiceEntry[] }>(
+      '/voice/voices',
+      { suppressErrorLog: true }
+    )
+    voiceList.value = Array.isArray(data) ? data : (data?.voices ?? [])
   } catch {
     // voice list unavailable — selector will show empty
   }
