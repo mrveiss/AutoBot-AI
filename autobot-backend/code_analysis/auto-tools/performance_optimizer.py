@@ -7,20 +7,40 @@ Intelligently removes console.log statements from production code
 while preserving important console methods and handling edge cases.
 """
 
-import argparse
-import json
-import os
-import re
-import shutil
-from datetime import datetime, timezone
+import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
 
-from autobot_shared.ssot_config import config
+# Issue #12660: auto-tools/ has no __init__.py (hyphenated dir name isn't a
+# valid package identifier) — add this directory to sys.path so the shared
+# tool skeleton can be imported by every standalone script here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import argparse  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+from typing import Dict, List, Tuple  # noqa: E402
+
+from autobot_shared.ssot_config import config  # noqa: E402
+from tool_base import ConsoleLogToolBase  # noqa: E402
 
 
-class ConsoleLogCleaner:
-    """Removes console.log statements from JavaScript/TypeScript/Vue files."""
+class ConsoleLogCleaner(ConsoleLogToolBase):
+    """Removes console.log statements from JavaScript/TypeScript/Vue files.
+
+    Issue #12660: create_backup/process_file/cli_main now live on
+    ``ConsoleLogToolBase``; this class only provides the console.log
+    removal logic and the performance_optimizer.py-specific report text
+    and extra CLI flags.
+    """
+
+    ARG_DESCRIPTION = "Remove console.log statements from JavaScript/TypeScript/Vue files"
+    PROJECT_PATH_HELP = "Path to the project root or specific directory to clean"
+    TARGET_DIR_HELP = "Specific directory to clean (e.g., src/)"
+    REPORT_HELP = "Path for the cleanup report"
+    REPORT_COUNT_KEY = "console_logs_removed"
+    ERROR_MESSAGE = "File optimization failed"
 
     def __init__(self, project_root: str, backup_dir: str = None):
         self.project_root = Path(project_root)
@@ -93,17 +113,6 @@ class ConsoleLogCleaner:
             return False
 
         return True
-
-    def create_backup(self, file_path: Path) -> Path:
-        """Create backup of file before modification."""
-        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-        relative_path = file_path.relative_to(self.project_root)
-        backup_path = self.backup_dir / timestamp / relative_path
-
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(file_path, backup_path)
-
-        return backup_path
 
     def _resolve_console_log_match(
         self, content: str, line: str, line_start_pos: int, match: "re.Match"
@@ -293,38 +302,13 @@ class ConsoleLogCleaner:
 
         return modified_content, removed_count
 
-    def process_file(self, file_path: Path) -> bool:
-        """Process a single file to remove console.logs."""
-        try:
-            # Read file content
-            with open(file_path, "r", encoding="utf-8") as f:
-                original_content = f.read()
+    def _transform_content(self, content: str, file_path: Path) -> Tuple[str, int]:
+        """Hook for ``ConsoleLogToolBase.process_file``: remove console.logs."""
+        return self.remove_console_logs(content, file_path)
 
-            # Remove console.logs
-            modified_content, removed_count = self.remove_console_logs(original_content, file_path)
-
-            # If content changed, write back
-            if removed_count > 0:
-                # Create backup
-                self.create_backup(file_path)
-
-                # Write modified content
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(modified_content)
-
-                self.report["console_logs_removed"] += removed_count
-                return True
-
-            return False
-
-        except Exception:
-            self.report["errors"].append(
-                {
-                    "file": str(file_path.relative_to(self.project_root)),
-                    "error": "File optimization failed",
-                }
-            )
-            return False
+    def run_project(self, target_dir: str = None) -> Dict:
+        """Hook for ``ConsoleLogToolBase.cli_main``."""
+        return self.clean_project(target_dir)
 
     def clean_project(self, target_dir: str = None) -> Dict:
         """Clean console.logs from entire project or specific directory."""
@@ -409,56 +393,40 @@ class ConsoleLogCleaner:
             json.dump(self.report, f, indent=2)
         print(f"📊 JSON report saved to: {json_report_path}")  # noqa: print
 
+    @classmethod
+    def _extra_cli_args(cls, parser: argparse.ArgumentParser) -> None:
+        """Hook for ``ConsoleLogToolBase.cli_main``: cleanup-specific flags."""
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Show what would be removed without making changes",
+        )
+        parser.add_argument(
+            "--dev-mode",
+            action="store_true",
+            help="Enable development mode - preserve console.error, console.warn, etc.",
+        )
+        parser.add_argument(
+            "--replace-with-dev-logging",
+            action="store_true",
+            help="Replace console.log with environment-aware logging",
+        )
+
+    def _print_cli_summary(self, report: Dict) -> None:
+        """Hook for ``ConsoleLogToolBase.cli_main``."""
+        print(f"\n🎉 Cleanup Complete!")  # noqa: print
+        print(f"   - Removed {report['console_logs_removed']} console.log statements")  # noqa: print
+        print(f"   - Modified {report['files_modified']} files")  # noqa: print
+        print(f"   - Backups saved to: {self.backup_dir}")  # noqa: print
+
 
 def main():
     """Main entry point for the console.log cleanup tool."""
-    parser = argparse.ArgumentParser(description="Remove console.log statements from JavaScript/TypeScript/Vue files")
-    parser.add_argument("project_path", help="Path to the project root or specific directory to clean")
-    parser.add_argument("--target-dir", help="Specific directory to clean (e.g., src/)", default=None)
-    parser.add_argument("--backup-dir", help="Directory to store backups", default=None)
-    parser.add_argument("--report", help="Path for the cleanup report", default=None)
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be removed without making changes",
-    )
-    parser.add_argument(
-        "--dev-mode",
-        action="store_true",
-        help="Enable development mode - preserve console.error, console.warn, etc.",
-    )
-    parser.add_argument(
-        "--replace-with-dev-logging",
-        action="store_true",
-        help="Replace console.log with environment-aware logging",
-    )
-
-    args = parser.parse_args()
-
-    # Create cleaner instance
-    cleaner = ConsoleLogCleaner(args.project_path, args.backup_dir)
-
-    # Run cleanup
-    if args.target_dir:
-        target_path = Path(args.project_path) / args.target_dir
-        report = cleaner.clean_project(str(target_path))
-    else:
-        report = cleaner.clean_project()
-
-    # Generate report
-    cleaner.generate_report(args.report)
-
-    # Print summary
-    print(f"\n🎉 Cleanup Complete!")  # noqa: print
-    print(f"   - Removed {report['console_logs_removed']} console.log statements")  # noqa: print
-    print(f"   - Modified {report['files_modified']} files")  # noqa: print
-    print(f"   - Backups saved to: {cleaner.backup_dir}")  # noqa: print
+    ConsoleLogCleaner.cli_main()
 
 
 if __name__ == "__main__":
     # If run directly without arguments, use AutoBot defaults
-    import sys
-
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory
         project_root = config.base_dir  # noqa: ssot-path
