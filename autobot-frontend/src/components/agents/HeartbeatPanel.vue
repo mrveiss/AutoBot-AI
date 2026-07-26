@@ -189,8 +189,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 
-import { getBackendUrl } from '@/config/ssot-config'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { useEventBus } from '@/composables/useEventBus'
 import { useExpansion } from '@/composables/useExpansion'
@@ -310,16 +309,17 @@ onUnmounted(() => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function apiBase(): string {
-  return `${getBackendUrl()}/api/heartbeat`
-}
+const API_BASE = '/api/heartbeat'
 
-async function apiFetch(path: string, init?: RequestInit): Promise<unknown> {
-  const resp = await fetchWithAuth(`${apiBase()}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    ...init,
+// Base URL + auth resolved by apiClient (#12363). rawRequest preserves the exact
+// status/text error shape and 204→null contract the panel relies on.
+async function apiFetch(
+  path: string,
+  init?: { method?: string; body?: unknown },
+): Promise<unknown> {
+  const resp = await apiClient.rawRequest(`${API_BASE}${path}`, {
+    method: init?.method ?? 'GET',
+    body: init?.body,
   })
   if (!resp.ok) {
     const text = await resp.text()
@@ -359,11 +359,11 @@ async function saveConfig(): Promise<void> {
   try {
     const updated = await apiFetch(`/${agentId.value}/config`, {
       method: 'PUT',
-      body: JSON.stringify({
+      body: {
         heartbeat_enabled: editEnabled.value,
         heartbeat_interval_seconds: editInterval.value,
         max_run_duration_seconds: editMaxDuration.value,
-      }),
+      },
     })
     config.value = updated as HeartbeatConfig
   } catch (err) {
@@ -396,7 +396,7 @@ async function queueWakeup(): Promise<void> {
   try {
     await apiFetch(`/${agentId.value}/wakeup`, {
       method: 'POST',
-      body: JSON.stringify({ priority: 0, reason: 'Manual wakeup from UI' }),
+      body: { priority: 0, reason: 'Manual wakeup from UI' },
     })
     const wakeupsRes = await apiFetch(`/${agentId.value}/wakeup`)
     pendingWakeups.value = wakeupsRes as WakeupRequest[]
@@ -414,7 +414,7 @@ async function pauseAgent(): Promise<void> {
   try {
     const updated = await apiFetch(`/${agentId.value}/pause`, {
       method: 'POST',
-      body: JSON.stringify({ reason: 'Manual pause from UI', paused_by: 'user' }),
+      body: { reason: 'Manual pause from UI', paused_by: 'user' },
     })
     config.value = updated as HeartbeatConfig
   } catch (err) {

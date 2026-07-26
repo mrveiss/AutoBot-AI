@@ -150,8 +150,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { BaseModal } from '@autobot/ui'
-import { getBackendUrl } from '@/config/ssot-config'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 
 const logger = createLogger('ApiKeySetupWizard')
 const { t } = useI18n()
@@ -279,18 +278,18 @@ async function saveAndClose(): Promise<void> {
 }
 
 async function saveKeys(keys: KeyEntry[]): Promise<void> {
-  const baseUrl = getBackendUrl()
+  // Base URL + auth resolved by apiClient (#12363). rawRequest keeps the
+  // non-throwing per-key contract: a failure logs and continues to the next key.
   for (const key of keys) {
-    const response = await fetchWithAuth(`${baseUrl}/api/secrets/`, {
+    const response = await apiClient.rawRequest(`/api/secrets/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         name: key.envVar,
         value: key.value,
         secret_type: 'api_key',
         scope: 'general',
         description: key.description,
-      }),
+      },
     })
     if (!response.ok) {
       logger.error('Failed to save key %s: %s', key.envVar, response.statusText)

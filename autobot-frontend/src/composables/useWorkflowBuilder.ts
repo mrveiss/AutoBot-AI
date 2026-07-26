@@ -14,7 +14,7 @@
  */
 
 import { ref, computed } from 'vue';
-import { getBackendUrl, getBackendWsUrl, getApiBase } from '@/config/ssot-config';
+import { getBackendWsUrl, getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import httpClient from '@/utils/ApiClient';
 import type { ApiResponse } from '@/types/api';
@@ -266,11 +266,9 @@ export interface WorkflowNode {
 // ==================================================================================
 
 class WorkflowBuilderApiClient {
-  private baseUrl: string;
   private timeout: number;
 
   constructor() {
-    this.baseUrl = getBackendUrl();
     this.timeout = 60000;
   }
 
@@ -278,15 +276,16 @@ class WorkflowBuilderApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Base URL resolved by httpClient/apiClient (#12363); `endpoint` is the
+    // getApiBase()-prefixed relative path proxied by nginx/Vite.
     try {
       const method = ((options.method as string) || 'GET').toUpperCase();
       let data: T;
       if (method === 'POST') {
         const body = options.body ? JSON.parse(options.body as string) as unknown : undefined;
-        data = await httpClient.post<T>(url, body, { timeout: this.timeout });
+        data = await httpClient.post<T>(endpoint, body, { timeout: this.timeout });
       } else {
-        data = await httpClient.get<T>(url, { timeout: this.timeout });
+        data = await httpClient.get<T>(endpoint, { timeout: this.timeout });
       }
       return { success: true, data };
     } catch (error) {
