@@ -59,7 +59,27 @@ def test_effective_score_boosts_by_access(monkeypatch):
     monkeypatch.setattr(es, "_REINFORCE_WEIGHT", 0.3)
     hot = _fact("hot", 0.5, access=50)
     cold = _fact("cold", 0.5, access=0)
-    assert _effective_score(hot, NOW) > _effective_score(cold, NOW)
+    assert _effective_score(hot, NOW, max_access=50) > _effective_score(cold, NOW, max_access=50)
+
+
+def test_effective_score_normalized_boost_does_not_swamp_quality(monkeypatch):
+    # A high-quality never-accessed fact must still beat a low-quality
+    # heavily-accessed one: the usage boost is normalised + bounded by weight.
+    monkeypatch.setattr(es, "_REINFORCE_ENABLED", True)
+    monkeypatch.setattr(es, "_REINFORCE_WEIGHT", 0.3)
+    pristine = _fact("pristine", 1.0, access=0)
+    popular = _fact("popular", 0.2, access=1_000_000, last_accessed=NOW.isoformat())
+    assert _effective_score(pristine, NOW, max_access=1_000_000) > _effective_score(
+        popular, NOW, max_access=1_000_000
+    )
+
+
+def test_effective_score_no_boost_without_max_access(monkeypatch):
+    # Degenerate set (nobody accessed): usage term is 0, ordering is by quality.
+    monkeypatch.setattr(es, "_REINFORCE_ENABLED", True)
+    monkeypatch.setattr(es, "_REINFORCE_WEIGHT", 0.3)
+    f = _fact("a", 0.5, access=0)
+    assert _effective_score(f, NOW, max_access=0) == 0.5
 
 
 def test_effective_score_tolerates_garbage(monkeypatch):
@@ -143,3 +163,29 @@ async def test_fetch_top_facts_weight_zero_matches_quality_order(monkeypatch):
         gen = EssentialStoryGenerator()
         selected = await gen._fetch_top_facts(max_tokens=1000)
     assert [f["fact_id"] for f in selected] == ["high", "mid", "low"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_top_facts_ties_are_deterministic(monkeypatch):
+    # Equal quality + equal access: order must be stable (by fact_id), not
+    # dependent on the (non-deterministic) get_all_facts scan order — otherwise
+    # the order-sensitive fingerprint would thrash the cache.
+    monkeypatch.setattr(es, "_REINFORCE_WEIGHT", 0.3)
+    order_a = [_fact("b", 0.5, access=1), _fact("a", 0.5, access=1), _fact("c", 0.5, access=1)]
+    order_b = list(reversed(order_a))
+    out = []
+    for facts in (order_a, order_b):
+        kb = _patch_kb(facts)
+        with patch("knowledge._composed.get_knowledge_base", AsyncMock(return_value=kb)):
+            selected = await EssentialStoryGenerator()._fetch_top_facts(max_tokens=1000)
+        out.append([f["fact_id"] for f in selected])
+    assert out[0] == out[1] == ["a", "b", "c"]
+
+
+def test_env_float_falls_back_on_garbage(monkeypatch):
+    monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "not-a-float")
+    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.3
+    monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "nan")
+    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.3
+    monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "0.7")
+    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.7
