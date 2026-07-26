@@ -81,13 +81,24 @@ class _ConfigStub:
         return default
 
     def get_redis_config(self):
-        """Env-var fallback so redis_client.get_redis_client() survives re-entry (#3491)."""
+        """SSOT fallback so redis_client.get_redis_client() survives re-entry (#3491).
+
+        Issue #12748: mirrors the canonical superset shape returned by
+        config.service_config.ServiceConfigMixin.get_redis_config() (enabled,
+        host, port, password, db) instead of a hand-rolled subset. Reads the
+        already-imported `config` proxy directly (no manager/mixin call) to
+        avoid re-entering the circular-import path this stub exists to guard.
+        Previously read nonexistent `config.redis_enabled`/`config.redis_db_main`
+        attributes (AttributeError if ever invoked) — fixed to use the real
+        `config.redis.*` sub-config fields.
+        """
 
         return {
-            "enabled": config.redis_enabled.lower() == "true",
-            "host": config.redis_host,
+            "enabled": config.redis.enabled,
+            "host": config.vm.redis,
             "port": int(config.port.redis),
-            "db": int(config.redis_db_main),
+            "password": config.redis.password,
+            "db": int(config.redis.db_main),
         }
 
     def get_llm_config(self):
@@ -285,7 +296,13 @@ def get_llm_config():
 
 
 def get_redis_config():
-    """Get Redis configuration"""
+    """Get Redis configuration.
+
+    Issue #12748: pure pass-through to the cached manager's
+    get_redis_config() (canonical: config.service_config.
+    ServiceConfigMixin.get_redis_config()), or _ConfigStub during
+    circular-import re-entry. Not a fork; already converged by delegation.
+    """
     return _get_cached_config_manager().get_redis_config()
 
 

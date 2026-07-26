@@ -34,7 +34,13 @@ logger = get_logger(__name__)
     error_code_prefix="REDIS",
 )
 async def get_redis_config():
-    """Get current Redis configuration"""
+    """Get current Redis configuration.
+
+    Issue #12748: route handler, not a fork — delegates to
+    ConfigService.get_redis_config() (task-transport scope; see that
+    method's docstring for why it is distinct from the canonical core
+    connection config in config.service_config.ServiceConfigMixin).
+    """
     try:
         return ConfigService.get_redis_config()
     except Exception as e:
