@@ -168,7 +168,7 @@ export const useFleetStore = defineStore('fleet', () => {
   async function fetchFleetUpdateSummary(): Promise<void> {
     try {
       fleetUpdateSummary.value = await api.getFleetUpdateSummary()
-    } catch (_err) {
+    } catch {
       // Silently fail - updates are supplementary info
       fleetUpdateSummary.value = null
     }

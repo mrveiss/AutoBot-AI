@@ -89,7 +89,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${authStore.token}`,
-      ...(init?.headers || {}),
+      ...(init?.headers),
     },
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
