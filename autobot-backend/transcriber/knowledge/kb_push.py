@@ -6,7 +6,6 @@
 """Manual Knowledge Base push — formats transcript segments as KB documents."""
 
 from autobot_shared.logging_manager import get_logger
-
 from transcriber.util import format_timestamp as _fmt_ts
 
 logger = get_logger(__name__)

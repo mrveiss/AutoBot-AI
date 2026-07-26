@@ -8,7 +8,6 @@
 import html as html_lib
 
 from autobot_shared.logging_manager import get_logger
-
 from transcriber.util import format_timestamp as _fmt_ts
 
 logger = get_logger(__name__)
