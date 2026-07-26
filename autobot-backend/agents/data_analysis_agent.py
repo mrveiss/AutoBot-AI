@@ -8,7 +8,6 @@ Handles data analysis tasks using LLM to identify patterns, compute statistics,
 and provide insights from structured and unstructured data.
 """
 
-import uuid
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -22,7 +21,8 @@ from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest, DeploymentMode
-from .standardized_agent import ActionHandler, StandardizedAgent
+from .base_modality_agent import BaseModalityAgent
+from .standardized_agent import ActionHandler
 
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -31,10 +31,14 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 logger = get_logger(__name__)
 
 
-class DataAnalysisAgent(StandardizedAgent):
+class DataAnalysisAgent(BaseModalityAgent):
     """Agent specialized for data analysis, statistics, and pattern detection."""
 
     AGENT_ID = "data_analysis"
+    QUERY_TEMPERATURE = 0.3
+    QUERY_MAX_TOKENS = LLMDefaults.SYNTHESIS_MAX_TOKENS
+    QUERY_ERROR_MESSAGE = "Error analyzing data. Please try rephrasing your request."
+    _LOGGER = logger
 
     def __init__(
         self,
@@ -103,40 +107,6 @@ class DataAnalysisAgent(StandardizedAgent):
         prompt = f"Detect {pattern_type} patterns in the following data:\n\n{data}"
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        """Process a data analysis query using the vLLM-optimised API (Issue #3389)."""
-        try:
-            logger.info("Data Analysis Agent processing: %s...", request_text[:50])
-            session_id = (context or {}).get("session_id") or str(uuid.uuid4())
-            response = await self.llm_interface.chat_optimized(
-                agent_type=self.AGENT_ID,
-                user_message=request_text,
-                session_id=session_id,
-                user_name=(context or {}).get("user_name"),
-                user_role=(context or {}).get("user_role"),
-                temperature=0.3,
-                max_tokens=LLMDefaults.SYNTHESIS_MAX_TOKENS,
-                top_p=LLMDefaults.DEFAULT_TOP_P,
-            )
-            response_text = self._extract_content(response)
-            return {
-                "status": "success",
-                "response": response_text,
-                "response_text": response_text,
-                "agent_type": "data_analysis",
-                "model_used": self.model_name,
-                "token_usage": (response.get("usage", {}) if isinstance(response, dict) else {}),
-            }
-        except Exception as e:
-            logger.error("Data Analysis Agent error: %s", e)
-            return {
-                "status": "error",
-                "response": "Error analyzing data. Please try rephrasing your request.",
-                "response_text": str(e),
-                "agent_type": "data_analysis",
-                "model_used": self.model_name,
-            }
-
     def _get_system_prompt(self) -> str:
         """Get system prompt for data analysis tasks."""
         return (
@@ -150,23 +120,6 @@ class DataAnalysisAgent(StandardizedAgent):
             "- Use tables or bullet points for clarity when appropriate\n"
             "- If data is insufficient, state what additional data would help"
         )
-
-    def _extract_content(self, response: Any) -> str:
-        """Extract text content from LLM response."""
-        if isinstance(response, str):
-            return response.strip()
-        if isinstance(response, dict):
-            msg = response.get("message", {})
-            if isinstance(msg, dict) and msg.get("content"):
-                return msg["content"].strip()
-            choices = response.get("choices", [])
-            if choices and isinstance(choices[0], dict):
-                choice_msg = choices[0].get("message", {})
-                if isinstance(choice_msg, dict) and choice_msg.get("content"):
-                    return choice_msg["content"].strip()
-            if "content" in response:
-                return str(response["content"]).strip()
-        return str(response)
 
 
 get_data_analysis_agent = lazy_singleton(DataAnalysisAgent)
