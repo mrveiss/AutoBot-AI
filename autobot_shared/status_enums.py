@@ -191,6 +191,25 @@ class LLMProvider(Enum):
 
     Used in ssot_config and throughout LLM integration code.
     Replaces hardcoded strings: "ollama", "openai", "anthropic", "custom".
+
+    Single canonical source of truth (#12661): this enum was previously
+    triplicated — ``autobot-backend/llm_shared/types.py::ProviderType`` and
+    ``autobot-backend/services/llm_cost_tracker.py::LLMProvider`` are now
+    thin aliases of this class. The member set below is the UNION of all
+    three historical forks; every ``.value`` string is preserved exactly as
+    it was serialized by its origin fork — no provider was renamed or
+    dropped, per the #12645 consolidation contract.
+
+    Semantic-mapping notes (kept distinct, not merged):
+    - ``VERTEX_AI`` (GCP Vertex AI / ``google-cloud-aiplatform`` SDK, GH#9009,
+      real usage in ``llm_shared/providers/vertexai.py``) and ``GOOGLE``
+      (from the cost-tracker fork, unused by any call site) are kept as two
+      separate values — they can represent different access paths to
+      Google's models (direct Gemini API vs. enterprise Vertex SDK) and the
+      contract forbids merging two potentially-distinct providers.
+    - ``CUSTOM`` (generic custom-endpoint provider, ``ssot_config.custom_endpoint``)
+      and ``PROCESS`` (subprocess-based local inference adapter, Issue #1403)
+      are semantically different providers, kept separate.
     """
 
     OLLAMA = "ollama"
@@ -199,6 +218,24 @@ class LLMProvider(Enum):
     AZURE = "azure"
     CUSTOM = "custom"
     LOCAL = "local"
+    # -- union additions from llm_shared/types.py::ProviderType --
+    VLLM = "vllm"
+    HUGGINGFACE = "huggingface"
+    TRANSFORMERS = "transformers"
+    MOCK = "mock"
+    AI_STACK = "ai_stack"  # Issue #1403
+    PROCESS = "process"  # Issue #1403
+    LAYER_INFERENCE = "layer_inference"  # Issue #3104
+    GROQ = "groq"  # Issue #4096
+    MISTRAL = "mistral"  # Issue #10549
+    VERTEX_AI = "vertexai"  # GH#9009
+    BEDROCK = "bedrock"  # GH#9010
+    # -- union additions from services/llm_cost_tracker.py::LLMProvider --
+    GOOGLE = "google"  # cost-tracker fork; unused by any provider call site
+    OPENROUTER = "openrouter"  # cost-tracker fork; ProviderType lacked this
+    # (llm_shared/providers/openrouter.py had a defensive hasattr() guard
+    # against ProviderType.OPENROUTER not existing — a real symptom of the
+    # triplication bug this consolidation fixes)
 
     @classmethod
     def supports_streaming(cls, provider: "LLMProvider") -> bool:
