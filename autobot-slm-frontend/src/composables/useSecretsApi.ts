@@ -8,13 +8,16 @@
  *
  * Provides REST API integration for encrypted system secrets
  * management via the SLM backend. Admin-only.
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()`, injects the SLM bearer token,
+ * and centrally handles 401 for these non-auth endpoints (clear session +
+ * redirect to `/login`) — matching the previous axios interceptor that called
+ * `authStore.logout()`. Call sites pass endpoints relative to the API base and
+ * receive parsed JSON directly.
  */
 
-import axios, { type AxiosInstance } from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
-
-const SLM_API_BASE = getSlmApiBase()
+import slmApiClient from '@/utils/ApiClient'
 
 export interface SecretCreate {
   key: string
@@ -52,65 +55,34 @@ export interface ApplySecretsResult {
 }
 
 export function useSecretsApi() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: SLM_API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000,
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
-
   async function listSecrets(): Promise<SecretResponse[]> {
-    const response = await client.get<SecretResponse[]>('/secrets')
-    return response.data
+    return slmApiClient.get<SecretResponse[]>('/secrets')
   }
 
   async function createSecret(data: SecretCreate): Promise<SecretResponse> {
-    const response = await client.post<SecretResponse>('/secrets', data)
-    return response.data
+    return slmApiClient.post<SecretResponse>('/secrets', data)
   }
 
   async function updateSecret(
     key: string,
     data: SecretUpdate
   ): Promise<SecretResponse> {
-    const response = await client.put<SecretResponse>(
+    return slmApiClient.put<SecretResponse>(
       `/secrets/${encodeURIComponent(key)}`,
       data
     )
-    return response.data
   }
 
   async function deleteSecret(key: string): Promise<void> {
-    await client.delete(`/secrets/${encodeURIComponent(key)}`)
+    await slmApiClient.delete(`/secrets/${encodeURIComponent(key)}`)
   }
 
   async function getDependentRolesMapping(): Promise<DependentRolesMapping> {
-    const response = await client.get<DependentRolesMapping>('/secrets/dependent-roles')
-    return response.data
+    return slmApiClient.get<DependentRolesMapping>('/secrets/dependent-roles')
   }
 
   async function applySecret(key: string): Promise<ApplySecretsResult> {
-    const response = await client.post<ApplySecretsResult>('/secrets/apply', { key })
-    return response.data
+    return slmApiClient.post<ApplySecretsResult>('/secrets/apply', { key })
   }
 
   return {

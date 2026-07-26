@@ -287,9 +287,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
@@ -393,7 +392,7 @@ async function loadPolicies(): Promise<void> {
   try {
     const params = new URLSearchParams()
     if (filterScope.value) params.set('scope', filterScope.value)
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/budget-policies?${params}`)
+    const res = await apiClient.rawRequest(`/api/budget-policies?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
       throw new Error(body.detail ?? `HTTP ${res.status}`)
@@ -443,14 +442,13 @@ async function submitForm(): Promise<void> {
   modalError.value = null
   const payload = { ...form.value }
   const url = editTarget.value
-    ? `${getBackendUrl()}/api/budget-policies/${editTarget.value.id}`
-    : `${getBackendUrl()}/api/budget-policies`
+    ? `/api/budget-policies/${editTarget.value.id}`
+    : `/api/budget-policies`
   const method = editTarget.value ? 'PATCH' : 'POST'
   try {
-    const res = await fetchWithAuth(url, {
+    const res = await apiClient.rawRequest(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: payload,
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
@@ -474,7 +472,7 @@ async function doDelete(): Promise<void> {
   if (!deleteTarget.value) return
   deleting.value = true
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/budget-policies/${deleteTarget.value.id}`, {
+    const res = await apiClient.rawRequest(`/api/budget-policies/${deleteTarget.value.id}`, {
       method: 'DELETE',
     })
     if (!res.ok && res.status !== 204) {
@@ -498,7 +496,7 @@ async function checkAgentStatus(): Promise<void> {
   agentStatus.value = null
   error.value = null
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/budget-policies/${id}/status`)
+    const res = await apiClient.rawRequest(`/api/budget-policies/${id}/status`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
       throw new Error(body.detail ?? `HTTP ${res.status}`)
@@ -514,7 +512,7 @@ async function resumeAgent(agentId: string): Promise<void> {
   resuming.value = true
   error.value = null
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/budget-policies/${agentId}/resume`, {
+    const res = await apiClient.rawRequest(`/api/budget-policies/${agentId}/resume`, {
       method: 'POST',
     })
     if (!res.ok) {

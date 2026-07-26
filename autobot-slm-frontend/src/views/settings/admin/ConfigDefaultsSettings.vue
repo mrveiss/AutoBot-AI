@@ -12,13 +12,11 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import slmApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
-import { getSlmApiBase } from '@/config/ssot-config'
 
 const logger = createLogger('ConfigDefaultsSettings')
-const authStore = useAuthStore()
 
 // Types
 interface ConfigEntry {
@@ -52,18 +50,20 @@ const filteredConfigs = computed(() => {
   return configs.value.filter(c => c.config_key.toLowerCase().includes(p))
 })
 
-// API helper
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | null> {
+// API helper — migrated onto slmApiClient (#12420 Phase 2). The client resolves
+// the base URL via getSlmApiBase(), injects the SLM bearer token, and centrally
+// handles 401 for these non-auth endpoints (clear session + redirect to /login).
+// It returns parsed JSON directly and throws `Error('HTTP <status>: <detail>')`
+// on failure, so the null-on-error contract to callers is preserved.
+async function apiRequest<T>(
+  method: 'GET' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown
+): Promise<T | null> {
   try {
-    const response = await fetch(`${getSlmApiBase()}${path}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...authStore.getAuthHeaders(), ...options?.headers },
-    })
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
-      throw new Error(body.detail || `HTTP ${response.status}`)
-    }
-    return await response.json()
+    if (method === 'GET') return await slmApiClient.get<T>(path)
+    if (method === 'PUT') return await slmApiClient.put<T>(path, body)
+    return await slmApiClient.delete<T>(path)
   } catch (err) {
     errorMessage.value = `Request failed: ${err instanceof Error ? err.message : 'Unknown error'}`
     logger.error('API error:', err)
@@ -75,7 +75,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | nul
 async function fetchDefaults(): Promise<void> {
   isLoading.value = true
   errorMessage.value = null
-  const result = await apiFetch<{ configs: ConfigEntry[]; total: number }>('/config/defaults')
+  const result = await apiRequest<{ configs: ConfigEntry[]; total: number }>('GET', '/config/defaults')
   if (result) configs.value = result.configs
   isLoading.value = false
 }
@@ -101,9 +101,10 @@ async function saveConfig(): Promise<void> {
   const key = editingKey.value || newKey.value
   if (!key) { errorMessage.value = 'Key is required'; return }
 
-  const result = await apiFetch<ConfigEntry>(
+  const result = await apiRequest<ConfigEntry>(
+    'PUT',
     `/config/defaults/${encodeURIComponent(key)}`,
-    { method: 'PUT', body: JSON.stringify({ value: newValue.value, value_type: newValueType.value }) }
+    { value: newValue.value, value_type: newValueType.value }
   )
   if (result) {
     successMessage.value = `Config "${key}" saved`
@@ -115,9 +116,9 @@ async function saveConfig(): Promise<void> {
 
 async function deleteConfig(key: string): Promise<void> {
   if (!confirm(`Delete global config "${key}"?`)) return
-  const result = await apiFetch<{ message: string }>(
-    `/config/defaults/${encodeURIComponent(key)}`,
-    { method: 'DELETE' }
+  const result = await apiRequest<{ message: string }>(
+    'DELETE',
+    `/config/defaults/${encodeURIComponent(key)}`
   )
   if (result) {
     successMessage.value = result.message

@@ -247,7 +247,9 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                         current_code=code.strip(),
                         confidence=0.55,
                         potential_false_positive=True,
-                        false_positive_reason="Static regex cannot confirm the handle is released later in the same scope",
+                        false_positive_reason=(
+                            "Static regex cannot confirm the handle is released later in the same scope"
+                        ),
                     )
                 )
 

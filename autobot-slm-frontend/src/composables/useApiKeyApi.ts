@@ -9,13 +9,17 @@
  * Provides REST API integration for API key management
  * via the SLM backend.
  * Issue #576 - User Management System Phase 5 (API Keys).
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()`, injects the SLM bearer token
+ * (same `slm_access_token` storage the auth store reads), and centrally handles
+ * 401 for these non-auth endpoints by clearing the session and redirecting to
+ * `/login` — matching the previous per-composable axios interceptor that called
+ * `authStore.logout()`. Call sites therefore pass endpoints relative to the API
+ * base and receive parsed JSON directly (no axios `.data`).
  */
 
-import axios, { type AxiosInstance } from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
-
-const SLM_API_BASE = getSlmApiBase()
+import slmApiClient from '@/utils/ApiClient'
 
 export interface APIKeyCreate {
   name: string
@@ -58,70 +62,31 @@ export interface APIKeyUpdate {
 }
 
 export function useApiKeyApi() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: SLM_API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000,
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
-
   async function createKey(data: APIKeyCreate): Promise<APIKeyCreateResponse> {
-    const response = await client.post<APIKeyCreateResponse>(
-      '/api-keys',
-      data
-    )
-    return response.data
+    return slmApiClient.post<APIKeyCreateResponse>('/api-keys', data)
   }
 
   async function listKeys(): Promise<APIKeyListResponse> {
-    const response = await client.get<APIKeyListResponse>('/api-keys')
-    return response.data
+    return slmApiClient.get<APIKeyListResponse>('/api-keys')
   }
 
   async function getKey(keyId: string): Promise<APIKeyResponse> {
-    const response = await client.get<APIKeyResponse>(`/api-keys/${keyId}`)
-    return response.data
+    return slmApiClient.get<APIKeyResponse>(`/api-keys/${keyId}`)
   }
 
   async function updateKey(
     keyId: string,
     data: APIKeyUpdate
   ): Promise<APIKeyResponse> {
-    const response = await client.patch<APIKeyResponse>(
-      `/api-keys/${keyId}`,
-      data
-    )
-    return response.data
+    return slmApiClient.patch<APIKeyResponse>(`/api-keys/${keyId}`, data)
   }
 
   async function revokeKey(keyId: string): Promise<void> {
-    await client.delete(`/api-keys/${keyId}`)
+    await slmApiClient.delete(`/api-keys/${keyId}`)
   }
 
   async function getScopes(): Promise<Record<string, string>> {
-    const response = await client.get<Record<string, string>>(
-      '/api-keys/scopes'
-    )
-    return response.data
+    return slmApiClient.get<Record<string, string>>('/api-keys/scopes')
   }
 
   return {

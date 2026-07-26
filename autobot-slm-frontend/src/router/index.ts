@@ -10,9 +10,8 @@
  */
 
 import { createRouter, createWebHistory } from 'vue-router'
-import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import slmApiClient from '@/utils/ApiClient'
 
 // One-time wizard completion check (Issue #1294)
 let wizardCheckDone = false
@@ -551,10 +550,13 @@ router.beforeEach(async (to, _from) => {
   if (!wizardCheckDone && to.name !== 'setup') {
     wizardCheckDone = true
     try {
-      const token = sessionStorage.getItem('slm_access_token')
-      const { data } = await axios.get(`${getSlmApiBase()}/setup/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      // slmApiClient injects the SLM bearer token and resolves the base URL
+      // via getSlmApiBase(); single attempt (maxRetries: 1) so a first-run
+      // navigation is not delayed by GET retry/backoff on a missing endpoint.
+      const data = await slmApiClient.get<{ completed?: boolean }>(
+        '/setup/status',
+        { maxRetries: 1 }
+      )
       if (!data.completed) {
         return { name: 'setup' }
       }
