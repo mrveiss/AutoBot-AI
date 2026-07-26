@@ -69,9 +69,7 @@ def test_effective_score_normalized_boost_does_not_swamp_quality(monkeypatch):
     monkeypatch.setattr(es, "_REINFORCE_WEIGHT", 0.3)
     pristine = _fact("pristine", 1.0, access=0)
     popular = _fact("popular", 0.2, access=1_000_000, last_accessed=NOW.isoformat())
-    assert _effective_score(pristine, NOW, max_access=1_000_000) > _effective_score(
-        popular, NOW, max_access=1_000_000
-    )
+    assert _effective_score(pristine, NOW, max_access=1_000_000) > _effective_score(popular, NOW, max_access=1_000_000)
 
 
 def test_effective_score_no_boost_without_max_access(monkeypatch):
