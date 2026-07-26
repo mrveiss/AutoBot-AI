@@ -11,6 +11,9 @@ has persistent top-memories without requiring a RAG retrieval round-trip.
 
 import asyncio
 import hashlib
+import math
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -28,23 +31,81 @@ _DEFAULT_BUDGET = 600
 # Redis cache key template — fingerprint makes any fact change invalidate the cache
 _CACHE_KEY = "autobot:essential_story:{model_name}:{fingerprint}"
 
+# A2 (#12553): usage-aware reinforcement. The always-loaded facts are ranked by
+# an effective score that boosts a fact's static ``quality_score`` by how often
+# it is actually recalled (``access_count``, from A1 #12552) and how recently
+# (``last_accessed``). Tunable per deployment; **weight 0 (or the flag off)
+# reproduces the pre-A2 pure-quality_score ordering byte-for-byte.**
+_REINFORCE_ENABLED: bool = os.environ.get("AUTOBOT_ESSENTIAL_STORY_REINFORCE", "1").lower() not in (
+    "0",
+    "false",
+    "no",
+)
+_REINFORCE_WEIGHT: float = float(os.environ.get("AUTOBOT_ESSENTIAL_STORY_REINFORCE_WEIGHT", "0.3"))
+_REINFORCE_RECENCY_HALFLIFE_SECONDS: float = float(
+    os.environ.get("AUTOBOT_ESSENTIAL_STORY_RECENCY_HALFLIFE_SECONDS", str(30 * 24 * 3600))
+)
+
+
+def _recency_factor(timestamp_iso: str | None, now: datetime) -> float:
+    """Exponential-decay recency score in ``[0, 1]`` from an ISO timestamp.
+
+    ``1.0`` for a just-now access, halving every half-life. Returns ``0.0`` when
+    the timestamp is missing or unparseable so a never-accessed fact gets no
+    recency boost. Mirrors ``verbatim_store._recency_factor`` (GH#11163).
+    """
+    if not timestamp_iso:
+        return 0.0
+    try:
+        ts = datetime.fromisoformat(timestamp_iso)
+    except (ValueError, TypeError):
+        return 0.0
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    age = (now - ts).total_seconds()
+    if age <= 0:
+        return 1.0
+    return 0.5 ** (age / _REINFORCE_RECENCY_HALFLIFE_SECONDS)
+
+
+def _effective_score(fact: Dict[str, Any], now: datetime) -> float:
+    """Rank key for a fact: static quality boosted by usage + recency (A2).
+
+    ``quality + weight * (log1p(access_count) + recency)``. With reinforcement
+    disabled or ``weight <= 0`` this collapses to the raw ``quality_score``, so
+    the ordering is identical to the pre-A2 behaviour.
+    """
+    meta = fact.get("metadata") or {}
+    try:
+        quality = float(meta.get("quality_score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        quality = 0.0
+    if not _REINFORCE_ENABLED or _REINFORCE_WEIGHT <= 0.0:
+        return quality
+    try:
+        access = int(meta.get("access_count", 0) or 0)
+    except (TypeError, ValueError):
+        access = 0
+    usage_boost = math.log1p(max(access, 0))
+    recency_boost = _recency_factor(meta.get("last_accessed"), now)
+    return quality + _REINFORCE_WEIGHT * (usage_boost + recency_boost)
+
 
 def _compute_facts_fingerprint(facts: list) -> str:
-    """Return a SHA-256 hex digest of fact (id, content, category) tuples.
+    """Return a SHA-256 hex digest of the ranked fact (id, content, category) list.
 
-    Order-independent: sorted before hashing so reordering never invalidates.
-    Any add, edit, or delete changes the digest.
+    Order-**sensitive** (A2 #12553): the input is the already-ranked selection,
+    so its order is part of the rendered output — a re-rank that changes the
+    surfaced order must invalidate the cache. Any add, edit, delete, or reorder
+    changes the digest; an identical ranked selection yields an identical digest.
     """
-    items = sorted(
-        (
-            str(f.get("id", "")),
+    h = hashlib.sha256()
+    for f in facts:
+        triple = (
+            str(f.get("fact_id", "") or f.get("id", "")),
             str(f.get("content", "")),
             str((f.get("metadata") or {}).get("category", "")),
         )
-        for f in facts
-    )
-    h = hashlib.sha256()
-    for triple in items:
         h.update(("\x1f".join(triple) + "\x1e").encode("utf-8"))
     return h.hexdigest()
 
@@ -113,14 +174,11 @@ class EssentialStoryGenerator:
         # for any model's token budget (max 800 tokens) after sorting.
         all_facts = await kb.get_all_facts(limit=200)
 
-        def _quality(fact: Dict[str, Any]) -> float:
-            meta = fact.get("metadata") or {}
-            try:
-                return float(meta.get("quality_score", 0.0))
-            except (TypeError, ValueError):
-                return 0.0
-
-        sorted_facts = sorted(all_facts, key=_quality, reverse=True)
+        # A2 (#12553): rank by the usage-aware effective score so frequently- and
+        # recently-recalled facts rise. Collapses to raw quality_score when
+        # reinforcement is disabled / weight 0 (identical to pre-A2 ordering).
+        now = datetime.now(tz=timezone.utc)
+        sorted_facts = sorted(all_facts, key=lambda f: _effective_score(f, now), reverse=True)
 
         selected: List[Dict[str, Any]] = []
         used_tokens = 0
