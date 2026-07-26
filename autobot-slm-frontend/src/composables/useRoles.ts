@@ -10,8 +10,7 @@
  */
 
 import { ref, reactive } from 'vue'
-import axios from 'axios'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
 
 export interface Role {
   name: string
@@ -119,28 +118,119 @@ export interface DecommissionPreflight {
   safe_to_remove: DecommissionRoleInfo[]
 }
 
+// =============================================================================
+// slmApiClient adapter (#12420 Phase 2 batch 7)
+//
+// useRoles historically owned its own `axios.create()` instance (base URL built
+// from getSlmApiBase(), a request interceptor injecting the SLM bearer token, no
+// response interceptor). This adapter routes every call through the canonical
+// `slmApiClient` — where the auth token, base URL and centralised 401 handling
+// now live — while reproducing the axios surface the methods below depend on so
+// their bodies, and all consumers, stay unchanged:
+//
+//   * methods `await client.<verb>(endpoint, body?)` and read `response.data`
+//     → the adapter returns `{ data }`.
+//   * every catch reads `err.response?.data?.detail || err.message` → the
+//     adapter throws an axios-shaped error carrying `response.status` +
+//     `response.data` (and a `message` of `HTTP <n>` as the secondary fallback);
+//     a network/timeout rejection surfaces the raw Error (no `.response`), so
+//     `err.message` remains the fallback exactly as with axios.
+//
+// It delegates to `slmApiClient.rawRequest` (not the get/post/... helpers) on
+// purpose: rawRequest is the single seam that injects the bearer token + base
+// URL and runs the 401 handler, WITHOUT the helpers' GET retry/back-off or the
+// `HTTP <n>: <msg>` error transform — preserving the original single-shot,
+// structured-error behaviour every method relies on.
+// =============================================================================
+
+interface AxiosLikeResponse<T> {
+  data: T
+}
+
+// Serialise an axios-style params object onto the endpoint, matching axios's
+// default serialisation: scalars as `key=value`, arrays as repeated `key[]=value`
+// (URLSearchParams encodes the brackets to `%5B%5D`, exactly as axios does). Only
+// removeRole (scalar) and syncRole (scalar + array) pass a params object.
+function withParams(endpoint: string, params?: Record<string, unknown>): string {
+  if (!params) return endpoint
+  const usp = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue
+    if (Array.isArray(value)) {
+      for (const item of value) usp.append(`${key}[]`, String(item))
+    } else {
+      usp.append(key, String(value))
+    }
+  }
+  const qs = usp.toString()
+  if (!qs) return endpoint
+  return endpoint.includes('?') ? `${endpoint}&${qs}` : `${endpoint}?${qs}`
+}
+
+async function adapterRequest<T>(
+  method: string,
+  endpoint: string,
+  body?: unknown
+): Promise<AxiosLikeResponse<T>> {
+  const response = await slmApiClient.rawRequest(endpoint, { method, body })
+
+  if (!response.ok) {
+    let data: unknown = null
+    try {
+      data = await response.json()
+    } catch {
+      /* non-JSON error body — leave data null, mirroring axios */
+    }
+    const error = new Error(`HTTP ${response.status}`) as Error & {
+      response: { status: number; data: unknown }
+    }
+    // Reproduce the axios error shape the catch blocks read (err.response.data.detail).
+    error.response = { status: response.status, data }
+    throw error
+  }
+
+  if (response.status === 204) return { data: {} as T }
+  const contentType = response.headers.get('content-type')
+  if (contentType && contentType.includes('application/json')) {
+    return { data: (await response.json()) as T }
+  }
+  return { data: {} as T }
+}
+
+// Axios-compatible facade over slmApiClient consumed by every method below.
+const client = {
+  get: <T = unknown>(
+    endpoint: string,
+    config?: { params?: Record<string, unknown> }
+  ): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('GET', withParams(endpoint, config?.params)),
+  post: <T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    config?: { params?: Record<string, unknown> }
+  ): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('POST', withParams(endpoint, config?.params), body ?? undefined),
+  put: <T = unknown>(endpoint: string, body?: unknown): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('PUT', endpoint, body),
+  delete: <T = unknown>(
+    endpoint: string,
+    config?: { params?: Record<string, unknown> }
+  ): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('DELETE', withParams(endpoint, config?.params)),
+}
+
 export function useRoles() {
   const roles = ref<Role[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const fleetHealth = ref<FleetHealth | null>(null)
 
-  // Create axios instance with auth
-  const client = axios.create()
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   async function fetchRoles(): Promise<void> {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await client.get<Role[]>(`${getSlmApiBase()}/roles`)
+      const response = await client.get<Role[]>('/roles')
       roles.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -153,7 +243,7 @@ export function useRoles() {
   async function getNodeRoles(nodeId: string): Promise<NodeRolesInfo | null> {
     try {
       const response = await client.get<NodeRolesInfo>(
-        `${getSlmApiBase()}/nodes/${nodeId}/detected-roles`
+        `/nodes/${nodeId}/detected-roles`
       )
       return response.data
     } catch (e: unknown) {
@@ -170,7 +260,7 @@ export function useRoles() {
   ): Promise<NodeRoleItem | null> {
     try {
       const response = await client.post<NodeRoleItem>(
-        `${getSlmApiBase()}/nodes/${nodeId}/detected-roles`,
+        `/nodes/${nodeId}/detected-roles`,
         { role_name: roleName, assignment_type: assignmentType }
       )
       return response.data
@@ -191,7 +281,7 @@ export function useRoles() {
         success: boolean
         message: string
         backup_path?: string
-      }>(`${getSlmApiBase()}/nodes/${nodeId}/detected-roles/${roleName}`, {
+      }>(`/nodes/${nodeId}/detected-roles/${roleName}`, {
         params: { backup },
       })
       return response.data
@@ -205,7 +295,7 @@ export function useRoles() {
 
   async function createRole(roleData: Partial<Role>): Promise<Role | null> {
     try {
-      const response = await client.post<Role>(`${getSlmApiBase()}/roles`, roleData)
+      const response = await client.post<Role>('/roles', roleData)
       return response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -216,7 +306,7 @@ export function useRoles() {
 
   async function updateRole(roleName: string, roleData: Partial<Role>): Promise<Role | null> {
     try {
-      const response = await client.put<Role>(`${getSlmApiBase()}/roles/${roleName}`, roleData)
+      const response = await client.put<Role>(`/roles/${roleName}`, roleData)
       return response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -227,7 +317,7 @@ export function useRoles() {
 
   async function deleteRole(roleName: string): Promise<boolean> {
     try {
-      await client.delete(`${getSlmApiBase()}/roles/${roleName}`)
+      await client.delete(`/roles/${roleName}`)
       return true
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -247,7 +337,7 @@ export function useRoles() {
         params.node_ids = nodeIds
       }
       const response = await client.post<SyncResult>(
-        `${getSlmApiBase()}/code-sync/roles/${roleName}/sync`,
+        `/code-sync/roles/${roleName}/sync`,
         null,
         { params }
       )
@@ -265,7 +355,7 @@ export function useRoles() {
   async function pullFromSource(): Promise<{ success: boolean; message: string; commit: string | null }> {
     try {
       const response = await client.post<{ success: boolean; message: string; commit: string | null }>(
-        `${getSlmApiBase()}/code-sync/pull`
+        '/code-sync/pull'
       )
       return response.data
     } catch (e: unknown) {
@@ -280,7 +370,7 @@ export function useRoles() {
 
   async function fetchFleetHealth(): Promise<void> {
     try {
-      const response = await client.get<FleetHealth>(`${getSlmApiBase()}/roles/fleet-health`)
+      const response = await client.get<FleetHealth>('/roles/fleet-health')
       fleetHealth.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -294,7 +384,7 @@ export function useRoles() {
   ): Promise<PlaybookMigrateResult | null> {
     try {
       const response = await client.post<PlaybookMigrateResult>(
-        `${getSlmApiBase()}/roles/${roleName}/migrate`,
+        `/roles/${roleName}/migrate`,
         { target_node_id: targetNodeId }
       )
       return response.data
@@ -311,7 +401,7 @@ export function useRoles() {
   ): Promise<NodeActionsResponse | null> {
     try {
       const resp = await client.get<NodeActionsResponse>(
-        `${getSlmApiBase()}/roles/node-actions/${nodeId}`
+        `/roles/node-actions/${nodeId}`
       )
       return resp.data
     } catch (e: unknown) {
@@ -334,7 +424,7 @@ export function useRoles() {
   ): Promise<ExecuteActionResult | null> {
     try {
       const resp = await client.post<ExecuteActionResult>(
-        `${getSlmApiBase()}/roles/node-actions/${nodeId}/execute`,
+        `/roles/node-actions/${nodeId}/execute`,
         { role_name: roleName, category }
       )
       return resp.data
@@ -357,7 +447,7 @@ export function useRoles() {
   ): Promise<DecommissionPreflight | null> {
     try {
       const resp = await client.get<DecommissionPreflight>(
-        `${getSlmApiBase()}/nodes/${nodeId}/decommission/preflight`
+        `/nodes/${nodeId}/decommission/preflight`
       )
       return resp.data
     } catch (e: unknown) {
@@ -384,7 +474,7 @@ export function useRoles() {
         message: string
         deployment_id: string
         output: string
-      }>(`${getSlmApiBase()}/nodes/${nodeId}/decommission`, {
+      }>(`/nodes/${nodeId}/decommission`, {
         backup,
         confirm_node_id: confirmNodeId,
       })
@@ -410,7 +500,7 @@ export function useRoles() {
       const resp = await client.post<{
         success: boolean
         message: string
-      }>(`${getSlmApiBase()}/nodes/${nodeId}/reenroll`)
+      }>(`/nodes/${nodeId}/reenroll`)
       return resp.data
     } catch (e: unknown) {
       const err = e as {
