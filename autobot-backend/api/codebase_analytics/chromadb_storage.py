@@ -600,6 +600,68 @@ Docstring: {cls.get('docstring', 'No documentation')}
     return f"{prefix}class_{idx}_{cls['name']}", doc_text, metadata
 
 
+def _prepare_import_document(file_path: str, imports: List[str], idx: int, source_id: str | None = None) -> tuple:
+    """Prepare a per-file import document for ChromaDB storage (#12364).
+
+    Persists the raw import-statement list already collected transiently
+    during scanning (``FileAnalysisResult.imports``) so read endpoints can
+    reconstruct the import tree from the index instead of re-walking the
+    filesystem and re-parsing every file on each request.
+    """
+    doc_text = f"Imports: {file_path}\n" + "\n".join(imports)
+
+    metadata = {
+        "type": "import",
+        "file_path": file_path,
+        "imports": json.dumps(imports),
+    }
+    if source_id:
+        metadata["source_id"] = source_id
+
+    prefix = f"{source_id}_" if source_id else ""
+    return f"{prefix}import_{idx}_{file_path}", doc_text, metadata
+
+
+async def _prepare_imports_batch(
+    files: Dict[str, Dict],
+    batch_ids: list,
+    batch_documents: list,
+    batch_metadatas: list,
+    update_progress,
+    total_items: int,
+    items_offset: int,
+    source_id: str | None = None,
+) -> int:
+    """Prepare import documents for every scanned Python file (#12364).
+
+    Only ``.py`` files carry a populated ``imports`` list (the JS/Vue
+    analyzer does not extract imports), matching the scope of the
+    import-tree/dependencies live-walk endpoints this replaces.
+    """
+    items_prepared = items_offset
+    idx = 0
+    for file_path, file_analysis in files.items():
+        if not file_path.endswith(".py"):
+            continue
+        doc_id, doc_text, metadata = _prepare_import_document(
+            file_path, file_analysis.get("imports", []), idx, source_id=source_id
+        )
+        batch_ids.append(doc_id)
+        batch_documents.append(doc_text)
+        batch_metadatas.append(metadata)
+
+        idx += 1
+        items_prepared += 1
+        if items_prepared % 200 == 0:
+            await update_progress(
+                operation="Storing imports",
+                current=items_prepared,
+                total=total_items,
+                current_file=f"Import map {idx}/{len(files)}",
+            )
+    return items_prepared
+
+
 def _prepare_stats_document(analysis_results: Dict, source_id: str | None = None) -> tuple:
     """Prepare stats document for ChromaDB storage (Issue #281: extracted)."""
     stats = analysis_results["stats"]
@@ -721,7 +783,9 @@ async def _prepare_batch_data(
     batch_documents = []
     batch_metadatas = []
 
-    total_items = len(analysis_results["all_functions"]) + len(analysis_results["all_classes"]) + 1
+    files = analysis_results.get("files", {})
+    python_file_count = sum(1 for file_path in files if file_path.endswith(".py"))
+    total_items = len(analysis_results["all_functions"]) + len(analysis_results["all_classes"]) + python_file_count + 1
 
     await update_progress(
         operation="Preparing functions",
@@ -749,8 +813,21 @@ async def _prepare_batch_data(
     )
 
     all_classes = analysis_results["all_classes"]
-    await _prepare_classes_batch(
+    items_prepared = await _prepare_classes_batch(
         all_classes,
+        batch_ids,
+        batch_documents,
+        batch_metadatas,
+        update_progress,
+        total_items,
+        items_prepared,
+        source_id=source_id,
+    )
+
+    # #12364: persist per-file import lists so import-tree/dependencies can
+    # read from the index instead of re-walking the filesystem every request.
+    await _prepare_imports_batch(
+        files,
         batch_ids,
         batch_documents,
         batch_metadatas,
