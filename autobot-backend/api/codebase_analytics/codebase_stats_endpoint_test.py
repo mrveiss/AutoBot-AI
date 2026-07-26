@@ -317,23 +317,25 @@ class TestRecreateChromaDBCollection:
 
 
 class TestNoDataResponse:
-    """Tests for _no_data_response helper."""
+    """Tests for stats.py's use of the shared no_data_response helper (Issue #12705)."""
 
     def test_returns_json_response(self):
-        """Should return JSONResponse with correct structure."""
+        """stats.py wraps the shared helper's dict in a JSONResponse."""
         from fastapi.responses import JSONResponse
 
-        from api.codebase_analytics.endpoints.stats import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response()
+        result = JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
 
         assert isinstance(result, JSONResponse)
 
     def test_default_message(self):
-        """Should use default message when none provided."""
-        from api.codebase_analytics.endpoints.stats import _no_data_response
+        """Should use stats.py's default message when none provided."""
+        from fastapi.responses import JSONResponse
 
-        result = _no_data_response()
+        from api.analytics_shared import no_data_response
+
+        result = JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
         # JSONResponse body is bytes, need to decode
         import json
 
@@ -347,9 +349,11 @@ class TestNoDataResponse:
         """Should use custom message when provided."""
         import json
 
-        from api.codebase_analytics.endpoints.stats import _no_data_response
+        from fastapi.responses import JSONResponse
 
-        result = _no_data_response("Custom error message")
+        from api.analytics_shared import no_data_response
+
+        result = JSONResponse(no_data_response("Custom error message", stats=None))
         body = json.loads(result.body)
 
         assert body["message"] == "Custom error message"

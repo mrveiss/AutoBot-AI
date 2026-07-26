@@ -19,6 +19,9 @@ from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.analytics_shared import (
+    no_data_response,
+)
 from api.analytics_shared import (  # noqa: F401 – used by history/metrics/summary
     resolve_source_or_404 as _resolve_source_or_404,
 )
@@ -189,24 +192,6 @@ REVIEW_PATTERNS = {
         "suggestion": "Create a GitHub issue to track this work.",
     },
 }
-
-
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-
-def _no_data_response(
-    message: str = "No code review data. Run a code review first.",
-) -> dict:
-    """Standardized no-data response (Issue #543)."""
-    return {
-        "status": "no_data",
-        "message": message,
-        "review": None,
-        "comments": [],
-        "summary": {},
-    }
 
 
 def _parse_hunk_header(line: str) -> dict[str, Any] | None:
@@ -447,7 +432,12 @@ async def analyze_diff(
 
     if not diff_content:
         # Issue #543: Return no-data response instead of demo data
-        return _no_data_response("No git diff available. Make changes or specify a commit range.")
+        return no_data_response(
+            "No git diff available. Make changes or specify a commit range.",
+            review=None,
+            comments=[],
+            summary={},
+        )
 
     # Parse diff
     files = parse_diff(diff_content)
@@ -675,7 +665,7 @@ async def get_review_history(
 
         redis = get_redis_client(async_client=False, database="analytics")
         if not redis:
-            return _no_data_response("Analytics database unavailable.")
+            return no_data_response("Analytics database unavailable.", review=None, comments=[], summary={})
 
         effective_source = source_id or "default"
         raw_entries = await asyncio.to_thread(redis.lrange, f"code_review:history:{effective_source}", 0, limit - 1)
@@ -699,14 +689,22 @@ async def get_review_history(
             reviews.append(entry)
 
         if not reviews:
-            return _no_data_response(
-                "No review history available. Reviews will be stored here once you run code reviews."
+            return no_data_response(
+                "No review history available. Reviews will be stored here once you run code reviews.",
+                review=None,
+                comments=[],
+                summary={},
             )
 
         return {"status": "success", "reviews": reviews, "total": len(reviews)}
     except Exception as exc:
         logger.warning("Failed to load review history: %s", exc)
-        return _no_data_response("No review history available. Reviews will be stored here once you run code reviews.")
+        return no_data_response(
+            "No review history available. Reviews will be stored here once you run code reviews.",
+            review=None,
+            comments=[],
+            summary={},
+        )
 
 
 @router.get("/metrics", response_model=CodeReviewMetricsResponse)
@@ -730,7 +728,12 @@ async def get_review_metrics(
     """
     await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
-    return _no_data_response("No review metrics available. Metrics will accumulate as you run code reviews.")
+    return no_data_response(
+        "No review metrics available. Metrics will accumulate as you run code reviews.",
+        review=None,
+        comments=[],
+        summary={},
+    )
 
 
 @router.post("/feedback", response_model=CodeReviewFeedbackResponse)
@@ -800,8 +803,11 @@ async def get_review_summary(
     """
     await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
-    return _no_data_response(
-        "No review summary available. Summary statistics will be generated after running code reviews."
+    return no_data_response(
+        "No review summary available. Summary statistics will be generated after running code reviews.",
+        review=None,
+        comments=[],
+        summary={},
     )
 
 
