@@ -4,9 +4,12 @@
 // Author: mrveiss
 
 import { createI18n } from 'vue-i18n'
-import en from './locales/en.json'
 
-export type MessageSchema = typeof en
+// Issue #12342: the English message bundle (~366KB) is no longer statically
+// imported — that pulled the whole locale JSON into the initial chunk on every
+// page (incl. /chat). The type is derived without emitting a runtime import;
+// messages are loaded lazily via loadLocaleMessages() / initI18n() below.
+export type MessageSchema = typeof import('./locales/en.json')
 
 // Derive supported locales from locale files on disk — no manual sync needed (#1675)
 const localeModules = import.meta.glob('./locales/*.json')
@@ -38,9 +41,9 @@ const i18n = createI18n<[MessageSchema], string>({
   legacy: false,
   locale: localStorage.getItem('autobot-language') || detectBrowserLocale(),
   fallbackLocale: 'en',
-  messages: {
-    en,
-  },
+  // Start with no messages — the active locale and the 'en' fallback are
+  // loaded (and awaited) by initI18n() before the app mounts (#12342).
+  messages: {},
 })
 
 /**
@@ -81,6 +84,21 @@ export async function setLocale(locale: string): Promise<void> {
   localStorage.setItem('autobot-language', locale)
   document.documentElement.setAttribute('lang', locale)
   document.documentElement.setAttribute('dir', getLocaleDir(locale))
+}
+
+/**
+ * Load the active locale and the English fallback, then set html lang/dir.
+ * Awaited by main.ts before app.mount() so the first render never flashes
+ * missing strings even when the active locale isn't English (#12342).
+ */
+export async function initI18n(): Promise<void> {
+  const active = (i18n.global.locale as unknown as { value: string }).value
+  await Promise.all([
+    loadLocaleMessages('en'),
+    active === 'en' ? Promise.resolve(true) : loadLocaleMessages(active),
+  ])
+  document.documentElement.setAttribute('lang', active)
+  document.documentElement.setAttribute('dir', getLocaleDir(active))
 }
 
 export default i18n
