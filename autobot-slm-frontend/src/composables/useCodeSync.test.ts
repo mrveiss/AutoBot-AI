@@ -111,3 +111,89 @@ describe('useCodeSync — async drift/resolve job (#11303)', () => {
     expect(result).toBeUndefined()
   })
 })
+
+/**
+ * Issue #12593 — during Update-All stage 3 (`slm_self_update`) the SLM control
+ * plane restarts itself, so the page (which polls that same control plane) sees
+ * ~1min of transient poll failures and previously showed only a generic
+ * "updating..." spinner → read as frozen. These pure helpers drive the
+ * reconnecting affordance and the (unchanged) transient-error give-up.
+ */
+import {
+  isSelfUpdateReconnecting,
+  classifyUpdateAllPollError,
+  SLM_SELF_UPDATE_STAGE,
+  type UpdateAllJob,
+  type UpdateAllStage,
+} from './useCodeSync'
+
+function makeStage(name: string, status: UpdateAllStage['status']): UpdateAllStage {
+  return {
+    name,
+    status,
+    message: null,
+    sha: null,
+    deps_changed: false,
+    log_lines: [],
+    started_at: null,
+    completed_at: null,
+  }
+}
+
+function makeJob(runningStage: string): UpdateAllJob {
+  return {
+    job_id: 'job-ua',
+    status: 'running',
+    stages: [
+      makeStage('github_fetch', 'success'),
+      makeStage('code_source_pull', 'success'),
+      makeStage(SLM_SELF_UPDATE_STAGE, runningStage === SLM_SELF_UPDATE_STAGE ? 'running' : 'pending'),
+      makeStage('fleet_nodes', runningStage === 'fleet_nodes' ? 'running' : 'pending'),
+    ],
+    total_fleet_nodes: 0,
+    completed_fleet_nodes: 0,
+    failed_fleet_nodes: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    completed_at: null,
+    failure_reason: null,
+  }
+}
+
+describe('isSelfUpdateReconnecting (#12593)', () => {
+  it('is true when stage 3 is running and at least one poll failed transiently', () => {
+    expect(isSelfUpdateReconnecting(makeJob(SLM_SELF_UPDATE_STAGE), 1)).toBe(true)
+    expect(isSelfUpdateReconnecting(makeJob(SLM_SELF_UPDATE_STAGE), 5)).toBe(true)
+  })
+
+  it('is false with zero transient errors even while stage 3 is running (poll still succeeding)', () => {
+    expect(isSelfUpdateReconnecting(makeJob(SLM_SELF_UPDATE_STAGE), 0)).toBe(false)
+  })
+
+  it('does NOT fire for a non-stage-3 transient error (e.g. fleet_nodes running)', () => {
+    expect(isSelfUpdateReconnecting(makeJob('fleet_nodes'), 3)).toBe(false)
+  })
+
+  it('is false when there is no job', () => {
+    expect(isSelfUpdateReconnecting(null, 10)).toBe(false)
+  })
+})
+
+describe('classifyUpdateAllPollError (#12593 keeps the #9971 give-up unchanged)', () => {
+  const LOST = 30
+  const MAX = 90
+
+  it('continues below the lost-contact threshold', () => {
+    expect(classifyUpdateAllPollError(1, LOST, MAX)).toBe('continue')
+    expect(classifyUpdateAllPollError(29, LOST, MAX)).toBe('continue')
+  })
+
+  it('reports lost-contact at the lost-contact threshold (still polling)', () => {
+    expect(classifyUpdateAllPollError(30, LOST, MAX)).toBe('lost-contact')
+    expect(classifyUpdateAllPollError(89, LOST, MAX)).toBe('lost-contact')
+  })
+
+  it('hard give-up still fires at the 90-error max threshold', () => {
+    expect(classifyUpdateAllPollError(90, LOST, MAX)).toBe('giveup')
+    expect(classifyUpdateAllPollError(120, LOST, MAX)).toBe('giveup')
+  })
+})

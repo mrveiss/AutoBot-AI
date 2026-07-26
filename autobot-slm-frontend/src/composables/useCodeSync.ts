@@ -229,6 +229,47 @@ export interface UpdateAllJob {
 }
 
 // =============================================================================
+// Update-All poll helpers (#9971 F1, #12593) — pure functions, unit-tested.
+// =============================================================================
+
+// Pipeline stage (index 3) that restarts the SLM control plane the code-sync
+// page itself polls; ~1min of transient poll failures follow (issue #12593).
+export const SLM_SELF_UPDATE_STAGE = 'slm_self_update'
+
+/**
+ * True when the pipeline is mid stage-3 self-restart AND at least one poll has
+ * failed transiently — i.e. the control plane is bouncing, so the UI should
+ * show a "reconnecting" affordance immediately (#12593) instead of a bare
+ * "updating..." spinner. `transientErrors` resets to 0 on the next successful
+ * poll, so this flips back to false automatically once contact is restored.
+ */
+export function isSelfUpdateReconnecting(
+  job: UpdateAllJob | null,
+  transientErrors: number,
+): boolean {
+  if (!job || transientErrors < 1) return false
+  const running = job.stages.find((s) => s.status === 'running')
+  return running?.name === SLM_SELF_UPDATE_STAGE
+}
+
+export type UpdateAllPollDecision = 'continue' | 'lost-contact' | 'giveup'
+
+/**
+ * Classify a run of consecutive transient poll errors (#9971 F1). Show the
+ * "lost contact" banner at `lostContactThreshold`; hard give-up (stop polling)
+ * at `maxThreshold`. Thresholds are unchanged by #12593.
+ */
+export function classifyUpdateAllPollError(
+  transientErrors: number,
+  lostContactThreshold: number,
+  maxThreshold: number,
+): UpdateAllPollDecision {
+  if (transientErrors >= maxThreshold) return 'giveup'
+  if (transientErrors >= lostContactThreshold) return 'lost-contact'
+  return 'continue'
+}
+
+// =============================================================================
 // Composable
 // =============================================================================
 
