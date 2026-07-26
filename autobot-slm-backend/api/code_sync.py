@@ -35,6 +35,7 @@ from typing_extensions import Annotated
 from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.security.redaction import redact_mapping
 from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import CodeSource, CodeStatus
 from models.database import ComponentSyncJob as ComponentSyncJobModel
@@ -4090,10 +4091,6 @@ class UpdateAllJob(BaseModel):
     failure_reason: Optional[str] = None
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def _short_sha(sha: Optional[str]) -> Optional[str]:
     return sha[:12] if sha else None
 
@@ -4267,7 +4264,7 @@ async def _run_github_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
     """
     stage = _get_stage(job, "github_fetch")
     stage.status = _StageStatus.RUNNING
-    stage.started_at = _now_iso()
+    stage.started_at = utc_timestamp()
     _stage_log(stage, "Fetching latest commit from GitHub ...")
     try:
         async with db_service_ref.session() as db:
@@ -4277,10 +4274,10 @@ async def _run_github_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
             if not remote_commit:
                 stage.status = _StageStatus.FAILED
                 stage.message = "git fetch returned no remote commit"
-                stage.completed_at = _now_iso()
+                stage.completed_at = utc_timestamp()
                 job.status = "failed"
                 job.failure_reason = stage.message
-                job.completed_at = _now_iso()
+                job.completed_at = utc_timestamp()
                 return None
             setting_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
             setting = setting_result.scalar_one_or_none()
@@ -4292,16 +4289,16 @@ async def _run_github_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
         stage.sha = _short_sha(remote_commit)
         stage.status = _StageStatus.SUCCESS
         stage.message = f"Latest commit: {_short_sha(remote_commit)}"
-        stage.completed_at = _now_iso()
+        stage.completed_at = utc_timestamp()
         _stage_log(stage, f"Fetched remote commit {_short_sha(remote_commit)}")
         return remote_commit
     except Exception as exc:
         stage.status = _StageStatus.FAILED
         stage.message = str(exc)[:300]
-        stage.completed_at = _now_iso()
+        stage.completed_at = utc_timestamp()
         job.status = "failed"
         job.failure_reason = f"GitHub fetch failed: {exc}"
-        job.completed_at = _now_iso()
+        job.completed_at = utc_timestamp()
         return None
 
 
@@ -4312,7 +4309,7 @@ async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
     """
     stage = _get_stage(job, "code_source_pull")
     stage.status = _StageStatus.RUNNING
-    stage.started_at = _now_iso()
+    stage.started_at = utc_timestamp()
     _stage_log(stage, "Pulling code_source from source node ...")
     try:
         slm_deps_before = await _compute_deps_changed("autobot-slm-backend")
@@ -4321,16 +4318,16 @@ async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
         if not success:
             stage.status = _StageStatus.FAILED
             stage.message = message or "pull_from_source returned failure"
-            stage.completed_at = _now_iso()
+            stage.completed_at = utc_timestamp()
             job.status = "failed"
             job.failure_reason = f"code_source pull failed: {stage.message}"
-            job.completed_at = _now_iso()
+            job.completed_at = utc_timestamp()
             return None
         stage.deps_changed = slm_deps_before or await _compute_deps_changed("autobot-slm-backend")
         stage.sha = _short_sha(commit)
         stage.status = _StageStatus.SUCCESS
         stage.message = message or f"Pulled {_short_sha(commit)}"
-        stage.completed_at = _now_iso()
+        stage.completed_at = utc_timestamp()
         _stage_log(stage, f"Pulled commit {_short_sha(commit)}, deps_changed={stage.deps_changed}")
         if commit:
             async with db_service_ref.session() as db:
@@ -4340,10 +4337,10 @@ async def _run_pull_stage(job: UpdateAllJob, db_service_ref) -> Optional[str]:
     except Exception as exc:
         stage.status = _StageStatus.FAILED
         stage.message = str(exc)[:300]
-        stage.completed_at = _now_iso()
+        stage.completed_at = utc_timestamp()
         job.status = "failed"
         job.failure_reason = f"code_source pull error: {exc}"
-        job.completed_at = _now_iso()
+        job.completed_at = utc_timestamp()
         return None
 
 
@@ -4550,7 +4547,7 @@ async def _run_slm_stage(
     """
     stage = _get_stage(job, "slm_self_update")
     stage.status = _StageStatus.RUNNING
-    stage.started_at = _now_iso()
+    stage.started_at = utc_timestamp()
     _stage_log(stage, "Starting Ansible SLM self-update ...")
     try:
         slm_own_ip = urlparse(settings.external_url).hostname or ""
@@ -4561,7 +4558,7 @@ async def _run_slm_stage(
         if slm_node is None:
             stage.status = _StageStatus.SKIPPED
             stage.message = "SLM node not found in DB — skipping self-update"
-            stage.completed_at = _now_iso()
+            stage.completed_at = utc_timestamp()
             _stage_log(stage, stage.message)
             return False
 
@@ -4585,7 +4582,7 @@ async def _run_slm_stage(
             # "resync succeeded but code_version never advanced" gap as
             # drift-resolve. Guarded the same way (only when nothing is stale).
             await _advance_node_version_if_fully_synced("autobot-slm-backend")
-            stage.completed_at = _now_iso()
+            stage.completed_at = utc_timestamp()
             _stage_log(stage, stage.message)
             return False
 
@@ -4603,10 +4600,10 @@ async def _run_slm_stage(
     except Exception as exc:
         stage.status = _StageStatus.FAILED
         stage.message = str(exc)[:300]
-        stage.completed_at = _now_iso()
+        stage.completed_at = utc_timestamp()
         job.status = "failed"
         job.failure_reason = f"SLM self-update error: {exc}"
-        job.completed_at = _now_iso()
+        job.completed_at = utc_timestamp()
         await _clear_resume_plan()
         return False
 
@@ -4619,10 +4616,10 @@ def _fail_fleet_stage(
     """Mark fleet stage and job as failed with a common reason string."""
     stage.status = _StageStatus.FAILED
     stage.message = reason[:300]
-    stage.completed_at = _now_iso()
+    stage.completed_at = utc_timestamp()
     job.status = "failed"
     job.failure_reason = reason[:300]
-    job.completed_at = _now_iso()
+    job.completed_at = utc_timestamp()
 
 
 _NON_OPERATIONAL_STATUSES = frozenset({"degraded", "offline", "error", "pending", "enrolling", "decommissioned"})
@@ -4728,7 +4725,7 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
     """
     stage = _get_stage(job, "fleet_nodes")
     stage.status = _StageStatus.RUNNING
-    stage.started_at = _now_iso()
+    stage.started_at = utc_timestamp()
     job.total_fleet_nodes = len(node_ids)
     job.completed_fleet_nodes = 0
     job.failed_fleet_nodes = 0
@@ -4757,9 +4754,9 @@ async def _run_fleet_stage(job: UpdateAllJob, node_ids: List[str]) -> None:
 
     stage.status = _StageStatus.SUCCESS
     stage.message = summary
-    stage.completed_at = _now_iso()
+    stage.completed_at = utc_timestamp()
     job.status = "partial" if skipped else "completed"
-    job.completed_at = _now_iso()
+    job.completed_at = utc_timestamp()
     _stage_log(stage, f"Fleet stage complete: {summary}")
     await _clear_resume_plan()
 
@@ -4844,7 +4841,7 @@ async def _run_fleet_stage_or_already_current(
     stage_fleet = _get_stage(job, "fleet_nodes")
     stage_fleet.status = _StageStatus.SKIPPED
     stage_fleet.message = "No outdated fleet nodes"
-    stage_fleet.completed_at = _now_iso()
+    stage_fleet.completed_at = utc_timestamp()
 
     # C4: already_current when SLM is also at target
     deployed = await _get_slm_deployed_commit()
@@ -4856,7 +4853,7 @@ async def _run_fleet_stage_or_already_current(
     else:
         job.status = "completed"
         _stage_log(stage_fleet, "No outdated nodes — pipeline complete")
-    job.completed_at = _now_iso()
+    job.completed_at = utc_timestamp()
 
 
 async def _run_update_all_orchestration(job: UpdateAllJob, db_service_ref) -> None:
@@ -4961,10 +4958,10 @@ async def _resume_verify_slm_stage(job: UpdateAllJob, target_commit: Optional[st
     stage_slm = _get_stage(job, "slm_self_update")
     stage_slm.status = _StageStatus.FAILED
     stage_slm.message = err_msg
-    stage_slm.completed_at = _now_iso()
+    stage_slm.completed_at = utc_timestamp()
     job.status = "failed"
     job.failure_reason = err_msg
-    job.completed_at = _now_iso()
+    job.completed_at = utc_timestamp()
     await _clear_resume_plan()
     return False
 
@@ -4987,15 +4984,15 @@ async def _execute_resume(
         stage_slm.status = _StageStatus.SUCCESS
         stage_slm.message = f"SLM restarted at {_short_sha(target_commit)}"
         stage_slm.sha = _short_sha(target_commit)
-        stage_slm.completed_at = _now_iso()
+        stage_slm.completed_at = utc_timestamp()
 
         if not remaining:
             stage_fleet = _get_stage(job, "fleet_nodes")
             stage_fleet.status = _StageStatus.SKIPPED
             stage_fleet.message = "No fleet nodes to update"
-            stage_fleet.completed_at = _now_iso()
+            stage_fleet.completed_at = utc_timestamp()
             job.status = "completed"
-            job.completed_at = _now_iso()
+            job.completed_at = utc_timestamp()
             await _clear_resume_plan()
             return
 
@@ -5004,7 +5001,7 @@ async def _execute_resume(
         logger.error("update-all resume: unhandled error: %s", exc, exc_info=True)
         job.status = "failed"
         job.failure_reason = f"Resume error: {exc}"
-        job.completed_at = _now_iso()
+        job.completed_at = utc_timestamp()
         await _clear_resume_plan()
     finally:
         _resume_task = None
@@ -5027,7 +5024,7 @@ async def resume_update_all_orchestration() -> None:
     target_commit: Optional[str] = plan.get("target_commit")
     remaining: List[str] = plan.get("remaining_node_ids", [])
     job_id: str = plan.get("job_id", str(uuid.uuid4())[:16])
-    plan_created_at_val: str = plan.get("created_at", _now_iso())
+    plan_created_at_val: str = plan.get("created_at", utc_timestamp())
 
     logger.info(
         "update-all resume: found plan job=%s target=%s fleet_nodes=%d",
@@ -5094,7 +5091,7 @@ async def start_update_all(
     job = UpdateAllJob(
         job_id=job_id,
         status="pending",
-        created_at=_now_iso(),
+        created_at=utc_timestamp(),
         stages=[
             _make_stage("github_fetch"),
             _make_stage("code_source_pull"),
@@ -5114,7 +5111,7 @@ async def start_update_all(
             logger.error("update-all orchestration unhandled error: %s", exc, exc_info=True)
             job.status = "failed"
             job.failure_reason = str(exc)[:300]
-            job.completed_at = _now_iso()
+            job.completed_at = utc_timestamp()
             await _clear_resume_plan()
         finally:
             _update_all_task = None
@@ -5154,7 +5151,7 @@ async def get_update_all_status(
                 return UpdateAllJob(
                     job_id=job_id,
                     status="running",
-                    created_at=plan.get("created_at", _now_iso()),
+                    created_at=plan.get("created_at", utc_timestamp()),
                     stages=[
                         UpdateAllStage(
                             name="github_fetch",

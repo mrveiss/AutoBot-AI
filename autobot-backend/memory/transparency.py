@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from memory._redis_util import decode as _decode
 from memory._redis_util import redis_scan as _redis_scan
 from memory.working_memory import is_working_memory_key
@@ -80,10 +81,6 @@ async def _safe(coro, fallback=None):
     except Exception as exc:
         logger.warning("memory_transparency: store error: %s", exc)
         return fallback
-
-
-def _now_iso() -> str:
-    return datetime.now(tz=timezone.utc).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +359,7 @@ async def export_user_memory(user_id: str) -> Dict[str, Any]:
     memories = await list_user_memories(user_id)
     return {
         "export_version": "1.0",
-        "exported_at": _now_iso(),
+        "exported_at": utc_timestamp(),
         "user_id": user_id,
         "total_items": len(memories),
         "stores": sorted({m["store"] for m in memories}),
