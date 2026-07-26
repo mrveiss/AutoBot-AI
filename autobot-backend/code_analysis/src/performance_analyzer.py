@@ -1,31 +1,57 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """
-Performance and Memory Leak Analyzer using Redis and NPU acceleration
-Analyzes codebase for performance bottlenecks, memory leaks, and processing inefficiencies
+Performance Analyzer — deprecated legacy-shaped facade (Issue #12362).
+
+This module used to contain a full, independent regex/AST scanning engine
+that duplicated (and had diverged from) the canonical implementation at
+``code_intelligence.performance_analysis``. It is kept as an import-
+compatible shim — per the "never delete code" policy — for any caller that
+still imports ``PerformanceAnalyzer``/``PerformanceIssue`` from this path.
+
+The detection engine is now delegated entirely to the canonical
+``code_intelligence.performance_analysis.PerformanceAnalyzer``. This class
+adapts the modern, enum-typed ``PerformanceIssue`` (``line_start``/
+``line_end``, ``PerformanceIssueType`` enum) to the legacy dataclass shape
+below (``line_number``/``issue_type: str``) so that pre-existing callers of
+``analyze_performance()`` keep receiving the same response contract.
+
+DEPRECATED: New code should import directly from
+``code_intelligence.performance_analysis`` instead.
 """
 
-import ast
+import asyncio
 import json
-import re
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
 
-logger = get_logger(__name__)
+from code_intelligence.performance_analysis import (
+    PerformanceIssueType as _ModernIssueType,
+)
+from code_intelligence.performance_analysis import (
+    PerformanceAnalyzer as _ModernPerformanceAnalyzer,
+)
+from code_intelligence.performance_analysis.types import (
+    PerformanceIssue as _ModernPerformanceIssue,
+)
 
-# Issue #380: Module-level tuple for loop AST types
-_LOOP_TYPES = (ast.For, ast.While)
+logger = get_logger(__name__)
 
 
 @dataclass
 class PerformanceIssue:
-    """Represents a performance issue in the codebase"""
+    """Represents a performance issue in the codebase (legacy shape).
+
+    Issue #12362: Preserved verbatim for backward compatibility. Field names
+    (``line_number``, ``issue_type: str``) intentionally differ from the
+    canonical ``code_intelligence.performance_analysis.types.PerformanceIssue``
+    (``line_start``/``line_end``, ``PerformanceIssueType`` enum) — see
+    ``PerformanceAnalyzer._adapt_issue`` below for the field mapping.
+    """
 
     file_path: str
     line_number: int
@@ -40,7 +66,7 @@ class PerformanceIssue:
 
 @dataclass
 class PerformanceRecommendation:
-    """Performance improvement recommendation"""
+    """Performance improvement recommendation (legacy shape)."""
 
     category: str  # memory, async, loops, database, etc.
     title: str
@@ -50,66 +76,76 @@ class PerformanceRecommendation:
     code_examples: List[Dict[str, str]]  # before/after examples
 
 
+# Issue #12362: Maps a canonical PerformanceIssueType to the legacy 6-bucket
+# taxonomy (memory_leaks, blocking_calls, inefficient_loops, database_issues,
+# concurrency_issues, resource_waste) that PerformanceIssue.issue_type /
+# PerformanceRecommendation.category used pre-consolidation. Explicit at the
+# consumer boundary per the type-divergence-handling requirement — every
+# member of the modern enum is listed so a new addition to the canonical
+# enum fails loudly (KeyError) instead of silently falling into a bucket.
+_LEGACY_BUCKET_BY_ISSUE_TYPE: Dict[_ModernIssueType, str] = {
+    # Query patterns -> database_issues
+    _ModernIssueType.N_PLUS_ONE_QUERY: "database_issues",
+    _ModernIssueType.QUERY_IN_LOOP: "database_issues",
+    _ModernIssueType.MISSING_INDEX_HINT: "database_issues",
+    _ModernIssueType.UNBATCHED_INSERTS: "database_issues",
+    # Loop complexity -> inefficient_loops
+    _ModernIssueType.NESTED_LOOP_COMPLEXITY: "inefficient_loops",
+    _ModernIssueType.INEFFICIENT_LOOP: "inefficient_loops",
+    _ModernIssueType.LOOP_INVARIANT_COMPUTATION: "inefficient_loops",
+    _ModernIssueType.QUADRATIC_COMPLEXITY: "inefficient_loops",
+    # Async/sync issues -> blocking_calls
+    _ModernIssueType.SYNC_IN_ASYNC: "blocking_calls",
+    _ModernIssueType.BLOCKING_IO_IN_ASYNC: "blocking_calls",
+    _ModernIssueType.MISSING_AWAIT: "blocking_calls",
+    _ModernIssueType.SEQUENTIAL_AWAITS: "blocking_calls",
+    # Memory patterns -> memory_leaks
+    _ModernIssueType.UNBOUNDED_COLLECTION: "memory_leaks",
+    _ModernIssueType.LARGE_OBJECT_CREATION: "memory_leaks",
+    _ModernIssueType.MEMORY_LEAK_RISK: "memory_leaks",
+    _ModernIssueType.EXCESSIVE_STRING_CONCAT: "memory_leaks",
+    # Cache patterns -> resource_waste (no direct legacy equivalent)
+    _ModernIssueType.REPEATED_COMPUTATION: "resource_waste",
+    _ModernIssueType.MISSING_CACHE: "resource_waste",
+    _ModernIssueType.CACHE_STAMPEDE_RISK: "resource_waste",
+    _ModernIssueType.INEFFICIENT_CACHE_KEY: "resource_waste",
+    # Data structure issues -> resource_waste
+    _ModernIssueType.LIST_FOR_LOOKUP: "resource_waste",
+    _ModernIssueType.INEFFICIENT_DICT_ACCESS: "resource_waste",
+    _ModernIssueType.REPEATED_LIST_APPEND: "resource_waste",
+    # I/O patterns -> memory_leaks (unclosed handles = the old "memory_leaks"
+    # regex category)
+    _ModernIssueType.REPEATED_FILE_OPEN: "memory_leaks",
+    _ModernIssueType.MISSING_CONTEXT_MANAGER: "memory_leaks",
+    _ModernIssueType.INEFFICIENT_FILE_READ: "memory_leaks",
+    # Network patterns -> resource_waste (old analyzer had no network bucket)
+    _ModernIssueType.UNBATCHED_API_CALLS: "resource_waste",
+    _ModernIssueType.MISSING_CONNECTION_POOL: "resource_waste",
+    _ModernIssueType.REPEATED_HTTP_REQUESTS: "resource_waste",
+}
+
+
 class PerformanceAnalyzer:
-    """Analyzes code for performance issues and memory leaks"""
+    """Analyzes code for performance issues and memory leaks.
 
-    @staticmethod
-    def _build_performance_patterns() -> Dict[str, List[str]]:
-        """Return the anti-pattern regex map used for performance scanning.
-
-        Issue #1183: Extracted from __init__() to reduce function length.
-        """
-        return {
-            "memory_leaks": [
-                r"open\s*\([^)]+\)(?!\s*(?:with|\.close\(\)|as\s+))",
-                r"subprocess\.Popen\([^)]+\)(?!\s*(?:\.wait\(\)|\.communicate\(\)|with\s+))",
-                r"requests\.(?:get|post|put|delete)\([^)]+\)(?!\s*\.close\(\))",
-                r"for\s+[^:]+:\s*\n\s*(?:.*\n)*?\s*[A-Z][a-zA-Z]+\([^)]*\)",
-                r"(?:sqlite3|psycopg2|pymongo)\.connect\([^)]+\)(?!\s*(?:with|\.close\(\)|as\s+))",
-            ],
-            "blocking_calls": [
-                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)(?:time\.sleep|requests\.|urllib\.)",
-                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)subprocess\.(?:run|call|check_output)",
-                r"(?:time\.sleep|threading\.Event\(\)\.wait)\s*\(\s*([1-9]\d*)\s*\)",
-                r"\.join\(\s*(?:[1-9]\d*|None)\s*\)",
-            ],
-            "inefficient_loops": [
-                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*for\s+",
-                r'for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\+=\s*[\'"]',
-                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\.append\(",
-                r'for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\[[\'"][^\'"]*[\'"]\]',
-            ],
-            "database_issues": [
-                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*(?:cursor\.execute|session\.query|\.filter)",
-                r"(?:sqlite3|psycopg2|pymongo)\.connect\([^)]+\)(?!\s*(?:pool|Pool))",
-                r"SELECT\s+\*\s+FROM\s+\w+(?!\s+(?:WHERE|LIMIT))",
-                r'WHERE\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[?\'"]\w+[?\'"](?!\s*(?:INDEX|index))',
-            ],
-            "concurrency_issues": [
-                r"(?:threading\.Thread|multiprocessing\.Process)\([^)]*\)(?!\s*\.join\(\))",
-                r"(?:global\s+|self\.)[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\+=|\-=|\*=|\/=)",
-                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)[a-zA-Z_][a-zA-Z0-9_]*\([^)]*\)(?!\s*(?:await|\.result\(\)))",
-            ],
-            "resource_waste": [
-                r"(?:logging|logger|log)\.\w+\([^)]*\).*(?:logging|logger|log)\.\w+\([^)]*\)",
-                r"(?:len|max|min|sum)\([^)]+\).*(?:len|max|min|sum)\(\1\)",
-                r"[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^=\n]+(?:\n(?!.*\1).*)*$",
-                r"\.read\(\)(?!\s*(?:\.decode|\.split|\.strip))",
-            ],
-        }
+    Issue #12362: Legacy-shaped facade. Detection is delegated to the
+    canonical ``code_intelligence.performance_analysis.PerformanceAnalyzer``;
+    this class only adapts the response shape and preserves the Redis
+    caching contract (``PERFORMANCE_KEY``/``RECOMMENDATIONS_KEY``) that
+    existing callers of ``analyze_performance()`` rely on.
+    """
 
     def __init__(self, redis_client=None):
         self.redis_client = redis_client  # Lazy init if None (#2725)
-        self.config = config
 
         # Caching keys
         self.PERFORMANCE_KEY = "perf_analysis:issues"
         self.RECOMMENDATIONS_KEY = "perf_analysis:recommendations"
 
-        # Issue #1183: Delegate pattern dict to extracted static method
-        self.performance_patterns = self._build_performance_patterns()
-
-        logger.info("Performance Analyzer initialized")
+        logger.info(
+            "Performance Analyzer (deprecated legacy shim) initialized — "
+            "delegating to code_intelligence.performance_analysis"
+        )
 
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
@@ -119,29 +155,27 @@ class PerformanceAnalyzer:
             self.redis_client = await get_async_redis_client()
 
     async def analyze_performance(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
-        """Analyze codebase for performance issues"""
+        """Analyze codebase for performance issues.
 
+        Issue #12362: ``patterns`` is accepted for backward compatibility but
+        is not used to filter — the canonical analyzer always scans ``*.py``
+        files under ``root_path`` (matching the old default of
+        ``["**/*.py"]``, the only pattern any known caller ever passed).
+        """
         start_time = time.time()
-        patterns = patterns or ["**/*.py"]
 
         # Clear previous analysis cache
         await self._clear_cache()
 
         logger.info(f"Scanning for performance issues in {root_path}")
-        performance_issues = await self._scan_for_performance_issues(root_path, patterns)
+        modern_issues = await asyncio.to_thread(self._run_modern_analysis, root_path)
+        performance_issues = [self._adapt_issue(issue) for issue in modern_issues]
         logger.info(f"Found {len(performance_issues)} potential performance issues")
 
-        # Analyze AST for complex patterns
-        logger.info("Performing AST-based performance analysis")
-        ast_issues = await self._ast_performance_analysis(root_path, patterns)
-        performance_issues.extend(ast_issues)
-
         # Categorize and prioritize findings
-        logger.info("Categorizing and prioritizing issues")
         categorized = await self._categorize_issues(performance_issues)
 
         # Generate optimization recommendations
-        logger.info("Generating optimization recommendations")
         recommendations = await self._generate_optimization_recommendations(categorized)
 
         # Calculate performance metrics
@@ -167,387 +201,30 @@ class PerformanceAnalyzer:
         logger.info(f"Performance analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _scan_for_performance_issues(self, root_path: str, patterns: List[str]) -> List[PerformanceIssue]:
-        """Scan files for performance anti-patterns"""
+    def _run_modern_analysis(self, root_path: str) -> List[_ModernPerformanceIssue]:
+        """Run the canonical analyzer synchronously (invoked via asyncio.to_thread)."""
+        analyzer = _ModernPerformanceAnalyzer(project_root=root_path)
+        return analyzer.analyze_directory()
 
-        issues = []
-        root = Path(root_path)
-
-        for pattern in patterns:
-            pattern_issues = await self._scan_pattern_files(root, pattern)  # (Issue #315 - extracted)
-            issues.extend(pattern_issues)
-
-        return issues
-
-    async def _scan_pattern_files(self, root: Path, pattern: str) -> List[PerformanceIssue]:
-        """Scan all files matching a pattern (Issue #315 - extracted)"""
-        issues = []
-
-        for file_path in root.glob(pattern):
-            # Guard clause - skip non-files or files that should be skipped
-            if not file_path.is_file() or self._should_skip_file(file_path):
-                continue
-
-            try:
-                file_issues = await self._scan_file_for_performance_issues(str(file_path))
-                issues.extend(file_issues)
-            except Exception as e:
-                logger.warning(f"Failed to scan {file_path}: {e}")
-
-        return issues
-
-    def _should_skip_file(self, file_path: Path) -> bool:
-        """Check if file should be skipped"""
-        skip_patterns = [
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-            ".pyc",
-            "env_analysis",
-            "performance_analyzer",
-            "analyze_",
-        ]
-
-        path_str = str(file_path)
-        return any(pattern in path_str for pattern in skip_patterns)
-
-    async def _scan_file_for_performance_issues(self, file_path: str) -> List[PerformanceIssue]:
-        """Scan a single file for performance issues"""
-
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                lines = content.splitlines()
-
-            return self._scan_file_content_for_patterns(file_path, content, lines)  # (Issue #315 - extracted)
-
-        except Exception as e:
-            logger.error(f"Error scanning {file_path}: {e}")
-            return []
-
-    def _scan_file_content_for_patterns(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
-        """Scan file content for performance patterns (Issue #315 - extracted)"""
-        issues = []
-
-        for category, pattern_list in self.performance_patterns.items():
-            category_issues = self._scan_category_patterns(file_path, content, lines, category, pattern_list)
-            issues.extend(category_issues)
-
-        return issues
-
-    def _scan_category_patterns(
-        self,
-        file_path: str,
-        content: str,
-        lines: List[str],
-        category: str,
-        pattern_list: List[str],
-    ) -> List[PerformanceIssue]:
-        """Scan a single category's patterns (Issue #315 - extracted)"""
-        issues = []
-
-        for pattern in pattern_list:
-            for match in re.finditer(pattern, content, re.MULTILINE):
-                line_num = content[: match.start()].count("\n") + 1
-
-                issue = self._create_performance_issue(file_path, line_num, match.group(0), category, lines)
-                if issue:
-                    issues.append(issue)
-
-        return issues
-
-    async def _ast_performance_analysis(self, root_path: str, patterns: List[str]) -> List[PerformanceIssue]:
-        """Perform AST-based performance analysis"""
-
-        issues = []
-        root = Path(root_path)
-
-        for pattern in patterns:
-            pattern_issues = await self._analyze_ast_pattern_files(root, pattern)  # (Issue #315 - extracted)
-            issues.extend(pattern_issues)
-
-        return issues
-
-    async def _analyze_ast_pattern_files(self, root: Path, pattern: str) -> List[PerformanceIssue]:
-        """Analyze AST for all files matching a pattern (Issue #315 - extracted)"""
-        issues = []
-
-        for file_path in root.glob(pattern):
-            # Guard clause - skip non-files or files that should be skipped
-            if not file_path.is_file() or self._should_skip_file(file_path):
-                continue
-
-            try:
-                file_issues = await self._analyze_ast_performance(str(file_path))
-                issues.extend(file_issues)
-            except Exception as e:
-                logger.warning(f"Failed to analyze AST for {file_path}: {e}")
-
-        return issues
-
-    async def _analyze_ast_performance(self, file_path: str) -> List[PerformanceIssue]:
-        """Analyze AST for performance patterns"""
-
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                lines = content.splitlines()
-
-            tree = ast.parse(content, filename=file_path)
-            return self._walk_ast_nodes(tree, file_path, lines)  # (Issue #315 - extracted)
-
-        except SyntaxError:
-            # Skip files with syntax errors
-            return []
-        except Exception as e:
-            logger.error(f"AST analysis error for {file_path}: {e}")
-            return []
-
-    def _walk_ast_nodes(self, tree: ast.AST, file_path: str, lines: List[str]) -> List[PerformanceIssue]:
-        """Walk AST nodes and analyze for performance issues (Issue #315 - extracted)"""
-        issues = []
-
-        for node in ast.walk(tree):
-            node_issues = self._analyze_ast_node(node, file_path, lines)  # (Issue #315 - extracted)
-            issues.extend(node_issues)
-
-        return issues
-
-    def _analyze_ast_node(self, node: ast.AST, file_path: str, lines: List[str]) -> List[PerformanceIssue]:
-        """Analyze a single AST node for performance patterns (Issue #315 - extracted)"""
-        # Detect potential memory leaks
-        if isinstance(node, ast.With):
-            # Check for proper resource management
-            return []
-
-        # Detect inefficient loops
-        if isinstance(node, ast.For):
-            issue = self._analyze_loop_efficiency(node, file_path, lines)
-            return [issue] if issue else []
-
-        # Detect blocking calls in async functions
-        if isinstance(node, ast.AsyncFunctionDef):
-            return self._analyze_async_function(node, file_path, lines)
-
-        # Detect database query patterns
-        if isinstance(node, ast.Call):
-            db_issue = self._analyze_database_call(node, file_path, lines)
-            return [db_issue] if db_issue else []
-
-        return []
-
-    def _analyze_loop_efficiency(self, node: ast.For, file_path: str, lines: List[str]) -> PerformanceIssue | None:
-        """Analyze loop for efficiency issues"""
-
-        # Check for nested loops (potential O(n²) or worse)
-        nested_loops = 0
-        for child in ast.walk(node):
-            # Issue #380: Use module-level constant
-            if isinstance(child, _LOOP_TYPES) and child != node:
-                nested_loops += 1
-
-        if nested_loops >= 2:
-            return PerformanceIssue(
-                file_path=file_path,
-                line_number=node.lineno,
-                function_name=self._get_containing_function(node),
-                issue_type="inefficient_loop",
-                description=f"Deeply nested loop (depth {nested_loops + 1}) - potential O(n^{nested_loops + 1}) complexity",
-                severity="high" if nested_loops >= 3 else "medium",
-                code_snippet=self._get_code_snippet(lines, node.lineno, 5),
-                suggestion="Consider using list comprehensions, vectorized operations, or algorithm optimization",
-                estimated_impact="high",
-            )
-
-        return None
-
-    def _analyze_async_function(
-        self, node: ast.AsyncFunctionDef, file_path: str, lines: List[str]
-    ) -> List[PerformanceIssue]:
-        """Analyze async function for blocking operations"""
-
-        issues = []
-        blocking_calls = [
-            "time.sleep",
-            "requests.",
-            "subprocess.run",
-            "input(",
-            "urllib.",
-        ]
-
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                call_name = self._get_call_name(child)
-
-                for blocking_pattern in blocking_calls:
-                    if blocking_pattern in call_name:
-                        issues.append(
-                            PerformanceIssue(
-                                file_path=file_path,
-                                line_number=child.lineno,
-                                function_name=node.name,
-                                issue_type="blocking_call",
-                                description=f"Blocking call '{call_name}' in async function '{node.name}'",
-                                severity="critical",
-                                code_snippet=self._get_code_snippet(lines, child.lineno, 3),
-                                suggestion="Use async equivalent: asyncio.sleep, aiohttp, asyncio.subprocess, etc.",
-                                estimated_impact="high",
-                            )
-                        )
-
-        return issues
-
-    def _analyze_database_call(self, node: ast.Call, file_path: str, lines: List[str]) -> PerformanceIssue | None:
-        """Analyze database calls for efficiency"""
-
-        call_name = self._get_call_name(node)
-
-        # Check for potential N+1 queries
-        if any(db_pattern in call_name for db_pattern in ["execute", "query", "filter", "get"]):
-            # This is a simplified check - in practice, you'd need more context
-            if self._is_in_loop_context(node):
-                return PerformanceIssue(
-                    file_path=file_path,
-                    line_number=node.lineno,
-                    function_name=self._get_containing_function(node),
-                    issue_type="database_n_plus_one",
-                    description=f"Potential N+1 query pattern: '{call_name}' in loop",
-                    severity="high",
-                    code_snippet=self._get_code_snippet(lines, node.lineno, 3),
-                    suggestion="Use bulk operations, joins, or prefetch_related to reduce queries",
-                    estimated_impact="high",
-                )
-
-        return None
-
-    def _create_performance_issue(
-        self,
-        file_path: str,
-        line_num: int,
-        code_match: str,
-        category: str,
-        lines: List[str],
-    ) -> PerformanceIssue | None:
-        """Create a PerformanceIssue object"""
-
-        # Get context
-        snippet = self._get_code_snippet(lines, line_num, 3)
-
-        # Skip false positives
-        if self._is_false_positive(code_match, snippet, category):
-            return None
-
-        # Determine severity and description
-        severity, description, suggestion = self._classify_performance_issue(code_match, category, snippet)
-
+    def _adapt_issue(self, issue: _ModernPerformanceIssue) -> PerformanceIssue:
+        """Map a canonical PerformanceIssue onto the legacy dataclass shape."""
+        legacy_bucket = _LEGACY_BUCKET_BY_ISSUE_TYPE.get(issue.issue_type, "resource_waste")
         return PerformanceIssue(
-            file_path=file_path,
-            line_number=line_num,
-            function_name=None,  # Would need AST analysis to determine
-            issue_type=category,
-            description=description,
-            severity=severity,
-            code_snippet=snippet,
-            suggestion=suggestion,
-            estimated_impact=severity,
+            file_path=issue.file_path,
+            line_number=issue.line_start,
+            function_name=None,  # Not tracked by the canonical analyzer either
+            issue_type=legacy_bucket,
+            description=issue.description,
+            severity=issue.severity.value,
+            code_snippet=issue.current_code,
+            suggestion=issue.recommendation,
+            estimated_impact=issue.estimated_impact,
         )
-
-    def _classify_performance_issue(self, code_match: str, category: str, context: str) -> Tuple[str, str, str]:
-        """Classify performance issue severity and provide description/suggestion"""
-
-        classifications = {
-            "memory_leaks": {
-                "severity": ("critical" if any(leak in code_match for leak in ["open(", "Popen("]) else "high"),
-                "description": f"Potential memory leak: {category}",
-                "suggestion": "Use context managers (with statements) or ensure proper resource cleanup",
-            },
-            "blocking_calls": {
-                "severity": "critical",
-                "description": f"Blocking call in async context: {code_match[:50]}",
-                "suggestion": "Replace with async equivalent or use asyncio.run_in_executor()",
-            },
-            "inefficient_loops": {
-                "severity": "medium",
-                "description": "Inefficient loop pattern detected",
-                "suggestion": "Consider list comprehensions, vectorization, or algorithm optimization",
-            },
-            "database_issues": {
-                "severity": "high",
-                "description": "Database efficiency issue",
-                "suggestion": "Use connection pooling, bulk operations, and proper indexing",
-            },
-            "concurrency_issues": {
-                "severity": "high",
-                "description": "Potential race condition or concurrency issue",
-                "suggestion": "Add proper synchronization (locks, queues) or use async patterns",
-            },
-            "resource_waste": {
-                "severity": "low",
-                "description": "Resource waste detected",
-                "suggestion": "Optimize resource usage and eliminate redundant operations",
-            },
-        }
-
-        info = classifications.get(
-            category,
-            {
-                "severity": "medium",
-                "description": f"Performance issue in category: {category}",
-                "suggestion": "Review and optimize this code section",
-            },
-        )
-
-        return info["severity"], info["description"], info["suggestion"]
-
-    def _is_false_positive(self, code_match: str, context: str, category: str) -> bool:
-        """Check if this is likely a false positive"""
-
-        # Skip comments and docstrings
-        context_clean = context.strip()
-        if context_clean.startswith("#") or '"""' in context or "'''" in context:
-            return True
-
-        # Skip test files and examples
-        if any(word in context.lower() for word in ["test", "example", "demo", "mock"]):
-            return True
-
-        return False
-
-    def _get_code_snippet(self, lines: List[str], line_num: int, context_lines: int = 2) -> str:
-        """Get code snippet with context"""
-        start = max(0, line_num - context_lines - 1)
-        end = min(len(lines), line_num + context_lines)
-        return "\n".join(lines[start:end])
-
-    def _get_call_name(self, node: ast.Call) -> str:
-        """Get the name of a function call"""
-        if isinstance(node.func, ast.Name):
-            return node.func.id
-        elif isinstance(node.func, ast.Attribute):
-            return f"{self._get_call_name(node.func.value)}.{node.func.attr}"
-        else:
-            return str(node.func)
-
-    def _get_containing_function(self, node: ast.AST) -> str | None:
-        """Get the name of the function containing this node"""
-        # This would require maintaining parent references in AST
-        # Simplified implementation
-        return None
-
-    def _is_in_loop_context(self, node: ast.AST) -> bool:
-        """Check if node is inside a loop"""
-        # This would require parent node tracking
-        # Simplified implementation
-        return False
 
     async def _categorize_issues(self, performance_issues: List[PerformanceIssue]) -> Dict[str, List[PerformanceIssue]]:
         """Categorize performance issues"""
 
-        categories = {}
+        categories: Dict[str, List[PerformanceIssue]] = {}
         for issue in performance_issues:
             if issue.issue_type not in categories:
                 categories[issue.issue_type] = []
@@ -597,7 +274,10 @@ class PerformanceAnalyzer:
                 "after": "async def func():\n    await asyncio.sleep(1)",
             },
             "inefficient_loops": {
-                "before": "result = []\nfor item in items:\n    if condition(item):\n        result.append(transform(item))",
+                "before": (
+                    "result = []\nfor item in items:\n"
+                    "    if condition(item):\n        result.append(transform(item))"
+                ),
                 "after": "result = [transform(item) for item in items if condition(item)]",
             },
             "database_issues": {
@@ -626,7 +306,7 @@ class PerformanceAnalyzer:
             "low": len([i for i in issues if i.severity == "low"]),
         }
 
-        category_counts = {}
+        category_counts: Dict[str, int] = {}
         for issue in issues:
             category_counts[issue.issue_type] = category_counts.get(issue.issue_type, 0) + 1
 
@@ -697,44 +377,3 @@ class PerformanceAnalyzer:
                         break
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
-
-
-async def main():
-    """Example usage of performance analyzer"""
-
-    analyzer = PerformanceAnalyzer()
-
-    # Analyze the codebase for performance issues
-    results = await analyzer.analyze_performance(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
-
-    # Print summary
-    print("\n=== Performance Analysis Results ===")  # noqa: print
-    print(f"Total performance issues: {results['total_performance_issues']}")  # noqa: print  # noqa: print
-    print(f"Critical issues: {results['critical_issues']}")  # noqa: print
-    print(f"High priority issues: {results['high_priority_issues']}")  # noqa: print
-    print(f"Optimization recommendations: {results['recommendations_count']}")  # noqa: print  # noqa: print
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
-
-    # Print category breakdown
-    print("\n=== Issue Categories ===")  # noqa: print
-    for category, count in results["categories"].items():
-        print(f"{category}: {count}")  # noqa: print
-
-    # Print top critical issues
-    print("\n=== Critical Performance Issues ===")  # noqa: print
-    critical_issues = [i for i in results["performance_details"] if i["severity"] == "critical"]
-    for i, issue in enumerate(critical_issues[:5], 1):
-        print(f"\n{i}. {issue['type']} in {issue['file']}:{issue['line']}")  # noqa: print  # noqa: print
-        print(f"   Description: {issue['description']}")  # noqa: print
-        print(f"   Suggestion: {issue['suggestion']}")  # noqa: print
-
-    # Print optimization recommendations
-    print("\n=== Optimization Recommendations ===")  # noqa: print
-    for i, rec in enumerate(results["optimization_recommendations"][:3], 1):
-        print(f"\n{i}. {rec['title']} ({rec['priority']} priority)")  # noqa: print
-        print(f"   {rec['description']}")  # noqa: print
-        print(f"   Files affected: {len(rec['affected_files'])}")  # noqa: print
-
-
-if __name__ == "__main__":
-    run_or_schedule(main())

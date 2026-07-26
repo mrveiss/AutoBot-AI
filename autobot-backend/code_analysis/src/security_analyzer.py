@@ -1,32 +1,52 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 """
-Security Vulnerability Analyzer using Redis and NPU acceleration
-Analyzes codebase for security vulnerabilities and defensive coding issues
+Security Analyzer — deprecated legacy-shaped facade (Issue #12362).
+
+This module used to contain a full, independent regex/AST scanning engine
+that duplicated (and had diverged from) the canonical implementation at
+``code_intelligence.security``. It is kept as an import-compatible shim —
+per the "never delete code" policy — for any caller that still imports
+``SecurityAnalyzer``/``SecurityVulnerability`` from this path.
+
+The detection engine is now delegated entirely to the canonical
+``code_intelligence.security.SecurityAnalyzer``. This class adapts the
+modern, enum-typed ``SecurityFinding`` (``vulnerability_type:
+VulnerabilityType``, ``line_start``/``line_end``) to the legacy dataclass
+shape below (``vulnerability_type: str``, ``line_number``) so that
+pre-existing callers of ``analyze_security()`` keep receiving the same
+response contract.
+
+DEPRECATED: New code should import directly from
+``code_intelligence.security`` instead.
 """
 
-import ast
+import asyncio
 import json
-import re
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import TTL_1_HOUR
 
-logger = get_logger(__name__)
+from code_intelligence.security import SecurityAnalyzer as _ModernSecurityAnalyzer
+from code_intelligence.security import VulnerabilityType as _ModernVulnerabilityType
+from code_intelligence.security.finding import SecurityFinding as _ModernSecurityFinding
 
-# Issue #380: Module-level tuple for import AST types
-_IMPORT_TYPES = (ast.Import, ast.ImportFrom)
+logger = get_logger(__name__)
 
 
 @dataclass
 class SecurityVulnerability:
-    """Represents a security vulnerability in the codebase"""
+    """Represents a security vulnerability in the codebase (legacy shape).
+
+    Issue #12362: Preserved verbatim for backward compatibility. Field names
+    (``line_number``, ``vulnerability_type: str``) intentionally differ from
+    the canonical ``code_intelligence.security.finding.SecurityFinding``
+    (``line_start``/``line_end``, ``VulnerabilityType`` enum) — see
+    ``SecurityAnalyzer._adapt_finding`` below for the field mapping.
+    """
 
     file_path: str
     line_number: int
@@ -42,7 +62,7 @@ class SecurityVulnerability:
 
 @dataclass
 class SecurityRecommendation:
-    """Security improvement recommendation"""
+    """Security improvement recommendation (legacy shape)."""
 
     category: str
     title: str
@@ -53,177 +73,92 @@ class SecurityRecommendation:
     fix_examples: List[Dict[str, str]]
 
 
+# Issue #12362: Maps a canonical VulnerabilityType to the legacy 10-bucket
+# taxonomy (sql_injection, command_injection, path_traversal,
+# insecure_crypto, hardcoded_secrets, weak_authentication,
+# xss_vulnerabilities, information_disclosure, deserialization,
+# timing_attacks) that SecurityVulnerability.vulnerability_type /
+# SecurityRecommendation.category used pre-consolidation. Explicit at the
+# consumer boundary per the type-divergence-handling requirement — every
+# member of the modern enum is listed so a new addition to the canonical
+# enum fails loudly (KeyError) instead of silently falling into a bucket.
+# The canonical enum (37 members) is more granular than the legacy taxonomy
+# (10 buckets); members with no old equivalent are placed in the closest
+# thematic bucket (noted inline).
+_LEGACY_BUCKET_BY_VULN_TYPE: Dict[_ModernVulnerabilityType, str] = {
+    # Injection vulnerabilities -> sql_injection (query/data-store injection)
+    # or command_injection (OS command execution)
+    _ModernVulnerabilityType.SQL_INJECTION: "sql_injection",
+    _ModernVulnerabilityType.NOSQL_INJECTION: "sql_injection",
+    _ModernVulnerabilityType.LDAP_INJECTION: "sql_injection",
+    _ModernVulnerabilityType.XPATH_INJECTION: "sql_injection",
+    _ModernVulnerabilityType.TEMPLATE_INJECTION: "sql_injection",
+    _ModernVulnerabilityType.COMMAND_INJECTION: "command_injection",
+    # Sensitive data exposure -> hardcoded_secrets or information_disclosure
+    _ModernVulnerabilityType.HARDCODED_SECRET: "hardcoded_secrets",
+    _ModernVulnerabilityType.HARDCODED_PASSWORD: "hardcoded_secrets",
+    _ModernVulnerabilityType.HARDCODED_API_KEY: "hardcoded_secrets",
+    _ModernVulnerabilityType.HARDCODED_TOKEN: "hardcoded_secrets",
+    _ModernVulnerabilityType.SENSITIVE_DATA_LOGGING: "information_disclosure",
+    _ModernVulnerabilityType.UNENCRYPTED_STORAGE: "information_disclosure",
+    # Cryptographic failures -> insecure_crypto
+    _ModernVulnerabilityType.WEAK_HASH_ALGORITHM: "insecure_crypto",
+    _ModernVulnerabilityType.WEAK_ENCRYPTION: "insecure_crypto",
+    _ModernVulnerabilityType.INSECURE_RANDOM: "insecure_crypto",
+    _ModernVulnerabilityType.MISSING_SALT: "insecure_crypto",
+    _ModernVulnerabilityType.WEAK_KEY_SIZE: "insecure_crypto",
+    # Broken access control -> weak_authentication (old's closest bucket;
+    # legacy analyzer only checked SSL-verification/session flags, but this
+    # is the nearest "access control" concept it had)
+    _ModernVulnerabilityType.MISSING_AUTH_CHECK: "weak_authentication",
+    _ModernVulnerabilityType.INSECURE_DIRECT_OBJECT_REF: "weak_authentication",
+    _ModernVulnerabilityType.PATH_TRAVERSAL: "path_traversal",
+    _ModernVulnerabilityType.PRIVILEGE_ESCALATION_RISK: "weak_authentication",
+    # Security misconfiguration -> weak_authentication / information_disclosure
+    _ModernVulnerabilityType.DEBUG_MODE_ENABLED: "information_disclosure",
+    _ModernVulnerabilityType.INSECURE_CORS: "weak_authentication",
+    _ModernVulnerabilityType.MISSING_SECURITY_HEADERS: "weak_authentication",
+    _ModernVulnerabilityType.DEFAULT_CREDENTIALS: "hardcoded_secrets",
+    # XSS/CSRF -> xss_vulnerabilities
+    _ModernVulnerabilityType.XSS_VULNERABILITY: "xss_vulnerabilities",
+    _ModernVulnerabilityType.MISSING_CSRF_PROTECTION: "xss_vulnerabilities",
+    _ModernVulnerabilityType.UNSAFE_REDIRECT: "xss_vulnerabilities",
+    # Insecure deserialization -> deserialization
+    _ModernVulnerabilityType.INSECURE_DESERIALIZATION: "deserialization",
+    _ModernVulnerabilityType.PICKLE_USAGE: "deserialization",
+    _ModernVulnerabilityType.YAML_LOAD_UNSAFE: "deserialization",
+    # Input validation -> no old equivalent; nearest thematic bucket
+    _ModernVulnerabilityType.MISSING_INPUT_VALIDATION: "weak_authentication",
+    # ReDoS is an algorithmic-complexity DoS vector, same family as the old
+    # (very noisy) "timing_attacks" heuristics -> closest available bucket
+    _ModernVulnerabilityType.REGEX_DOS: "timing_attacks",
+    _ModernVulnerabilityType.INTEGER_OVERFLOW_RISK: "deserialization",
+    # Authentication issues -> weak_authentication / hardcoded_secrets
+    _ModernVulnerabilityType.WEAK_PASSWORD_POLICY: "weak_authentication",
+    _ModernVulnerabilityType.MISSING_RATE_LIMITING: "weak_authentication",
+    _ModernVulnerabilityType.SESSION_FIXATION_RISK: "weak_authentication",
+    _ModernVulnerabilityType.JWT_WEAK_SECRET: "hardcoded_secrets",
+    _ModernVulnerabilityType.JWT_NO_EXPIRY: "weak_authentication",
+}
+
+
 class SecurityAnalyzer:
-    """Analyzes code for security vulnerabilities"""
+    """Analyzes code for security vulnerabilities.
 
-    @staticmethod
-    def _build_injection_and_path_patterns() -> dict:
-        """Return SQL injection, command injection, and path traversal patterns. Issue #1183."""
-        return {
-            "sql_injection": [
-                (
-                    r'execute\s*\(\s*[\'"].*?\%s.*?[\'"]\s*%',
-                    "String formatting in SQL query",
-                    "CWE-89",
-                ),
-                (
-                    r'execute\s*\(\s*f[\'"].*?\{.*?\}.*?[\'"]\s*\)',
-                    "F-string in SQL query",
-                    "CWE-89",
-                ),
-                (
-                    r"\.format\s*\(.*?\).*?execute",
-                    "String format in SQL query",
-                    "CWE-89",
-                ),
-                (r"SELECT.*?\+.*?WHERE", "String concatenation in SQL", "CWE-89"),
-            ],
-            "command_injection": [
-                (
-                    r"subprocess\.(?:run|call|Popen)\s*\([^)]*shell\s*=\s*True[^)]*\)",
-                    "Shell injection risk",
-                    "CWE-78",
-                ),
-                (
-                    r"os\.system\s*\([^)]*\+[^)]*\)",
-                    "Command injection via os.system",
-                    "CWE-78",
-                ),
-                (
-                    r"os\.popen\s*\([^)]*\+[^)]*\)",
-                    "Command injection via os.popen",
-                    "CWE-78",
-                ),
-                (r"eval\s*\([^)]*input[^)]*\)", "Code injection via eval", "CWE-94"),
-            ],
-            "path_traversal": [
-                (
-                    r"open\s*\([^)]*\+[^)]*\.\.",
-                    "Path traversal in file operations",
-                    "CWE-22",
-                ),
-                (
-                    r"os\.path\.join\s*\([^)]*input[^)]*\)",
-                    "Unvalidated path join",
-                    "CWE-22",
-                ),
-                (
-                    r'/\.\./\.\./\.\./.*?[\'"]',
-                    "Potential directory traversal",
-                    "CWE-22",
-                ),
-            ],
-        }
-
-    @staticmethod
-    def _build_crypto_auth_patterns() -> dict:
-        """Return insecure crypto, hardcoded secrets, and weak auth patterns. Issue #1183."""
-        return {
-            "insecure_crypto": [
-                (r"hashlib\.md5\s*\(", "Weak hash algorithm MD5", "CWE-327"),
-                (r"hashlib\.sha1\s*\(", "Weak hash algorithm SHA1", "CWE-327"),
-                (
-                    r"random\.random\s*\(.*?password",
-                    "Weak random for security",
-                    "CWE-338",
-                ),
-                (r"DES|RC4|MD4", "Weak encryption algorithm", "CWE-327"),
-            ],
-            "hardcoded_secrets": [
-                (
-                    r'[\'"](?:password|passwd|pwd|secret|key|token)\s*[:=]\s*[\'"][^\'"]+[\'"]',
-                    "Hardcoded secret",
-                    "CWE-798",
-                ),
-                (
-                    r'[\'"](?:sk-|pk_|ghp_|glpat-)[A-Za-z0-9_-]{20,}[\'"]',
-                    "API key in code",
-                    "CWE-798",
-                ),
-                (r'[\'"](?:AKIA|ASIA)[A-Z0-9]{16}[\'"]', "AWS access key", "CWE-798"),
-                (
-                    r'[\'"].*?(?:@|://).*?:[^@]+@.*?[\'"]',
-                    "Credentials in URL",
-                    "CWE-798",
-                ),
-            ],
-            "weak_authentication": [
-                (r"auth.*?=.*?False", "Authentication disabled", "CWE-306"),
-                (r"verify\s*=\s*False", "SSL verification disabled", "CWE-295"),
-                (
-                    r"check_hostname\s*=\s*False",
-                    "Hostname verification disabled",
-                    "CWE-295",
-                ),
-                (
-                    r"session\.permanent\s*=\s*False",
-                    "Non-persistent sessions",
-                    "CWE-613",
-                ),
-            ],
-        }
-
-    @staticmethod
-    def _build_xss_disclosure_patterns() -> dict:
-        """Return XSS, information disclosure, deserialization, timing attack patterns. Issue #1183."""
-        return {
-            "xss_vulnerabilities": [
-                (
-                    r"render_template_string\s*\([^)]*\+[^)]*\)",
-                    "XSS via template injection",
-                    "CWE-79",
-                ),
-                (r"innerHTML\s*=\s*[^;]*\+", "Client-side XSS risk", "CWE-79"),
-                (r"document\.write\s*\([^)]*\+[^)]*\)", "DOM-based XSS", "CWE-79"),
-            ],
-            "information_disclosure": [
-                (
-                    r"print\s*\([^)]*(?:password|secret|key|token)[^)]*\)",
-                    "Secret in print statement",
-                    "CWE-209",
-                ),
-                (
-                    r"log(?:ger)?\.(?:debug|info|warning|error)\s*\([^)]*(?:password|secret|key|token)",
-                    "Secret in logs",
-                    "CWE-209",
-                ),
-                (
-                    r"traceback\.print_exc\s*\(\s*\)",
-                    "Stack trace disclosure",
-                    "CWE-209",
-                ),
-                (r"app\.debug\s*=\s*True", "Debug mode in production", "CWE-489"),
-            ],
-            "deserialization": [
-                (r"pickle\.loads?\s*\([^)]*\)", "Unsafe deserialization", "CWE-502"),
-                (r"yaml\.load\s*\([^)]*\)", "Unsafe YAML loading", "CWE-502"),
-                (r"marshal\.loads?\s*\([^)]*\)", "Unsafe marshal loading", "CWE-502"),
-            ],
-            "timing_attacks": [
-                (
-                    r"==\s*[^=].*?(?:password|secret|token|hash)",
-                    "Timing attack vulnerability",
-                    "CWE-208",
-                ),
-                (
-                    r"if\s+[^:]*(?:password|hash)\s*==",
-                    "String comparison timing",
-                    "CWE-208",
-                ),
-            ],
-        }
+    Issue #12362: Legacy-shaped facade. Detection is delegated to the
+    canonical ``code_intelligence.security.SecurityAnalyzer``; this class
+    only adapts the response shape and preserves the Redis caching contract
+    (``SECURITY_KEY``/``RECOMMENDATIONS_KEY``) that existing callers of
+    ``analyze_security()`` rely on.
+    """
 
     def __init__(self, redis_client=None):
         self.redis_client = redis_client  # Lazy init if None (#2725)
-        self.config = config
         self.SECURITY_KEY = "security_analysis:vulnerabilities"
         self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
-        self.security_patterns = {
-            **self._build_injection_and_path_patterns(),
-            **self._build_crypto_auth_patterns(),
-            **self._build_xss_disclosure_patterns(),
-        }
-        logger.info("Security Analyzer initialized")
+        logger.info(
+            "Security Analyzer (deprecated legacy shim) initialized — delegating to code_intelligence.security"
+        )
 
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""
@@ -233,29 +168,27 @@ class SecurityAnalyzer:
             self.redis_client = await get_async_redis_client()
 
     async def analyze_security(self, root_path: str = ".", patterns: List[str] = None) -> Dict[str, Any]:
-        """Analyze codebase for security vulnerabilities"""
+        """Analyze codebase for security vulnerabilities.
 
+        Issue #12362: ``patterns`` is accepted for backward compatibility but
+        is not used to filter — the canonical analyzer always scans ``*.py``
+        files under ``root_path`` (matching the old default of
+        ``["**/*.py"]``, the only pattern any known caller ever passed).
+        """
         start_time = time.time()
-        patterns = patterns or ["**/*.py"]
 
         # Clear previous analysis cache
         await self._clear_cache()
 
         logger.info(f"Scanning for security vulnerabilities in {root_path}")
-        vulnerabilities = await self._scan_for_vulnerabilities(root_path, patterns)
+        modern_findings = await asyncio.to_thread(self._run_modern_analysis, root_path)
+        vulnerabilities = [self._adapt_finding(finding) for finding in modern_findings]
         logger.info(f"Found {len(vulnerabilities)} potential security vulnerabilities")
 
-        # Analyze AST for complex security patterns
-        logger.info("Performing AST-based security analysis")
-        ast_vulns = await self._ast_security_analysis(root_path, patterns)
-        vulnerabilities.extend(ast_vulns)
-
         # Categorize and prioritize findings
-        logger.info("Categorizing and prioritizing vulnerabilities")
         categorized = await self._categorize_vulnerabilities(vulnerabilities)
 
         # Generate security recommendations
-        logger.info("Generating security recommendations")
         recommendations = await self._generate_security_recommendations(categorized)
 
         # Calculate security metrics
@@ -281,386 +214,33 @@ class SecurityAnalyzer:
         logger.info(f"Security analysis complete in {analysis_time:.2f}s")
         return results
 
-    async def _scan_for_vulnerabilities(self, root_path: str, patterns: List[str]) -> List[SecurityVulnerability]:
-        """Scan files for security vulnerabilities"""
+    def _run_modern_analysis(self, root_path: str) -> List[_ModernSecurityFinding]:
+        """Run the canonical analyzer synchronously (invoked via asyncio.to_thread)."""
+        analyzer = _ModernSecurityAnalyzer(project_root=root_path)
+        return analyzer.analyze_directory()
 
-        vulnerabilities = []
-        root = Path(root_path)
-
-        for pattern in patterns:
-            pattern_vulns = await self._scan_pattern_for_vulnerabilities(root, pattern)
-            vulnerabilities.extend(pattern_vulns)
-
-        return vulnerabilities
-
-    async def _scan_pattern_for_vulnerabilities(self, root: Path, pattern: str) -> List[SecurityVulnerability]:
-        """Scan files matching a pattern for vulnerabilities (Issue #315 - extracted)"""
-        vulnerabilities = []
-
-        for file_path in root.glob(pattern):
-            if not file_path.is_file() or self._should_skip_file(file_path):
-                continue
-
-            try:
-                file_vulns = await self._scan_file_for_vulnerabilities(str(file_path))
-                vulnerabilities.extend(file_vulns)
-            except Exception as e:
-                logger.warning(f"Failed to scan {file_path}: {e}")
-
-        return vulnerabilities
-
-    def _should_skip_file(self, file_path: Path) -> bool:
-        """Check if file should be skipped"""
-        skip_patterns = [
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-            ".pyc",
-            "env_analysis",
-            "performance_analyzer",
-            "analyze_",
-            "security_analyzer",
-        ]
-
-        path_str = str(file_path)
-        return any(pattern in path_str for pattern in skip_patterns)
-
-    async def _scan_file_for_vulnerabilities(self, file_path: str) -> List[SecurityVulnerability]:
-        """Scan a single file for security vulnerabilities"""
-
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                lines = content.splitlines()
-        except Exception as e:
-            logger.error(f"Error scanning {file_path}: {e}")
-            return []
-
-        vulnerabilities = []
-
-        # Regex-based scanning for each vulnerability category
-        for category, pattern_list in self.security_patterns.items():
-            category_vulns = self._scan_category_patterns(file_path, content, lines, category, pattern_list)
-            vulnerabilities.extend(category_vulns)
-
-        return vulnerabilities
-
-    def _scan_category_patterns(
-        self,
-        file_path: str,
-        content: str,
-        lines: List[str],
-        category: str,
-        pattern_list: List[tuple],
-    ) -> List[SecurityVulnerability]:
-        """Scan file content for patterns in a specific category (Issue #315 - extracted)"""
-        vulnerabilities = []
-
-        for pattern, description, cwe_id in pattern_list:
-            for match in re.finditer(pattern, content, re.MULTILINE | re.IGNORECASE):
-                line_num = content[: match.start()].count("\n") + 1
-
-                vuln = self._create_vulnerability(
-                    file_path,
-                    line_num,
-                    match.group(0),
-                    category,
-                    description,
-                    cwe_id,
-                    lines,
-                )
-                if vuln:
-                    vulnerabilities.append(vuln)
-
-        return vulnerabilities
-
-    async def _ast_security_analysis(self, root_path: str, patterns: List[str]) -> List[SecurityVulnerability]:
-        """Perform AST-based security analysis"""
-
-        vulnerabilities = []
-        root = Path(root_path)
-
-        for pattern in patterns:
-            pattern_vulns = await self._analyze_pattern_ast_security(root, pattern)
-            vulnerabilities.extend(pattern_vulns)
-
-        return vulnerabilities
-
-    async def _analyze_pattern_ast_security(self, root: Path, pattern: str) -> List[SecurityVulnerability]:
-        """Analyze AST security for files matching a pattern (Issue #315 - extracted)"""
-        vulnerabilities = []
-
-        for file_path in root.glob(pattern):
-            if not file_path.is_file() or self._should_skip_file(file_path):
-                continue
-
-            try:
-                file_vulns = await self._analyze_ast_security(str(file_path))
-                vulnerabilities.extend(file_vulns)
-            except Exception as e:
-                logger.warning(f"Failed to analyze AST for {file_path}: {e}")
-
-        return vulnerabilities
-
-    async def _analyze_ast_security(self, file_path: str) -> List[SecurityVulnerability]:
-        """Analyze AST for security patterns"""
-
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                lines = content.splitlines()
-
-            tree = ast.parse(content, filename=file_path)
-        except SyntaxError:
-            # Skip files with syntax errors
-            return []
-        except Exception as e:
-            logger.error(f"AST security analysis error for {file_path}: {e}")
-            return []
-
-        vulnerabilities = []
-
-        for node in ast.walk(tree):
-            vuln = self._check_node_for_vulnerabilities(node, file_path, lines)
-            if vuln:
-                vulnerabilities.append(vuln)
-
-        return vulnerabilities
-
-    def _check_node_for_vulnerabilities(
-        self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> SecurityVulnerability | None:
-        """Check a single AST node for vulnerabilities (Issue #315 - extracted)"""
-
-        # Check for dangerous function calls
-        if isinstance(node, ast.Call):
-            return self._analyze_dangerous_call(node, file_path, lines)
-
-        # Check for insecure assignments
-        if isinstance(node, ast.Assign):
-            return self._analyze_insecure_assignment(node, file_path, lines)
-
-        # Check for dangerous imports
-        if isinstance(node, _IMPORT_TYPES):  # Issue #380
-            return self._analyze_dangerous_import(node, file_path, lines)
-
-        return None
-
-    def _analyze_dangerous_call(self, node: ast.Call, file_path: str, lines: List[str]) -> SecurityVulnerability | None:
-        """Analyze function calls for security issues"""
-
-        call_name = self._get_call_name(node)
-
-        # Check for dangerous functions
-        dangerous_functions = {
-            "eval": ("Code injection risk", "critical", "CWE-94"),
-            "exec": ("Code execution risk", "critical", "CWE-94"),
-            "compile": ("Dynamic code compilation", "high", "CWE-94"),
-            "input": ("Potential injection if used unsanitized", "medium", "CWE-20"),
-        }
-
-        if call_name in dangerous_functions:
-            desc, severity, cwe = dangerous_functions[call_name]
-            return SecurityVulnerability(
-                file_path=file_path,
-                line_number=node.lineno,
-                function_name=self._get_containing_function(node),
-                vulnerability_type="code_injection",
-                severity=severity,
-                description=f"Dangerous function call: {call_name} - {desc}",
-                code_snippet=self._get_code_snippet(lines, node.lineno),
-                cwe_id=cwe,
-                fix_suggestion=f"Avoid {call_name} or implement strict input validation",
-                confidence=0.8,
-            )
-
-        return None
-
-    def _analyze_insecure_assignment(
-        self, node: ast.Assign, file_path: str, lines: List[str]
-    ) -> SecurityVulnerability | None:
-        """Analyze assignments for security issues"""
-
-        # Check for hardcoded secrets in assignments (string-valued constant)
-        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-            value = node.value.value
-            line_content = lines[node.lineno - 1] if node.lineno <= len(lines) else ""
-
-            # Look for secret-like patterns
-            secret_patterns = ["password", "secret", "key", "token", "api_key"]
-
-            if any(pattern in line_content.lower() for pattern in secret_patterns):
-                if len(value) > 8 and any(c.isalnum() for c in value):
-                    return SecurityVulnerability(
-                        file_path=file_path,
-                        line_number=node.lineno,
-                        function_name=self._get_containing_function(node),
-                        vulnerability_type="hardcoded_secrets",
-                        severity="critical",
-                        description=f"Potential hardcoded secret in assignment",
-                        code_snippet=line_content.strip(),
-                        cwe_id="CWE-798",
-                        fix_suggestion="Use environment variables or secure key management",
-                        confidence=0.7,
-                    )
-
-        return None
-
-    def _analyze_dangerous_import(
-        self, node: ast.AST, file_path: str, lines: List[str]
-    ) -> SecurityVulnerability | None:
-        """Analyze imports for security concerns"""
-
-        dangerous_modules = {
-            "pickle": ("Unsafe deserialization module", "high", "CWE-502"),
-            "marshal": ("Unsafe serialization module", "medium", "CWE-502"),
-            "shelve": ("Pickle-based storage module", "medium", "CWE-502"),
-        }
-
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name in dangerous_modules:
-                    desc, severity, cwe = dangerous_modules[alias.name]
-                    return SecurityVulnerability(
-                        file_path=file_path,
-                        line_number=node.lineno,
-                        function_name=None,
-                        vulnerability_type="dangerous_import",
-                        severity=severity,
-                        description=f"Import of dangerous module: {alias.name} - {desc}",
-                        code_snippet=(lines[node.lineno - 1] if node.lineno <= len(lines) else ""),
-                        cwe_id=cwe,
-                        fix_suggestion=f"Consider safer alternatives to {alias.name}",
-                        confidence=0.6,
-                    )
-
-        return None
-
-    def _create_vulnerability(
-        self,
-        file_path: str,
-        line_num: int,
-        code_match: str,
-        category: str,
-        description: str,
-        cwe_id: str,
-        lines: List[str],
-    ) -> SecurityVulnerability | None:
-        """Create a SecurityVulnerability object"""
-
-        # Get context
-        snippet = self._get_code_snippet(lines, line_num)
-
-        # Skip false positives
-        if self._is_security_false_positive(code_match, snippet, category):
-            return None
-
-        # Determine severity
-        severity = self._get_vulnerability_severity(category, code_match)
-
-        # Generate fix suggestion
-        fix_suggestion = self._generate_fix_suggestion(category, code_match)
-
+    def _adapt_finding(self, finding: _ModernSecurityFinding) -> SecurityVulnerability:
+        """Map a canonical SecurityFinding onto the legacy dataclass shape."""
+        legacy_bucket = _LEGACY_BUCKET_BY_VULN_TYPE.get(finding.vulnerability_type, "information_disclosure")
         return SecurityVulnerability(
-            file_path=file_path,
-            line_number=line_num,
-            function_name=None,  # Would need AST analysis to determine
-            vulnerability_type=category,
-            severity=severity,
-            description=description,
-            code_snippet=snippet,
-            cwe_id=cwe_id,
-            fix_suggestion=fix_suggestion,
-            confidence=0.8,
+            file_path=finding.file_path,
+            line_number=finding.line_start,
+            function_name=None,  # Not tracked by the canonical analyzer either
+            vulnerability_type=legacy_bucket,
+            severity=finding.severity.value,
+            description=finding.description,
+            code_snippet=finding.current_code,
+            cwe_id=finding.cwe_id,
+            fix_suggestion=finding.recommendation,
+            confidence=finding.confidence,
         )
-
-    def _get_vulnerability_severity(self, category: str, code_match: str) -> str:
-        """Determine vulnerability severity"""
-
-        severity_map = {
-            "sql_injection": "critical",
-            "command_injection": "critical",
-            "hardcoded_secrets": "critical",
-            "insecure_crypto": "high",
-            "path_traversal": "high",
-            "xss_vulnerabilities": "high",
-            "weak_authentication": "high",
-            "information_disclosure": "medium",
-            "deserialization": "high",
-            "timing_attacks": "medium",
-        }
-
-        return severity_map.get(category, "low")
-
-    def _generate_fix_suggestion(self, category: str, code_match: str) -> str:
-        """Generate fix suggestion for vulnerability"""
-
-        suggestions = {
-            "sql_injection": "Use parameterized queries or ORM with parameter binding",
-            "command_injection": "Use subprocess with shell=False and validate inputs",
-            "hardcoded_secrets": "Store secrets in environment variables or secure vaults",
-            "insecure_crypto": "Use strong algorithms: SHA-256, AES, RSA with proper key sizes",
-            "path_traversal": "Validate and sanitize file paths, use os.path.abspath()",
-            "xss_vulnerabilities": "Escape output, use templating with auto-escaping",
-            "weak_authentication": "Enable proper authentication and SSL verification",
-            "information_disclosure": "Remove sensitive data from logs and error messages",
-            "deserialization": "Use safe serialization formats like JSON",
-            "timing_attacks": "Use constant-time comparison functions",
-        }
-
-        return suggestions.get(category, "Review and fix this security issue")
-
-    def _is_security_false_positive(self, code_match: str, context: str, category: str) -> bool:
-        """Check if this is likely a false positive"""
-
-        # Skip comments and docstrings
-        context_clean = context.strip()
-        if context_clean.startswith("#") or '"""' in context or "'''" in context:
-            return True
-
-        # Skip test files and examples
-        if any(word in context.lower() for word in ["test", "example", "demo", "mock"]):
-            return True
-
-        # Category-specific false positive checks
-        if category == "hardcoded_secrets":
-            # Skip common non-secret strings
-            non_secrets = ["example", "test", "default", "placeholder", "sample"]
-            if any(word in code_match.lower() for word in non_secrets):
-                return True
-
-        return False
-
-    def _get_code_snippet(self, lines: List[str], line_num: int, context_lines: int = 2) -> str:
-        """Get code snippet with context"""
-        start = max(0, line_num - context_lines - 1)
-        end = min(len(lines), line_num + context_lines)
-        return "\n".join(lines[start:end])
-
-    def _get_call_name(self, node: ast.Call) -> str:
-        """Get the name of a function call"""
-        if isinstance(node.func, ast.Name):
-            return node.func.id
-        elif isinstance(node.func, ast.Attribute):
-            return f"{node.func.attr}"
-        else:
-            return str(node.func)
-
-    def _get_containing_function(self, node: ast.AST) -> str | None:
-        """Get the name of the function containing this node"""
-        # This would require maintaining parent references in AST
-        return None
 
     async def _categorize_vulnerabilities(
         self, vulnerabilities: List[SecurityVulnerability]
     ) -> Dict[str, List[SecurityVulnerability]]:
         """Categorize vulnerabilities"""
 
-        categories = {}
+        categories: Dict[str, List[SecurityVulnerability]] = {}
         for vuln in vulnerabilities:
             if vuln.vulnerability_type not in categories:
                 categories[vuln.vulnerability_type] = []
@@ -744,7 +324,7 @@ class SecurityAnalyzer:
             "low": len([v for v in vulnerabilities if v.severity == "low"]),
         }
 
-        category_counts = {}
+        category_counts: Dict[str, int] = {}
         for vuln in vulnerabilities:
             category_counts[vuln.vulnerability_type] = category_counts.get(vuln.vulnerability_type, 0) + 1
 
@@ -824,38 +404,3 @@ class SecurityAnalyzer:
                         break
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
-
-
-async def main():
-    """Example usage of security analyzer"""
-
-    analyzer = SecurityAnalyzer()
-
-    # Analyze the codebase for security vulnerabilities
-    results = await analyzer.analyze_security(root_path=".", patterns=["src/**/*.py", "backend/**/*.py"])
-
-    # Print summary
-    print(f"\n=== Security Analysis Results ===")  # noqa: print
-    print(f"Total vulnerabilities: {results['total_vulnerabilities']}")  # noqa: print
-    print(f"Critical vulnerabilities: {results['critical_vulnerabilities']}")  # noqa: print
-    print(f"High severity count: {results['high_severity_count']}")  # noqa: print
-    print(f"Security score: {results['metrics']['security_score']}/100")  # noqa: print
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
-
-    # Print category breakdown
-    print(f"\n=== Vulnerability Categories ===")  # noqa: print
-    for category, count in results["categories"].items():
-        print(f"{category}: {count}")  # noqa: print
-
-    # Print critical vulnerabilities
-    print(f"\n=== Critical Security Vulnerabilities ===")  # noqa: print
-    critical_vulns = [v for v in results["vulnerability_details"] if v["severity"] == "critical"]
-    for i, vuln in enumerate(critical_vulns[:5], 1):
-        print(f"\n{i}. {vuln['type']} in {vuln['file']}:{vuln['line']}")  # noqa: print
-        print(f"   {vuln['description']}")  # noqa: print
-        print(f"   CWE: {vuln['cwe_id']}")  # noqa: print
-        print(f"   Fix: {vuln['fix_suggestion']}")  # noqa: print
-
-
-if __name__ == "__main__":
-    run_or_schedule(main())
