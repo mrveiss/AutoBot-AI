@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from api.schemas_media import ProvidersResponse, ProviderStatus
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -58,16 +59,6 @@ class ImageGenerationResponse(BaseModel):
     prompt: str = ""
     size: str = ""
     error: Optional[str] = None
-
-
-class ProviderStatus(BaseModel):
-    name: str
-    available: bool
-    reason: Optional[str] = None
-
-
-class ProvidersResponse(BaseModel):
-    providers: List[ProviderStatus]
 
 
 # ------------------------------------------------------------------
