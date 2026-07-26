@@ -40,12 +40,16 @@ import json
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from memory._redis_util import redis_scan as _redis_scan
 from memory.working_memory import is_working_memory_key
 
 logger = get_logger(__name__)
 
-# Module-level lazy references — mirrors memory.transparency so tests can
-# pre-assign any one of these without triggering the full import stack.
+# Module-level lazy references — same pattern as memory.transparency so tests
+# can pre-assign any one of these without triggering the full import stack.
+# NOTE: not shared with memory.transparency._bootstrap — this module also
+# lazy-imports get_knowledge_base_fn (kb_facts store), which transparency
+# does not use, so the two bootstraps import different symbol sets (#12694).
 get_verbatim_store = None  # type: ignore[assignment]
 get_trajectory_store = None  # type: ignore[assignment]
 get_redis_client = None  # type: ignore[assignment]
@@ -53,7 +57,8 @@ get_knowledge_base_fn = None  # type: ignore[assignment]
 
 
 def _bootstrap() -> None:
-    """Lazily import heavy dependencies; mirrors memory.transparency._bootstrap."""
+    """Lazily import heavy dependencies (same pattern as memory.transparency._bootstrap;
+    see module-level NOTE above for why it is not shared)."""
     global get_verbatim_store, get_trajectory_store, get_redis_client, get_knowledge_base_fn
     if get_verbatim_store is None:
         from memory.verbatim_store import get_verbatim_store as _gvs
@@ -71,27 +76,6 @@ def _bootstrap() -> None:
         from knowledge._composed import get_knowledge_base as _gkb
 
         get_knowledge_base_fn = _gkb
-
-
-def _decode(v: Any) -> str:
-    return v.decode("utf-8") if isinstance(v, bytes) else str(v)
-
-
-async def _redis_scan(redis: Any, match: str) -> List[str]:
-    """Non-blocking SCAN helper — mirrors memory.transparency._redis_scan."""
-    keys: List[str] = []
-    cursor = 0
-    while True:
-        try:
-            cursor, batch = await redis.scan(cursor, match=match, count=200)
-        except Exception as exc:
-            logger.warning("ownership_reassign: redis scan error: %s", exc)
-            break
-        for k in batch:
-            keys.append(_decode(k))
-        if cursor == 0:
-            break
-    return keys
 
 
 # ---------------------------------------------------------------------------

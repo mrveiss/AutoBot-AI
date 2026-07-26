@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from memory._redis_util import decode as _decode
+from memory._redis_util import redis_scan as _redis_scan
 from memory.working_memory import is_working_memory_key
 
 logger = get_logger(__name__)
@@ -82,27 +84,6 @@ async def _safe(coro, fallback=None):
 
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
-
-
-def _decode(v) -> str:
-    return v.decode("utf-8") if isinstance(v, bytes) else str(v)
-
-
-async def _redis_scan(redis, match: str) -> List[str]:
-    """SCAN for all keys matching *match* without blocking the event loop."""
-    keys: List[str] = []
-    cursor = 0
-    while True:
-        try:
-            cursor, batch = await redis.scan(cursor, match=match, count=200)
-        except Exception as exc:
-            logger.warning("memory_transparency: redis scan failed: %s", exc)
-            break
-        for k in batch:
-            keys.append(_decode(k))
-        if cursor == 0:
-            break
-    return keys
 
 
 # ---------------------------------------------------------------------------
