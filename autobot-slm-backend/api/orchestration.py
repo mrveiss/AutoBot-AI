@@ -24,6 +24,7 @@ from typing_extensions import Annotated
 
 from api.websocket import ws_manager
 from models.database import Node, Service, ServiceStatus
+from models.schemas import ServiceActionRequest
 from services.auth import get_current_user
 from services.database import get_db
 from services.service_orchestrator import service_orchestrator
@@ -35,19 +36,10 @@ router = APIRouter(prefix="/orchestration", tags=["orchestration"])
 # =============================================================================
 # Request/Response Models
 # =============================================================================
-
-
-class ServiceActionRequest(BaseModel):
-    """Request for a service action."""
-
-    node_id: str | None = Field(
-        None,
-        description="Target node ID. If not specified, uses default host from SSOT config.",
-    )
-    force: bool = Field(
-        False,
-        description="Force the action even if service appears to be in desired state.",
-    )
+# ServiceActionRequest canonicalized to models/schemas.py (Issue #12755) —
+# was duplicated here and in schemas.py with different field sets; the
+# schemas.py copy was orphaned dead code, this one is the version actually
+# wired to the endpoints below and exposed via the OpenAPI schema.
 
 
 class ServiceMigrateRequest(BaseModel):

@@ -839,9 +839,21 @@ class ServiceListResponse(BaseModel):
 
 
 class ServiceActionRequest(BaseModel):
-    """Service action request."""
+    """Request for a service action (start/stop/restart via orchestration).
 
-    action: str = Field(..., description="start, stop, or restart")
+    Issue #12755: canonicalized from the duplicate defined in
+    api/orchestration.py — action is carried in the URL path, this body
+    only carries optional targeting/behavior flags.
+    """
+
+    node_id: str | None = Field(
+        None,
+        description="Target node ID. If not specified, uses default host from SSOT config.",
+    )
+    force: bool = Field(
+        False,
+        description="Force the action even if service appears to be in desired state.",
+    )
 
 
 class ServiceActionResponse(BaseModel):
