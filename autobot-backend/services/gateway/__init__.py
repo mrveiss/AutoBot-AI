@@ -19,12 +19,11 @@ from .adapters import (
     WhatsAppAdapter,
 )
 from .gateway_manager import GatewayManager
-from .message_queue import MessageQueue, RateLimiter
+from .message_queue import MessageQueue
 
 __all__ = [
     "GatewayManager",
     "MessageQueue",
-    "RateLimiter",
     "BaseAdapter",
     "GatewayMessage",
     "NormalizedResponse",

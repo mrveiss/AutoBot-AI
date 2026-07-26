@@ -32,9 +32,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+# Add project root + main backend to path (Issue #12663: this tool lives at
+# autobot-infrastructure/shared/tools/, four levels below the monorepo root —
+# PROJECT_ROOT must resolve there since TIER_*_FILES/docs/CLAUDE.md/data/ all
+# live at the true root, while `utils.chromadb_client` below lives under
+# autobot-backend/, so both roots are added).
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+BACKEND_ROOT = PROJECT_ROOT / "autobot-backend"
+for _path in (str(PROJECT_ROOT), str(BACKEND_ROOT)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -43,6 +50,9 @@ env_path = PROJECT_ROOT / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
+from autobot_shared.doc_chunking import chunk_large_content as _chunk_large_content
+from autobot_shared.doc_chunking import estimate_tokens
+from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
 from utils.chromadb_client import get_chromadb_client
 
 # Hash cache file for incremental indexing (Issue #400)
@@ -222,181 +232,6 @@ def extract_tags(content: str, file_path: str) -> List[str]:
             tags.add(keyword)
 
     return list(tags)[:15]  # Limit to 15 tags
-
-
-def estimate_tokens(text: str) -> int:
-    """Estimate token count (rough approximation)."""
-    # Rough estimate: 1 token ≈ 4 characters
-    return len(text) // 4
-
-
-def _create_chunk_dict(
-    content: str,
-    section: str,
-    subsection: str | None,
-    file_path: str,
-    doc_type: str,
-    category: str,
-    title: str,
-) -> Dict[str, Any]:
-    """Create a chunk dictionary with metadata (Issue #315: extracted helper)."""
-    return {
-        "content": content,
-        "section": section,
-        "subsection": subsection,
-        "file_path": file_path,
-        "doc_type": doc_type,
-        "category": category,
-        "title": title,
-    }
-
-
-def _chunk_large_content(
-    full_content: str,
-    section_name: str,
-    subsection_name: str | None,
-    file_path: str,
-    doc_type: str,
-    category: str,
-    doc_title: str,
-    chunks: List[Dict[str, Any]],
-) -> None:
-    """Split large content into paragraph-based chunks (Issue #315: extracted helper)."""
-    paragraphs = full_content.split("\n\n")
-    current_chunk = []
-    current_size = 0
-
-    for para in paragraphs:
-        para_tokens = estimate_tokens(para)
-        if current_size + para_tokens > 800 and current_chunk:
-            chunks.append(
-                _create_chunk_dict(
-                    "\n\n".join(current_chunk),
-                    section_name,
-                    subsection_name,
-                    file_path,
-                    doc_type,
-                    category,
-                    doc_title,
-                )
-            )
-            current_chunk = [para]
-            current_size = para_tokens
-        else:
-            current_chunk.append(para)
-            current_size += para_tokens
-
-    if current_chunk:
-        chunks.append(
-            _create_chunk_dict(
-                "\n\n".join(current_chunk),
-                section_name,
-                subsection_name,
-                file_path,
-                doc_type,
-                category,
-                doc_title,
-            )
-        )
-
-
-def _process_h3_subsections(
-    h3_splits: list,
-    section_name: str,
-    file_path: str,
-    doc_type: str,
-    category: str,
-    doc_title: str,
-    chunks: List[Dict[str, Any]],
-) -> None:
-    """Process H3 subsections and add to chunks.
-
-    Helper for chunk_markdown (Issue #825).
-    """
-    j = 1
-    while j < len(h3_splits):
-        h3_header = h3_splits[j].strip() if j < len(h3_splits) else ""
-        h3_content = h3_splits[j + 1].strip() if j + 1 < len(h3_splits) else ""
-        j += 2
-
-        # Extract H3 subsection name
-        h3_match = re.match(r"###\s+(.+)", h3_header)
-        subsection_name = h3_match.group(1) if h3_match else "Subsection"
-
-        full_content = f"## {section_name}\n\n### {subsection_name}\n\n{h3_content}"
-        token_count = estimate_tokens(full_content)
-
-        # Only add substantial chunks
-        if token_count > 30:
-            if token_count > 1000:
-                _chunk_large_content(
-                    full_content,
-                    section_name,
-                    subsection_name,
-                    file_path,
-                    doc_type,
-                    category,
-                    doc_title,
-                    chunks,
-                )
-            else:
-                chunks.append(
-                    _create_chunk_dict(
-                        full_content,
-                        section_name,
-                        subsection_name,
-                        file_path,
-                        doc_type,
-                        category,
-                        doc_title,
-                    )
-                )
-
-
-def _process_h2_sections(
-    h2_splits: list,
-    file_path: str,
-    doc_type: str,
-    category: str,
-    doc_title: str,
-    chunks: List[Dict[str, Any]],
-) -> None:
-    """Process H2 sections and add to chunks.
-
-    Helper for chunk_markdown (Issue #825).
-    """
-    i = 1
-    while i < len(h2_splits):
-        h2_header = h2_splits[i].strip() if i < len(h2_splits) else ""
-        h2_content = h2_splits[i + 1].strip() if i + 1 < len(h2_splits) else ""
-        i += 2
-
-        # Extract H2 section name
-        h2_match = re.match(r"##\s+(.+)", h2_header)
-        section_name = h2_match.group(1) if h2_match else "Section"
-
-        # Split by H3 subsections
-        h3_pattern = r"^(###\s+.+)$"
-        h3_splits = re.split(h3_pattern, h2_content, flags=re.MULTILINE)
-
-        # Content before first H3
-        h2_intro = h3_splits[0].strip() if h3_splits else ""
-
-        if h2_intro and estimate_tokens(h2_intro) > 30:
-            chunks.append(
-                {
-                    "content": f"## {section_name}\n\n{h2_intro}",
-                    "section": section_name,
-                    "subsection": None,
-                    "file_path": file_path,
-                    "doc_type": doc_type,
-                    "category": category,
-                    "title": doc_title,
-                }
-            )
-
-        # Process H3 subsections
-        _process_h3_subsections(h3_splits, section_name, file_path, doc_type, category, doc_title, chunks)
 
 
 def chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:

@@ -33,8 +33,10 @@ The `manifest.yml` in each infrastructure directory is the **single source of tr
 | `autobot-browser-worker` | `autobot-browser-worker/` | browser (.25) | <browser-ip> |
 | `autobot-ai-stack` | `autobot-ai-stack/` | ai-stack (.24) | <aiml-ip> |
 | `autobot-database` | `autobot-database/` | database (.23) | <database-ip> |
-| `autobot-slm-agent` | `autobot-slm-agent/` | **all nodes** | all |
+| `autobot-slm-agent` | `autobot-slm-backend/slm/agent/`¹ | **all nodes** | all |
 | `autobot_shared` | `autobot_shared/` | all backend nodes | all |
+
+¹ Exception to the one-role-one-top-level-dir rule: the agent's code source lives nested under `autobot-slm-backend/slm/agent/` (not a top-level `autobot-slm-agent/` dir) and is deployed by the `slm_agent` Ansible role from a byte-identical mirror at `autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, CI-gated against drift (#1629). See `autobot-infrastructure/autobot-slm-agent/manifest.yml` for the role's infra descriptor.
 
 ---
 
@@ -77,6 +79,7 @@ AutoBot/
 ├── autobot-frontend/         # Vue 3 user frontend
 ├── autobot-ollama/           # Ollama local LLM config
 ├── autobot-slm-backend/      # SLM fleet management API
+│   └── slm/agent/            # Per-node SLM agent (all nodes) — see ¹ above
 ├── autobot-slm-frontend/     # SLM admin dashboard
 ├── autobot-slm-database/     # PostgreSQL schema/migrations
 ├── autobot-monitoring/       # Prometheus/Grafana config
@@ -84,7 +87,6 @@ AutoBot/
 ├── autobot-browser-worker/   # Playwright automation worker
 ├── autobot-ai-stack/         # ChromaDB + embeddings
 ├── autobot-database/         # Redis Stack + PostgreSQL config
-├── autobot-slm-agent/        # Per-node SLM agent (all nodes)
 ├── autobot_shared/           # Shared Python utilities
 └── autobot-infrastructure/   # Per-role Ansible + manifests
     ├── autobot-backend/

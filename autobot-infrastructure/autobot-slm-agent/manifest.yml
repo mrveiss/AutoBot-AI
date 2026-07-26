@@ -5,8 +5,11 @@ target_node: null         # Deployed to ALL nodes
 deploy_to_all: true
 
 deploy:
-  source: autobot-slm-agent/
-  destination: /opt/autobot/autobot-slm-agent/
+  # #12657: source is the per-file `copy:` tasks in the slm_agent Ansible role
+  # (files/slm/agent/), a byte-identical mirror of autobot-slm-backend/slm/agent/
+  # CI-gated against drift (#1629) — there is no top-level code_source/autobot-slm-agent/ dir.
+  source: autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/
+  destination: /opt/autobot/autobot-slm-agent/slm/agent/
   shared: true
   infrastructure: true
 

@@ -312,17 +312,12 @@ def test_suggestion_uses_helper_for_default_path() -> None:
     assert "autobot_shared.time_utils" in msg
 
 
-def test_suggestion_uses_inline_for_slm_agent_standalone() -> None:
-    # Standalone agent runs on remote nodes possibly without autobot_shared
-    msg = hook._suggestion_for("autobot-slm-agent/agent.py")
-    assert "datetime.now(timezone.utc).isoformat()" in msg
-    assert "inline" in msg
-
-
 def test_suggestion_uses_inline_for_slm_backend_agent_subpackage() -> None:
-    # Same agent code lives under slm-backend/slm/agent/ — also remote-deployed
+    # Standalone agent runs on remote nodes possibly without autobot_shared
+    # (autobot-slm-backend/slm/agent/ — also remote-deployed)
     msg = hook._suggestion_for("autobot-slm-backend/slm/agent/health_collector.py")
     assert "datetime.now(timezone.utc).isoformat()" in msg
+    assert "inline" in msg
 
 
 def test_suggestion_uses_inline_for_ansible_synced_copy() -> None:
@@ -340,7 +335,7 @@ def test_suggestion_uses_inline_for_infra_shared_scripts() -> None:
 def test_scan_emits_path_aware_suggestion_in_message(tmp_path: Path) -> None:
     # End-to-end: a violation in an inline-path file produces a message
     # recommending the inline form, not utc_timestamp().
-    target = tmp_path / "autobot-slm-agent" / "agent.py"
+    target = tmp_path / "autobot-slm-backend" / "slm" / "agent" / "agent.py"
     target.parent.mkdir(parents=True)
     target.write_text(
         "from datetime import datetime\nts = datetime.utcnow().isoformat()\n",
