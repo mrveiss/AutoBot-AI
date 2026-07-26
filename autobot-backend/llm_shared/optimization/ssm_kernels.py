@@ -40,9 +40,7 @@ from ..torch_loader import lazy_torch
 
 logger = get_logger(__name__)
 
-_TORCH_REQUIRED_MSG = (
-    "torch is required for SSM/linear/hybrid kernels. Install with: pip install torch>=2.0.0"
-)
+_TORCH_REQUIRED_MSG = "torch is required for SSM/linear/hybrid kernels. Install with: pip install torch>=2.0.0"
 
 
 def _get_torch() -> Any:
