@@ -30,7 +30,7 @@ def _mock_researcher() -> MagicMock:
     researcher = MagicMock()
     researcher.health_check = AsyncMock(return_value={"enabled": True})
     researcher.get_circuit_breaker_status = MagicMock(return_value={})
-    researcher.get_cache_stats = MagicMock(return_value={"cache_size": 0, "cache_ttl": 300, "rate_limiter": {}})
+    researcher.get_cache_stats = AsyncMock(return_value={"cache_size": 0, "cache_ttl": 300, "rate_limiter": {}})
     researcher.enabled = True
     return researcher
 

@@ -20,10 +20,8 @@ import json
 import os
 import re
 import threading
-from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
-from time import time
 from typing import Dict, List
 
 from cryptography.fernet import Fernet
@@ -50,6 +48,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
@@ -64,41 +63,10 @@ SECRET_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window
 
-
-class RateLimiter:
-    """Simple in-memory rate limiter for secrets API"""
-
-    def __init__(
-        self,
-        window: int = RATE_LIMIT_WINDOW,
-        max_requests: int = RATE_LIMIT_MAX_REQUESTS,
-    ):
-        """Initialize rate limiter with window size and request limit."""
-        self.window = window
-        self.max_requests = max_requests
-        self.requests: Dict[str, List[float]] = defaultdict(list)
-
-    def is_allowed(self, client_id: str) -> bool:
-        """Check if request is allowed under rate limit"""
-        now = time()
-        # Clean old requests
-        self.requests[client_id] = [t for t in self.requests[client_id] if now - t < self.window]
-        # Check limit
-        if len(self.requests[client_id]) >= self.max_requests:
-            return False
-        # Record request
-        self.requests[client_id].append(now)
-        return True
-
-    def get_remaining(self, client_id: str) -> int:
-        """Get remaining requests for client"""
-        now = time()
-        self.requests[client_id] = [t for t in self.requests[client_id] if now - t < self.window]
-        return max(0, self.max_requests - len(self.requests[client_id]))
-
-
-# Global rate limiter instance
-rate_limiter = RateLimiter()
+# Shared sliding-window limiter scoped to the secrets API (Issue #12646).
+# Delegates to autobot_shared.rate_limiter.RateLimiter's custom single-window
+# mode (window=60s, max=30) rather than the retired local in-memory class.
+rate_limiter = RateLimiter(scope_prefix="secrets")
 
 
 def validate_secret_name(name: str) -> str:
@@ -490,10 +458,13 @@ def get_client_id(request: Request) -> str:
     return get_client_ip(request) or "unknown"
 
 
-def check_rate_limit(request: Request) -> None:
+async def check_rate_limit(request: Request) -> None:
     """Check rate limit and raise exception if exceeded"""
     client_id = get_client_id(request)
-    if not rate_limiter.is_allowed(client_id):
+    allowed = await rate_limiter.acquire_window(
+        client_id, max_requests=RATE_LIMIT_MAX_REQUESTS, window_seconds=RATE_LIMIT_WINDOW
+    )
+    if not allowed:
         logger.warning("[Secrets] Rate limit exceeded for client: %s", client_id)
         raise HTTPException(
             status_code=429,
@@ -538,7 +509,7 @@ async def create_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Create a new secret (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.create_secret, request)
@@ -592,7 +563,7 @@ async def list_secrets(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """List secrets with optional filtering (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager.list_secrets, chat_id=chat_id, scope=scope)
@@ -723,7 +694,7 @@ async def get_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get a specific secret with its value (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
@@ -789,7 +760,7 @@ async def update_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
@@ -845,7 +816,7 @@ async def delete_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete a secret (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
@@ -898,7 +869,7 @@ async def transfer_secrets(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Transfer secrets between scopes (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         result = await asyncio.to_thread(secrets_manager.transfer_secrets, request, chat_id=chat_id)
@@ -958,7 +929,7 @@ async def delete_chat_secrets(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete secrets for a specific chat (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         result = await asyncio.to_thread(secrets_manager.delete_chat_secrets, chat_id, secret_ids)

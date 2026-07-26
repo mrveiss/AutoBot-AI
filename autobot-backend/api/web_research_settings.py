@@ -66,7 +66,7 @@ async def get_research_status(request: Request):
         circuit_status = integration.get_circuit_breaker_status()
 
         # Get cache stats
-        cache_stats = integration.get_cache_stats()
+        cache_stats = await integration.get_cache_stats()
 
         return JSONResponse(
             status_code=200,
@@ -399,7 +399,7 @@ async def get_usage_stats(request: Request):
     integration = _require_web_researcher(request)
     try:
         # Get basic stats
-        cache_stats = integration.get_cache_stats()
+        cache_stats = await integration.get_cache_stats()
         circuit_status = integration.get_circuit_breaker_status()
 
         stats = {
