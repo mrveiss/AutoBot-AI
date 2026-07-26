@@ -175,8 +175,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getBackendUrl } from '@/config/ssot-config'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { BaseModal } from '@autobot/ui'
 
@@ -221,7 +220,7 @@ function spendClass(key: KeyRow): string {
 async function loadKeys(): Promise<void> {
   loading.value = true
   try {
-    const resp = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/list')
+    const resp = await apiClient.rawRequest('/api/llm-keys/list')
     const data = (await resp.json()) as { keys: KeyRow[] }
     keys.value = data.keys ?? []
   } catch (err) {
@@ -242,16 +241,15 @@ async function handleIssue(): Promise<void> {
       ? new Date(form.expires_at_str).getTime() / 1000
       : null
 
-    const issueResp = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/issue', {
+    const issueResp = await apiClient.rawRequest('/api/llm-keys/issue', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         team_id: form.team_id,
         label: form.label,
         monthly_budget_usd: form.monthly_budget_usd,
         allowed_models,
         expires_at,
-      }),
+      },
     })
     const issueResult = (await issueResp.json()) as { raw_key: string }
     newRawKey.value = issueResult.raw_key
@@ -271,10 +269,9 @@ function confirmRevoke(keyId: string): void {
 
 async function handleRevoke(): Promise<void> {
   try {
-    await fetchWithAuth(getBackendUrl() + '/api/llm-keys/revoke', {
+    await apiClient.rawRequest('/api/llm-keys/revoke', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key_id: revokeKeyId.value }),
+      body: { key_id: revokeKeyId.value },
     })
     revokeKeyId.value = ''
     await loadKeys()
@@ -285,10 +282,9 @@ async function handleRevoke(): Promise<void> {
 
 async function handleRotate(keyId: string): Promise<void> {
   try {
-    const rotateResp = await fetchWithAuth(getBackendUrl() + '/api/llm-keys/rotate', {
+    const rotateResp = await apiClient.rawRequest('/api/llm-keys/rotate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key_id: keyId }),
+      body: { key_id: keyId },
     })
     const rotateResult = (await rotateResp.json()) as { new_raw_key: string }
     newRawKey.value = rotateResult.new_raw_key

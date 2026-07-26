@@ -241,9 +241,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
@@ -321,7 +320,7 @@ async function loadUsers(): Promise<void> {
     if (searchQuery.value.trim()) {
       params.set('search', searchQuery.value.trim())
     }
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users?${params}`)
+    const res = await apiClient.rawRequest(`/api/user-management/users?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
@@ -416,10 +415,9 @@ function changePage(delta: number): void {
 
 async function onRoleChange(user: UserRecord, role: string): Promise<void> {
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users/${user.id}/role`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users/${user.id}/role`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role }),
+      body: { role },
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -435,7 +433,7 @@ async function onRoleChange(user: UserRecord, role: string): Promise<void> {
 async function toggleActive(user: UserRecord, activate: boolean): Promise<void> {
   const action = activate ? 'activate' : 'deactivate'
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users/${user.id}/${action}`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users/${user.id}/${action}`, {
       method: 'POST',
     })
     if (!res.ok) {
@@ -456,7 +454,7 @@ function confirmDelete(user: UserRecord): void {
 async function deleteUser(): Promise<void> {
   if (!deleteTarget.value) return
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users/${deleteTarget.value.id}`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users/${deleteTarget.value.id}`, {
       method: 'DELETE',
     })
     if (!res.ok) {
@@ -476,15 +474,14 @@ async function createUser(): Promise<void> {
   creating.value = true
   createError.value = null
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         email: newUser.value.email,
         username: newUser.value.username,
         password: newUser.value.password,
         display_name: newUser.value.display_name || undefined,
-      }),
+      },
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))

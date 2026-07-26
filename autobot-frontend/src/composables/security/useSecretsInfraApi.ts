@@ -10,7 +10,6 @@
  * Extracted from SecretsManager.vue (issue #6081).
  */
 
-import { getBackendUrl } from '@/config/ssot-config';
 import apiClient from '@/utils/ApiClient';
 
 export interface InfraHost {
@@ -41,22 +40,19 @@ export interface SecretsUsageResponse {
 export function useSecretsInfraApi() {
   /** Fetch legacy infrastructure hosts from the old API. */
   async function fetchInfraHosts(): Promise<InfraHostsResponse> {
-    const backendUrl = getBackendUrl();
-    return apiClient.get<InfraHostsResponse>(`${backendUrl}/api/infrastructure/hosts`)
+    return apiClient.get<InfraHostsResponse>(`/api/infrastructure/hosts`)
       .catch(() => ({ hosts: [] }));
   }
 
   /** Fetch workflow-usage mapping for secrets (#1415). */
   async function fetchSecretsUsage(): Promise<SecretsUsageResponse> {
-    const backendUrl = getBackendUrl();
-    return apiClient.get<SecretsUsageResponse>(`${backendUrl}/api/templates/templates/secrets-usage`)
+    return apiClient.get<SecretsUsageResponse>(`/api/templates/templates/secrets-usage`)
       .catch(() => ({ secrets_usage: {} }));
   }
 
   /** Delete a legacy infrastructure host by id. */
   async function deleteInfraHost(id: string): Promise<void> {
-    const backendUrl = getBackendUrl();
-    await apiClient.delete<unknown>(`${backendUrl}/api/infrastructure/hosts/${id}`);
+    await apiClient.delete<unknown>(`/api/infrastructure/hosts/${id}`);
   }
 
   return { fetchInfraHosts, fetchSecretsUsage, deleteInfraHost };
