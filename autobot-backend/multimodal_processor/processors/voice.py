@@ -17,6 +17,7 @@ import numpy as np
 
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
+from llm_shared.torch_loader import lazy_torch
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult
@@ -33,17 +34,12 @@ from ..types import (
 )
 
 # Issue #3016: lazy module-level import for torch
-_torch = None
+# Issue #12714: torch loader unified onto the shared thread-safe llm_shared.torch_loader.
 
 
 def _get_torch():
     """Lazy-load torch on first use. Issue #3016."""
-    global _torch  # noqa: PLW0603
-    if _torch is None:
-        import torch
-
-        _torch = torch
-    return _torch
+    return lazy_torch()
 
 
 # Import models for audio processing
