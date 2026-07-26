@@ -17,9 +17,7 @@ import api.infrastructure as infra
 @pytest.fixture
 def _hosts(monkeypatch):
     """Stub the secrets-host read-shim with a single known host."""
-    monkeypatch.setattr(
-        infra, "_load_secrets_hosts", lambda: [{"id": "h9", "name": "box"}]
-    )
+    monkeypatch.setattr(infra, "_load_secrets_hosts", lambda: [{"id": "h9", "name": "box"}])
 
 
 async def test_delete_infrastructure_host_removes_matching_secret(_hosts, monkeypatch):
@@ -48,12 +46,11 @@ async def test_delete_unknown_host_returns_404(_hosts):
 
 
 async def test_delete_404_when_secret_delete_reports_missing(_hosts, monkeypatch):
-    import api.secrets as secrets_mod
     from fastapi import HTTPException
 
-    monkeypatch.setattr(
-        secrets_mod.secrets_manager, "delete_secret", lambda sid, *a, **k: False
-    )
+    import api.secrets as secrets_mod
+
+    monkeypatch.setattr(secrets_mod.secrets_manager, "delete_secret", lambda sid, *a, **k: False)
 
     with pytest.raises(HTTPException) as exc:
         await infra.delete_infrastructure_host(host_id="h9", _user={"sub": "u"})
