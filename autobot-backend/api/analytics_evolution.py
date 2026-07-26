@@ -298,19 +298,6 @@ def _parse_date_range(start_date: str | None, end_date: str | None) -> tuple:
     return start_ts, end_ts
 
 
-def _no_data_response(
-    message: str = "No evolution data. Redis required for timeline tracking.",
-) -> dict:
-    """Standardized no-data response (Issue #543)."""
-    return {
-        "status": "no_data",
-        "message": message,
-        "timeline": [],
-        "patterns": {},
-        "trends": {},
-    }
-
-
 def _build_timeline_response(timeline: list, start_date: str, end_date: str, granularity: str, metrics: list) -> dict:
     """Build timeline success response (Issue #398: extracted)."""
     return {

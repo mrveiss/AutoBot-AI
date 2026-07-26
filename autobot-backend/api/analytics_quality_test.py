@@ -8,7 +8,7 @@ Unit tests for analytics_quality.py source_id scoping (Issue #3436)
 Tests the following functionality:
 - get_grade helper function
 - calculate_health_score helper function
-- _no_data_response helper function
+- no_data_response shared helper (api.analytics_shared)
 - _resolve_source_root_or_404 guard logic (mocked via sys.modules)
 """
 
@@ -133,21 +133,28 @@ class TestCalculateHealthScore:
 
 
 class TestNoDataResponse:
-    """Tests for _no_data_response helper."""
+    """Tests for the shared no_data_response helper (Issue #12705)."""
 
     def test_default_message(self):
         """Should return a dict with status=no_data and default message."""
-        from api.analytics_quality import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response()
+        result = no_data_response(
+            "No analysis data. Run codebase indexing first.",
+            metrics={},
+            patterns=[],
+            complexity={},
+            stats={},
+            trends=[],
+        )
         assert result["status"] == "no_data"
         assert "message" in result
 
     def test_custom_message(self):
         """Should return the custom message when provided."""
-        from api.analytics_quality import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response("Custom error message")
+        result = no_data_response("Custom error message", metrics={}, patterns=[], complexity={}, stats={}, trends=[])
         assert result["message"] == "Custom error message"
 
 

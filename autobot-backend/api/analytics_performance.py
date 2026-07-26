@@ -19,6 +19,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from api.analytics_shared import no_data_response
 from api.schemas_analytics import (
     AnalyticsPerformanceAnalyzeData,
     ImpactLevel,
@@ -504,7 +505,7 @@ async def analyze_path(
     # Return no_data response if no files to analyze
     if not files_to_analyze:
         return JSONResponse(
-            content=_no_data_response("No files found to analyze. Please provide a valid path."),
+            content=no_data_response("No files found to analyze. Please provide a valid path.", issues=[], summary={}),
             status_code=200,
         )
 
@@ -784,20 +785,3 @@ async def get_hotspots(
     ]
 
     return hotspots
-
-
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-
-def _no_data_response(
-    message: str = "No performance analysis data. Run codebase indexing first.",
-) -> dict:
-    """Standardized no-data response for analytics endpoints."""
-    return {
-        "status": "no_data",
-        "message": message,
-        "issues": [],
-        "summary": {},
-    }

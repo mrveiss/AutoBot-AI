@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.analytics_shared import no_data_response
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
     BugPredictionAnalyzeResponse,
@@ -120,28 +121,6 @@ async def _set_cached_bug_prediction(
         )
     except Exception as e:
         logger.debug("Cache write error (non-critical): %s", e)
-
-
-def _no_data_response(
-    message: str = "No bug prediction data available. Run codebase analysis first.",
-) -> dict:
-    """
-    Standardized no-data response.
-
-    Issue #543: Replaces all demo data responses.
-
-    Args:
-        message: Custom message explaining why no data is available
-
-    Returns:
-        Dict with status="no_data", message, and empty data structures
-    """
-    return {
-        "status": "no_data",
-        "message": message,
-        "files": [],
-        "summary": {},
-    }
 
 
 def _parse_git_bug_history_lines(lines: list[str]) -> dict[str, int]:
@@ -813,7 +792,7 @@ async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict
     )
 
     if not files_to_analyze:
-        return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+        return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
 
     analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
     analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
@@ -878,7 +857,7 @@ async def analyze_codebase(
 
     except Exception as e:
         logger.error("Failed to analyze codebase: %s", e, exc_info=True)
-        return _no_data_response("Analysis failed")
+        return no_data_response("Analysis failed", files=[], summary={})
 
 
 def _build_analysis_result(
@@ -921,7 +900,7 @@ async def get_cached_bug_prediction():
             "completed_at": cached.get("completed_at"),
             **cached["result"],
         }
-    return _no_data_response("No cached bug prediction available")
+    return no_data_response("No cached bug prediction available", files=[], summary={})
 
 
 @router.post("/analyze", response_model=BugPredictionAnalyzeResponse)
@@ -1001,7 +980,7 @@ async def get_high_risk_files(
         )
 
         if not files_to_analyze:
-            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+            return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
 
         # Issue #609: Analyze files in parallel
         analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
@@ -1019,7 +998,7 @@ async def get_high_risk_files(
 
     except Exception as e:
         logger.error("Failed to get high-risk files: %s", e, exc_info=True)
-        return _no_data_response("Analysis failed")
+        return no_data_response("Analysis failed", files=[], summary={})
 
 
 def _build_file_risk_response(file_path: str, factors: dict, bug_history: dict) -> dict:
@@ -1054,7 +1033,7 @@ async def get_file_risk(
     """
     path = Path(file_path)
     if not await asyncio.to_thread(path.exists):
-        return _no_data_response(f"File not found: {file_path}")
+        return no_data_response(f"File not found: {file_path}", files=[], summary={})
 
     try:
         # Issue #664: Parallelize independent data fetches
@@ -1079,7 +1058,7 @@ async def get_file_risk(
 
     except Exception as e:
         logger.error("Failed to analyze file %s: %s", file_path, e, exc_info=True)
-        return _no_data_response("Analysis failed for {file_path}")
+        return no_data_response("Analysis failed for {file_path}", files=[], summary={})
 
 
 def _get_file_recommendation(risk_score: float, factors: dict[str, float]) -> str:
@@ -1166,7 +1145,7 @@ async def get_risk_heatmap(
         )
 
         if not files_to_analyze:
-            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+            return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
 
         # Issue #609: Analyze files in parallel
         analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
@@ -1187,7 +1166,7 @@ async def get_risk_heatmap(
 
     except Exception as e:
         logger.error("Failed to generate heatmap: %s", e, exc_info=True)
-        return _no_data_response("Heatmap generation failed")
+        return no_data_response("Heatmap generation failed", files=[], summary={})
 
 
 @router.get("/trends", response_model=BugPredictionTrendsResponse)
@@ -1223,9 +1202,11 @@ async def get_prediction_trends(
     history = await _get_prediction_history(period_days)
 
     if not history:
-        return _no_data_response(
+        return no_data_response(
             f"No prediction history available for period '{period}'. "
-            "Run /bug-prediction/analyze to start collecting trend data."
+            "Run /bug-prediction/analyze to start collecting trend data.",
+            files=[],
+            summary={},
         )
 
     # Calculate trend metrics
@@ -1330,7 +1311,7 @@ async def get_prediction_summary(
         )
 
         if not files_to_analyze:
-            return _no_data_response(f"No files matching '{include_pattern}' found in '{path}'")
+            return no_data_response(f"No files matching '{include_pattern}' found in '{path}'", files=[], summary={})
 
         # Issue #609: Analyze files in parallel
         analyzed_files = await _analyze_files_parallel(files_to_analyze, change_freq, bug_history)
@@ -1360,7 +1341,7 @@ async def get_prediction_summary(
 
     except Exception as e:
         logger.error("Failed to generate summary: %s", e, exc_info=True)
-        return _no_data_response("Summary generation failed")
+        return no_data_response("Summary generation failed", files=[], summary={})
 
 
 @router.get("/factors", response_model=BugPredictionRiskFactorsResponse)
