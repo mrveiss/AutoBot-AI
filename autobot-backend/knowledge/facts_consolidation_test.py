@@ -53,7 +53,7 @@ class _KB(FactsMixin):
         {"owner_id": "u1"},
         {"user_id": "u1"},
         {"verification_status": "verified"},
-        {"unique_key": "man_page:ls"},          # curated (man-page) -> protected
+        {"unique_key": "man_page:ls"},  # curated (man-page) -> protected
         {"source_connector_id": "confluence-1"},  # ingested -> protected
     ],
 )
@@ -72,12 +72,12 @@ def test_only_dead_facts_are_candidates():
     kb = _KB([])
     cutoff = NOW - timedelta(days=180)
     facts = [
-        _fact("dead", quality=0.0, access=0, ts=OLD),           # prunable
-        _fact("recalled", quality=0.0, access=3, ts=OLD),        # accessed -> keep
-        _fact("quality", quality=0.9, access=0, ts=OLD),         # high quality -> keep
-        _fact("new", quality=0.0, access=0, ts=RECENT),          # too new -> keep
+        _fact("dead", quality=0.0, access=0, ts=OLD),  # prunable
+        _fact("recalled", quality=0.0, access=3, ts=OLD),  # accessed -> keep
+        _fact("quality", quality=0.9, access=0, ts=OLD),  # high quality -> keep
+        _fact("new", quality=0.0, access=0, ts=RECENT),  # too new -> keep
         _fact("owned", quality=0.0, access=0, ts=OLD, owner_id="u1"),  # owned -> keep
-        _fact("noage", quality=0.0, access=0, ts=""),            # unknown age -> keep
+        _fact("noage", quality=0.0, access=0, ts=""),  # unknown age -> keep
         _fact("preepoch", quality=0.0, access=0, ts=PRE_EPOCH),  # predates A1 -> keep
         _fact("curated", quality=0.0, access=0, ts=OLD, unique_key="man_page:ls"),  # curated -> keep
     ]
