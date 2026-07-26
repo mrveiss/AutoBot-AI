@@ -27,6 +27,7 @@ from knowledge.connectors.models import (
     SourceInfo,
 )
 from knowledge.connectors.registry import ConnectorRegistry
+from utils.text_chunking import chunk_text
 
 logger = get_logger(__name__)
 
@@ -253,7 +254,7 @@ class FileServerConnector(AbstractConnector):
             logger.error("Failed to read %s: %s", file_path, exc)
             return None
 
-        chunks = _chunk_text(text)
+        chunks = chunk_text(text, max_chars=2000)
 
         return ContentResult(
             source_id=source_id,
@@ -268,32 +269,3 @@ class FileServerConnector(AbstractConnector):
             },
             chunks=chunks,
         )
-
-
-def _chunk_text(text: str, max_chars: int = 2000) -> List[str]:
-    """Split text into paragraph-based chunks of at most *max_chars* chars.
-
-    Falls back to fixed-size splitting when paragraphs are very long.
-    """
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    chunks: List[str] = []
-    current: List[str] = []
-    current_len = 0
-
-    for para in paragraphs:
-        if current_len + len(para) > max_chars and current:
-            chunks.append("\n\n".join(current))
-            current = []
-            current_len = 0
-        # If a single paragraph exceeds max_chars, split by fixed size
-        if len(para) > max_chars:
-            for i in range(0, len(para), max_chars):
-                chunks.append(para[i : i + max_chars])
-        else:
-            current.append(para)
-            current_len += len(para)
-
-    if current:
-        chunks.append("\n\n".join(current))
-
-    return chunks
