@@ -10,9 +10,10 @@
  * TypeScript migration of useSystemStatus.js
  */
 
-import { ref, watch, onScopeDispose, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { getApiBase } from '@/config/ssot-config'
 
 // #10347: poll cadence while the System Status panel is open, so a transient
@@ -427,21 +428,21 @@ export function useSystemStatus(): UseSystemStatusReturn {
   // #10347: auto-refresh while the panel is open so a transient backend
   // restart self-recovers without a manual Refresh. Polls only while shown
   // (no cost when closed); cleaned up on scope teardown.
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  const stopPolling = (): void => {
-    if (pollTimer !== null) {
-      clearInterval(pollTimer)
-      pollTimer = null
-    }
-  }
+  // Backed by the canonical usePollingJob (#12701): fires immediately on start
+  // then re-polls every STATUS_POLL_INTERVAL_MS, with auto scope-dispose cleanup.
+  // maxAttempts is effectively unlimited — lifecycle is driven by the panel
+  // open/close watch below, not an attempt cap. refreshSystemStatus never throws
+  // (internal try/catch → fallback state), so no error-backoff path applies.
+  const statusJob = usePollingJob<void>(
+    async () => { await refreshSystemStatus() },
+    { intervalMs: STATUS_POLL_INTERVAL_MS, maxAttempts: Number.MAX_SAFE_INTEGER },
+  )
   watch(showSystemStatus, (open) => {
-    stopPolling()
+    statusJob.stop()
     if (open) {
-      void refreshSystemStatus()
-      pollTimer = setInterval(() => void refreshSystemStatus(), STATUS_POLL_INTERVAL_MS)
+      statusJob.start('')
     }
   })
-  onScopeDispose(stopPolling)
 
   /**
    * Manually recalculate system status from the current services list
