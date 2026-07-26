@@ -7,8 +7,9 @@ Unit tests for SyncOrchestrator ssh command construction (Issue #10277).
 
 Regression guard: stray ``-o`` tokens with no ``key=value`` argument made ssh
 fail with ``command-line line 0: no argument after keyword "-o"``, breaking node
-role-sync (_build_ssh_command) and source-commit lookup (_get_current_git_commit).
-These tests assert every ssh argv built in the orchestrator is well-formed.
+role-sync (build_ssh_base_cmd, shared with api/nodes.py since #12690) and
+source-commit lookup (_get_current_git_commit). These tests assert every ssh
+argv built in the orchestrator is well-formed.
 """
 
 import importlib
@@ -16,6 +17,8 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from services.ssh_utils import build_ssh_base_cmd
 
 # ── Load the REAL services.sync_orchestrator (#11737) ────────────────────────
 # The slm-backend root conftest stubs ``services.sync_orchestrator`` as a
@@ -64,16 +67,23 @@ _MISSING_KEY_PATH = "/nonexistent-test-dir/autobot_key"
 
 
 def test_build_ssh_command_argv_is_wellformed():
-    with patch.object(_so_mod, "SSH_KEY_PATH", _MISSING_KEY_PATH):
-        cmd = _orchestrator()._build_ssh_command(2222, "autobot", "10.0.0.5")
+    cmd = build_ssh_base_cmd("10.0.0.5", "autobot", 2222, _MISSING_KEY_PATH)
     _assert_ssh_argv_wellformed(cmd)
 
 
 def test_build_ssh_command_port_and_target():
-    with patch.object(_so_mod, "SSH_KEY_PATH", _MISSING_KEY_PATH):
-        cmd = _orchestrator()._build_ssh_command(2222, "u", "h")
+    cmd = build_ssh_base_cmd("h", "u", 2222, _MISSING_KEY_PATH)
     assert "-p" in cmd and cmd[cmd.index("-p") + 1] == "2222"
     assert cmd[-1] == "u@h"
+
+
+def test_build_ssh_command_includes_connect_timeout():
+    """Sync-path role-sync/post-sync/restart commands must carry
+    ``ConnectTimeout=10`` (#12690): before the shared helper, sync_orchestrator's
+    local builder omitted it, so a role-sync against an unreachable node could
+    hang indefinitely instead of failing fast."""
+    cmd = build_ssh_base_cmd("10.0.0.5", "autobot", 2222, _MISSING_KEY_PATH)
+    assert "ConnectTimeout=10" in cmd
 
 
 @pytest.mark.asyncio
