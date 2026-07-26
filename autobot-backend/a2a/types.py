@@ -14,12 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from autobot_shared.time_utils import now_utc
-
-
-def _utcnow() -> str:
-    """Return current UTC time as ISO 8601 string."""
-    return now_utc().isoformat()
+from autobot_shared.time_utils import utc_timestamp
 
 
 class TaskState(str, Enum):
@@ -109,7 +104,7 @@ class TaskArtifact:
 
     artifact_type: str  # "text", "json", "error"
     content: Any
-    created_at: str = field(default_factory=_utcnow)
+    created_at: str = field(default_factory=utc_timestamp)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -130,7 +125,7 @@ class A2ATaskStatus:
 
     state: TaskState
     message: str | None = None
-    timestamp: str = field(default_factory=_utcnow)
+    timestamp: str = field(default_factory=utc_timestamp)
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -156,8 +151,8 @@ class Task:
     input: str
     context: Dict[str, Any] | None = None
     artifacts: List[TaskArtifact] = field(default_factory=list)
-    created_at: str = field(default_factory=_utcnow)
-    updated_at: str = field(default_factory=_utcnow)
+    created_at: str = field(default_factory=utc_timestamp)
+    updated_at: str = field(default_factory=utc_timestamp)
     # Issue #968: distributed tracing — set on task creation
     trace_context: Optional["TraceContext"] = field(default=None, repr=False)
 
