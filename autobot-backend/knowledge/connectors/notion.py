@@ -26,6 +26,7 @@ import aiohttp
 
 from autobot_shared.auth import BearerAuth
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.notion_utils import extract_title as _extract_title
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -316,17 +317,6 @@ def _blocks_to_text(blocks: List[Dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
-def _extract_title(obj: Dict[str, Any]) -> str:
-    """Extract the plain-text title from a Notion page or database object."""
-    title_array = obj.get("title", [])
-    if title_array and isinstance(title_array, list):
-        return "".join(t.get("plain_text", "") for t in title_array)
-
-    props = obj.get("properties", {})
-    for prop_name in ("Name", "Title", "title"):
-        prop = props.get(prop_name, {})
-        title_values = prop.get("title", [])
-        if title_values:
-            return "".join(t.get("plain_text", "") for t in title_values)
-
-    return ""
+# Issue #12659: _extract_title() single-sourced in autobot_shared/notion_utils.py
+# (was byte-identical to integrations/notion_integration.py's copy) —
+# imported at the top of this module as `extract_title as _extract_title`.

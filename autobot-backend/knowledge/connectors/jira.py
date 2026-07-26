@@ -49,8 +49,9 @@ from knowledge.connectors.registry import ConnectorRegistry
 
 logger = get_logger(__name__)
 
-_REDIS_TS_PREFIX = "connector:jira:ts:"
-_REDIS_TS_TTL = 86400 * 30  # 30 days
+# Issue #12659: _load_ts()/_store_ts() moved to AbstractConnector — this
+# connector's Redis prefix ("connector:jira:ts:") matches the base class
+# default derived from connector_type, so no override is needed.
 
 
 @ConnectorRegistry.register("jira")
@@ -136,7 +137,7 @@ class JiraConnector(AbstractConnector):
 
         updated = fields.get("updated", "")
         if updated:
-            await _store_ts(self.config.connector_id, issue_key, updated)
+            await self._store_ts(issue_key, updated)
 
         return ContentResult(
             source_id=source_id,
@@ -191,10 +192,10 @@ class JiraConnector(AbstractConnector):
                 details={"issue_key": issue_key, "updated": updated},
             )
 
-        stored = await _load_ts(self.config.connector_id, issue_key)
+        stored = await self._load_ts(issue_key)
         if stored is None or updated > stored:
             change_type = "added" if stored is None else "modified"
-            await _store_ts(self.config.connector_id, issue_key, updated)
+            await self._store_ts(issue_key, updated)
             return ChangeInfo(
                 source_id=_build_source_id(self.config.connector_id, issue_key),
                 change_type=change_type,
@@ -252,43 +253,6 @@ class JiraConnector(AbstractConnector):
         except aiohttp.ClientError as exc:
             self.logger.warning("Jira request to %s failed: %s", url, exc)
             return {"status_code": 0, "error": str(exc)}
-
-
-# ---------------------------------------------------------------------------
-# Redis checkpoint helpers
-# ---------------------------------------------------------------------------
-
-
-async def _load_ts(connector_id: str, issue_key: str) -> Optional[str]:
-    """Load the stored ``updated`` timestamp for *issue_key* from Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, issue_key)
-        value = redis.get(key)
-        if hasattr(value, "__await__"):
-            value = await value
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        return value
-    except Exception as exc:
-        logger.warning("Redis load_ts failed for issue %s: %s", issue_key, exc)
-        return None
-
-
-async def _store_ts(connector_id: str, issue_key: str, updated: str) -> None:
-    """Persist the ``updated`` timestamp for *issue_key* in Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, issue_key)
-        result = redis.set(key, updated, ex=_REDIS_TS_TTL)
-        if hasattr(result, "__await__"):
-            await result
-    except Exception as exc:
-        logger.warning("Redis store_ts failed for issue %s: %s", issue_key, exc)
 
 
 # ---------------------------------------------------------------------------
