@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Callable, Dict, List
 
 from services.ansible_secrets import fetch_deploy_secrets
+from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
     build_registry_inventory,
     validate_inventory,
@@ -122,21 +123,11 @@ class PlaybookExecutor:
         self.inventory_path = ansible_dir / "inventory" / "slm-nodes.yml"
 
     def _find_ansible_playbook(self) -> str:
-        """Find ansible-playbook executable."""
-        ansible_path = shutil.which("ansible-playbook")
-        if ansible_path:
-            return ansible_path
+        """Find ansible-playbook executable.
 
-        # Try common paths
-        common_paths = [
-            "/usr/bin/ansible-playbook",
-            "/usr/local/bin/ansible-playbook",
-        ]
-        for path in common_paths:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-
-        raise FileNotFoundError("ansible-playbook not found. Install: apt install ansible")
+        Shared search logic lives in services.ansible_utils (Issue #12693).
+        """
+        return _resolve_ansible_playbook()
 
     @staticmethod
     def _clean_task_name(task_name: str) -> str:

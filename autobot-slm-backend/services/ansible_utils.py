@@ -4,7 +4,37 @@
 # Author: mrveiss
 """Ansible output parsing utilities for slm-backend endpoints."""
 
+import os
 import re
+import shutil
+
+# Common install locations checked when ansible-playbook isn't on PATH
+# (Issue #12693 — shared between DeploymentService and PlaybookExecutor).
+_COMMON_ANSIBLE_PATHS = (
+    "/usr/bin/ansible-playbook",
+    "/usr/local/bin/ansible-playbook",
+    "/opt/ansible/bin/ansible-playbook",
+)
+
+
+def _find_ansible_playbook() -> str:
+    """Find the ansible-playbook executable with system PATH.
+
+    Shared by DeploymentService and PlaybookExecutor (Issue #12693, round-2
+    of the #12645 dedup umbrella) — both previously carried near-identical
+    copies of this search.
+    """
+    # First try with current PATH
+    ansible_path = shutil.which("ansible-playbook")
+    if ansible_path:
+        return ansible_path
+
+    # Try common system paths if not in current PATH
+    for path in _COMMON_ANSIBLE_PATHS:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+
+    raise FileNotFoundError("ansible-playbook not found. Install Ansible: apt install ansible")
 
 
 def _extract_failure_summary(output: str) -> str:
