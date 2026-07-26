@@ -69,7 +69,6 @@ ALLOWLIST = {
 # forwarders). For violations in these paths, suggest the inline canonical
 # form instead of the helper. See PR #5384 (#5381) and #5397.
 INLINE_PATH_PREFIXES: Tuple[str, ...] = (
-    "autobot-slm-agent/",
     "autobot-slm-backend/slm/agent/",
     "autobot-slm-backend/ansible/roles/slm_agent/files/",
     "autobot-infrastructure/shared/scripts/",

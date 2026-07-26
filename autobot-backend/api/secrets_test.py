@@ -13,6 +13,7 @@ the renamed enum stays distinct from the canonical authorization
 """
 
 import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -76,3 +77,40 @@ async def test_get_secret_types_response_pinned():
     assert response.status_code == 200
     payload = json.loads(response.body)
     assert payload == {"types": EXPECTED_TYPES, "scopes": EXPECTED_SCOPES}
+
+
+class TestCheckRateLimit:
+    """check_rate_limit() delegates to the shared RateLimiter's custom
+    single-window mode (window=60s, max=30) — migrated off the retired
+    local in-memory class (#12646). No coverage previously existed."""
+
+    def _fake_request(self, host: str) -> MagicMock:
+        from fastapi import Request
+
+        request = MagicMock(spec=Request)
+        request.client = MagicMock(host=host)
+        request.headers = {}
+        return request
+
+    @pytest.mark.asyncio
+    async def test_allows_when_under_limit(self):
+        from api.secrets import check_rate_limit
+
+        with patch("autobot_shared.rate_limiter.get_async_redis_client", AsyncMock(return_value=None)):
+            await check_rate_limit(self._fake_request("203.0.113.5"))  # must not raise
+
+    @pytest.mark.asyncio
+    async def test_raises_429_with_retry_after_when_denied(self):
+        from fastapi import HTTPException
+
+        from api.secrets import RATE_LIMIT_WINDOW, check_rate_limit
+
+        redis = AsyncMock()
+        redis.eval = AsyncMock(return_value=[0, "5"])
+
+        with patch("autobot_shared.rate_limiter.get_async_redis_client", AsyncMock(return_value=redis)):
+            with pytest.raises(HTTPException) as exc_info:
+                await check_rate_limit(self._fake_request("203.0.113.6"))
+
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.headers["Retry-After"] == str(RATE_LIMIT_WINDOW)

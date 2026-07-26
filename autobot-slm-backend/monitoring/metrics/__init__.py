@@ -3,16 +3,18 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Metrics Package
+Metrics Package — Issue #12648
 
 Domain-specific metrics recorders for Prometheus.
-Extracted from PrometheusMetricsManager as part of Issue #394.
-Extended with PerformanceMetricsRecorder as part of Issue #469.
-Extended with KnowledgeBase, LLMProvider, WebSocket, Redis recorders (Issue #470).
-Extended with FrontendMetricsRecorder for RUM metrics (Issue #476).
-Extended with ApiRequestsMetricsRecorder for HTTP request counting (Issue #10778).
 
-Package Structure:
+The recorders themselves now live exclusively in
+``autobot_shared.monitoring.metrics``; every module in this package
+(including this ``__init__``) is a thin re-export shim so the SLM-backend
+local metrics package stays in sync with the shared canonical implementation
+and no metric body is duplicated (Issue #12648, consolidating #10778's
+established shim pattern across the whole package).
+
+Package Structure (each module below is a re-export shim):
 - base.py: Base recorder class with shared functionality
 - workflow.py: Workflow execution metrics
 - github.py: GitHub operation metrics
@@ -29,25 +31,22 @@ Package Structure:
 - api_requests.py: HTTP API request counter (Issue #10778)
 """
 
-# Issue #10778: HTTP API request counter
-from .api_requests import ApiRequestsMetricsRecorder
-from .base import BaseMetricsRecorder
-from .claude_api import ClaudeAPIMetricsRecorder
-
-# Issue #476: Frontend RUM metrics recorder
-from .frontend import FrontendMetricsRecorder
-from .github import GitHubMetricsRecorder
-
-# Issue #470: New domain-specific recorders
-from .knowledge_base import KnowledgeBaseMetricsRecorder
-from .llm_provider import LLMProviderMetricsRecorder
-from .performance import PerformanceMetricsRecorder
-from .redis import RedisMetricsRecorder
-from .service_health import ServiceHealthMetricsRecorder
-from .system import SystemMetricsRecorder
-from .task import TaskMetricsRecorder
-from .websocket import WebSocketMetricsRecorder
-from .workflow import WorkflowMetricsRecorder
+from autobot_shared.monitoring.metrics import (
+    ApiRequestsMetricsRecorder,
+    BaseMetricsRecorder,
+    ClaudeAPIMetricsRecorder,
+    FrontendMetricsRecorder,
+    GitHubMetricsRecorder,
+    KnowledgeBaseMetricsRecorder,
+    LLMProviderMetricsRecorder,
+    PerformanceMetricsRecorder,
+    RedisMetricsRecorder,
+    ServiceHealthMetricsRecorder,
+    SystemMetricsRecorder,
+    TaskMetricsRecorder,
+    WebSocketMetricsRecorder,
+    WorkflowMetricsRecorder,
+)
 
 __all__ = [
     "BaseMetricsRecorder",
