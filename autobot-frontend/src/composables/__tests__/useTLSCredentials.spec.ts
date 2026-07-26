@@ -6,7 +6,8 @@
  * Verifies the composable routes SLM TLS calls through the canonical SLM bridge
  * (a SlmClient instance) — not raw getSLMUrl()+fetch — and that the bridge is
  * wired with the composable's in-memory SLM token (read live). Also covers the
- * form-encoded, token-less authenticate() path and graceful-error behaviour.
+ * JSON, token-less authenticate() path (POST /api/auth/login, #1922) and
+ * graceful-error / MFA-challenge behaviour.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
@@ -107,7 +108,7 @@ describe('useTLSCredentials', () => {
     expect(ok).toBe(true)
   })
 
-  it('authenticate POSTs form-encoded credentials with skipAuth and stores the token', async () => {
+  it('authenticate POSTs JSON credentials to /api/auth/login with skipAuth and stores the token', async () => {
     h.rawMock.mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({ access_token: 'new-token' }),
@@ -118,11 +119,11 @@ describe('useTLSCredentials', () => {
 
     expect(ok).toBe(true)
     const [path, options] = h.rawMock.mock.calls[0]
-    expect(path).toBe('/api/auth/token')
+    expect(path).toBe('/api/auth/login')
     expect(options.method).toBe('POST')
     expect(options.skipAuth).toBe(true)
-    expect(options.headers['Content-Type']).toBe('application/x-www-form-urlencoded')
-    expect(options.body).toBeInstanceOf(URLSearchParams)
+    expect(options.headers['Content-Type']).toBe('application/json')
+    expect(JSON.parse(options.body)).toEqual({ username: 'admin', password: 'pw' })
     expect(isAuthenticated()).toBe(true)
   })
 
@@ -131,6 +132,18 @@ describe('useTLSCredentials', () => {
     const { authenticate } = useTLSCredentials()
 
     await expect(authenticate('admin', 'bad')).resolves.toBe(false)
+  })
+
+  it('authenticate returns false (no crash) on an MFA-challenge response', async () => {
+    h.rawMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ requires_mfa: true, temp_token: 'tmp' }),
+    })
+    const { authenticate } = useTLSCredentials()
+
+    // Returns false without throwing; the MFA temp_token is never stored as a
+    // bearer (module-scoped authToken makes isAuthenticated() unreliable here).
+    await expect(authenticate('admin', 'pw')).resolves.toBe(false)
   })
 
   it('fetchNodes returns [] and records the error message on rejection', async () => {
