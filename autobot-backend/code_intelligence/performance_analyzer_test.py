@@ -397,6 +397,76 @@ class TestListLookup:
             assert "set" in lookup_results[0].recommendation.lower()
 
 
+class TestUnclosedResources:
+    """Test unclosed resource (memory leak risk) detection.
+
+    Issue #12362: MEMORY_LEAK_RISK was defined in types.py but never emitted
+    by any check until the code_analysis.src.performance_analyzer convergence.
+    """
+
+    def test_detect_unclosed_file_open(self):
+        """Test detection of open() not used as a context manager."""
+        code = textwrap.dedent("""
+            def read_config():
+                f = open("config.txt", "r")
+                data = f.read()
+                return data
+        """)
+
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = PerformanceAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            leak_results = [r for r in results if r.issue_type == PerformanceIssueType.MEMORY_LEAK_RISK]
+
+            assert len(leak_results) >= 1
+            assert "with" in leak_results[0].recommendation.lower()
+            assert leak_results[0].potential_false_positive is True
+
+    def test_no_false_positive_with_context_manager(self):
+        """Test that 'with open(...) as f:' does not trigger a leak finding."""
+        code = textwrap.dedent("""
+            def read_config():
+                with open("config.txt", "r") as f:
+                    return f.read()
+        """)
+
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = PerformanceAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            leak_results = [r for r in results if r.issue_type == PerformanceIssueType.MEMORY_LEAK_RISK]
+
+            assert leak_results == []
+
+    def test_detect_unclosed_subprocess_popen(self):
+        """Test detection of subprocess.Popen() without wait()/communicate()."""
+        code = textwrap.dedent("""
+            import subprocess
+
+            def run_background():
+                proc = subprocess.Popen(["ls", "-la"])
+                return proc.pid
+        """)
+
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = PerformanceAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            leak_results = [r for r in results if r.issue_type == PerformanceIssueType.MEMORY_LEAK_RISK]
+
+            assert len(leak_results) >= 1
+
+
 class TestHTTPRequestsInLoop:
     """Test HTTP request pattern detection."""
 
