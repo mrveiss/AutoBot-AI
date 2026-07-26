@@ -89,6 +89,10 @@ async def _proxy_to_main_backend(request: Request, path: str) -> Response:
 @router.api_route(
     "/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    # Opaque passthrough proxy (raw Response, no typed contract); excluded
+    # from OpenAPI so the multi-method route does not emit duplicate
+    # operationIds (invalid spec / un-typecheckable generated types). #12420
+    include_in_schema=False,
 )
 async def personality_proxy(
     path: str,
