@@ -16,6 +16,7 @@ import time
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from llm_shared.torch_loader import lazy_torch
 from memory import TaskPriority, get_memory_manager
 from utils.multimodal_performance_monitor import performance_monitor
 
@@ -26,19 +27,14 @@ from .types import EMBEDDING_FIELDS, VISUAL_MODALITY_TYPES, ModalityType
 logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level imports for torch to avoid startup cost
-_torch = None
+# Issue #12714: torch loader unified onto the shared thread-safe llm_shared.torch_loader.
 _torch_nn = None
 _TORCH_NN_AVAILABLE = None
 
 
 def _get_torch():
     """Lazy-load torch on first use. Issue #3016."""
-    global _torch  # noqa: PLW0603
-    if _torch is None:
-        import torch
-
-        _torch = torch
-    return _torch
+    return lazy_torch()
 
 
 def _get_torch_nn():

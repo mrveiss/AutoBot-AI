@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING, Any, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
+from ..torch_loader import lazy_torch
+
 if TYPE_CHECKING:
     import torch  # noqa: F401  # used by deferred (string) type annotations
 
@@ -31,22 +33,12 @@ logger = get_logger(__name__)
 
 # Issue #3009: Lazy-load torch on first use so importing this module does not
 # require torch to be installed (NPU/GPU subsystem is feature-flagged).
-# Issue #10916: double-checked lock prevents two threads from both racing past
-# the None check and importing torch concurrently.
-_torch: Any = None
-_torch_lock = threading.Lock()
+# Issue #12714: unified onto the shared thread-safe llm_shared.torch_loader.
 
 
 def _get_torch() -> Any:
     """Return the torch module, importing it on first call (thread-safe)."""
-    global _torch  # noqa: PLW0603
-    if _torch is None:
-        with _torch_lock:
-            if _torch is None:
-                import torch
-
-                _torch = torch
-    return _torch
+    return lazy_torch()
 
 
 # Lazy imports for optional dependencies

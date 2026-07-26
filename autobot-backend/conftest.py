@@ -383,6 +383,11 @@ if "llm_shared" not in sys.modules:
 
     _real_load_and_bind("llm_shared.types", _llm_root / "types.py")
     _real_load_and_bind("llm_shared.models", _llm_root / "models.py")
+    # #12714: thread-safe lazy torch loader shared by 9 call sites (flash_attention,
+    # ssm_kernels, kv_cache, layer_inference, ai_hardware_accelerator,
+    # multimodal_processor + vision/voice, incremental_trainer). No deps beyond
+    # stdlib threading — safe to real-load unconditionally, early.
+    _real_load_and_bind("llm_shared.torch_loader", _llm_root / "torch_loader.py")
     # #11520: canonical JSON parser and schema-typed extraction helper — lightweight,
     # no heavy deps; load real so tests importing them don't hit the stub.
     _real_load_and_bind("llm_shared.json_utils", _llm_root / "json_utils.py")
