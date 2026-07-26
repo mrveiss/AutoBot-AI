@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api._video_providers_loader import load_video_providers
+from api.schemas_media import ProvidersResponse, ProviderStatus
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import redis_get, redis_set
@@ -96,16 +97,6 @@ class VideoStatusResponse(BaseModel):
     provider: str = ""
     prompt: str = ""
     error: Optional[str] = None
-
-
-class ProviderStatus(BaseModel):
-    name: str
-    available: bool
-    reason: Optional[str] = None
-
-
-class ProvidersResponse(BaseModel):
-    providers: list[ProviderStatus]
 
 
 # ------------------------------------------------------------------

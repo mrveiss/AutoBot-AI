@@ -87275,7 +87275,10 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ProviderStatus */
+        /**
+         * ProviderStatus
+         * @description Availability of a single media-generation provider (image or video).
+         */
         ProviderStatus: {
             /** Name */
             name: string;
@@ -100842,13 +100845,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ProvidersResponse */
-        api__image_generation__ProvidersResponse: {
-            /** Providers */
-            providers: components["schemas"]["ProviderStatus"][];
-        } & {
-            [key: string]: unknown;
-        };
         /**
          * SearchRequest
          * @description Request for similarity search.
@@ -101255,6 +101251,16 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ProvidersResponse
+         * @description Response for GET /providers — list of provider availability statuses.
+         */
+        api__schemas_media__ProvidersResponse: {
+            /** Providers */
+            providers: components["schemas"]["ProviderStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** ClearAllResponse */
         api__schemas_system__ClearAllResponse: {
             /** Success */
@@ -101319,13 +101325,6 @@ export interface components {
         api__task_workspace_ws__RestoreRequest: {
             /** Checkpoint Name */
             checkpoint_name: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ProvidersResponse */
-        api__video_generation__ProvidersResponse: {
-            /** Providers */
-            providers: components["schemas"]["ProviderStatus"][];
         } & {
             [key: string]: unknown;
         };
@@ -146454,7 +146453,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__image_generation__ProvidersResponse"];
+                    "application/json": components["schemas"]["api__schemas_media__ProvidersResponse"];
                 };
             };
         };
@@ -146507,7 +146506,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__video_generation__ProvidersResponse"];
+                    "application/json": components["schemas"]["api__schemas_media__ProvidersResponse"];
                 };
             };
         };
