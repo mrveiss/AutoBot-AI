@@ -625,17 +625,25 @@ export default config;
 
 /**
  * Get backend URL (backward compatibility).
- * Returns empty string when VITE_BACKEND_HOST is not explicitly set,
- * enabling proxy mode where nginx at the frontend VM routes API calls.
+ *
+ * Defaults to '' (proxy mode) so browser calls stay same-origin and nginx at the
+ * frontend VM proxies /api and /ws to the backend. This is the deployed norm
+ * (#10348): a same-origin SPA behind a reverse proxy under CSP `connect-src 'self'`.
+ *
+ * #12339: a baked VITE_BACKEND_HOST/VITE_BACKEND_PORT alone must NOT force an
+ * absolute origin. The ansible frontend template used to bake host + port 8443,
+ * which produced `https://<host>:8443` — an absolute origin blocked by CSP,
+ * 404-ing onboarding/metrics in production. Only an EXPLICIT VITE_API_BASE_URL
+ * (or legacy VITE_API_URL) forces an absolute URL — the genuine cross-origin
+ * dev/deploy case, which must also be added to CSP connect-src.
  */
 export function getBackendUrl(): string {
-  // Explicit base URL override takes highest priority
+  // Explicit base URL override takes highest priority (cross-origin dev/deploy).
   const explicitBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
   if (explicitBaseUrl) return explicitBaseUrl;
-  // If no explicit backend host, return '' for proxy mode via nginx
-  const explicitHost = import.meta.env.VITE_BACKEND_HOST;
-  if (!explicitHost) return '';
-  return getConfig().backendUrl;
+  // Otherwise proxy mode: same-origin relative URLs via nginx. A baked
+  // VITE_BACKEND_HOST/VITE_BACKEND_PORT is deliberately ignored here (#12339).
+  return '';
 }
 
 
