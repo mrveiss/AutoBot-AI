@@ -81,6 +81,19 @@ ANSIBLE_ENV_ALLOWLIST_EXACT = (
 # precedent (api/setup_wizard.py).
 SELF_UPDATE_LOG_PATH = Path(os.getenv("SLM_SELF_UPDATE_LOG_PATH", "/var/log/autobot/self-update-ansible.log"))
 
+# #12425: /var/log/autobot is a shared dir that any autobot-* service user
+# may have created/re-created first (observed owned by the TTS worker,
+# 0755) — the SLM's own `autobot` user then cannot create a new file there
+# and _prepare_self_update_log_file() raises OSError. Silently dropping to
+# an attached run in that case is the exact regression this constant exists
+# to prevent: #11492's own Play-1 "restart autobot-slm-backend" SIGTERMs an
+# attached run before Play 2/3 (the co-located backend/frontend deploy) ever
+# execute. Before giving up and going attached, retry under this uid-scoped
+# 0700 dir (same one execute_playbook already uses for temp inventories/
+# extra-vars, so no additional permission is required beyond what a normal
+# run already needs).
+SELF_UPDATE_LOG_FALLBACK_PATH = Path(ANSIBLE_LOCAL_TMP) / "self-update-ansible.log"
+
 # Poll interval while tailing the detached run's log file for live progress.
 SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
 
@@ -543,31 +556,45 @@ class PlaybookExecutor:
         return shutil.which("systemd-run") is not None and "INVOCATION_ID" in os.environ
 
     @staticmethod
+    def _write_fresh_log_file(path: Path) -> Path | None:
+        """Create/truncate a fresh 0600 log file at ``path`` (best-effort).
+
+        Shared by the canonical (#11492) and fallback (#12425) self-update
+        log paths. Truncated per run so log-tailing starts at byte 0 and a
+        stale prior run's content is never replayed as this run's progress.
+        Ansible output can contain sensitive paths/values — 0600, not the
+        world-readable default umask.
+
+        Returns None on any OSError; the caller decides whether to fall back
+        to another path or give up.
+        """
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("", encoding="utf-8")
+            os.chmod(path, 0o600)
+            return path
+        except OSError:
+            return None
+
+    @staticmethod
     def _prepare_self_update_log_file() -> Path | None:
         """Create/truncate a fresh log file for this detached run (#11492).
 
         The detached ansible-playbook process's stdout/stderr are redirected
         here (see _wrap_with_systemd_scope) instead of the backend's pipe, so
-        a dead backend can never BrokenPipe-crash Play 2/3. Truncated per run
-        so log-tailing starts at byte 0 and a stale prior run's content is
-        never replayed as this run's progress.
+        a dead backend can never BrokenPipe-crash Play 2/3.
 
-        Returns None on failure — the caller must NOT detach without
-        file-backed output in that case (a pipe-only detach would just move
-        the same crash risk this fix exists to close from "cgroup kill" to
-        "broken pipe"; direct-exec, though it dies with the backend, is at
-        least a deterministic, well-understood failure mode).
+        Returns None on failure — the caller (#12425) falls back to a
+        writable uid-scoped path before giving up; the caller must NOT detach
+        without file-backed output in the meantime (a pipe-only detach would
+        just move the same crash risk this fix exists to close from "cgroup
+        kill" to "broken pipe"; direct-exec, though it dies with the backend,
+        is at least a deterministic, well-understood failure mode).
         """
-        try:
-            SELF_UPDATE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            SELF_UPDATE_LOG_PATH.write_text("", encoding="utf-8")
-            # Ansible output can contain sensitive paths/values — 0600, not
-            # the world-readable default umask (#11492 hardening).
-            os.chmod(SELF_UPDATE_LOG_PATH, 0o600)
-            return SELF_UPDATE_LOG_PATH
-        except OSError as exc:
-            logger.error("Could not prepare self-update log file %s: %s", SELF_UPDATE_LOG_PATH, exc)
-            return None
+        result = PlaybookExecutor._write_fresh_log_file(SELF_UPDATE_LOG_PATH)
+        if result is None:
+            logger.error("Could not prepare canonical self-update log file %s", SELF_UPDATE_LOG_PATH)
+        return result
 
     @staticmethod
     def _systemd_run_env_args(env: Dict[str, str]) -> List[str]:
@@ -627,9 +654,19 @@ class PlaybookExecutor:
         """Resolve the effective argv + log path for a requested detach (#11492).
 
         Helper for _run_subprocess. Returns (cmd, None) unchanged whenever
-        detaching isn't possible (no systemd-run/service context, or the log
-        file couldn't be prepared) so the caller falls back to the exact
-        pipe-attached behavior that existed before this fix.
+        detaching isn't possible (no systemd-run/service context, or neither
+        the canonical nor fallback log file could be prepared) so the caller
+        falls back to the exact pipe-attached behavior that existed before
+        this fix.
+
+        #12425: the canonical SELF_UPDATE_LOG_PATH (/var/log/autobot/...) can
+        be unwritable by this service user (e.g. another autobot-* service
+        owns the shared dir) without systemd-run itself being unavailable.
+        Silently dropping to attached in that case is the regression this
+        fallback closes — an attached run gets SIGTERM'd by Play 1's own
+        "restart autobot-slm-backend" task before Play 2/3 (the co-located
+        backend/frontend deploy) ever execute. Try a writable uid-scoped
+        fallback path and still detach before giving up.
         """
         if not self._self_update_detach_available():
             logger.warning(
@@ -641,7 +678,25 @@ class PlaybookExecutor:
 
         log_path = self._prepare_self_update_log_file()
         if log_path is None:
-            logger.error("Self-update detach requested but log file unavailable — running attached")
+            logger.warning(
+                "Canonical self-update log path %s unwritable — retrying "
+                "under fallback path %s before giving up on detach (#12425)",
+                SELF_UPDATE_LOG_PATH,
+                SELF_UPDATE_LOG_FALLBACK_PATH,
+            )
+            log_path = self._write_fresh_log_file(SELF_UPDATE_LOG_FALLBACK_PATH)
+
+        if log_path is None:
+            logger.critical(
+                "UPDATE-ALL DEGRADED (#12425): neither the canonical (%s) nor "
+                "the fallback (%s) self-update log path is writable — running "
+                "ATTACHED as a last resort. The imminent Play-1 'restart "
+                "autobot-slm-backend' WILL SIGTERM this run before Play 2/3 "
+                "(backend/frontend deploy) execute, silently leaving the "
+                "co-located app tier stale.",
+                SELF_UPDATE_LOG_PATH,
+                SELF_UPDATE_LOG_FALLBACK_PATH,
+            )
             return cmd, None
 
         logger.info("Self-update run detached into transient systemd scope, output -> %s", log_path)
