@@ -13,12 +13,18 @@ caller can forget it.
 
 from __future__ import annotations
 
-# Add autobot-slm-backend to path so api.code_sync imports resolve.
 import sys
 from pathlib import Path
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_BACKEND_ROOT))
+# #12572: import api.code_sync via the shared helper, which installs real
+# Pydantic stand-ins for models.schemas (a MagicMock on the dev host / under
+# the stubbed conftests) only for the duration of the import and then restores
+# the original models entries.  Without it this file cannot collect standalone
+# and fails order-dependently once tests/services/conftest.py has run.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _code_sync_import import import_code_sync  # noqa: E402
+
+import_code_sync()
 
 from api.code_sync import (  # noqa: E402
     _PROTECTED_EXCLUDES,
