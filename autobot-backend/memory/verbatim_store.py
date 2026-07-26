@@ -21,6 +21,7 @@ Design decisions:
 
 import asyncio
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -32,6 +33,38 @@ logger = get_logger(__name__)
 _COLLECTION_NAME = "autobot_verbatim"
 _DEFAULT_LIMIT = 10
 _DEFAULT_RETENTION_DAYS: int = 90  # override via memory.verbatim.retention_days config
+
+# B1 (#12555): optional MemPalace-style symbolic "drawer" index. An inverted
+# term -> chunk_id index in Redis lets an entity/keyword query resolve candidate
+# chunks in one lookup and rank them lexically, skipping the ANN embed+search on
+# the hot path. Default OFF — merged flag-on only if the micro-benchmark shows a
+# latency win with no recall regression (see benchmarks/verbatim_symbolic_benchmark.py).
+_SYMBOLIC_INDEX_ENABLED: bool = os.environ.get("AUTOBOT_VERBATIM_SYMBOLIC_INDEX", "0").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+_SYM_TERM_KEY = "autobot:vsym:term:{term}"  # set of chunk_ids containing the term
+_SYM_CHUNK_KEY = "autobot:vsym:chunk:{chunk_id}"  # reverse: set of terms (for cleanup)
+_SYM_MAX_TERMS_PER_CHUNK = 32  # cap so a huge turn can't bloat the index
+_SYM_RECENCY_WEIGHT = 0.2  # blend recency into the lexical rank (mirrors search)
+
+# Minimal stopword set — mirrors query_processor._extract_keywords intent without
+# coupling to that private module. Salient-term extraction, not full NLP.
+_SYM_STOPWORDS = frozenset(
+    {
+        "the", "and", "for", "are", "was", "were", "you", "your", "our", "their", "with", "that",
+        "this", "have", "has", "had", "not", "but", "can", "will", "would", "should", "could",
+        "what", "when", "where", "which", "who", "why", "how", "did", "does", "about", "from",
+        "into", "out", "get", "got", "let", "its", "it's", "they", "them", "then", "than",
+    }
+)
+
+
+def _extract_terms(text: str) -> set:
+    """Salient alphanumeric terms (len>2, non-stopword) for the symbolic index."""
+    tokens = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {t for t in tokens if len(t) > 2 and t not in _SYM_STOPWORDS}
 
 # Recency-weighted re-ranking (GH#11163). Verbatim recall blends semantic
 # similarity with an exponential recency decay so recent turns surface over
@@ -151,8 +184,111 @@ class VerbatimStore:
             documents=[text],
             metadatas=[metadata],
         )
+        if _SYMBOLIC_INDEX_ENABLED:
+            await self._index_symbolic(chunk_id, text)
         logger.debug("VerbatimStore.append: stored chunk %s", chunk_id)
         return chunk_id
+
+    # ------------------------------------------------------------------
+    # B1 (#12555): symbolic drawer index (opt-in, default off)
+    # ------------------------------------------------------------------
+
+    async def _index_symbolic(self, chunk_id: str, text: str) -> None:
+        """Add ``chunk_id`` to the inverted term index. Best-effort, never raises.
+
+        Writes ``term -> {chunk_id}`` sets plus a reverse ``chunk_id -> {terms}``
+        set so ``delete_session`` can clean up without re-tokenising.
+        """
+        try:
+            terms = list(_extract_terms(text))[:_SYM_MAX_TERMS_PER_CHUNK]
+            if not terms:
+                return
+            from autobot_shared.redis_client import get_redis_client
+
+            redis = await get_redis_client(database="knowledge")
+            pipe = redis.pipeline()
+            for term in terms:
+                pipe.sadd(_SYM_TERM_KEY.format(term=term), chunk_id)
+            pipe.sadd(_SYM_CHUNK_KEY.format(chunk_id=chunk_id), *terms)
+            await pipe.execute()
+        except Exception:
+            logger.debug("VerbatimStore._index_symbolic failed (non-fatal)", exc_info=True)
+
+    async def _deindex_symbolic(self, chunk_ids: List[str]) -> None:
+        """Remove chunk_ids from the inverted index (called on delete). Best-effort."""
+        if not chunk_ids:
+            return
+        try:
+            from autobot_shared.redis_client import get_redis_client
+
+            redis = await get_redis_client(database="knowledge")
+            for chunk_id in chunk_ids:
+                chunk_key = _SYM_CHUNK_KEY.format(chunk_id=chunk_id)
+                raw_terms = await redis.smembers(chunk_key)
+                terms = [t.decode() if isinstance(t, bytes) else t for t in raw_terms]
+                if not terms:
+                    continue
+                pipe = redis.pipeline()
+                for term in terms:
+                    pipe.srem(_SYM_TERM_KEY.format(term=term), chunk_id)
+                pipe.delete(chunk_key)
+                await pipe.execute()
+        except Exception:
+            logger.debug("VerbatimStore._deindex_symbolic failed (non-fatal)", exc_info=True)
+
+    async def search_symbolic(
+        self,
+        query: str,
+        session_filter: str | None = None,
+        limit: int = _DEFAULT_LIMIT,
+    ) -> List[Dict[str, Any]] | None:
+        """Entity/keyword recall via the symbolic index — no ANN embed on the path.
+
+        Resolves candidate chunks from the inverted term index, fetches them, and
+        ranks by query-term overlap blended with recency. Returns ``None`` (not
+        ``[]``) when the index is disabled, the query has no salient terms, or no
+        candidate matched — so the caller can fall back to semantic ``search``.
+        """
+        if not _SYMBOLIC_INDEX_ENABLED:
+            return None
+        terms = _extract_terms(query)
+        if not terms:
+            return None
+        try:
+            from autobot_shared.redis_client import get_redis_client
+
+            redis = await get_redis_client(database="knowledge")
+            raw = await redis.sunion([_SYM_TERM_KEY.format(term=t) for t in terms])
+        except Exception:
+            logger.debug("VerbatimStore.search_symbolic union failed (non-fatal)", exc_info=True)
+            return None
+        candidate_ids = [c.decode() if isinstance(c, bytes) else c for c in raw]
+        if not candidate_ids:
+            return None
+        return await self._rank_symbolic_candidates(candidate_ids, terms, session_filter, limit)
+
+    async def _rank_symbolic_candidates(
+        self, candidate_ids: List[str], query_terms: set, session_filter: str | None, limit: int
+    ) -> List[Dict[str, Any]]:
+        """Fetch candidate chunks and rank by term-overlap blended with recency."""
+        collection = await self._get_collection()
+        got = await collection.get(ids=candidate_ids, include=["documents", "metadatas"])
+        ids = got.get("ids", []) or []
+        docs = got.get("documents", []) or []
+        metas = got.get("metadatas", []) or []
+        now = datetime.now(tz=timezone.utc)
+        ranked: List[Dict[str, Any]] = []
+        for cid, doc, meta in zip(ids, docs, metas):
+            meta = meta or {}
+            if session_filter and meta.get("session_id") != session_filter:
+                continue
+            doc_terms = _extract_terms(doc)
+            overlap = len(query_terms & doc_terms) / len(query_terms) if query_terms else 0.0
+            recency = _recency_factor(meta.get("timestamp"), now) or 0.0
+            score = (1.0 - _SYM_RECENCY_WEIGHT) * overlap + _SYM_RECENCY_WEIGHT * recency
+            ranked.append({"id": cid, "text": doc, "score": score, "metadata": meta})
+        ranked.sort(key=lambda c: c["score"], reverse=True)
+        return ranked[:limit]
 
     async def search(
         self,
@@ -245,10 +381,13 @@ class VerbatimStore:
             where=where,
             include=["documents"],
         )
-        count = len(existing.get("ids", []))
+        existing_ids = existing.get("ids", [])
+        count = len(existing_ids)
 
         if count > 0:
             await collection.delete(where=where)
+            if _SYMBOLIC_INDEX_ENABLED:
+                await self._deindex_symbolic(existing_ids)
             logger.info(
                 "VerbatimStore.delete_session: removed %d chunks for session %s",
                 count,
