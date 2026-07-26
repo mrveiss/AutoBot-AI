@@ -14,6 +14,9 @@
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
 import {
   useCodeSync,
+  isSelfUpdateReconnecting,
+  classifyUpdateAllPollError,
+  SLM_SELF_UPDATE_STAGE,
   type PendingNode,
   type SyncOptions,
   type UpdateSchedule,
@@ -153,6 +156,15 @@ function stageStatusText(stage: UpdateAllStage): string | null {
   return null
 }
 
+// #12593: while reconnecting, the stage-3 box shows "reconnecting..." instead
+// of the generic "updating..." so the self-restart window doesn't read as dead.
+function stageRunningStatusKey(stage: UpdateAllStage): string {
+  if (stage.name === SLM_SELF_UPDATE_STAGE && updateAllReconnecting.value) {
+    return 'codeSyncView.pipelineStageReconnecting'
+  }
+  return stageStatusI18nKey(stage)
+}
+
 const updateAllButtonLabel = computed(() => {
   const job = updateAllJob.value
   if (!job) {
@@ -168,6 +180,20 @@ const updateAllButtonLabel = computed(() => {
 const updateAllIsRunning = computed(() => {
   const s = updateAllJob.value?.status
   return s === 'pending' || s === 'running'
+})
+
+// #12593: reconnecting affordance during the stage-3 (slm_self_update) window,
+// when the SLM control plane restarts itself and polling fails transiently.
+// Derives from the last-known running stage + transient-error count, so it
+// resets to false automatically as soon as a poll succeeds again.
+const updateAllReconnecting = computed(() =>
+  isSelfUpdateReconnecting(updateAllJob.value, updateAllTransientErrors.value),
+)
+
+// #12593: auto-expand stage-3 logs while reconnecting so the backend
+// "service will restart" message is visible during the restart window.
+watch(updateAllReconnecting, (reconnecting) => {
+  if (reconnecting) expandedStageLogs.value.add(SLM_SELF_UPDATE_STAGE)
 })
 
 function toggleStageLog(name: string): void {
@@ -633,17 +659,24 @@ function _scheduleUpdateAllPoll(): void {
     if (result === undefined) {
       // Transient error (SLM restart in progress)
       updateAllTransientErrors.value += 1
-      if (updateAllTransientErrors.value >= UPDATE_ALL_MAX_TRANSIENT_ERRORS) {
+      const decision = classifyUpdateAllPollError(
+        updateAllTransientErrors.value,
+        UPDATE_ALL_LOST_CONTACT_ERRORS,
+        UPDATE_ALL_MAX_TRANSIENT_ERRORS,
+      )
+      if (decision === 'giveup') {
         // Gave up — show "lost contact" banner, re-enable CTA
         updateAllLostContact.value = true
         updateAllPolling.value = false
         updateAllPollTimer = null
         return
       }
-      if (updateAllTransientErrors.value >= UPDATE_ALL_LOST_CONTACT_ERRORS) {
+      if (decision === 'lost-contact') {
         updateAllLostContact.value = true
       }
-      // Keep polling (backoff: 2s)
+      // Keep polling (backoff: 2s). During stage-3, updateAllReconnecting is
+      // already true (transient errors >= 1) so the reconnecting affordance
+      // shows immediately without waiting for the lost-contact threshold.
       updateAllPollTimer = setTimeout(poll, 2000)
       return
     }
@@ -797,6 +830,16 @@ onUnmounted(() => {
 
       <!-- Pipeline progress display (shown when job exists) -->
       <div v-if="updateAllJob" class="mt-5">
+        <!-- #12593: inline reconnecting notice during the stage-3 self-restart window -->
+        <div
+          v-if="updateAllReconnecting"
+          class="mb-3 flex items-center gap-2 text-sm text-amber-700"
+        >
+          <svg class="w-4 h-4 animate-spin shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
+        </div>
         <!-- Stage track -->
         <div class="flex items-start gap-0 overflow-x-auto">
           <template v-for="(stage, idx) in updateAllJob.stages" :key="stage.name">
@@ -812,9 +855,10 @@ onUnmounted(() => {
                   <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  <!-- Fleet progress shows numeric fraction; others use i18n status key -->
+                  <!-- Fleet progress shows numeric fraction; others use i18n status key
+                       (stage-3 shows "reconnecting..." while the control plane restarts, #12593) -->
                   <span v-if="stageStatusText(stage) !== null">{{ stageStatusText(stage) }}</span>
-                  <span v-else>{{ $t(stageStatusI18nKey(stage)) }}</span>
+                  <span v-else>{{ $t(stageRunningStatusKey(stage)) }}</span>
                 </div>
                 <!-- F2: terminal/pending status via i18n -->
                 <div v-else class="text-xs">{{ $t(stageStatusI18nKey(stage)) }}</div>
@@ -885,21 +929,36 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- F1: Lost contact banner — shown when polling gives up after transient errors -->
+    <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
+         during the stage-3 self-restart window; escalates to a static warning
+         with a retry CTA only once polling has lost contact / given up. -->
     <div
-      v-if="updateAllLostContact"
+      v-if="updateAllLostContact || updateAllReconnecting"
       class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center justify-between"
     >
       <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          v-if="updateAllReconnecting && !updateAllLostContact"
+          class="w-5 h-5 text-amber-600 animate-spin"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <svg v-else class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div class="flex-1">
           <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-          <div class="text-sm text-amber-700">{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</div>
+          <div class="text-sm text-amber-700">
+            <span v-if="updateAllReconnecting && !updateAllLostContact">
+              {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
+            </span>
+            <span v-else>{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</span>
+          </div>
         </div>
       </div>
       <button
+        v-if="updateAllLostContact"
         @click="updateAllLostContact = false; handleUpdateAll()"
         class="btn btn-secondary text-sm shrink-0 ml-4"
       >
