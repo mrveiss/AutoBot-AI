@@ -19,26 +19,7 @@ from unittest.mock import patch
 import pytest
 
 import services.ssh_utils as ssh_utils
-from services.ssh_utils import _ssh_key_usable
-
-# ── Load the REAL services.sync_orchestrator (#11737 pattern) ────────────────
-# The slm-backend root conftest stubs ``services.sync_orchestrator`` as a
-# MagicMock (it is an api/code_sync.py import).  Pop the stub, import the real
-# module through the hollow ``services`` package (its heavy deps stay satisfied
-# by the conftest stubs), then restore the stub so sibling test files and
-# api/* tests are unaffected (#11478 pattern).
-_SO_KEY = "services.sync_orchestrator"
-_orig_so = sys.modules.get(_SO_KEY)
-sys.modules.pop(_SO_KEY, None)
-try:
-    _so_mod = importlib.import_module(_SO_KEY)
-finally:
-    if _orig_so is not None:
-        sys.modules[_SO_KEY] = _orig_so
-    else:
-        sys.modules.pop(_SO_KEY, None)
-
-SyncOrchestrator = _so_mod.SyncOrchestrator
+from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
 
 # ── Load the REAL services.code_distributor (same pattern) ───────────────────
 _CD_KEY = "services.code_distributor"
@@ -154,18 +135,17 @@ def test_warn_once_is_per_path(caplog):
 
 
 def test_build_ssh_command_degrades_on_permissionerror(caplog):
-    """The exact site from the #11793 traceback (sync_orchestrator.py
-    _build_ssh_command) no longer raises: the command is built WITHOUT -i and
-    a single WARNING is logged."""
-    orchestrator = SyncOrchestrator.__new__(SyncOrchestrator)
+    """The exact site from the #11793 traceback (now the shared
+    ``build_ssh_base_cmd``, used by both api/nodes.py and
+    services/sync_orchestrator.py since #12690) no longer raises: the command
+    is built WITHOUT -i and a single WARNING is logged."""
     key = "/unreadable-home/.ssh/autobot_key"
     with (
         caplog.at_level(logging.WARNING, logger=_LOGGER_NAME),
-        patch.object(_so_mod, "SSH_KEY_PATH", key),
         patch.object(ssh_utils, "Path") as mock_path,
     ):
         mock_path.return_value.exists.side_effect = PermissionError(13, "Permission denied")
-        cmd = orchestrator._build_ssh_command(2222, "autobot", "10.0.0.5")
+        cmd = build_ssh_base_cmd("10.0.0.5", "autobot", 2222, key)
 
     assert "-i" not in cmd
     assert cmd[0] == "ssh"

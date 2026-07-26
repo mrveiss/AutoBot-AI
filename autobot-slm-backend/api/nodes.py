@@ -76,7 +76,7 @@ from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from services.ssh_utils import _ssh_key_usable
+from services.ssh_utils import build_ssh_base_cmd
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -2780,26 +2780,6 @@ class NodeExecResponse(BaseModel):
     success: bool
 
 
-def _build_node_ssh_cmd(ip_address: str, ssh_user: str, ssh_port: int) -> list:
-    """Build base SSH command args for a node.
-
-    Helper for exec_node_command (Issue #933).
-    """
-    cmd = [
-        "ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-p",
-        str(ssh_port),
-    ]
-    if _ssh_key_usable(_DEFAULT_SSH_KEY):
-        cmd.extend(["-i", _DEFAULT_SSH_KEY])
-    cmd.append(f"{ssh_user}@{ip_address}")
-    return cmd
-
-
 @router.post("/{node_id}/exec", response_model=NodeExecResponse)
 async def exec_node_command(
     node_id: str,
@@ -2819,7 +2799,7 @@ async def exec_node_command(
 
     ssh_user = node.ssh_user or _DEFAULT_SSH_USER
     ssh_port = node.ssh_port or 22
-    cmd = _build_node_ssh_cmd(node.ip_address, ssh_user, ssh_port)
+    cmd = build_ssh_base_cmd(node.ip_address, ssh_user, ssh_port, _DEFAULT_SSH_KEY)
     cmd.append(body.command)
 
     try:
