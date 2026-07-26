@@ -13,6 +13,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "gen:types:openapi": "python3 ../autobot-slm-backend/scripts/dump_openapi.py > openapi.json",
+    "gen:types": "openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties",
+    "verify:types": "git diff --exit-code src/types/generated/api.ts",
     "test": "vitest",
     "test:unit": "vitest run",
     "storybook": "VITE_API_URL=/slm storybook dev -p 6007",
@@ -31,6 +34,11 @@
     "vue-i18n": "^11.4.7",
     "vue-router": "^5.2.0"
   },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  },
   "devDependencies": {
     "@vue/test-utils": "^2.4.11",
     "jsdom": "^29.1.1",
@@ -44,6 +52,7 @@
     "@vue/tsconfig": "^0.9.1",
     "eslint": "^10.7.0",
     "eslint-plugin-vue": "^10.10.0",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.21",
     "storybook": "^10.4.6",
     "tailwindcss": "^4.3.0",
