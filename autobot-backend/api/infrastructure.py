@@ -13,7 +13,7 @@ Issue #1310: Fleet/system VMs removed — they belong in SLM only.
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.schemas_system import InfrastructureHostsResponse
 from auth_middleware import get_current_user
@@ -80,3 +80,31 @@ async def get_infrastructure_hosts(
         hosts = [h for h in hosts if capability in h.get("capabilities", [])]
 
     return {"hosts": hosts}
+
+
+@router.delete("/hosts/{host_id}")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="delete_infrastructure_host",
+    error_code_prefix="INFRASTRUCTURE",
+)
+async def delete_infrastructure_host(
+    host_id: str,
+    _user: Any = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Delete a user-configured infrastructure host.
+
+    Issue #1310: infra hosts are user Secrets entries of type
+    ``infrastructure_host``; deleting the host removes its Secrets entry.
+    Mirrors the GET read-shim — the host id IS the secret id. Returns 404
+    when no matching infrastructure host exists.
+    """
+    if not any(h["id"] == host_id for h in _load_secrets_hosts()):
+        raise HTTPException(status_code=404, detail="Infrastructure host not found")
+
+    from api.secrets import secrets_manager
+
+    if not secrets_manager.delete_secret(host_id):
+        raise HTTPException(status_code=404, detail="Infrastructure host not found")
+
+    return {"status": "success", "id": host_id}
