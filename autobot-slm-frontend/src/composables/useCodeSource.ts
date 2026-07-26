@@ -9,11 +9,20 @@
  * Manages the code-source node assignment for the AutoBot repository.
  * The code source is the designated node that has git access to pull
  * the latest code changes which can then be synced to other nodes.
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()`, injects the SLM bearer token
+ * (same `slm_access_token` storage the auth store reads), and centrally handles
+ * 401 for these non-auth endpoints (clear session + redirect to `/login`) —
+ * replacing the previous per-composable axios instance and request interceptor.
+ * Call sites pass endpoints relative to the API base and receive parsed JSON
+ * directly (no axios `.data`). The client throws on non-2xx, so each method
+ * keeps its try/catch and populates `error.value` from the thrown message,
+ * preserving the graceful `null`/`false` return semantics.
  */
 
 import { ref } from 'vue'
-import axios from 'axios'
-import { getSlmApiBase } from '@/config/ssot-config'
+import slmApiClient from '@/utils/ApiClient'
 
 export interface CodeSource {
   node_id: string
@@ -37,16 +46,6 @@ export function useCodeSource() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  // Use relative path for same-origin SLM backend API (Issue #860)
-  const api = axios.create({ baseURL: getSlmApiBase(), timeout: 15000 })
-  api.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   /**
    * Fetch the current code source configuration.
    */
@@ -55,12 +54,9 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      // Fix double-prefix: baseURL is /api, endpoint is /code-source (Issue #860)
-      const response = await api.get<CodeSource | null>('/code-source')
-      codeSource.value = response.data
+      codeSource.value = await slmApiClient.get<CodeSource | null>('/code-source')
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string }
-      error.value = err.response?.data?.detail || err.message || 'Failed to fetch code source'
+      error.value = e instanceof Error ? e.message : 'Failed to fetch code source'
     } finally {
       isLoading.value = false
     }
@@ -82,17 +78,15 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      // Fix double-prefix: baseURL is /api, endpoint is /code-source/assign (Issue #860)
-      const response = await api.post<CodeSource>('/code-source/assign', {
+      const result = await slmApiClient.post<CodeSource>('/code-source/assign', {
         node_id: nodeId,
         repo_path: repoPath,
         branch,
       })
-      codeSource.value = response.data
-      return response.data
+      codeSource.value = result
+      return result
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string }
-      error.value = err.response?.data?.detail || err.message || 'Failed to assign code source'
+      error.value = e instanceof Error ? e.message : 'Failed to assign code source'
       return null
     } finally {
       isLoading.value = false
@@ -107,13 +101,11 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      // Fix double-prefix: baseURL is /api, endpoint is /code-source/assign (Issue #860)
-      await api.delete('/code-source/assign')
+      await slmApiClient.delete('/code-source/assign')
       codeSource.value = null
       return true
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } }; message?: string }
-      error.value = err.response?.data?.detail || err.message || 'Failed to remove code source'
+      error.value = e instanceof Error ? e.message : 'Failed to remove code source'
       return false
     } finally {
       isLoading.value = false
