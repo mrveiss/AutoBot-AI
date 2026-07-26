@@ -10702,7 +10702,12 @@ export interface paths {
         };
         /**
          * Get Redis Config
-         * @description Get current Redis configuration
+         * @description Get current Redis configuration.
+         *
+         *     Issue #12748: route handler, not a fork — delegates to
+         *     ConfigService.get_redis_config() (task-transport scope; see that
+         *     method's docstring for why it is distinct from the canonical core
+         *     connection config in config.service_config.ServiceConfigMixin).
          */
         get: operations["get_redis_config_api_redis_config_get"];
         put?: never;
