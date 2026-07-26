@@ -421,10 +421,15 @@ async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: i
     node_ids = [n.node_id for n in nodes]
     svc_counts = await _get_service_counts(db, node_ids)
 
+    # #12428: derive code_status per-node (see get_node) so the fleet list
+    # view agrees with outdated_nodes for agentless/never-heartbeated nodes.
+    latest_version = await _get_latest_code_version(db)
+
     node_responses = []
     for n in nodes:
         resp = NodeResponse.model_validate(n)
         resp.service_summary = svc_counts.get(n.node_id)
+        resp.code_status = _reported_code_status(n, latest_version)
         node_responses.append(resp)
 
     return NodeListResponse(
@@ -550,7 +555,14 @@ async def get_node(
             detail="Node not found",
         )
 
-    return NodeResponse.model_validate(node)
+    # #12428: derive code_status from the live code_version vs latest signal
+    # rather than trusting the heartbeat-only stamp, so an agentless node
+    # (never heartbeats) can't report a stale up_to_date here while
+    # outdated_nodes (api/code_sync.py get_sync_status) counts it as behind.
+    latest_version = await _get_latest_code_version(db)
+    resp = NodeResponse.model_validate(node)
+    resp.code_status = _reported_code_status(node, latest_version)
+    return resp
 
 
 @router.patch("/{node_id}", response_model=NodeResponse)
@@ -1731,6 +1743,73 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
+def _derive_code_status(
+    code_version: str | None,
+    latest_version: str | None,
+    was_service_failed: bool = False,
+) -> str | None:
+    """Pure function: the CodeStatus label for code_version vs latest_version.
+
+    Single source of truth for a node's currency label (#12428): mirrors the
+    live signal ``outdated_nodes`` already uses (api/code_sync.py
+    get_sync_status, ``code_version != latest_version``) so a node's
+    reported code_status can never disagree with the fleet-wide outdated
+    count. Shared by both write time (_update_heartbeat_code_status, on a
+    heartbeat) and read time (_reported_code_status, on every GET) — an
+    agentless node that never heartbeats still gets a fresh label on read.
+
+    Returns None when latest_version is unknown — callers should fall back
+    to whatever status is already on hand (mirrors get_sync_status's own
+    fallback when the fleet latest commit isn't set yet).
+
+    was_service_failed preserves the #1605 code_current_service_failed
+    signal when the version still matches latest; that check needs live
+    heartbeat extra_data and cannot be recomputed at read time, so a read
+    derivation passes in the node's own last-known stamp instead.
+    """
+    if not latest_version:
+        return None
+    if not code_version:
+        return CodeStatus.UNKNOWN.value
+    if code_version != latest_version:
+        return CodeStatus.OUTDATED.value
+    if was_service_failed:
+        return CodeStatus.CODE_CURRENT_SERVICE_FAILED.value
+    return CodeStatus.UP_TO_DATE.value
+
+
+async def _get_latest_code_version(db: AsyncSession) -> str | None:
+    """Read the fleet's slm_agent_latest_commit setting.
+
+    Same query used by _update_heartbeat_code_status and
+    api/code_sync.py's get_sync_status — kept here so node reads compare
+    against the exact same live value (#12428).
+    """
+    result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
+    setting = result.scalar_one_or_none()
+    return setting.value if setting else None
+
+
+def _reported_code_status(node: Node, latest_version: str | None) -> str | None:
+    """Derive the code_status to report for a node READ (#12428).
+
+    node.code_status is a stamp written only by _update_heartbeat_code_status,
+    which runs only on a heartbeat. An agentless node (e.g. role vnc) never
+    heartbeats, so the stamp freezes — often at up_to_date from enrollment —
+    even after code_version drifts behind latest_version, disagreeing with
+    outdated_nodes (api/code_sync.py get_sync_status), which always uses the
+    live code_version != latest_version signal. Recomputing here on every
+    read keeps the two surfaces in agreement; falls back to the stored stamp
+    when latest_version is unknown.
+    """
+    derived = _derive_code_status(
+        node.code_version,
+        latest_version,
+        was_service_failed=node.code_status == CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
+    )
+    return derived if derived is not None else node.code_status
+
+
 async def _update_heartbeat_code_status(db: AsyncSession, node: Node, extra_data: dict | None = None) -> str | None:
     """Query latest commit setting and update node.code_status.
 
@@ -1739,23 +1818,16 @@ async def _update_heartbeat_code_status(db: AsyncSession, node: Node, extra_data
     Issue #1605: Also checks service health — code_current_service_failed
     when commit matches but autobot services are failed/crash-looping.
     """
-    latest_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
-    latest_setting = latest_result.scalar_one_or_none()
-    latest_version = latest_setting.value if latest_setting else None
+    latest_version = await _get_latest_code_version(db)
 
     # Compare node.code_version (DB, set by mark-synced) against latest (Issue #918).
     # Do NOT use heartbeat.code_version — agents report stale values (Issue #889).
     if latest_version:
-        if node.code_version == latest_version:
-            # Issue #1605: check if autobot services are actually healthy
-            if _has_failed_autobot_service(extra_data):
-                node.code_status = CodeStatus.CODE_CURRENT_SERVICE_FAILED.value
-            else:
-                node.code_status = CodeStatus.UP_TO_DATE.value
-        elif node.code_version:
-            node.code_status = CodeStatus.OUTDATED.value
-        else:
-            node.code_status = CodeStatus.UNKNOWN.value
+        node.code_status = _derive_code_status(
+            node.code_version,
+            latest_version,
+            was_service_failed=_has_failed_autobot_service(extra_data),
+        )
 
     return latest_version
 
