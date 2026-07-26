@@ -95,6 +95,17 @@ for _key in list(sys.modules.keys()):
     if _key == "code_intelligence.security" or _key.startswith("code_intelligence.security."):
         del sys.modules[_key]
 
+# code_intelligence.security.analyzer imports code_intelligence.shared.analysis_base
+# (#12686). The top-level conftest installs a leaf-only stub for
+# code_intelligence.shared (empty __path__) so that api/*.py's module-level
+# `from code_intelligence.shared.scoring import get_grade_from_score` resolves
+# without dragging in the heavier ASTCache/FileListCache imports. Drop that
+# stub here too so the real package (with its real __path__, now that
+# code_intelligence.__path__ is repaired above) loads for real analysis_base.
+for _key in list(sys.modules.keys()):
+    if _key == "code_intelligence.shared" or _key.startswith("code_intelligence.shared."):
+        del sys.modules[_key]
+
 importlib.import_module("code_intelligence.security")
 
 # Replace the stub for the shim module with the real one.

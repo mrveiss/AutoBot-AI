@@ -308,8 +308,9 @@ def run_security_analysis(self, path: str) -> dict:
     _progress(self, "Initializing security analyzer", 10.0, started)
 
     async def _work():
-        from api.code_intelligence import _calculate_grade_from_score, _get_security_status_message
+        from api.code_intelligence import _get_security_status_message
         from code_intelligence.security import SecurityAnalyzer
+        from code_intelligence.shared.scoring import get_grade_from_score
 
         analyzer = SecurityAnalyzer(project_root=path)
         _progress(self, "Scanning for vulnerabilities", 30.0, started)
@@ -322,7 +323,7 @@ def run_security_analysis(self, path: str) -> dict:
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "path": path,
             "security_score": score,
-            "grade": _calculate_grade_from_score(score),
+            "grade": get_grade_from_score(score),
             "risk_level": summary["risk_level"],
             "status_message": _get_security_status_message(score),
             "total_findings": summary["total_findings"],

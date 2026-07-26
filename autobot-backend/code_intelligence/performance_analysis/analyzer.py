@@ -253,23 +253,6 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
             "top_issues": self._get_top_issues(),
         }
 
-    def _get_grade(self, score: int) -> str:
-        """
-        Get letter grade from score.
-
-        DEPRECATED: Use get_grade_from_score from shared.scoring instead.
-        Kept for backward compatibility.
-        """
-        if score >= 90:
-            return "A"
-        elif score >= 80:
-            return "B"
-        elif score >= 70:
-            return "C"
-        elif score >= 60:
-            return "D"
-        return "F"
-
     def _get_top_issues(self) -> List[Dict[str, Any]]:
         """Get top issues by severity."""
         severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}

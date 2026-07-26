@@ -29,6 +29,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from code_intelligence.shared.scoring import get_grade_from_score
 
 logger = get_logger(__name__)
 # Issue #3355: prefix moved to router registry (analytics_routers.py)
@@ -180,20 +181,6 @@ def calculate_composite_health_score(
     return round(quality_component + issues_component + debt_component + perf_component, 1)
 
 
-def get_grade(score: float) -> str:
-    """Convert score to letter grade."""
-    if score >= 90:
-        return "A"
-    elif score >= 80:
-        return "B"
-    elif score >= 70:
-        return "C"
-    elif score >= 60:
-        return "D"
-    else:
-        return "F"
-
-
 def _get_problem_category_mapping() -> list:
     """Get problem type keyword to category mapping (Issue #315)."""
     return [
@@ -260,7 +247,7 @@ def _build_report_response(
         "generated_at": utc_timestamp(),
         "summary": {
             "health_score": health_score,
-            "grade": get_grade(health_score),
+            "grade": get_grade_from_score(health_score),
             "total_issues": total_issues,
             "critical": severity_totals.get("critical", 0),
             "high": severity_totals.get("high", 0),
