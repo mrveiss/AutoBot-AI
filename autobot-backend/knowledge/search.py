@@ -316,7 +316,7 @@ class SearchMixin:
                 hardware_backend="auto",
             )
             # Convert canonical SearchResult -> legacy dict format expected by callers
-            return [
+            results = [
                 {
                     "content": r.text,
                     "score": r.score,
@@ -326,6 +326,13 @@ class SearchMixin:
                 }
                 for r in engine_results
             ]
+            # A1 (#12552): reinforce facts surfaced by a real query. Fire-and-forget;
+            # never blocks or alters the returned results.
+            try:
+                await self.record_fact_access([r.source for r in engine_results if r.source])
+            except Exception:
+                logger.debug("search: record_fact_access skipped", exc_info=True)
+            return results
         except Exception as exc:
             logger.warning(
                 "VectorSearchEngine delegation failed (%s), falling back to direct ChromaDB",

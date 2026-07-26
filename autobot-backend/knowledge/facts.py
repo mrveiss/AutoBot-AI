@@ -247,6 +247,37 @@ def get_embedding_metrics() -> Dict[str, int]:
     return {"npu_count": npu_count, "fallback_count": fallback_count}
 
 
+# A1 (#12552): fire-and-forget access-recording tasks are held here so the event
+# loop keeps a strong reference until they finish (create_task otherwise GC-able).
+_ACCESS_TASKS: "set[asyncio.Task]" = set()
+
+# A1 (#12552): atomic usage bump. EXISTS + HINCRBY + HSET in one server-side
+# round-trip so a concurrent delete_fact can never resurrect a ghost hash
+# between the guard and the writes (both HINCRBY/HSET auto-create keys).
+_ACCESS_BUMP_LUA = (
+    "if redis.call('EXISTS', KEYS[1]) == 1 then "
+    "redis.call('HINCRBY', KEYS[1], 'access_count', 1) "
+    "redis.call('HSET', KEYS[1], 'last_accessed', ARGV[1]) "
+    "return 1 end return 0"
+)
+
+
+def _apply_usage_fields(decoded: Dict[str, Any], metadata: Dict[str, Any]) -> None:
+    """Surface authoritative usage counters from the Redis hash into metadata.
+
+    A1 (#12552): ``access_count`` / ``last_accessed`` live as top-level hash
+    fields (so ``HINCRBY`` stays atomic and the metadata JSON blob is never
+    rewritten on access). They are the single source of truth; on read we copy
+    them into the returned metadata dict, defaulting to 0 / "" when absent so
+    every fact — old or new — exposes the keys.
+    """
+    try:
+        metadata["access_count"] = int(decoded.get("access_count") or 0)
+    except (TypeError, ValueError):
+        metadata["access_count"] = 0
+    metadata["last_accessed"] = decoded.get("last_accessed") or ""
+
+
 def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
     """Decode Redis hash bytes to strings and parse metadata (Issue #315: extracted).
 
@@ -833,6 +864,7 @@ class FactsMixin:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
+            _apply_usage_fields(decoded, metadata)
             return {
                 "fact_id": fact_id,
                 "content": decoded.get("content", ""),
@@ -843,6 +875,50 @@ class FactsMixin:
         except Exception as e:
             logger.error("Error retrieving fact %s: %s", fact_id, e)
             return None
+
+    async def record_fact_access(self, fact_ids: List[str]) -> None:
+        """Schedule a non-blocking usage bump for surfaced facts (A1, #12552).
+
+        Returns immediately: the actual ``HINCRBY`` runs in a background task so
+        the read path is never blocked and a failure here never propagates to the
+        caller. Reinforcement is best-effort — a dropped bump only costs one
+        ranking signal, never correctness.
+        """
+        ids = [fid for fid in (fact_ids or []) if fid]
+        if not ids:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop (sync/test context): do it inline, still guarded.
+            await self._bump_fact_access(ids)
+            return
+        task = loop.create_task(self._bump_fact_access(ids))
+        _ACCESS_TASKS.add(task)
+        task.add_done_callback(_ACCESS_TASKS.discard)
+
+    async def _bump_fact_access(self, fact_ids: List[str]) -> None:
+        """Atomically increment ``access_count`` and stamp ``last_accessed``.
+
+        Counters are authoritative top-level hash fields, so the metadata JSON
+        blob is never rewritten. The EXISTS+HINCRBY+HSET is done as one atomic
+        Lua ``EVAL`` per fact, so a deleted fact is never resurrected by a bump
+        racing a concurrent ``delete_fact``. Duplicate ids collapse to one bump.
+        """
+        now_iso = datetime.now(tz=timezone.utc).isoformat()
+        unique_ids = list(dict.fromkeys(fact_ids))
+
+        def _work() -> None:
+            for fid in unique_ids:
+                try:
+                    self.redis_client.eval(_ACCESS_BUMP_LUA, 1, "fact:%s" % fid, now_iso)
+                except Exception:
+                    logger.debug("record_fact_access: bump failed for %s (non-fatal)", fid)
+
+        try:
+            await asyncio.to_thread(_work)
+        except Exception:
+            logger.debug("record_fact_access bump failed (non-fatal)", exc_info=True)
 
     def _process_fact_data(
         self,
@@ -874,6 +950,7 @@ class FactsMixin:
         if collection and metadata.get("collection") != collection:
             return None
 
+        _apply_usage_fields(decoded, metadata)
         return {
             "fact_id": fact_id,
             "content": decoded.get("content", ""),

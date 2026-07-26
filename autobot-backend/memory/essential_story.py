@@ -131,6 +131,15 @@ class EssentialStoryGenerator:
                 break
             selected.append(fact)
             used_tokens += tokens
+
+        # A1 (#12552): reinforce the facts we actually surface to the model.
+        # Fire-and-forget — never blocks or fails story generation.
+        try:
+            surfaced_ids = [f.get("fact_id") or f.get("id") for f in selected]
+            await kb.record_fact_access([fid for fid in surfaced_ids if fid])
+        except Exception:
+            logger.debug("essential_story: record_fact_access skipped", exc_info=True)
+
         return selected
 
     async def _format_output(self, facts: List[Dict[str, Any]]) -> str:
