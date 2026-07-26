@@ -18,7 +18,7 @@
 // These serve DIFFERENT purposes and MUST remain separate composables.
 
 import { ref } from 'vue'
-import { getSLMUrl } from '@/config/ssot-config'
+import { slmClient } from '@/utils/slmClient'
 import { createLogger } from '@/utils/debugUtils'
 import { useLoadingState } from '@/composables/useLoadingState'
 
@@ -79,34 +79,23 @@ export interface HostCreate {
 // Composable
 // ---------------------------------------------------------------------------
 
+// SLM node endpoints live under the SLM backend's /api/nodes path. The base URL
+// (getSLMUrl) and token handling are owned by the canonical SLM bridge; these
+// endpoints are token-less, so the default (token-less) slmClient is used.
+const NODES_PATH = '/api/nodes'
+
 export function useHostInventory() {
   const hosts = ref<Host[]>([])
   const total = ref(0)
   const { isLoading: loading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
-  function slmBase(): string {
-    return `${getSLMUrl()}/api/nodes`
-  }
-
-  async function _slmFetch<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetch(path, {
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
-      ...init,
-    })
-    if (!res.ok) {
-      const text = await res.text().catch(() => res.statusText)
-      throw new Error(`SLM ${res.status}: ${text}`)
-    }
-    return res.json() as Promise<T>
-  }
-
   async function fetchHosts(page = 1, perPage = 50): Promise<void> {
     error.value = null
     await wrap(async () => {
       try {
-        const data = await _slmFetch<HostListResponse>(
-          `${slmBase()}?page=${page}&per_page=${perPage}`,
+        const data = await slmClient.get<HostListResponse>(
+          `${NODES_PATH}?page=${page}&per_page=${perPage}`,
         )
         hosts.value = data.nodes
         total.value = data.total
@@ -121,10 +110,7 @@ export function useHostInventory() {
     error.value = null
     return wrap(async () => {
       try {
-        const host = await _slmFetch<Host>(slmBase(), {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        })
+        const host = await slmClient.post<Host>(NODES_PATH, payload)
         await fetchHosts()
         return host
       } catch (err: unknown) {
@@ -139,12 +125,9 @@ export function useHostInventory() {
     error.value = null
     return wrap(async () => {
       try {
-        const result = await _slmFetch<{ job_id?: string; message?: string }>(
-          `${slmBase()}/${nodeId}/provision`,
-          {
-            method: 'POST',
-            body: JSON.stringify({ roles: [roleName] }),
-          },
+        const result = await slmClient.post<{ job_id?: string; message?: string }>(
+          `${NODES_PATH}/${nodeId}/provision`,
+          { roles: [roleName] },
         )
         return result.job_id ?? null
       } catch (err: unknown) {
