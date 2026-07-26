@@ -20254,6 +20254,9 @@ export interface paths {
          *     (Issue #315 - refactored to reduce nesting)
          *     Issue #12330: Scope the scan to the requested source's clone path so one
          *     project cannot see another's import tree.
+         *     Issue #12364: Reads from the indexed store first (single source of truth,
+         *     sub-second); falls back to the live filesystem walk -- and kicks off a
+         *     background index job -- only when the index has no data for this source.
          */
         get: operations["get_import_tree_api_analytics_codebase_analytics_import_tree_get"];
         put?: never;
