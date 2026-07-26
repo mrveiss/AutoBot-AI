@@ -1532,16 +1532,23 @@ async def _start_autonomous_loop(app: FastAPI) -> None:
 
 
 async def _wire_scheduler_executor() -> None:
-    """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
+    """Wire Orchestrator.run_workflow into the global WorkflowScheduler (#2166).
 
     Replaces the scheduler's fallback _default_template_executor with an adapter
     that delegates non-template scheduled workflows to Orchestrator, enabling
     full agent coordination, step dependency management, and auto-documentation for
     all scheduled workflows — not just template-based ones.
 
+    Correction (#12373): despite this function's name, it does NOT wire
+    ``orchestration.workflow_executor.WorkflowExecutor`` (that class has had
+    no production callers since #5058). ``orchestrator.run_workflow`` itself
+    delegates to ``orchestration.workflow_runner.WorkflowRunner``. The name
+    is kept for now to avoid an unrelated rename churn; read "orchestration
+    executor" below as "the orchestrator's run_workflow pipeline."
+
     NON-CRITICAL: template-based workflows still work if this fails.
     """
-    logger.info("[ 98%%] Scheduler: Wiring orchestration executor...")
+    logger.info("[ 98%%] Scheduler: Wiring orchestrator run_workflow pipeline...")
     try:
         from orchestrator import get_orchestrator_sync
         from workflow_scheduler import ScheduledWorkflow, get_workflow_scheduler

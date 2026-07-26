@@ -6,6 +6,21 @@
 Workflow Execution Module
 
 Handles workflow step execution, dependency checking, and command execution.
+
+CANONICAL RUNTIME ENGINE (#12373): This ``WorkflowExecutor`` is the single
+production workflow-execution engine.  It is the only ``WorkflowExecutor``
+implementation with a live instantiation site (``WorkflowAutomationManager``
+in ``manager.py``), and backs the ``/api/workflow/*`` and
+``/api/workflow-automation/*`` API surfaces via that manager.
+
+A second, unrelated class of the same name, ``orchestration.workflow_executor
+.WorkflowExecutor``, exists but has had **no production callers since #5058**
+(``orchestrator.run_workflow`` now delegates to ``orchestration.workflow_runner
+.WorkflowRunner`` instead).  See that module's docstring for details — its
+unique DAG/checkpoint/sub-workflow/parallel-group/variable-piping capabilities
+are tracked for future consolidation onto *this* engine under #12577 (and
+#6826 for the DAG-specific piece).  Do not confuse the two classes; prefer
+this one for all new integration work.
 """
 
 from __future__ import annotations

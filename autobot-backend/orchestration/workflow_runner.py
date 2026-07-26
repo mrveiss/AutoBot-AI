@@ -10,9 +10,17 @@ moved to CollaborationCoordinator and AgentRouter collaborators respectively.
 Executor scope (#6826): WorkflowRunner is the **enhanced/multi-agent strategy engine**.
 It executes WorkflowPlan objects via pluggable ExecutionStrategy instances and delegates
 agent routing and collaboration to injected collaborators.  It does not handle DAG graphs
-or step-level checkpoints — those remain in orchestration.WorkflowExecutor and
-CheckpointResumer.  WorkflowRunner is the post-#5058 successor for the multi-agent path;
-orchestration.WorkflowExecutor remains canonical for the legacy step-based path.
+or step-level checkpoints — that logic still only exists in orchestration.WorkflowExecutor
+and CheckpointResumer, neither of which WorkflowRunner currently calls.
+
+Correction (#12373): despite the "canonical for the legacy step-based path" language this
+docstring used to carry, orchestration.WorkflowExecutor has had NO production callers
+since #5058 — orchestrator.run_workflow delegates to WorkflowRunner (this class), not to
+orchestration.WorkflowExecutor. The actual canonical *runtime* workflow-execution engine
+for the product overall is services.workflow_automation.executor.WorkflowExecutor (a
+third, unrelated class). WorkflowRunner is the live post-#5058 engine for the multi-agent
+orchestration path specifically; consolidating it with the canonical services engine is
+scoped to the follow-up issue #12577.
 
 Moved from enhanced_orchestration.workflow_runner to orchestration.workflow_runner
 (issue #10666 B3).
