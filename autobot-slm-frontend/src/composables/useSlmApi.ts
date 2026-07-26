@@ -9,7 +9,7 @@
  * Provides REST API integration for all SLM endpoints.
  */
 
-import axios, { type AxiosInstance } from 'axios'
+import { slmApiClient } from '@/utils/ApiClient'
 import type {
   SLMNode,
   NodeHealth,
@@ -45,7 +45,6 @@ import type {
   FleetUpdateSummary,
   EligibleNode,
 } from '@/types/slm'
-import { getSlmApiBase } from '@/config/ssot-config'
 import type {
   ActionResponse,
   SyncVerifyResponse,
@@ -98,8 +97,95 @@ import type {
   WizardStatusResponse,
 } from '@/types/api-responses'
 
-// SLM Admin uses the local SLM backend API
-const API_BASE = getSlmApiBase()
+// =============================================================================
+// slmApiClient adapter (#12420 Phase 2 batch 5)
+//
+// useSlmApi historically owned its own axios instance (base URL from
+// getSlmApiBase(), a request interceptor injecting the SLM bearer token, and no
+// response interceptor). This adapter routes every call through the canonical
+// `slmApiClient` — where the auth token, base URL and centralised 401 handling
+// now live — while reproducing the axios surface the methods below depend on so
+// their bodies, and all ~26 consumers, stay byte-for-byte unchanged:
+//
+//   * methods `await client.<verb>(endpoint, body?)` and read `response.data`
+//     → the adapter returns `{ data }`.
+//   * consumers read `err.response.status` / `err.response.data.detail` on a
+//     rejected call (e.g. upsertSecret's 409 fallback, SetupWizardView,
+//     SecretsSettings) → the adapter throws an axios-shaped error carrying
+//     `response.status` and `response.data`.
+//
+// It delegates to `slmApiClient.rawRequest` (not the get/post/... helpers) on
+// purpose: rawRequest is the single seam that injects the bearer token + base
+// URL and runs the 401 handler, WITHOUT the helpers' GET retry/back-off or the
+// `HTTP <n>: <msg>` error transform — preserving the original single-shot,
+// structured-error behaviour the consumers rely on.
+// =============================================================================
+
+interface AxiosLikeResponse<T> {
+  data: T
+}
+
+// Serialise an axios-style params object onto the endpoint. Only getProvisionStatus
+// passes a params object; every other method already builds its own query string.
+function withParams(endpoint: string, params?: Record<string, unknown>): string {
+  if (!params) return endpoint
+  const usp = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) usp.append(key, String(value))
+  }
+  const qs = usp.toString()
+  if (!qs) return endpoint
+  return endpoint.includes('?') ? `${endpoint}&${qs}` : `${endpoint}?${qs}`
+}
+
+async function adapterRequest<T>(
+  method: string,
+  endpoint: string,
+  body?: unknown
+): Promise<AxiosLikeResponse<T>> {
+  const response = await slmApiClient.rawRequest(endpoint, { method, body })
+
+  if (!response.ok) {
+    let data: unknown = null
+    try {
+      data = await response.json()
+    } catch {
+      /* non-JSON error body — leave data null, mirroring axios */
+    }
+    const error = new Error(`HTTP ${response.status}`) as Error & {
+      response: { status: number; data: unknown }
+    }
+    // Reproduce the axios error shape consumers read (err.response.status/.data).
+    error.response = { status: response.status, data }
+    throw error
+  }
+
+  if (response.status === 204) return { data: {} as T }
+  const contentType = response.headers.get('content-type')
+  if (contentType && contentType.includes('application/json')) {
+    return { data: (await response.json()) as T }
+  }
+  // Non-JSON 2xx (e.g. PEM cert downloads) — return the raw text, as axios does
+  // when its default JSON transform cannot parse the payload.
+  return { data: (await response.text()) as unknown as T }
+}
+
+// Axios-compatible facade over slmApiClient consumed by every method below.
+const client = {
+  get: <T = unknown>(
+    endpoint: string,
+    config?: { params?: Record<string, unknown> }
+  ): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('GET', withParams(endpoint, config?.params)),
+  post: <T = unknown>(endpoint: string, body?: unknown): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('POST', endpoint, body),
+  put: <T = unknown>(endpoint: string, body?: unknown): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('PUT', endpoint, body),
+  patch: <T = unknown>(endpoint: string, body?: unknown): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('PATCH', endpoint, body),
+  delete: <T = unknown>(endpoint: string): Promise<AxiosLikeResponse<T>> =>
+    adapterRequest<T>('DELETE', endpoint),
+}
 
 // Backend response types (different from frontend SLMNode)
 interface BackendNodeResponse {
@@ -178,22 +264,6 @@ interface ReplicationsResponse {
 }
 
 export function useSlmApi() {
-  const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   // Nodes
   async function getNodes(): Promise<SLMNode[]> {
     const response = await client.get<NodesResponse>('/nodes')
@@ -326,7 +396,7 @@ export function useSlmApi() {
     nodeId: string,
     updateIds: string[]
   ): Promise<{ applied_updates: string[]; failed_updates: string[] }> {
-    const response = await client.post(`/nodes/${nodeId}/updates/apply`, { update_ids: updateIds })
+    const response = await client.post<{ applied_updates: string[]; failed_updates: string[] }>(`/nodes/${nodeId}/updates/apply`, { update_ids: updateIds })
     return response.data
   }
 
@@ -435,7 +505,7 @@ export function useSlmApi() {
     nodeId: string,
     serviceType = 'redis'
   ): Promise<{ is_healthy: boolean; details: Record<string, unknown> }> {
-    const response = await client.post('/stateful/verify', {
+    const response = await client.post<{ is_healthy: boolean; details: Record<string, unknown> }>('/stateful/verify', {
       node_id: nodeId,
       service_type: serviceType,
     })
@@ -764,7 +834,7 @@ export function useSlmApi() {
   }
 
   async function getNodeMetrics(nodeId: string): Promise<FleetMetrics['nodes'][0]> {
-    const response = await client.get(`/monitoring/metrics/node/${nodeId}`)
+    const response = await client.get<FleetMetrics['nodes'][0]>(`/monitoring/metrics/node/${nodeId}`)
     return response.data
   }
 
@@ -852,7 +922,20 @@ export function useSlmApi() {
     time_window_hours: number
   }> {
     const params = hours ? `?hours=${hours}` : ''
-    const response = await client.get(`/monitoring/errors${params}`)
+    const response = await client.get<{
+      total_errors: number
+      by_type: Record<string, number>
+      by_node: Record<string, number>
+      recent_errors: Array<{
+        event_id: string
+        node_id: string
+        hostname: string
+        event_type: string
+        message: string
+        timestamp: string
+      }>
+      time_window_hours: number
+    }>(`/monitoring/errors${params}`)
     return response.data
   }
 
@@ -1237,7 +1320,13 @@ export function useSlmApi() {
     error: string | null
     elapsed_seconds?: number
   }> {
-    const response = await client.get('/setup/provision-status', {
+    const response = await client.get<{
+      status: string
+      lines: string[]
+      total_lines: number
+      error: string | null
+      elapsed_seconds?: number
+    }>('/setup/provision-status', {
       params: { since_line: sinceLine },
     })
     return response.data
@@ -1250,7 +1339,13 @@ export function useSlmApi() {
     missing_required_roles: string[]
     ready: boolean
   }> {
-    const response = await client.get('/setup/validate')
+    const response = await client.get<{
+      health: string
+      total_nodes: number
+      online_nodes: number
+      missing_required_roles: string[]
+      ready: boolean
+    }>('/setup/validate')
     return response.data
   }
 
