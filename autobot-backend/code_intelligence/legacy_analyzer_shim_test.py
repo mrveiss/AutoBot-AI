@@ -22,7 +22,6 @@ conftest's generic code_intelligence stub (used everywhere else to avoid the
 heavy __init__ chain) does not carry a working __path__.
 """
 
-import tempfile
 import textwrap
 
 import pytest
