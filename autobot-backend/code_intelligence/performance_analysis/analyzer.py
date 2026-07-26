@@ -10,133 +10,39 @@ Issue #554: Added Vector/Redis/LLM infrastructure for semantic analysis.
 Contains the main PerformanceAnalyzer class and convenience functions.
 """
 
-import ast
 import re
-import time
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.shared.analysis_base import (
+    HAS_ANALYTICS_INFRASTRUCTURE,
+    SIMILARITY_MEDIUM,
+    BaseCodeAnalyzer,
+)
 
 from .ast_visitor import PerformanceASTVisitor
 from .types import PerformanceIssue, PerformanceIssueType, PerformanceSeverity
 
-# Issue #554: Import analytics infrastructure for semantic analysis
-try:
-    from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
-
-    HAS_ANALYTICS_INFRASTRUCTURE = True
-except ImportError:
-    HAS_ANALYTICS_INFRASTRUCTURE = False
-    SemanticAnalysisMixin = object  # Fallback to object if not available
-
-# Issue #607: Import shared caches for performance optimization
-try:
-    from code_intelligence.shared.ast_cache import get_ast_with_content
-
-    HAS_SHARED_CACHE = True
-except ImportError:
-    HAS_SHARED_CACHE = False
-
 logger = get_logger(__name__)
 
 
-class PerformanceAnalyzer(SemanticAnalysisMixin):
+class PerformanceAnalyzer(BaseCodeAnalyzer):
     """
     Main performance pattern analyzer.
 
     Issue #554: Now includes optional semantic analysis via ChromaDB/Redis/LLM
     infrastructure for detecting semantically similar performance issues.
+    Issue #12660: The scan/cache skeleton (``__init__``, ``analyze_file``,
+    ``analyze_directory``, ``analyze_directory_async``, ``_regex_analysis``,
+    ``_should_exclude``, ``cache_analysis_results``, ``get_cached_analysis``)
+    now lives in ``BaseCodeAnalyzer``; this class only provides the AST
+    visitor, the performance-specific ``_check_*`` regex checkers, and the
+    performance-shaped summary/report methods.
     """
 
-    def __init__(
-        self,
-        project_root: str | None = None,
-        exclude_patterns: List[str] | None = None,
-        use_semantic_analysis: bool = False,
-        use_cache: bool = True,
-        use_shared_cache: bool = True,
-    ):
-        """
-        Initialize performance analyzer with project root and exclusion patterns.
-
-        Args:
-            project_root: Root directory for analysis
-            exclude_patterns: Patterns to exclude from analysis
-            use_semantic_analysis: Whether to use LLM-based semantic analysis (Issue #554)
-            use_cache: Whether to use Redis caching for results (Issue #554)
-            use_shared_cache: Whether to use shared FileListCache/ASTCache (Issue #607)
-        """
-        self.project_root = Path(project_root) if project_root else Path.cwd()
-        self.exclude_patterns = exclude_patterns or [
-            "venv",
-            "node_modules",
-            ".git",
-            "__pycache__",
-            "*.pyc",
-            "test_*",
-            "*_test.py",
-            "archives",
-            "migrations",
-        ]
-        self.results: List[PerformanceIssue] = []
-        self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
-        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
-        self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
-
-        # Issue #554: Initialize analytics infrastructure if semantic analysis enabled
-        if self.use_semantic_analysis:
-            self._init_infrastructure(
-                collection_name="performance_analysis_vectors",
-                use_llm=True,
-                use_cache=use_cache,
-                redis_database="analytics",
-            )
-
-    def analyze_file(self, file_path: str) -> List[PerformanceIssue]:
-        """
-        Analyze a single file for performance issues.
-
-        Issue #607: Uses shared ASTCache when available for performance.
-        """
-        findings: List[PerformanceIssue] = []
-        path = Path(file_path)
-
-        if not path.exists() or not path.suffix == ".py":
-            return findings
-
-        try:
-            # Issue #607: Use shared AST cache if available
-            if self.use_shared_cache:
-                tree, content = get_ast_with_content(file_path)
-                lines = content.split("\n") if content else []
-            else:
-                content = path.read_text(encoding="utf-8")
-                lines = content.split("\n")
-                try:
-                    tree = ast.parse(content)
-                except SyntaxError:
-                    tree = None
-
-            # AST-based analysis
-            if tree is not None:
-                visitor = PerformanceASTVisitor(str(path), lines)
-                visitor.visit(tree)
-                findings.extend(visitor.findings)
-            else:
-                logger.warning("Syntax error in %s, skipping AST analysis", file_path)
-
-            # Regex-based analysis for patterns AST can't catch
-            if content:
-                findings.extend(self._regex_analysis(str(path), content, lines))
-
-        except Exception as e:
-            logger.error("Error analyzing %s: %s", file_path, e)
-
-        return findings
+    AST_VISITOR_CLASS = PerformanceASTVisitor
+    SEMANTIC_COLLECTION_NAME = "performance_analysis_vectors"
+    CACHE_PREFIX = "performance_analysis"
 
     def _check_list_lookup_pattern(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
         """
@@ -289,54 +195,14 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
                 )
         return findings
 
-    def _regex_analysis(self, file_path: str, content: str, lines: List[str]) -> List[PerformanceIssue]:
-        """
-        Perform regex-based performance analysis.
-
-        Issue #620: Refactored with extracted helper methods.
-        """
-        findings: List[PerformanceIssue] = []
-
-        # Check for list used as lookup (Issue #620: uses helper)
-        findings.extend(self._check_list_lookup_pattern(file_path, content, lines))
-
-        # Check for repeated file opens (Issue #620: uses helper)
-        findings.extend(self._check_repeated_file_opens(file_path, content, lines))
-
-        # Check for string concat in loops (Issue #620: uses helper)
-        findings.extend(self._check_string_concat_in_loop(file_path, content, lines))
-
-        # Check for unclosed resources (Issue #12362: uses helper)
-        findings.extend(self._check_unclosed_resources(file_path, content, lines))
-
-        return findings
-
-    def analyze_directory(self, directory: str | None = None) -> List[PerformanceIssue]:
-        """Analyze all Python files in a directory."""
-        target = Path(directory) if directory else self.project_root
-        self.results = []
-        self.total_files_scanned = 0  # Issue #686: Reset counter
-
-        for py_file in target.rglob("*.py"):
-            if self._should_exclude(py_file):
-                continue
-
-            self.total_files_scanned += 1  # Issue #686: Count all files scanned
-            findings = self.analyze_file(str(py_file))
-            self.results.extend(findings)
-
-        return self.results
-
-    def _should_exclude(self, path: Path) -> bool:
-        """Check if path should be excluded."""
-        path_str = str(path)
-        for pattern in self.exclude_patterns:
-            if pattern.startswith("*"):
-                if path_str.endswith(pattern[1:]):
-                    return True
-            elif pattern in path_str:
-                return True
-        return False
+    def _get_checkers(self) -> List[Callable[[str, str, List[str]], List[PerformanceIssue]]]:
+        """Ordered regex checkers run by ``BaseCodeAnalyzer._regex_analysis``."""
+        return [
+            self._check_list_lookup_pattern,
+            self._check_repeated_file_opens,
+            self._check_string_concat_in_loop,
+            self._check_unclosed_resources,
+        ]
 
     def get_summary(self) -> Dict[str, Any]:
         """
@@ -472,50 +338,13 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         return "".join(md)
 
     # Issue #554: Async semantic analysis methods
+    # Issue #12660: analyze_directory_async/cache_analysis_results/
+    # get_cached_analysis now live on BaseCodeAnalyzer; only the
+    # domain-specific metadata_keys below remain here.
 
-    async def analyze_directory_async(
+    async def _find_semantic_duplicates(
         self,
-        directory: str | None = None,
-        find_semantic_duplicates: bool = True,
-    ) -> Dict[str, Any]:
-        """
-        Analyze a directory with optional semantic analysis.
-
-        Issue #554: Async version that supports ChromaDB/Redis/LLM infrastructure.
-
-        Args:
-            directory: Path to directory to analyze
-            find_semantic_duplicates: Whether to find semantically similar issues
-
-        Returns:
-            Dictionary with analysis results including semantic matches
-        """
-        start_time = time.time()
-
-        # Run standard analysis first
-        results = self.analyze_directory(directory)
-
-        result = {
-            "results": [r.to_dict() for r in results],
-            "summary": self.get_summary(),
-            "semantic_duplicates": [],
-            "infrastructure_metrics": {},
-        }
-
-        # Run semantic analysis if enabled
-        if self.use_semantic_analysis and find_semantic_duplicates:
-            semantic_dups = await self._find_semantic_performance_duplicates(results)
-            result["semantic_duplicates"] = semantic_dups
-
-            # Add infrastructure metrics
-            result["infrastructure_metrics"] = self._get_infrastructure_metrics()
-
-        result["analysis_time_ms"] = (time.time() - start_time) * 1000
-        return result
-
-    async def _find_semantic_performance_duplicates(
-        self,
-        issues: List[PerformanceIssue],
+        items: List[PerformanceIssue],
     ) -> List[Dict[str, Any]]:
         """
         Find semantically similar performance issues using LLM embeddings.
@@ -524,14 +353,14 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         helper from SemanticAnalysisMixin to reduce code duplication.
 
         Args:
-            issues: List of detected performance issues
+            items: List of detected performance issues
 
         Returns:
             List of duplicate pairs with similarity scores
         """
         try:
             return await self._find_semantic_duplicates_with_extraction(
-                items=issues,
+                items=items,
                 code_extractors=["current_code"],
                 metadata_keys={
                     "issue_type": "issue_type",
@@ -544,62 +373,6 @@ class PerformanceAnalyzer(SemanticAnalysisMixin):
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
             return []
-
-    async def cache_analysis_results(
-        self,
-        directory: str,
-        results: List[PerformanceIssue],
-    ) -> bool:
-        """
-        Cache analysis results in Redis for faster retrieval.
-
-        Issue #554: Uses Redis caching from analytics infrastructure.
-
-        Args:
-            directory: Analyzed directory path
-            results: Analysis results to cache
-
-        Returns:
-            True if cached successfully
-        """
-        if not self.use_semantic_analysis:
-            return False
-
-        cache_key = self._generate_content_hash(directory)
-        results_dict = {
-            "results": [r.to_dict() for r in results],
-            "summary": self.get_summary(),
-        }
-
-        return await self._cache_result(
-            key=cache_key,
-            result=results_dict,
-            prefix="performance_analysis",
-        )
-
-    async def get_cached_analysis(
-        self,
-        directory: str,
-    ) -> Dict[str, Any] | None:
-        """
-        Get cached analysis results from Redis.
-
-        Issue #554: Retrieves cached results for faster repeat analysis.
-
-        Args:
-            directory: Directory path to look up
-
-        Returns:
-            Cached analysis results or None if not found
-        """
-        if not self.use_semantic_analysis:
-            return None
-
-        cache_key = self._generate_content_hash(directory)
-        return await self._get_cached_result(
-            key=cache_key,
-            prefix="performance_analysis",
-        )
 
 
 def analyze_performance(directory: str | None = None, exclude_patterns: List[str] | None = None) -> Dict[str, Any]:

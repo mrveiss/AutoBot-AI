@@ -16,6 +16,10 @@ Components:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
+from code_intelligence.shared.analysis_base import (
+    DEFAULT_EXCLUDE_PATTERNS,
+    BaseCodeAnalyzer,
+)
 from code_intelligence.shared.ast_cache import (
     ASTCache,
     get_ast,
@@ -48,6 +52,9 @@ from code_intelligence.shared.scoring import (
 )
 
 __all__ = [
+    # Analyzer skeleton (Issue #12660)
+    "BaseCodeAnalyzer",
+    "DEFAULT_EXCLUDE_PATTERNS",
     # FileListCache
     "FileListCache",
     "get_file_list_cache",
