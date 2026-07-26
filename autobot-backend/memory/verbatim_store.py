@@ -48,15 +48,60 @@ _SYM_TERM_KEY = "autobot:vsym:term:{term}"  # set of chunk_ids containing the te
 _SYM_CHUNK_KEY = "autobot:vsym:chunk:{chunk_id}"  # reverse: set of terms (for cleanup)
 _SYM_MAX_TERMS_PER_CHUNK = 32  # cap so a huge turn can't bloat the index
 _SYM_RECENCY_WEIGHT = 0.2  # blend recency into the lexical rank (mirrors search)
+# A broad term (e.g. a common word) can union to thousands of chunks. Rather than
+# fetch them all from ChromaDB, treat an over-broad match as "not an entity query"
+# and fall back to semantic search.
+_SYM_MAX_CANDIDATES = 200
 
 # Minimal stopword set — mirrors query_processor._extract_keywords intent without
 # coupling to that private module. Salient-term extraction, not full NLP.
 _SYM_STOPWORDS = frozenset(
     {
-        "the", "and", "for", "are", "was", "were", "you", "your", "our", "their", "with", "that",
-        "this", "have", "has", "had", "not", "but", "can", "will", "would", "should", "could",
-        "what", "when", "where", "which", "who", "why", "how", "did", "does", "about", "from",
-        "into", "out", "get", "got", "let", "its", "it's", "they", "them", "then", "than",
+        "the",
+        "and",
+        "for",
+        "are",
+        "was",
+        "were",
+        "you",
+        "your",
+        "our",
+        "their",
+        "with",
+        "that",
+        "this",
+        "have",
+        "has",
+        "had",
+        "not",
+        "but",
+        "can",
+        "will",
+        "would",
+        "should",
+        "could",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "how",
+        "did",
+        "does",
+        "about",
+        "from",
+        "into",
+        "out",
+        "get",
+        "got",
+        "let",
+        "its",
+        "it's",
+        "they",
+        "them",
+        "then",
+        "than",
     }
 )
 
@@ -65,6 +110,7 @@ def _extract_terms(text: str) -> set:
     """Salient alphanumeric terms (len>2, non-stopword) for the symbolic index."""
     tokens = re.findall(r"[a-z0-9]+", (text or "").lower())
     return {t for t in tokens if len(t) > 2 and t not in _SYM_STOPWORDS}
+
 
 # Recency-weighted re-ranking (GH#11163). Verbatim recall blends semantic
 # similarity with an exponential recency decay so recent turns surface over
@@ -265,6 +311,15 @@ class VerbatimStore:
         candidate_ids = [c.decode() if isinstance(c, bytes) else c for c in raw]
         if not candidate_ids:
             return None
+        # Over-broad match (a common term) → not a good entity query. Fall back to
+        # semantic search rather than fetch thousands of chunks from ChromaDB.
+        if len(candidate_ids) > _SYM_MAX_CANDIDATES:
+            logger.debug(
+                "search_symbolic: %d candidates exceed cap %d — deferring to semantic",
+                len(candidate_ids),
+                _SYM_MAX_CANDIDATES,
+            )
+            return None
         return await self._rank_symbolic_candidates(candidate_ids, terms, session_filter, limit)
 
     async def _rank_symbolic_candidates(
@@ -284,8 +339,13 @@ class VerbatimStore:
                 continue
             doc_terms = _extract_terms(doc)
             overlap = len(query_terms & doc_terms) / len(query_terms) if query_terms else 0.0
-            recency = _recency_factor(meta.get("timestamp"), now) or 0.0
-            score = (1.0 - _SYM_RECENCY_WEIGHT) * overlap + _SYM_RECENCY_WEIGHT * recency
+            # Blend recency only when present — mirrors search()'s handling of a
+            # missing/unparseable timestamp (skip, don't penalise the chunk).
+            recency = _recency_factor(meta.get("timestamp"), now)
+            if recency is not None:
+                score = (1.0 - _SYM_RECENCY_WEIGHT) * overlap + _SYM_RECENCY_WEIGHT * recency
+            else:
+                score = overlap
             ranked.append({"id": cid, "text": doc, "score": score, "metadata": meta})
         ranked.sort(key=lambda c: c["score"], reverse=True)
         return ranked[:limit]

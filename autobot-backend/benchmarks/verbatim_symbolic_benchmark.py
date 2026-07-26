@@ -32,19 +32,27 @@ logger = get_logger(__name__)
 _ENTITIES = [f"ClientAcme{i:03d}" for i in range(50)]
 
 
-def _build_corpus() -> Tuple[List[Tuple[str, int, str, str]], Dict[str, str]]:
-    """Return (turns, ground_truth). turns = (session_id, turn, role, text);
-    ground_truth maps an entity query -> the chunk text that answers it."""
+def _build_corpus() -> Tuple[List[Tuple[str, int, str, str]], Dict[str, str], Dict[str, str]]:
+    """Return (turns, exact_truth, paraphrase_truth).
+
+    turns = (session_id, turn, role, text). ``exact_truth`` maps an entity query
+    that SHARES tokens with its answer (symbolic's ideal case). ``paraphrase_truth``
+    maps a query with **no exact token overlap** with the answer (semantic's job) —
+    included deliberately so the recall verdict isn't biased toward the lexical
+    index (a corpus that only tests exact-token queries would over-report symbolic).
+    """
     turns: List[Tuple[str, int, str, str]] = []
-    truth: Dict[str, str] = {}
+    exact: Dict[str, str] = {}
+    paraphrase: Dict[str, str] = {}
     for i, ent in enumerate(_ENTITIES):
         decision = f"We decided that {ent} pricing stays flat through Q3 after review."
         turns.append((f"sess{i}", 0, "assistant", decision))
-        truth[f"{ent} pricing decision"] = decision
-        # filler turns that mention the entity only incidentally
+        exact[f"{ent} pricing decision"] = decision
+        # Paraphrase: same meaning, zero shared content words with the answer.
+        paraphrase[f"how much will {ent} cost us next quarter"] = decision
         for j in range(4):
             turns.append((f"sess{i}", j + 1, "user", f"Some unrelated chatter number {j} for {ent}."))
-    return turns, truth
+    return turns, exact, paraphrase
 
 
 def _recall_at_k(results: List[dict], answer: str, k: int) -> float:
@@ -52,10 +60,22 @@ def _recall_at_k(results: List[dict], answer: str, k: int) -> float:
     return 1.0 if any(answer in (r.get("text") or "") for r in top) else 0.0
 
 
-async def _seed(store) -> None:
-    turns, _ = _build_corpus()
+async def _seed(store) -> List[str]:
+    turns, _, _ = _build_corpus()
+    sessions = set()
     for session_id, turn, role, text in turns:
         await store.append(session_id=session_id, turn=turn, role=role, text=text)
+        sessions.add(session_id)
+    return sorted(sessions)
+
+
+async def _teardown(store, sessions: List[str]) -> None:
+    """Remove seeded sessions so reruns stay reproducible (don't accumulate)."""
+    for session_id in sessions:
+        try:
+            await store.delete_session(session_id)
+        except Exception as exc:  # noqa: BLE001 — best-effort cleanup
+            logger.debug("teardown: delete_session(%s) failed: %s", session_id, exc)
 
 
 async def _measure(store, method_name: str, queries: Dict[str, str], k: int) -> Tuple[float, float]:
@@ -74,24 +94,35 @@ async def _measure(store, method_name: str, queries: Dict[str, str], k: int) -> 
 async def main(k: int) -> None:
     store = await get_verbatim_store()
     logger.info("Seeding synthetic verbatim corpus ...")
-    await _seed(store)
-    _, truth = _build_corpus()
+    sessions = await _seed(store)
+    try:
+        _, exact, paraphrase = _build_corpus()
+        # Exact-token queries: symbolic's ideal case (latency win expected).
+        sem_lat_e, sem_rec_e = await _measure(store, "search", exact, k)
+        sym_lat_e, sym_rec_e = await _measure(store, "search_symbolic", exact, k)
+        # Paraphrase queries: no shared tokens — semantic should win; symbolic
+        # legitimately returns nothing (falls back). This is the honesty check.
+        _, sem_rec_p = await _measure(store, "search", paraphrase, k)
+        _, sym_rec_p = await _measure(store, "search_symbolic", paraphrase, k)
 
-    sem_lat, sem_recall = await _measure(store, "search", truth, k)
-    sym_lat, sym_recall = await _measure(store, "search_symbolic", truth, k)
-
-    logger.info("semantic : median=%.2fms recall@%d=%.3f", sem_lat, k, sem_recall)
-    logger.info("symbolic : median=%.2fms recall@%d=%.3f", sym_lat, k, sym_recall)
-    faster = sym_lat < sem_lat
-    no_regress = sym_recall >= sem_recall
-    verdict = "ADOPT (flag-on)" if (faster and no_regress) else "KEEP OFF"
-    logger.info(
-        "VERDICT: %s — faster=%s (%.2fx), recall-neutral=%s",
-        verdict,
-        faster,
-        (sem_lat / sym_lat) if sym_lat else float("inf"),
-        no_regress,
-    )
+        logger.info("[exact]      semantic median=%.2fms recall@%d=%.3f", sem_lat_e, k, sem_rec_e)
+        logger.info("[exact]      symbolic median=%.2fms recall@%d=%.3f", sym_lat_e, k, sym_rec_e)
+        logger.info("[paraphrase] semantic recall@%d=%.3f  symbolic recall@%d=%.3f", k, sem_rec_p, k, sym_rec_p)
+        faster = sym_lat_e < sem_lat_e
+        no_regress_exact = sym_rec_e >= sem_rec_e
+        # Symbolic must NOT be trusted to answer paraphrase queries — if it did
+        # worse than semantic there (expected), the caller's fallback covers it,
+        # but if symbolic *replaced* semantic it would lose that recall.
+        logger.info(
+            "VERDICT: %s — exact: faster=%s (%.2fx) recall-neutral=%s | paraphrase gap (semantic-symbolic)=%.3f",
+            "ADOPT (flag-on, WITH semantic fallback)" if (faster and no_regress_exact) else "KEEP OFF",
+            faster,
+            (sem_lat_e / sym_lat_e) if sym_lat_e else float("inf"),
+            no_regress_exact,
+            sem_rec_p - sym_rec_p,
+        )
+    finally:
+        await _teardown(store, sessions)
 
 
 if __name__ == "__main__":

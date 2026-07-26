@@ -84,7 +84,7 @@ def test_extract_terms_drops_stopwords_and_short():
     assert "pricing" in terms
     assert "march" in terms
     assert "did" not in terms  # stopword
-    assert "we" not in terms   # too short
+    assert "we" not in terms  # too short
 
 
 # ---- fallback contract -----------------------------------------------------
@@ -157,6 +157,21 @@ async def test_search_symbolic_respects_session_filter(monkeypatch, fake_redis):
     await store._index_symbolic("c1", "ClientX pricing note")
     results = await store.search_symbolic("clientx pricing", session_filter="s1")
     assert results == []  # candidate belongs to a different session
+
+
+@pytest.mark.asyncio
+async def test_over_broad_query_defers_to_semantic(monkeypatch, fake_redis):
+    # A term matching more than the cap => not an entity query => return None so
+    # the caller falls back to semantic search (no giant ChromaDB fetch).
+    monkeypatch.setattr(vs, "_SYMBOLIC_INDEX_ENABLED", True)
+    monkeypatch.setattr(vs, "_SYM_MAX_CANDIDATES", 3)
+    for i in range(5):
+        await VerbatimStore()._index_symbolic(f"c{i}", "pricing pricing pricing")
+    collection = MagicMock()
+    collection.get = AsyncMock()
+    store = _store_with_collection(collection)
+    assert await store.search_symbolic("pricing") is None
+    collection.get.assert_not_awaited()  # never fetched the oversized set
 
 
 @pytest.mark.asyncio
