@@ -98,9 +98,12 @@ describe('useThinkingMode — persist via fetchWithAuth', () => {
       ([, opts]) => (opts as RequestInit | undefined)?.method === 'PUT',
     )
     expect(putCall).toBeTruthy()
-    expect(putCall?.[0]).toBe('/api/sessions/sess-9/thinking-preferences')
-    expect((putCall?.[1] as RequestInit).credentials).toBe('include')
-    expect(JSON.parse((putCall?.[1] as RequestInit).body as string)).toEqual({
+    // Destructure once (putCall asserted truthy above) so the RequestInit
+    // access isn't a `?.`-then-required member read (no-unsafe-optional-chaining).
+    const [putUrl, putInit] = putCall ?? []
+    expect(putUrl).toBe('/api/sessions/sess-9/thinking-preferences')
+    expect((putInit as RequestInit).credentials).toBe('include')
+    expect(JSON.parse((putInit as RequestInit).body as string)).toEqual({
       enabled: false,
       budget_tokens: 32000,
     })
