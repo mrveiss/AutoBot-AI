@@ -34,6 +34,19 @@
     state: present
   tags: ['npu', 'users']
 
+# #12425: supplementary (not primary) membership in the shared `autobot`
+# group so this role can write into the shared, setgid /var/log/autobot dir
+# (see common role) via group permission, without owning that directory
+# itself — see the "Create NPU worker directories" task below, which
+# deliberately excludes npu_log_dir from the owner/group it applies to the
+# role's own, exclusively-owned dirs.
+- name: "NPU Worker | Join shared autobot log group (#12425)"
+  ansible.builtin.user:
+    name: "{{ npu_user }}"
+    groups: autobot
+    append: true
+  tags: ['npu', 'users']
+
 # ============================================================
 # Per-role env at /etc/autobot/  (#926 Phase 4)
 # ============================================================
@@ -89,8 +102,36 @@
     group: "{{ npu_group }}"
   loop:
     - "{{ npu_install_dir }}"
-    - "{{ npu_log_dir }}"
     - "{{ npu_models_dir }}"
+
+# #12425: npu_log_dir defaults to the SHARED /var/log/autobot (common role),
+# not an NPU-exclusive path — re-chowning it to npu_user/npu_group above (as
+# the other two, genuinely NPU-exclusive dirs correctly are) clobbered
+# common's autobot:autobot ownership on every run of this role. Converge to
+# the SAME canonical ownership the common role applies, regardless of which
+# role runs last; the group-write bit + this role's own membership in the
+# `autobot` group (above) is what lets npu_user still write its log files
+# here. A future group_vars override to an NPU-exclusive path falls through
+# to the npu_user-owned dir instead.
+- name: "NPU Worker | Ensure shared log directory uses canonical ownership (#12425)"
+  ansible.builtin.file:
+    path: "{{ npu_log_dir }}"
+    state: directory
+    mode: "02775"
+    owner: autobot
+    group: autobot
+  when: npu_log_dir == '/var/log/autobot'
+  tags: ['npu', 'dirs']
+
+- name: "NPU Worker | Create NPU-exclusive log directory (override path only, #12425)"
+  ansible.builtin.file:
+    path: "{{ npu_log_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ npu_user }}"
+    group: "{{ npu_group }}"
+  when: npu_log_dir != '/var/log/autobot'
+  tags: ['npu', 'dirs']
 
 # #11374: Install python3.11 (OpenVINO's supported interpreter) BEFORE any
 # venv work. `ensure_venv_version` removes a wrong-version venv and the
