@@ -8,7 +8,6 @@ Handles text translation between languages with context-aware processing
 and automatic language detection.
 """
 
-import uuid
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -22,7 +21,8 @@ from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
-from .standardized_agent import ActionHandler, StandardizedAgent
+from .base_modality_agent import BaseModalityAgent
+from .standardized_agent import ActionHandler
 
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -31,10 +31,14 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 logger = get_logger(__name__)
 
 
-class TranslationAgent(StandardizedAgent):
+class TranslationAgent(BaseModalityAgent):
     """Agent specialized for multi-language translation."""
 
     AGENT_ID = "translation"
+    QUERY_TEMPERATURE = 0.3
+    QUERY_MAX_TOKENS = LLMDefaults.CHAT_MAX_TOKENS
+    QUERY_ERROR_MESSAGE = "Error processing translation. Please try again."
+    _LOGGER = logger
 
     def __init__(self):
         """Initialize the Translation Agent with LLM configuration."""
@@ -99,40 +103,6 @@ class TranslationAgent(StandardizedAgent):
         )
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        """Process a translation query using the vLLM-optimised API (Issue #3389)."""
-        try:
-            logger.info("Translation Agent processing: %s...", request_text[:50])
-            session_id = (context or {}).get("session_id") or str(uuid.uuid4())
-            response = await self.llm_interface.chat_optimized(
-                agent_type=self.AGENT_ID,
-                user_message=request_text,
-                session_id=session_id,
-                user_name=(context or {}).get("user_name"),
-                user_role=(context or {}).get("user_role"),
-                temperature=0.3,
-                max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
-                top_p=LLMDefaults.DEFAULT_TOP_P,
-            )
-            response_text = self._extract_content(response)
-            return {
-                "status": "success",
-                "response": response_text,
-                "response_text": response_text,
-                "agent_type": "translation",
-                "model_used": self.model_name,
-                "token_usage": (response.get("usage", {}) if isinstance(response, dict) else {}),
-            }
-        except Exception as e:
-            logger.error("Translation Agent error: %s", e)
-            return {
-                "status": "error",
-                "response": "Error processing translation. Please try again.",
-                "response_text": str(e),
-                "agent_type": "translation",
-                "model_used": self.model_name,
-            }
-
     def _get_system_prompt(self) -> str:
         """Get system prompt for translation tasks."""
         return (
@@ -146,23 +116,6 @@ class TranslationAgent(StandardizedAgent):
             "- If detecting language, provide ISO 639-1 code and confidence level\n"
             "- Handle technical terminology with precision"
         )
-
-    def _extract_content(self, response: Any) -> str:
-        """Extract text content from LLM response."""
-        if isinstance(response, str):
-            return response.strip()
-        if isinstance(response, dict):
-            msg = response.get("message", {})
-            if isinstance(msg, dict) and msg.get("content"):
-                return msg["content"].strip()
-            choices = response.get("choices", [])
-            if choices and isinstance(choices[0], dict):
-                choice_msg = choices[0].get("message", {})
-                if isinstance(choice_msg, dict) and choice_msg.get("content"):
-                    return choice_msg["content"].strip()
-            if "content" in response:
-                return str(response["content"]).strip()
-        return str(response)
 
 
 get_translation_agent = lazy_singleton(TranslationAgent)
