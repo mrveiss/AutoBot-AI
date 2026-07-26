@@ -20,6 +20,7 @@
 import { computed, getCurrentScope, onScopeDispose, ref } from 'vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
+import { extractErrorMessage } from '@/utils/errorExtract'
 import { useUserStore } from '@/stores/useUserStore'
 
 const logger = createLogger('useDesktopControlLock')
@@ -36,12 +37,6 @@ export interface DesktopControlLockState {
   owner: string | null
   human_active: boolean
   message: string
-}
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message
-  if (typeof err === 'string') return err
-  return fallback
 }
 
 export function useDesktopControlLock(vncType: string = 'desktop', sessionId: string = 'default') {
