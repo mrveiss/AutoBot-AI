@@ -141,7 +141,12 @@ import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/file-browser/FileBrowser.vue'
 import VisualBrowserPanel from '@/components/chat/VisualBrowserPanel.vue'  // Issue #1130: screenshot-based browser
 import HostSelector from '@/components/ui/HostSelector.vue'  // Issue #715: Dynamic host selection
-import SSHTerminal from '@/components/terminal/SSHTerminal.vue'    // Issue #715: SSH terminal component
+// Issue #715: SSH terminal component.
+// Issue #12342: lazy-load so xterm + its addons (~336KB) are fetched only
+// when a host is selected and the terminal actually renders — not at /chat
+// first paint. Rendered behind v-if="selectedSshHost", so the chunk loads
+// on demand.
+const SSHTerminal = defineAsyncComponent(() => import('@/components/terminal/SSHTerminal.vue'))
 import DesktopInterface from '@/components/desktop/DesktopInterface.vue'  // Issue #4977: full VNC component
 
 /**
