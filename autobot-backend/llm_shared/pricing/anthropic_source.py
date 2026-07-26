@@ -12,10 +12,7 @@ the hardcoded fallback.
 
 from __future__ import annotations
 
-from autobot_shared.logging_manager import get_logger
-from llm_shared.pricing.sources import ModelPricing, PricingSource
-
-logger = get_logger(__name__)
+from llm_shared.pricing.sources import BaselinePricingSource
 
 _PROVIDER = "anthropic"
 
@@ -34,20 +31,7 @@ _BASELINE: list[tuple[str, float, float, float]] = [
 ]
 
 
-class AnthropicPricingSource(PricingSource):
+class AnthropicPricingSource(BaselinePricingSource):
     provider = _PROVIDER
-
-    async def fetch(self) -> dict[str, ModelPricing]:
-        now = self._now()
-        result: dict[str, ModelPricing] = {}
-        for model_id, inp, out, cache_read in _BASELINE:
-            result[model_id] = ModelPricing(
-                provider=_PROVIDER,
-                model_id=model_id,
-                input_per_1m=inp,
-                output_per_1m=out,
-                cache_read_per_1m=cache_read,
-                updated_at=now,
-            )
-        logger.debug("AnthropicPricingSource.fetch returned %d models", len(result))
-        return result
+    _PROVIDER = _PROVIDER
+    _BASELINE = _BASELINE

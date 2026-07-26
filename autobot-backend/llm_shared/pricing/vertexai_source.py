@@ -12,10 +12,7 @@ Vertex-specific pricing endpoints.
 
 from __future__ import annotations
 
-from autobot_shared.logging_manager import get_logger
-from llm_shared.pricing.sources import ModelPricing, PricingSource
-
-logger = get_logger(__name__)
+from llm_shared.pricing.sources import BaselinePricingSource
 
 _PROVIDER = "vertexai"
 
@@ -36,19 +33,7 @@ _BASELINE: list[tuple[str, float, float]] = [
 ]
 
 
-class VertexAIPricingSource(PricingSource):
+class VertexAIPricingSource(BaselinePricingSource):
     provider = _PROVIDER
-
-    async def fetch(self) -> dict[str, ModelPricing]:
-        now = self._now()
-        result: dict[str, ModelPricing] = {}
-        for model_id, inp, out in _BASELINE:
-            result[model_id] = ModelPricing(
-                provider=_PROVIDER,
-                model_id=model_id,
-                input_per_1m=inp,
-                output_per_1m=out,
-                updated_at=now,
-            )
-        logger.debug("VertexAIPricingSource.fetch returned %d models", len(result))
-        return result
+    _PROVIDER = _PROVIDER
+    _BASELINE = _BASELINE
