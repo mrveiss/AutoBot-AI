@@ -70,6 +70,9 @@ from models.schemas import (
     UpdatePolicyResponse,
 )
 from services.auth import get_current_user
+from services.code_status import derive_code_status as _derive_code_status
+from services.code_status import get_latest_code_version as _get_latest_code_version
+from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
@@ -1743,73 +1746,6 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
-def _derive_code_status(
-    code_version: str | None,
-    latest_version: str | None,
-    was_service_failed: bool = False,
-) -> str | None:
-    """Pure function: the CodeStatus label for code_version vs latest_version.
-
-    Single source of truth for a node's currency label (#12428): mirrors the
-    live signal ``outdated_nodes`` already uses (api/code_sync.py
-    get_sync_status, ``code_version != latest_version``) so a node's
-    reported code_status can never disagree with the fleet-wide outdated
-    count. Shared by both write time (_update_heartbeat_code_status, on a
-    heartbeat) and read time (_reported_code_status, on every GET) — an
-    agentless node that never heartbeats still gets a fresh label on read.
-
-    Returns None when latest_version is unknown — callers should fall back
-    to whatever status is already on hand (mirrors get_sync_status's own
-    fallback when the fleet latest commit isn't set yet).
-
-    was_service_failed preserves the #1605 code_current_service_failed
-    signal when the version still matches latest; that check needs live
-    heartbeat extra_data and cannot be recomputed at read time, so a read
-    derivation passes in the node's own last-known stamp instead.
-    """
-    if not latest_version:
-        return None
-    if not code_version:
-        return CodeStatus.UNKNOWN.value
-    if code_version != latest_version:
-        return CodeStatus.OUTDATED.value
-    if was_service_failed:
-        return CodeStatus.CODE_CURRENT_SERVICE_FAILED.value
-    return CodeStatus.UP_TO_DATE.value
-
-
-async def _get_latest_code_version(db: AsyncSession) -> str | None:
-    """Read the fleet's slm_agent_latest_commit setting.
-
-    Same query used by _update_heartbeat_code_status and
-    api/code_sync.py's get_sync_status — kept here so node reads compare
-    against the exact same live value (#12428).
-    """
-    result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
-    setting = result.scalar_one_or_none()
-    return setting.value if setting else None
-
-
-def _reported_code_status(node: Node, latest_version: str | None) -> str | None:
-    """Derive the code_status to report for a node READ (#12428).
-
-    node.code_status is a stamp written only by _update_heartbeat_code_status,
-    which runs only on a heartbeat. An agentless node (e.g. role vnc) never
-    heartbeats, so the stamp freezes — often at up_to_date from enrollment —
-    even after code_version drifts behind latest_version, disagreeing with
-    outdated_nodes (api/code_sync.py get_sync_status), which always uses the
-    live code_version != latest_version signal. Recomputing here on every
-    read keeps the two surfaces in agreement; falls back to the stored stamp
-    when latest_version is unknown.
-    """
-    derived = _derive_code_status(
-        node.code_version,
-        latest_version,
-        was_service_failed=node.code_status == CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
-    )
-    return derived if derived is not None else node.code_status
-
-
 async def _update_heartbeat_code_status(db: AsyncSession, node: Node, extra_data: dict | None = None) -> str | None:
     """Query latest commit setting and update node.code_status.
 
@@ -2607,7 +2543,10 @@ async def get_node_updates(
     Includes code_update_available/code_status (#11964) computed via the
     SAME is_code_update_available() helper the fleet update-summary badge
     uses, so this live "Check for updates" scan can never disagree with
-    the badge shown on the node card.
+    the badge shown on the node card. code_status is derived fresh via
+    _reported_code_status (#12428/#12571) instead of trusting the raw,
+    heartbeat-only node.code_status stamp, so an agentless node's frozen
+    stamp can't surface here either.
     """
     from sqlalchemy import or_
 
@@ -2635,11 +2574,14 @@ async def get_node_updates(
     result = await db.execute(query)
     updates = result.scalars().all()
 
+    latest_version = await _get_latest_code_version(db)
+    reported_status = _reported_code_status(node, latest_version)
+
     return UpdateCheckResponse(
         updates=[UpdateInfoResponse.model_validate(u) for u in updates],
         total=len(updates),
-        code_update_available=is_code_update_available(node),
-        code_status=node.code_status or "unknown",
+        code_update_available=is_code_update_available(node, latest_version),
+        code_status=reported_status or "unknown",
     )
 
 

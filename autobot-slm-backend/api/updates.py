@@ -49,6 +49,7 @@ from models.schemas import (
     UpdateSummaryResponse,
 )
 from services.auth import get_current_user
+from services.code_status import get_latest_code_version, reported_code_status
 from services.database import get_db
 from services.playbook_executor import get_playbook_executor
 
@@ -755,28 +756,40 @@ async def check_updates(
     )
 
 
-def is_code_update_available(node: Node) -> bool:
+def is_code_update_available(node: Node, latest_version: str | None = None) -> bool:
     """Canonical check for whether a node has a pending code update.
 
     Single source of truth for "code update available" (#11964): consumed by
     both the fleet update-summary badge (get_fleet_update_summary below) and
     the live per-node "Check for updates" scan (nodes.get_node_updates), so
-    the two can never disagree — they read the exact same node.code_status
-    field via the same helper.
+    the two can never disagree.
+
+    latest_version routes the check through reported_code_status
+    (services/code_status.py, #12428/#12571) instead of the raw,
+    heartbeat-only node.code_status stamp, so an agentless node whose stamp
+    is frozen still reports correctly. Defaults to None (falls back to the
+    stored stamp) for backward-compatible callers that haven't fetched the
+    fleet's latest commit.
     """
-    return (node.code_status or "") == CodeStatus.OUTDATED.value
+    return (reported_code_status(node, latest_version) or "") == CodeStatus.OUTDATED.value
 
 
-def _build_node_summaries(nodes: list, updates_by_node: dict, global_count: int) -> list:
+def _build_node_summaries(
+    nodes: list, updates_by_node: dict, global_count: int, latest_version: str | None = None
+) -> list:
     """Build per-node update summaries.
 
-    Helper for get_fleet_update_summary (#682).
+    Helper for get_fleet_update_summary (#682). latest_version (#12571)
+    routes each node's code_status through reported_code_status so the
+    fleet badge agrees with GET /nodes and GET /nodes/{id}/updates for
+    agentless nodes whose heartbeat stamp is frozen.
     """
     summaries = []
     for node in nodes:
         sys_count = len(updates_by_node.get(node.node_id, []))
         sys_count += global_count
-        code_outdated = is_code_update_available(node)
+        status_label = reported_code_status(node, latest_version)
+        code_outdated = (status_label or "") == CodeStatus.OUTDATED.value
         total = sys_count + (1 if code_outdated else 0)
         summaries.append(
             NodeUpdateSummary(
@@ -784,7 +797,7 @@ def _build_node_summaries(nodes: list, updates_by_node: dict, global_count: int)
                 hostname=node.hostname,
                 system_updates=sys_count,
                 code_update_available=code_outdated,
-                code_status=node.code_status or "unknown",
+                code_status=status_label or "unknown",
                 total_updates=total,
             )
         )
@@ -815,7 +828,8 @@ async def get_fleet_update_summary(
         else:
             global_updates.append(upd)
 
-    summaries = _build_node_summaries(nodes, updates_by_node, len(global_updates))
+    latest_version = await get_latest_code_version(db)
+    summaries = _build_node_summaries(nodes, updates_by_node, len(global_updates), latest_version)
 
     # Unique total: per-node specific + global (not per-node * global)
     total_sys = sum(len(v) for v in updates_by_node.values()) + len(global_updates)

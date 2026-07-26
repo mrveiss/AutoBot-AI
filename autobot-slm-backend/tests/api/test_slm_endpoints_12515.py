@@ -63,14 +63,23 @@ def _load_real_module(name: str, path: Path):
 
 
 def _build_real_modules() -> dict:
-    """One-time real sqlalchemy + models.database/models.schemas snapshot.
+    """One-time real sqlalchemy + models.database/models.schemas/
+    services.code_status snapshot.
 
     Copied from tests/api/test_nodes_list_timeout_10913.py: the root conftest
     stubs these as MagicMocks for import-time safety, so the real packages are
     loaded once here and swapped in on demand.
+
+    services.code_status (#12571) must be real-loaded too: api.nodes'
+    _get_latest_code_version/_reported_code_status now delegate there
+    (#12428/#12570), and its own module-level ``select``/``Setting`` bindings
+    need the real sqlalchemy/models.database swapped in first or its queries
+    fail against a genuine aiosqlite AsyncSession.
     """
     saved = {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)}
-    saved.update({name: sys.modules.get(name) for name in ("models.database", "models.schemas")})
+    saved.update(
+        {name: sys.modules.get(name) for name in ("models.database", "models.schemas", "services.code_status")}
+    )
     for name in list(saved):
         sys.modules.pop(name, None)
     try:
@@ -79,15 +88,18 @@ def _build_real_modules() -> dict:
         importlib.import_module("sqlalchemy.dialects.sqlite")
         _load_real_module("models.database", _SLM_ROOT / "models" / "database.py")
         _load_real_module("models.schemas", _SLM_ROOT / "models" / "schemas.py")
+        _load_real_module("services.code_status", _SLM_ROOT / "services" / "code_status.py")
         return {name: mod for name, mod in sys.modules.items() if _is_sqlalchemy_key(name)} | {
             "models.database": sys.modules["models.database"],
             "models.schemas": sys.modules["models.schemas"],
+            "services.code_status": sys.modules["services.code_status"],
         }
     finally:
         for name in [n for n in sys.modules if _is_sqlalchemy_key(n)]:
             del sys.modules[name]
         sys.modules.pop("models.database", None)
         sys.modules.pop("models.schemas", None)
+        sys.modules.pop("services.code_status", None)
         for name, mod in saved.items():
             if mod is not None:
                 sys.modules[name] = mod
