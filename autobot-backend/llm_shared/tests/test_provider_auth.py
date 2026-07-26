@@ -886,10 +886,10 @@ class TestGetOauthAllowedHosts:
         old = os.environ.pop(env_key, None)
         try:
             hosts = get_oauth_allowed_hosts()
-            assert "accounts.google.com" in hosts  # codeql[py/incomplete-url-substring-sanitization]
-            assert "github.com" in hosts  # codeql[py/incomplete-url-substring-sanitization]
-            assert "api.anthropic.com" in hosts  # codeql[py/incomplete-url-substring-sanitization]
-            assert "login.microsoftonline.com" in hosts  # codeql[py/incomplete-url-substring-sanitization]
+            assert "accounts.google.com" in hosts
+            assert "github.com" in hosts
+            assert "api.anthropic.com" in hosts
+            assert "login.microsoftonline.com" in hosts
         finally:
             if old is not None:
                 os.environ[env_key] = old
@@ -904,8 +904,8 @@ class TestGetOauthAllowedHosts:
         os.environ[env_key] = "custom.provider.com, other.example.com"
         try:
             hosts = get_oauth_allowed_hosts()
-            assert "custom.provider.com" in hosts  # codeql[py/incomplete-url-substring-sanitization]
-            assert "other.example.com" in hosts  # codeql[py/incomplete-url-substring-sanitization]
+            assert "custom.provider.com" in hosts
+            assert "other.example.com" in hosts
             assert "accounts.google.com" not in hosts
         finally:
             if old is None:

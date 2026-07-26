@@ -4006,7 +4006,7 @@ async def sync_role(
         len(node_roles),
     )
 
-    return {  # codeql[py/stack-trace-exposure]
+    return {
         "success": success_count > 0,
         "message": f"Synced {success_count}/{len(node_roles)} nodes",
         "role_name": role_name,

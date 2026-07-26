@@ -1490,7 +1490,7 @@ async def decommission_node(
         "node_decommissioned",
         {"hostname": node.hostname, "ip_address": node.ip_address},
     )
-    return {  # codeql[py/stack-trace-exposure]
+    return {
         "success": True,
         "message": f"Node {node_id} decommissioned successfully",
         "deployment_id": deployment.deployment_id,

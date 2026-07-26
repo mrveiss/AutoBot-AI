@@ -275,7 +275,7 @@ def build_drift_report(
     Returns:
         Dict matching the ``FileDriftReport`` schema.
     """
-    drifted, total = compute_drift(source_dir, deployed_dir, component)  # codeql[py/path-injection]
+    drifted, total = compute_drift(source_dir, deployed_dir, component)
 
     return {
         "source_dir": source_dir,

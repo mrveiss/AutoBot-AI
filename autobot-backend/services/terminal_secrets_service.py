@@ -103,7 +103,7 @@ class TerminalSecretsService:
     def _create_session_state(self, session_id: str, chat_id: str | None) -> SessionKeyState:
         """Helper for setup_ssh_keys. Ref: #1088."""
         state = SessionKeyState(session_id=session_id, chat_id=chat_id)
-        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)  # codeql[py/path-injection]
+        safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in session_id)
         state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{safe_id}_")
         return state
 

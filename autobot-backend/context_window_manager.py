@@ -131,14 +131,12 @@ class ContextWindowManager:
             model_name: Name of the LLM model to use
         """
         if model_name not in self.config["models"]:
-            logger.warning(
-                "Unknown model %s, using default", model_name
-            )  # codeql[py/clear-text-logging-sensitive-data]
+            logger.warning("Unknown model %s, using default", model_name)
             self.current_model = self.config["models"]["default"]["name"]
         else:
             self.current_model = model_name
 
-        logger.info("Active model: %s", self.current_model)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("Active model: %s", self.current_model)
 
     def get_message_limit(self, model_name: str | None = None) -> int:
         """Get recommended message limit for model.
@@ -351,7 +349,7 @@ class ContextWindowManager:
         if family in _NON_TRANSFORMER_FAMILIES:
             logger.debug(
                 "async_should_compress: %s (family=%s) → False (bypass)",
-                model,  # codeql[py/clear-text-logging-sensitive-data]
+                model,
                 family,
             )
             return False

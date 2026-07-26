@@ -184,7 +184,6 @@ class OpenAIGPT4VProvider(BaseAIProvider):
                 self.client = openai.AsyncOpenAI(api_key=self.config.api_key)
                 logger.info("OpenAI GPT-4V client initialized")
             else:
-                # codeql[py/clear-text-logging-sensitive-data]
                 logger.warning("OpenAI API key not provided")
         except ImportError:
             logger.warning("OpenAI library not available")
@@ -330,7 +329,6 @@ class AnthropicClaudeProvider(BaseAIProvider):
                 self.client = anthropic.AsyncAnthropic(api_key=self.config.api_key)
                 logger.info("Anthropic Claude client initialized")
             else:
-                # codeql[py/clear-text-logging-sensitive-data]
                 logger.warning("Anthropic API key not provided")
         except ImportError:
             logger.warning("Anthropic library not available")
@@ -466,7 +464,6 @@ class GoogleGeminiProvider(BaseAIProvider):
                 self.client = genai
                 logger.info("Google Gemini client initialized")
             else:
-                # codeql[py/clear-text-logging-sensitive-data]
                 logger.warning("Google AI API key not provided")
         except ImportError:
             logger.warning("Google GenerativeAI library not available")

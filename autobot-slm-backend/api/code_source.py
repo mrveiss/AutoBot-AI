@@ -188,7 +188,7 @@ async def _find_similar_paths(node: Node, target_path: str) -> str | None:
     if _is_local_node(node):
         try:
             parent = Path(parent_dir)
-            if parent.is_dir():  # codeql[py/path-injection]
+            if parent.is_dir():
                 for entry in parent.iterdir():
                     if entry.name.lower() == basename.lower() and entry.name != basename:
                         return str(entry)
@@ -237,7 +237,7 @@ async def _validate_repo_path(node: Node, repo_path: str) -> None:
         HTTPException: If path doesn't exist or validation fails
     """
     if _is_local_node(node):
-        if Path(repo_path).is_dir():  # codeql[py/path-injection]
+        if Path(repo_path).is_dir():
             return
         similar_path = await _find_similar_paths(node, repo_path)
         error_detail = f"Repository path does not exist on source node: {repo_path}"

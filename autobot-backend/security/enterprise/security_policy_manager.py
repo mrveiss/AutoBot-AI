@@ -520,9 +520,7 @@ class SecurityPolicyManager:
         self._save_policy(policy)
         self._update_policy_statistics()
 
-        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
-            "Created new security policy: %s (%s)", name, policy_id
-        )
+        logger.info("Created new security policy: %s (%s)", name, policy_id)
         return policy_id
 
     def update_policy(self, policy_id: str, updates: Dict, author: str) -> bool:

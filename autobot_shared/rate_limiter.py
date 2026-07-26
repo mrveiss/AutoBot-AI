@@ -233,7 +233,7 @@ class RateLimiter:
             logger.warning(
                 "rate_limiter: failed to record request for '%s:%s': %s",
                 self._prefix,
-                key,  # codeql[py/clear-text-logging-sensitive-data]
+                key,
                 exc,
             )
 
