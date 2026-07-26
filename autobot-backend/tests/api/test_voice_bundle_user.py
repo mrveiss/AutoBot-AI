@@ -18,7 +18,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.voice_bundle_helpers import _require_admin
 from api.voice_bundle_user import (
     _check_self_or_admin,
     _get_user_id,
@@ -26,35 +25,46 @@ from api.voice_bundle_user import (
     router,
 )
 from auth_middleware import get_current_user
-from utils.catalog_http_exceptions import raise_auth_error
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
 _USER_BOB = {"user_id": "bob", "username": "bob", "role": "user"}
 _ADMIN = {"user_id": "admin-user", "username": "admin", "role": "admin"}
+_SUPERADMIN = {"user_id": "root", "username": "root", "role": "superadmin"}
+
+# Holds the user the patched auth middleware returns for the current test.
+_CURRENT: dict = {"user": None}
+
+
+@pytest.fixture(autouse=True)
+def _patch_auth_middleware():
+    """Make the canonical require_role() gate see the injected test user.
+
+    Admin-gated routes use ``require_role("admin", "superadmin")`` (#12704),
+    which reads the user via ``auth_rbac.get_auth_middleware()``.
+    """
+    mw = MagicMock()
+    mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
+    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+        yield
+    _CURRENT["user"] = None
 
 
 def _make_client(user: dict) -> TestClient:
-    """Create a TestClient with dependency_overrides for get_current_user.
+    """Create a TestClient with the injected user wired into auth.
 
-    Admin-gated routes depend on ``_require_admin`` (a Request-based middleware
-    check, GH#9450) rather than ``get_current_user``, so override it too —
-    role-gated against the injected user so admin routes 200 for admins and
-    403 for non-admins (GH#8977).
+    ``get_current_user`` (the acting-user dict) is overridden, and the
+    ``require_role()`` gate reads the same user via the autouse middleware
+    patch, so admin routes 200 for admin/superadmin and 403 for others.
     """
+    _CURRENT["user"] = user
     app = FastAPI()
     app.include_router(router, prefix="/api/voice")
 
     async def _override():
         return user
 
-    def _override_require_admin() -> dict:
-        if user.get("role") != "admin":
-            raise_auth_error("AUTH_0003", "Admin permission required")
-        return user
-
     app.dependency_overrides[get_current_user] = _override
-    app.dependency_overrides[_require_admin] = _override_require_admin
     return TestClient(app)
 
 
@@ -364,6 +374,30 @@ class TestSetUserBundle:
         )
 
         assert response.status_code == 403
+
+    def test_superadmin_assigns_bundle_to_user(self):
+        """superadmin can assign a bundle — previously admin-only (#12704 unlock)."""
+        client = _make_client(_SUPERADMIN)
+
+        with (
+            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("api.voice_bundle_user.emit") as mock_emit,
+        ):
+            mock_session = AsyncMock(spec=AsyncSession)
+            mock_session_ctx.return_value.__aenter__.return_value = mock_session
+            mock_result = MagicMock()
+            mock_result.fetchone.return_value = ("voice_safe",)
+            mock_session.execute.return_value = mock_result
+
+            response = client.put(
+                "/api/voice/users/bob/bundle",
+                json={"bundle_name": "voice_safe"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["bundle_name"] == "voice_safe"
+        mock_emit.assert_called_once()
 
     def test_admin_can_assign_admin_bundle(self):
         """Admin can assign voice_admin bundle."""

@@ -20,8 +20,9 @@ from api.voice_bundle_constants import (
     VALID_BUNDLES,
     BundleAssignRequest,
 )
-from api.voice_bundle_helpers import _count_tools_for_bundle, _require_admin
+from api.voice_bundle_helpers import _count_tools_for_bundle
 from auth_middleware import get_current_user
+from auth_rbac import require_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.audit import AuditCategory, AuditEvent, emit
@@ -171,7 +172,8 @@ async def set_user_bundle(
     user_id: str,
     body: BundleAssignRequest,
     request: Request,
-    admin_user: dict = Depends(_require_admin),
+    admin_user: dict = Depends(get_current_user),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> UserBundleResponse:
     """Assign or clear a voice bundle override for a user.
 

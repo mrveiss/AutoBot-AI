@@ -12,20 +12,37 @@ Covers the admin cross-user view (AC4):
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.chat_shared_links import router
 from api.user_management.dependencies import get_db_session
-from api.voice_bundle_helpers import _require_admin
 from auth_middleware import get_current_user
 from autobot_shared.time_utils import now_utc
-from utils.catalog_http_exceptions import raise_auth_error
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
 _ADMIN = {"user_id": "admin-user", "username": "admin", "role": "admin"}
+_SUPERADMIN = {"user_id": "root", "username": "root", "role": "superadmin"}
+
+# Holds the user the patched auth middleware returns for the current test.
+_CURRENT: dict = {"user": None}
+
+
+@pytest.fixture(autouse=True)
+def _patch_auth_middleware():
+    """Make require_role() (#12704) see the injected test user.
+
+    The admin cross-user route uses ``require_role("admin", "superadmin")``,
+    which reads the user via ``auth_rbac.get_auth_middleware()``.
+    """
+    mw = MagicMock()
+    mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
+    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+        yield
+    _CURRENT["user"] = None
 
 
 def _make_link(*, owner: str, session_id: str, has_password: bool = False, expired: bool = False):
@@ -46,19 +63,16 @@ def _make_link(*, owner: str, session_id: str, has_password: bool = False, expir
 def _make_client(user: dict, links: list) -> TestClient:
     """Create a TestClient overriding auth + DB session.
 
-    Admin routes depend on ``_require_admin`` (a Request-based middleware check),
-    so override it too — role-gated against the injected user so the admin route
-    200s for admins and 403s for non-admins.
+    The admin cross-user route uses ``require_role("admin", "superadmin")``
+    (#12704), fed by the autouse middleware patch; ``get_current_user`` (the
+    owner-scoped routes) is overridden so admin routes 200 for admin/superadmin
+    and 403 for others.
     """
+    _CURRENT["user"] = user
     app = FastAPI()
     app.include_router(router)
 
     async def _override_user():
-        return user
-
-    def _override_require_admin() -> dict:
-        if user.get("role") != "admin":
-            raise_auth_error("AUTH_0003", "Admin permission required")
         return user
 
     async def _override_db():
@@ -71,7 +85,6 @@ def _make_client(user: dict, links: list) -> TestClient:
         return session
 
     app.dependency_overrides[get_current_user] = _override_user
-    app.dependency_overrides[_require_admin] = _override_require_admin
     app.dependency_overrides[get_db_session] = _override_db
     return TestClient(app)
 
@@ -101,6 +114,15 @@ class TestAdminListAllSharedLinks:
         protected = {item["owner"]: item["has_password"] for item in data["links"]}
         assert protected["bob"] is True
         assert protected["alice"] is False
+
+    def test_superadmin_lists_all_active_links(self):
+        """superadmin reaches the admin cross-user view — previously admin-only (#12704)."""
+        client = _make_client(_SUPERADMIN, [_make_link(owner="alice", session_id="sess-a")])
+
+        response = client.get("/chat/shared-links/admin")
+
+        assert response.status_code == 200
+        assert response.json()["data"]["count"] == 1
 
     def test_non_admin_cannot_list_all_links(self):
         """Non-admin user receives 403."""
