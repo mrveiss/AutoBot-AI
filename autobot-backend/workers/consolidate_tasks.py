@@ -13,6 +13,7 @@ Registered in ``celery_app.py`` beat schedule under ``memory.consolidate_traject
 lives in ``TrajectoryStore.consolidate`` which is fully delete-only.
 """
 
+import os
 from datetime import datetime, timezone
 
 from autobot_shared.async_compat import run_or_schedule
@@ -22,6 +23,15 @@ from celery_app import celery_app
 logger = get_logger(__name__)
 
 _LAST_RUN_KEY = "memory:consolidate_trajectories:last_run"
+_FACTS_LAST_RUN_KEY = "memory:consolidate_facts:last_run"
+
+# A3 (#12554): first ship enforces nothing — the task logs prune candidates until
+# the counts are reviewed, then this flips to False (or is overridden per run).
+_FACTS_CONSOLIDATE_DRY_RUN = os.environ.get("AUTOBOT_FACTS_CONSOLIDATE_DRY_RUN", "1").lower() not in (
+    "0",
+    "false",
+    "no",
+)
 
 
 def _get_redis():
@@ -49,4 +59,29 @@ def consolidate_trajectories(self) -> dict:
     except Exception as exc:  # noqa: BLE001 — bookkeeping only, never fail the task
         logger.debug("consolidate_trajectories: last-run write skipped: %s", exc)
     logger.info("consolidate_trajectories complete at %s: %s", run_at, summary)
+    return {"status": "success", "run_at": run_at, **(summary or {})}
+
+
+async def _run_facts_consolidation() -> dict:
+    """Open the knowledge base and run one fact-lane consolidation pass."""
+    from knowledge._composed import get_knowledge_base
+
+    kb = await get_knowledge_base()
+    return await kb.consolidate_facts(dry_run=_FACTS_CONSOLIDATE_DRY_RUN)
+
+
+@celery_app.task(bind=True, name="memory.consolidate_facts")
+def consolidate_facts(self) -> dict:
+    """Nightly task: decay/prune genuinely-dead essential-story facts (A3 #12554).
+
+    Delete-only and guarded (owned/verified/pinned never eligible); ships in
+    dry-run by default so candidates are logged before any deletion is enforced.
+    """
+    run_at = datetime.now(timezone.utc).isoformat()
+    summary = run_or_schedule(_run_facts_consolidation())
+    try:
+        _get_redis().set(_FACTS_LAST_RUN_KEY, run_at)
+    except Exception as exc:  # noqa: BLE001 — bookkeeping only, never fail the task
+        logger.debug("consolidate_facts: last-run write skipped: %s", exc)
+    logger.info("consolidate_facts complete at %s: %s", run_at, summary)
     return {"status": "success", "run_at": run_at, **(summary or {})}

@@ -12,8 +12,9 @@ store, retrieve, update, delete, and vectorization.
 import asyncio
 import hashlib
 import json
+import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -260,6 +261,77 @@ _ACCESS_BUMP_LUA = (
     "redis.call('HSET', KEYS[1], 'last_accessed', ARGV[1]) "
     "return 1 end return 0"
 )
+
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var, never raising at import — bad values fall back."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
+        return default
+
+
+def _env_float_safe(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
+        return default
+    return val if val == val else default  # reject NaN
+
+
+# A3 (#12554): fact-lane consolidation thresholds. Conservative by design — see
+# consolidate_facts for the full no-data-loss reasoning. A fact is prunable only
+# if it is UNPROTECTED, low-quality, never recalled since instrumentation began
+# (access_count == 0, A1 #12552), created AFTER the instrumentation epoch (so a
+# 0 count is meaningful, not "predates A1"), and aged past the floor.
+_FACTS_PRUNE_QUALITY_FLOOR: float = _env_float_safe("AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR", 0.1)
+_FACTS_PRUNE_MAX_AGE_DAYS: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS", 180)
+_FACTS_PRUNE_SCAN_LIMIT: int = _env_int("AUTOBOT_FACTS_PRUNE_SCAN_LIMIT", 5000)
+# Instrumentation epoch: ISO date A1 access-tracking began for THIS deployment.
+# Facts created before it have unknown recall history → never pruned. UNSET =
+# feature inert (no candidates) so an un-configured deploy can never mass-delete.
+_FACTS_PRUNE_EPOCH: str = os.environ.get("AUTOBOT_FACTS_PRUNE_EPOCH", "").strip()
+# Circuit breaker: if a single run would prune more than this many facts, refuse
+# and log loudly — a healthy decay pass sheds a trickle, not thousands.
+_FACTS_PRUNE_MAX_PER_RUN: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_PER_RUN", 100)
+
+
+def _fact_is_protected(metadata: Dict[str, Any]) -> bool:
+    """A fact that must never be auto-pruned (A3 #12554, no-data-loss invariant).
+
+    Protected when owned (``owner_id``/``user_id``), human-verified, explicitly
+    kept (``important``/``preserve``/``pinned``), or **curated/ingested** rather
+    than ephemeral conversational cruft: a ``unique_key`` (e.g. man-page facts)
+    or a ``source_connector_id`` (Confluence/Notion/web-crawl/... ingestion) marks
+    knowledge a user deliberately brought in, which a low access_count must not
+    condemn. Superset of the session-cleanup ``preserve_important`` predicate.
+    """
+    if metadata.get("important") or metadata.get("preserve") or metadata.get("pinned"):
+        return True
+    if metadata.get("owner_id") or metadata.get("user_id"):
+        return True
+    if metadata.get("unique_key") or metadata.get("source_connector_id"):
+        return True
+    return metadata.get("verification_status") == "verified"
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    """Parse an ISO timestamp to an aware UTC datetime, or ``None`` if unusable."""
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        ts = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
 
 
 def _apply_usage_fields(decoded: Dict[str, Any], metadata: Dict[str, Any]) -> None:
@@ -1400,6 +1472,126 @@ class FactsMixin:
             await self._delete_single_fact_for_session(fact_id, session_id, important_ids, preserve_important, result)
 
         await self._cleanup_session_tracking(session_id, fact_ids)
+
+    def _collect_prune_candidates(
+        self, facts: List[Dict[str, Any]], quality_floor: float, cutoff: datetime, epoch: datetime
+    ) -> List[str]:
+        """Return fact_ids that are genuinely dead and safe to prune (A3 #12554).
+
+        A candidate must satisfy ALL of: unprotected (incl. curated/ingested — see
+        ``_fact_is_protected``); ``quality_score`` below the floor; ``access_count
+        == 0`` (never recalled); creation time **after ``epoch``** so a 0 count
+        reflects real non-use rather than predating A1 instrumentation; and older
+        than ``cutoff``. Unknown-age, pre-epoch, or newer facts are kept (fail-safe).
+        """
+        candidates: List[str] = []
+        for fact in facts:
+            meta = fact.get("metadata") or {}
+            if _fact_is_protected(meta):
+                continue
+            try:
+                quality = float(meta.get("quality_score", 0.0) or 0.0)
+                access = int(meta.get("access_count", 0) or 0)
+            except (TypeError, ValueError):
+                continue  # unparseable usage -> keep (fail-safe)
+            if access != 0 or quality >= quality_floor:
+                continue
+            created = _parse_iso(fact.get("timestamp") or meta.get("timestamp"))
+            # Keep if age unknown, created before instrumentation (0 count is
+            # meaningless there), or not yet older than the age floor.
+            if created is None or created <= epoch or created > cutoff:
+                continue
+            fid = fact.get("fact_id")
+            if fid:
+                candidates.append(fid)
+        return candidates
+
+    async def consolidate_facts(
+        self,
+        *,
+        quality_floor: float = _FACTS_PRUNE_QUALITY_FLOOR,
+        max_age_days: int = _FACTS_PRUNE_MAX_AGE_DAYS,
+        dry_run: bool = True,
+        now: datetime | None = None,
+    ) -> Dict[str, Any]:
+        """Delete-only consolidation of the essential-story facts lane (A3 #12554).
+
+        Prunes only genuinely-dead facts (see ``_collect_prune_candidates``):
+        unprotected, uncurated, low-quality, never recalled since instrumentation
+        began, and aged out. Multiple no-data-loss safeguards, all fail-safe:
+
+        - **Instrumentation epoch** (``AUTOBOT_FACTS_PRUNE_EPOCH``): UNSET → the
+          task is inert (no candidates), so an unconfigured deploy can never
+          delete. Set it to the date A1 access-tracking began for this instance;
+          facts older than that are never eligible.
+        - **Circuit breaker** (``AUTOBOT_FACTS_PRUNE_MAX_PER_RUN``): if a run would
+          prune more than the cap, it refuses and logs loudly — a healthy decay
+          sheds a trickle, a flood means the signals are wrong.
+        - **dry_run** (default True): logs candidates without deleting.
+
+        Owned/verified/pinned/curated facts are never eligible. Never raises.
+        """
+        self.ensure_initialized()
+        now = now or datetime.now(tz=timezone.utc)
+        cutoff = now - timedelta(days=max_age_days)
+        epoch = _parse_iso(_FACTS_PRUNE_EPOCH)
+        if epoch is None:
+            logger.info(
+                "consolidate_facts: AUTOBOT_FACTS_PRUNE_EPOCH unset — pruning disabled "
+                "(set it to when A1 access-tracking began to enable decay)."
+            )
+            return {"scanned": 0, "candidates": 0, "pruned": 0, "remaining": 0, "dry_run": dry_run, "epoch_unset": True}
+        try:
+            facts = await self.get_all_facts(limit=_FACTS_PRUNE_SCAN_LIMIT)
+        except Exception as exc:
+            logger.warning("consolidate_facts: scan failed (non-fatal): %s", exc)
+            return {"scanned": 0, "candidates": 0, "pruned": 0, "remaining": 0, "dry_run": dry_run}
+
+        candidates = self._collect_prune_candidates(facts, quality_floor, cutoff, epoch)
+        pruned = 0
+        # Circuit breaker: an unexpectedly large candidate set means the signals
+        # are wrong (mis-set epoch, instrumentation gap). Refuse and shout.
+        if not dry_run and len(candidates) > _FACTS_PRUNE_MAX_PER_RUN:
+            logger.error(
+                "consolidate_facts: %d candidates exceed max-per-run %d — refusing to "
+                "prune (likely misconfigured epoch/floor). Review before enforcing.",
+                len(candidates),
+                _FACTS_PRUNE_MAX_PER_RUN,
+            )
+            return {
+                "scanned": len(facts),
+                "candidates": len(candidates),
+                "pruned": 0,
+                "remaining": len(facts),
+                "dry_run": dry_run,
+                "circuit_broken": True,
+            }
+        if not dry_run:
+            for fid in candidates:
+                try:
+                    res = await self.delete_fact(fid, _skip_bm25_refresh=True)
+                    if res.get("status") == "success":
+                        pruned += 1
+                except Exception:
+                    logger.debug("consolidate_facts: delete failed for %s (non-fatal)", fid)
+            if pruned:
+                self._schedule_bm25_refresh()
+
+        summary = {
+            "scanned": len(facts),
+            "candidates": len(candidates),
+            "pruned": pruned,
+            "remaining": len(facts) - pruned,
+            "dry_run": dry_run,
+        }
+        logger.info(
+            "consolidate_facts: scanned=%d candidates=%d pruned=%d dry_run=%s",
+            len(facts),
+            len(candidates),
+            pruned,
+            dry_run,
+        )
+        return summary
 
     async def delete_facts_by_session(self, session_id: str, preserve_important: bool = True) -> Dict[str, Any]:
         """Delete all facts created during a specific session. Issue #620.

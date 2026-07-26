@@ -244,6 +244,12 @@ celery_app.conf.beat_schedule = {
         "task": "memory.consolidate_trajectories",
         "schedule": crontab(hour=4, minute=0),  # 04:00 UTC, after nightly cleanup
     },
+    # A3 (#12554): nightly fact-lane decay/prune (delete-only, guarded, dry-run
+    # by default) so the always-loaded essential-story facts self-improve.
+    "memory-consolidate-facts-daily": {
+        "task": "memory.consolidate_facts",
+        "schedule": crontab(hour=4, minute=20),  # 04:20 UTC, after trajectory pass
+    },
     # GH#6471: nightly eviction of stale per-task git worktree workspaces
     "workspace-cleanup-nightly": {
         "task": "tasks.cleanup_stale_workspaces",
