@@ -184,7 +184,7 @@
                 :y="nodeHeight / 2 + 35"
                 text-anchor="middle"
               >
-                {{ formatDuration(node.duration) }}
+                {{ formatDuration(node.duration, { style: 'msMinutes' }) }}
               </text>
             </g>
           </g>
@@ -237,7 +237,7 @@
           </div>
           <div class="detail-row" v-if="selectedNode.duration">
             <span class="label">{{ t('visualizations.workflowViz.duration') }}</span>
-            <span class="value">{{ formatDuration(selectedNode.duration) }}</span>
+            <span class="value">{{ formatDuration(selectedNode.duration, { style: 'msMinutes' }) }}</span>
           </div>
           <div class="detail-row" v-if="selectedNode.startTime">
             <span class="label">{{ t('visualizations.workflowViz.started') }}</span>
@@ -263,6 +263,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
@@ -495,12 +496,6 @@ function formatStatus(status?: string): string {
     failed: t('visualizations.workflowViz.failed')
   }
   return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1)
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.round(ms / 60000)}m`
 }
 
 function formatTime(timestamp: number): string {

@@ -2,6 +2,7 @@
 <!-- Copyright (c) 2025-2026 mrveiss -->
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import { useRoute, useRouter } from 'vue-router'
 import UploadModal from '@/components/transcriber/UploadModal.vue'
 import ProcessingProgress from '@/components/transcriber/ProcessingProgress.vue'
@@ -93,14 +94,6 @@ function isInProgress(r: Recording): boolean {
   return r.status === 'pending' || r.status === 'processing'
 }
 
-function formatDuration(seconds: number | null): string {
-  if (seconds === null || Number.isNaN(seconds)) return '—'
-  const total = Math.round(seconds)
-  const mins = Math.floor(total / 60)
-  const secs = total % 60
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
 function formatDate(iso: string): string {
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
@@ -148,7 +141,7 @@ onMounted(load)
             <span class="recording-status" :class="`recording-status-${recording.status}`">
               {{ recording.status }}
             </span>
-            <span>{{ formatDuration(recording.duration) }}</span>
+            <span>{{ formatDuration(recording.duration, { style: 'clock', nullText: '—' }) }}</span>
             <span>{{ formatDate(recording.uploaded_at) }}</span>
           </span>
 

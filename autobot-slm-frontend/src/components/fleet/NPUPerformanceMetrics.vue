@@ -13,6 +13,7 @@
  */
 
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { formatUptime } from '@/utils/formatHelpers'
 import type { NPUFleetMetrics, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
@@ -37,15 +38,6 @@ const nodeMetrics = computed<NPUWorkerMetrics[]>(
 )
 
 // -- Helpers --
-
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400)
-  const hrs = Math.floor((seconds % 86400) / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  if (days > 0) return `${days}d ${hrs}h`
-  if (hrs > 0) return `${hrs}h ${mins}m`
-  return `${mins}m`
-}
 
 function utilizationBarColor(pct: number): string {
   if (pct > 80) return 'bg-red-500'

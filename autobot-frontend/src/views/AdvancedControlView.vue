@@ -420,6 +420,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { formatUptime } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 import { useTabs } from '@/composables/useTabs'
 import { useAdvancedControl } from '@/composables/useAdvancedControl'
@@ -652,17 +653,6 @@ function formatPercent(value: number | null | undefined): string {
 function formatLoadAverage(loadAverage: [number, number, number] | null): string {
   if (!loadAverage) return '—'
   return loadAverage.map((v) => v.toFixed(2)).join(' / ')
-}
-
-function formatUptime(seconds: number | null | undefined): string {
-  if (seconds == null || Number.isNaN(seconds) || seconds < 0) return '—'
-  const totalSeconds = Math.floor(seconds)
-  const days = Math.floor(totalSeconds / 86400)
-  const hours = Math.floor((totalSeconds % 86400) / 3600)
-  const mins = Math.floor((totalSeconds % 3600) / 60)
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${mins}m`
-  return `${mins}m`
 }
 
 async function onEmergencyStop(): Promise<void> {

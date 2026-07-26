@@ -163,7 +163,7 @@
                 left: `${activity.startPercent}%`,
                 width: `${activity.widthPercent}%`
               }"
-              :title="`${activity.task} (${formatDuration(activity.duration)})`"
+              :title="`${activity.task} (${formatDuration(activity.duration, { style: 'msMinutes', rounding: 'floor' })})`"
             ></div>
           </div>
         </div>
@@ -198,6 +198,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -268,12 +269,6 @@ function formatUptime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
   return `${Math.floor(seconds / 3600)}h`
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.floor(ms / 60000)}m`
 }
 
 function formatTimeAgo(timestamp: number): string {

@@ -11,7 +11,7 @@
       </div>
       <span v-if="step.execution_time" class="step-time">
         <Icon name="clock" />
-        {{ formatDuration(step.execution_time) }}
+        {{ formatDuration(step.execution_time, { style: 'secondsCompact' }) }}
       </span>
     </div>
 
@@ -148,6 +148,7 @@
  */
 
 import type { IconName } from '@/components/ui/Icon.vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -196,13 +197,6 @@ const copyCommand = () => {
   }
 }
 
-const formatDuration = (seconds: number): string => {
-  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`
-  if (seconds < 60) return `${seconds.toFixed(1)}s`
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.round(seconds % 60)
-  return `${mins}m ${secs}s`
-}
 </script>
 
 <style scoped>

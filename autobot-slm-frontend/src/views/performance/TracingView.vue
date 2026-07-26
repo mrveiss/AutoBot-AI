@@ -12,6 +12,7 @@
  */
 
 import { ref, onMounted, watch } from 'vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import { usePagination } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -200,15 +201,10 @@ function spanBarColor(status: string): string {
 /**
  * Format duration for display.
  */
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms.toFixed(0)}ms`
-  return `${(ms / 1000).toFixed(2)}s`
-}
 
 function formatDate(dateStr: string): string {
   return formatDateTime(dateStr)
 }
-
 
 // Watch for filter changes that require immediate reload
 watch([timeRange, statusFilter], () => {
@@ -348,7 +344,7 @@ onMounted(() => {
                   {{ trace.name }}
                 </td>
                 <td class="px-4 py-2 text-sm font-mono">
-                  {{ formatDuration(trace.duration_ms) }}
+                  {{ formatDuration(trace.duration_ms, { style: 'msSeconds2dp' }) }}
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600">{{ trace.span_count }}</td>
                 <td class="px-4 py-2">
@@ -396,7 +392,7 @@ onMounted(() => {
                         ></div>
                       </div>
                       <span class="text-xs font-mono text-gray-600 w-16 text-right shrink-0">
-                        {{ formatDuration(span.duration_ms) }}
+                        {{ formatDuration(span.duration_ms, { style: 'msSeconds2dp' }) }}
                       </span>
                       <span
                         :class="[
