@@ -221,6 +221,44 @@ async def resolve_scan_root(source_id: "str | None", use_default: bool = True) -
     return Path(resolve_project_root())
 
 
+# Issue #12364: sources whose auto-index has already been fired this process
+# lifetime, so a burst of concurrent panel requests against an unindexed
+# source triggers exactly one background indexing job instead of a flood of
+# duplicate ones queued behind each other.
+_auto_index_inflight: set[str] = set()
+
+
+async def trigger_auto_index_if_unindexed(source_id: "str | None") -> None:
+    """Fire-and-forget background indexing for a source with no index yet.
+
+    Issue #12364: The indexed store is the single source of truth for
+    converged analytics panels, but a freshly-registered source (or one
+    registered before auto-index-on-registration existed) has nothing in it
+    until a job runs. Panels fall back to the live filesystem walk for that
+    one request *and* call this helper so the index gets populated in the
+    background -- the next request (and every panel sharing the index) is
+    then served from ChromaDB without anyone running a manual step.
+
+    No-op when source_id is falsy, already triggered this process lifetime,
+    or the source cannot be resolved to a clone path.
+    """
+    if not source_id or source_id in _auto_index_inflight:
+        return
+    _auto_index_inflight.add(source_id)
+    try:
+        from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415
+
+        source = await get_source(source_id)
+        if not source or not source.clone_path:
+            return
+
+        from .sources import _trigger_indexing  # noqa: PLC0415
+
+        await _trigger_indexing(source)
+    except Exception as exc:
+        logger.debug("Auto-index trigger failed for %s: %s", source_id, exc)
+
+
 # Sentinel ownership id for an authenticated, non-service caller whose token
 # carries no derivable identity. It can never equal a real ``owner_id``, so
 # ``_is_visible`` denies another owner's PRIVATE source while still allowing

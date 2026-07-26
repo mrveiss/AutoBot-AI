@@ -284,8 +284,28 @@ async def create_code_source(request: CodeSourceCreateRequest, http_request: Req
             source.clone_path = source.repo
         await save_source(source)
         logger.info("Created code source %s (%s)", source.id, source.name)
+        await _auto_index_local_source(source)
 
     return JSONResponse(source.model_dump(), status_code=201)
+
+
+async def _auto_index_local_source(source: CodeSource) -> None:
+    """Trigger indexing immediately for a local source with a valid path (#12364).
+
+    Issue #12364: GitHub sources already auto-index via ``create_github_source``
+    (``auto_sync=True`` -> ``_do_sync`` -> ``_trigger_indexing``). Local sources
+    had no equivalent -- registration alone never populated the index, leaving
+    the indexed-store panels blank until someone manually called
+    ``POST /sources/{id}/sync``. This closes that gap so the indexed path is
+    populated as part of the normal registration flow, not a separate manual
+    step. No-op for non-local sources or an unresolvable/missing clone path.
+    """
+    if source.source_type != "local" or not source.clone_path or not Path(source.clone_path).is_dir():
+        return
+    source.status = SourceStatus.READY
+    source.last_synced = datetime.now(tz=timezone.utc).isoformat()
+    await save_source(source)
+    await _trigger_indexing(source)
 
 
 @router.get("/sources/summary")
