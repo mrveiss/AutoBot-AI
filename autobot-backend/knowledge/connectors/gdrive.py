@@ -48,8 +48,6 @@ from knowledge.connectors.registry import ConnectorRegistry
 logger = get_logger(__name__)
 
 _DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
-_REDIS_TS_PREFIX = "connector:gdrive:ts:"
-_REDIS_TS_TTL = 86400 * 30  # 30 days
 
 # Default supported extensions (Google native + common formats)
 _DEFAULT_EXTENSIONS = [".gdoc", ".gsheet", ".pdf", ".docx", ".md", ".txt"]
@@ -61,37 +59,11 @@ _DEFAULT_MAX_FILE_SIZE = 100 * 1024 * 1024
 _GDOC_MIME = "application/vnd.google-apps.document"
 _GSHEET_MIME = "application/vnd.google-apps.spreadsheet"
 
-
-async def _load_ts(connector_id: str, source_id: str) -> Optional[str]:
-    """Load last-modified timestamp for a source from Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
-        value = redis.get(key)
-        if hasattr(value, "__await__"):
-            value = await value
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        return value
-    except Exception as exc:
-        logger.warning("Redis load_ts failed for %s: %s", source_id, exc)
-        return None
-
-
-async def _store_ts(connector_id: str, source_id: str, ts: str) -> None:
-    """Store last-modified timestamp for a source in Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
-        result = redis.set(key, ts, ex=_REDIS_TS_TTL)
-        if hasattr(result, "__await__"):
-            await result
-    except Exception as exc:
-        logger.warning("Redis store_ts failed for %s: %s", source_id, exc)
+# Issue #12659: _load_ts()/_store_ts()/_classify_change() moved to
+# AbstractConnector (byte-identical to onedrive.py's copies). This
+# connector's Redis prefix ("connector:gdrive:ts:") matches the base class
+# default derived from connector_type, so no override is needed. Its
+# _modified_time_field also matches the base default ("modifiedTime").
 
 
 @ConnectorRegistry.register("gdrive")
@@ -280,7 +252,7 @@ class GoogleDriveConnector(AbstractConnector):
         # Update stored timestamp
         last_modified = file_meta.get("modifiedTime", "")
         if last_modified:
-            await _store_ts(self.config.connector_id, source_id, last_modified)
+            await self._store_ts(source_id, last_modified)
 
         # Build file path from parents
         file_path = await self._build_file_path(file_meta.get("parents", []), file_name)
@@ -307,21 +279,11 @@ class GoogleDriveConnector(AbstractConnector):
         """Return ChangeInfo for files added or modified since *since*.
 
         When *since* is None all files are reported as 'added'. Otherwise
-        compares modifiedTime against stored Redis timestamp.
+        compares modifiedTime against stored Redis timestamp. Shared with
+        onedrive.py via AbstractConnector._detect_changes_via_file_listing()
+        (Issue #12659).
         """
-        files = await self._list_all_files()
-        changes: List[ChangeInfo] = []
-
-        for file_item in files:
-            file_id = file_item.get("id", "")
-            source_id = f"gdrive:{self.config.connector_id}:file:{file_id}"
-            last_modified = file_item.get("modifiedTime", "")
-
-            change = await self._classify_change(source_id, last_modified, since)
-            if change:
-                changes.append(change)
-
-        return changes
+        return await self._detect_changes_via_file_listing(since)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -552,33 +514,6 @@ class GoogleDriveConnector(AbstractConnector):
                 break
 
         return files
-
-    async def _classify_change(
-        self,
-        source_id: str,
-        last_modified: str,
-        since: datetime | None,
-    ) -> ChangeInfo | None:
-        """Return ChangeInfo when the file is new or was modified after *since*."""
-        if since is None:
-            return ChangeInfo(
-                source_id=source_id,
-                change_type="added",
-                timestamp=now_utc(),
-                details={"last_modified": last_modified},
-            )
-
-        stored_ts = await _load_ts(self.config.connector_id, source_id)
-        if stored_ts is None or last_modified > stored_ts:
-            change_type = "added" if stored_ts is None else "modified"
-            return ChangeInfo(
-                source_id=source_id,
-                change_type=change_type,
-                timestamp=parse_utc_iso(last_modified) if last_modified else now_utc(),
-                details={"last_modified": last_modified},
-            )
-
-        return None
 
     def _file_to_source_info(self, file_item: Dict[str, Any]) -> SourceInfo | None:
         """Convert a Drive API file item to SourceInfo."""

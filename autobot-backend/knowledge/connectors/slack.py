@@ -50,8 +50,10 @@ from knowledge.connectors.registry import ConnectorRegistry
 logger = get_logger(__name__)
 
 _SLACK_API_BASE = "https://slack.com/api"
-_REDIS_TS_PREFIX = "connector:slack:ts:"
-_REDIS_TS_TTL = 86400 * 30  # 30 days
+
+# Issue #12659: _load_ts()/_store_ts() moved to AbstractConnector — this
+# connector's Redis prefix ("connector:slack:ts:") matches the base class
+# default derived from connector_type, so no override is needed.
 
 
 @ConnectorRegistry.register("slack")
@@ -143,7 +145,7 @@ class SlackConnector(AbstractConnector):
             reply_count = len(replies)
             text_parts.extend(_message_to_text(r) for r in replies)
 
-        await _store_ts(self.config.connector_id, channel_id, ts)
+        await self._store_ts(channel_id, ts)
         return ContentResult(
             source_id=source_id,
             content="\n\n".join(p for p in text_parts if p.strip()),
@@ -163,7 +165,7 @@ class SlackConnector(AbstractConnector):
         changes: List[ChangeInfo] = []
         for channel_id in self._channel_ids:
             oldest = self._since_to_ts(since)
-            stored = await _load_ts(self.config.connector_id, channel_id)
+            stored = await self._load_ts(channel_id)
             messages = await self._history(channel_id, oldest=oldest)
             newest_ts = stored
             for message in messages:
@@ -180,7 +182,7 @@ class SlackConnector(AbstractConnector):
                 if newest_ts is None or ts > newest_ts:
                     newest_ts = ts
             if newest_ts is not None and newest_ts != stored:
-                await _store_ts(self.config.connector_id, channel_id, newest_ts)
+                await self._store_ts(channel_id, newest_ts)
         return changes
 
     # ------------------------------------------------------------------
@@ -273,43 +275,6 @@ class SlackConnector(AbstractConnector):
         except aiohttp.ClientError as exc:
             self.logger.warning("Slack request to %s failed: %s", url, exc)
             return {"status_code": 0, "body": {"ok": False, "error": str(exc)}}
-
-
-# ---------------------------------------------------------------------------
-# Redis checkpoint helpers
-# ---------------------------------------------------------------------------
-
-
-async def _load_ts(connector_id: str, channel_id: str) -> Optional[str]:
-    """Load the newest processed message ``ts`` for *channel_id* from Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, channel_id)
-        value = redis.get(key)
-        if hasattr(value, "__await__"):
-            value = await value
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        return value
-    except Exception as exc:
-        logger.warning("Redis load_ts failed for channel %s: %s", channel_id, exc)
-        return None
-
-
-async def _store_ts(connector_id: str, channel_id: str, ts: str) -> None:
-    """Persist the newest processed message ``ts`` for *channel_id* in Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, channel_id)
-        result = redis.set(key, ts, ex=_REDIS_TS_TTL)
-        if hasattr(result, "__await__"):
-            await result
-    except Exception as exc:
-        logger.warning("Redis store_ts failed for channel %s: %s", channel_id, exc)
 
 
 # ---------------------------------------------------------------------------

@@ -47,9 +47,6 @@ from knowledge.connectors.registry import ConnectorRegistry
 
 logger = get_logger(__name__)
 
-_REDIS_TS_PREFIX = "connector:confluence:ts:"
-_REDIS_TS_TTL = 86400 * 30  # 30 days
-
 
 @ConnectorRegistry.register("confluence")
 class ConfluenceConnector(AbstractConnector):
@@ -137,7 +134,7 @@ class ConfluenceConnector(AbstractConnector):
 
         version_when = page.get("version", {}).get("when", "")
         if version_when:
-            await _store_ts(self.config.connector_id, page_id, version_when)
+            await self._store_ts(page_id, version_when)
 
         return ContentResult(
             source_id=source_id,
@@ -210,10 +207,10 @@ class ConfluenceConnector(AbstractConnector):
             return None
         version_when = result.get("body", {}).get("version", {}).get("when", "")
 
-        stored = await _load_ts(self.config.connector_id, page_id)
+        stored = await self._load_ts(page_id)
         if stored is None or version_when > stored:
             change_type = "added" if stored is None else "modified"
-            await _store_ts(self.config.connector_id, page_id, version_when)
+            await self._store_ts(page_id, version_when)
             return ChangeInfo(
                 source_id=_build_source_id(self.config.connector_id, page_id),
                 change_type=change_type,
@@ -244,45 +241,11 @@ class ConfluenceConnector(AbstractConnector):
 
 
 # ---------------------------------------------------------------------------
-# Redis checkpoint helpers
-# ---------------------------------------------------------------------------
-
-
-async def _load_ts(connector_id: str, page_id: str) -> Optional[str]:
-    """Load the stored ``version.when`` timestamp for *page_id* from Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, page_id)
-        value = redis.get(key)
-        if hasattr(value, "__await__"):
-            value = await value
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        return value
-    except Exception as exc:
-        logger.warning("Redis load_ts failed for page %s: %s", page_id, exc)
-        return None
-
-
-async def _store_ts(connector_id: str, page_id: str, version_when: str) -> None:
-    """Persist the ``version.when`` timestamp for *page_id* in Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, page_id)
-        result = redis.set(key, version_when, ex=_REDIS_TS_TTL)
-        if hasattr(result, "__await__"):
-            await result
-    except Exception as exc:
-        logger.warning("Redis store_ts failed for page %s: %s", page_id, exc)
-
-
-# ---------------------------------------------------------------------------
 # Module-level helpers (no state)
 # ---------------------------------------------------------------------------
+# Issue #12659: _load_ts()/_store_ts() moved to AbstractConnector — this
+# connector's Redis prefix ("connector:confluence:ts:") matches the base
+# class default derived from connector_type, so no override is needed.
 
 
 def _build_source_id(connector_id: str, page_id: str) -> str:

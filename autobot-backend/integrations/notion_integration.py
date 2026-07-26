@@ -25,6 +25,7 @@ from typing import Any, Dict, List
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.notion_utils import extract_title as _extract_title
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -325,21 +326,6 @@ class NotionIntegration(BaseIntegration):
 # ------------------------------------------------------------------
 # Utilities
 # ------------------------------------------------------------------
-
-
-def _extract_title(obj: Dict[str, Any]) -> str:
-    """Extract the plain-text title from a Notion page or database object."""
-    # Database title field
-    title_array = obj.get("title", [])
-    if title_array and isinstance(title_array, list):
-        return "".join(t.get("plain_text", "") for t in title_array)
-
-    # Page title via Name property
-    props = obj.get("properties", {})
-    for prop_name in ("Name", "Title", "title"):
-        prop = props.get(prop_name, {})
-        title_values = prop.get("title", [])
-        if title_values:
-            return "".join(t.get("plain_text", "") for t in title_values)
-
-    return ""
+# Issue #12659: _extract_title() single-sourced in autobot_shared/notion_utils.py
+# (was byte-identical to knowledge/connectors/notion.py's copy) — imported
+# above as `extract_title as _extract_title`.
