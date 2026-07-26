@@ -29,7 +29,6 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
-
 from code_intelligence.security import SecurityAnalyzer as _ModernSecurityAnalyzer
 from code_intelligence.security import VulnerabilityType as _ModernVulnerabilityType
 from code_intelligence.security.finding import SecurityFinding as _ModernSecurityFinding
@@ -156,9 +155,7 @@ class SecurityAnalyzer:
         self.redis_client = redis_client  # Lazy init if None (#2725)
         self.SECURITY_KEY = "security_analysis:vulnerabilities"
         self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
-        logger.info(
-            "Security Analyzer (deprecated legacy shim) initialized — delegating to code_intelligence.security"
-        )
+        logger.info("Security Analyzer (deprecated legacy shim) initialized — delegating to code_intelligence.security")
 
     async def _ensure_redis(self):
         """Lazy-init async Redis client on first use (#2725)."""

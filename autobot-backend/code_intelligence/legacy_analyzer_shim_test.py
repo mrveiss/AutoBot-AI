@@ -43,16 +43,12 @@ class TestPerformanceShimFieldMapping:
     @pytest.mark.asyncio
     async def test_analyze_performance_response_shape(self, tmp_path):
         """analyze_performance() must keep the legacy aggregate dict shape."""
-        (tmp_path / "blocking.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "blocking.py").write_text(textwrap.dedent("""
                 import time
 
                 async def blocked():
                     time.sleep(5)
-                """
-            )
-        )
+                """))
 
         analyzer = PerformanceAnalyzer()
         results = await analyzer.analyze_performance(root_path=str(tmp_path))
@@ -76,16 +72,12 @@ class TestPerformanceShimFieldMapping:
     @pytest.mark.asyncio
     async def test_field_mapping_line_number_and_issue_type(self, tmp_path):
         """line_number must come from the modern line_start; issue_type must be a legacy bucket string."""
-        (tmp_path / "blocking.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "blocking.py").write_text(textwrap.dedent("""
                 import time
 
                 async def blocked():
                     time.sleep(5)
-                """
-            )
-        )
+                """))
 
         analyzer = PerformanceAnalyzer()
         results = await analyzer.analyze_performance(root_path=str(tmp_path))
@@ -129,16 +121,12 @@ class TestPerformanceShimRecommendations:
 
     @pytest.mark.asyncio
     async def test_recommendations_generated_for_high_impact(self, tmp_path):
-        (tmp_path / "blocking.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "blocking.py").write_text(textwrap.dedent("""
                 import time
 
                 async def blocked():
                     time.sleep(5)
-                """
-            )
-        )
+                """))
 
         analyzer = PerformanceAnalyzer()
         results = await analyzer.analyze_performance(root_path=str(tmp_path))
@@ -155,15 +143,11 @@ class TestSecurityShimFieldMapping:
     @pytest.mark.asyncio
     async def test_analyze_security_response_shape(self, tmp_path):
         """analyze_security() must keep the legacy aggregate dict shape."""
-        (tmp_path / "sqli.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "sqli.py").write_text(textwrap.dedent("""
                 def get_user(cursor, user_id):
                     cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
                     return cursor.fetchone()
-                """
-            )
-        )
+                """))
 
         analyzer = SecurityAnalyzer()
         results = await analyzer.analyze_security(root_path=str(tmp_path))
@@ -187,15 +171,11 @@ class TestSecurityShimFieldMapping:
     @pytest.mark.asyncio
     async def test_field_mapping_line_number_and_vulnerability_type(self, tmp_path):
         """line_number must come from the modern line_start; vulnerability_type must be a legacy bucket string."""
-        (tmp_path / "sqli.py").write_text(
-            textwrap.dedent(
-                """
+        (tmp_path / "sqli.py").write_text(textwrap.dedent("""
                 def get_user(cursor, user_id):
                     cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
                     return cursor.fetchone()
-                """
-            )
-        )
+                """))
 
         analyzer = SecurityAnalyzer()
         results = await analyzer.analyze_security(root_path=str(tmp_path))

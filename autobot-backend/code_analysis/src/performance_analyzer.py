@@ -27,17 +27,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.performance_analysis import PerformanceAnalyzer as _ModernPerformanceAnalyzer
+from code_intelligence.performance_analysis import PerformanceIssueType as _ModernIssueType
+from code_intelligence.performance_analysis.types import PerformanceIssue as _ModernPerformanceIssue
 from constants.ttl_constants import TTL_1_HOUR
-
-from code_intelligence.performance_analysis import (
-    PerformanceIssueType as _ModernIssueType,
-)
-from code_intelligence.performance_analysis import (
-    PerformanceAnalyzer as _ModernPerformanceAnalyzer,
-)
-from code_intelligence.performance_analysis.types import (
-    PerformanceIssue as _ModernPerformanceIssue,
-)
 
 logger = get_logger(__name__)
 
