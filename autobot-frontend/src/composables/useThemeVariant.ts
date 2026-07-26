@@ -22,6 +22,7 @@
 
 import { ref, readonly, computed, watch, onMounted, getCurrentInstance } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchInstalledThemes, type InstalledTheme } from './useThemeRegistry'
 
@@ -82,12 +83,14 @@ function isBuiltin(variant: ThemeVariant): boolean {
  *
  * CSP-safe: the CSS text is fetched same-credentials from the backend and
  * adopted via `document.adoptedStyleSheets` — never injected as an inline
- * `<style>` or a cross-origin `<link>`. `apiClient.get` always parses JSON, so
- * a raw `fetch` is used here to retrieve the CSS as text.
+ * `<style>` or a cross-origin `<link>`. Uses the `fetchWithAuth` bridge so the
+ * JWT is attached consistently with `ApiClient`; the response is read as text
+ * (the convenience `apiClient.get` always parses JSON) while keeping the
+ * cookie credentials the endpoint may also rely on.
  */
 async function ensureThemeStylesheet(id: string): Promise<void> {
   if (adopted.has(id)) return
-  const response = await fetch(`${getBackendUrl()}/api/themes/${id}/theme.css`, {
+  const response = await fetchWithAuth(`${getBackendUrl()}/api/themes/${id}/theme.css`, {
     credentials: 'include',
   })
   if (!response.ok) {
