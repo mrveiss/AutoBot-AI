@@ -24,6 +24,7 @@
 
 import slmApiClient from '@/utils/ApiClient'
 import { useAuthStore } from '@/stores/auth'
+import { createAuthGuard } from '@/utils/slmAuthGuard'
 
 // =============================================================================
 // Type Definitions
@@ -113,19 +114,10 @@ export interface SSOProviderHealthResponse {
 export function useSsoApi() {
   const authStore = useAuthStore()
 
-  // The canonical client skips its session-clearing 401 handler for `/auth/**`
-  // endpoints, so the SSO login-flow methods below preserve the historic
-  // interceptor behavior (logout on any 401) explicitly and re-throw as before.
-  async function withAuthGuard<T>(op: () => Promise<T>): Promise<T> {
-    try {
-      return await op()
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith('HTTP 401')) {
-        authStore.logout()
-      }
-      throw error
-    }
-  }
+  // Preserve the historic "logout on 401" behaviour: the canonical client skips
+  // its session-clearing 401 handler for /auth/** endpoints, so the SSO
+  // login-flow methods re-apply it explicitly (shared helper — utils/slmAuthGuard.ts).
+  const withAuthGuard = createAuthGuard(authStore.logout)
 
   // ===========================================================================
   // SSO Provider CRUD (non-auth endpoints — client handles 401 centrally)
