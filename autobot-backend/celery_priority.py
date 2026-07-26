@@ -31,6 +31,7 @@ PRIORITY_TASK_ROUTES = {
     "workers.audit_claims": {"priority": PRIORITY_CRITICAL},
     # Normal — memory consolidation (#11263 attaches its beat entry).
     "memory.consolidate_trajectories": {"priority": PRIORITY_NORMAL},
+    "memory.consolidate_facts": {"priority": PRIORITY_NORMAL},  # A3 (#12554)
     # Low — nightly cleanup / retention yields to everything else.
     "tasks.cleanup_orphan_documents": {"priority": PRIORITY_LOW},
     "tasks.cleanup_generated_files": {"priority": PRIORITY_LOW},

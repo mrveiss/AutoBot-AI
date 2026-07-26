@@ -12,8 +12,9 @@ store, retrieve, update, delete, and vectorization.
 import asyncio
 import hashlib
 import json
+import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -260,6 +261,39 @@ _ACCESS_BUMP_LUA = (
     "redis.call('HSET', KEYS[1], 'last_accessed', ARGV[1]) "
     "return 1 end return 0"
 )
+
+# A3 (#12554): fact-lane consolidation thresholds. A fact is prunable only if it
+# is genuinely dead: low quality AND never recalled (access_count == 0, A1) AND
+# aged past the floor AND unprotected. Conservative defaults honour the
+# no-data-loss invariant; tune per deployment via env.
+_FACTS_PRUNE_QUALITY_FLOOR: float = float(os.environ.get("AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR", "0.1"))
+_FACTS_PRUNE_MAX_AGE_DAYS: int = int(os.environ.get("AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS", "180"))
+_FACTS_PRUNE_SCAN_LIMIT: int = int(os.environ.get("AUTOBOT_FACTS_PRUNE_SCAN_LIMIT", "5000"))
+
+
+def _fact_is_protected(metadata: Dict[str, Any]) -> bool:
+    """A fact that must never be auto-pruned (A3 #12554, no-data-loss invariant).
+
+    Protected when owned (``owner_id``/``user_id``), human-verified, or explicitly
+    kept (``important`` / ``preserve`` / ``pinned``) — mirrors the ``preserve_important``
+    predicate used by session cleanup.
+    """
+    if metadata.get("important") or metadata.get("preserve") or metadata.get("pinned"):
+        return True
+    if metadata.get("owner_id") or metadata.get("user_id"):
+        return True
+    return metadata.get("verification_status") == "verified"
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    """Parse an ISO timestamp to an aware UTC datetime, or ``None`` if unusable."""
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        ts = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
 
 
 def _apply_usage_fields(decoded: Dict[str, Any], metadata: Dict[str, Any]) -> None:
@@ -1400,6 +1434,89 @@ class FactsMixin:
             await self._delete_single_fact_for_session(fact_id, session_id, important_ids, preserve_important, result)
 
         await self._cleanup_session_tracking(session_id, fact_ids)
+
+    def _collect_prune_candidates(
+        self, facts: List[Dict[str, Any]], quality_floor: float, cutoff: datetime
+    ) -> List[str]:
+        """Return fact_ids that are genuinely dead and safe to prune (A3 #12554).
+
+        A candidate must satisfy ALL of: unprotected, ``quality_score`` below the
+        floor, ``access_count == 0`` (never recalled), and a known creation time
+        older than ``cutoff``. Unknown-age or newer facts are kept (fail-safe).
+        """
+        candidates: List[str] = []
+        for fact in facts:
+            meta = fact.get("metadata") or {}
+            if _fact_is_protected(meta):
+                continue
+            try:
+                quality = float(meta.get("quality_score", 0.0) or 0.0)
+                access = int(meta.get("access_count", 0) or 0)
+            except (TypeError, ValueError):
+                continue  # unparseable usage -> keep (fail-safe)
+            if access != 0 or quality >= quality_floor:
+                continue
+            created = _parse_iso(fact.get("timestamp") or meta.get("timestamp"))
+            if created is None or created > cutoff:
+                continue
+            fid = fact.get("fact_id")
+            if fid:
+                candidates.append(fid)
+        return candidates
+
+    async def consolidate_facts(
+        self,
+        *,
+        quality_floor: float = _FACTS_PRUNE_QUALITY_FLOOR,
+        max_age_days: int = _FACTS_PRUNE_MAX_AGE_DAYS,
+        dry_run: bool = True,
+        now: datetime | None = None,
+    ) -> Dict[str, Any]:
+        """Delete-only consolidation of the essential-story facts lane (A3 #12554).
+
+        Prunes only genuinely-dead facts (see ``_collect_prune_candidates``).
+        ``dry_run`` (default True) logs candidates without deleting so the impact
+        can be reviewed before enforcing. Owned/verified/pinned facts are never
+        eligible — the no-data-loss invariant. Never raises: a scan failure
+        returns an empty summary.
+        """
+        self.ensure_initialized()
+        now = now or datetime.now(tz=timezone.utc)
+        cutoff = now - timedelta(days=max_age_days)
+        try:
+            facts = await self.get_all_facts(limit=_FACTS_PRUNE_SCAN_LIMIT)
+        except Exception as exc:
+            logger.warning("consolidate_facts: scan failed (non-fatal): %s", exc)
+            return {"scanned": 0, "candidates": 0, "pruned": 0, "remaining": 0, "dry_run": dry_run}
+
+        candidates = self._collect_prune_candidates(facts, quality_floor, cutoff)
+        pruned = 0
+        if not dry_run:
+            for fid in candidates:
+                try:
+                    res = await self.delete_fact(fid, _skip_bm25_refresh=True)
+                    if res.get("status") == "success":
+                        pruned += 1
+                except Exception:
+                    logger.debug("consolidate_facts: delete failed for %s (non-fatal)", fid)
+            if pruned:
+                self._schedule_bm25_refresh()
+
+        summary = {
+            "scanned": len(facts),
+            "candidates": len(candidates),
+            "pruned": pruned,
+            "remaining": len(facts) - pruned,
+            "dry_run": dry_run,
+        }
+        logger.info(
+            "consolidate_facts: scanned=%d candidates=%d pruned=%d dry_run=%s",
+            len(facts),
+            len(candidates),
+            pruned,
+            dry_run,
+        )
+        return summary
 
     async def delete_facts_by_session(self, session_id: str, preserve_important: bool = True) -> Dict[str, Any]:
         """Delete all facts created during a specific session. Issue #620.
