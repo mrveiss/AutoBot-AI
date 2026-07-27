@@ -166,17 +166,17 @@ onMounted(load);
 
 .description {
   margin: 0.25rem 0 0;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
 .state-message {
   padding: 1rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-muted);
 }
 
 .state-message.error {
-  color: var(--color-danger, #dc2626);
+  color: var(--color-error);
 }
 
 .scheduler-list {
@@ -191,9 +191,9 @@ onMounted(load);
   align-items: flex-start;
   gap: 1rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  background: var(--color-surface, #fff);
+  background: var(--bg-secondary);
 }
 
 .scheduler-name {
@@ -208,8 +208,8 @@ onMounted(load);
   font-weight: 500;
   padding: 0.1rem 0.45rem;
   border-radius: 999px;
-  background: var(--color-warning-bg, #fef3c7);
-  color: var(--color-warning-text, #92400e);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .scheduler-description,
@@ -217,11 +217,11 @@ onMounted(load);
 .scheduler-inert {
   margin: 0.3rem 0 0;
   font-size: 0.82rem;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--text-muted);
 }
 
 .scheduler-inert {
-  color: var(--color-warning-text, #92400e);
+  color: var(--color-warning);
 }
 
 .scheduler-actions {
@@ -249,7 +249,7 @@ onMounted(load);
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background: var(--color-border, #cbd5e1);
+  background: var(--border-default);
   border-radius: 999px;
   transition: background 0.2s;
 }
@@ -261,13 +261,13 @@ onMounted(load);
   width: 18px;
   left: 3px;
   bottom: 3px;
-  background: #fff;
+  background: var(--text-inverse);
   border-radius: 50%;
   transition: transform 0.2s;
 }
 
 .toggle input:checked + .toggle-slider {
-  background: var(--color-primary, #2563eb);
+  background: var(--color-primary);
 }
 
 .toggle input:checked + .toggle-slider::before {
@@ -283,7 +283,7 @@ onMounted(load);
 .btn-reset {
   padding: 0.3rem 0.6rem;
   font-size: 0.78rem;
-  border: 1px solid var(--color-border, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   background: transparent;
   cursor: pointer;

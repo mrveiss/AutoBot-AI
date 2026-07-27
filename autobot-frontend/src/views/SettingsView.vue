@@ -672,7 +672,7 @@ function onApiKeysSaved(): void {
   gap: var(--spacing-sm);
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md, 8px);
   font-weight: 500;
@@ -726,7 +726,7 @@ function onApiKeysSaved(): void {
   align-self: flex-start;
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md, 8px);
   font-size: var(--text-sm);
@@ -756,12 +756,12 @@ function onApiKeysSaved(): void {
 }
 
 .backend-check-status.status-ok {
-  color: var(--color-success, #16a34a);
+  color: var(--color-success);
   background: var(--color-success-bg, rgba(22, 163, 74, 0.1));
 }
 
 .backend-check-status.status-fail {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
   background: var(--color-danger-bg, rgba(220, 38, 38, 0.1));
 }
 
