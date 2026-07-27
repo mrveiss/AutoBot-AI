@@ -91,7 +91,11 @@ class PipelineResult:
             stages.append("extract")
         if self.entities_extracted > 0 or self.events_extracted > 0 or self.facts_extracted > 0:
             stages.append("cognify")
-        if not self.errors:
+        # #12743: "load" means a load actually happened, not merely "nothing went
+        # wrong". A freshly-constructed PipelineResult has no errors, so the old
+        # `if not self.errors` claimed a completed load stage for a pipeline that
+        # never ran. Require at least one earlier stage to have produced output.
+        if stages and not self.errors:
             stages.append("load")
         return stages
 

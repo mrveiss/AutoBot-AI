@@ -1058,7 +1058,7 @@ async def get_file_risk(
 
     except Exception as e:
         logger.error("Failed to analyze file %s: %s", file_path, e, exc_info=True)
-        return no_data_response("Analysis failed for {file_path}", files=[], summary={})
+        return no_data_response(f"Analysis failed for {file_path}", files=[], summary={})
 
 
 def _get_file_recommendation(risk_score: float, factors: dict[str, float]) -> str:
