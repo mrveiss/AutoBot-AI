@@ -1,10 +1,10 @@
-fastapi>=0.139.2                # SECURITY UPDATE - requires starlette >=0.52.1
+fastapi>=0.140.0                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn[standard]>=0.51.0
 transformers>=5.14.1
 torch>=2.13.0
 soundfile>=0.14.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-huggingface_hub>=1.24.0
+huggingface_hub>=1.25.1
 aiofiles>=25.1.0
 python-multipart>=0.0.32          # SECURITY UPDATE - arbitrary file write fix
