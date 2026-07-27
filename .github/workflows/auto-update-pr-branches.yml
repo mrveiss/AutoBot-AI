@@ -42,15 +42,27 @@ jobs:
 
           # List all open PRs targeting Dev_new_gui that are behind.
           # .number is always a GitHub-assigned integer — safe to iterate.
+          #
+          # #12801: this used `--json number,behindBy`, but `behindBy` is not a
+          # field the installed gh exposes — it exits non-zero with "Unknown JSON
+          # field". Because this is an assignment from a command substitution and
+          # Actions runs `run:` under `bash -e`, that aborted the whole step here,
+          # before the `exit 0` below could apply. Net effect: the workflow never
+          # updated a single branch, so every stale PR needed the manual "Update
+          # branch" click this job exists to remove.
+          #
+          # `mergeStateStatus` IS supported; BEHIND is exactly "needs updating".
+          # `|| true` keeps a transient gh/API failure from re-introducing the
+          # same abort-before-exit-0 behaviour.
           OUTDATED=$(gh pr list \
             --repo "$REPO" \
             --base Dev_new_gui \
             --state open \
-            --json number,behindBy \
-            --jq '.[] | select(.behindBy > 0) | .number')
+            --json number,mergeStateStatus \
+            --jq '.[] | select(.mergeStateStatus == "BEHIND") | .number' || true)
 
           if [ -z "$OUTDATED" ]; then
-            echo "All PR branches are up to date."
+            echo "All PR branches are up to date (or none could be listed)."
             exit 0
           fi
 
@@ -65,7 +77,13 @@ jobs:
               continue
             fi
             echo "Updating PR #$PR..."
-            if gh pr update-branch "$PR" --repo "$REPO" 2>&1; then
+            # #12801: `gh pr update-branch` does not exist in the installed gh
+            # build (same class as the missing `behindBy` field above), so this
+            # branch could never have succeeded even if the listing worked. The
+            # REST endpoint is always available and is what the "Update branch"
+            # button calls; a conflicting PR returns non-2xx and is counted as
+            # needing manual resolution rather than failing the job.
+            if gh api -X PUT "repos/$REPO/pulls/$PR/update-branch" 2>&1; then
               echo "  ✓ PR #$PR updated"
               UPDATED=$((UPDATED + 1))
             else
