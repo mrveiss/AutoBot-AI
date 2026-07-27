@@ -459,6 +459,54 @@ class TestSync:
 
         assert _url_to_source_id("https://c.com") not in written
 
+    async def test_sync_checkpoints_crawled_seeds_without_callback(self) -> None:
+        """GH#12744: a crawl that never fires on_seed_complete must still checkpoint.
+
+        The callback is optional. When it is not invoked, the fetch results are
+        the evidence that a seed was crawled — without this, a resumed sync
+        re-crawled every seed it had already finished.
+        """
+        urls = ["https://a.com", "https://b.com"]
+        cfg = _make_config(urls, max_pages=50)
+        connector = WebCrawlerConnector(cfg)
+
+        written: list = []
+
+        async def _crawl_no_callback(seed_urls, **kwargs):
+            # Deliberately ignores on_seed_complete, as a backend may.
+            return [_make_fetch_result(u, markdown="content") for u in seed_urls]
+
+        with patch.object(connector, "crawl", new=AsyncMock(side_effect=_crawl_no_callback)):
+            with patch.object(connector, "_write_checkpoint", new=AsyncMock(side_effect=written.append)):
+                with patch("knowledge.connectors.web_crawler._ingest_results_to_kb", new=AsyncMock()):
+                    await connector.sync(incremental=True)
+
+        assert _url_to_source_id("https://a.com") in written
+        assert _url_to_source_id("https://b.com") in written
+
+    async def test_sync_does_not_checkpoint_a_seed_with_no_fetch_result(self) -> None:
+        """GH#12843: no result for a seed means it was never crawled — never checkpoint it.
+
+        Checkpointing marks a seed done, so the next incremental sync skips it.
+        Doing that for an uncrawled seed drops it permanently.
+        """
+        urls = ["https://a.com", "https://skipped.com"]
+        cfg = _make_config(urls, max_pages=50)
+        connector = WebCrawlerConnector(cfg)
+
+        written: list = []
+
+        async def _crawl_partial(seed_urls, **kwargs):
+            return [_make_fetch_result("https://a.com", markdown="content")]
+
+        with patch.object(connector, "crawl", new=AsyncMock(side_effect=_crawl_partial)):
+            with patch.object(connector, "_write_checkpoint", new=AsyncMock(side_effect=written.append)):
+                with patch("knowledge.connectors.web_crawler._ingest_results_to_kb", new=AsyncMock()):
+                    await connector.sync(incremental=True)
+
+        assert _url_to_source_id("https://a.com") in written
+        assert _url_to_source_id("https://skipped.com") not in written
+
 
 # ---------------------------------------------------------------------------
 # Issue #12486 — no-content pages surface a specific, diagnosable reason
