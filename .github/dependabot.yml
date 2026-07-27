@@ -120,6 +120,18 @@ updates:
           - "vite"
           - "@vitejs/*"
           - "typescript"
+      # #12798: eslint-plugin-oxlint declares a peer on its OWN matching oxlint
+      # minor (plugin 1.75.0 -> peer oxlint ~1.75.0). Under all-dependencies
+      # nothing kept the pair in lockstep, so a run advanced the plugin while
+      # leaving oxlint at ~1.73.0 — npm ci then died on ERESOLVE and took four
+      # required checks down with it (#12792). Their own group forces them to
+      # move together. A version cap (the @pinia/testing remedy below) is wrong
+      # here: both SHOULD keep advancing, just never apart.
+      # Must stay ABOVE all-dependencies — first matching group wins.
+      oxlint:
+        patterns:
+          - "oxlint"
+          - "eslint-plugin-oxlint"
       all-dependencies:
         patterns:
           - "*"
