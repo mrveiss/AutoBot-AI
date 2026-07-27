@@ -14,7 +14,7 @@ import time
 
 import pytest
 
-from services.resilience.circuit_breaker_manager import (
+from circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerManager,
