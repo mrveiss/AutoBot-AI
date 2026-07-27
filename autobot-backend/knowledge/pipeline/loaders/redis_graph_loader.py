@@ -13,7 +13,7 @@ from typing import List
 
 from autobot_memory_graph.property_graph import PropertyGraph
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from knowledge.pipeline.base import BaseLoader, PipelineContext
 from knowledge.pipeline.models.entity import Entity
 from knowledge.pipeline.models.event import TemporalEvent
@@ -50,7 +50,7 @@ class RedisGraphLoader(BaseLoader):
         Args:
             context: Pipeline context with entities, relationships, events
         """
-        self.redis_client = get_redis_client(async_client=True, database=self.database)
+        self.redis_client = await get_async_redis_client(database=self.database)
         # Wire PropertyGraph to the same Redis connection (no extra pool entry)
         self._property_graph._redis = self.redis_client
 

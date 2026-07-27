@@ -163,8 +163,8 @@ class TestRedisGraphLoader:
         mock_redis.zadd = AsyncMock()
 
         with patch(
-            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
-            return_value=mock_redis,
+            "knowledge.pipeline.loaders.redis_graph_loader.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
@@ -185,8 +185,8 @@ class TestRedisGraphLoader:
         mock_redis.zadd = AsyncMock()
 
         with patch(
-            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
-            return_value=mock_redis,
+            "knowledge.pipeline.loaders.redis_graph_loader.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
@@ -210,8 +210,8 @@ class TestRedisGraphLoader:
         mock_redis.zadd = AsyncMock()
 
         with patch(
-            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
-            return_value=mock_redis,
+            "knowledge.pipeline.loaders.redis_graph_loader.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
@@ -225,8 +225,8 @@ class TestRedisGraphLoader:
         mock_redis = MagicMock()
 
         with patch(
-            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
-            return_value=mock_redis,
+            "knowledge.pipeline.loaders.redis_graph_loader.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
@@ -249,8 +249,8 @@ class TestRedisGraphLoader:
         mock_redis.zadd = AsyncMock()
 
         with patch(
-            "knowledge.pipeline.loaders.redis_graph_loader.get_redis_client",
-            return_value=mock_redis,
+            "knowledge.pipeline.loaders.redis_graph_loader.get_async_redis_client",
+            new=AsyncMock(return_value=mock_redis),
         ):
             from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
