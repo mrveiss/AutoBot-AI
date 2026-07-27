@@ -465,6 +465,45 @@ def reset_http_client_for_new_loop() -> None:
             HTTPClientManager._lock = asyncio.Lock()
 
 
+def _service_signature(
+    service_id: str,
+    method: str,
+    path: str,
+    timestamp: int,
+    key: str,
+) -> str:
+    """
+    Canonical HMAC-SHA256 signature for service-to-service requests (#12766).
+
+    Single source of truth for the signature computation shared by
+    ``sign_request`` (caller side, below) and
+    ``security.service_auth.ServiceAuthManager.generate_signature``
+    (receiver side, ``autobot-backend``) — the two previously duplicated an
+    identical ``hmac.new(key, "service_id:method:path:timestamp", sha256)``
+    formula. Extracting one helper guarantees they can never silently drift.
+
+    SECURITY: the message format, field order, ``:`` separator, UTF-8
+    encoding, and SHA-256 digest MUST NOT change — any edit here changes
+    every signature this system has ever produced or verified.
+
+    Args:
+        service_id: Caller's service identifier (e.g. ``'main-backend'``).
+        method: HTTP method in upper-case (e.g. ``'GET'``, ``'POST'``).
+        path: URL path component only (e.g. ``'/api/inference'``).
+        timestamp: Unix timestamp (seconds).
+        key: 256-bit hex-encoded secret shared between caller and receiver.
+
+    Returns:
+        Hex-encoded HMAC-SHA256 signature.
+    """
+    message = f"{service_id}:{method}:{path}:{timestamp}"
+    return hmac.new(
+        key.encode(encoding="utf-8"),
+        message.encode(encoding="utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
 def sign_request(
     service_id: str,
     service_key: str,
@@ -496,12 +535,7 @@ def sign_request(
     Returns:
         Dict mapping header name → value, ready to merge into request headers.
     """
-    message = f"{service_id}:{method}:{path}:{timestamp}"
-    signature = hmac.new(
-        service_key.encode(encoding="utf-8"),
-        message.encode(encoding="utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    signature = _service_signature(service_id, method, path, timestamp, service_key)
     return {
         "X-Service-ID": service_id,
         "X-Service-Signature": signature,
