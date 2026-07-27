@@ -16,7 +16,7 @@ import os
 import time
 import traceback
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -26,6 +26,7 @@ import psutil
 
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 from config import ConfigManager
 
 logger = logging.getLogger(__name__)
@@ -200,7 +201,7 @@ class PerformanceMonitor:
             npu_util = await self.get_npu_metrics()
 
             return SystemMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 hostname=hostname,
                 cpu_percent=cpu_percent,
                 memory_percent=memory.percent,
@@ -290,7 +291,7 @@ class PerformanceMonitor:
                 redis_test.ping()
                 response_time = time.time() - start_time
                 return ServiceMetrics(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=utc_timestamp(),
                     service_name=service_name,
                     response_time=response_time,
                     status_code=200,
@@ -305,7 +306,7 @@ class PerformanceMonitor:
                         is_healthy = response.status < 400
 
                         return ServiceMetrics(
-                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            timestamp=utc_timestamp(),
                             service_name=service_name,
                             response_time=response_time,
                             status_code=response.status,
@@ -315,7 +316,7 @@ class PerformanceMonitor:
         except Exception as e:
             response_time = time.time() - start_time
             return ServiceMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 service_name=service_name,
                 response_time=response_time,
                 status_code=None,
@@ -352,7 +353,7 @@ class PerformanceMonitor:
             ops_per_second = 1.0 / query_time if query_time > 0 else 0
 
             return DatabaseMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 database_type=f"Redis_DB_{db_num}",
                 connection_time=connection_time,
                 query_count=1,
@@ -364,7 +365,7 @@ class PerformanceMonitor:
         except Exception as e:
             self.logger.error(f"Error testing Redis DB {db_num}: {e}")
             return DatabaseMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 database_type=f"Redis_DB_{db_num}",
                 connection_time=0.0,
                 query_count=0,
@@ -431,7 +432,7 @@ class PerformanceMonitor:
         Helper for test_inter_vm_performance.
         """
         return InterVMMetrics(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=utc_timestamp(),
             source_vm="main",
             target_vm=vm_name,
             latency_ms=999.0,
@@ -481,7 +482,7 @@ class PerformanceMonitor:
 
                     inter_vm_metrics.append(
                         InterVMMetrics(
-                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            timestamp=utc_timestamp(),
                             source_vm="main",
                             target_vm=vm_name,
                             latency_ms=latency_ms,
@@ -552,7 +553,7 @@ class PerformanceMonitor:
 
     async def store_metrics(self, metrics: Dict[str, Any]):
         """Store performance metrics in Redis and local files."""
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = utc_timestamp()
 
         # Store in Redis (if available)
         if self.redis_client:

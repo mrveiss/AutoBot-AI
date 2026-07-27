@@ -5,10 +5,10 @@
 """LLC HandoffBriefGenerator — AI→Human and Human→AI KB-powered briefs (GH#8239)."""
 
 import json
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from llm_shared.types import LLMType
 
 from .rag_assembler import AssemblerProfile, LLCRAGAssembler
@@ -108,7 +108,7 @@ class HandoffBriefGenerator:
                 "open_questions": brief_content.get("open_questions", []),
                 "next_steps": brief_content.get("next_steps", []),
                 "artifacts": brief_content.get("artifacts", []),
-                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_at": utc_timestamp(),
                 "generator": "handoff_brief_generator",
             }
 
@@ -196,7 +196,7 @@ class HandoffBriefGenerator:
                 "company_standards": brief_content.get("company_standards", []),
                 "project_context": brief_content.get("project_context", []),
                 "suggested_approach": brief_content.get("suggested_approach", ""),
-                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "generated_at": utc_timestamp(),
                 "generator": "handoff_brief_generator",
             }
 
@@ -229,7 +229,7 @@ class HandoffBriefGenerator:
             "open_questions": [],
             "next_steps": [],
             "artifacts": [],
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": utc_timestamp(),
             "generator": "fallback",
         }
 
@@ -240,7 +240,7 @@ class HandoffBriefGenerator:
             "company_standards": [],
             "project_context": [],
             "suggested_approach": "Proceed with default best practices. Escalate if unclear.",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": utc_timestamp(),
             "generator": "fallback",
         }
 

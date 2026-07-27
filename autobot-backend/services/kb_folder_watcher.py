@@ -20,7 +20,6 @@ Features:
 import asyncio
 import json
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -30,6 +29,7 @@ from watchdog.observers import Observer
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 
@@ -67,7 +67,7 @@ class WatchFolderConfig:
         self.recursive = recursive
         self.category = category
         self.tags = tags or []
-        self.created_at = datetime.now(timezone.utc).isoformat()
+        self.created_at = utc_timestamp()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -466,7 +466,7 @@ class KBFolderWatcherService:
             # Update stats
             if folder_id in self._stats:
                 self._stats[folder_id]["files_ingested"] += 1
-                self._stats[folder_id]["last_change"] = datetime.now(timezone.utc).isoformat()
+                self._stats[folder_id]["last_change"] = utc_timestamp()
 
             logger.info("Successfully ingested file: %s into collection %s", file_path.name, config.collection)
 

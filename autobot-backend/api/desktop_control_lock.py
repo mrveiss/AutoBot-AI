@@ -33,10 +33,10 @@ navigates away or closes the tab does not permanently mute the agent.
 
 import json
 import os
-from datetime import datetime, timezone
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 
@@ -113,7 +113,7 @@ async def acquire_human_control(session_id: str, owner: str) -> dict:
     key = _lock_key(session_id)
     record = {
         "owner": owner,
-        "acquired_at": datetime.now(timezone.utc).isoformat(),
+        "acquired_at": utc_timestamp(),
     }
     try:
         redis = await get_async_redis_client(database="main")

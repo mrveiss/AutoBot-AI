@@ -20,6 +20,7 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import (
     Deployment,
@@ -930,7 +931,7 @@ class ReconcilerService:
                 **(deployment.extra_data or {}),
                 "auto_rollback_attempted": True,
                 "auto_rollback_reason": f"Node status: {node.status}",
-                "auto_rollback_time": datetime.now(timezone.utc).isoformat(),
+                "auto_rollback_time": utc_timestamp(),
             }
 
             # Remove deployed roles from node

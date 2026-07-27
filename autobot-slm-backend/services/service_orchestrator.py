@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Service, ServiceStatus
 
 logger = logging.getLogger(__name__)
@@ -538,7 +539,7 @@ class ServiceOrchestrator:
             Dict with service statuses and health information
         """
         status = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
             "services": {},
             "healthy_count": 0,
             "unhealthy_count": 0,

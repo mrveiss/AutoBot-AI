@@ -13,6 +13,8 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
+from autobot_shared.time_utils import utc_timestamp
+
 logger = logging.getLogger(__name__)
 
 # Default paths
@@ -102,7 +104,7 @@ class AgentVersion:
         version_info = {
             "commit": commit,
             "built_at": built_at.isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": utc_timestamp(),
         }
 
         if extra_data:
