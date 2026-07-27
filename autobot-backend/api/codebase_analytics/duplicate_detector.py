@@ -19,7 +19,9 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 """
 
 import hashlib
+import os
 import re
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -618,6 +620,7 @@ class DuplicateCodeDetector(_BaseClass):
         project_root: str | None = None,
         min_similarity: float = LOW_SIMILARITY_THRESHOLD,
         use_semantic_analysis: bool = False,
+        cancel_token: "threading.Event | None" = None,
     ):
         """
         Initialize the duplicate detector.
@@ -626,6 +629,11 @@ class DuplicateCodeDetector(_BaseClass):
             project_root: Root directory to scan (defaults to AutoBot project)
             min_similarity: Minimum similarity threshold (0.0 to 1.0)
             use_semantic_analysis: Enable LLM-based semantic duplicate detection (Issue #554)
+            cancel_token: #12779 — set by the caller when it stops waiting.
+                asyncio.wait_for cancels the AWAIT, but work already running in a
+                ThreadPoolExecutor cannot be cancelled, so a timed-out scan kept
+                walking the whole tree in a thread whose result was already
+                discarded. The scan polls this token and stops cooperatively.
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
         self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
@@ -646,7 +654,12 @@ class DuplicateCodeDetector(_BaseClass):
             self.project_root = Path(__file__).resolve().parents[3]
 
         self.min_similarity = min_similarity
+        self._cancel_token = cancel_token
         self.code_extensions = PYTHON_EXTENSIONS | JS_EXTENSIONS | TS_EXTENSIONS | VUE_EXTENSIONS
+
+    def _cancelled(self) -> bool:
+        """True once the caller has stopped waiting for this scan (#12779)."""
+        return self._cancel_token is not None and self._cancel_token.is_set()
 
     def _should_skip_path(self, path: Path) -> bool:
         """Check if path should be skipped."""
@@ -654,23 +667,44 @@ class DuplicateCodeDetector(_BaseClass):
         return bool(path_parts & SKIP_DIRS)
 
     def _get_files_to_scan(self) -> List[Path]:
-        """Get list of files to scan for duplicates."""
-        files = []
+        """Get list of files to scan for duplicates.
 
-        for ext in self.code_extensions:
-            pattern = f"**/*{ext}"
-            for file_path in self.project_root.glob(pattern):
-                if self._should_skip_path(file_path):
+        #12779: this used ``project_root.glob(f"**/*{ext}")`` once PER EXTENSION
+        and applied the skip-list only AFTER the walk had already descended. So
+        node_modules/, .git/, venv/ and .worktrees/ were fully traversed and then
+        discarded — N times over, once per extension. That is what made a single
+        scan expensive enough to blow the 120 s timeout.
+
+        Now: ONE os.walk over the tree, pruning excluded directories in place via
+        ``dirnames[:]`` so they are never descended at all, matching every
+        extension in the same pass.
+
+        Honours the cooperative cancel token so an abandoned scan can actually
+        stop instead of running to completion in a thread nobody is waiting on.
+        """
+        files: List[Path] = []
+        extensions = tuple(self.code_extensions)
+
+        for dirpath, dirnames, filenames in os.walk(self.project_root):
+            if self._cancelled():
+                logger.info("File scan cancelled after %d files", len(files))
+                return files
+
+            # Prune BEFORE descending — this is the whole point. Mutating
+            # dirnames in place is what stops os.walk entering these trees.
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+
+            for name in filenames:
+                if not name.endswith(extensions):
                     continue
-                if file_path.is_file():
-                    files.append(file_path)
-                    # Issue #609: MAX_FILES_TO_SCAN=0 means no limit
-                    if MAX_FILES_TO_SCAN > 0 and len(files) >= MAX_FILES_TO_SCAN:
-                        logger.warning(
-                            "Reached max files limit (%d), stopping scan",
-                            MAX_FILES_TO_SCAN,
-                        )
-                        return files
+                files.append(Path(dirpath) / name)
+                # Issue #609: MAX_FILES_TO_SCAN=0 means no limit
+                if MAX_FILES_TO_SCAN > 0 and len(files) >= MAX_FILES_TO_SCAN:
+                    logger.warning(
+                        "Reached max files limit (%d), stopping scan",
+                        MAX_FILES_TO_SCAN,
+                    )
+                    return files
 
         return files
 
