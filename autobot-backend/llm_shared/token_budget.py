@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from autobot_shared.doc_chunking import estimate_tokens
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -47,28 +48,21 @@ TOKEN_BUDGET_PER_RUN: int = env_int("AUTOBOT_LLM_TOKEN_BUDGET_PER_RUN", 0)
 # counter never resets mid-conversation. Default: 24h.
 TOKEN_BUDGET_TTL_SECONDS: int = env_int("AUTOBOT_LLM_TOKEN_BUDGET_TTL_SECONDS", 86400)
 
-# Chars-per-token estimate — the same rough approximation already used by
-# chat_workflow/compact_hook.py and context_window_manager.py. Accurate
-# tokenisation is unnecessary for a budget *ceiling* check.
-_CHARS_PER_TOKEN: int = 4
-
+# Token estimation delegates to autobot_shared.doc_chunking.estimate_tokens
+# (chars/4 — accurate tokenisation is unnecessary for a budget *ceiling*
+# check). Canonical estimator per #12764; family convergence for #12645.
 _KEY_PREFIX = "autobot:llm:token_budget"
-
-
-def _estimate_tokens(char_count: int) -> int:
-    """Cheap chars/4 token estimate (matches compact_hook.py convention)."""
-    return max(0, char_count // _CHARS_PER_TOKEN)
 
 
 def _estimate_request_tokens(request: LLMRequest) -> int:
     """Estimate this request's token cost: input messages + requested output budget."""
-    input_chars = sum(len(str(m.get("content", ""))) for m in request.messages)
-    return _estimate_tokens(input_chars) + (request.max_tokens or 0)
+    input_text = "".join(str(m.get("content", "")) for m in request.messages)
+    return estimate_tokens(input_text) + (request.max_tokens or 0)
 
 
 def _estimate_response_tokens(response: LLMResponse) -> int:
     """Estimate a completed response's token cost when the provider didn't report usage."""
-    return _estimate_tokens(len(response.content or ""))
+    return estimate_tokens(response.content or "")
 
 
 def _scope_key(request: LLMRequest) -> str:
