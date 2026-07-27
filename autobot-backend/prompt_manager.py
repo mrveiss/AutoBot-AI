@@ -1281,6 +1281,7 @@ def get_optimized_prompt(
     additional_params: Dict | None = None,
     tool_descriptions: Dict | None = None,
     preference_clause: str | None = None,
+    skill_clause: str | None = None,
 ) -> str:
     """
     Get a prompt optimized for vLLM prefix caching.
@@ -1324,7 +1325,43 @@ def get_optimized_prompt(
     # function stays sync.
     if preference_clause:
         combined = f"{combined}\n\n{preference_clause}"
+    # #12810: append the ranked-skill context. Same placement rule as the preference
+    # clause — after the dynamic suffix, never inside the cached static prefix, since
+    # it varies per query. Callers on async paths pre-fetch it via ``build_skill_clause``
+    # so this sync function stays sync.
+    if skill_clause:
+        combined = f"{combined}\n\n{skill_clause}"
     return combined
+
+
+async def build_skill_clause(
+    context: str,
+    *,
+    platform: str | None = None,
+    top_k: int | None = None,
+) -> str | None:
+    """Build the ranked-skill context block for prompt assembly (#4337, wired in #12810).
+
+    Ranks registered skills against ``context`` by embedding similarity and renders the
+    top matches through :func:`_build_skill_context`, so the model knows which of its
+    skills are relevant to the request in front of it.
+
+    Both halves of this shipped and were never connected: ``SkillRanker`` had no caller,
+    and ``_build_skill_context`` — written to consume its output — had none either.
+
+    Returns ``None`` when nothing ranks or ranking fails, leaving the prompt unchanged.
+    """
+    if not context or not context.strip():
+        return None
+    try:
+        from services.skill_management.skill_ranker import get_skill_ranker
+
+        skills = await get_skill_ranker().rank_skills(context, platform=platform, top_k=top_k)
+    except Exception:  # noqa: BLE001 — never break prompt assembly on skill ranking
+        logger.debug("Skill ranking unavailable; prompt assembled without skill context", exc_info=True)
+        return None
+
+    return _build_skill_context(skills) or None
 
 
 async def build_preference_clause(
