@@ -422,3 +422,53 @@ class TestSetUserBundle:
         data = response.json()
         assert data["bundle_name"] == "voice_admin"
         mock_emit.assert_called_once()
+
+
+class TestSuperadminIsNotLockedOut:
+    """#12717: superadmin must count as admin on the READ paths too.
+
+    The write path (PUT /voice/users/{id}/bundle) has always been guarded by
+    require_role("admin", "superadmin"), so a superadmin could ASSIGN a bundle
+    but then got 403 reading it back — the read path went through _is_admin,
+    which only accepted "admin". Same class as #12704.
+    """
+
+    def test_is_admin_accepts_superadmin(self):
+        from api.voice_bundle_user import _is_admin
+
+        assert _is_admin({"role": "superadmin"}) is True
+        assert _is_admin({"role": "admin"}) is True
+
+    def test_is_admin_still_rejects_ordinary_roles(self):
+        from api.voice_bundle_user import _is_admin
+
+        for role in ("user", "readonly", "operator", "analyst", "editor"):
+            assert _is_admin({"role": role}) is False, role
+        assert _is_admin({}) is False
+        assert _is_admin({"role": None}) is False
+
+    def test_is_admin_is_case_insensitive_like_require_role(self):
+        """auth_rbac.require_role lowercases both sides; this must match, or a
+        'SuperAdmin' token would pass the write guard and fail the read."""
+        from api.voice_bundle_user import _is_admin
+
+        assert _is_admin({"role": "SuperAdmin"}) is True
+        assert _is_admin({"role": "ADMIN"}) is True
+
+    def test_superadmin_can_read_another_users_bundle(self):
+        """_check_self_or_admin is what the GET actually calls."""
+        from unittest.mock import MagicMock
+
+        from api.voice_bundle_user import _check_self_or_admin
+
+        superadmin = {"role": "superadmin", "user_id": "admin-1"}
+        assert _check_self_or_admin(MagicMock(), superadmin, "some-other-user") is True
+
+    def test_ordinary_user_still_cannot_read_another_users_bundle(self):
+        from unittest.mock import MagicMock
+
+        from api.voice_bundle_user import _check_self_or_admin
+
+        plain = {"role": "user", "user_id": "user-1"}
+        assert _check_self_or_admin(MagicMock(), plain, "user-2") is False
+        assert _check_self_or_admin(MagicMock(), plain, "user-1") is True
