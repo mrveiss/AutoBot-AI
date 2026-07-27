@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.ttl_constants import TTL_30_DAYS
 
@@ -166,7 +166,7 @@ class RetrievalLearner:
             return self._redis
         try:
             self._redis = await asyncio.wait_for(
-                get_redis_client(async_client=True, database="analytics"),
+                get_async_redis_client(database="analytics"),
                 timeout=_REDIS_ACQUIRE_TIMEOUT,
             )
         except (asyncio.TimeoutError, Exception) as exc:

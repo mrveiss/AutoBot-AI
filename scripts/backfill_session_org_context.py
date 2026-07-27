@@ -63,9 +63,9 @@ async def _update_redis_indices(session_id: str, username: str, org_id: str) -> 
     Helper for backfill_sessions (#684).
     """
     try:
-        from autobot_shared.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
 
         # Org session set
         org_key = f"org_chat_sessions:{org_id}"

@@ -75,9 +75,9 @@ class TaskOutcomeJudge(BaseLLMJudge):
     async def _get_redis(self):
         """Lazily initialize Redis client."""
         if self._redis_client is None:
-            from autobot_shared.redis_client import get_redis_client
+            from autobot_shared.redis_client import get_async_redis_client
 
-            self._redis_client = await get_redis_client(async_client=True, database="main")
+            self._redis_client = await get_async_redis_client(database="main")
         return self._redis_client
 
     async def evaluate_task_outcome(

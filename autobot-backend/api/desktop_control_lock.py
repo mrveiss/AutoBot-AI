@@ -36,7 +36,7 @@ import os
 from datetime import datetime, timezone
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = get_logger(__name__)
 
@@ -88,7 +88,7 @@ async def _get_lock_record(session_id: str) -> tuple[dict | None, bool]:
     """
     key = _lock_key(session_id)
     try:
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         if redis is None:
             return None, False
         raw = await redis.get(key)
@@ -116,7 +116,7 @@ async def acquire_human_control(session_id: str, owner: str) -> dict:
         "acquired_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         if redis is None:
             logger.error("desktop_control_lock: Redis unavailable, cannot acquire lock for %s", session_id)
             return {
@@ -166,7 +166,7 @@ async def release_human_control(session_id: str, owner: str) -> dict:
     """
     key = _lock_key(session_id)
     try:
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         if redis is None:
             logger.error("desktop_control_lock: Redis unavailable, cannot release lock for %s", session_id)
             return {

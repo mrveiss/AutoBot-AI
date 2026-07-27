@@ -69,7 +69,7 @@ def _bootstrap() -> None:
 
         get_trajectory_store = _gts
     if get_redis_client is None:
-        from autobot_shared.redis_client import get_redis_client as _grc
+        from autobot_shared.redis_client import get_async_redis_client as _grc
 
         get_redis_client = _grc
     if get_knowledge_base_fn is None:
@@ -132,7 +132,7 @@ async def _reassign_trajectory(old_id: str, new_id: str) -> int:
 
 async def _reassign_working_memory(old_id: str, new_id: str) -> int:
     """Reassign Redis working-memory JSON payloads whose ``user_id`` == *old_id*."""
-    redis = await get_redis_client(async_client=True, database="knowledge")
+    redis = await get_async_redis_client(database="knowledge")
     keys = await _redis_scan(redis, "autobot:session:*:memory:*")
 
     count = 0
@@ -160,7 +160,7 @@ async def _reassign_working_memory(old_id: str, new_id: str) -> int:
 
 async def _reassign_graph_entities(old_id: str, new_id: str) -> int:
     """Reassign Redis graph entities whose metadata ``user_id`` or ``owner_id`` == *old_id*."""
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     keys = await _redis_scan(redis, "memory:entity:*")
 
     count = 0
@@ -266,7 +266,7 @@ async def _reassign_kb_facts(old_id: str, new_id: str) -> int:
 
     # --- Redis ownership indexes ---
     try:
-        redis = await get_redis_client(async_client=True, database="knowledge")
+        redis = await get_async_redis_client(database="knowledge")
         # Canonical index written by KnowledgeOwnership._set_owner_indexes
         await _move_redis_facts_index(redis, f"user:kb:facts:{old_id}", f"user:kb:facts:{new_id}")
         # Legacy fallback index written by facts.py when ownership_manager is absent

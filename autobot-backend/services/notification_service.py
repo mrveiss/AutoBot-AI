@@ -43,7 +43,7 @@ from typing import Any, Dict, List
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
 
@@ -183,7 +183,7 @@ class NotificationStore:
         }
         serialised = json.dumps(record)
         try:
-            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
+            client = await get_async_redis_client(database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning(
                     "Redis unavailable — in-app notification not stored (user=%s)",
@@ -208,7 +208,7 @@ class NotificationStore:
         Returns an empty list if Redis is unavailable or no notifications exist.
         """
         try:
-            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
+            client = await get_async_redis_client(database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning("Redis unavailable — cannot list notifications (user=%s)", user_id)
                 return []
@@ -235,7 +235,7 @@ class NotificationStore:
         is unavailable.
         """
         try:
-            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
+            client = await get_async_redis_client(database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning(
                     "Redis unavailable — cannot mark notification %s as read",

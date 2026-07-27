@@ -28,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from knowledge.memory_graph.hybrid_scorer import HybridScorer, SearchResult
 
 logger = get_logger(__name__)
@@ -494,7 +494,7 @@ class MemoryGraphQueryProcessor:
     async def _get_redis(self):
         """Lazily obtain the async Redis client."""
         if self._redis is None:
-            self._redis = await get_redis_client(async_client=True, database="knowledge")
+            self._redis = await get_async_redis_client(database="knowledge")
         return self._redis
 
 

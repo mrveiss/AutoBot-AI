@@ -60,7 +60,7 @@ def _bootstrap() -> None:
 
         get_trajectory_store = _gts
     if get_redis_client is None:
-        from autobot_shared.redis_client import get_redis_client as _grc
+        from autobot_shared.redis_client import get_async_redis_client as _grc
 
         get_redis_client = _grc
 
@@ -169,7 +169,7 @@ async def _list_working_memory(user_id: str) -> List[Dict[str, Any]]:
     """
     try:
         _bootstrap()
-        redis = await get_redis_client(async_client=True, database="knowledge")
+        redis = await get_async_redis_client(database="knowledge")
         all_keys = await _redis_scan(redis, "autobot:session:*:memory:*")
     except Exception as exc:
         logger.warning("_list_working_memory scan failed: %s", exc)
@@ -208,7 +208,7 @@ async def _list_graph_entities(user_id: str) -> List[Dict[str, Any]]:
     """Return memory-graph entities whose metadata.user_id matches *user_id*."""
     try:
         _bootstrap()
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         all_keys = await _redis_scan(redis, _GRAPH_ENTITY_PATTERN)
     except Exception as exc:
         logger.warning("_list_graph_entities scan failed: %s", exc)
@@ -244,7 +244,7 @@ async def _list_rl_patterns(user_id: str) -> List[Dict[str, Any]]:
     """Return retrieval-learner patterns scoped to *user_id*."""
     try:
         _bootstrap()
-        redis = await get_redis_client(async_client=True, database="analytics")
+        redis = await get_async_redis_client(database="analytics")
         prefix = f"{_RL_PATTERN_PREFIX}{user_id}:"
         all_keys = await _redis_scan(redis, f"{prefix}*")
     except Exception as exc:
@@ -421,7 +421,7 @@ async def _forget_working_memory(user_id: str, memory_id: str) -> bool:
     if not is_working_memory_key(memory_id):
         logger.warning("forget_working_memory: rejected non-working-memory key %s", memory_id)
         return False
-    redis = await get_redis_client(async_client=True, database="knowledge")
+    redis = await get_async_redis_client(database="knowledge")
     raw = await redis.get(memory_id)
     if not raw:
         return False
@@ -439,7 +439,7 @@ async def _forget_working_memory(user_id: str, memory_id: str) -> bool:
 async def _forget_graph_entity(user_id: str, entity_id: str) -> bool:
     """Delete a graph entity (by id) and its relations after verifying ownership."""
     _bootstrap()
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     entity_key = f"memory:entity:{entity_id}"
     raw = await redis.json().get(entity_key)
     if not raw:
@@ -466,7 +466,7 @@ async def _forget_rl_pattern(user_id: str, redis_key: str) -> bool:
     if not redis_key.startswith(expected_prefix):
         logger.warning("forget_rl_pattern: tenant mismatch key=%s user=%s", redis_key, user_id)
         return False
-    redis = await get_redis_client(async_client=True, database="analytics")
+    redis = await get_async_redis_client(database="analytics")
     deleted = await redis.delete(redis_key)
     logger.info("forget_rl_pattern: deleted key %s", redis_key)
     return deleted > 0

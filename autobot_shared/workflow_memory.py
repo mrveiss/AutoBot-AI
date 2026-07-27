@@ -21,7 +21,7 @@ Usage::
 import logging
 from typing import Dict
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class WorkflowMemory:
             value: String value (JSON-encode complex data).
             agent_id: Optional agent identifier for audit logging.
         """
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         await redis.hset(self._key, key, value)
         await redis.expire(self._key, _DEFAULT_TTL_SECONDS)
         if agent_id:
@@ -73,7 +73,7 @@ class WorkflowMemory:
         Returns:
             Value string or None if not found.
         """
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         return await redis.hget(self._key, key)
 
     async def read_all(self) -> Dict[str, str]:
@@ -82,11 +82,11 @@ class WorkflowMemory:
         Returns:
             Dict of all key-value pairs.
         """
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         return await redis.hgetall(self._key)
 
     async def clear(self) -> None:
         """Clean up workflow memory. Call when workflow completes."""
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         await redis.delete(self._key)
         logger.debug("WorkflowMemory[%s] cleared", self.workflow_id)

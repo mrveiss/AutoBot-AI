@@ -208,7 +208,7 @@ class TestTrackGenerationStatsGather:
 
 
 class TestGetRedisAwaitsCoroutine:
-    """Regression: _get_redis must await get_redis_client(async_client=True), which
+    """Regression: _get_redis must await get_async_redis_client(), which
     returns a coroutine. A missing await silently broke every stats/version Redis op
     (AttributeError on the coroutine, swallowed by except)."""
 
@@ -219,7 +219,7 @@ class TestGetRedisAwaitsCoroutine:
         engine._redis = None
         fake_client = MagicMock(name="async_redis_client")
         with patch(
-            "api.analytics_code_generation.get_redis_client",
+            "api.analytics_code_generation.get_async_redis_client",
             new=AsyncMock(return_value=fake_client),
         ) as mock_get:
             result = await engine._get_redis()
@@ -235,7 +235,7 @@ class TestGetRedisAwaitsCoroutine:
         engine._redis = None
         fake_client = MagicMock(name="async_redis_client")
         with patch(
-            "api.analytics_code_generation.get_redis_client",
+            "api.analytics_code_generation.get_async_redis_client",
             new=AsyncMock(return_value=fake_client),
         ) as mock_get:
             first = await engine._get_redis()

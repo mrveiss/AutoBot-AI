@@ -19,7 +19,7 @@ class TestWorkflowMemory:
         assert self.memory._key == "autobot:workflow:wf-123:memory"
 
     @pytest.mark.asyncio
-    @patch("autobot_shared.workflow_memory.get_redis_client")
+    @patch("autobot_shared.workflow_memory.get_async_redis_client")
     async def test_write(self, mock_get_redis) -> None:
         mock_redis = AsyncMock()
         mock_get_redis.return_value = mock_redis
@@ -30,7 +30,7 @@ class TestWorkflowMemory:
         mock_redis.expire.assert_called_once_with("autobot:workflow:wf-123:memory", 3600)
 
     @pytest.mark.asyncio
-    @patch("autobot_shared.workflow_memory.get_redis_client")
+    @patch("autobot_shared.workflow_memory.get_async_redis_client")
     async def test_read(self, mock_get_redis) -> None:
         mock_redis = AsyncMock()
         mock_redis.hget.return_value = '{"status": "done"}'
@@ -42,7 +42,7 @@ class TestWorkflowMemory:
         mock_redis.hget.assert_called_once_with("autobot:workflow:wf-123:memory", "step1:result")
 
     @pytest.mark.asyncio
-    @patch("autobot_shared.workflow_memory.get_redis_client")
+    @patch("autobot_shared.workflow_memory.get_async_redis_client")
     async def test_read_all(self, mock_get_redis) -> None:
         mock_redis = AsyncMock()
         mock_redis.hgetall.return_value = {"k1": "v1", "k2": "v2"}
@@ -53,7 +53,7 @@ class TestWorkflowMemory:
         assert result == {"k1": "v1", "k2": "v2"}
 
     @pytest.mark.asyncio
-    @patch("autobot_shared.workflow_memory.get_redis_client")
+    @patch("autobot_shared.workflow_memory.get_async_redis_client")
     async def test_clear(self, mock_get_redis) -> None:
         mock_redis = AsyncMock()
         mock_get_redis.return_value = mock_redis
