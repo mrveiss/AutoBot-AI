@@ -31,7 +31,7 @@
     "axios": "^1.18.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
-    "vue-i18n": "^11.4.7",
+    "vue-i18n": "^11.4.8",
     "vue-router": "^5.2.0"
   },
   "overrides": {
@@ -41,24 +41,24 @@
   },
   "devDependencies": {
     "@vue/test-utils": "^2.4.11",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.0",
     "vitest": "^4.1.10",
-    "@storybook/addon-docs": "^10.5.3",
-    "@storybook/vue3": "^10.5.3",
-    "@storybook/vue3-vite": "^10.5.3",
+    "@storybook/addon-docs": "^10.5.5",
+    "@storybook/vue3": "^10.5.5",
+    "@storybook/vue3-vite": "^10.5.5",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.1.1",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
-    "eslint": "^10.7.0",
+    "eslint": "^10.8.0",
     "eslint-plugin-vue": "^10.10.0",
     "openapi-typescript": "^7.13.0",
-    "postcss": "^8.5.21",
+    "postcss": "^8.5.23",
     "storybook": "^10.4.6",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.65.0",
     "vite": "^8.0.13",
-    "vue-tsc": "^3.3.7"
+    "vue-tsc": "^3.3.8"
   }
 }
