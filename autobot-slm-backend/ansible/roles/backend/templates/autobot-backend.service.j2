@@ -27,6 +27,17 @@ Group={{ backend_group }}
 WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
 Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir | dirname }}/autobot_shared:{{ backend_install_dir | dirname }}"
+# #12777: the backend SIGABRTs every ~25-55 min and leaves ZERO diagnostics.
+# Without faulthandler a fatal signal raised inside a C extension (uvloop,
+# chromadb, torch/onnx — all compiled against a very new Python 3.14) unwinds
+# without ever printing a Python stack, so backend-error.log just stops
+# mid-stream and resumes at the next boot. Core capture cannot cover for that
+# here either: this platform's core_pattern pipes to /wsl-capture-crash, which
+# does not exist, so the kernel reports code=dumped and the core is discarded.
+# With this set, the next abort writes a native + Python traceback to
+# StandardError (backend-error.log, see below) — which is the prerequisite for
+# identifying the aborting extension at all.
+Environment="PYTHONFAULTHANDLER=1"
 EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 # MVA-1633: Validate env vars before starting to prevent silent crashes
