@@ -316,8 +316,12 @@ class WebCrawlerConnector(AbstractConnector):
 
         try:
 
+            crawled_seed_ids: set[str] = set()
+
             async def _on_seed_done(url: str) -> None:
-                await self._write_checkpoint(_url_to_source_id(url))
+                source_id = _url_to_source_id(url)
+                crawled_seed_ids.add(source_id)
+                await self._write_checkpoint(source_id)
 
             fetched = await self.crawl(
                 seed_urls=pending_seeds,
@@ -328,6 +332,16 @@ class WebCrawlerConnector(AbstractConnector):
                 same_origin=self._same_origin,
                 on_seed_complete=_on_seed_done,
             )
+            # #12744: on_seed_complete is an OPTIONAL callback — a crawl backend
+            # that does not invoke it left the checkpoint empty, so a resumed
+            # sync re-crawled every seed it had already finished. Once crawl()
+            # returns without raising, every dispatched seed has been attempted,
+            # so record any the callback did not report.
+            for seed_url in pending_seeds:
+                source_id = _url_to_source_id(seed_url)
+                if source_id not in crawled_seed_ids:
+                    await self._write_checkpoint(source_id)
+
             await _ingest_results_to_kb(fetched, self, result)
             result.status = "success" if not result.errors else "partial"
             if result.status == "success":
