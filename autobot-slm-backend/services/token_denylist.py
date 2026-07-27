@@ -97,6 +97,10 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
     so no background cleanup is needed.  Silently no-ops if Redis is
     unavailable (logs a warning) — bounded by the module deadline.
     """
+    if _redis_marked_unavailable():
+        logger.warning("revoke_jti: jti=%r NOT revoked (Redis marked unavailable)", jti)
+        return
+
     ttl = max(1, ttl_seconds)
 
     async def _do() -> bool:
