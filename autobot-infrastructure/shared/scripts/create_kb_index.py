@@ -10,6 +10,7 @@ Create knowledge base index with correct dimensions using redisvl directly.
 import logging
 import os
 import sys
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import centralized Redis client
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 
 def _drop_existing_indexes(r) -> None:

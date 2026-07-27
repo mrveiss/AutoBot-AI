@@ -128,7 +128,7 @@ def test_agent_communication_fix():
 
     try:
         # This would be the code path that was failing before
-        from utils.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_redis_client
 
         # This should now use the service registry
         redis_client = get_redis_client()
