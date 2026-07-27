@@ -81,9 +81,12 @@ REGISTRY: list[ScheduledJob] = [
             "Runs four sub-tasks: edge_sync (300 s), node_promoter (24 h), "
             "edge_discoverer (24 h), mesh_pruner (7 d), edge_learner (realtime Redis consumer)."
         ),
+        startup_marker="initialization/lifespan.py::_init_mesh_brain_scheduler",
         inert_reason=(
-            "Not started — tracked by GH#12816. mesh_pruner deletes data, so enabling this "
-            "scheduler is a data-retention decision, not a wiring change."
+            "Wired in lifespan (#12816) but DEFAULT-OFF via "
+            "AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED. mesh_pruner deletes data on a 7-day "
+            "cadence, so ENABLING it remains a data-retention decision — the wiring gap "
+            "is closed, the retention call is not."
         ),
     ),
     ScheduledJob(

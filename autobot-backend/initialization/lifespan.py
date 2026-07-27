@@ -1696,6 +1696,41 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
         app.state.llc_budget_watchdog = None
 
 
+async def _init_mesh_brain_scheduler(app: FastAPI) -> None:
+    """Start MeshBrainScheduler when explicitly enabled (#12816).
+
+    The scheduler was registered, fully described, and never started — its own
+    registry entry admitted "currently inert". This wires it, but DEFAULT-OFF.
+
+    Off by default is deliberate, not timidity: of its five jobs, `mesh_pruner`
+    DELETES data on a 7-day cadence, and `node_promoter`/`edge_discoverer`
+    mutate node and edge state. Establishing what mesh_pruner removes and under
+    which retention rule is a data-retention decision, not a wiring change, so
+    it must not be switched on as a side effect of fixing the wiring.
+
+    start() returns as soon as it has spawned its own per-job tasks, and only
+    spawns jobs whose component is present, so it is safe to await directly.
+    """
+    from autobot_shared.ssot_config import config as _cfg
+
+    if not _cfg.misc.mesh_brain_scheduler_enabled:
+        logger.info("MeshBrainScheduler: disabled (AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED not set)")
+        app.state.mesh_brain_scheduler = None
+        return
+
+    logger.info("MeshBrainScheduler: Starting...")
+    try:
+        from services.mesh_brain.scheduler import MeshBrainScheduler
+
+        scheduler = MeshBrainScheduler()
+        await scheduler.start()
+        app.state.mesh_brain_scheduler = scheduler
+        logger.info("MeshBrainScheduler: Started")
+    except Exception as exc:
+        logger.warning("MeshBrainScheduler startup failed (non-fatal): %s", exc)
+        app.state.mesh_brain_scheduler = None
+
+
 async def _recover_agent_sessions(app: FastAPI) -> None:
     """Re-queue runs that were interrupted by a previous server crash (GH#9026)."""
     logger.info("LLC SessionCheckpointer: recovering incomplete runs...")
@@ -1853,6 +1888,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_skill_distillation_scheduler(app)
         await _init_liveness_monitor(app)
         await _init_budget_watchdog(app)
+        await _init_mesh_brain_scheduler(app)
         await _init_session_checkpointer(app)
         await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
@@ -2043,6 +2079,20 @@ async def cleanup_services(app: FastAPI):
         if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
             app.state.llc_budget_watchdog.stop()
             logger.info("✅ LLC budget watchdog stopped")
+        # #12816: Stop MeshBrainScheduler — stop() cancels every per-job task
+        # start() spawned, so none survive shutdown.
+        #
+        # Guarded independently: this whole shutdown block sits inside one broad
+        # `except Exception`, so an error raised here would jump straight to that
+        # handler and SKIP every remaining shutdown step below. Startup is
+        # already treated as non-fatal; shutdown gets the same treatment so one
+        # scheduler cannot abort the rest of the teardown.
+        if hasattr(app.state, "mesh_brain_scheduler") and app.state.mesh_brain_scheduler:
+            try:
+                await app.state.mesh_brain_scheduler.stop()
+                logger.info("✅ MeshBrainScheduler stopped")
+            except Exception as mesh_stop_error:
+                logger.warning("MeshBrainScheduler stop failed (non-fatal): %s", mesh_stop_error)
         # GH#9026: Stop LLC session checkpointer
         if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
             app.state.llc_session_checkpointer.stop()

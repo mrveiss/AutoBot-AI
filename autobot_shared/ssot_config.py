@@ -1356,6 +1356,12 @@ class MiscConfig(BaseSettings):
         extra="ignore",
     )
 
+    # #12816: MeshBrainScheduler was registered and never started. Now wired in
+    # lifespan but DEFAULT-OFF: mesh_pruner DELETES data on a 7-day cadence and
+    # node_promoter/edge_discoverer mutate state, so ENABLING it is a
+    # data-retention decision rather than a wiring change.
+    mesh_brain_scheduler_enabled: bool = Field(default=False, alias="AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED")
+
     anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
     # #11681: restore pre-#7437 default (1000) — 0 silently disabled the AST cache
