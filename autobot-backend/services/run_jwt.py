@@ -53,6 +53,7 @@ Configuration
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 import uuid
@@ -234,6 +235,15 @@ async def _add_to_denylist(jti: str, remaining_ttl: int) -> None:
     logger.debug("run_jwt: denylist key=%s ttl=%ds", key, remaining_ttl)
 
 
+# #12751: the denylist check sits on an auth path, so it must fail fast rather
+# than stall the request. Deliberately short — a revocation lookup that cannot
+# answer in this budget is treated as "Redis unavailable" and follows the same
+# fail-closed policy.
+DENYLIST_TIMEOUT_S: float = float(
+    os.environ.get("AUTOBOT_RUN_JWT_DENYLIST_TIMEOUT_S", "2.0")  # ssot-config-exempt: dynamic env var name
+)
+
+
 async def _is_denied(jti: str) -> bool:
     """Return True if the JTI is present in the Redis denylist.
 
@@ -246,16 +256,36 @@ async def _is_denied(jti: str) -> bool:
     Raises:
         JWTDecodeError: Redis is unavailable and fail-closed mode is active.
     """
+    try:
+        return await asyncio.wait_for(_denylist_lookup(jti), timeout=DENYLIST_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        # #12751: this runs inside get_current_user, a dependency on most
+        # authenticated routes. Without a bound, a slow Redis stalls the whole
+        # request with no HTTP status at all — the caller sees a hang rather
+        # than a 401, which is strictly worse than a fast rejection.
+        return _unavailable(f"denylist lookup timed out after {DENYLIST_TIMEOUT_S}s")
+
+
+async def _denylist_lookup(jti: str) -> bool:
+    """Ask Redis whether *jti* is revoked. Bounded by the caller."""
     redis = await get_async_redis_client(database="main")
     if redis is None:
-        if os.environ.get(_ENV_FAIL_OPEN) == "1":  # ssot-config-exempt: dynamic env var name
-            logger.warning("run_jwt: Redis unavailable — denylist check skipped (RUN_JWT_REDIS_FAIL_OPEN=1)")
-            return False
-        raise JWTDecodeError(
-            "run_jwt: Redis unavailable — cannot verify JTI revocation status "
-            "(set RUN_JWT_REDIS_FAIL_OPEN=1 to allow fail-open)"
-        )
+        return _unavailable("Redis unavailable")
     return bool(await redis.exists(_DENYLIST_PREFIX + jti))
+
+
+def _unavailable(reason: str) -> bool:
+    """Apply the denylist-unavailable policy: fail closed unless opted out.
+
+    Returning False means "not revoked" and is only safe when the operator has
+    explicitly accepted that a revoked token may be honoured during an outage.
+    """
+    if os.environ.get(_ENV_FAIL_OPEN) == "1":  # ssot-config-exempt: dynamic env var name
+        logger.warning("run_jwt: %s — denylist check skipped (RUN_JWT_REDIS_FAIL_OPEN=1)", reason)
+        return False
+    raise JWTDecodeError(
+        f"run_jwt: {reason} — cannot verify JTI revocation status " "(set RUN_JWT_REDIS_FAIL_OPEN=1 to allow fail-open)"
+    )
 
 
 async def validate_run_jwt(token: str) -> Dict[str, object]:
