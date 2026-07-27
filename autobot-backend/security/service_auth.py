@@ -17,8 +17,8 @@ from typing import Dict
 import structlog
 from fastapi import HTTPException, Request
 
-from autobot_shared.http_client import _service_signature
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.service_signing import _service_signature
 from constants.ttl_constants import TTL_90_DAYS
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
@@ -76,7 +76,7 @@ class ServiceAuthManager:
 
         Signature format: HMAC-SHA256(service_key, "service_id:method:path:timestamp")
 
-        Delegates to ``autobot_shared.http_client._service_signature`` (#12766)
+        Delegates to ``autobot_shared.service_signing._service_signature`` (#12766)
         — the single canonical implementation shared with the caller-side
         ``sign_request`` helper, so signer and verifier can never drift.
 

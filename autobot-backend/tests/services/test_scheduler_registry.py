@@ -102,3 +102,69 @@ def test_all_scheduler_files_registered() -> None:
         + "\n".join(f"  - {f}" for f in sorted(unregistered))
         + "\n\nAdd an entry for each file to autobot-backend/services/scheduler_registry.py."
     )
+
+
+# ---------------------------------------------------------------------------
+# Enforcement test: a registered job must actually start (GH#12810)
+# ---------------------------------------------------------------------------
+
+# Runtimes whose jobs are launched from initialization/lifespan.py. celery_beat jobs
+# are launched by the Celery beat schedule instead, so they are exempt.
+_LIFESPAN_RUNTIMES = {"asyncio_per_worker", "leader_elected", "apscheduler"}
+
+_LIFESPAN_PATH = _BACKEND_ROOT / "initialization" / "lifespan.py"
+
+
+def test_lifespan_jobs_declare_startup_or_inertness() -> None:
+    """Every lifespan-run job declares exactly one of startup_marker / inert_reason.
+
+    Registration never made a job run. SkillHealthScheduler and MeshBrainScheduler were
+    both registered, described, and dead — the fact buried in prose in `description`,
+    where nothing could enforce it. Forcing an explicit declaration makes "registered
+    but silently inert" a test failure instead of a discovery months later.
+    """
+    for job in REGISTRY:
+        if job.runtime not in _LIFESPAN_RUNTIMES:
+            continue
+        declared = [f for f in (job.startup_marker, job.inert_reason) if f]
+        assert len(declared) == 1, (
+            f"REGISTRY entry '{job.name}' ({job.runtime}) must declare exactly one of "
+            f"startup_marker or inert_reason, got {len(declared)}. "
+            "Set startup_marker to the symbol that starts it in initialization/lifespan.py, "
+            "or set inert_reason to state why it deliberately does not run."
+        )
+
+
+def test_declared_startup_markers_exist_in_lifespan() -> None:
+    """A declared startup_marker must actually appear in initialization/lifespan.py.
+
+    Guards the failure this whole check exists for: a job claiming to be started by a
+    function nobody ever calls, or one renamed out from under the registry.
+    """
+    source = _LIFESPAN_PATH.read_text(encoding="utf-8")
+
+    missing = [
+        (job.name, job.startup_marker)
+        for job in REGISTRY
+        if job.runtime in _LIFESPAN_RUNTIMES and job.startup_marker and job.startup_marker not in source
+    ]
+
+    assert not missing, (
+        "These REGISTRY entries name a startup_marker absent from initialization/lifespan.py:\n"
+        + "\n".join(f"  - {name}: '{marker}'" for name, marker in sorted(missing))
+        + "\n\nEither wire the scheduler up in lifespan.py or correct the marker."
+    )
+
+
+def test_inert_jobs_cite_a_tracking_issue() -> None:
+    """An inert job must point at an issue, so the decision stays revisitable.
+
+    An inert_reason with no tracking issue is how a dead scheduler becomes permanent.
+    """
+    for job in REGISTRY:
+        if not job.inert_reason:
+            continue
+        assert "#" in job.inert_reason, (
+            f"REGISTRY entry '{job.name}' is declared inert without citing a tracking issue. "
+            f"Add the issue number to inert_reason: {job.inert_reason!r}"
+        )

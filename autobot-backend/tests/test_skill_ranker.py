@@ -336,3 +336,51 @@ class TestSkillContextBuilding:
 
         assert "WebSearch" in context
         assert "1." in context
+
+
+class TestSkillClauseWiring:
+    """#12810: SkillRanker and _build_skill_context are actually connected."""
+
+    @pytest.mark.asyncio
+    async def test_build_skill_clause_renders_ranked_skills(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from prompt_manager import build_skill_clause
+
+        ranker = MagicMock()
+        ranker.rank_skills = AsyncMock(return_value=[{"name": "deploy", "description": "Deploy a service"}])
+        with patch("services.skill_management.skill_ranker.get_skill_ranker", return_value=ranker):
+            clause = await build_skill_clause("deploy the API to staging")
+
+        assert clause is not None
+        assert "deploy" in clause
+        ranker.rank_skills.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_build_skill_clause_returns_none_when_nothing_ranks(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from prompt_manager import build_skill_clause
+
+        ranker = MagicMock()
+        ranker.rank_skills = AsyncMock(return_value=[])
+        with patch("services.skill_management.skill_ranker.get_skill_ranker", return_value=ranker):
+            assert await build_skill_clause("anything") is None
+
+    @pytest.mark.asyncio
+    async def test_build_skill_clause_never_breaks_prompt_assembly(self):
+        """A ranking failure must degrade to no skill context, not raise."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from prompt_manager import build_skill_clause
+
+        ranker = MagicMock()
+        ranker.rank_skills = AsyncMock(side_effect=RuntimeError("embedding backend down"))
+        with patch("services.skill_management.skill_ranker.get_skill_ranker", return_value=ranker):
+            assert await build_skill_clause("anything") is None
+
+    @pytest.mark.asyncio
+    async def test_empty_context_skips_ranking_entirely(self):
+        from prompt_manager import build_skill_clause
+
+        assert await build_skill_clause("   ") is None
