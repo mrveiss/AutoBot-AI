@@ -280,8 +280,16 @@ async def move_item(
             },
         )
     except InvalidTransition as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=422, detail="Internal server error")
+        # #12740: the service already computed the exact, useful reason
+        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
+        # generic 422 "Internal server error" threw that away, so the UI could
+        # not tell the user what went wrong or what IS allowed. The message is
+        # purely domain-level — statuses and permitted transitions, no internals
+        # — so it is safe to surface. 409 Conflict is the correct code: the
+        # request is well-formed (422 implies malformed), it conflicts with the
+        # item's current state.
+        logger.info("Rejected illegal work-item transition: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
