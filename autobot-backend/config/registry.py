@@ -40,6 +40,13 @@ logger = logging.getLogger(__name__)
 # Redis key prefix for all config values
 REDIS_CONFIG_PREFIX = "autobot:config:"
 
+# Issue #12674: how long to stop re-dialling Redis after a failed connect.
+# Without this the registry re-attempted a blocking sync connect on EVERY
+# lookup, so a single import that resolves ~29 config keys with Redis
+# unreachable opened 29 connections and tripped the 'main' circuit breaker.
+# Bounded so a Redis that comes up after the config layer is still picked up.
+REDIS_RETRY_INTERVAL_SECONDS = float(os.getenv("AUTOBOT_CONFIG_REGISTRY_REDIS_RETRY_SECONDS", "30"))
+
 
 class ConfigRegistry:
     """
@@ -57,6 +64,9 @@ class ConfigRegistry:
     _lock = threading.RLock()
     _ttl_seconds = 60
     _initialized = False
+    # Issue #12674: monotonic deadline before which _get_redis() skips dialling
+    # Redis because the previous connect attempt failed.
+    _redis_retry_after: float = 0.0
 
     @classmethod
     def get(cls, key: str, default: Any = None) -> Any:
@@ -138,16 +148,47 @@ class ConfigRegistry:
 
     @classmethod
     def _get_redis(cls):
-        """Lazy Redis connection - only when first needed."""
-        if cls._redis_client is None:
+        """Lazy Redis connection - only when first needed.
+
+        Issue #12674: a failed connect is remembered for
+        ``REDIS_RETRY_INTERVAL_SECONDS`` instead of being retried on every
+        lookup. Redis is an optional tier in the fallback chain, so when it is
+        unreachable the registry must degrade to env/registry_defaults without
+        spending a blocking connect (and a circuit-breaker failure) per key.
+        """
+        if cls._redis_client is not None:
+            return cls._redis_client
+
+        with cls._lock:
+            if cls._redis_client is not None:
+                return cls._redis_client
+            if time.monotonic() < cls._redis_retry_after:
+                return None
+
             try:
                 from autobot_shared.redis_client import get_redis_client
+            except ImportError as e:
+                # Transient, NOT a Redis outage: autobot_shared.redis_client
+                # imports network_constants, whose module-level constants resolve
+                # through this registry while network_constants is still
+                # mid-import. Returning None lets the caller fall back to
+                # env/registry_defaults; arming the retry guard here would
+                # wrongly suppress Redis-backed config on a healthy system.
+                logger.debug("Redis client not importable yet (circular import): %s", e)
+                return None
 
-                cls._redis_client = get_redis_client(database="main")
+            try:
+                client = get_redis_client(database="main")
             except Exception as e:
                 logger.debug("Redis connection failed: %s", e)
+                client = None
+
+            if client is None:
+                cls._redis_retry_after = time.monotonic() + REDIS_RETRY_INTERVAL_SECONDS
                 return None
-        return cls._redis_client
+
+            cls._redis_client = client
+            return client
 
     @classmethod
     def clear_cache(cls) -> None:
@@ -156,6 +197,9 @@ class ConfigRegistry:
             cls._cache.clear()
             cls._cache_timestamps.clear()
             cls._redis_client = None
+            # Issue #12674: also drop the failed-connect backoff so a cleared
+            # registry re-probes Redis immediately instead of staying degraded.
+            cls._redis_retry_after = 0.0
 
     @classmethod
     def get_section(cls, prefix: str) -> Dict[str, Any]:

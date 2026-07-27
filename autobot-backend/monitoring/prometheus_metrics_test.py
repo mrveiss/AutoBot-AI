@@ -55,27 +55,27 @@ class TestPrometheusMetricsManager:
         assert hasattr(metrics_manager, "requests_total")
         assert hasattr(metrics_manager, "success_rate")
 
-        # Verify workflow metrics
-        assert hasattr(metrics_manager, "workflow_executions_total")
-        assert hasattr(metrics_manager, "workflow_duration")
-        assert hasattr(metrics_manager, "workflow_steps_executed")
-        assert hasattr(metrics_manager, "active_workflows")
-        assert hasattr(metrics_manager, "workflow_approvals")
+        # Verify workflow metrics (#394: delegated to WorkflowMetricsRecorder)
+        assert metrics_manager._workflow is not None
+        assert callable(metrics_manager.record_workflow_execution)
+        assert callable(metrics_manager.record_workflow_step)
+        assert callable(metrics_manager.update_active_workflows)
+        assert callable(metrics_manager.record_workflow_approval)
 
-        # Verify GitHub metrics
-        assert hasattr(metrics_manager, "github_operations_total")
-        assert hasattr(metrics_manager, "github_api_duration")
-        assert hasattr(metrics_manager, "github_rate_limit_remaining")
-        assert hasattr(metrics_manager, "github_commits")
-        assert hasattr(metrics_manager, "github_pull_requests")
-        assert hasattr(metrics_manager, "github_issues")
+        # Verify GitHub metrics (#394: delegated to GitHubMetricsRecorder)
+        assert metrics_manager._github is not None
+        assert callable(metrics_manager.record_github_operation)
+        assert callable(metrics_manager.update_github_rate_limit)
+        assert callable(metrics_manager.record_github_commit)
+        assert callable(metrics_manager.record_github_pull_request)
+        assert callable(metrics_manager.record_github_issue)
 
-        # Verify task metrics
-        assert hasattr(metrics_manager, "tasks_executed_total")
-        assert hasattr(metrics_manager, "task_duration")
-        assert hasattr(metrics_manager, "active_tasks")
-        assert hasattr(metrics_manager, "task_queue_size")
-        assert hasattr(metrics_manager, "task_retries")
+        # Verify task metrics (#394: delegated to TaskMetricsRecorder)
+        assert metrics_manager._task is not None
+        assert callable(metrics_manager.record_task_execution)
+        assert callable(metrics_manager.update_active_tasks)
+        assert callable(metrics_manager.update_task_queue_size)
+        assert callable(metrics_manager.record_task_retry)
 
     # ===== Workflow Metrics Tests =====
 

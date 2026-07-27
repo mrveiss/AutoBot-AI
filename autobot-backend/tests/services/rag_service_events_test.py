@@ -44,6 +44,31 @@ def _bind_real_rag_service() -> None:
 
 _bind_real_rag_service()
 
+
+@pytest.fixture(autouse=True)
+def isolate_hash_cache(tmp_path, monkeypatch):
+    """Isolate the doc-indexer hash cache from ambient on-disk state (#12673).
+
+    ``RAGService._filter_stale_chunks`` reads ``doc_indexer.HASH_CACHE_FILE``
+    through a module-level TTL memo. Without isolation the suite picks up the
+    real ``data/.doc_index_hashes.json`` that exists on any machine where the
+    indexer has run, so the provenance filter drops every test-double chunk.
+    Point the cache at an absent tmp path and reset the memo around each test;
+    classes needing a populated cache patch ``HASH_CACHE_FILE`` themselves.
+    """
+    import services.rag_service as rag_mod
+
+    monkeypatch.setattr(
+        "services.knowledge.doc_indexer.HASH_CACHE_FILE",
+        tmp_path / "absent_doc_index_hashes.json",
+    )
+    rag_mod._hash_cache_memo = {}
+    rag_mod._hash_cache_loaded_at = 0.0
+    yield
+    rag_mod._hash_cache_memo = {}
+    rag_mod._hash_cache_loaded_at = 0.0
+
+
 # =============================================================================
 # _emit_retrieval_feedback Tests
 # =============================================================================
@@ -760,18 +785,11 @@ class TestRetrievedVsRankedIdsSeparation:
 
 
 class TestFilterStaleChunks:
-    """Tests for RAGService._filter_stale_chunks() — provenance validation."""
+    """Tests for RAGService._filter_stale_chunks() — provenance validation.
 
-    @pytest.fixture(autouse=True)
-    def reset_hash_cache_memo(self):
-        """Reset module-level TTL cache before each test to ensure isolation."""
-        import services.rag_service as rag_mod
-
-        rag_mod._hash_cache_memo = {}
-        rag_mod._hash_cache_loaded_at = 0.0
-        yield
-        rag_mod._hash_cache_memo = {}
-        rag_mod._hash_cache_loaded_at = 0.0
+    Hash-cache isolation comes from the module-level ``isolate_hash_cache``
+    fixture; tests here patch ``HASH_CACHE_FILE`` to a populated tmp file.
+    """
 
     def _make_service(self):
         from services.rag_service import RAGService
@@ -983,17 +1001,6 @@ class TestFallbackBasicSearchFiltersStaleChunks:
     Issue #4721: the fallback path previously returned results without calling
     _filter_stale_chunks(), silently returning stale/moved source paths.
     """
-
-    @pytest.fixture(autouse=True)
-    def reset_hash_cache_memo(self):
-        """Reset module-level TTL cache before each test to ensure isolation."""
-        import services.rag_service as rag_mod
-
-        rag_mod._hash_cache_memo = {}
-        rag_mod._hash_cache_loaded_at = 0.0
-        yield
-        rag_mod._hash_cache_memo = {}
-        rag_mod._hash_cache_loaded_at = 0.0
 
     def _make_service(self):
         from services.rag_service import RAGService
