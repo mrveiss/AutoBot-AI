@@ -169,3 +169,82 @@ async def test_exec_scrape_url_failure_is_not_wrapped():
 
     assert "Fetch failed" in out
     assert UNTRUSTED_WEB_OPEN not in out
+
+
+# ---------------------------------------------------------------------------
+# Preview-before-expand for scraped page bodies (#12758)
+# ---------------------------------------------------------------------------
+
+
+def test_page_preview_reports_char_count_and_collapses_whitespace():
+    from chat_workflow.tool_handler import _page_preview
+
+    raw = "# Title\n\n\n   Lots   of\n\n\n   padding   here.\n\n"
+    out = _page_preview(raw, limit=100)
+
+    assert f"({len(raw)} chars)" in out
+    assert "# Title Lots of padding here." in out  # whitespace collapsed
+    assert "\n\n" not in out
+
+
+def test_page_preview_truncates_long_bodies():
+    from chat_workflow.tool_handler import PREVIEW_SNIPPET_CHARS, _page_preview
+
+    out = _page_preview("word " * 5000)
+
+    assert out.endswith("…")
+    # charCount reports the FULL body, snippet stays bounded.
+    assert "(25000 chars)" in out
+    assert len(out) < PREVIEW_SNIPPET_CHARS + 60
+
+
+@pytest.mark.asyncio
+async def test_exec_scrape_url_preview_returns_snippet_not_body():
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from chat_workflow.tool_handler import ToolHandlerMixin
+
+    mixin = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    body = "UNIQUE_MARKER_START " + ("filler " * 2000) + "UNIQUE_MARKER_END"
+
+    mock_result = MagicMock()
+    mock_result.success = True
+    mock_result.title = "Doc"
+    mock_result.markdown = body
+    mock_result.status_code = 200
+    mock_result.source = "bs4"
+
+    with patch("web_fetch.WebFetcher.fetch", new_callable=AsyncMock, return_value=mock_result):
+        preview = await mixin._exec_scrape_url({"url": "https://x.example", "preview": True})
+        full = await mixin._exec_scrape_url({"url": "https://x.example", "preview": False})
+
+    # Preview keeps the head, drops the tail, and is far cheaper than the body.
+    assert "UNIQUE_MARKER_START" in preview
+    assert "UNIQUE_MARKER_END" not in preview
+    assert len(preview) < len(full)
+    assert "preview=false" in preview
+    # Expanding returns the whole page.
+    assert "UNIQUE_MARKER_END" in full
+    # Preview output is still behind the trust boundary (#12757).
+    assert UNTRUSTED_WEB_OPEN in preview
+
+
+def test_format_crawl_results_previews_by_default():
+    from unittest.mock import MagicMock
+
+    from chat_workflow.tool_handler import _format_crawl_results
+
+    page = MagicMock()
+    page.success = True
+    page.url = "https://example.com/a"
+    page.markdown = "HEAD_MARKER " + ("filler " * 2000) + "TAIL_MARKER"
+    page.error_code = None
+
+    previewed = _format_crawl_results(["https://example.com"], [page])
+    expanded = _format_crawl_results(["https://example.com"], [page], preview=False)
+
+    assert "HEAD_MARKER" in previewed and "TAIL_MARKER" not in previewed
+    assert "chars)" in previewed
+    assert len(previewed) < len(expanded)
+    # Both still identify the page.
+    assert "https://example.com/a" in previewed

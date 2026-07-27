@@ -163,6 +163,15 @@ SCRAPE_URL_SCHEMA: dict = {
             "default": "auto",
             "description": "Render mode: auto (Jina+BS4+Playwright), fast (Jina+BS4), playwright (JS render).",
         },
+        "preview": {
+            "type": "boolean",
+            "default": False,
+            "description": (
+                "Return only the page's character count and a short leading snippet "
+                "instead of the full body. Use to judge relevance cheaply, then re-call "
+                "with preview=false to expand the page you actually need."
+            ),
+        },
     },
     "required": ["url"],
 }
@@ -199,6 +208,15 @@ CRAWL_SITE_SCHEMA: dict = {
             "type": "boolean",
             "default": True,
             "description": "Restrict crawl to same scheme+host per seed.",
+        },
+        "preview": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Render each crawled page as its character count plus a short leading "
+                "snippet rather than a large body dump. Leave on to survey many pages "
+                "cheaply, then expand a specific one with scrape_url."
+            ),
         },
     },
     "required": ["seed_urls"],
@@ -1049,10 +1067,31 @@ def _search_unavailable_message(query: str) -> str:
     )
 
 
-def _format_crawl_results(seed_urls: list, results: list) -> str:
+# #12758: default snippet length for preview mode. Long enough for the agent to
+# judge relevance, short enough that scanning N pages costs far less than N full
+# bodies. Expand with preview=false (crawl) or scrape_url (single page).
+PREVIEW_SNIPPET_CHARS = 400
+
+
+def _page_preview(markdown: str, limit: int = PREVIEW_SNIPPET_CHARS) -> str:
+    """Render a page as charCount + a whitespace-collapsed leading snippet (#12758).
+
+    Collapsing whitespace matters: raw markdown from a scraped page is mostly
+    blank lines and list padding, so an uncollapsed slice of the same length
+    carries a fraction of the actual text.
+    """
+    text = " ".join((markdown or "").split())
+    snippet = text[:limit]
+    truncated = "…" if len(text) > limit else ""
+    return f"({len(markdown or '')} chars) {snippet}{truncated}"
+
+
+def _format_crawl_results(seed_urls: list, results: list, preview: bool = True) -> str:
     """Format BFS crawl FetchResults into a markdown index. Issue #7509.
 
-    Successful pages are rendered as `### <url> (depth N)\\n<first 2000 chars>`.
+    In preview mode (#12758, the default) each successful page renders as its
+    char count plus a collapsed leading snippet, so multi-page research does not
+    pay for N full bodies; ``preview=False`` restores the first-2000-chars dump.
     Failed pages appear as a single-line error note.
     """
     seed_str = ", ".join(seed_urls[:3])
@@ -1063,8 +1102,8 @@ def _format_crawl_results(seed_urls: list, results: list) -> str:
     lines = [header]
     for r in results:
         if r.success:
-            preview = (r.markdown or "")[:2000]
-            lines.append(f"### {r.url}\n\n{preview}\n\n---\n")
+            body = _page_preview(r.markdown) if preview else (r.markdown or "")[:2000]
+            lines.append(f"### {r.url}\n\n{body}\n\n---\n")
         else:
             lines.append(f"- **FAILED** {r.url} — {r.error_code}\n")
     return "".join(lines)
@@ -2530,6 +2569,11 @@ class ToolHandlerMixin:
             return f"## Fetch failed\n\nURL: {url}\nError: {result.error_code}"
         title = f"# {result.title}\n\n" if result.title else ""
         header = f"## Scraped: {url} (status {result.status_code}, source: {result.source})\n\n"
+        if bool(params.get("preview", False)):
+            # #12758: preview-before-expand — charCount + snippet only. Re-call
+            # without preview to pay for the full body.
+            body = sanitize_and_wrap_web_content(_page_preview(result.markdown or ""), url)
+            return header + title + body + "\n\n*(preview — re-run with preview=false for the full page)*"
         # #12757: page body is third-party text — sanitize it and put it behind a
         # trust boundary before it can reach the LLM. Our own header stays
         # OUTSIDE the boundary so the page cannot forge it.
@@ -2565,8 +2609,10 @@ class ToolHandlerMixin:
             same_origin=same_origin,
         )
         # #12757: crawled page text is untrusted third-party content.
+        # #12758: preview by default — expand one page via scrape_url.
         return sanitize_and_wrap_web_content(
-            _format_crawl_results(seed_urls, results), ", ".join(seed_urls)
+            _format_crawl_results(seed_urls, results, preview=bool(params.get("preview", True))),
+            ", ".join(seed_urls),
         )
 
     async def _exec_map_site(self, params: dict) -> str:
