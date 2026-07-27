@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Delete User",
     "deleteConfirm": "Delete",
     "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "مجدولات الخلفية",
+    "description": "شغّل أو أوقف المهام في الخلفية. تسري التغييرات في الدورة التالية دون إعادة تشغيل.",
+    "refresh": "تحديث",
+    "loading": "جارٍ تحميل المجدولات…",
+    "empty": "لا توجد مجدولات مسجّلة.",
+    "overridden": "مُتجاوَز",
+    "defaultLabel": "الافتراضي",
+    "runtimeLabel": "بيئة التشغيل",
+    "on": "مفعّل",
+    "off": "معطّل",
+    "revertToDefault": "العودة إلى الافتراضي",
+    "enableTitle": "تفعيل هذه المهمة",
+    "disableTitle": "تعطيل هذه المهمة",
+    "toggleAria": "تبديل {name}",
+    "loadFailed": "تعذّر تحميل المجدولات.",
+    "toggleFailed": "تعذّر تغيير {name}.",
+    "resetFailed": "تعذّرت إعادة {name} إلى الافتراضي."
   }
 }

@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Usuń użytkownika",
     "deleteConfirm": "Usuń",
     "deleteUndone": "Tej operacji nie można cofnąć."
+  },
+  "schedulers": {
+    "title": "Harmonogramy w tle",
+    "description": "Włączaj i wyłączaj zadania w tle. Zmiany działają od następnego cyklu — bez restartu.",
+    "refresh": "Odśwież",
+    "loading": "Wczytywanie harmonogramów…",
+    "empty": "Brak zarejestrowanych harmonogramów.",
+    "overridden": "Nadpisane",
+    "defaultLabel": "Domyślnie",
+    "runtimeLabel": "Środowisko",
+    "on": "Wł.",
+    "off": "Wył.",
+    "revertToDefault": "Przywróć domyślne",
+    "enableTitle": "Włącz to zadanie",
+    "disableTitle": "Wyłącz to zadanie",
+    "toggleAria": "Przełącz {name}",
+    "loadFailed": "Nie udało się wczytać harmonogramów.",
+    "toggleFailed": "Nie udało się zmienić {name}.",
+    "resetFailed": "Nie udało się przywrócić domyślnych dla {name}."
   }
 }

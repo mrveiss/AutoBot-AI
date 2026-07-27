@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Delete User",
     "deleteConfirm": "Delete",
     "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "زمان‌بندهای پس‌زمینه",
+    "description": "کارهای پس‌زمینه را روشن یا خاموش کنید. تغییرات در چرخهٔ بعدی اعمال می‌شود — بدون راه‌اندازی مجدد.",
+    "refresh": "تازه‌سازی",
+    "loading": "در حال بارگذاری زمان‌بندها…",
+    "empty": "هیچ زمان‌بندی ثبت نشده است.",
+    "overridden": "بازنویسی‌شده",
+    "defaultLabel": "پیش‌فرض",
+    "runtimeLabel": "محیط اجرا",
+    "on": "روشن",
+    "off": "خاموش",
+    "revertToDefault": "بازگشت به پیش‌فرض",
+    "enableTitle": "فعال‌سازی این کار",
+    "disableTitle": "غیرفعال‌سازی این کار",
+    "toggleAria": "تغییر {name}",
+    "loadFailed": "بارگذاری زمان‌بندها ممکن نشد.",
+    "toggleFailed": "تغییر {name} ممکن نشد.",
+    "resetFailed": "بازگرداندن {name} به پیش‌فرض ممکن نشد."
   }
 }

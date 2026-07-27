@@ -306,7 +306,7 @@ export interface paths {
         };
         /**
          * List Schedulers
-         * @description Return all registered background schedulers with their runtime metadata.
+         * @description List every registered scheduler with its effective state and declared default.
          */
         get: operations["list_schedulers_api_admin_schedulers_get"];
         put?: never;
@@ -45564,6 +45564,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/schedulers/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Scheduler
+         * @description Override a scheduler's state. Takes effect on the job's next cycle.
+         */
+        put: operations["set_scheduler_api_admin_schedulers__name__put"];
+        post?: never;
+        /**
+         * Clear Scheduler
+         * @description Clear the override so the scheduler reverts to its registry default.
+         */
+        delete: operations["clear_scheduler_api_admin_schedulers__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llm-keys/issue": {
         parameters: {
             query?: never;
@@ -90329,6 +90353,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * SchedulerStateResponse
+         * @description Response for GET /schedulers — every registered job with its resolved state.
+         */
+        SchedulerStateResponse: {
+            /** Schedulers */
+            schedulers: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
         /** SchedulerStatsResponse */
         SchedulerStatsResponse: {
             /** Success */
@@ -90386,6 +90422,30 @@ export interface components {
             status: string;
             /** Complexity */
             complexity: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SchedulerToggleUpdate
+         * @description Request body for PUT /schedulers/{name} (GH#12820).
+         */
+        SchedulerToggleUpdate: {
+            /** Enabled */
+            enabled: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SchedulerToggleUpdateResponse
+         * @description Response for PUT/DELETE /schedulers/{name}.
+         */
+        SchedulerToggleUpdateResponse: {
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Override Active */
+            override_active: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -102115,9 +102175,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SchedulerStateResponse"];
                 };
             };
         };
@@ -161137,6 +161195,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessControlCleanupResponse"];
+                };
+            };
+        };
+    };
+    set_scheduler_api_admin_schedulers__name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulerToggleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulerToggleUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_scheduler_api_admin_schedulers__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulerToggleUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

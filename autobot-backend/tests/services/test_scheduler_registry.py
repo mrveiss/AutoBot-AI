@@ -32,16 +32,28 @@ ScheduledJob = _mod.ScheduledJob
 _BACKEND_ROOT = Path(__file__).parent.parent.parent
 
 
+# Modules whose filename matches the *scheduler* glob but which are not themselves
+# scheduled jobs — support code about schedulers rather than an implementation of one.
+# Deliberately an explicit list: anything added here must be justified, so the discovery
+# net cannot be quietly widened to hide a real unregistered scheduler.
+_NOT_SCHEDULER_IMPLEMENTATIONS = {
+    # GH#12820: resolves each registered job's effective on/off state. It owns no loop
+    # and runs no job; registering it would assert a scheduler that does not exist.
+    "services/scheduler_toggles.py",
+}
+
+
 def _discover_scheduler_files() -> list[str]:
     """Return background scheduler implementation paths relative to the backend root.
 
     Excludes __pycache__, test files (test_*.py and *_test.py), api/ endpoint
     modules, Alembic migrations (migrations/versions/*scheduler*.py are DB
-    migrations, not scheduler implementations), and the registry file itself —
-    only actual scheduler implementations.
+    migrations, not scheduler implementations), the registry file itself, and the
+    support modules in ``_NOT_SCHEDULER_IMPLEMENTATIONS`` — only actual scheduler
+    implementations.
     """
     return [
-        str(p.relative_to(_BACKEND_ROOT))
+        rel
         for p in _BACKEND_ROOT.rglob("*scheduler*.py")
         if "__pycache__" not in str(p)
         and not p.name.startswith("test_")
@@ -49,6 +61,7 @@ def _discover_scheduler_files() -> list[str]:
         and "autobot-backend/api/" not in str(p).replace("\\", "/")
         and "/migrations/" not in str(p).replace("\\", "/")
         and p.resolve() != _REGISTRY_PATH.resolve()
+        and (rel := str(p.relative_to(_BACKEND_ROOT)).replace("\\", "/")) not in _NOT_SCHEDULER_IMPLEMENTATIONS
     ]
 
 
@@ -115,23 +128,38 @@ _LIFESPAN_RUNTIMES = {"asyncio_per_worker", "leader_elected", "apscheduler"}
 _LIFESPAN_PATH = _BACKEND_ROOT / "initialization" / "lifespan.py"
 
 
+def _marker_symbol(marker: str) -> str:
+    """The symbol a startup_marker names, tolerating a ``path::symbol`` qualifier.
+
+    Both spellings are in use — a bare ``_init_x`` and a qualified
+    ``initialization/lifespan.py::_init_x`` (#12816) — and both identify the same
+    function. Only the symbol is searched for, so a marker is validated by what it
+    points at rather than by how it was written.
+    """
+    return marker.rsplit("::", 1)[-1]
+
+
 def test_lifespan_jobs_declare_startup_or_inertness() -> None:
-    """Every lifespan-run job declares exactly one of startup_marker / inert_reason.
+    """Every lifespan-run job declares a startup_marker, an inert_reason, or both.
 
     Registration never made a job run. SkillHealthScheduler and MeshBrainScheduler were
     both registered, described, and dead — the fact buried in prose in `description`,
     where nothing could enforce it. Forcing an explicit declaration makes "registered
     but silently inert" a test failure instead of a discovery months later.
+
+    Both fields together is a legitimate state, not a contradiction (#12816 + #12820):
+    a job can be genuinely wired into lifespan *and* deliberately default-off, where
+    `default_enabled=False` carries the off-ness and `inert_reason` explains why. This
+    check originally demanded exactly one, which forbade that combination — the wiring
+    gap and the enable decision are separate facts, and a job is allowed to state both.
     """
     for job in REGISTRY:
         if job.runtime not in _LIFESPAN_RUNTIMES:
             continue
-        declared = [f for f in (job.startup_marker, job.inert_reason) if f]
-        assert len(declared) == 1, (
-            f"REGISTRY entry '{job.name}' ({job.runtime}) must declare exactly one of "
-            f"startup_marker or inert_reason, got {len(declared)}. "
-            "Set startup_marker to the symbol that starts it in initialization/lifespan.py, "
-            "or set inert_reason to state why it deliberately does not run."
+        assert job.startup_marker or job.inert_reason, (
+            f"REGISTRY entry '{job.name}' ({job.runtime}) declares neither startup_marker "
+            "nor inert_reason. Set startup_marker to the symbol that starts it in "
+            "initialization/lifespan.py, and/or inert_reason to state why it does not run."
         )
 
 
@@ -146,7 +174,7 @@ def test_declared_startup_markers_exist_in_lifespan() -> None:
     missing = [
         (job.name, job.startup_marker)
         for job in REGISTRY
-        if job.runtime in _LIFESPAN_RUNTIMES and job.startup_marker and job.startup_marker not in source
+        if job.runtime in _LIFESPAN_RUNTIMES and job.startup_marker and _marker_symbol(job.startup_marker) not in source
     ]
 
     assert not missing, (

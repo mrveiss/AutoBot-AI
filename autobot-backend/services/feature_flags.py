@@ -237,6 +237,61 @@ class FeatureFlags(AsyncRedisClientMixin):
             logger.error("Failed to set feature flag %s: %s", feature_name, e)
             return False
 
+    async def get_feature_override(self, feature_name: str) -> bool | None:
+        """
+        Read a feature flag without applying a default (GH#12820).
+
+        :meth:`get_feature` cannot distinguish "explicitly set to false" from "never
+        set", which is exactly the difference between an operator turning something
+        off and simply not having an opinion. Callers that must show whether an
+        override exists — and offer to clear it — need the unset case back.
+
+        Args:
+            feature_name: Feature flag name
+
+        Returns:
+            The stored boolean, or None when no override is stored.
+        """
+        try:
+            redis = await self._get_redis()
+            value = await redis.get(f"feature_flag:{feature_name}")
+
+            if value is None:
+                return None
+
+            if isinstance(value, bytes):
+                value = value.decode()
+
+            return value.lower() in StringParsingConstants.TRUTHY_STRING_VALUES
+
+        except Exception as e:
+            logger.error("Failed to read feature flag override %s: %s", feature_name, e)
+            return None
+
+    async def clear_feature(self, feature_name: str) -> bool:
+        """
+        Remove a feature flag override so its caller-supplied default applies again.
+
+        The service could set a flag but never unset one, which made "revert to
+        default" impossible to express (GH#12820).
+
+        Args:
+            feature_name: Feature flag name
+
+        Returns:
+            True if the key was removed or already absent.
+        """
+        try:
+            redis = await self._get_redis()
+            await redis.delete(f"feature_flag:{feature_name}")
+
+            logger.info("Feature flag %s override cleared", feature_name)
+            return True
+
+        except Exception as e:
+            logger.error("Failed to clear feature flag %s: %s", feature_name, e)
+            return False
+
     def _parse_history_entries(self, history_raw: list) -> list:
         """Parse raw history entries from Redis. (Issue #315 - extracted)"""
         history = []

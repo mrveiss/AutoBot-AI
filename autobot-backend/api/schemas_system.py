@@ -171,6 +171,26 @@ class FeatureFlagStatusResponse(BaseModel):
     data: Any | None = None
 
 
+class SchedulerToggleUpdate(BaseModel):
+    """Request body for PUT /schedulers/{name} (GH#12820)."""
+
+    enabled: bool
+
+
+class SchedulerToggleUpdateResponse(BaseModel):
+    """Response for PUT/DELETE /schedulers/{name}."""
+
+    name: str
+    enabled: bool
+    override_active: bool
+
+
+class SchedulerStateResponse(BaseModel):
+    """Response for GET /schedulers — every registered job with its resolved state."""
+
+    schedulers: List[Dict[str, Any]]
+
+
 class FeatureFlagEnforcementModeResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/enforcement-mode."""
 

@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Benutzer löschen",
     "deleteConfirm": "Löschen",
     "deleteUndone": "Dies kann nicht rückgängig gemacht werden."
+  },
+  "schedulers": {
+    "title": "Hintergrund-Planer",
+    "description": "Hintergrundaufgaben ein- oder ausschalten. Änderungen greifen im nächsten Zyklus – kein Neustart nötig.",
+    "refresh": "Aktualisieren",
+    "loading": "Planer werden geladen…",
+    "empty": "Keine Planer registriert.",
+    "overridden": "Überschrieben",
+    "defaultLabel": "Standard",
+    "runtimeLabel": "Laufzeit",
+    "on": "Ein",
+    "off": "Aus",
+    "revertToDefault": "Auf Standard zurücksetzen",
+    "enableTitle": "Diese Aufgabe aktivieren",
+    "disableTitle": "Diese Aufgabe deaktivieren",
+    "toggleAria": "{name} umschalten",
+    "loadFailed": "Planer konnten nicht geladen werden.",
+    "toggleFailed": "{name} konnte nicht geändert werden.",
+    "resetFailed": "{name} konnte nicht zurückgesetzt werden."
   }
 }
