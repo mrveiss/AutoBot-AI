@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Delete User",
     "deleteConfirm": "Delete",
     "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "Background schedulers",
+    "description": "Turn background jobs on or off. Changes take effect on the job's next cycle — no restart needed.",
+    "refresh": "Refresh",
+    "loading": "Loading schedulers…",
+    "empty": "No schedulers registered.",
+    "overridden": "Overridden",
+    "defaultLabel": "Default",
+    "runtimeLabel": "Runtime",
+    "on": "On",
+    "off": "Off",
+    "revertToDefault": "Revert to default",
+    "enableTitle": "Enable this job",
+    "disableTitle": "Disable this job",
+    "toggleAria": "Toggle {name}",
+    "loadFailed": "Could not load schedulers.",
+    "toggleFailed": "Could not change {name}.",
+    "resetFailed": "Could not revert {name} to its default."
   }
 }

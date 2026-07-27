@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Delete User",
     "deleteConfirm": "Delete",
     "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "پس منظر شیڈولر",
+    "description": "پس منظر کے کام آن یا آف کریں۔ تبدیلیاں اگلے چکر میں لاگو ہوتی ہیں — دوبارہ شروع کرنے کی ضرورت نہیں۔",
+    "refresh": "تازہ کریں",
+    "loading": "شیڈولر لوڈ ہو رہے ہیں…",
+    "empty": "کوئی شیڈولر رجسٹرڈ نہیں۔",
+    "overridden": "اوور رائیڈ شدہ",
+    "defaultLabel": "ڈیفالٹ",
+    "runtimeLabel": "رن ٹائم",
+    "on": "آن",
+    "off": "آف",
+    "revertToDefault": "ڈیفالٹ پر واپس",
+    "enableTitle": "یہ کام فعال کریں",
+    "disableTitle": "یہ کام غیر فعال کریں",
+    "toggleAria": "{name} ٹوگل کریں",
+    "loadFailed": "شیڈولر لوڈ نہیں ہو سکے۔",
+    "toggleFailed": "{name} تبدیل نہیں ہو سکا۔",
+    "resetFailed": "{name} کو ڈیفالٹ پر واپس نہیں کیا جا سکا۔"
   }
 }

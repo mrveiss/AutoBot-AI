@@ -91,9 +91,13 @@ class SkillDistillationScheduler:
     # ------------------------------------------------------------------
 
     async def start(self) -> bool:
-        """Spawn the leader-election loop. Returns False when the feature is off."""
-        if not DISTILLATION_ENABLED:
-            logger.info("Skill distillation disabled (AUTOBOT_SKILL_DISTILLATION_ENABLED unset)")
+        """Spawn the leader-election loop. Returns False when the job is toggled off.
+
+        GH#12820: the operator toggle is authoritative; ``DISTILLATION_ENABLED`` remains
+        as a deploy-time force-on so an environment can opt in without touching Redis.
+        """
+        if not await self._enabled():
+            logger.info("Skill distillation is toggled off; not starting")
             return False
         if self._task is not None and not self._task.done():
             logger.warning("Skill distillation scheduler already running")
@@ -119,11 +123,30 @@ class SkillDistillationScheduler:
     # Leader election
     # ------------------------------------------------------------------
 
+    async def _enabled(self) -> bool:
+        """Is this job toggled on? (GH#12820)
+
+        ``DISTILLATION_ENABLED`` is an env-level force-on. Otherwise the operator
+        toggle decides, falling back to the registry default — so flipping the switch
+        takes effect on the next cycle with no restart.
+        """
+        if DISTILLATION_ENABLED:
+            return True
+        from services.scheduler_toggles import is_scheduler_enabled
+
+        return await is_scheduler_enabled("SkillDistillationScheduler")
+
     async def _leader_loop(self) -> None:
         """Hold or acquire the lease; run one distillation pass per cycle while leader."""
         elapsed = DISTILLATION_INTERVAL_S  # run immediately on becoming leader
         while True:
             try:
+                # Re-checked every cycle, not just at startup: an operator turning this
+                # off must stop the work without needing a restart. The loop keeps
+                # running (and keeps the lease honest) so re-enabling also needs no restart.
+                if not await self._enabled():
+                    await asyncio.sleep(_LEADER_POLL_S)
+                    continue
                 await self._update_leadership()
                 if self._is_leader and elapsed >= DISTILLATION_INTERVAL_S:
                     await self.run_once()

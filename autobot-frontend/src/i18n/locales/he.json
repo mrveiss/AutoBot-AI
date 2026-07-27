@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Delete User",
     "deleteConfirm": "Delete",
     "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "מתזמני רקע",
+    "description": "הפעל או כבה משימות רקע. השינויים נכנסים לתוקף במחזור הבא — ללא הפעלה מחדש.",
+    "refresh": "רענון",
+    "loading": "טוען מתזמנים…",
+    "empty": "אין מתזמנים רשומים.",
+    "overridden": "נדרס",
+    "defaultLabel": "ברירת מחדל",
+    "runtimeLabel": "סביבת ריצה",
+    "on": "פעיל",
+    "off": "כבוי",
+    "revertToDefault": "חזרה לברירת המחדל",
+    "enableTitle": "הפעלת משימה זו",
+    "disableTitle": "כיבוי משימה זו",
+    "toggleAria": "החלף {name}",
+    "loadFailed": "טעינת המתזמנים נכשלה.",
+    "toggleFailed": "שינוי {name} נכשל.",
+    "resetFailed": "החזרת {name} לברירת המחדל נכשלה."
   }
 }
