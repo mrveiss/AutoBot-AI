@@ -154,6 +154,28 @@ class AdvancedRAGOptimizer:
         self._init_performance_tracking()
         logger.info("AdvancedRAGOptimizer initialized")
 
+    def _apply_seed_priority_boost(self, result: "SearchResult") -> float:
+        """Return *result*'s hybrid score lifted by its seed priority (#4679, #12742).
+
+        CognitionSeeder stamps every seeded document with ``seeded: "true"`` and
+        ``seed_priority: high|medium|low`` (services/knowledge/cognition_seeder.py
+        :219-220) precisely so retrieval can favour them during cold start — when
+        the corpus is otherwise empty and an unseeded document would win on noise.
+
+        That producer has been live while this consumer was missing, so the
+        metadata was written and never read: the boost #4679 exists for was
+        silently inert. Non-seeded results are returned unchanged, and the score
+        is capped at 1.0 so a boost can never push it out of range.
+        """
+        from services.knowledge.cognition_seeder import SEED_PRIORITY_BOOST
+
+        metadata = getattr(result, "metadata", None) or {}
+        if str(metadata.get("seeded", "")).lower() != "true":
+            return result.hybrid_score
+
+        boost = SEED_PRIORITY_BOOST.get(str(metadata.get("seed_priority", "")).lower(), 0.0)
+        return min(1.0, result.hybrid_score + boost)
+
     def _init_search_config(self) -> None:
         """Initialize search configuration parameters. Issue #620."""
         self.hybrid_weight_semantic = 0.7  # Weight for semantic similarity
