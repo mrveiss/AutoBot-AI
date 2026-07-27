@@ -77,9 +77,7 @@ def _load_drift_checker():
     pkg.__path__ = [str(services_dir)]  # type: ignore[attr-defined]
     sys.modules["services"] = pkg
     try:
-        spec = importlib.util.spec_from_file_location(
-            "_drift_checker_12450", services_dir / "drift_checker.py"
-        )
+        spec = importlib.util.spec_from_file_location("_drift_checker_12450", services_dir / "drift_checker.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
