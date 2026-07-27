@@ -53,7 +53,6 @@ _LEADER_KEY = "skills:distillation:leader"
 _CURSOR_KEY = "skills:distillation:cursor"
 
 
-
 def _decode(value: object) -> str | None:
     """Decode bytes to str; pass through str and None."""
     if isinstance(value, bytes):
@@ -147,7 +146,6 @@ class SkillDistillationScheduler:
             except Exception as exc:
                 logger.error("Skill distillation leader loop error: %s", exc)
                 await asyncio.sleep(self._lease.poll_s)
-
 
     # ------------------------------------------------------------------
     # Distillation pass

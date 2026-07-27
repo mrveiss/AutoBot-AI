@@ -197,7 +197,6 @@ class ConnectorScheduler:
             on_lost=self._cancel_all_local_tasks,
         )
 
-
     # ------------------------------------------------------------------
     # Schedule reconciliation (leader only)
     # ------------------------------------------------------------------
