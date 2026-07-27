@@ -44,8 +44,19 @@ ANSIBLE_LOCAL_TMP = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
 # KillMode=control-group, so systemd SIGTERMs the whole cgroup on restart —
 # including the ansible-playbook child — killing the run before Play 1's tail
 # and all of Play 2/3 execute. Detaching that one run into its own transient
-# systemd scope (a separate cgroup) lets it survive the restart.
+# systemd unit (a separate cgroup) lets it survive the restart.
 SELF_UPDATE_DETACH_UNIT_PREFIX = os.getenv("SLM_SELF_UPDATE_UNIT_PREFIX", "autobot-selfupdate")
+
+# #12596: the detached run must be a transient SERVICE in system.slice, never
+# a --scope. A scope's payload stays a descendant of the invoking process, so
+# one created from inside autobot-slm-backend is nested in that service's
+# cgroup subtree and Play 1's `systemctl restart autobot-slm-backend` tears it
+# down mid-run — the exact failure #11492/#12567 were meant to prevent (Play 2/3
+# never ran; the app tier and workers stayed stale while the run reported OK).
+# A transient service is forked by PID 1, so it is not in this backend's cgroup
+# at all. Pinning the slice explicitly keeps that true even if this service is
+# ever given cgroup delegation.
+SELF_UPDATE_DETACH_SLICE = os.getenv("SLM_SELF_UPDATE_SLICE", "system.slice")
 
 # Env vars forwarded to the detached scope via explicit --setenv=NAME=VALUE.
 # `sudo` (env_reset, see setup-passwordless-sudo.yml) strips the environment
@@ -76,7 +87,7 @@ ANSIBLE_ENV_ALLOWLIST_EXACT = (
 # still running) ansible-playbook process would raise BrokenPipeError,
 # killing Play 2/3 exactly like the cgroup-kill this fix exists to prevent.
 # The detached run's stdout/stderr are redirected to this file instead of the
-# backend's pipe (see _wrap_with_systemd_scope), so a dead backend can never
+# backend's pipe (see _wrap_with_systemd_unit), so a dead backend can never
 # crash it; this backend tails the same file for live progress while it is
 # still alive. Mirrors the existing /var/log/autobot/provision-wizard.log
 # precedent (api/setup_wizard.py).
@@ -535,7 +546,7 @@ class PlaybookExecutor:
         """Whether the self-update run can be detached into its own scope (#11492).
 
         Both must hold:
-          - ``systemd-run`` is on PATH (creates the transient scope)
+          - ``systemd-run`` is on PATH (creates the transient service)
           - this process is itself managed by systemd — ``INVOCATION_ID`` is set
             only for units systemd starts, so it precisely answers "are we
             running as a systemd service" (as opposed to `sd_booted()`-style
@@ -572,7 +583,7 @@ class PlaybookExecutor:
         """Create/truncate a fresh log file for this detached run (#11492).
 
         The detached ansible-playbook process's stdout/stderr are redirected
-        here (see _wrap_with_systemd_scope) instead of the backend's pipe, so
+        here (see _wrap_with_systemd_unit) instead of the backend's pipe, so
         a dead backend can never BrokenPipe-crash Play 2/3.
 
         Returns None on failure — the caller (#12425) falls back to a
@@ -599,19 +610,38 @@ class PlaybookExecutor:
         allowed = SYSTEMD_RUN_ENV_ALLOWLIST_EXACT + ANSIBLE_ENV_ALLOWLIST_EXACT
         return [f"--setenv={key}={env[key]}" for key in allowed if key in env]
 
-    def _wrap_with_systemd_scope(self, cmd: List[str], env: Dict[str, str], log_path: Path) -> List[str]:
-        """Wrap an ansible-playbook cmd to run detached, file-backed (#11492).
+    def _wrap_with_systemd_unit(self, cmd: List[str], env: Dict[str, str], log_path: Path) -> List[str]:
+        """Wrap an ansible-playbook cmd to run detached, file-backed (#11492, #12596).
 
         Two layers:
-          - ``sudo -n systemd-run --scope --collect``: a separate transient
-            scope = a separate cgroup, so ``systemctl restart
-            autobot-slm-backend`` (KillMode=control-group) no longer SIGTERMs
-            this run. ``sudo`` mirrors the existing privilege pattern already
-            used for service restarts (_restart_slm_service) — the
-            passwordless-sudo sudoers rule this service already relies on;
-            ``-n`` (non-interactive) fast-fails instead of hanging on a
-            password prompt if that sudoers rule is ever misconfigured.
-            ``--uid``/``--gid`` drop back to the caller's own identity so
+          - ``sudo -n systemd-run --collect --unit=… --slice=system.slice``: a
+            transient **service**, forked by PID 1 into its own cgroup under
+            ``system.slice``.
+
+            #12596: this was previously ``--scope``, which does NOT survive.
+            A scope keeps the payload as a descendant of the *invoking*
+            process, so a scope created from inside ``autobot-slm-backend``
+            lands in that service's cgroup subtree; Play 1's own ``systemctl
+            restart autobot-slm-backend`` (KillMode=control-group) then tore
+            the nested scope down with the service and the run died at the end
+            of Play 1 — before Play 2/3 deployed the co-located app tier and
+            workers. A transient service is owned by PID 1, not by this
+            backend, so restarting this backend cannot control-group-kill it.
+            ``--slice=system.slice`` states that placement explicitly rather
+            than relying on the default, so inherited cgroup delegation can
+            never silently re-nest the unit under the caller again.
+
+            ``--wait`` preserves the pre-#12596 blocking semantics and exit-code
+            propagation for detached runs that do NOT restart this backend. When
+            the restart does land, only this waiting client is killed — the
+            transient service keeps running to completion on its own.
+
+            ``sudo`` mirrors the existing privilege pattern already used for
+            service restarts (_restart_slm_service) — the passwordless-sudo
+            sudoers rule this service already relies on; ``-n``
+            (non-interactive) fast-fails instead of hanging on a password
+            prompt if that sudoers rule is ever misconfigured. ``--uid``/
+            ``--gid`` drop back to the caller's own identity so
             ansible-playbook still runs as the SLM service user, not root;
             ``--working-directory`` replaces the ``cwd=`` kwarg systemd-run
             does not inherit.
@@ -630,9 +660,10 @@ class PlaybookExecutor:
             "sudo",
             "-n",
             "systemd-run",
-            "--scope",
             "--collect",
+            "--wait",
             f"--unit={unit_name}",
+            f"--slice={SELF_UPDATE_DETACH_SLICE}",
             f"--uid={os.getuid()}",
             f"--gid={os.getgid()}",
             f"--working-directory={self.ansible_dir}",
@@ -690,8 +721,8 @@ class PlaybookExecutor:
             )
             return cmd, None
 
-        logger.info("Self-update run detached into transient systemd scope, output -> %s", log_path)
-        return self._wrap_with_systemd_scope(cmd, env, log_path), log_path
+        logger.info("Self-update run detached into transient systemd service, output -> %s", log_path)
+        return self._wrap_with_systemd_unit(cmd, env, log_path), log_path
 
     async def _run_subprocess(
         self,
@@ -707,7 +738,7 @@ class PlaybookExecutor:
 
         Args:
             detach: When True AND the runtime supports it (#11492), wrap the
-                command in ``systemd-run --scope --collect`` with file-backed
+                command in a ``systemd-run`` transient service with file-backed
                 stdout/stderr so it survives a same-process ``systemctl
                 restart autobot-slm-backend`` mid-run (the self-update path)
                 without a dead backend's pipe crashing it. Falls back to the
@@ -723,7 +754,7 @@ class PlaybookExecutor:
         if detach:
             effective_cmd, log_path = self._prepare_detached_run(cmd, env)
             if log_path is not None:
-                # Real output goes to the file (see _wrap_with_systemd_scope);
+                # Real output goes to the file (see _wrap_with_systemd_unit);
                 # nothing meaningful is expected on this outer pipe, and
                 # leaving it as PIPE-but-unread risks the wrapper deadlocking
                 # once the OS pipe buffer fills.
@@ -832,7 +863,7 @@ class PlaybookExecutor:
             check_mode: Run in check mode (dry run)
             progress_callback: Async function to call with progress updates
             inventory_path: Override inventory file (Issue #1294, wizard provisioning)
-            detach: Run detached in its own systemd scope (#11492). Only pass
+            detach: Run detached in its own systemd service (#11492, #12596). Only pass
                 True for the SLM self-update path (the run that restarts
                 autobot-slm-backend); ordinary per-role/per-node deploys leave
                 this False, since they don't kill their own process.
