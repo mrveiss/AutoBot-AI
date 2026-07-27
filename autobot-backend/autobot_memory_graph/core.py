@@ -16,7 +16,7 @@ import inspect
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as _ssot_config
 
@@ -167,7 +167,7 @@ class AutoBotMemoryGraphCore:
                 # the same DB.  The "memory" alias maps to DB 0 for exactly this
                 # purpose — see autobot_shared/redis_management/types.py _ALIASES.
                 # Fixed by #9943 (same root cause as #9904).
-                self.redis_client = get_redis_client(async_client=True, database="memory")
+                self.redis_client = await get_async_redis_client(database="memory")
 
                 # Create search indexes if they don't exist
                 await self._create_search_indexes()
