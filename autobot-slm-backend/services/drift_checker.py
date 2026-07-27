@@ -74,22 +74,35 @@ ALLOWED_COMPONENTS = frozenset(
         # crash-looping every backend that imports it. Resolving it restarts all
         # dependent services (see _COMPONENT_SERVICES in api/code_sync.py).
         "autobot_shared",
+        # #12450: worker components promoted from read-only visibility to a real
+        # per-component resolve path. Each has an explicit post-sync definition in
+        # api/code_sync.py (_WORKER_COMPONENTS / _WORKER_COMPONENT_PIP /
+        # _COMPONENT_SERVICES) traced to its actual ansible deploy task — notably
+        # the restart target is NOT derivable from the component name for two of
+        # them (slm-agent -> autobot-agent, browser-worker -> autobot-playwright).
+        "autobot-ai-stack",
+        "autobot-npu-worker",
+        "autobot-browser-worker",
+        "autobot-slm-agent",
     }
 )
 
-# #12450: additional deployed components that have NO resolve/restart wiring
-# (no per-component post-sync — pip/npm/docker/symlink heterogeneity) but ARE
-# actively running deployed code with no builtin drift signal today. These are
-# READ-ONLY visibility — do NOT add them to ALLOWED_COMPONENTS, which gates
-# /drift/resolve[-async]. Whitelisting resolve for them would rsync files but
-# never install deps or restart the right service (see the parked root-cause
-# comment on #12450) — half-working and worse than the current 400.
+# Deployed components that are visible to the drift walk but still have NO
+# resolve wiring — READ-ONLY. Do NOT add an entry here without either giving it
+# a post-sync definition (then it belongs in ALLOWED_COMPONENTS instead) or
+# recording why it cannot have one. Whitelisting resolve without post-sync would
+# rsync files but never restart the right service — half-working and worse than
+# the current 400.
+#
+# #12450 phase 2 promoted ai-stack, npu-worker, browser-worker and slm-agent out
+# of this set into ALLOWED_COMPONENTS once each had a verified post-sync
+# definition. `plugins` stays here — see below.
 #
 # Every entry must be verified against its actual ansible deploy task before
 # being added here — see _NONSTANDARD_COMPONENT_PATHS below for the ones whose
 # layout isn't the standard code_source/<name> -> /opt/autobot/<name> shape.
 #
-# NOT included (confirmed unmappable, see #12450 PR notes):
+# NOT resolve-capable (confirmed unmappable, see #12450 PR notes):
 #   - autobot-tts-worker: deployed via a single Jinja2-templated file
 #     (tts-worker.py.j2 -> tts-worker.py), not a 1:1 sync of the repo's
 #     autobot-tts-worker/ directory — comparing them would report fake drift.
@@ -100,15 +113,7 @@ ALLOWED_COMPONENTS = frozenset(
 #     packages): synced into TWO deployed locations (autobot-frontend/ and
 #     autobot-slm-frontend/), so there is no single canonical deployed target
 #     to compare against — needs an owner decision on which (or both) to scan.
-EXTRA_VISIBILITY_COMPONENTS = frozenset(
-    {
-        "autobot-ai-stack",
-        "autobot-npu-worker",
-        "autobot-browser-worker",
-        "autobot-slm-agent",
-        "plugins",
-    }
-)
+EXTRA_VISIBILITY_COMPONENTS = frozenset({"plugins"})
 
 # Union of the resolve-capable allowlist and the read-only extras — used by
 # the GET-only drift surfaces (/status stale_components, GET /drift). The
