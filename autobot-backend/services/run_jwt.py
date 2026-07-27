@@ -284,8 +284,7 @@ def _unavailable(reason: str) -> bool:
         logger.warning("run_jwt: %s — denylist check skipped (RUN_JWT_REDIS_FAIL_OPEN=1)", reason)
         return False
     raise JWTDecodeError(
-        f"run_jwt: {reason} — cannot verify JTI revocation status "
-        "(set RUN_JWT_REDIS_FAIL_OPEN=1 to allow fail-open)"
+        f"run_jwt: {reason} — cannot verify JTI revocation status " "(set RUN_JWT_REDIS_FAIL_OPEN=1 to allow fail-open)"
     )
 
 
