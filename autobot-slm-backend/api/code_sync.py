@@ -1322,8 +1322,11 @@ _COMPONENT_SERVICES: Dict[str, List[str]] = {
     # ai-stack: roles/ai-stack/tasks/main.yml installs BOTH units from this one
     # component tree (:235 autobot-chromadb, :244 autobot-ai-stack) and the
     # chroma binary lives inside the component's venv (MVA-79), so a sync of
-    # this component affects both. Order mirrors the role's own restart order
-    # (:251 chromadb, then :258 ai-stack) — chromadb must be up first.
+    # this component affects both. Order mirrors the role's own restart order —
+    # roles/ai-stack/handlers/main.yml defines `restart chromadb` before
+    # `restart ai-stack`, and ansible runs handlers in definition order, so
+    # chromadb comes up first. (The tasks at :251/:258 are `state: started`
+    # enable-and-start steps, not the restart path.)
     "autobot-ai-stack": ["autobot-chromadb", "autobot-ai-stack"],
     "autobot-npu-worker": ["autobot-npu-worker"],
     # browser: roles/browser/tasks/main.yml:295-298 installs autobot-playwright;

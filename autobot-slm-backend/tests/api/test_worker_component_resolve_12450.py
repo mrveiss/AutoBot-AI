@@ -153,8 +153,11 @@ def test_restart_targets_that_do_not_match_the_component_name():
 
 def test_ai_stack_restarts_both_units_in_ansible_order():
     """The ai-stack component tree installs BOTH units and the chroma binary
-    lives in its venv (MVA-79), so a sync affects both. Order mirrors the role's
-    own restart order — chromadb first (roles/ai-stack/tasks/main.yml:251,:258).
+    lives in its venv (MVA-79), so a sync affects both.
+
+    Order mirrors the role's own restart order: roles/ai-stack/handlers/main.yml
+    defines `restart chromadb` before `restart ai-stack`, and ansible runs
+    handlers in definition order, so chromadb comes up first.
     """
     import api.code_sync as cs
 
