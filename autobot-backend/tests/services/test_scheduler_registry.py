@@ -24,6 +24,11 @@ sys.modules["services.scheduler_registry"] = _mod  # register before exec so @da
 _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
 REGISTRY = _mod.REGISTRY
 ScheduledJob = _mod.ScheduledJob
+# GH#12836: pulled from the registry so the valid-runtime set and the
+# lifespan-managed subset have exactly one definition.
+SCHEDULER_RUNTIMES = _mod.SCHEDULER_RUNTIMES
+LIFESPAN_RUNTIMES = _mod.LIFESPAN_RUNTIMES
+NON_LIFESPAN_RUNTIMES = _mod.NON_LIFESPAN_RUNTIMES
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -86,7 +91,7 @@ def test_registry_names_are_unique() -> None:
 
 
 def test_registry_runtimes_are_valid() -> None:
-    valid = {"asyncio_per_worker", "celery_beat", "leader_elected", "apscheduler"}
+    valid = SCHEDULER_RUNTIMES  # GH#12836: imported, never restated
     for job in REGISTRY:
         assert job.runtime in valid, (
             f"REGISTRY entry '{job.name}' has unknown runtime '{job.runtime}'. " f"Valid values: {valid}"
@@ -121,9 +126,10 @@ def test_all_scheduler_files_registered() -> None:
 # Enforcement test: a registered job must actually start (GH#12810)
 # ---------------------------------------------------------------------------
 
-# Runtimes whose jobs are launched from initialization/lifespan.py. celery_beat jobs
-# are launched by the Celery beat schedule instead, so they are exempt.
-_LIFESPAN_RUNTIMES = {"asyncio_per_worker", "leader_elected", "apscheduler"}
+# GH#12836: imported from the registry rather than re-listed here. A hand-kept
+# copy of this subset meant a new runtime could be added to the type and silently
+# skipped by the gate below.
+_LIFESPAN_RUNTIMES = LIFESPAN_RUNTIMES
 
 _LIFESPAN_PATH = _BACKEND_ROOT / "initialization" / "lifespan.py"
 
@@ -196,3 +202,39 @@ def test_inert_jobs_cite_a_tracking_issue() -> None:
             f"REGISTRY entry '{job.name}' is declared inert without citing a tracking issue. "
             f"Add the issue number to inert_reason: {job.inert_reason!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# GH#12836: the runtime sets must stay exhaustive and disjoint
+# ---------------------------------------------------------------------------
+
+
+def test_every_runtime_is_classified_as_lifespan_or_not() -> None:
+    """A new runtime must be explicitly classified, not silently exempted.
+
+    _LIFESPAN_RUNTIMES gates the #12810 startup-enforcement check. Before this,
+    that subset was a hand-kept copy: adding a runtime to the type and forgetting
+    the subset meant every job using it was skipped by the gate, with all tests
+    still green — the exact failure the gate exists to prevent.
+    """
+    classified = LIFESPAN_RUNTIMES | NON_LIFESPAN_RUNTIMES
+    unclassified = SCHEDULER_RUNTIMES - classified
+
+    assert not unclassified, (
+        f"Runtime(s) {sorted(unclassified)} are declared in SchedulerRuntime but not "
+        "classified in scheduler_registry. Add each to LIFESPAN_RUNTIMES (launched "
+        "from initialization/lifespan.py) or NON_LIFESPAN_RUNTIMES (launched "
+        "elsewhere, e.g. Celery beat) — otherwise the GH#12810 startup check "
+        "silently skips every job using it."
+    )
+
+
+def test_runtime_classifications_do_not_overlap() -> None:
+    overlap = LIFESPAN_RUNTIMES & NON_LIFESPAN_RUNTIMES
+    assert not overlap, f"Runtime(s) {sorted(overlap)} are in both classifications"
+
+
+def test_classified_runtimes_are_all_real() -> None:
+    """Neither classification may name a runtime the type does not declare."""
+    unknown = (LIFESPAN_RUNTIMES | NON_LIFESPAN_RUNTIMES) - SCHEDULER_RUNTIMES
+    assert not unknown, f"Unknown runtime(s) in classification sets: {sorted(unknown)}"
