@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Dzēst lietotāju",
     "deleteConfirm": "Dzēst",
     "deleteUndone": "To nevar atsaukt."
+  },
+  "schedulers": {
+    "title": "Fona plānotāji",
+    "description": "Ieslēdziet vai izslēdziet fona uzdevumus. Izmaiņas stājas spēkā nākamajā ciklā — bez pārstartēšanas.",
+    "refresh": "Atsvaidzināt",
+    "loading": "Ielādē plānotājus…",
+    "empty": "Nav reģistrētu plānotāju.",
+    "overridden": "Pārrakstīts",
+    "defaultLabel": "Noklusējums",
+    "runtimeLabel": "Izpildvide",
+    "on": "Ieslēgts",
+    "off": "Izslēgts",
+    "revertToDefault": "Atjaunot noklusējumu",
+    "enableTitle": "Ieslēgt šo uzdevumu",
+    "disableTitle": "Izslēgt šo uzdevumu",
+    "toggleAria": "Pārslēgt {name}",
+    "loadFailed": "Neizdevās ielādēt plānotājus.",
+    "toggleFailed": "Neizdevās mainīt {name}.",
+    "resetFailed": "Neizdevās atjaunot {name} noklusējumu."
   }
 }

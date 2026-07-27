@@ -46,12 +46,23 @@ class SkillHealthScheduler:
 
         while self._running:
             try:
-                await self.check_all_skills()
+                # GH#12820: re-checked each cycle so an operator toggle takes effect
+                # without a restart. The loop stays alive while disabled so re-enabling
+                # needs no restart either.
+                if await self._enabled():
+                    await self.check_all_skills()
             except Exception as e:
                 logger.error("Health check failed: %s", e)
 
             # Sleep before next check
             await asyncio.sleep(HEALTH_CHECK_INTERVAL)
+
+    @staticmethod
+    async def _enabled() -> bool:
+        """Is this job toggled on? Falls back to the registry default (GH#12820)."""
+        from services.scheduler_toggles import is_scheduler_enabled
+
+        return await is_scheduler_enabled("SkillHealthScheduler")
 
     async def stop(self) -> None:
         """Stop the health check loop."""

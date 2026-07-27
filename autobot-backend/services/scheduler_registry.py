@@ -28,6 +28,11 @@ class ScheduledJob:
     or ``inert_reason`` (a deliberate, stated decision not to run it).
     ``tests/services/test_scheduler_registry.py`` enforces exactly one of the two,
     so "registered but silently inert" cannot ship again.
+
+    GH#12820: ``default_enabled`` is what the job does with no operator override
+    present — the default an operator toggle departs from, and the value the
+    resolver falls back to when Redis is unreachable. Jobs declared inert default
+    to ``False``; every other default is set to preserve exactly what runs today.
     """
 
     name: str
@@ -37,6 +42,7 @@ class ScheduledJob:
     description: str
     startup_marker: str | None = None
     inert_reason: str | None = None
+    default_enabled: bool = True
 
 
 REGISTRY: list[ScheduledJob] = [
@@ -85,6 +91,7 @@ REGISTRY: list[ScheduledJob] = [
             "Not started — tracked by GH#12816. mesh_pruner deletes data, so enabling this "
             "scheduler is a data-retention decision, not a wiring change."
         ),
+        default_enabled=False,
     ),
     ScheduledJob(
         name="SkillHealthScheduler",
@@ -111,6 +118,8 @@ REGISTRY: list[ScheduledJob] = [
             "AUTOBOT_SKILL_DISTILLATION_ENABLED. Wired in lifespan.py (GH#12809)."
         ),
         startup_marker="_init_skill_distillation_scheduler",
+        # Ships off: an hourly pass costs real LLM tokens, so it is opt-in (GH#12809).
+        default_enabled=False,
     ),
     ScheduledJob(
         name="LLMKeyRotationScheduler",

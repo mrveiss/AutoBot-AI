@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Eliminar usuario",
     "deleteConfirm": "Eliminar",
     "deleteUndone": "Esto no se puede deshacer."
+  },
+  "schedulers": {
+    "title": "Programadores en segundo plano",
+    "description": "Activa o desactiva tareas en segundo plano. Los cambios se aplican en el siguiente ciclo, sin reiniciar.",
+    "refresh": "Actualizar",
+    "loading": "Cargando programadores…",
+    "empty": "No hay programadores registrados.",
+    "overridden": "Anulado",
+    "defaultLabel": "Predeterminado",
+    "runtimeLabel": "Entorno",
+    "on": "Activado",
+    "off": "Desactivado",
+    "revertToDefault": "Restaurar predeterminado",
+    "enableTitle": "Activar esta tarea",
+    "disableTitle": "Desactivar esta tarea",
+    "toggleAria": "Alternar {name}",
+    "loadFailed": "No se pudieron cargar los programadores.",
+    "toggleFailed": "No se pudo cambiar {name}.",
+    "resetFailed": "No se pudo restaurar {name} a su valor predeterminado."
   }
 }

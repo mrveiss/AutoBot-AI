@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Excluir usuário",
     "deleteConfirm": "Excluir",
     "deleteUndone": "Isso não pode ser desfeito."
+  },
+  "schedulers": {
+    "title": "Agendadores em segundo plano",
+    "description": "Ative ou desative tarefas em segundo plano. As alterações valem no próximo ciclo, sem reiniciar.",
+    "refresh": "Atualizar",
+    "loading": "Carregando agendadores…",
+    "empty": "Nenhum agendador registrado.",
+    "overridden": "Substituído",
+    "defaultLabel": "Padrão",
+    "runtimeLabel": "Execução",
+    "on": "Ligado",
+    "off": "Desligado",
+    "revertToDefault": "Voltar ao padrão",
+    "enableTitle": "Ativar esta tarefa",
+    "disableTitle": "Desativar esta tarefa",
+    "toggleAria": "Alternar {name}",
+    "loadFailed": "Não foi possível carregar os agendadores.",
+    "toggleFailed": "Não foi possível alterar {name}.",
+    "resetFailed": "Não foi possível voltar {name} ao padrão."
   }
 }

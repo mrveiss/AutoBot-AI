@@ -8915,5 +8915,24 @@
     "deleteUserTitle": "Supprimer l'utilisateur",
     "deleteConfirm": "Supprimer",
     "deleteUndone": "Cette action est irréversible."
+  },
+  "schedulers": {
+    "title": "Planificateurs en arrière-plan",
+    "description": "Activez ou désactivez les tâches en arrière-plan. Les changements prennent effet au cycle suivant, sans redémarrage.",
+    "refresh": "Actualiser",
+    "loading": "Chargement des planificateurs…",
+    "empty": "Aucun planificateur enregistré.",
+    "overridden": "Remplacé",
+    "defaultLabel": "Par défaut",
+    "runtimeLabel": "Exécution",
+    "on": "Activé",
+    "off": "Désactivé",
+    "revertToDefault": "Rétablir la valeur par défaut",
+    "enableTitle": "Activer cette tâche",
+    "disableTitle": "Désactiver cette tâche",
+    "toggleAria": "Basculer {name}",
+    "loadFailed": "Impossible de charger les planificateurs.",
+    "toggleFailed": "Impossible de modifier {name}.",
+    "resetFailed": "Impossible de rétablir {name} à sa valeur par défaut."
   }
 }

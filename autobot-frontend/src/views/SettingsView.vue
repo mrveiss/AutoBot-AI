@@ -284,6 +284,8 @@ Issue #753: User preference management interface
           </div>
           <div class="section-content">
             <FeatureFlagsSettingsPanel />
+            <!-- GH#12820: operator control over background schedulers -->
+            <SchedulerToggles />
           </div>
         </section>
 
@@ -378,6 +380,7 @@ import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ProviderOAuthConnect from '@/components/settings/ProviderOAuthConnect.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
+import SchedulerToggles from '@/components/schedulers/SchedulerToggles.vue'
 import PresetsSettingsPanel from '@/components/settings/PresetsSettingsPanel.vue'
 import PushNotificationSettingsPanel from '@/components/settings/PushNotificationSettingsPanel.vue'
 import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vue'

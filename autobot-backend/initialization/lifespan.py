@@ -813,8 +813,19 @@ async def _init_skill_health_scheduler(app: FastAPI) -> None:
     ``SkillHealthScheduler.start()`` is an infinite ``while self._running`` loop, so it
     is spawned as a task and never awaited — awaiting it here would block the rest of
     startup forever.
+
+    Startup is gated on the same resolver the loop re-checks (GH#12820), so the
+    startup decision and the running decision can never disagree.
     """
     try:
+        from services.scheduler_toggles import is_scheduler_enabled
+
+        if not await is_scheduler_enabled("SkillHealthScheduler"):
+            logger.info("Skill health scheduler: toggled off, not started")
+            app.state.skill_health_scheduler = None
+            app.state.skill_health_task = None
+            return
+
         from services.skill_management.skill_health_scheduler import get_skill_health_scheduler
 
         scheduler = get_skill_health_scheduler()

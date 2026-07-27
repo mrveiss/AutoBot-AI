@@ -32,16 +32,28 @@ ScheduledJob = _mod.ScheduledJob
 _BACKEND_ROOT = Path(__file__).parent.parent.parent
 
 
+# Modules whose filename matches the *scheduler* glob but which are not themselves
+# scheduled jobs — support code about schedulers rather than an implementation of one.
+# Deliberately an explicit list: anything added here must be justified, so the discovery
+# net cannot be quietly widened to hide a real unregistered scheduler.
+_NOT_SCHEDULER_IMPLEMENTATIONS = {
+    # GH#12820: resolves each registered job's effective on/off state. It owns no loop
+    # and runs no job; registering it would assert a scheduler that does not exist.
+    "services/scheduler_toggles.py",
+}
+
+
 def _discover_scheduler_files() -> list[str]:
     """Return background scheduler implementation paths relative to the backend root.
 
     Excludes __pycache__, test files (test_*.py and *_test.py), api/ endpoint
     modules, Alembic migrations (migrations/versions/*scheduler*.py are DB
-    migrations, not scheduler implementations), and the registry file itself —
-    only actual scheduler implementations.
+    migrations, not scheduler implementations), the registry file itself, and the
+    support modules in ``_NOT_SCHEDULER_IMPLEMENTATIONS`` — only actual scheduler
+    implementations.
     """
     return [
-        str(p.relative_to(_BACKEND_ROOT))
+        rel
         for p in _BACKEND_ROOT.rglob("*scheduler*.py")
         if "__pycache__" not in str(p)
         and not p.name.startswith("test_")
@@ -49,6 +61,7 @@ def _discover_scheduler_files() -> list[str]:
         and "autobot-backend/api/" not in str(p).replace("\\", "/")
         and "/migrations/" not in str(p).replace("\\", "/")
         and p.resolve() != _REGISTRY_PATH.resolve()
+        and (rel := str(p.relative_to(_BACKEND_ROOT)).replace("\\", "/")) not in _NOT_SCHEDULER_IMPLEMENTATIONS
     ]
 
 
