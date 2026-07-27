@@ -25,8 +25,8 @@ from api.schemas_workflows import (
     WebResearchToggleData,
     WebResearchUsageStatsData,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from api.system_health import HEALTH_PROBE_TIMEOUT_S
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -67,16 +67,12 @@ async def get_research_status(request: Request):
         # Exception` below catches failures but never a hang. Same budget as the
         # health aggregator so probes cannot disagree about what "too slow"
         # means. (#6918 caveat: wait_for only cancels at await points.)
-        health_status = await asyncio.wait_for(
-            integration.health_check(), timeout=HEALTH_PROBE_TIMEOUT_S
-        )
+        health_status = await asyncio.wait_for(integration.health_check(), timeout=HEALTH_PROBE_TIMEOUT_S)
 
         # Get circuit breaker status (sync, no I/O)
         circuit_status = integration.get_circuit_breaker_status()
 
-        cache_stats = await asyncio.wait_for(
-            integration.get_cache_stats(), timeout=HEALTH_PROBE_TIMEOUT_S
-        )
+        cache_stats = await asyncio.wait_for(integration.get_cache_stats(), timeout=HEALTH_PROBE_TIMEOUT_S)
 
         return JSONResponse(
             status_code=200,

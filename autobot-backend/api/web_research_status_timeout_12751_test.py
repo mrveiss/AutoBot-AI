@@ -50,9 +50,7 @@ class TestStatusIsBounded:
         monkeypatch.setattr(mod, "HEALTH_PROBE_TIMEOUT_S", 0.05)
         monkeypatch.setattr(mod, "_require_web_researcher", lambda request: _integration(hang=True))
 
-        resp = await asyncio.wait_for(
-            mod.get_research_status(_request_with(None)), timeout=5.0
-        )
+        resp = await asyncio.wait_for(mod.get_research_status(_request_with(None)), timeout=5.0)
 
         body = json.loads(resp.body)
         assert body["status"] == "degraded"
@@ -65,7 +63,8 @@ class TestStatusIsBounded:
         import api.web_research_settings as mod
 
         monkeypatch.setattr(
-            mod, "_require_web_researcher",
+            mod,
+            "_require_web_researcher",
             lambda request: _integration(health={"enabled": True}, cache={"hits": 1}),
         )
 
