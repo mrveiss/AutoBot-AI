@@ -123,6 +123,27 @@ PATTERNS: List[Tuple[str, re.Pattern[str], str]] = [
 ]
 
 
+# A generic pattern must not re-report a line a more specific pattern already
+# caught (#12670). `bare-utcnow` matches the `datetime.utcnow()` prefix of every
+# `utcnow().isoformat()` line, so before this every such line was reported twice
+# — once with the correct `utc_timestamp()` fix and once with the unrelated
+# `datetime_now()` fix, which made the hook's output actively misleading about
+# how many violations a file has and which replacement to use.
+SUBSUMED_BY: dict = {
+    "bare-utcnow": {"isoformat", "z-suffix-isoformat"},
+}
+
+# Patterns whose own reason text already names the correct replacement, so the
+# path-aware timestamp suggestion must not be prepended (#12670).
+SELF_DESCRIBING_FIX = frozenset({"bare-utcnow"})
+
+
+def _dedupe_subsumed(pattern_ids: List[str]) -> List[str]:
+    """Drop generic pattern ids when a more specific one matched the same line."""
+    matched = set(pattern_ids)
+    return [pid for pid in pattern_ids if not (SUBSUMED_BY.get(pid, set()) & matched)]
+
+
 def _is_allowlisted(rel_path: str) -> bool:
     """Check if a file path is in the allowlist (POSIX-normalized)."""
     posix = rel_path.replace("\\", "/")
@@ -149,10 +170,16 @@ def _scan(path: Path, repo_root: Path) -> List[Tuple[int, str, str]]:
         return []
     suggestion = _suggestion_for(rel)
     hits: List[Tuple[int, str, str]] = []
+    reasons = {pattern_id: reason for pattern_id, _, reason in PATTERNS}
     for line_no, line in enumerate(text.splitlines(), start=1):
-        for pattern_id, regex, reason in PATTERNS:
-            if regex.search(line):
-                hits.append((line_no, pattern_id, f"Use {suggestion} {reason}"))
+        line_ids = [pattern_id for pattern_id, regex, _ in PATTERNS if regex.search(line)]
+        for pattern_id in _dedupe_subsumed(line_ids):
+            reason = reasons[pattern_id]
+            # Patterns in SELF_DESCRIBING_FIX already name their own replacement;
+            # prefixing the timestamp-string suggestion produced a message telling
+            # the contributor to use two different helpers in one breath (#12670).
+            message = reason if pattern_id in SELF_DESCRIBING_FIX else f"Use {suggestion} {reason}"
+            hits.append((line_no, pattern_id, message))
     return hits
 
 

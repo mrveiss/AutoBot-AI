@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from config import ConfigManager
 from knowledge_base import KnowledgeBase
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Wire in the canonical chunker so the embedding-model consistency check
 # at `verify_embedding_model_consistency()` can actually verify the

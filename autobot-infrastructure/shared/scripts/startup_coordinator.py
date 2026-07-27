@@ -30,7 +30,7 @@ import psutil
 sys.path.append(str(Path(__file__).parent.parent))
 from constants.network_constants import NetworkConstants, ServiceURLs
 from constants.threshold_constants import TimingConstants
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 # Configure logging
 logging.basicConfig(
@@ -64,7 +64,7 @@ def _restore_component_from_data(comp: "ComponentInfo", data: dict) -> None:
 async def _check_redis_health() -> bool:
     """Check Redis health via centralized client (Issue #315 - extracted)."""
     try:
-        redis_client = await get_redis_client("main")
+        redis_client = await get_async_redis_client(database="main")
         if redis_client:
             await redis_client.ping()
             return True

@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import structlog
 from backend.security.service_auth import ServiceAuthManager
 
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = structlog.get_logger()
 
@@ -84,7 +84,7 @@ async def export_service_configs():
     export_dir.mkdir(parents=True, exist_ok=True)
 
     # Get Redis client for main database
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
 
     # Create auth manager
     auth_manager = ServiceAuthManager(redis)
@@ -169,7 +169,7 @@ async def verify_exports():
         return False
 
     # Get Redis client for main database
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
 
     # Create auth manager
     auth_manager = ServiceAuthManager(redis)

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import centralized Redis client
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 
 async def fix_dimensions():

@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -190,7 +190,7 @@ class NPUWorker:
 
         # Initialize Redis connection using centralized client
         try:
-            self.redis_client = await get_redis_client("main")
+            self.redis_client = await get_async_redis_client(database="main")
             if self.redis_client:
                 logger.info("✅ Connected to Redis via centralized client")
             else:
