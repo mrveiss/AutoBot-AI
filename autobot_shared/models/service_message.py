@@ -24,10 +24,11 @@ Usage::
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, Literal
 
 from pydantic import BaseModel, Field
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class ServiceMessage(BaseModel):
         description="Unique message identifier (UUID4).",
     )
     ts: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: utc_timestamp(),
         description="UTC ISO 8601 timestamp of message creation.",
     )
     sender: str = Field(

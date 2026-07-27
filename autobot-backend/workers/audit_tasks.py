@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -348,7 +349,7 @@ def audit_testgaps(self) -> dict:
     """Every-6h task: find Python modules changed since last run that lack tests."""
     redis = _get_redis()
     last_run = _redis_get(redis, _TESTGAPS_LAST_RUN_KEY)
-    run_at = datetime.now(timezone.utc).isoformat()
+    run_at = utc_timestamp()
 
     repo_root = _repo_root()
     modules = _changed_python_modules(last_run, repo_root)
@@ -441,7 +442,7 @@ def audit_dead_code(self) -> dict:
 
     result = {
         "status": "success",
-        "run_at": datetime.now(timezone.utc).isoformat(),
+        "run_at": utc_timestamp(),
         "total_findings": len(current_lines),
         "new_findings": len(new_findings_raw),
         "issues_filed": filed,
@@ -550,7 +551,7 @@ def audit_claims(self) -> dict:
     """Weekly task: verify README/docs capability claims have wired implementations."""
     redis = _get_redis()
     _redis_get(redis, _CLAIMS_LAST_RUN_KEY)
-    run_at = datetime.now(timezone.utc).isoformat()
+    run_at = utc_timestamp()
 
     repo_root = _repo_root()
     claims = _extract_capability_claims(repo_root)

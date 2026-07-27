@@ -17,12 +17,13 @@ import socket
 import subprocess  # nosec B404 - required for systemctl interaction
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, List
 
 import psutil
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 # App-level /health probes for services that expose engine state beyond
 # systemd (#11723/#11777). Local-only URLs, short timeout, never fatal to
@@ -81,7 +82,7 @@ class HealthCollector:
     def collect(self) -> Dict:
         """Collect all health metrics."""
         health = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": utc_timestamp(),
             "hostname": self.hostname,
             "cpu_percent": psutil.cpu_percent(interval=0.1),
             "memory_percent": psutil.virtual_memory().percent,

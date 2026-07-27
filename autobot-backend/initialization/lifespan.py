@@ -15,12 +15,12 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
+from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,
@@ -508,7 +508,7 @@ async def initialize_critical_services(app: FastAPI):
                 json.dumps(
                     {
                         "error_type": error_type,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 ),
                 encoding="utf-8",

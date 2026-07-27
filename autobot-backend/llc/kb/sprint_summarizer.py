@@ -13,12 +13,12 @@ On sprint close:
 """
 
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from llm_shared.types import LLMType
 
 from ..kb.collections import KbCollectionManager
@@ -268,7 +268,7 @@ class SprintKbSummarizer:
             )
             await self._direct_merge(docs, dst_collection, sprint_id, project_id)
             return "[direct-merged: LLM returned empty content]"
-        closed_at = datetime.now(timezone.utc).isoformat()
+        closed_at = utc_timestamp()
         sprint_name = sprint.name if sprint else str(sprint_id)
 
         from knowledge import get_knowledge_base  # lazy

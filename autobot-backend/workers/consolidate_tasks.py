@@ -14,10 +14,10 @@ lives in ``TrajectoryStore.consolidate`` which is fully delete-only.
 """
 
 import os
-from datetime import datetime, timezone
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -52,7 +52,7 @@ async def _run_consolidation() -> dict:
 @celery_app.task(bind=True, name="memory.consolidate_trajectories")
 def consolidate_trajectories(self) -> dict:
     """Daily task: dedupe + prune the trajectory store, then record the run time."""
-    run_at = datetime.now(timezone.utc).isoformat()
+    run_at = utc_timestamp()
     summary = run_or_schedule(_run_consolidation())
     try:
         _get_redis().set(_LAST_RUN_KEY, run_at)
@@ -77,7 +77,7 @@ def consolidate_facts(self) -> dict:
     Delete-only and guarded (owned/verified/pinned never eligible); ships in
     dry-run by default so candidates are logged before any deletion is enforced.
     """
-    run_at = datetime.now(timezone.utc).isoformat()
+    run_at = utc_timestamp()
     summary = run_or_schedule(_run_facts_consolidation())
     try:
         _get_redis().set(_FACTS_LAST_RUN_KEY, run_at)

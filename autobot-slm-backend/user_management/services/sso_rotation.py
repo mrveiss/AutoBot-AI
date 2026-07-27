@@ -38,6 +38,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.time_utils import utc_timestamp
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -200,7 +202,7 @@ async def rotate_kek(
     except VaultClientError as exc:
         raise SSORotationError(f"KEK rotation failed for provider {provider_id} field {field}: {exc}") from exc
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = utc_timestamp()
     await _update_provider_config(session, provider_id, {_rotated_at_key(field): now_iso})
     await _write_audit(
         session,
@@ -246,7 +248,7 @@ async def rotate_value(
     except VaultClientError as exc:
         raise SSORotationError(f"value rotation failed for provider {provider_id} field {field}: {exc}") from exc
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = utc_timestamp()
     await _update_provider_config(session, provider_id, {_rotated_at_key(field): now_iso})
     await _write_audit(
         session,

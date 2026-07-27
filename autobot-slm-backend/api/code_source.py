@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.time_utils import utc_timestamp
 from models.database import (
     CodeSource,
     CodeStatus,
@@ -484,7 +485,7 @@ async def _broadcast_commit_notification(notification: CodeNotification, outdate
                     "message": notification.message,
                     "node_id": notification.node_id,
                     "outdated_nodes": outdated_count,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 },
             }
         )
