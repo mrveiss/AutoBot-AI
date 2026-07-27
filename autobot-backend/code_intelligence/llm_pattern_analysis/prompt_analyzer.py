@@ -14,6 +14,7 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 
 from typing import List
 
+from autobot_shared.doc_chunking import estimate_tokens as _canonical_estimate_tokens
 from code_intelligence.llm_pattern_analysis.data_models import PromptAnalysisResult
 from code_intelligence.llm_pattern_analysis.types import (
     EXCESSIVE_CONTEXT_PATTERNS,
@@ -92,7 +93,10 @@ class PromptAnalyzer:
         Estimate token count for text.
 
         Uses a simple heuristic: ~4 characters per token for English text.
-        More accurate counting would require the actual tokenizer.
+        More accurate counting would require the actual tokenizer. Delegates
+        the chars/4 estimate to the canonical autobot_shared.doc_chunking
+        estimator (#12764); the trailing +1 is preserved here to keep this
+        method's output identical to its pre-existing behavior.
 
         Args:
             text: The text to estimate tokens for
@@ -100,7 +104,7 @@ class PromptAnalyzer:
         Returns:
             Estimated token count
         """
-        return len(text) // 4 + 1
+        return _canonical_estimate_tokens(text) + 1
 
     @classmethod
     def extract_variables(cls, template: str) -> List[str]:

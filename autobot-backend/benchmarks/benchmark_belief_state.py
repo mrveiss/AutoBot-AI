@@ -38,6 +38,8 @@ _autobot_root = _repo_root.parent
 sys.path.insert(0, str(_repo_root))
 sys.path.insert(0, str(_autobot_root))
 
+from autobot_shared.doc_chunking import estimate_tokens as _canonical_estimate_tokens  # noqa: E402
+
 # Import directly from submodules to avoid agent_loop/__init__.py
 # (which imports AgentLoop → heavy FastAPI/Redis/Celery dependencies)
 import importlib.util as _ilu
@@ -79,26 +81,31 @@ from agent_loop.belief_state import BeliefStateUpdater  # noqa: E402
 # Token-cost estimation helpers
 # ---------------------------------------------------------------------------
 
-# Rough heuristic: 1 token ≈ 4 characters for English/JSON text
-_CHARS_PER_TOKEN = 4
-
-
 def _estimate_tokens(obj: Any) -> int:
-    """Estimate token count for an arbitrary value by JSON-serialising it."""
+    """Estimate token count for an arbitrary value by JSON-serialising it.
+
+    The chars/4 arithmetic delegates to the canonical
+    autobot_shared.doc_chunking.estimate_tokens (#12764); the JSON-serialize
+    step and the 1-token floor are preserved here, unchanged.
+    """
     try:
         text = json.dumps(obj, default=str)
     except Exception:
         text = str(obj)
-    return max(1, len(text) // _CHARS_PER_TOKEN)
+    return max(1, _canonical_estimate_tokens(text))
 
 
 def _assertion_summary_tokens(ctx: TaskContext) -> int:
-    """Compact token cost of surfacing belief state vs. raw tool outputs."""
+    """Compact token cost of surfacing belief state vs. raw tool outputs.
+
+    Same chars/4 family as ``_estimate_tokens`` above — also repointed onto
+    the canonical estimator (#12764), preserving the 1-token floor.
+    """
     active = [a for a in ctx.assertions.values() if a.is_active]
     # Each assertion is roughly "key = value @ conf\n" — very compact
     lines = [f"  {a.key} = {a.value!r} @ {a.confidence:.2f}" for a in active]
     summary = "Belief state:\n" + "\n".join(lines)
-    return max(1, len(summary) // _CHARS_PER_TOKEN)
+    return max(1, _canonical_estimate_tokens(summary))
 
 
 # ---------------------------------------------------------------------------

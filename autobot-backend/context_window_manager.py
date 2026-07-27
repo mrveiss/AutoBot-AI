@@ -173,6 +173,13 @@ class ContextWindowManager:
     def estimate_tokens(self, text: str) -> int:
         """Estimate token count from text.
 
+        NOT repointed onto autobot_shared.doc_chunking.estimate_tokens
+        (#12764/#12645): chars_per_token here is a genuine runtime config
+        knob (config/context_windows.yaml `token_estimation.chars_per_token`,
+        default 4) rather than a hardcoded constant. The canonical estimator
+        hardcodes //4, so delegating would silently ignore any deployment
+        that configures a different ratio and change truncation behavior.
+
         Args:
             text: Text to estimate tokens for
 
