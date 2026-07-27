@@ -86,6 +86,7 @@ class SkillExtractor:
     async def extract_skills(
         self,
         conversation_history: List[Dict[str, str]],
+        existing_skills: List[Dict[str, str]] | None = None,
     ) -> List[ExtractedSkill]:
         """
         Extract reusable skills from conversation history.
@@ -93,6 +94,10 @@ class SkillExtractor:
         Args:
             conversation_history: List of conversation messages
                 Format: [{"role": "user"/"assistant", "content": "..."}]
+            existing_skills: Skills already registered, as ``{"name", "description"}``
+                records (Issue #12809). Shown to the model so it can recognise a
+                conversation that merely re-treads a skill the system already has.
+                Omitted means the model sees no prior art and can only propose new.
 
         Returns:
             List of extracted skills with high confidence (>0.6)
@@ -111,7 +116,7 @@ class SkillExtractor:
 
         logger.info("Extracting skills from %d-message conversation", len(conversation_history))
         try:
-            extracted = await self._call_extraction_llm(conversation_history)
+            extracted = await self._call_extraction_llm(conversation_history, existing_skills)
             # Filter by confidence threshold
             high_confidence = [s for s in extracted if s.confidence >= 0.6]
             logger.info(
@@ -150,11 +155,16 @@ class SkillExtractor:
             )
         return has_patterns
 
-    async def _call_extraction_llm(self, conversation_history: List[Dict[str, str]]) -> List[ExtractedSkill]:
+    async def _call_extraction_llm(
+        self,
+        conversation_history: List[Dict[str, str]],
+        existing_skills: List[Dict[str, str]] | None = None,
+    ) -> List[ExtractedSkill]:
         """Call LLM to extract skills from conversation.
 
         Args:
             conversation_history: Full conversation history
+            existing_skills: Already-registered skills shown to the model as prior art
 
         Returns:
             List of extracted skills (including low-confidence ones for filtering)
@@ -162,7 +172,7 @@ class SkillExtractor:
         # Truncate to last 20 messages to stay within token budget
         recent_history = conversation_history[-20:]
 
-        prompt = self._build_extraction_prompt(recent_history)
+        prompt = self._build_extraction_prompt(recent_history, existing_skills)
 
         # Call AI Stack LLM endpoint
         try:
@@ -191,13 +201,37 @@ class SkillExtractor:
             logger.error("AI Stack call failed: %s", e)
             raise
 
-    def _build_extraction_prompt(self, conversation_history: List[Dict[str, str]]) -> str:
+    @staticmethod
+    def _format_existing_skills(existing_skills: List[Dict[str, str]] | None) -> str:
+        """Render already-registered skills as prior art for the prompt (Issue #12809)."""
+        if not existing_skills:
+            return "SKILLS ALREADY REGISTERED:\n(none)"
+
+        lines = [
+            f"- {skill.get('name', 'unnamed')}: {skill.get('description', '')}".rstrip()
+            for skill in existing_skills
+        ]
+        return "SKILLS ALREADY REGISTERED:\n" + "\n".join(lines)
+
+    def _build_extraction_prompt(
+        self,
+        conversation_history: List[Dict[str, str]],
+        existing_skills: List[Dict[str, str]] | None = None,
+    ) -> str:
         """Build prompt for LLM skill extraction."""
         history_text = "\n".join(
             f"[{msg.get('role', 'unknown')}]: {msg.get('content', '')}" for msg in conversation_history
         )
 
         return f"""Analyze this conversation and extract reusable skills.
+
+{self._format_existing_skills(existing_skills)}
+
+Extract a skill ONLY if the conversation developed a workflow that none of the
+skills above already covers. Returning an empty array is a correct and expected
+outcome — most conversations teach nothing new, and a conversation that merely
+followed an existing skill must produce no skill at all. Do not invent a skill,
+and do not restate an existing one under a different name, to justify a result.
 
 For each skill you identify:
 1. Name: concise skill identifier (lowercase_with_underscores)
@@ -225,6 +259,8 @@ Output JSON array of skills:
     "confidence": 0.9
   }}
 ]
+
+If nothing in this conversation qualifies, respond with exactly: []
 
 Respond ONLY with valid JSON, no other text."""
 

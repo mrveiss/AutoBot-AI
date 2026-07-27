@@ -75,6 +75,19 @@ REGISTRY: list[ScheduledJob] = [
         description=("Checks skill health every 300 s. " "NOTE: not initialized in lifespan.py — currently inert."),
     ),
     ScheduledJob(
+        name="SkillDistillationScheduler",
+        interval_seconds="config:AUTOBOT_SKILL_DISTILLATION_INTERVAL_S",
+        owner_file="services/skill_management/skill_distillation_scheduler.py",
+        runtime="leader_elected",
+        description=(
+            "Distils conversations finished since the last run into proposed skills "
+            "(SkillExtractor -> SkillProposer). Leader-elected so N workers do not each "
+            "propose the same skill; cursor advances only after a proposal returns. "
+            "Interval defaults to 3600 s; gated off by default behind "
+            "AUTOBOT_SKILL_DISTILLATION_ENABLED. Wired in lifespan.py (GH#12809)."
+        ),
+    ),
+    ScheduledJob(
         name="LLMKeyRotationScheduler",
         interval_seconds="config:AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES",
         owner_file="services/llm_key_rotation_scheduler.py",
