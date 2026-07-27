@@ -26,7 +26,7 @@ Correctness → Speed → Maintainability. No wasted motion. No speculative work
 
 ## Core Rules
 
-**Every task must:** link to GitHub issue · search Memory MCP first · break into subtasks · use code-reviewer · update issue throughout · verify before closing.
+**Every task must:** link to GitHub issue · search memory first · break into subtasks · use code-reviewer · update issue throughout · verify before closing.
 
 1. **Check Before Writing** — search existing code/docs/PRs before creating anything
 2. **Reuse** — import from `autobot_shared/`; never duplicate or hardcode
