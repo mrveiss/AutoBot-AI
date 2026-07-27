@@ -15,10 +15,8 @@ path discarded output when a run did succeed:
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # #12683 — the CLI command must be valid
