@@ -196,12 +196,12 @@ class TestForgetTenantIsolation(unittest.IsolatedAsyncioTestCase):
         redis_mock = AsyncMock()
         redis_mock.get = AsyncMock(return_value=json.dumps({"user_id": "user-B", "content": "secret"}).encode())
 
-        original = mt.get_redis_client
-        mt.get_redis_client = AsyncMock(return_value=redis_mock)
+        original = mt.get_async_redis_client
+        mt.get_async_redis_client = AsyncMock(return_value=redis_mock)
         try:
             result = await _forget_working_memory("user-A", "autobot:session:s1:memory:k1")
         finally:
-            mt.get_redis_client = original
+            mt.get_async_redis_client = original
 
         self.assertFalse(result)
         redis_mock.delete.assert_not_called()
@@ -225,12 +225,12 @@ class TestForgetTenantIsolation(unittest.IsolatedAsyncioTestCase):
         json_mock.get = AsyncMock(return_value={"id": "eid1", "metadata": {"user_id": "user-B"}})
         redis_mock.json = MagicMock(return_value=json_mock)
 
-        original = mt.get_redis_client
-        mt.get_redis_client = AsyncMock(return_value=redis_mock)
+        original = mt.get_async_redis_client
+        mt.get_async_redis_client = AsyncMock(return_value=redis_mock)
         try:
             result = await _forget_graph_entity("user-A", "eid1")
         finally:
-            mt.get_redis_client = original
+            mt.get_async_redis_client = original
 
         self.assertFalse(result)
         redis_mock.delete.assert_not_called()

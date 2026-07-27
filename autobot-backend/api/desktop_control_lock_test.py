@@ -83,7 +83,7 @@ def fake_redis():
 
 def _patch_redis(fake_redis):
     return patch(
-        "api.desktop_control_lock.get_redis_client",
+        "api.desktop_control_lock.get_async_redis_client",
         new=AsyncMock(return_value=fake_redis),
     )
 
@@ -216,7 +216,7 @@ class TestOwnerAwareMuting:
 
     @pytest.mark.asyncio
     async def test_muted_fails_safe_when_redis_down(self):
-        with patch("api.desktop_control_lock.get_redis_client", new=AsyncMock(return_value=None)):
+        with patch("api.desktop_control_lock.get_async_redis_client", new=AsyncMock(return_value=None)):
             assert await is_actuation_muted(DEFAULT_DESKTOP_SESSION_ID, caller="alice") is True
 
 
@@ -247,7 +247,7 @@ class TestRedisUnavailableFailSafe:
     @pytest.mark.asyncio
     async def test_is_human_active_fails_safe_when_redis_down(self):
         with patch(
-            "api.desktop_control_lock.get_redis_client",
+            "api.desktop_control_lock.get_async_redis_client",
             new=AsyncMock(return_value=None),
         ):
             assert await is_human_active(DEFAULT_DESKTOP_SESSION_ID) is True
@@ -255,7 +255,7 @@ class TestRedisUnavailableFailSafe:
     @pytest.mark.asyncio
     async def test_acquire_fails_cleanly_when_redis_down(self):
         with patch(
-            "api.desktop_control_lock.get_redis_client",
+            "api.desktop_control_lock.get_async_redis_client",
             new=AsyncMock(return_value=None),
         ):
             result = await acquire_human_control(DEFAULT_DESKTOP_SESSION_ID, "alice")
@@ -265,7 +265,7 @@ class TestRedisUnavailableFailSafe:
     @pytest.mark.asyncio
     async def test_release_fails_cleanly_when_redis_down(self):
         with patch(
-            "api.desktop_control_lock.get_redis_client",
+            "api.desktop_control_lock.get_async_redis_client",
             new=AsyncMock(return_value=None),
         ):
             result = await release_human_control(DEFAULT_DESKTOP_SESSION_ID, "alice")
@@ -276,7 +276,7 @@ class TestRedisUnavailableFailSafe:
     @pytest.mark.asyncio
     async def test_get_lock_owner_none_when_redis_down(self):
         with patch(
-            "api.desktop_control_lock.get_redis_client",
+            "api.desktop_control_lock.get_async_redis_client",
             new=AsyncMock(return_value=None),
         ):
             assert await get_lock_owner(DEFAULT_DESKTOP_SESSION_ID) is None

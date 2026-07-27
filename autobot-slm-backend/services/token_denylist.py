@@ -32,7 +32,7 @@ import asyncio
 import logging
 import time
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
     from redis.exceptions import RedisError as _RedisError
@@ -100,7 +100,7 @@ async def revoke_jti(jti: str, ttl_seconds: int) -> None:
     ttl = max(1, ttl_seconds)
 
     async def _do() -> bool:
-        redis = await get_redis_client(async_client=True)
+        redis = await get_async_redis_client()
         if redis is None:
             return False
         await redis.set(_denylist_key(jti), "1", ex=ttl)
@@ -131,7 +131,7 @@ async def is_jti_revoked(jti: str) -> bool:
         return False
 
     async def _do() -> bool | None:
-        redis = await get_redis_client(async_client=True)
+        redis = await get_async_redis_client()
         if redis is None:
             return None
         return bool(await redis.exists(_denylist_key(jti)))

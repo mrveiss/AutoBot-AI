@@ -28,7 +28,7 @@ from typing import Dict, List
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 
 # Configure logging
@@ -79,7 +79,7 @@ class MigrationValidator:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(async_client=True, database="main")
+            self.redis_client = await get_async_redis_client(database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:

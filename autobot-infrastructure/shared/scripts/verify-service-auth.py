@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "autobot-backend"))
 sys.path.insert(0, str(PROJECT_ROOT / "autobot_shared"))
 
-from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
 from security.service_auth import ServiceAuthManager  # noqa: E402
 
 # All 6 services that should have keys
@@ -77,7 +77,7 @@ async def verify():
     logger.info("")
 
     try:
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         auth_mgr = ServiceAuthManager(redis)
         logger.info("ServiceAuthManager initialized successfully")
         logger.info("")
