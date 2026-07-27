@@ -38,12 +38,12 @@ _autobot_root = _repo_root.parent
 sys.path.insert(0, str(_repo_root))
 sys.path.insert(0, str(_autobot_root))
 
-from autobot_shared.doc_chunking import estimate_tokens as _canonical_estimate_tokens  # noqa: E402
-
 # Import directly from submodules to avoid agent_loop/__init__.py
 # (which imports AgentLoop → heavy FastAPI/Redis/Celery dependencies)
 import importlib.util as _ilu
 import types as _types
+
+from autobot_shared.doc_chunking import estimate_tokens as _canonical_estimate_tokens  # noqa: E402
 
 
 def _load_submodule(dotted_name: str, file_path: Path):
@@ -80,6 +80,7 @@ from agent_loop.belief_state import BeliefStateUpdater  # noqa: E402
 # ---------------------------------------------------------------------------
 # Token-cost estimation helpers
 # ---------------------------------------------------------------------------
+
 
 def _estimate_tokens(obj: Any) -> int:
     """Estimate token count for an arbitrary value by JSON-serialising it.
