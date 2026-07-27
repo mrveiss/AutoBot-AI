@@ -225,9 +225,9 @@ class PatternLearningEngine:
                 return True
 
             try:
-                from autobot_shared.redis_client import get_redis_client
+                from autobot_shared.redis_client import get_async_redis_client
 
-                self.redis_client = get_redis_client(async_client=True, database="analytics")
+                self.redis_client = await get_async_redis_client(database="analytics")
                 # Issue #379: Parallelize independent Redis loading operations
                 await asyncio.gather(
                     self._load_patterns_from_redis(),
