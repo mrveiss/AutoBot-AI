@@ -51,15 +51,48 @@ jobs:
           # updated a single branch, so every stale PR needed the manual "Update
           # branch" click this job exists to remove.
           #
-          # `mergeStateStatus` IS supported; BEHIND is exactly "needs updating".
-          # `|| true` keeps a transient gh/API failure from re-introducing the
-          # same abort-before-exit-0 behaviour.
-          OUTDATED=$(gh pr list \
+          # #12818: do NOT filter on mergeStateStatus. It is computed LAZILY by
+          # GitHub, and immediately after a push — exactly when this workflow
+          # fires — it comes back UNKNOWN for the very PRs that just went stale.
+          # The filter then matched nothing, the script took the "all up to
+          # date" branch and exited 0, so the job went GREEN while updating
+          # nothing. That is worse than the #12801 crash: a passing check
+          # asserting work that never happened.
+          #
+          # `compare/{base}...{head}` is evaluated on demand and is always
+          # accurate at push time, so no retry loop is needed.
+          # `|| true` on each call keeps a transient API failure from
+          # re-introducing the abort-before-exit-0 behaviour.
+          OPEN_PRS=$(gh pr list \
             --repo "$REPO" \
             --base Dev_new_gui \
             --state open \
-            --json number,mergeStateStatus \
-            --jq '.[] | select(.mergeStateStatus == "BEHIND") | .number' || true)
+            --json number,headRefName \
+            --jq '.[] | "\(.number) \(.headRefName)"' || true)
+
+          OUTDATED=""
+          while read -r PR HEAD_REF; do
+            [ -n "$PR" ] || continue
+            # $HEAD_REF is interpolated into an API PATH, so validate it the same
+            # way $PR is validated numerically below. A branch may legitimately
+            # contain '/', '.', '-' and '_', but '..' would traverse to a
+            # different endpoint — reject anything outside that charset or
+            # containing a dot-dot segment.
+            case "$HEAD_REF" in
+              ''|*..*|-*) echo "  Skipping unsafe head ref for PR #$PR"; continue ;;
+            esac
+            if ! printf '%s' "$HEAD_REF" | grep -qE '^[A-Za-z0-9._/-]+$'; then
+              echo "  Skipping unsafe head ref for PR #$PR"
+              continue
+            fi
+            BEHIND=$(gh api \
+              "repos/$REPO/compare/Dev_new_gui...$HEAD_REF" \
+              --jq '.behind_by' 2>/dev/null || echo "")
+            case "$BEHIND" in
+              ''|0) ;;
+              *) OUTDATED="$OUTDATED $PR"; echo "  PR #$PR is $BEHIND commit(s) behind" ;;
+            esac
+          done <<< "$OPEN_PRS"
 
           if [ -z "$OUTDATED" ]; then
             echo "All PR branches are up to date (or none could be listed)."
