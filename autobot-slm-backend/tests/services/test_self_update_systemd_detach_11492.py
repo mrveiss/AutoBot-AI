@@ -11,11 +11,17 @@ systemd SIGTERMs the whole cgroup — including the ansible-playbook child —
 before Play 1's tail and all of Play 2/3 ever run.
 
 The fix has two parts:
-  1. Detach that one run into its own transient systemd scope
-     (`systemd-run --scope --collect`, a separate cgroup) so it survives the
-     restart, gated to the self-update path only and falling back to the
-     direct exec when systemd-run / a systemd-service context is unavailable
-     (dev mode, tests, containers).
+  1. Detach that one run into its own transient systemd unit (a separate
+     cgroup) so it survives the restart, gated to the self-update path only
+     and falling back to the direct exec when systemd-run / a systemd-service
+     context is unavailable (dev mode, tests, containers).
+
+     #12596: that unit must be a transient SERVICE (`systemd-run --collect
+     --wait --slice=system.slice`), not a `--scope`. A scope keeps its payload
+     a descendant of the invoking process, so a scope created from inside
+     autobot-slm-backend stayed nested in that service's cgroup subtree and
+     the Play-1 restart tore it down anyway — Play 2/3 never ran while the
+     update still reported success.
   2. File-back the detached run's stdout/stderr (never the backend's pipe):
      once the backend dies, the pipe's read end closes, and a further write
      from the still-running ansible-playbook would raise BrokenPipeError —
@@ -152,19 +158,23 @@ def test_prepare_self_update_log_file_returns_none_on_failure(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_wrap_with_systemd_scope_builds_expected_command(tmp_path):
+def test_wrap_with_systemd_unit_builds_expected_command(tmp_path):
     ex = _executor(tmp_path)
     cmd = ["/usr/bin/ansible-playbook", "-i", "inv.yml", "update-all-nodes.yml"]
     env = {"ANSIBLE_FORCE_COLOR": "0", "PATH": "/usr/bin", "SECRET_TOKEN": "s3cr3t"}
     log_path = tmp_path / "self-update-ansible.log"
 
-    wrapped = ex._wrap_with_systemd_scope(cmd, env, log_path)
+    wrapped = ex._wrap_with_systemd_unit(cmd, env, log_path)
 
     assert wrapped[0] == "sudo"
     assert wrapped[1] == "-n"  # non-interactive: fast-fail, never hang on a password prompt
     assert wrapped[2] == "systemd-run"
-    assert "--scope" in wrapped
+    # #12596: a transient SERVICE (PID 1-owned), never a --scope nested in this
+    # backend's cgroup — see test_detached_run_is_a_transient_service_not_a_scope.
+    assert "--scope" not in wrapped
     assert "--collect" in wrapped
+    assert "--wait" in wrapped
+    assert f"--slice={_pe.SELF_UPDATE_DETACH_SLICE}" in wrapped
     assert any(a.startswith("--unit=autobot-selfupdate-") for a in wrapped)
     assert f"--uid={os.getuid()}" in wrapped
     assert f"--gid={os.getgid()}" in wrapped
@@ -245,7 +255,7 @@ async def test_run_subprocess_wraps_file_backed_when_systemd_available(tmp_path)
     assert argv[0] == "sudo"
     assert argv[1] == "-n"
     assert argv[2] == "systemd-run"
-    assert "--scope" in argv
+    assert "--scope" not in argv  # #12596: transient service, not a nested scope
     assert "--collect" in argv
     tail = list(argv[argv.index("--") + 1 :])
     assert tail[:2] == ["/bin/sh", "-c"]
@@ -426,3 +436,63 @@ async def test_tail_playbook_log_parses_existing_lines_then_stops(tmp_path):
     stages = [p["stage"] for p in seen]
     assert "play1_start" in stages
     assert "slm_restarting" in stages
+
+
+# ---------------------------------------------------------------------------
+# #12596: the detached run must not be nested in this backend's cgroup
+# ---------------------------------------------------------------------------
+
+
+def test_detached_run_is_a_transient_service_not_a_scope(tmp_path):
+    """The self-update run must survive Play 1's own SLM restart.
+
+    #11492/#12567 detached via ``systemd-run --scope``. A scope keeps its
+    payload a descendant of the *invoking* process, so a scope created from
+    inside ``autobot-slm-backend`` is nested in that service's cgroup subtree.
+    Play 1 then runs ``systemctl restart autobot-slm-backend`` and systemd
+    (KillMode=control-group) tore the nested scope down with the service —
+    the run died at the end of Play 1 and Play 2/3 never deployed the
+    co-located app tier or the workers, while the update still reported OK.
+
+    A transient service is forked by PID 1 and lives in ``system.slice``, so
+    restarting this backend cannot control-group-kill it.
+    """
+    ex = _executor(tmp_path)
+    wrapped = ex._wrap_with_systemd_unit(
+        ["/usr/bin/ansible-playbook", "update-all-nodes.yml"],
+        {"PATH": "/usr/bin"},
+        tmp_path / "self-update.log",
+    )
+
+    # The regression itself: --scope must never come back.
+    assert "--scope" not in wrapped
+
+    # Placement is stated explicitly, so cgroup delegation on this service can
+    # never silently re-nest the unit under the caller again.
+    assert f"--slice={_pe.SELF_UPDATE_DETACH_SLICE}" in wrapped
+    assert _pe.SELF_UPDATE_DETACH_SLICE == "system.slice"
+
+    # Named + garbage-collected so repeat runs neither collide nor leak units.
+    assert any(a.startswith("--unit=autobot-selfupdate-") for a in wrapped)
+    assert "--collect" in wrapped
+
+
+def test_detached_service_waits_so_exit_code_still_propagates(tmp_path):
+    """--wait preserves the pre-#12596 blocking semantics.
+
+    Without it, ``systemd-run`` in service mode returns as soon as the unit has
+    been *started*, so a detached run that does not restart this backend would
+    report success immediately and the caller would lose the real exit code.
+    When the Play-1 restart does land, only this waiting client is killed — the
+    transient service keeps running to completion on its own.
+    """
+    ex = _executor(tmp_path)
+    wrapped = ex._wrap_with_systemd_unit(
+        ["/usr/bin/ansible-playbook", "update-all-nodes.yml"],
+        {"PATH": "/usr/bin"},
+        tmp_path / "self-update.log",
+    )
+
+    assert "--wait" in wrapped
+    # --wait must be an option to systemd-run, not an argument to the payload.
+    assert wrapped.index("--wait") < wrapped.index("--")
