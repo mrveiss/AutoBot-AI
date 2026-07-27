@@ -279,7 +279,14 @@ class IncrementalKnowledgeSync:
             self.file_metadata = {}
 
     async def _save_sync_state(self):
-        """Save current file metadata and sync state."""
+        """Save current file metadata and sync state, atomically.
+
+        Issue #12808: the manifest is staged to a sibling temp file and promoted with
+        ``os.replace``, so the live path is only ever a complete document. Writing in place
+        left a window where a crash truncated it; ``_load_sync_state`` then discarded the
+        unparseable manifest and forced a full re-sync of every tracked file.
+        """
+        staging_path = self.file_metadata_path.with_suffix(self.file_metadata_path.suffix + ".tmp")
         try:
             # Ensure data directory exists
             # Issue #358 - avoid blocking
@@ -290,15 +297,26 @@ class IncrementalKnowledgeSync:
             for path, metadata in self.file_metadata.items():
                 data[path] = asdict(metadata)
 
-            async with aiofiles.open(self.file_metadata_path, "w", encoding="utf-8") as f:
+            async with aiofiles.open(staging_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(data, indent=2))
+            await asyncio.to_thread(os.replace, staging_path, self.file_metadata_path)
 
             logger.info("Saved metadata for %d files", len(self.file_metadata))
 
         except OSError as e:
             logger.error("Failed to write sync state file %s: %s", self.file_metadata_path, e)
+            await self._discard_staging_file(staging_path)
         except Exception as e:
             logger.error("Failed to save sync state: %s", e)
+            await self._discard_staging_file(staging_path)
+
+    @staticmethod
+    async def _discard_staging_file(staging_path: Path) -> None:
+        """Remove a half-written manifest so it can never be mistaken for the real one."""
+        try:
+            await asyncio.to_thread(staging_path.unlink, True)
+        except OSError as e:
+            logger.warning("Failed to remove staging file %s: %s", staging_path, e)
 
     def _compute_content_hash(self, content: str) -> str:
         """Compute SHA-256 hash of file content for change detection."""
@@ -396,6 +414,14 @@ class IncrementalKnowledgeSync:
             # Store chunks using extracted helper (Issue #665)
             vector_ids, fact_ids = await self._store_chunks_in_knowledge_base(chunks, relative_path, base_metadata)
 
+            # Issue #12808: sync state must advance on durable success, not on intent. Recording
+            # the content hash for a file the KB did not fully accept makes the next run classify
+            # it as unchanged, so the missing chunks are never retried and the content is silently
+            # absent from the KB. Returning None keeps the file out of the manifest, and the next
+            # run re-offers it: bounded re-work instead of silent loss.
+            if not self._is_durably_stored(chunks, fact_ids, relative_path):
+                return None
+
             # Create file metadata using extracted helper (Issue #665)
             metadata = self._create_file_metadata(
                 file_path,
@@ -404,14 +430,14 @@ class IncrementalKnowledgeSync:
                 file_stat,
                 vector_ids,
                 fact_ids,
-                len(chunks),
+                len(fact_ids),
                 processing_time,
             )
 
             logger.info(
-                "Processed: %s -> %d chunks in %.3fs",
+                "Processed: %s -> %d chunks stored in %.3fs",
                 relative_path,
-                len(chunks),
+                len(fact_ids),
                 processing_time,
             )
             return metadata
@@ -476,7 +502,13 @@ class IncrementalKnowledgeSync:
     async def _store_chunks_in_knowledge_base(
         self, chunks: List[Any], relative_path: Path, base_metadata: Dict[str, Any]
     ) -> Tuple[List[str], List[str]]:
-        """Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length."""
+        """Store each chunk as a KB fact, surfacing every rejection.
+
+        Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length.
+        Issue #12808: a chunk the KB refuses is logged rather than silently dropped, so the
+        caller can compare ``len(fact_ids)`` against ``len(chunks)`` and decide whether the
+        file was durably stored.
+        """
         vector_ids = []
         fact_ids = []
 
@@ -494,8 +526,37 @@ class IncrementalKnowledgeSync:
             result = await self.kb.store_fact(chunk_text, chunk_metadata)
             if result["status"] == "success":
                 fact_ids.append(result["fact_id"])
+            else:
+                logger.error(
+                    "Knowledge base rejected chunk %d/%d of %s: status=%s",
+                    i + 1,
+                    len(chunks),
+                    relative_path,
+                    result.get("status"),
+                )
 
         return vector_ids, fact_ids
+
+    @staticmethod
+    def _is_durably_stored(chunks: List[Any], fact_ids: List[str], relative_path: Path) -> bool:
+        """Did the knowledge base accept every chunk this file produced? (Issue #12808)
+
+        A partial store counts as a failure: the file is left out of the sync manifest so the
+        next run re-offers it whole. Re-storing the chunks that did land is cheaper than the
+        alternative — a file recorded at its current hash with only part of its content
+        retrievable, which nothing would ever correct.
+        """
+        if len(fact_ids) == len(chunks):
+            return True
+
+        logger.error(
+            "Not recording %s as synced: knowledge base stored %d of %d chunks; "
+            "the file stays unsynced and will be retried on the next run",
+            relative_path,
+            len(fact_ids),
+            len(chunks),
+        )
+        return False
 
     def _create_file_metadata(
         self,
