@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 from ..kb.handoff_brief import HandoffBriefGenerator
 from ..models.enums import ActivityEventType, WorkItemStatus
@@ -541,7 +542,7 @@ class HandoffService(LLCServiceBase):
             "comment_count": len(item.comments or []),
             "recent_comments": comment_excerpts[-5:],
             "agent_notes": agent_notes,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": utc_timestamp(),
             "generator": "stub-phase4",
         }
 

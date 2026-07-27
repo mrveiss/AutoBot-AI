@@ -27,6 +27,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.time_utils import utc_timestamp
+
 # ---------------------------------------------------------------------------
 # Helpers — build lightweight stubs that match the real dataclass shapes.
 # ---------------------------------------------------------------------------
@@ -119,7 +121,7 @@ def _stub_shared(sys_mod):
     if not hasattr(tu, "now_utc"):
         tu.now_utc = lambda: datetime.now(timezone.utc)
     if not hasattr(tu, "utc_timestamp"):
-        tu.utc_timestamp = lambda: datetime.now(timezone.utc).isoformat()
+        tu.utc_timestamp = lambda: utc_timestamp()
 
     # Keep autobot_shared package-level accessible
     shared = sys_mod.modules["autobot_shared"]

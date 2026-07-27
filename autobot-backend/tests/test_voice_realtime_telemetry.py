@@ -22,6 +22,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.time_utils import utc_timestamp
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -33,7 +35,7 @@ def _make_record(**kwargs):
         "session_id": "test-session-1",
         "user_id": "user-42",
         "model": "gpt-realtime-2",
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": utc_timestamp(),
         "ended_at": None,
         "duration_s": 0.0,
         "audio_in_s": 0.0,

@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Setting
 from models.schemas import (
     NPUCapabilities,
@@ -195,7 +196,7 @@ async def trigger_npu_detection(
 
     # Query the NPU worker health endpoint (Issue #813)
     capabilities, error_msg = await _detect_npu_capabilities(node.ip_address, node.ssh_port or 8081)
-    result_data = {"last_health_check": datetime.now(timezone.utc).isoformat()}
+    result_data = {"last_health_check": utc_timestamp()}
     if capabilities:
         result_data.update(detection_status="completed", capabilities=capabilities.model_dump())
     else:

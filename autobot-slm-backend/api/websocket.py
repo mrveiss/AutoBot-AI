@@ -15,6 +15,7 @@ from typing import Dict, Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from autobot_shared.time_utils import utc_timestamp
 from services.auth import auth_service
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,6 @@ class ConnectionManager:
         last_heartbeat: str = None,
     ) -> None:
         """Send health update to global and node-specific event channels."""
-        from datetime import datetime, timezone
 
         message = {
             "type": "health_update",
@@ -193,7 +193,7 @@ class ConnectionManager:
                 "cpu_percent": cpu,
                 "memory_percent": memory,
                 "disk_percent": disk,
-                "last_heartbeat": last_heartbeat or datetime.now(timezone.utc).isoformat(),
+                "last_heartbeat": last_heartbeat or utc_timestamp(),
             },
             "timestamp": asyncio.get_running_loop().time(),
         }

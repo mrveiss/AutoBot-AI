@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from services.task_workspace_common import validate_task_id
 
 logger = get_logger(__name__)
@@ -146,7 +147,7 @@ def allocate(
     workspace_base.mkdir(parents=True, exist_ok=True)
     _enforce_limit(agent_id, max_per_agent, root)
 
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = utc_timestamp()
     _git_add_worktree(root, workspace_dir, branch)
 
     meta = {

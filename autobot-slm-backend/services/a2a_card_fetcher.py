@@ -21,6 +21,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from autobot_shared.time_utils import utc_timestamp
+
 logger = logging.getLogger(__name__)
 
 # TLS verification for A2A card fetches from internal backend nodes.
@@ -71,7 +73,7 @@ async def _store_card(db, node, card: Dict[str, Any] | None) -> None:
 
     extra = dict(node.extra_data or {})
     extra["a2a_card"] = card
-    extra["a2a_card_fetched_at"] = datetime.now(timezone.utc).isoformat()
+    extra["a2a_card_fetched_at"] = utc_timestamp()
     await db.execute(update(Node).where(Node.node_id == node.node_id).values(extra_data=extra))
     await db.commit()
 

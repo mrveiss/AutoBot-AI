@@ -7,11 +7,12 @@ Tests for Background Version Checker (Issue #741).
 """
 
 import asyncio
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from autobot_shared.time_utils import utc_timestamp
 
 # Import git_tracker module directly
 git_tracker_path = Path(__file__).parent.parent.parent / "services" / "git_tracker.py"
@@ -79,7 +80,7 @@ class TestVersionCheckTask:
                             "has_update": False,
                             "local_commit": "abc123",
                             "remote_commit": "abc123",
-                            "last_fetch": datetime.now(timezone.utc).isoformat(),
+                            "last_fetch": utc_timestamp(),
                         }
                     )
                     mock_get_tracker.return_value = mock_tracker
@@ -115,7 +116,7 @@ class TestVersionCheckTask:
                             "has_update": False,
                             "local_commit": "abc123",
                             "remote_commit": "abc123",
-                            "last_fetch": datetime.now(timezone.utc).isoformat(),
+                            "last_fetch": utc_timestamp(),
                         }
                     )
                     mock_get_tracker.return_value = mock_tracker
@@ -182,7 +183,7 @@ class TestVersionCheckTask:
                         "has_update": False,
                         "local_commit": "abc123",
                         "remote_commit": "abc123",
-                        "last_fetch": datetime.now(timezone.utc).isoformat(),
+                        "last_fetch": utc_timestamp(),
                     },
                 ]
             )
@@ -213,7 +214,7 @@ class TestVersionCheckTask:
                                 "has_update": True,
                                 "local_commit": "abc123",
                                 "remote_commit": "def456",
-                                "last_fetch": datetime.now(timezone.utc).isoformat(),
+                                "last_fetch": utc_timestamp(),
                             }
                         )
                         mock_get_tracker.return_value = mock_tracker

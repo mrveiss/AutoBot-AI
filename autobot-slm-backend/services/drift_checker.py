@@ -12,10 +12,10 @@ directory to detect files that have been manually patched or missed by Ansible.
 import hashlib
 import logging
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from autobot_shared.time_utils import utc_timestamp
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 from services.git_tracker import DEFAULT_REPO_PATH
 
@@ -363,7 +363,7 @@ def build_drift_report(
         "drifted_files": drifted,
         "total_compared": total,
         "drift_detected": len(drifted) > 0,
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": utc_timestamp(),
     }
 
 

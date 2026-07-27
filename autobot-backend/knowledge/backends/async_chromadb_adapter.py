@@ -19,6 +19,7 @@ import re
 from typing import Any, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
 
@@ -210,9 +211,7 @@ class AsyncChromaDBClient(AsyncBaseClient):
         metadata: Metadata | None = None,
         embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
-        from datetime import datetime, timezone
-
-        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        provenance: dict = {"created_at": utc_timestamp()}
         if metadata:
             provenance.update(metadata)
         raw_col = await self._raw.get_or_create_collection(
@@ -236,9 +235,7 @@ class AsyncChromaDBClient(AsyncBaseClient):
         metadata: Metadata | None = None,
         embedding_function: Any | None = None,
     ) -> AsyncBaseCollection:
-        from datetime import datetime, timezone
-
-        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        provenance: dict = {"created_at": utc_timestamp()}
         if metadata:
             provenance.update(metadata)
         try:
