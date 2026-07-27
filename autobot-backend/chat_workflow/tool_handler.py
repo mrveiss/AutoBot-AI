@@ -2299,7 +2299,12 @@ class ToolHandlerMixin:
         if tool_name == "get_text":
             text = inner.get("text", "")
             if text:
-                return f"Text content: {text[:2000]}"
+                # #12757: browser page text is untrusted third-party content —
+                # sanitize and put it behind a trust boundary before it lands in
+                # the agent's context as if it were operator input.
+                from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+                return "Text content: " + sanitize_and_wrap_web_content(text[:2000], params.get("url", ""))
             return "No text found."
 
         if tool_name == "get_attribute":
@@ -2514,6 +2519,7 @@ class ToolHandlerMixin:
 
     async def _exec_scrape_url(self, params: dict) -> str:
         """Fetch a URL and return markdown content. Issue #7509."""
+        from knowledge.query_sanitizer import sanitize_and_wrap_web_content
         from web_fetch import RenderMode, WebFetcher
 
         url = params.get("url", "").strip()
@@ -2524,12 +2530,17 @@ class ToolHandlerMixin:
             return f"## Fetch failed\n\nURL: {url}\nError: {result.error_code}"
         title = f"# {result.title}\n\n" if result.title else ""
         header = f"## Scraped: {url} (status {result.status_code}, source: {result.source})\n\n"
-        return header + title + (result.markdown or "*(no content)*")
+        # #12757: page body is third-party text — sanitize it and put it behind a
+        # trust boundary before it can reach the LLM. Our own header stays
+        # OUTSIDE the boundary so the page cannot forge it.
+        body = sanitize_and_wrap_web_content(result.markdown or "*(no content)*", url)
+        return header + title + body
 
     async def _exec_crawl_site(self, params: dict) -> str:
         """BFS crawl seed URLs and return a markdown index. Issue #7509."""
         from knowledge.connectors.models import ConnectorConfig
         from knowledge.connectors.web_crawler import WebCrawlerConnector
+        from knowledge.query_sanitizer import sanitize_and_wrap_web_content
 
         seed_urls: list = params.get("seed_urls", [])
         max_depth: int = int(params.get("max_depth", 1))
@@ -2553,17 +2564,22 @@ class ToolHandlerMixin:
             ingest=ingest,
             same_origin=same_origin,
         )
-        return _format_crawl_results(seed_urls, results)
+        # #12757: crawled page text is untrusted third-party content.
+        return sanitize_and_wrap_web_content(
+            _format_crawl_results(seed_urls, results), ", ".join(seed_urls)
+        )
 
     async def _exec_map_site(self, params: dict) -> str:
         """Discover URLs for a domain via sitemap or BFS. Issue #7509."""
+        from knowledge.query_sanitizer import sanitize_and_wrap_web_content
         from web_fetch.site_mapper import SiteMapper
 
         domain = params.get("domain", "").strip()
         max_urls: int = int(params.get("max_urls", 500))
         respect_robots: bool = bool(params.get("respect_robots", True))
         site_result = await SiteMapper.map_site(domain, max_urls=max_urls, respect_robots=respect_robots)
-        return _format_map_results(site_result)
+        # #12757: discovered URLs/titles are attacker-controlled strings too.
+        return sanitize_and_wrap_web_content(_format_map_results(site_result), domain)
 
     async def _exec_extract_structured_data(self, params: dict) -> str:
         """Extract structured data from a URL using JSON Schema + LLM. Issue #7509."""
