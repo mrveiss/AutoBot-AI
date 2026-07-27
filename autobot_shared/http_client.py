@@ -10,8 +10,6 @@ Provides efficient aiohttp client session management to prevent resource exhaust
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import logging
 import threading
 import time
@@ -21,6 +19,10 @@ from typing import Any, AsyncIterator, Dict
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
+# Re-exported, not defined here: the signature formula lives in a stdlib-only module
+# so callers that only verify signatures do not inherit this module's aiohttp
+# dependency (#12814). Kept importable from here for existing call sites.
+from autobot_shared.service_signing import _service_signature
 from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
@@ -463,45 +465,6 @@ def reset_http_client_for_new_loop() -> None:
             # A contended asyncio.Lock binds permanently to the loop that
             # contended it — rebind so the new loop gets a fresh lock.
             HTTPClientManager._lock = asyncio.Lock()
-
-
-def _service_signature(
-    service_id: str,
-    method: str,
-    path: str,
-    timestamp: int,
-    key: str,
-) -> str:
-    """
-    Canonical HMAC-SHA256 signature for service-to-service requests (#12766).
-
-    Single source of truth for the signature computation shared by
-    ``sign_request`` (caller side, below) and
-    ``security.service_auth.ServiceAuthManager.generate_signature``
-    (receiver side, ``autobot-backend``) — the two previously duplicated an
-    identical ``hmac.new(key, "service_id:method:path:timestamp", sha256)``
-    formula. Extracting one helper guarantees they can never silently drift.
-
-    SECURITY: the message format, field order, ``:`` separator, UTF-8
-    encoding, and SHA-256 digest MUST NOT change — any edit here changes
-    every signature this system has ever produced or verified.
-
-    Args:
-        service_id: Caller's service identifier (e.g. ``'main-backend'``).
-        method: HTTP method in upper-case (e.g. ``'GET'``, ``'POST'``).
-        path: URL path component only (e.g. ``'/api/inference'``).
-        timestamp: Unix timestamp (seconds).
-        key: 256-bit hex-encoded secret shared between caller and receiver.
-
-    Returns:
-        Hex-encoded HMAC-SHA256 signature.
-    """
-    message = f"{service_id}:{method}:{path}:{timestamp}"
-    return hmac.new(
-        key.encode(encoding="utf-8"),
-        message.encode(encoding="utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
 
 
 def sign_request(
