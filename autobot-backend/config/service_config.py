@@ -25,8 +25,6 @@ _LMSTUDIO_HOST = _lmstudio_parsed.hostname or "127.0.0.1"
 _LMSTUDIO_PORT = _lmstudio_parsed.port or 1234
 
 # Issue #380: Module-level cached maps to avoid repeated dictionary creation
-# Issue #1214: Ollama host resolved via ConfigRegistry (SLM-managed, not
-# hardcoded to any VM). ConfigRegistry checks Redis → env → registry_defaults.
 _HOST_SERVICE_MAP = {
     "slm": NetworkConstants.SLM_VM_IP,
     "backend": NetworkConstants.MAIN_MACHINE_IP,
@@ -35,12 +33,26 @@ _HOST_SERVICE_MAP = {
     "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
     "ai_stack": NetworkConstants.AI_STACK_VM_IP,
     "browser": NetworkConstants.BROWSER_VM_IP,
-    "ollama": ConfigRegistry.get("vm.ollama", "127.0.0.1"),
     "browser_service": NetworkConstants.BROWSER_VM_IP,
     "openai": "api.openai.com",
     "anthropic": "api.anthropic.com",
     "vllm": "localhost",
     "lmstudio": _LMSTUDIO_HOST,
+}
+
+# Issue #1214: Ollama host is SLM-managed (not hardcoded to any VM) and resolved
+# via ConfigRegistry, which checks Redis → env → registry_defaults behind its own
+# TTL cache.
+#
+# Issue #12674: resolve it at call time, never at import. This module sits on the
+# logging-manager init path, so a module-level ConfigRegistry.get() made merely
+# importing anything that logs (e.g. utils.chromadb_client) open five blocking
+# sync Redis connections and trip the 'main' circuit breaker before any Redis
+# client method was ever called. Call-time resolution also lets an SLM host
+# change take effect within the ConfigRegistry TTL instead of being frozen for
+# the lifetime of the process.
+_DYNAMIC_HOST_RESOLVERS = {
+    "ollama": lambda: ConfigRegistry.get("vm.ollama", "127.0.0.1"),
 }
 
 _PORT_SERVICE_MAP = {
@@ -73,7 +85,8 @@ class ServiceConfigMixin:
         Priority order:
         1. Environment variable AUTOBOT_{SERVICE}_HOST
         2. Config file infrastructure.hosts.{service}
-        3. Hardcoded fallback map
+        3. Call-time resolver for SLM-managed hosts (Issue #12674)
+        4. Hardcoded fallback map
 
         Args:
             service: Service name (e.g., 'backend', 'redis', 'frontend', 'ollama')
@@ -92,7 +105,12 @@ class ServiceConfigMixin:
         if host:
             return host
 
-        # 3. Fallback to module-level cached map (Issue #380)
+        # 3. SLM-managed hosts resolve lazily, never at import time (Issue #12674)
+        resolver = _DYNAMIC_HOST_RESOLVERS.get(service)
+        if resolver is not None:
+            return resolver()
+
+        # 4. Fallback to module-level cached map (Issue #380)
         return _HOST_SERVICE_MAP.get(service, "localhost")
 
     def get_port(self, service: str) -> int:
