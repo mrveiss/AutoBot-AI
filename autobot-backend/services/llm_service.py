@@ -694,6 +694,33 @@ class LLMService:
     # Optimized chat (vLLM prefix-cache variant) (#3185)
     # ------------------------------------------------------------------
 
+    async def _build_prompt_clauses(
+        self,
+        *,
+        agent_type: str,
+        user_message: str,
+        available_tools: List | None,
+        additional_params: Dict | None,
+    ) -> tuple[str | None, str | None]:
+        """Pre-fetch the async prompt clauses for :meth:`chat_optimized` (#12829).
+
+        Returns ``(preference_clause, skill_clause)``, either of which may be
+        ``None`` when there is nothing to add. Tenant scoping is taken from
+        ``additional_params`` when the caller supplied it; without it the
+        aggregator falls back to unscoped biases.
+        """
+        from prompt_manager import build_preference_clause, build_skill_clause
+
+        params = additional_params or {}
+        preference_clause = await build_preference_clause(
+            list(available_tools or []),
+            task_class=agent_type,
+            user_id=params.get("user_id"),
+            org_id=params.get("org_id"),
+        )
+        skill_clause = await build_skill_clause(user_message)
+        return preference_clause, skill_clause
+
     async def chat_optimized(
         self,
         agent_type: str,
@@ -765,6 +792,20 @@ class LLMService:
                 exc_info=True,
             )
 
+        # #12829: get_optimized_prompt accepts a preference clause (#10545) and a
+        # skill clause (#12810), but nothing ever passed either — both halves were
+        # built, tested and left disconnected, so learned tenant preferences and
+        # ranked skills never reached a prompt. Both are async lookups, which is
+        # why they are pre-fetched here rather than inside the sync assembler.
+        # Each helper returns None on any failure, so prompt assembly is unaffected
+        # when the aggregator or ranker is unavailable.
+        preference_clause, skill_clause = await self._build_prompt_clauses(
+            agent_type=agent_type,
+            user_message=user_message,
+            available_tools=available_tools,
+            additional_params=additional_params,
+        )
+
         system_prompt = get_optimized_prompt(
             base_prompt_key=get_base_prompt_for_agent(agent_type),
             session_id=session_id,
@@ -774,6 +815,8 @@ class LLMService:
             recent_context=recent_context,
             additional_params=additional_params,
             tool_descriptions=tool_descriptions,
+            preference_clause=preference_clause,
+            skill_clause=skill_clause,
         )
 
         request_id: str = llm_params.pop("request_id", str(uuid.uuid4()))
