@@ -807,6 +807,47 @@ async def _init_llc_routine_scheduler(app: FastAPI) -> None:
         app.state.llc_routine_scheduler = None
 
 
+async def _init_skill_health_scheduler(app: FastAPI) -> None:
+    """Start the skill health check loop (GH#12810, implements GH#4339).
+
+    ``SkillHealthScheduler.start()`` is an infinite ``while self._running`` loop, so it
+    is spawned as a task and never awaited — awaiting it here would block the rest of
+    startup forever.
+    """
+    try:
+        from services.skill_management.skill_health_scheduler import get_skill_health_scheduler
+
+        scheduler = get_skill_health_scheduler()
+        app.state.skill_health_scheduler = scheduler
+        app.state.skill_health_task = asyncio.create_task(scheduler.start(), name="skill-health-scheduler")
+        logger.info("Skill health scheduler: started")
+    except Exception as exc:
+        logger.warning("Skill health scheduler startup failed (non-fatal): %s", exc)
+        app.state.skill_health_scheduler = None
+        app.state.skill_health_task = None
+
+
+async def _init_skill_distillation_scheduler(app: FastAPI) -> None:
+    """Start the skill distillation pass that turns conversations into proposed skills (GH#12809).
+
+    Leader-elected and gated off by default; a worker that is not the leader — or a
+    deployment with the flag unset — costs one Redis round-trip and nothing more.
+    """
+    try:
+        from services.skill_management.skill_distillation_scheduler import (
+            get_skill_distillation_scheduler,
+        )
+
+        scheduler = get_skill_distillation_scheduler()
+        started = await scheduler.start()
+        app.state.skill_distillation_scheduler = scheduler if started else None
+        if started:
+            logger.info("Skill distillation scheduler: started")
+    except Exception as exc:
+        logger.warning("Skill distillation scheduler startup failed (non-fatal): %s", exc)
+        app.state.skill_distillation_scheduler = None
+
+
 async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     """
     Start heartbeat scheduler for scheduled agent wakeups (NON-CRITICAL).
@@ -1808,6 +1849,8 @@ async def initialize_background_services(app: FastAPI):
         await _recover_agent_sessions(app)
         await _init_heartbeat_scheduler(app)
         await _init_llc_routine_scheduler(app)
+        await _init_skill_health_scheduler(app)
+        await _init_skill_distillation_scheduler(app)
         await _init_liveness_monitor(app)
         await _init_budget_watchdog(app)
         await _init_session_checkpointer(app)
@@ -1904,6 +1947,30 @@ async def cleanup_services(app: FastAPI):
             logger.info("Connector scheduler stopped")
         except Exception as _cs_err:
             logger.warning("Connector scheduler shutdown failed: %s", _cs_err)
+
+        # Issue #12810: Stop the skill health loop and cancel the task carrying it.
+        try:
+            health = getattr(app.state, "skill_health_scheduler", None)
+            if health is not None:
+                await health.stop()
+            health_task = getattr(app.state, "skill_health_task", None)
+            if health_task is not None and not health_task.done():
+                # stop() only clears the loop flag; the task may be parked in its
+                # interval sleep, so cancel rather than wait out the interval.
+                health_task.cancel()
+            logger.info("Skill health scheduler stopped")
+        except Exception as _sh_err:
+            logger.warning("Skill health scheduler shutdown failed: %s", _sh_err)
+
+        # Issue #12809: Stop the skill distillation pass and release its leader lease
+        # so another worker can claim it without waiting out the TTL.
+        try:
+            distiller = getattr(app.state, "skill_distillation_scheduler", None)
+            if distiller is not None:
+                await distiller.stop()
+                logger.info("Skill distillation scheduler stopped")
+        except Exception as _sd_err:
+            logger.warning("Skill distillation scheduler shutdown failed: %s", _sd_err)
 
         # Issue #8391: Stop VectorWriteBuffer (flushes pending writes).
         kb = getattr(app.state, "knowledge_base", None)

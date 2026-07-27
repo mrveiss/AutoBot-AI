@@ -9,6 +9,10 @@ Issue #4337: Skill relevance ranking and caching for agent prompts.
 Issue #4338: Autonomous skill extraction from conversations.
 """
 
+from services.skill_management.skill_distillation_scheduler import (
+    SkillDistillationScheduler,
+    get_skill_distillation_scheduler,
+)
 from services.skill_management.skill_extractor import ExtractedSkill, SkillExtractor
 from services.skill_management.skill_feedback import SkillFeedbackAnalyzer
 from services.skill_management.skill_health_scheduler import (
@@ -29,4 +33,6 @@ __all__ = [
     "ExtractedSkill",
     "SkillExtractor",
     "SkillProposer",
+    "SkillDistillationScheduler",
+    "get_skill_distillation_scheduler",
 ]
