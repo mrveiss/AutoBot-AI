@@ -103,6 +103,107 @@ class TestSignRequestHelper:
         assert actual == expected
 
 
+class TestSharedSignatureHelperRoundTrip:
+    """Mandatory round-trip/tamper/golden tests for #12766.
+
+    Confirms the extracted ``autobot_shared.http_client._service_signature``
+    helper stays byte-identical to the pre-extraction formula used by both
+    ``sign_request`` (caller) and ``ServiceAuthManager.generate_signature``
+    (receiver).
+    """
+
+    def _auth_manager(self):
+        from security.service_auth import ServiceAuthManager
+
+        return ServiceAuthManager(redis_client=None)
+
+    def test_round_trip_sign_then_verify_succeeds(self):
+        """Sign via the shared helper (sign_request), verify via service_auth's
+        generate_signature + hmac.compare_digest — the real end-to-end path."""
+        service_id = "npu-worker"
+        service_key = "deadbeefcafebabe" * 4
+        method = "GET"
+        path = "/api/npu/results"
+        timestamp = 1712340000
+
+        produced_sig = sign_request(service_id, service_key, method, path, timestamp)["X-Service-Signature"]
+
+        auth_mgr = self._auth_manager()
+        expected_sig = auth_mgr.generate_signature(service_id, service_key, method, path, timestamp)
+
+        assert hmac.compare_digest(produced_sig, expected_sig)
+
+    def test_tamper_wrong_key_fails_verification(self):
+        service_id = "npu-worker"
+        method = "GET"
+        path = "/api/npu/results"
+        timestamp = 1712340000
+
+        produced_sig = sign_request(service_id, "correct-key" * 4, method, path, timestamp)["X-Service-Signature"]
+
+        auth_mgr = self._auth_manager()
+        expected_sig = auth_mgr.generate_signature(service_id, "wrong-key" * 4, method, path, timestamp)
+
+        assert not hmac.compare_digest(produced_sig, expected_sig)
+
+    def test_tamper_wrong_path_fails_verification(self):
+        service_id = "npu-worker"
+        service_key = "deadbeefcafebabe" * 4
+        method = "GET"
+        timestamp = 1712340000
+
+        produced_sig = sign_request(service_id, service_key, method, "/api/npu/results", timestamp)[
+            "X-Service-Signature"
+        ]
+
+        auth_mgr = self._auth_manager()
+        expected_sig = auth_mgr.generate_signature(service_id, service_key, method, "/api/other/path", timestamp)
+
+        assert not hmac.compare_digest(produced_sig, expected_sig)
+
+    def test_tamper_wrong_timestamp_fails_verification(self):
+        service_id = "npu-worker"
+        service_key = "deadbeefcafebabe" * 4
+        method = "GET"
+        path = "/api/npu/results"
+
+        produced_sig = sign_request(service_id, service_key, method, path, 1712340000)["X-Service-Signature"]
+
+        auth_mgr = self._auth_manager()
+        expected_sig = auth_mgr.generate_signature(service_id, service_key, method, path, 1712340099)
+
+        assert not hmac.compare_digest(produced_sig, expected_sig)
+
+    def test_golden_hex_matches_pre_change_formula(self):
+        """The shared helper's output MUST equal the pre-#12766 signer's formula:
+
+        ``hmac.new(key.encode('utf-8'),
+                    f"{service_id}:{method}:{path}:{timestamp}".encode('utf-8'),
+                    hashlib.sha256).hexdigest()``
+
+        computed independently of both ``sign_request`` and
+        ``ServiceAuthManager.generate_signature`` for fixed inputs, then
+        hardcoded here. If this test ever fails, the canonicalization or
+        digest changed — a byte-identical de-dup must never do that.
+        """
+        service_id = "golden-svc"
+        service_key = "0123456789abcdef" * 4
+        method = "POST"
+        path = "/api/golden/test"
+        timestamp = 1712345678
+
+        # Golden hex, independently computed offline with the pre-change
+        # formula: hmac.new(key, f"{sid}:{method}:{path}:{ts}", sha256).hexdigest()
+        expected_golden_hex = "ce4ee781f5d4f001fd1231a41a0293aeb04ad61083fe23dd193531ebbaca7b26"
+
+        actual = sign_request(service_id, service_key, method, path, timestamp)["X-Service-Signature"]
+        assert actual == expected_golden_hex
+
+        auth_mgr = self._auth_manager()
+        actual_verifier_side = auth_mgr.generate_signature(service_id, service_key, method, path, timestamp)
+        assert actual_verifier_side == expected_golden_hex
+
+
 class TestServiceHTTPClientSignRequest:
     """ServiceHTTPClient._sign_request must delegate to the shared helper."""
 
