@@ -58,6 +58,29 @@ SELF_UPDATE_DETACH_UNIT_PREFIX = os.getenv("SLM_SELF_UPDATE_UNIT_PREFIX", "autob
 # ever given cgroup delegation.
 SELF_UPDATE_DETACH_SLICE = os.getenv("SLM_SELF_UPDATE_SLICE", "system.slice")
 
+# #12803: where a DETACHED run's inventory / extra-vars files are written.
+#
+# autobot-slm-backend.service sets PrivateTmp=true, so this process's /tmp is a
+# private mount namespace. Under the old --scope the payload stayed in THIS
+# process's namespace and saw those files fine. A transient service is forked by
+# PID 1 and therefore gets the HOST /tmp — so anything written to
+# ANSIBLE_LOCAL_TMP (/tmp/...) is simply invisible to it, and ansible failed
+# instantly with "Unable to parse ... as an inventory source" / "Could not find
+# or access ...json". The files were never deleted out from under the run; they
+# were never in a namespace it could see.
+#
+# The unit's only writable non-namespaced location is ReadWritePaths=/opt/autobot
+# (ProtectSystem=strict blocks the rest), so detached runs stage these two files
+# there instead. Attached runs keep using ANSIBLE_LOCAL_TMP — same namespace, no
+# need to leave /tmp.
+SELF_UPDATE_SHARED_DIR = Path(os.getenv("SLM_SELF_UPDATE_SHARED_DIR", "/opt/autobot/.slm-self-update"))
+
+# Age after which a stray staged inventory/extra-vars file is pruned. A detached
+# run deliberately outlives this process (Play 1 restarts us), so the caller
+# cannot reliably delete these itself — see _stage_dir_for_run. Pruning on the
+# next run keeps the directory bounded without ever racing a live run.
+SELF_UPDATE_STAGE_TTL_SECONDS = float(os.getenv("SLM_SELF_UPDATE_STAGE_TTL_SECONDS", "86400"))
+
 # Env vars forwarded to the detached scope via explicit --setenv=NAME=VALUE.
 # `sudo` (env_reset, see setup-passwordless-sudo.yml) strips the environment
 # before systemd-run ever sees it, and systemd-run does not forward the
@@ -775,7 +798,63 @@ class PlaybookExecutor:
         await process.wait()
         return {"output": "\n".join(output_lines), "returncode": process.returncode}
 
-    async def _build_dynamic_inventory(self) -> Path:
+    @staticmethod
+    def _stage_dir_for_run(detach: bool) -> str | None:
+        """Directory for this run's inventory / extra-vars files (#12803).
+
+        Returns None for attached runs, meaning "use the default
+        ANSIBLE_LOCAL_TMP" — an attached payload shares this process's mount
+        namespace, so /tmp is fine and nothing needs to change.
+
+        A DETACHED payload is forked by PID 1 and does NOT inherit this
+        service's PrivateTmp namespace, so it cannot see anything under /tmp
+        that we wrote. Stage those files under SELF_UPDATE_SHARED_DIR instead —
+        inside ReadWritePaths=/opt/autobot, the only non-namespaced location
+        this sandboxed unit may write.
+
+        Returns None (falling back to /tmp) if the directory cannot be created,
+        so a staging failure degrades to the previous behaviour rather than
+        aborting the update outright.
+        """
+        if not detach:
+            return None
+        try:
+            SELF_UPDATE_SHARED_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.error(
+                "Could not create self-update staging dir %s (%s) — falling back to %s, "
+                "which a detached run cannot read (#12803)",
+                SELF_UPDATE_SHARED_DIR,
+                exc,
+                ANSIBLE_LOCAL_TMP,
+            )
+            return None
+        PlaybookExecutor._prune_stage_dir()
+        return str(SELF_UPDATE_SHARED_DIR)
+
+    @staticmethod
+    def _prune_stage_dir() -> None:
+        """Delete staged files older than the TTL (#12803).
+
+        A detached run outlives this process by design (Play 1 restarts us
+        mid-run), so the caller cannot delete its own staged files without
+        racing the payload — that race is precisely what #12803 reported. Prune
+        on the NEXT run instead: anything older than the TTL belongs to a run
+        that has long since finished.
+        """
+        cutoff = time.time() - SELF_UPDATE_STAGE_TTL_SECONDS
+        try:
+            entries = list(SELF_UPDATE_SHARED_DIR.iterdir())
+        except OSError:
+            return
+        for stale in entries:
+            try:
+                if stale.is_file() and stale.stat().st_mtime < cutoff:
+                    stale.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.debug("Could not prune staged file %s: %s", stale, exc)
+
+    async def _build_dynamic_inventory(self, stage_dir: str | None = None) -> Path:
         """Generate an Ansible inventory from the DB node registry (#10109, #10095).
 
         Queries all Node records, builds a YAML inventory where each host name
@@ -801,7 +880,7 @@ class PlaybookExecutor:
 
         inv = build_registry_inventory(nodes, is_local_ip)
         validate_inventory(inv)
-        tmp_path = write_temp_inventory(inv, uid_tmp_dir=ANSIBLE_LOCAL_TMP)
+        tmp_path = write_temp_inventory(inv, uid_tmp_dir=stage_dir or ANSIBLE_LOCAL_TMP)
         self._link_group_vars(tmp_path)
         logger.info(
             "_build_dynamic_inventory: wrote inventory for %d node(s) to %s",
@@ -880,6 +959,11 @@ class PlaybookExecutor:
         # Determine which inventory to use.
         # Explicit caller-supplied path (wizard) → use as-is.
         # No path provided → generate from DB node registry (#10109, #10095).
+        # #12803: a detached payload cannot see this process's PrivateTmp /tmp,
+        # so its inventory/extra-vars must be staged somewhere both namespaces
+        # share. None => default ANSIBLE_LOCAL_TMP (attached runs).
+        stage_dir = self._stage_dir_for_run(detach)
+
         dynamic_inv_path: Path | None = None
         if inventory_path is not None:
             effective_inventory = inventory_path
@@ -887,7 +971,7 @@ class PlaybookExecutor:
                 raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
         else:
             try:
-                dynamic_inv_path = await self._build_dynamic_inventory()
+                dynamic_inv_path = await self._build_dynamic_inventory(stage_dir)
                 effective_inventory = dynamic_inv_path
             except Exception as exc:
                 logger.warning(
@@ -907,7 +991,7 @@ class PlaybookExecutor:
         # temp file (-e @file), never argv (#11735).
         extra_vars_file: Path | None = None
         if merged_extra_vars:
-            extra_vars_file = write_temp_extra_vars(merged_extra_vars)
+            extra_vars_file = write_temp_extra_vars(merged_extra_vars, uid_tmp_dir=stage_dir)
 
         cmd = self._build_ansible_command(
             playbook_path,
@@ -944,17 +1028,29 @@ class PlaybookExecutor:
                 "returncode": -1,
             }
         finally:
-            # Clean up the per-run temp inventory and extra-vars files
-            if dynamic_inv_path is not None:
-                try:
-                    dynamic_inv_path.unlink(missing_ok=True)
-                except OSError as exc:
-                    logger.debug("Could not remove temp inventory %s: %s", dynamic_inv_path, exc)
-            if extra_vars_file is not None:
-                try:
-                    extra_vars_file.unlink(missing_ok=True)
-                except OSError as exc:
-                    logger.debug("Could not remove temp extra-vars file %s: %s", extra_vars_file, exc)
+            # Clean up the per-run temp inventory and extra-vars files.
+            #
+            # #12803: NEVER for a detached run. That payload is owned by PID 1
+            # and outlives this coroutine by design — Play 1 restarts this very
+            # service mid-run — so unlinking here can pull the inventory and
+            # extra-vars out from under a playbook that is still starting. Those
+            # files live under SELF_UPDATE_SHARED_DIR and are reclaimed by
+            # _prune_stage_dir() on a later run, which cannot race a live one.
+            if detach:
+                logger.debug(
+                    "Detached run — leaving staged inventory/extra-vars for TTL pruning (#12803)",
+                )
+            else:
+                if dynamic_inv_path is not None:
+                    try:
+                        dynamic_inv_path.unlink(missing_ok=True)
+                    except OSError as exc:
+                        logger.debug("Could not remove temp inventory %s: %s", dynamic_inv_path, exc)
+                if extra_vars_file is not None:
+                    try:
+                        extra_vars_file.unlink(missing_ok=True)
+                    except OSError as exc:
+                        logger.debug("Could not remove temp extra-vars file %s: %s", extra_vars_file, exc)
 
 
 # Singleton instance

@@ -38,6 +38,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import os
+import time
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -72,6 +73,7 @@ def _load_executor():
 
 
 _pe = _load_executor()
+_DEFAULT_SHARED_DIR = _pe.SELF_UPDATE_SHARED_DIR
 
 
 def _executor(ansible_dir: Path) -> "_pe.PlaybookExecutor":
@@ -496,3 +498,100 @@ def test_detached_service_waits_so_exit_code_still_propagates(tmp_path):
     assert "--wait" in wrapped
     # --wait must be an option to systemd-run, not an argument to the payload.
     assert wrapped.index("--wait") < wrapped.index("--")
+
+
+# ---------------------------------------------------------------------------
+# #12803: a detached payload cannot see this service's PrivateTmp /tmp
+# ---------------------------------------------------------------------------
+
+
+def test_detached_run_stages_files_outside_private_tmp(tmp_path, monkeypatch):
+    """Staging must leave /tmp, because the payload is in a different namespace.
+
+    autobot-slm-backend.service sets PrivateTmp=true, so this process's /tmp is
+    a private mount namespace. Under the old --scope the payload stayed in this
+    process's namespace and read the inventory fine. A transient service is
+    forked by PID 1 and gets the HOST /tmp, so anything under ANSIBLE_LOCAL_TMP
+    is invisible to it — ansible died instantly with "Unable to parse ... as an
+    inventory source" (#12803). ProtectSystem=strict leaves /opt/autobot
+    (ReadWritePaths) as the only writable non-namespaced location.
+    """
+    shared = tmp_path / "shared"
+    monkeypatch.setattr(_pe, "SELF_UPDATE_SHARED_DIR", shared)
+
+    staged = _pe.PlaybookExecutor._stage_dir_for_run(detach=True)
+
+    assert staged == str(shared)
+    assert shared.is_dir()
+    assert oct(shared.stat().st_mode & 0o777) == "0o700"
+
+    # The invariant that actually matters is on the SHIPPED default, not on the
+    # tmp_path fixture above (which is itself under /tmp): the default staging
+    # dir must live outside the namespaced /tmp and inside ReadWritePaths.
+    default = str(_DEFAULT_SHARED_DIR)
+    assert not default.startswith("/tmp"), default
+    assert default.startswith("/opt/autobot"), default
+
+
+def test_attached_run_keeps_using_the_uid_tmp_dir(tmp_path, monkeypatch):
+    """An attached payload shares this process's namespace — /tmp is correct
+    there, so the #12803 staging must not change non-detached behaviour."""
+    monkeypatch.setattr(_pe, "SELF_UPDATE_SHARED_DIR", tmp_path / "unused")
+
+    assert _pe.PlaybookExecutor._stage_dir_for_run(detach=False) is None
+    assert not (tmp_path / "unused").exists(), "attached runs must not create the shared dir"
+
+
+def test_staging_failure_degrades_instead_of_aborting(tmp_path, monkeypatch):
+    """If the shared dir cannot be created, fall back rather than kill the update."""
+    blocked = tmp_path / "not_a_dir"
+    blocked.write_text("x", encoding="utf-8")
+    monkeypatch.setattr(_pe, "SELF_UPDATE_SHARED_DIR", blocked / "sub")
+
+    assert _pe.PlaybookExecutor._stage_dir_for_run(detach=True) is None
+
+
+def test_prune_removes_only_files_past_the_ttl(tmp_path, monkeypatch):
+    """Pruning reclaims old staged files without ever racing a live run."""
+    shared = tmp_path / "shared"
+    shared.mkdir(mode=0o700)
+    monkeypatch.setattr(_pe, "SELF_UPDATE_SHARED_DIR", shared)
+    monkeypatch.setattr(_pe, "SELF_UPDATE_STAGE_TTL_SECONDS", 100.0)
+
+    fresh = shared / "autobot_inv_fresh.yml"
+    stale = shared / "autobot_inv_stale.yml"
+    for f in (fresh, stale):
+        f.write_text("x", encoding="utf-8")
+    old = time.time() - 500
+    os.utime(stale, (old, old))
+
+    _pe.PlaybookExecutor._prune_stage_dir()
+
+    assert fresh.exists(), "a file inside the TTL belongs to a possibly-live run"
+    assert not stale.exists()
+
+
+def test_detached_finally_deletes_neither_staged_file(tmp_path):
+    """The caller must not unlink files the detached payload still owns.
+
+    #12803 reported this as the root cause. It was not — the real cause was the
+    PrivateTmp namespace — but the deletion IS a live hazard now that the
+    payload outlives this coroutine by design (Play 1 restarts this service
+    mid-run). Both files must survive, not just the inventory: they are removed
+    by two separate branches in the finally, and guarding only one leaves the
+    extra-vars race intact.
+    """
+    import inspect
+
+    src = inspect.getsource(_pe.PlaybookExecutor.execute_playbook)
+    finally_body = src.split("finally:", 1)[1]
+
+    guard = finally_body.index("if detach:")
+    inv_unlink = finally_body.index("dynamic_inv_path.unlink")
+    evars_unlink = finally_body.index("extra_vars_file.unlink")
+
+    # BOTH unlinks must sit after the detach guard, i.e. inside its else branch.
+    assert guard < inv_unlink
+    assert guard < evars_unlink
+    else_branch = finally_body.index("else:")
+    assert else_branch < inv_unlink and else_branch < evars_unlink
