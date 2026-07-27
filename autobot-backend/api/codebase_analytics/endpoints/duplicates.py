@@ -16,6 +16,7 @@ Issue #554: Enhanced with semantic analysis support:
 """
 
 import asyncio
+import threading
 from pathlib import Path
 
 from celery.result import AsyncResult
@@ -35,6 +36,23 @@ from ..storage import get_code_collection
 from .shared import resolve_project_root
 
 logger = get_logger(__name__)
+
+# #12779: single-flight guard for the duplicate scan.
+#
+# asyncio.wait_for cancels the AWAIT, but work already running in a
+# ThreadPoolExecutor cannot be cancelled. So each timeout returned None to the
+# caller while the worker thread kept walking the entire tree, and every
+# subsequent poll queued ANOTHER full scan. Abandoned threads accumulated until
+# they saturated CPU and pushed RSS 2.8 -> 7.0 GB, at which point /api/health
+# stopped answering and the GUI reported "Backend API Unreachable" for a process
+# that was alive the whole time.
+#
+# Only one scan may be in flight; concurrent callers are told it is running
+# instead of starting a second walk, and a timed-out scan has its cancel token
+# set so the orphaned thread stops cooperatively rather than running to
+# completion for a result nobody will read.
+_duplicate_scan_lock = threading.Lock()
+_duplicate_scan_cancel: threading.Event | None = None
 
 router = APIRouter()
 
@@ -85,6 +103,15 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
     Returns:
         Analysis result or None if timed out
     """
+    global _duplicate_scan_cancel
+
+    # #12779: refuse to queue a second full walk while one is already running.
+    if not _duplicate_scan_lock.acquire(blocking=False):
+        logger.info("Duplicate detection already in flight — not queuing another scan")
+        return None
+
+    cancel_token = threading.Event()
+    _duplicate_scan_cancel = cancel_token
     try:
         # Issue #1233: Use dedicated analytics executor to prevent
         # default thread pool starvation
@@ -94,17 +121,24 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
                 lambda: DuplicateCodeDetector(
                     project_root=project_root,
                     min_similarity=min_similarity,
+                    cancel_token=cancel_token,
                 ).run_analysis(),
             ),
             timeout=AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
         )
         return analysis
     except asyncio.TimeoutError:
+        # The executor thread survives this cancellation — signal it to stop, or
+        # it keeps scanning for a result that is already discarded (#12779).
+        cancel_token.set()
         logger.warning(
-            "Duplicate detection timed out after %d seconds",
+            "Duplicate detection timed out after %d seconds — signalled the "
+            "orphaned scan to stop",
             AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
         )
         return None
+    finally:
+        _duplicate_scan_lock.release()
 
 
 def _convert_analysis_to_result(analysis, project_root: str) -> dict:
