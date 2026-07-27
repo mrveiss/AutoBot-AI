@@ -132,8 +132,7 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
         # it keeps scanning for a result that is already discarded (#12779).
         cancel_token.set()
         logger.warning(
-            "Duplicate detection timed out after %d seconds — signalled the "
-            "orphaned scan to stop",
+            "Duplicate detection timed out after %d seconds — signalled the " "orphaned scan to stop",
             AnalyticsConfig.DUPLICATE_DETECTION_TIMEOUT,
         )
         return None
