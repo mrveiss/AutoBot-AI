@@ -72,7 +72,9 @@ def test_clause_builders_are_awaited() -> None:
     """Both builders are async; calling without await would pass a coroutine object."""
     fn = _find_func(_tree(), "_build_prompt_clauses")
     awaited = {
-        getattr(n.value.func, "id", None) for n in ast.walk(fn) if isinstance(n, ast.Await) and isinstance(n.value, ast.Call)
+        getattr(n.value.func, "id", None)
+        for n in ast.walk(fn)
+        if isinstance(n, ast.Await) and isinstance(n.value, ast.Call)
     }
     assert {"build_preference_clause", "build_skill_clause"} <= awaited
 
