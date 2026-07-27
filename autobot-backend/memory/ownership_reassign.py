@@ -52,14 +52,14 @@ logger = get_logger(__name__)
 # does not use, so the two bootstraps import different symbol sets (#12694).
 get_verbatim_store = None  # type: ignore[assignment]
 get_trajectory_store = None  # type: ignore[assignment]
-get_redis_client = None  # type: ignore[assignment]
+get_async_redis_client = None  # type: ignore[assignment]
 get_knowledge_base_fn = None  # type: ignore[assignment]
 
 
 def _bootstrap() -> None:
     """Lazily import heavy dependencies (same pattern as memory.transparency._bootstrap;
     see module-level NOTE above for why it is not shared)."""
-    global get_verbatim_store, get_trajectory_store, get_redis_client, get_knowledge_base_fn
+    global get_verbatim_store, get_trajectory_store, get_async_redis_client, get_knowledge_base_fn
     if get_verbatim_store is None:
         from memory.verbatim_store import get_verbatim_store as _gvs
 
@@ -68,10 +68,10 @@ def _bootstrap() -> None:
         from memory.trajectory_store import get_trajectory_store as _gts
 
         get_trajectory_store = _gts
-    if get_redis_client is None:
+    if get_async_redis_client is None:
         from autobot_shared.redis_client import get_async_redis_client as _grc
 
-        get_redis_client = _grc
+        get_async_redis_client = _grc
     if get_knowledge_base_fn is None:
         from knowledge._composed import get_knowledge_base as _gkb
 

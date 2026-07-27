@@ -40,17 +40,17 @@ logger = get_logger(__name__)
 # the full application stack.  Real code calls _bootstrap() on first use.
 get_verbatim_store = None  # type: ignore[assignment]
 get_trajectory_store = None  # type: ignore[assignment]
-get_redis_client = None  # type: ignore[assignment]
+get_async_redis_client = None  # type: ignore[assignment]
 
 
 def _bootstrap() -> None:
     """Lazily import heavy dependencies so tests can patch before first call.
 
     Each reference is guarded independently so a test can pre-assign any one
-    of them (e.g. ``mt.get_redis_client = AsyncMock(…)``) and that assignment
+    of them (e.g. ``mt.get_async_redis_client = AsyncMock(…)``) and that assignment
     is preserved even if the other two have not been set yet.
     """
-    global get_verbatim_store, get_trajectory_store, get_redis_client
+    global get_verbatim_store, get_trajectory_store, get_async_redis_client
     if get_verbatim_store is None:
         from memory.verbatim_store import get_verbatim_store as _gvs
 
@@ -59,10 +59,10 @@ def _bootstrap() -> None:
         from memory.trajectory_store import get_trajectory_store as _gts
 
         get_trajectory_store = _gts
-    if get_redis_client is None:
+    if get_async_redis_client is None:
         from autobot_shared.redis_client import get_async_redis_client as _grc
 
-        get_redis_client = _grc
+        get_async_redis_client = _grc
 
 
 _GRAPH_ENTITY_PATTERN = "memory:entity:*"
