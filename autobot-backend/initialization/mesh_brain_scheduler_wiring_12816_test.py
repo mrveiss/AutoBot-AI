@@ -116,3 +116,17 @@ class TestShutdown:
 
         src = (Path(__file__).resolve().parent / "lifespan.py").read_text(encoding="utf-8")
         assert "await app.state.mesh_brain_scheduler.stop()" in src
+
+    def test_shutdown_stop_is_independently_guarded(self):
+        """A failing stop() must not abort the rest of teardown.
+
+        The whole shutdown block lives inside ONE broad `except Exception`, so an
+        unguarded raise here would jump to that handler and skip every remaining
+        shutdown step. Startup is already non-fatal; shutdown must match.
+        """
+        from pathlib import Path
+
+        src = (Path(__file__).resolve().parent / "lifespan.py").read_text(encoding="utf-8")
+        block = src[src.index("Stop MeshBrainScheduler") :][:900]
+        assert "try:" in block
+        assert "MeshBrainScheduler stop failed (non-fatal)" in block

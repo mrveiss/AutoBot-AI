@@ -2081,9 +2081,18 @@ async def cleanup_services(app: FastAPI):
             logger.info("✅ LLC budget watchdog stopped")
         # #12816: Stop MeshBrainScheduler — stop() cancels every per-job task
         # start() spawned, so none survive shutdown.
+        #
+        # Guarded independently: this whole shutdown block sits inside one broad
+        # `except Exception`, so an error raised here would jump straight to that
+        # handler and SKIP every remaining shutdown step below. Startup is
+        # already treated as non-fatal; shutdown gets the same treatment so one
+        # scheduler cannot abort the rest of the teardown.
         if hasattr(app.state, "mesh_brain_scheduler") and app.state.mesh_brain_scheduler:
-            await app.state.mesh_brain_scheduler.stop()
-            logger.info("✅ MeshBrainScheduler stopped")
+            try:
+                await app.state.mesh_brain_scheduler.stop()
+                logger.info("✅ MeshBrainScheduler stopped")
+            except Exception as mesh_stop_error:
+                logger.warning("MeshBrainScheduler stop failed (non-fatal): %s", mesh_stop_error)
         # GH#9026: Stop LLC session checkpointer
         if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
             app.state.llc_session_checkpointer.stop()
