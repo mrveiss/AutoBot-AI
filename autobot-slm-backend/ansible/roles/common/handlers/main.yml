@@ -13,3 +13,15 @@
     name: sshd
     state: restarted
   become: true
+
+# #12783: a drop-in under logrotate.timer.d only takes effect after a daemon
+# reload, and the timer must be restarted to pick up the new schedule —
+# otherwise the hourly cadence does not apply until the next boot and the
+# maxsize cap stays unenforceable in the meantime.
+- name: Reload systemd and restart logrotate timer
+  ansible.builtin.systemd:
+    name: logrotate.timer
+    state: restarted
+    daemon_reload: true
+  become: true
+  failed_when: false
