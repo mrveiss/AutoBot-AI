@@ -8,6 +8,7 @@ Web Research Settings API
 Provides endpoints for managing web research configuration and preferences.
 """
 
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
@@ -25,6 +26,7 @@ from api.schemas_workflows import (
     WebResearchUsageStatsData,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from api.system_health import HEALTH_PROBE_TIMEOUT_S
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -59,14 +61,22 @@ async def get_research_status(request: Request):
     """Get current web research status and configuration"""
     integration = _require_web_researcher(request)
     try:
-        # Get health check
-        health_status = await integration.health_check()
+        # #12751: bound every dependency call. A status endpoint that HANGS is
+        # worse than one reporting an error — the UI health panel and monitoring
+        # block instead of getting a clear degraded signal, and `except
+        # Exception` below catches failures but never a hang. Same budget as the
+        # health aggregator so probes cannot disagree about what "too slow"
+        # means. (#6918 caveat: wait_for only cancels at await points.)
+        health_status = await asyncio.wait_for(
+            integration.health_check(), timeout=HEALTH_PROBE_TIMEOUT_S
+        )
 
-        # Get circuit breaker status
+        # Get circuit breaker status (sync, no I/O)
         circuit_status = integration.get_circuit_breaker_status()
 
-        # Get cache stats
-        cache_stats = await integration.get_cache_stats()
+        cache_stats = await asyncio.wait_for(
+            integration.get_cache_stats(), timeout=HEALTH_PROBE_TIMEOUT_S
+        )
 
         return JSONResponse(
             status_code=200,
@@ -77,6 +87,21 @@ async def get_research_status(request: Request):
                 "health": health_status,
                 "circuit_breakers": circuit_status,
                 "cache_stats": cache_stats,
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            },
+        )
+
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Web research status probe exceeded %ss — returning degraded (#12751)",
+            HEALTH_PROBE_TIMEOUT_S,
+        )
+        return JSONResponse(
+            status_code=200,  # graceful degradation, same contract as the error path
+            content={
+                "status": "degraded",
+                "enabled": False,
+                "error": f"health probe timed out after {HEALTH_PROBE_TIMEOUT_S}s",
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             },
         )

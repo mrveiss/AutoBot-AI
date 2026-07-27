@@ -58,6 +58,12 @@ class KnownProbes(str, enum.Enum):
 # component cannot hold the aggregator hostage.
 _PROBE_TIMEOUT_S = 2.0
 
+# Public alias so other health/status endpoints bound their dependency calls
+# with the SAME budget instead of inventing their own (#12751). Note the #6918
+# caveat: asyncio.wait_for only cancels at await points, so a probe that blocks
+# the event loop synchronously still overruns this.
+HEALTH_PROBE_TIMEOUT_S = _PROBE_TIMEOUT_S
+
 # Issue #12459: "ok"/"degraded"/"down" alone cannot express an EXPECTED
 # absence (single-node topology, dev-only tooling intentionally off,
 # lazy singleton not yet touched). Forcing those into "degraded"/"down"
