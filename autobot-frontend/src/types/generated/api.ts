@@ -44474,6 +44474,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/infrastructure/hosts/{host_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Infrastructure Host
+         * @description Delete a user-configured infrastructure host.
+         *
+         *     Issue #1310: infra hosts are user Secrets entries of type
+         *     ``infrastructure_host``; deleting the host removes its Secrets entry.
+         *     Mirrors the GET read-shim — the host id IS the secret id. Returns 404
+         *     when no matching infrastructure host exists.
+         */
+        delete: operations["delete_infrastructure_host_api_infrastructure_hosts__host_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/entities/extract": {
         parameters: {
             query?: never;
@@ -159862,6 +159887,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InfrastructureHostsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_infrastructure_host_api_infrastructure_hosts__host_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
