@@ -1213,6 +1213,50 @@ _COMPONENT_FRONTEND_DIRS: Dict[str, str] = {
     "autobot-slm-frontend": "/opt/autobot/autobot-slm-frontend",
 }
 
+# #12450: worker components that now have a per-component resolve path.
+#
+# These deliberately do NOT reuse the _COMPONENT_PIP_PATHS branch: that path is
+# backend-shaped (repo-root constraints deploy, target-interpreter provisioning,
+# venv recreation, alembic migrations, autobot_shared symlink restore) and none
+# of it applies here. Running it would be actively wrong — alembic against a
+# worker has no meaning, and venv recreation would wipe the venv the chroma
+# binary lives in (MVA-79).
+_WORKER_COMPONENTS: frozenset = frozenset(
+    {
+        "autobot-ai-stack",
+        "autobot-npu-worker",
+        "autobot-browser-worker",
+        "autobot-slm-agent",
+    }
+)
+
+# Worker components whose dependencies ARE re-installable from a file that the
+# code sync itself updates. Only ai-stack qualifies, and note the filename is
+# requirements-ai.txt, not the conventional requirements.txt
+# (roles/ai-stack/tasks/main.yml:137-153 installs exactly this file into exactly
+# this venv, and :206 sources it from the same directory the ai-stack component
+# syncs — so a resolve genuinely refreshes it).
+#
+# Every OTHER worker is intentionally absent, because its ansible role installs
+# an explicit package LIST rather than a requirements file, so there is nothing
+# a code sync can legitimately re-install:
+#   - autobot-npu-worker: roles/npu-worker/tasks/main.yml:188-218 pip-installs a
+#     named list (FastAPI + OpenVINO) into its py3.11 venv. The repo does ship
+#     autobot-npu-worker/requirements.txt, but ansible never uses it — installing
+#     from it could pull a different OpenVINO build and brick the NPU worker.
+#   - autobot-browser-worker: roles/browser/tasks/main.yml:132-140 installs
+#     playwright/uvicorn/fastapi SYSTEM-wide via pip3 (no venv at all).
+#   - autobot-slm-agent: roles/slm_agent/tasks/main.yml:121-124 installs its
+#     package list system-wide via pip3.
+# For those three a resolve is code-only: rsync + restart the right unit.
+# Dependency changes remain ansible's job (Update-All / per-role redeploy).
+_WORKER_COMPONENT_PIP: Dict[str, Tuple[str, str]] = {
+    "autobot-ai-stack": (
+        "/opt/autobot/autobot-ai-stack/requirements-ai.txt",
+        "/opt/autobot/autobot-ai-stack/venv/bin/pip",
+    ),
+}
+
 # Timeout (seconds) for `npm ci` (dependency install).  Windows-generated
 # package-lock.json on WSL can be slow; 300 s default matches pip (#11351).
 _NPM_INSTALL_TIMEOUT: float = float(os.environ.get("AUTOBOT_NPM_INSTALL_TIMEOUT", "300"))
@@ -1270,6 +1314,25 @@ _COMPONENT_SERVICES: Dict[str, List[str]] = {
         "autobot-npu-worker",
         "autobot-slm-backend",
     ],
+    # #12450: worker components. The unit name is NOT derivable from the
+    # component name for half of these — each mapping is traced to the systemd
+    # unit its own ansible role actually installs, because restarting the wrong
+    # (or no) unit is precisely the silent half-update this wiring must avoid.
+    #
+    # ai-stack: roles/ai-stack/tasks/main.yml installs BOTH units from this one
+    # component tree (:235 autobot-chromadb, :244 autobot-ai-stack) and the
+    # chroma binary lives inside the component's venv (MVA-79), so a sync of
+    # this component affects both. Order mirrors the role's own restart order
+    # (:251 chromadb, then :258 ai-stack) — chromadb must be up first.
+    "autobot-ai-stack": ["autobot-chromadb", "autobot-ai-stack"],
+    "autobot-npu-worker": ["autobot-npu-worker"],
+    # browser: roles/browser/tasks/main.yml:295-298 installs autobot-playwright;
+    # autobot-vnc (:281-284) is optional (install_vnc, default false). Restarts
+    # tolerate absent units, so listing it is safe on nodes without VNC.
+    "autobot-browser-worker": ["autobot-playwright", "autobot-vnc"],
+    # slm-agent: the unit is autobot-agent, NOT autobot-slm-agent
+    # (roles/slm_agent/tasks/main.yml:27, :33).
+    "autobot-slm-agent": ["autobot-agent"],
 }
 
 
@@ -1519,12 +1582,22 @@ async def _install_pip_deps_for_component(component: str, steps: List[str]) -> b
     Returns True on success, False when pip exits non-zero so callers can surface
     the failure (previously the non-zero rc was swallowed — #11322).
     """
-    paths = _COMPONENT_PIP_PATHS.get(component)
+    # #12450: worker components carry their own (req, pip) pair — ai-stack's file
+    # is requirements-ai.txt, not requirements.txt.
+    paths = _COMPONENT_PIP_PATHS.get(component) or _WORKER_COMPONENT_PIP.get(component)
     if paths is None:
         return True
     req_path, pip_bin = paths
     if not Path(req_path).exists():
-        steps.append(f"pip: no requirements.txt at {req_path} — skipped")
+        steps.append(f"pip: no requirements file at {req_path} — skipped")
+        return True
+    if component in _WORKER_COMPONENT_PIP and not Path(pip_bin).exists():
+        # Worker-only relaxation: a worker venv is provisioned by ansible, never
+        # by code-sync, so a missing one means "not deployed here" rather than a
+        # broken install — the code rsync + restart is still valid on its own.
+        # Backends deliberately keep the original behaviour (attempt the exec so
+        # a genuine pip failure surfaces via pip_ok=False, #11322).
+        steps.append(f"pip: no venv pip at {pip_bin} — skipped (provisioned by ansible)")
         return True
     steps.append(f"pip: installing {req_path} into {Path(pip_bin).parent}")
     try:
@@ -2419,6 +2492,10 @@ async def _run_post_sync_steps(
           constraints deploy (#11322) + venv version check (#11323) +
           pip install + symlink restore (#10912) + alembic + restart + health
       - Frontend (autobot-frontend, autobot-slm-frontend): npm ci (conditional) + build + nginx reload + health
+      - Workers (#12450 — ai-stack, npu-worker, browser-worker, slm-agent):
+          optional pip install (ai-stack only) + restart of the unit(s) that
+          component's ansible role actually installs. No constraints/alembic/
+          venv-recreation/symlink work — none of it applies to a worker.
       - autobot_shared: restore BOTH backends' symlinks (#10912) + restart
           dependents (self last) + per-dependent health + rollback (#11496)
     """
@@ -2478,6 +2555,33 @@ async def _run_post_sync_steps(
             # window is only for warm pip-backend restarts. A fresh nginx worker
             # after a large asset swap can lag past 60s, and the generous window
             # avoids logging an otherwise-healthy frontend as "check manually".
+            healthy = await _wait_component_healthy(component, steps, slow_start=True)
+            if not healthy:
+                await _rollback_component(component, snapshot, steps, None)
+                steps.append("post-sync: rolled back to last-known-good due to unhealthy post-restart")
+                pip_ok = False
+        else:
+            steps.append("post-sync: restart deferred")
+    elif component in _WORKER_COMPONENTS:
+        # #12450: worker components. Only ai-stack has a re-installable
+        # requirements file; for the rest this is deliberately code-only
+        # (rsync already happened) plus a restart of the correct unit — see
+        # _WORKER_COMPONENT_PIP for why each is or isn't dep-installable.
+        #
+        # No constraints deploy, no interpreter provisioning, no venv
+        # recreation, no alembic, no autobot_shared symlink: none apply to a
+        # worker, and venv recreation in particular would wipe the venv the
+        # chroma binary lives in (MVA-79).
+        pip_ok = await _install_pip_deps_for_component(component, steps)
+        if not pip_ok:
+            await _rollback_component(component, snapshot, steps, None)
+            return deps_changed, steps, False
+        if restart:
+            await _restart_component_services(component, steps)
+            # Workers have no health URL, so _wait_component_healthy returns
+            # True immediately and rollback is gated purely on the systemd unit
+            # entering 'failed'. Note _is_systemd_unit_failed watches the FIRST
+            # unit in the component's _COMPONENT_SERVICES list.
             healthy = await _wait_component_healthy(component, steps, slow_start=True)
             if not healthy:
                 await _rollback_component(component, snapshot, steps, None)
@@ -4041,7 +4145,10 @@ async def sync_role(
 import json as _json  # noqa: E402
 
 _UPDATE_ALL_RESUME_KEY = "slm_update_all_resume"
-_DEPS_FILES = ["requirements.txt", "package-lock.json"]
+# #12450: requirements-ai.txt is the ai-stack component's dependency file (its
+# ansible role installs that name, not requirements.txt), so the deps_changed
+# signal must watch it too or an ai-stack dep bump is reported as code-only.
+_DEPS_FILES = ["requirements.txt", "requirements-ai.txt", "package-lock.json"]
 _RESUME_PLAN_VERSION = 1
 _RESUME_PLAN_TTL_SECONDS = 7200  # 2 hours (C2-b)
 
