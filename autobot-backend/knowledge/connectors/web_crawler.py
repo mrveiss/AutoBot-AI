@@ -333,13 +333,23 @@ class WebCrawlerConnector(AbstractConnector):
                 on_seed_complete=_on_seed_done,
             )
             # #12744: on_seed_complete is an OPTIONAL callback — a crawl backend
-            # that does not invoke it left the checkpoint empty, so a resumed
-            # sync re-crawled every seed it had already finished. Once crawl()
-            # returns without raising, every dispatched seed has been attempted,
-            # so record any the callback did not report.
+            # that does not invoke it left the checkpoint empty, so a resumed sync
+            # re-crawled every seed it had already finished.
+            #
+            # #12843: the first fix for that checkpointed every *pending* seed,
+            # which broke GH#8297 in the other direction. crawl() stops dispatching
+            # once max_pages is exhausted, so trailing seeds are never fetched at
+            # all — checkpointing them marks them done and the next incremental
+            # sync skips them permanently. Budget exhaustion is the normal case on
+            # a real crawl, so that silently dropped whole seeds.
+            #
+            # The correct set is the seeds actually crawled: those the callback
+            # reported, plus any with a fetch result to prove it. Derived from
+            # results, never from the input list.
+            fetched_urls = {r.url for r in fetched}
             for seed_url in pending_seeds:
                 source_id = _url_to_source_id(seed_url)
-                if source_id not in crawled_seed_ids:
+                if source_id not in crawled_seed_ids and seed_url in fetched_urls:
                     await self._write_checkpoint(source_id)
 
             await _ingest_results_to_kb(fetched, self, result)
