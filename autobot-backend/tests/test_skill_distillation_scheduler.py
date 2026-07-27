@@ -235,9 +235,7 @@ class TestDurableCursor:
         extractor = MagicMock()
         extractor.extract_skills = AsyncMock(return_value=[_skill()])
         proposer = MagicMock()
-        proposer.propose_skills = AsyncMock(
-            side_effect=[{"proposed": ["first"]}, RuntimeError("SLM unreachable")]
-        )
+        proposer.propose_skills = AsyncMock(side_effect=[{"proposed": ["first"]}, RuntimeError("SLM unreachable")])
         scheduler = _make_scheduler(extractor, proposer)
         _with_sessions(
             scheduler,

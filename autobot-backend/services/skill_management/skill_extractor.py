@@ -208,8 +208,7 @@ class SkillExtractor:
             return "SKILLS ALREADY REGISTERED:\n(none)"
 
         lines = [
-            f"- {skill.get('name', 'unnamed')}: {skill.get('description', '')}".rstrip()
-            for skill in existing_skills
+            f"- {skill.get('name', 'unnamed')}: {skill.get('description', '')}".rstrip() for skill in existing_skills
         ]
         return "SKILLS ALREADY REGISTERED:\n" + "\n".join(lines)
 
