@@ -26,11 +26,10 @@ turn latency.
 """
 
 import asyncio
-import os
-import socket
 from typing import Any, Dict, List
 
 from autobot_shared.env_utils import env_flag, env_int
+from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -52,20 +51,6 @@ MIN_MESSAGES_TO_DISTILL = env_int("AUTOBOT_SKILL_DISTILLATION_MIN_MESSAGES", 4)
 _REDIS_DB = "knowledge"
 _LEADER_KEY = "skills:distillation:leader"
 _CURSOR_KEY = "skills:distillation:cursor"
-_LEADER_TTL_MS = 30_000
-_LEADER_REFRESH_S = 10
-_LEADER_POLL_S = 15
-
-# Atomic compare-and-expire: refresh the lease only while the key still holds our
-# worker id. A GET->PEXPIRE pair is not atomic and can yield two leaders when a
-# GC pause lands between the commands.
-_REFRESH_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
-else
-    return 0
-end
-"""
 
 
 def _decode(value: object) -> str | None:
@@ -82,8 +67,9 @@ class SkillDistillationScheduler:
         """Initialize with injectable extractor/proposer for testing."""
         self._extractor = extractor
         self._proposer = proposer
-        self._worker_id = "%s-%d" % (socket.gethostname(), os.getpid())
-        self._is_leader = False
+        # GH#12835: leader election lives in autobot_shared.leader_lease, shared
+        # with the connector scheduler. Only the key and database are ours.
+        self._lease = LeaderLease(key=_LEADER_KEY, database=_REDIS_DB, label="Skill distillation")
         self._task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
@@ -116,7 +102,7 @@ class SkillDistillationScheduler:
             except asyncio.CancelledError:
                 pass
         self._task = None
-        self._is_leader = False
+        await self._lease.release()
         logger.info("Skill distillation scheduler stopped")
 
     # ------------------------------------------------------------------
@@ -145,45 +131,21 @@ class SkillDistillationScheduler:
                 # off must stop the work without needing a restart. The loop keeps
                 # running (and keeps the lease honest) so re-enabling also needs no restart.
                 if not await self._enabled():
-                    await asyncio.sleep(_LEADER_POLL_S)
+                    await asyncio.sleep(self._lease.poll_s)
                     continue
-                await self._update_leadership()
-                if self._is_leader and elapsed >= DISTILLATION_INTERVAL_S:
+                await self._lease.update_leadership()
+                if self._lease.is_leader and elapsed >= DISTILLATION_INTERVAL_S:
                     await self.run_once()
                     elapsed = 0
 
-                sleep_for = _LEADER_REFRESH_S if self._is_leader else _LEADER_POLL_S
+                sleep_for = self._lease.refresh_s if self._lease.is_leader else self._lease.poll_s
                 await asyncio.sleep(sleep_for)
                 elapsed += sleep_for
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 logger.error("Skill distillation leader loop error: %s", exc)
-                await asyncio.sleep(_LEADER_POLL_S)
-
-    async def _update_leadership(self) -> None:
-        """Acquire or refresh the lease and log every transition."""
-        won = await self._try_acquire_or_refresh()
-        if won and not self._is_leader:
-            logger.info("Skill distillation: became leader (%s)", self._worker_id)
-        elif not won and self._is_leader:
-            logger.warning("Skill distillation: lost leadership (%s)", self._worker_id)
-        self._is_leader = won
-
-    async def _try_acquire_or_refresh(self) -> bool:
-        """Acquire the lease via SETNX, or extend it atomically while held."""
-        redis = await get_async_redis_client(database=_REDIS_DB)
-        if redis is None:
-            return False
-        try:
-            if self._is_leader:
-                held = await redis.eval(_REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS))
-                return bool(held)
-            acquired = await redis.set(_LEADER_KEY, self._worker_id, nx=True, px=_LEADER_TTL_MS)
-            return acquired is not None
-        except Exception as exc:
-            logger.warning("Skill distillation leader election Redis error: %s", exc)
-            return False
+                await asyncio.sleep(self._lease.poll_s)
 
     # ------------------------------------------------------------------
     # Distillation pass
@@ -201,17 +163,7 @@ class SkillDistillationScheduler:
             logger.debug("Skill distillation: no conversations since cursor %s", cursor or "(start)")
             return {"sessions_seen": 0, "sessions_distilled": 0, "proposed": []}
 
-        proposed: List[str] = []
-        distilled = 0
-        for session in pending:
-            names = await self._distil_session(session)
-            if names is None:
-                # Stop the pass rather than skip: advancing over a conversation whose
-                # proposal never landed would drop it permanently.
-                break
-            proposed.extend(names)
-            distilled += 1
-            await self._write_cursor(session["updated_at"])
+        distilled, proposed = await self._distil_pending(pending)
 
         logger.info(
             "Skill distillation pass: %d/%d conversations distilled, %d skills proposed",
@@ -220,6 +172,23 @@ class SkillDistillationScheduler:
             len(proposed),
         )
         return {"sessions_seen": len(pending), "sessions_distilled": distilled, "proposed": proposed}
+
+    async def _distil_pending(self, pending: List[Dict[str, Any]]) -> tuple[int, List[str]]:
+        """Distil each pending conversation in order, advancing the cursor as it goes.
+
+        Stops at the first conversation whose proposal did not land rather than
+        skipping it — advancing past a failed session would drop it permanently.
+        """
+        proposed: List[str] = []
+        distilled = 0
+        for session in pending:
+            names = await self._distil_session(session)
+            if names is None:
+                break
+            proposed.extend(names)
+            distilled += 1
+            await self._write_cursor(session["updated_at"])
+        return distilled, proposed
 
     async def _distil_session(self, session: Dict[str, Any]) -> List[str] | None:
         """Extract and propose for one conversation. ``None`` means the pass must stop."""

@@ -14,7 +14,26 @@ enforces this automatically at CI time.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
+
+# GH#12836: the set of valid runtimes lives here and nowhere else. It used to be
+# restated by hand in the tests, including a hand-maintained *subset*
+# (_LIFESPAN_RUNTIMES) that gates the #12810 startup-enforcement check. Adding a
+# runtime to the Literal and forgetting the subset silently exempted every job
+# using it from the gate — the exact "registered but inert" failure that gate
+# exists to catch, reintroduced through a stale copy.
+SchedulerRuntime = Literal["asyncio_per_worker", "celery_beat", "leader_elected", "apscheduler"]
+
+#: Every valid runtime, derived from the type so the two can never drift.
+SCHEDULER_RUNTIMES: frozenset[str] = frozenset(get_args(SchedulerRuntime))
+
+#: Runtimes whose jobs are launched from ``initialization/lifespan.py`` and are
+#: therefore subject to the startup-enforcement check.
+LIFESPAN_RUNTIMES: frozenset[str] = frozenset({"asyncio_per_worker", "leader_elected", "apscheduler"})
+
+#: Runtimes launched by something other than lifespan, and exempt from that check.
+#: ``celery_beat`` jobs come from the Celery beat schedule.
+NON_LIFESPAN_RUNTIMES: frozenset[str] = frozenset({"celery_beat"})
 
 
 @dataclass
@@ -38,7 +57,7 @@ class ScheduledJob:
     name: str
     interval_seconds: int | str
     owner_file: str
-    runtime: Literal["asyncio_per_worker", "celery_beat", "leader_elected", "apscheduler"]
+    runtime: SchedulerRuntime
     description: str
     startup_marker: str | None = None
     inert_reason: str | None = None
