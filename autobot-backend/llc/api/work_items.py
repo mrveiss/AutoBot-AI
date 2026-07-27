@@ -550,8 +550,13 @@ async def checkout_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=409, detail="Internal server error")
+        # #12740 (same defect class, found alongside): the status code was
+        # already correct, but the useful reason ("Work item X already checked
+        # out by agent Y") was still replaced with a generic string, so a caller
+        # could not tell WHO holds the checkout. Domain-level message, safe to
+        # surface.
+        logger.info("Rejected work-item checkout conflict: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -600,8 +605,16 @@ async def transition_work_item(
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return await _item_to_dict(item, session)
     except InvalidTransition as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=422, detail="Internal server error")
+        # #12740: the service already computed the exact, useful reason
+        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
+        # generic 422 "Internal server error" threw that away, so the UI could
+        # not tell the user what went wrong or what IS allowed. The message is
+        # purely domain-level — statuses and permitted transitions, no internals
+        # — so it is safe to surface. 409 Conflict is the correct code: the
+        # request is well-formed (422 implies malformed), it conflicts with the
+        # item's current state.
+        logger.info("Rejected illegal work-item transition: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -666,8 +679,9 @@ async def claim_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=409, detail="Internal server error")
+        # #12740 (same defect class): surface WHO holds the checkout.
+        logger.info("Rejected work-item checkout conflict: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
