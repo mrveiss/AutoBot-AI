@@ -22,6 +22,7 @@ Moved from autobot-backend/utils/ to autobot_shared/ (Issue #2313).
 import asyncio
 import functools
 import logging
+import os
 import socket
 import time
 import weakref
@@ -318,6 +319,30 @@ class RedisConnectionManager:
         self._health_check_tasks: Dict[str, asyncio.Task] = {}
         self._cleanup_task: asyncio.Task | None = None
 
+    @staticmethod
+    def _redis_host_from_env() -> str | None:
+        """Return REDIS_HOST / AUTOBOT_REDIS_HOST if either is set (#12778).
+
+        Processes that cannot import the backend config layer — slm-agent runs
+        under the SYSTEM interpreter with only its own PYTHONPATH — get an empty
+        dict from the config manager and then fall back to
+        NetworkConstants.REDIS_VM_IP, which resolves to the EMPTY STRING in that
+        context. _validate_config_host (#11449) then correctly refuses to dial a
+        blank host, so the agent silently dropped every event it collected —
+        including the backend crash-loop transition that is the one signal that
+        would surface a crashing service in the GUI.
+
+        The slm-agent unit already sets both variables, and the resulting error
+        even tells the operator to "set REDIS_HOST" — advice that was
+        unactionable because nothing ever read it. Consulting them here makes
+        that instruction true.
+        """
+        for var in ("REDIS_HOST", "AUTOBOT_REDIS_HOST"):
+            value = (os.getenv(var) or "").strip()
+            if value:
+                return value
+        return None
+
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config (#2477)."""
         try:
@@ -326,8 +351,12 @@ class RedisConnectionManager:
         except AttributeError:
             # ssot_config._ConfigProxy does not expose get_redis_config(); fall back to NetworkConstants
             redis_config = {}
+        # #12778: env beats the NetworkConstants fallback, but NOT an explicit
+        # config-manager value — a deployment that configures Redis centrally
+        # must still win over a stray env var.
+        host = redis_config.get("host") or self._redis_host_from_env() or NetworkConstants.REDIS_VM_IP
         return {
-            "host": redis_config.get("host", NetworkConstants.REDIS_VM_IP),
+            "host": host,
             "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
             "password": redis_config.get("password"),
             "enabled": redis_config.get("enabled", True),
