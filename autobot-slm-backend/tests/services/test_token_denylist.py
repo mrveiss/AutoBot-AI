@@ -320,8 +320,9 @@ class TestBoundedRedisAccess:
         with patch.object(_dl_mod, "get_redis_client", get_client):
             assert await is_jti_revoked("jti-a") is False  # arms the window
             assert await is_jti_revoked("jti-b") is False  # short-circuits
+            await revoke_jti("jti-c", ttl_seconds=60)  # short-circuits via negative cache
 
-        get_client.assert_called_once()  # second call never touched Redis
+        get_client.assert_called_once()  # subsequent calls never touched Redis
 
     @pytest.mark.asyncio
     async def test_success_clears_negative_cache(self):
