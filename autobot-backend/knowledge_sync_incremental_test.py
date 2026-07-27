@@ -289,6 +289,129 @@ class TestIncrementalKnowledgeSyncChangedFiles:
 # ---------------------------------------------------------------------------
 
 
+class TestDurableSyncState:
+    """Issue #12808: the manifest must only record files the KB durably accepted."""
+
+    def _make_sync(self, tmp_path: Path) -> IncrementalKnowledgeSync:
+        sync = IncrementalKnowledgeSync.__new__(IncrementalKnowledgeSync)
+        sync.project_root = tmp_path
+        sync.sync_state_path = tmp_path / "data" / "incremental_sync_state.json"
+        sync.file_metadata_path = tmp_path / "data" / "file_metadata.json"
+        sync.kb = MagicMock()
+        sync.semantic_chunker = MagicMock()
+        sync.file_metadata = {}
+        sync.current_sync_time = time.time()
+        sync.max_concurrent_files = 4
+        sync.chunk_batch_size = 50
+        sync.enable_background_sync = True
+        sync.knowledge_ttl_hours = 24 * 7
+        sync.auto_invalidation_enabled = False
+        sync.doc_patterns = ["*.md"]
+        return sync
+
+    @staticmethod
+    def _chunk(text: str) -> MagicMock:
+        return MagicMock(content=text, semantic_score=0.9, sentences=[text])
+
+    async def _process(self, sync: IncrementalKnowledgeSync, doc: Path, statuses):
+        """Run one file through processing with a KB that returns ``statuses`` in order."""
+        sync.semantic_chunker.chunk_text = AsyncMock(
+            return_value=[self._chunk(f"chunk {i}") for i in range(len(statuses))]
+        )
+        sync.kb.store_fact = AsyncMock(
+            side_effect=[
+                {"status": s, "fact_id": f"fact-{i}"} if s == "success" else {"status": s}
+                for i, s in enumerate(statuses)
+            ]
+        )
+        return await sync._process_file_with_gpu_chunking(doc)
+
+    @pytest.mark.asyncio
+    async def test_total_store_failure_is_not_recorded_as_synced(self, tmp_path):
+        """Every chunk rejected -> no metadata, so the next run re-offers the file."""
+        sync = self._make_sync(tmp_path)
+        doc = tmp_path / "doc.md"
+        doc.write_text("some indexable content", encoding="utf-8")
+
+        result = await self._process(sync, doc, ["error", "error"])
+
+        assert result is None
+        sync._update_metadata_from_results([doc], [result], SyncMetrics())
+        assert str(doc) not in sync.file_metadata
+
+        # The file must still be classified as needing work on the next pass.
+        changed, _removed, _new = await sync._analyze_file_changes([doc])
+        assert doc in changed
+
+    @pytest.mark.asyncio
+    async def test_partial_store_failure_is_not_recorded_as_synced(self, tmp_path):
+        """One chunk rejected -> the file is retried whole rather than half-indexed."""
+        sync = self._make_sync(tmp_path)
+        doc = tmp_path / "doc.md"
+        doc.write_text("some indexable content", encoding="utf-8")
+
+        result = await self._process(sync, doc, ["success", "error"])
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_full_success_records_durable_chunk_count(self, tmp_path):
+        """All chunks stored -> metadata recorded, chunk_count reflects stored facts."""
+        sync = self._make_sync(tmp_path)
+        doc = tmp_path / "doc.md"
+        doc.write_text("some indexable content", encoding="utf-8")
+
+        result = await self._process(sync, doc, ["success", "success", "success"])
+
+        assert result is not None
+        assert result.fact_ids == ["fact-0", "fact-1", "fact-2"]
+        assert result.chunk_count == len(result.fact_ids)
+
+        metrics = SyncMetrics()
+        sync._update_metadata_from_results([doc], [result], metrics)
+        assert str(doc) in sync.file_metadata
+        assert metrics.total_chunks_processed == 3
+
+    @pytest.mark.asyncio
+    async def test_save_sync_state_promotes_atomically(self, tmp_path):
+        """The manifest is written whole and leaves no staging file behind."""
+        sync = self._make_sync(tmp_path)
+        sync.file_metadata = {"/a.md": _make_file_metadata("/a.md", _sha256("a"), 1.0)}
+
+        await sync._save_sync_state()
+
+        assert sync.file_metadata_path.is_file()
+        staged = sync.file_metadata_path.with_suffix(sync.file_metadata_path.suffix + ".tmp")
+        assert not staged.exists()
+        import json as _json
+
+        assert "/a.md" in _json.loads(sync.file_metadata_path.read_text(encoding="utf-8"))
+
+    @pytest.mark.asyncio
+    async def test_failed_save_leaves_previous_manifest_intact(self, tmp_path):
+        """A serialization failure must not damage the manifest already on disk."""
+        sync = self._make_sync(tmp_path)
+        sync.file_metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        sync.file_metadata_path.write_text('{"/old.md": {}}', encoding="utf-8")
+
+        # A field json.dumps cannot serialize aborts the write *after* the target file has
+        # been opened for writing — the exact window in which an in-place write truncates
+        # the live manifest.
+        doomed = _make_file_metadata("/new.md", _sha256("new"), 1.0)
+        doomed.vector_ids = [object()]
+        sync.file_metadata = {"/new.md": doomed}
+        await sync._save_sync_state()
+
+        assert sync.file_metadata_path.read_text(encoding="utf-8") == '{"/old.md": {}}'
+        staged = sync.file_metadata_path.with_suffix(sync.file_metadata_path.suffix + ".tmp")
+        assert not staged.exists()
+
+
+# ---------------------------------------------------------------------------
+# Tests: force_full flag clears metadata for full rebuild
+# ---------------------------------------------------------------------------
+
+
 class TestForceFullRebuild:
     """Acceptance: full rebuild available via force_full."""
 
