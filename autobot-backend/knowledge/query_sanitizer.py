@@ -398,11 +398,7 @@ _WEB_REJECT_RULES = frozenset(r.name for r in QuerySanitizer._default_rules() if
 
 _web_sanitizer = QuerySanitizer(
     [
-        (
-            replace(rule, action=SanitizerAction.ESCAPE)
-            if rule.action == SanitizerAction.REJECT
-            else rule
-        )
+        (replace(rule, action=SanitizerAction.ESCAPE) if rule.action == SanitizerAction.REJECT else rule)
         for rule in QuerySanitizer._default_rules()
     ]
 )
