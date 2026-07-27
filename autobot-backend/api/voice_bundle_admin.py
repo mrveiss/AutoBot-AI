@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
 from auth_middleware import get_current_user
-from auth_rbac import require_role
+from auth_rbac import is_admin_role, require_role
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
 
@@ -67,7 +67,7 @@ async def get_my_bundle(
 
     user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     role = current_user.get("role", "user")
-    is_admin = role == "admin"
+    is_admin = is_admin_role(role)  # #12717: superadmin must not see a reduced tool count
 
     bundle_name, resolution = await resolve_bundle_for_user(str(user_id), role=role)
     tool_count = await _count_tools_for_bundle(bundle_name, is_admin=is_admin)
