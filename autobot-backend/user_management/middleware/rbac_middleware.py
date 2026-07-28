@@ -23,6 +23,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from user_management.config import get_deployment_config
 from user_management.database import db_session_context
+from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services import TenantContext, UserService
 
 logger = get_logger(__name__)
@@ -334,6 +335,54 @@ def _require_authentication(user_id: uuid.UUID | None, permissions_desc: str) ->
         )
 
 
+async def _emit_permission_denied_audit(
+    user_id: uuid.UUID | None,
+    permission: str,
+    path: str,
+    *,
+    org_id: uuid.UUID | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> None:
+    """Persist a permission-denied event to the audit trail (#12925).
+
+    Ported from autobot-slm-backend, which has recorded denials since GH #6511
+    while this backend recorded nothing — a 403 left no user, permission, path
+    or IP behind, so there was no trail to investigate probing against.
+
+    Belt-and-suspenders: the warning is logged first and unconditionally, so a
+    DB failure cannot make the denial disappear entirely. The write is caught
+    and does NOT propagate — a failing audit must never convert a clean 403
+    into a 500.
+    """
+    logger.warning("Permission denied: user=%s org=%s permission=%s path=%s", user_id, org_id, permission, path)
+    try:
+        async with db_session_context() as session:
+            entry = AuditLog(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                org_id=org_id,
+                action=AuditAction.PERMISSION_DENIED,
+                resource_type=AuditResourceType.ENDPOINT,
+                outcome="denied",
+                details={"permission": permission, "path": path},
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            session.add(entry)
+    except Exception as exc:
+        logger.error("RBAC: failed to persist permission-denied audit entry: %s", exc)
+
+
+def _request_audit_context(request: Request) -> tuple[str, str | None, str | None]:
+    """Extract (path, ip_address, user_agent) for an audit entry (#12925)."""
+    return (
+        str(request.url.path),
+        request.client.host if request.client else None,
+        request.headers.get("user-agent"),
+    )
+
+
 def require_permission(permission: str):
     """
     Decorator to require a specific permission for an endpoint.
@@ -362,7 +411,15 @@ def require_permission(permission: str):
             has_permission = await rbac_middleware.check_permission(user_id, permission, org_id)
 
             if not has_permission:
-                logger.warning("Permission denied: user=%s, permission=%s", user_id, permission)
+                _path, _ip, _ua = _request_audit_context(request)
+                await _emit_permission_denied_audit(
+                    user_id,
+                    permission,
+                    _path,
+                    org_id=org_id,
+                    ip_address=_ip,
+                    user_agent=_ua,
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission '{permission}' required",
@@ -402,10 +459,14 @@ def require_any_permission(permissions: List[str]):
             has_permission = await rbac_middleware.check_any_permission(user_id, permissions, org_id)
 
             if not has_permission:
-                logger.warning(
-                    "Permission denied: user=%s, required_any=%s",
+                _path, _ip, _ua = _request_audit_context(request)
+                await _emit_permission_denied_audit(
                     user_id,
-                    permissions,
+                    str(permissions),
+                    _path,
+                    org_id=org_id,
+                    ip_address=_ip,
+                    user_agent=_ua,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -446,10 +507,14 @@ def require_all_permissions(permissions: List[str]):
             has_permission = await rbac_middleware.check_all_permissions(user_id, permissions, org_id)
 
             if not has_permission:
-                logger.warning(
-                    "Permission denied: user=%s, required_all=%s",
+                _path, _ip, _ua = _request_audit_context(request)
+                await _emit_permission_denied_audit(
                     user_id,
-                    permissions,
+                    str(permissions),
+                    _path,
+                    org_id=org_id,
+                    ip_address=_ip,
+                    user_agent=_ua,
                 )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
