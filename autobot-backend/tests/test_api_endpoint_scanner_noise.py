@@ -108,9 +108,7 @@ def test_a_matched_call_is_never_reported_missing():
     from api.codebase_analytics.models import APIEndpointItem
 
     endpoints = [
-        APIEndpointItem(
-            method="GET", path="/api/a/b", file_path="api/a.py", line_number=1, function_name="ab"
-        )
+        APIEndpointItem(method="GET", path="/api/a/b", file_path="api/a.py", line_number=1, function_name="ab")
     ]
     result = _Scanner(endpoints, [_call("/api/a/b")]).analyze()
 
