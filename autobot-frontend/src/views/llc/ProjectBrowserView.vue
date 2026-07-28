@@ -801,8 +801,8 @@ onMounted(async () => {
 
 <style scoped>
 .findings-disabled-note {
-  font-size: 0.85rem;
-  color: var(--color-text-muted, #6b7280);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
 .llc-browser {
