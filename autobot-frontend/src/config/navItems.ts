@@ -28,6 +28,14 @@ export interface NavItem {
   iconRule?: SvgFillRule;
   iconStroke?: boolean;
   /**
+   * viewBox for this item's icon path. GH#12729: nav icons are a mix of
+   * Heroicons' 24-grid and 20-grid sets, whose path coordinates differ. App.vue
+   * used to render every one in a hardcoded `0 0 20 20`, so 24-grid glyphs ran
+   * past the box and clipped (e.g. nav.home reaching y=21.29). Set this to
+   * `'0 0 24 24'` on 24-grid paths; omit it for 20-grid ones.
+   */
+  iconViewBox?: string;
+  /**
    * Gate this item behind `VITE_FEATURE_<featureFlag.toUpperCase()>`.
    * The flag is a UX visibility toggle only — never a security boundary
    * (route/API access is enforced server-side via RBAC). Explicit
@@ -67,15 +75,15 @@ export function filterByFeatureFlag(
 // ─── Primary nav (≤7 items for non-admin users at 1440 px) ───────────────────
 // Data-driven navigation items: single source of truth for desktop + mobile nav
 export const navItems: NavItem[] = [
-  { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconRule: 'evenodd' },
+  { to: '/home', labelKey: 'nav.home', icon: 'M10.707 2.293a1 1 0 00-1.414 0l-7 7v11a1 1 0 001 1h2a1 1 0 001-1v-5a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 001 1h2a1 1 0 001-1v-7l7-7a1 1 0 000-1.414z', iconViewBox: '0 0 24 24', iconRule: 'evenodd' },
   { to: '/chat', labelKey: 'nav.chat', icon: 'M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z', iconRule: 'evenodd' },
   // GH#8757: AI Documents and the Transcriber moved into the Knowledge sidebar
   // (BROWSE group) — see KnowledgeView.vue. Routes live under /knowledge/* now;
   // legacy /documents and /transcriber paths redirect there (router/index.ts).
-  { to: '/knowledge', labelKey: 'nav.knowledge', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { to: '/knowledge', labelKey: 'nav.knowledge', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', iconViewBox: '0 0 24 24' },
   // Company OS (LLC) — kept high in the order so it stays in the primary nav rail,
   // not pushed into the overflow menu (a major feature must be directly reachable).
-  { to: '/llc/select-company', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconStroke: true },
+  { to: '/llc/select-company', labelKey: 'nav.companyOs', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', iconViewBox: '0 0 24 24', iconStroke: true },
   { to: '/automation', labelKey: 'nav.automation', icon: 'M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z', iconRule: 'evenodd' },
   { to: '/analytics', labelKey: 'nav.analytics', iconPaths: ['M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z', 'M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z'] },
   // Agents nav entry removed (TASK 1c): /agents/registry duplicates SLM Admin's
@@ -95,7 +103,7 @@ export const navItems: NavItem[] = [
 export const profileMenuItems: NavItem[] = [
   // MVA-360: Live Canvas — experimental, gated by VITE_FEATURE_CANVAS (GH#8758).
   // Fails CLOSED (hidden) unless the env var is explicitly 'true'.
-  { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconStroke: true, featureFlag: 'canvas' },
+  { to: '/canvas', labelKey: 'nav.canvas', icon: 'M3 3h7v7H3V3zm0 11h7v7H3v-7zm11-11h7v7h-7V3zm0 11h7v7h-7v-7z', iconViewBox: '0 0 24 24', iconStroke: true, featureFlag: 'canvas' },
   // Issue #929: Plugin Manager
   { to: '/plugins', labelKey: 'nav.plugins', icon: 'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z', iconStroke: true },
   { to: '/secrets', labelKey: 'nav.secrets', icon: 'M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z', iconRule: 'evenodd' },
@@ -107,17 +115,17 @@ export const profileMenuItems: NavItem[] = [
 // Routes must carry hideInNav: true in router/index.ts.
 export const adminMenuItems: NavItem[] = [
   // Issue #1440: AutoResearch experiment dashboard
-  { to: '/experiments', labelKey: 'nav.experiments', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
+  { to: '/experiments', labelKey: 'nav.experiments', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z', iconViewBox: '0 0 24 24' },
   // Issue #6590/#10488: Virtual LLM API keys relocated under the Secrets section (/secrets/llm-keys)
   // Issue #7773: Sandbox file inspector
-  { to: '/admin/sandbox', labelKey: 'nav.adminSandbox', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z', iconStroke: true },
+  { to: '/admin/sandbox', labelKey: 'nav.adminSandbox', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #7513: Host inventory management
   // GH#6470: Budget policy management
-  { to: '/admin/budget-policies', labelKey: 'nav.budgetPolicies', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', iconStroke: true },
+  { to: '/admin/budget-policies', labelKey: 'nav.budgetPolicies', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #10932: System Health panel — CONTENT_REACH probe
-  { to: '/admin/system-health', labelKey: 'nav.systemHealth', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', iconStroke: true },
+  { to: '/admin/system-health', labelKey: 'nav.systemHealth', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #11996 (#11994): Provider-fallback observability panel
-  { to: '/admin/provider-fallback', labelKey: 'nav.providerFallback', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4', iconStroke: true },
+  { to: '/admin/provider-fallback', labelKey: 'nav.providerFallback', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4', iconViewBox: '0 0 24 24', iconStroke: true },
   // Issue #12162 (#12102/#11506 T1 Stage 1): Advanced Control — takeover approval queue
   { to: '/admin/advanced-control', labelKey: 'nav.advancedControl', icon: 'M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11', iconStroke: true },
 ];
