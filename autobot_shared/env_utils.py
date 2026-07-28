@@ -9,6 +9,26 @@ import os
 logger = logging.getLogger(__name__)
 
 
+def blank_to_none(value: object) -> str | None:
+    """Collapse a blank value to ``None`` — the canonical "blank means absent" rule (#12782).
+
+    Exists separately from :func:`env_raw` because the same defect arrives by two
+    routes. ``env_raw`` covers values read from ``os.environ``; this covers values
+    that reach code through ``ssot_config``, whose optional knobs are declared
+    ``str = Field(default="")``. An unset knob therefore surfaces as ``""``, not
+    ``None``, so ``if raw is None`` never fires and ``int("")`` raises — which is
+    why six settings logged a spurious "invalid value" warning on every boot while
+    quietly using their defaults.
+
+    Kept as one function rather than repeating ``or None`` / ``.strip()`` at each
+    call site, so "what counts as blank" has a single definition.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def env_raw(name: str) -> str | None:
     """Read an env var, treating a blank value as absent (#12782).
 
@@ -22,10 +42,7 @@ def env_raw(name: str) -> str | None:
     Collapsing blank to ``None`` here means callers get their default rather than
     an empty string that only fails later, at parse time or at use.
     """
-    raw = os.environ.get(name)
-    if raw is None or not raw.strip():
-        return None
-    return raw
+    return blank_to_none(os.environ.get(name))
 
 
 def env_str(name: str, default: str) -> str:
