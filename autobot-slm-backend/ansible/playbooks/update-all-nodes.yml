@@ -713,6 +713,50 @@
       when: "'backend' in group_names"
       tags: [backend, env]
 
+    # GH#12883: this render was unreachable until #12871 was fixed, and the first
+    # time it ran it overwrote a WORKING AUTOBOT_POSTGRES_PASSWORD with one
+    # PostgreSQL rejects — the next backend restart would have lost the database.
+    #
+    # Two stores claim to hold this secret and they disagree:
+    #   /etc/autobot/autobot-db-credentials.env   (what the task above reads)
+    #   /opt/autobot/autobot-backend/.env         (what actually authenticates)
+    #
+    # Converging them is the real fix and needs an owner decision (#12883). Until
+    # then this refuses to replace a working credential with a different one:
+    # a visibly failed update is recoverable, a dead credential on next restart
+    # is an outage.
+    - name: "[PLAY 2] Backend | Read the DB password currently in use (#12883)"
+      ansible.builtin.shell:
+        cmd: >-
+          grep -oP '^AUTOBOT_POSTGRES_PASSWORD=\K.*'
+          /opt/autobot/autobot-backend/.env 2>/dev/null || true
+      register: current_env_db_password
+      become: true
+      when: "'backend' in group_names"
+      failed_when: false
+      changed_when: false
+      no_log: true
+      tags: [backend, env]
+
+    - name: "[PLAY 2] Backend | Refuse to overwrite a working DB password (#12883)"
+      vars:
+        _current: "{{ current_env_db_password.stdout | default('') | trim }}"
+        _incoming: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
+      ansible.builtin.fail:
+        msg: >-
+          Refusing to rewrite .env: the DB password in
+          /etc/autobot/autobot-db-credentials.env differs from the one currently
+          authenticating in /opt/autobot/autobot-backend/.env. Writing it would
+          break PostgreSQL auth on the next backend restart (#12883). Reconcile
+          the two credential stores, then re-run. The working value is the one in
+          the live .env.
+      when:
+        - "'backend' in group_names"
+        - _current | length > 0
+        - _incoming | length > 0
+        - _current != _incoming
+      tags: [backend, env]
+
     # GH#12871: was a bare playbook-level `template:` task, which cannot see the
     # backend role's defaults — it died on AnsibleUndefinedVariable
     # 'backend_chromadb_auth_token', failing PLAY 2 so PLAY 3 never ran. That
