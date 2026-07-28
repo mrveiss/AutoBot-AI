@@ -899,7 +899,14 @@
       "disabledMessage": "Lokalne metryki użycia wyłączone. Żadne metryki nie będą rejestrowane.",
       "loadFailed": "Nie udało się załadować ustawień telemetrii",
       "updateFailed": "Nie udało się zaktualizować ustawień telemetrii"
-    }
+    },
+    "subtitle": "Dostosuj swoje doświadczenie AutoBot za pomocą własnych preferencji",
+    "featureFlags": "Flagi funkcji",
+    "telegram": "Telegram",
+    "notifications": "Powiadomienia",
+    "mobileDevices": "Urządzenia mobilne",
+    "privacy": "Prywatność",
+    "providerAuthDesc": "Połącz się z dostawcami przy użyciu istniejącej subskrypcji zamiast płatnego klucza API. Tokeny są bezpiecznie przechowywane w sejfie sekretów AutoBot."
   },
   "voice": {
     "title": "Głos",

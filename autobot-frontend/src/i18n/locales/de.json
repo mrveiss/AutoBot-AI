@@ -899,7 +899,14 @@
       "disabledMessage": "Lokale Nutzungsmetriken deaktiviert. Es werden keine Metriken aufgezeichnet.",
       "loadFailed": "Telemetrie-Einstellungen konnten nicht geladen werden",
       "updateFailed": "Telemetrie-Einstellungen konnten nicht aktualisiert werden"
-    }
+    },
+    "subtitle": "Passen Sie Ihr AutoBot-Erlebnis mit persönlichen Einstellungen an",
+    "featureFlags": "Feature-Flags",
+    "telegram": "Telegram",
+    "notifications": "Benachrichtigungen",
+    "mobileDevices": "Mobilgeräte",
+    "privacy": "Datenschutz",
+    "providerAuthDesc": "Verbinden Sie sich mit Anbietern über Ihr bestehendes Abonnement statt über einen kostenpflichtigen API-Schlüssel. Token werden sicher im AutoBot-Secrets-Vault gespeichert."
   },
   "voice": {
     "title": "Stimme",

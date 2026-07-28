@@ -899,7 +899,14 @@
       "disabledMessage": "Vietējie lietojuma rādītāji atspējoti. Rādītāji netiks reģistrēti.",
       "loadFailed": "Neizdevās ielādēt telemetrijas iestatījumus",
       "updateFailed": "Neizdevās atjaunināt telemetrijas iestatījumus"
-    }
+    },
+    "subtitle": "Pielāgojiet savu AutoBot pieredzi ar personiskiem iestatījumiem",
+    "featureFlags": "Funkciju karodziņi",
+    "telegram": "Telegram",
+    "notifications": "Paziņojumi",
+    "mobileDevices": "Mobilās ierīces",
+    "privacy": "Privātums",
+    "providerAuthDesc": "Savienojieties ar pakalpojumu sniedzējiem, izmantojot esošo abonementu, nevis maksas API atslēgu. Marķieri tiek droši glabāti AutoBot noslēpumu glabātavā."
   },
   "voice": {
     "title": "Balss",
