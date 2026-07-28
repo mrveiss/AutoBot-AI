@@ -254,7 +254,7 @@ def test_excludes_for_known_component(stub_user):
     src_patch, dep_patch = _setup_dir_mocks()
     captured: List[tuple] = []
 
-    async def fake_rsync(src, comp, excludes):
+    async def fake_rsync(src, comp, excludes, *, source_dir=None, dest_dir=None):
         captured.append((comp, excludes))
         return True, ""
 
