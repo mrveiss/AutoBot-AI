@@ -28,9 +28,7 @@ import pytest
 
 yaml = pytest.importorskip("yaml")
 
-_PLAYBOOK = (
-    Path(__file__).resolve().parents[1] / "ansible" / "playbooks" / "update-all-nodes.yml"
-)
+_PLAYBOOK = Path(__file__).resolve().parents[1] / "ansible" / "playbooks" / "update-all-nodes.yml"
 _CANONICAL = "/etc/autobot/db-credentials.env"
 _LEGACY = "/etc/autobot/autobot-db-credentials.env"
 
@@ -78,13 +76,10 @@ def test_extraction_resolves_duplicate_keys_to_the_current_value(tmp_path) -> No
     legacy.write_text("AUTOBOT_DB_PASSWORD=legacy-should-not-be-used\n", encoding="utf-8")
 
     snippet = _read_task_cmd().replace(_CANONICAL, str(canonical)).replace(_LEGACY, str(legacy))
-    out = subprocess.run(
-        ["bash", "-c", snippet], capture_output=True, text=True, check=True, timeout=30
-    )
+    out = subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, check=True, timeout=30)
 
     assert out.stdout == "current-last-copy", (
-        f"expected the last occurrence, got {out.stdout!r} — "
-        "a head/first-match read reintroduces #12883"
+        f"expected the last occurrence, got {out.stdout!r} — " "a head/first-match read reintroduces #12883"
     )
 
 
@@ -95,8 +90,6 @@ def test_falls_back_to_legacy_when_canonical_absent(tmp_path) -> None:
     legacy.write_text("AUTOBOT_DB_PASSWORD=legacy-value\n", encoding="utf-8")
 
     snippet = _read_task_cmd().replace(_CANONICAL, str(canonical)).replace(_LEGACY, str(legacy))
-    out = subprocess.run(
-        ["bash", "-c", snippet], capture_output=True, text=True, check=True, timeout=30
-    )
+    out = subprocess.run(["bash", "-c", snippet], capture_output=True, text=True, check=True, timeout=30)
 
     assert out.stdout == "legacy-value", f"fallback did not resolve, got {out.stdout!r}"
