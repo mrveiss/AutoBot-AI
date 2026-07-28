@@ -825,7 +825,16 @@ async def resolve_drift(
             deployed_dir=deployed_dir,
         )
 
-    ok, msg = await _rsync_component_local(source_root, request.component, excludes)
+    # #12872: pass the resolved paths verbatim. source_dir/deployed_dir already
+    # honour _NONSTANDARD_COMPONENT_PATHS; reconstructing them from the
+    # component name discarded that and pointed rsync at a nonexistent dir.
+    ok, msg = await _rsync_component_local(
+        source_root,
+        request.component,
+        excludes,
+        source_dir=source_dir,
+        dest_dir=deployed_dir,
+    )
 
     if not ok:
         return DriftResolveResponse(
@@ -1143,15 +1152,27 @@ async def _rsync_component_local(
     source_path: str,
     component: str,
     excludes: List[str],
+    *,
+    source_dir: str | None = None,
+    dest_dir: str | None = None,
 ) -> Tuple[bool, str]:
     """Rsync a component locally when code source is on the same host (#1191).
 
     Used when source_ip matches the SLM server's own IP — no SSH needed.
+
+    #12872: ``source_dir``/``dest_dir`` override the
+    ``{source_path}/{component}`` and ``/opt/autobot/{component}`` conventions.
+    Components in ``_NONSTANDARD_COMPONENT_PATHS`` (#12450) do not live at a
+    path ending in their own name — ai-stack's source is
+    ``.../docker/ai-stack`` and slm-agent deploys to
+    ``autobot-slm-agent/slm/agent`` — so rebuilding the path from the component
+    name silently pointed rsync at a directory that does not exist, and drift
+    for those components could never be cleared.
     """
     cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
     cmd.extend(_rsync_exclude_args(excludes))
-    cmd.append(f"{source_path}/{component}/")
-    cmd.append(f"/opt/autobot/{component}/")
+    cmd.append(f"{source_dir or f'{source_path}/{component}'}/")
+    cmd.append(f"{dest_dir or f'/opt/autobot/{component}'}/")
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
