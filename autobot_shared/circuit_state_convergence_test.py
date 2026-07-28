@@ -69,16 +69,18 @@ class TestForksConverged:
 
         assert "from autobot_shared.ssot_constants import CircuitState" in source
 
-    def test_worker_keeps_a_standalone_fallback(self):
-        """The PyInstaller build cannot import autobot_shared — it must still work.
+    def test_worker_has_no_fork_left(self):
+        """#12656 went further than a fallback: the worker re-exports from shared.
 
-        The fallback is nested inside the `except ImportError` branch, so it is
-        not a module-level definition and does not count as a surviving fork.
+        The PyInstaller concern that justified a local fallback now lives in
+        autobot_shared/npu, which imports the enum directly — so there is no
+        second definition to keep in step.
         """
         rel = "autobot-npu-worker/core/npu_integration.py"
+        source = (_REPO / rel).read_text(encoding="utf-8")
 
-        assert not _class_defs(rel, "CircuitState"), "fallback must be nested, not module-level"
-        assert "except (ImportError, ModuleNotFoundError):" in (_REPO / rel).read_text(encoding="utf-8")
+        assert not _class_defs(rel, "CircuitState"), "no CircuitState definition should remain"
+        assert "from autobot_shared.ssot_constants import CircuitState" in source
 
 
 def test_cross_module_identity_now_holds():
