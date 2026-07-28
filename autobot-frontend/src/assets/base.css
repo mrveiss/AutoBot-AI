@@ -168,6 +168,33 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* GH#12711: buttons had a disabled treatment but form controls did not, so a
+ * `<input type="checkbox" disabled>` rendered identically to an active one —
+ * users could not tell what was interactive. BaseInput already handles its own
+ * disabled state (.container-disabled); this covers the raw controls used
+ * directly across the app. Mirrors the button treatment so disabled reads the
+ * same everywhere. */
+/* :not(.base-input) matters — BaseInput's container already applies
+ * opacity 0.6 when disabled, and stacking 0.5 on the inner input would
+ * compound to 0.3 and render it nearly invisible. */
+input:not(.base-input):disabled,
+textarea:not(.base-input):disabled,
+select:not(.base-input):disabled,
+input[type='checkbox']:disabled,
+input[type='radio']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* A disabled control's label must dim with it, or the row still reads as active. */
+input:not(.base-input):disabled + label,
+input[type='checkbox']:disabled + span,
+input[type='radio']:disabled + span,
+label:has(> input:not(.base-input):disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ============================================
  * FORM ELEMENTS
  * ============================================ */
