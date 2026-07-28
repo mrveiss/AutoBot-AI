@@ -8,14 +8,15 @@ Base Service Class
 Provides tenant context management and common service patterns.
 """
 
-import logging
 import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -23,7 +24,6 @@ class TenantContext:
     """
     Tenant context for multi-tenancy operations.
 
-    In single_user mode, org_id is None.
     In single_company mode, org_id is the implicit organization.
     In multi_company/provider modes, org_id is set from JWT/session.
     """
