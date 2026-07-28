@@ -78,6 +78,22 @@ def _real_load_and_bind(name: str, path: Path) -> None:
     """
     import importlib.util as _rlb_ilu
 
+    # #12839: never re-execute a module that is ALREADY real-loaded from this
+    # same file. Re-executing builds a second set of class objects and swaps
+    # them into sys.modules, while every module that imported the first set
+    # keeps referencing it — so `isinstance(x, Cls)` fails against an object
+    # whose repr says it IS a Cls. That is what broke test_claim_classifier:
+    # services.claim_classifier imported .knowledge_grounding_models at
+    # collection, then _real_load_light_services re-executed the same file.
+    # Re-execution is only needed to replace a *stub*, so an already-real module
+    # is left alone and only the parent bind below is (re)applied.
+    _existing = sys.modules.get(name)
+    if _existing is not None and getattr(_existing, "__file__", None) == str(path):
+        parent, _, child = name.rpartition(".")
+        if parent and parent in sys.modules:
+            setattr(sys.modules[parent], child, _existing)
+        return
+
     spec = _rlb_ilu.spec_from_file_location(name, str(path))
     if not spec or not spec.loader:
         return
