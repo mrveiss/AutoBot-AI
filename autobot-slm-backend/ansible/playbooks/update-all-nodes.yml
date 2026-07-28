@@ -674,13 +674,32 @@
       no_log: true
       tags: [backend, env]
 
-    # Full user management requires the autobot_app DB password, written by the
-    # single-box provisioning play into autobot-db-credentials.env (#10636).
-    - name: "[PLAY 2] Backend | Read autobot_app DB password (#10636)"
+    # Full user management requires the autobot_app DB password (#10636).
+    #
+    # GH#12883: this used to read ONLY /etc/autobot/autobot-db-credentials.env.
+    # On a live host that file was a month stale and held a value PostgreSQL
+    # rejects — that is what tried to overwrite a working credential and would
+    # have taken the database out on the next backend restart.
+    #
+    # /etc/autobot/db-credentials.env is the canonical store: PLAY 1 already
+    # slurps it for the SLM migrations above, and its value is the one that
+    # actually authenticates. Prefer it; keep the legacy file as a fallback for
+    # hosts provisioned before it existed.
+    #
+    # `tail -n 1` is load-bearing, not defensive. db-credentials.env is appended
+    # to rather than rewritten, so this key can appear more than once with the
+    # CURRENT value LAST. That matches `set -a; . file` semantics (last
+    # assignment wins); a `head -1` would read the stale first copy and
+    # reintroduce the exact outage this fixes.
+    - name: "[PLAY 2] Backend | Read autobot_app DB password (#10636, #12883)"
       ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
-          /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
+        cmd: |
+          k=AUTOBOT_DB_PASSWORD
+          v=$(grep -oP "^${k}=\K.*" /etc/autobot/db-credentials.env 2>/dev/null | tail -n 1)
+          if [ -z "$v" ]; then
+            v=$(grep -oP "^${k}=\K.*" /etc/autobot/autobot-db-credentials.env 2>/dev/null | tail -n 1)
+          fi
+          printf '%s' "$v"
       register: existing_autobot_db_password
       become: true
       when: "'backend' in group_names"
@@ -717,14 +736,15 @@
     # time it ran it overwrote a WORKING AUTOBOT_POSTGRES_PASSWORD with one
     # PostgreSQL rejects — the next backend restart would have lost the database.
     #
-    # Two stores claim to hold this secret and they disagree:
-    #   /etc/autobot/autobot-db-credentials.env   (what the task above reads)
-    #   /opt/autobot/autobot-backend/.env         (what actually authenticates)
+    # Two stores claimed to hold this secret and they disagreed:
+    #   /etc/autobot/autobot-db-credentials.env   (legacy, observed a month stale)
+    #   /etc/autobot/db-credentials.env           (canonical; authenticates)
     #
-    # Converging them is the real fix and needs an owner decision (#12883). Until
-    # then this refuses to replace a working credential with a different one:
-    # a visibly failed update is recoverable, a dead credential on next restart
-    # is an outage.
+    # The read task above now prefers the canonical store (last-wins), which is
+    # the convergence this issue asked for. This check stays as defence in depth:
+    # it costs nothing, and it still catches any host whose stores diverge for a
+    # reason we have not seen yet. A visibly failed update is recoverable; a dead
+    # credential on next restart is an outage.
     - name: "[PLAY 2] Backend | Read the DB password currently in use (#12883)"
       ansible.builtin.shell:
         cmd: >-
