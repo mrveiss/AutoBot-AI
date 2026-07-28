@@ -11,7 +11,6 @@ so the Goal Tree UI could not render anything below the roots.
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
