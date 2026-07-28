@@ -70,7 +70,63 @@ def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:
         )
 
 
-class NetworkConstants:
+# #12773: these were resolved eagerly in the class body, so importing this module
+# performed ~25 ConfigRegistry lookups — which dial Redis, through a
+# network_constants -> config.registry -> redis_client import cycle. Two
+# consequences outlived that connection storm: values were frozen for the process
+# lifetime (defeating the ConfigRegistry TTL, so an SSOT/SLM change never reached
+# a running process), and import order decided which values a process saw.
+#
+# Resolving on access costs one lookup per use, and ConfigRegistry has its own
+# cache and TTL — which is where that caching belongs.
+# name -> (config key, default, type)
+_LAZY_CONFIG_VALUES: dict = {
+    "MAIN_MACHINE_IP": ("vm.main", "", str),
+    "FRONTEND_VM_IP": ("vm.frontend", "", str),
+    "NPU_WORKER_VM_IP": ("vm.npu", "", str),
+    "REDIS_VM_IP": ("vm.redis", "", str),
+    "AI_STACK_VM_IP": ("vm.aistack", "", str),
+    "BROWSER_VM_IP": ("vm.browser", "", str),
+    "SLM_VM_IP": ("vm.slm", "", str),
+    "AI_STACK_HOST": ("vm.aistack", "", str),
+    "BACKEND_PORT": ("port.backend", "8001", int),
+    "FRONTEND_PORT": ("port.frontend", "5173", int),
+    "REDIS_PORT": ("port.redis", "6379", int),
+    "OLLAMA_PORT": ("port.ollama", "11434", int),
+    "VNC_PORT": ("port.vnc", "6080", int),
+    "BROWSER_SERVICE_PORT": ("port.browser", "9001", int),
+    "AI_STACK_PORT": ("port.aistack", "8080", int),
+    "NPU_WORKER_PORT": ("port.npu", "8081", int),
+    "SLM_PORT": ("port.slm", "8000", int),
+    "NPU_WORKER_WINDOWS_PORT": ("port.npu_windows", "8081", int),
+    "DESKTOP_DISPLAY": ("desktop.display", ":1", str),
+    "PROMETHEUS_PORT": ("port.prometheus", "9090", int),
+    "GRAFANA_PORT": ("port.grafana", "3000", int),
+    "DEV_FRONTEND_PORT": ("port.frontend", "5173", int),
+    "DEV_BACKEND_PORT": ("port.backend", "8001", int),
+}
+
+
+class _LazyConfigMeta(type):
+    """Resolves the ConfigRegistry-backed constants on access, not at import.
+
+    A metaclass ``__getattr__`` fires only when normal class lookup fails, which
+    is why the class body carries annotations without values — assigning them
+    would shadow this and restore the eager behaviour.
+    """
+
+    def __getattr__(cls, name: str):
+        spec = _LAZY_CONFIG_VALUES.get(name)
+        if spec is None:
+            raise AttributeError(f"type object '{cls.__name__}' has no attribute '{name}'")
+        key, default, caster = spec
+        return caster(_get_config_value(key, default))
+
+    def __dir__(cls):
+        return sorted(set(super().__dir__()) | set(_LAZY_CONFIG_VALUES))
+
+
+class NetworkConstants(metaclass=_LazyConfigMeta):
     """
     Core network constants for AutoBot distributed infrastructure.
 
@@ -85,18 +141,18 @@ class NetworkConstants:
     # === VM Infrastructure IPs (from ConfigRegistry) ===
 
     # Main machine (WSL)
-    MAIN_MACHINE_IP: str = _get_config_value("vm.main", "")
+    MAIN_MACHINE_IP: str
 
     # VM Infrastructure IPs
-    FRONTEND_VM_IP: str = _get_config_value("vm.frontend", "")
-    NPU_WORKER_VM_IP: str = _get_config_value("vm.npu", "")
-    REDIS_VM_IP: str = _get_config_value("vm.redis", "")
-    AI_STACK_VM_IP: str = _get_config_value("vm.aistack", "")
-    BROWSER_VM_IP: str = _get_config_value("vm.browser", "")
-    SLM_VM_IP: str = _get_config_value("vm.slm", "")
+    FRONTEND_VM_IP: str
+    NPU_WORKER_VM_IP: str
+    REDIS_VM_IP: str
+    AI_STACK_VM_IP: str
+    BROWSER_VM_IP: str
+    SLM_VM_IP: str
 
     # Backward compatibility aliases
-    AI_STACK_HOST: str = _get_config_value("vm.aistack", "")
+    AI_STACK_HOST: str
 
     # === Local/Localhost addresses (static - not from SSOT) ===
     LOCALHOST_IP: str = "127.0.0.1"
@@ -126,16 +182,16 @@ class NetworkConstants:
     TEST_HOST_IP: str = "10.0.0.99"  # Test host IP for unit tests (not a real VM)
 
     # === Standard ports (from ConfigRegistry) ===
-    BACKEND_PORT: int = int(_get_config_value("port.backend", "8001"))
-    FRONTEND_PORT: int = int(_get_config_value("port.frontend", "5173"))
-    REDIS_PORT: int = int(_get_config_value("port.redis", "6379"))
-    OLLAMA_PORT: int = int(_get_config_value("port.ollama", "11434"))
-    VNC_PORT: int = int(_get_config_value("port.vnc", "6080"))
-    BROWSER_SERVICE_PORT: int = int(_get_config_value("port.browser", "9001"))
-    AI_STACK_PORT: int = int(_get_config_value("port.aistack", "8080"))
-    NPU_WORKER_PORT: int = int(_get_config_value("port.npu", "8081"))
-    SLM_PORT: int = int(_get_config_value("port.slm", "8000"))
-    NPU_WORKER_WINDOWS_PORT: int = int(_get_config_value("port.npu_windows", "8081"))
+    BACKEND_PORT: int
+    FRONTEND_PORT: int
+    REDIS_PORT: int
+    OLLAMA_PORT: int
+    VNC_PORT: int
+    BROWSER_SERVICE_PORT: int
+    AI_STACK_PORT: int
+    NPU_WORKER_PORT: int
+    SLM_PORT: int
+    NPU_WORKER_WINDOWS_PORT: int
     CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port (static)
 
     # Issue #11579: Canonical desktop-control display. SINGLE source of truth
@@ -145,16 +201,16 @@ class NetworkConstants:
     # Override via env var AUTOBOT_DESKTOP_DISPLAY (ConfigRegistry convention).
     # #11506 T1 (control-lock) will arbitrate simultaneous agent/human access
     # to this shared display — not implemented here.
-    DESKTOP_DISPLAY: str = _get_config_value("desktop.display", ":1")
+    DESKTOP_DISPLAY: str
 
     # Issue #474: Monitoring stack ports (from ConfigRegistry)
-    PROMETHEUS_PORT: int = int(_get_config_value("port.prometheus", "9090"))
+    PROMETHEUS_PORT: int
     ALERTMANAGER_PORT: int = 9093  # Not in ConfigRegistry currently
-    GRAFANA_PORT: int = int(_get_config_value("port.grafana", "3000"))
+    GRAFANA_PORT: int
 
     # Development ports (aliases)
-    DEV_FRONTEND_PORT: int = int(_get_config_value("port.frontend", "5173"))
-    DEV_BACKEND_PORT: int = int(_get_config_value("port.backend", "8001"))
+    DEV_FRONTEND_PORT: int
+    DEV_BACKEND_PORT: int
 
     # === External service URLs (static) ===
     GOOGLE_SEARCH_BASE_URL: str = "https://www.google.com/search"
@@ -248,7 +304,50 @@ class NetworkConstants:
         return f"ws://{cls.MAIN_MACHINE_IP}:{cls.BACKEND_PORT}/api/ws"
 
 
-class ServiceURLs:
+# #12773: these URLs were composed in the class body from NetworkConstants
+# values, so importing this module resolved every one of them — which is how the
+# import-time ConfigRegistry lookups survived making NetworkConstants itself
+# lazy. Each entry is now built on access, from whatever the constants resolve
+# to at that moment, so an SSOT change reaches a running process.
+_LAZY_SERVICE_URLS: dict = {
+    "BACKEND_API": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}",
+    "BACKEND_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}",
+    "FRONTEND_VM": lambda: f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}",
+    "FRONTEND_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}",
+    "REDIS_VM": lambda: f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}",
+    "REDIS_LOCAL": lambda: f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}",
+    "OLLAMA_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}",
+    "VNC_DESKTOP": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html",
+    "CHROME_DEBUGGER_LOCAL": lambda: (
+        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.CHROME_DEBUGGER_PORT}"
+    ),
+    "VNC_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html",
+    "BROWSER_SERVICE": lambda: f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}",
+    "AI_STACK_SERVICE": lambda: f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}",
+    "NPU_WORKER_SERVICE": lambda: f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}",
+    "NPU_WORKER_WINDOWS_SERVICE": lambda: (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
+    ),
+    "PROMETHEUS_API": lambda: f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.PROMETHEUS_PORT}",
+    "ALERTMANAGER_API": lambda: f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.ALERTMANAGER_PORT}",
+    "GRAFANA_URL": lambda: f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.GRAFANA_PORT}",
+}
+
+
+class _LazyURLMeta(type):
+    """Builds a service URL on attribute access rather than at import."""
+
+    def __getattr__(cls, name: str):
+        builder = _LAZY_SERVICE_URLS.get(name)
+        if builder is None:
+            raise AttributeError(f"type object '{cls.__name__}' has no attribute '{name}'")
+        return builder()
+
+    def __dir__(cls):
+        return sorted(set(super().__dir__()) | set(_LAZY_SERVICE_URLS))
+
+
+class ServiceURLs(metaclass=_LazyURLMeta):
     """
     Pre-built service URLs for common AutoBot services.
 
@@ -260,58 +359,60 @@ class ServiceURLs:
     """
 
     # Backend API URLs (computed from ConfigRegistry)
-    BACKEND_API: str = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
-    BACKEND_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
+    BACKEND_API: str
+
+    BACKEND_LOCAL: str
 
     # Frontend URLs (computed from ConfigRegistry)
-    FRONTEND_VM: str = f"http://{NetworkConstants.FRONTEND_VM_IP}:{NetworkConstants.FRONTEND_PORT}"
-    FRONTEND_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.FRONTEND_PORT}"
+    FRONTEND_VM: str
+
+    FRONTEND_LOCAL: str
 
     # Redis URLs (computed from ConfigRegistry)
-    REDIS_VM: str = f"redis://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.REDIS_PORT}"
-    REDIS_LOCAL: str = f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}"
+    REDIS_VM: str
+
+    REDIS_LOCAL: str
 
     # Ollama LLM URLs (computed from ConfigRegistry)
     # Ollama runs on the local host (.20); OLLAMA_MAIN pointed to .24 (wrong).
-    OLLAMA_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
+    OLLAMA_LOCAL: str
 
     # VNC Desktop URLs (computed from ConfigRegistry)
     # fmt: off
-    VNC_DESKTOP: str = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html"
-    )
+    VNC_DESKTOP: str
+
     # fmt: on
 
     # Chrome DevTools Protocol URLs (static)
     # fmt: off
-    CHROME_DEBUGGER_LOCAL: str = (
-        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.CHROME_DEBUGGER_PORT}"
-    )
+    CHROME_DEBUGGER_LOCAL: str
+
     # fmt: on
-    VNC_LOCAL: str = f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html"
+    VNC_LOCAL: str
 
     # Browser automation service (computed from ConfigRegistry)
     # fmt: off
-    BROWSER_SERVICE: str = (
-        f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
-    )
+    BROWSER_SERVICE: str
+
     # fmt: on
 
     # AI Stack service (computed from ConfigRegistry)
-    AI_STACK_SERVICE: str = f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}"
+    AI_STACK_SERVICE: str
 
     # NPU Worker services (computed from ConfigRegistry)
-    NPU_WORKER_SERVICE: str = f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}"
+    NPU_WORKER_SERVICE: str
+
     # fmt: off
-    NPU_WORKER_WINDOWS_SERVICE: str = (
-        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
-    )
+    NPU_WORKER_WINDOWS_SERVICE: str
+
     # fmt: on
 
     # Issue #474: Monitoring stack services (hosted on Redis VM)
-    PROMETHEUS_API: str = f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.PROMETHEUS_PORT}"
-    ALERTMANAGER_API: str = f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.ALERTMANAGER_PORT}"
-    GRAFANA_URL: str = f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.GRAFANA_PORT}"
+    PROMETHEUS_API: str
+
+    ALERTMANAGER_API: str
+
+    GRAFANA_URL: str
 
 
 class NetworkConfig:
@@ -425,12 +526,18 @@ class NetworkConfig:
         return self._vm_map.get(vm_name)
 
 
-# Global network configuration instance
-_network_config = NetworkConfig()
+# #12773: instantiating this at import resolved deployment.mode/environment and
+# built every VM URL, which is where the last 9 import-time ConfigRegistry
+# lookups came from after the constants themselves were made lazy. Built on
+# first use instead; get_network_config() is the accessor callers already use.
+_network_config: "NetworkConfig | None" = None
 
 
 def get_network_config() -> NetworkConfig:
-    """Get the global network configuration instance"""
+    """Get the global network configuration instance, building it on first use."""
+    global _network_config
+    if _network_config is None:
+        _network_config = NetworkConfig()
     return _network_config
 
 
@@ -484,10 +591,28 @@ class DatabaseConstants:
         return descriptions.get(db_number, f"Database {db_number}")
 
 
-# Legacy compatibility - keep these for backward compatibility during refactoring
-BACKEND_URL = ServiceURLs.BACKEND_API
-FRONTEND_URL = ServiceURLs.FRONTEND_VM
-REDIS_HOST = NetworkConstants.REDIS_VM_IP
-REDIS_VM_IP = NetworkConstants.REDIS_VM_IP
-MAIN_MACHINE_IP = NetworkConstants.MAIN_MACHINE_IP
-LOCALHOST_IP = NetworkConstants.LOCALHOST_IP
+# Legacy compatibility - keep these for backward compatibility during refactoring.
+# #12773: resolved via module __getattr__ (PEP 562) rather than assigned here.
+# Assigning them re-read every underlying constant at import — the last source of
+# import-time ConfigRegistry lookups once the classes themselves were made lazy —
+# and re-froze the values these aliases hand out.
+_LEGACY_ALIASES: dict = {
+    "BACKEND_URL": lambda: ServiceURLs.BACKEND_API,
+    "FRONTEND_URL": lambda: ServiceURLs.FRONTEND_VM,
+    "REDIS_HOST": lambda: NetworkConstants.REDIS_VM_IP,
+    "REDIS_VM_IP": lambda: NetworkConstants.REDIS_VM_IP,
+    "MAIN_MACHINE_IP": lambda: NetworkConstants.MAIN_MACHINE_IP,
+    "LOCALHOST_IP": lambda: NetworkConstants.LOCALHOST_IP,
+}
+
+
+def __getattr__(name: str):
+    """Resolve the legacy module-level aliases on access (#12773)."""
+    builder = _LEGACY_ALIASES.get(name)
+    if builder is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return builder()
+
+
+def __dir__():
+    return sorted(set(globals()) | set(_LEGACY_ALIASES))
