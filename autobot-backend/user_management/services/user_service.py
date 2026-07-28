@@ -267,29 +267,6 @@ class UserService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    def _build_user_list_base_query(self, include_inactive: bool, search: str | None):
-        """Build filtered base query for user listing.
-
-        Helper for list_users (Issue #576).
-        """
-        base_query = select(User).where(User.deleted_at.is_(None))
-
-        if not include_inactive:
-            base_query = base_query.where(User.is_active.is_(True))
-
-        base_query = self.apply_tenant_filter(base_query, User)
-
-        if search:
-            search_pattern = f"%{search}%"
-            base_query = base_query.where(
-                or_(
-                    User.email.ilike(search_pattern),
-                    User.username.ilike(search_pattern),
-                    User.display_name.ilike(search_pattern),
-                )
-            )
-        return base_query
-
     async def list_users(
         self,
         limit: int = 50,
@@ -309,7 +286,22 @@ class UserService(BaseService):
         Returns:
             Tuple of (users list, total count)
         """
-        base_query = self._build_user_list_base_query(include_inactive, search)
+        base_query = select(User).where(User.deleted_at.is_(None))
+
+        if not include_inactive:
+            base_query = base_query.where(User.is_active.is_(True))
+
+        base_query = self.apply_tenant_filter(base_query, User)
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.where(
+                or_(
+                    User.email.ilike(search_pattern),
+                    User.username.ilike(search_pattern),
+                    User.display_name.ilike(search_pattern),
+                )
+            )
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())
