@@ -48736,9 +48736,20 @@ export interface paths {
          * @description Get board metadata and column configuration.
          */
         get: operations["get_board_api_llc_boards__board_id__get"];
-        put?: never;
+        /**
+         * Update Board
+         * @description Rename a board (GH#12695). Boards were the only entity with no backend update.
+         */
+        put: operations["update_board_api_llc_boards__board_id__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete Board
+         * @description Delete a board and its columns (GH#12695).
+         *
+         *     Work items are untouched — they belong to the project, not the board, so
+         *     deleting a view must not destroy the work it displays.
+         */
+        delete: operations["delete_board_api_llc_boards__board_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -58152,6 +58163,16 @@ export interface components {
             mean_precision_at_k?: number | null;
             /** Reason */
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BoardUpdateRequest
+         * @description GH#12695: rename a board. Only the name is updatable — see BoardService.update_board.
+         */
+        BoardUpdateRequest: {
+            /** Name */
+            name: string;
         } & {
             [key: string]: unknown;
         };
@@ -166096,6 +166117,72 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_board_api_llc_boards__board_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_board_api_llc_boards__board_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
