@@ -38,6 +38,12 @@ Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(
 # StandardError (backend-error.log, see below) — which is the prerequisite for
 # identifying the aborting extension at all.
 Environment="PYTHONFAULTHANDLER=1"
+# #12777: systemd defaults RLIMIT_CORE to 0, so without this NO core is written
+# even once core_pattern points somewhere real — the capture opt-in
+# (backend_core_capture, roles/backend/tasks/core_capture.yml) would silently
+# produce nothing. Harmless while capture is off: the kernel still has nowhere
+# to put the core.
+LimitCORE={{ backend_core_limit | default('infinity') }}
 EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 # MVA-1633: Validate env vars before starting to prevent silent crashes
