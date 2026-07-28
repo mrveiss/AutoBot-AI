@@ -12,7 +12,6 @@ import asyncio
 import statistics
 import time
 from dataclasses import dataclass
-from enum import Enum
 from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List
@@ -25,13 +24,11 @@ from constants import CircuitBreakerDefaults
 logger = get_logger(__name__)
 
 
-class CircuitState(Enum):
-    """Circuit breaker states"""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Circuit is open, rejecting calls
-    HALF_OPEN = "half_open"  # Testing if service has recovered
-
+# #12656: CircuitState is now canonical in autobot_shared.ssot_constants and
+# re-exported here so the existing `from circuit_breaker import CircuitState`
+# importers keep working. Three identical copies existed; separate Enum classes
+# with the same members never compare equal across module boundaries.
+from autobot_shared.ssot_constants import CircuitState  # noqa: F401
 
 CircuitBreakerState = CircuitState
 

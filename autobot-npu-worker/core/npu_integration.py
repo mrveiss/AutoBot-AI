@@ -101,12 +101,19 @@ __all__ = [
 USE_AUTHENTICATED_CLIENT = True
 
 
-class CircuitState(Enum):
-    """Circuit breaker states for worker health management"""
+# #12656: prefer the canonical enum; keep a local definition only for the
+# PyInstaller standalone build, where autobot_shared is not importable. The
+# members are identical either way, so worker health logic is unchanged.
+try:
+    from autobot_shared.ssot_constants import CircuitState
+except (ImportError, ModuleNotFoundError):
 
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Worker failed, blocking requests
-    HALF_OPEN = "half_open"  # Testing recovery
+    class CircuitState(Enum):  # type: ignore[no-redef]
+        """Circuit breaker states for worker health management (standalone fallback)."""
+
+        CLOSED = "closed"  # Normal operation
+        OPEN = "open"  # Worker failed, blocking requests
+        HALF_OPEN = "half_open"  # Testing recovery
 
 
 @dataclass
