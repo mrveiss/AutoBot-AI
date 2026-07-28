@@ -13,6 +13,7 @@ Covers (#10602 subtask 6.4, #10698):
 - _build_worker_metrics returns non-zero avg_response_time_ms when pulse data exists
 """
 
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -86,7 +87,9 @@ def _make_manager(redis_client=None) -> NPUWorkerManager:
     mgr._pulse_canaries = {}
     mgr._pulse_defaults = {"latency_window": 20}
     mgr.redis_client = redis_client
-    mgr.config_file = Path("config/npu_workers.yaml")
+    # #12857: never name the real repo config — a save would write into the
+    # working tree. These tests do not read it; they only need a path.
+    mgr.config_file = Path(tempfile.gettempdir()) / "autobot-test-npu-workers.yaml"
     return mgr
 
 
