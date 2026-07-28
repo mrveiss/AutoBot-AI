@@ -23,7 +23,12 @@ from aiohttp import ClientSession, ClientTimeout, TCPConnector
 # so callers that only verify signatures do not inherit this module's aiohttp
 # dependency (#12814). Kept importable from here for existing call sites.
 from autobot_shared.service_signing import _service_signature
-from constants.threshold_constants import TimingConstants
+
+# #12656: import from the canonical source directly. This previously went via
+# `constants.threshold_constants`, an autobot-backend module that is itself a
+# pure re-export of ssot_constants — so autobot_shared depended on the backend
+# to reach its own constants, and could not be imported standalone.
+from autobot_shared.ssot_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
