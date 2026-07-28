@@ -713,17 +713,24 @@
       when: "'backend' in group_names"
       tags: [backend, env]
 
-    - name: "[PLAY 2] Backend | Regenerate .env from template (#2649)"
-      ansible.builtin.template:
-        src: ../roles/backend/templates/backend.env.j2
-        dest: /opt/autobot/autobot-backend/.env
-        mode: "0600"
-        owner: autobot
-        group: autobot
-        backup: true
-      become: true
+    # GH#12871: was a bare playbook-level `template:` task, which cannot see the
+    # backend role's defaults — it died on AnsibleUndefinedVariable
+    # 'backend_chromadb_auth_token', failing PLAY 2 so PLAY 3 never ran. That
+    # variable was only the first of 37 the template needs and this play does
+    # not define. include_role puts the defaults in scope at role-default
+    # precedence, so they fill the other 32 while the secret overrides below
+    # (read off the live host) still win. include_vars would NOT be safe here:
+    # it outranks task vars, so it would replace those secrets with the role's
+    # empty / "change-me-in-production" placeholders.
+    - name: "[PLAY 2] Backend | Regenerate .env from template (#2649, #12871)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: env_only
       when: "'backend' in group_names"
       vars:
+        backend_env_dest: /opt/autobot/autobot-backend/.env
+        backend_env_owner: autobot
+        backend_env_group: autobot
         # backend_secret_key uses a register var specific to this playbook
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
         # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.
