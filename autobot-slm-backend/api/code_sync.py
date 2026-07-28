@@ -666,6 +666,11 @@ async def get_sync_status(
     # so the endpoint never reads "up to date" while a managed component is stale.
     stale_components = await _compute_stale_components()
 
+    # #12776: the self-update path restarts this backend mid-run, so nothing
+    # in-process can assert the playbook finished. Read the verdict off the log
+    # instead, so a run that died before Play 2 stops being reported as success.
+    verdict = _read_last_self_update_verdict()
+
     return CodeSyncStatusResponse(
         latest_version=latest_version,
         local_version=local_version,
@@ -674,7 +679,21 @@ async def get_sync_status(
         outdated_nodes=outdated_nodes,
         total_nodes=total_nodes,
         stale_components=stale_components,
+        self_update_incomplete=verdict.degraded,
+        self_update_detail=verdict.reason,
     )
+
+
+def _read_last_self_update_verdict():
+    """Verdict for the last self-update run; never fails the status endpoint (#12776)."""
+    from services.playbook_executor import SELF_UPDATE_LOG_PATH
+    from services.self_update_log_reader import SelfUpdateVerdict, read_self_update_verdict
+
+    try:
+        return read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+    except Exception as exc:  # noqa: BLE001 — status must answer even if this cannot
+        logger.warning("self-update verdict unavailable: %s", exc)
+        return SelfUpdateVerdict(reason=None)
 
 
 @router.get("/drift", response_model=FileDriftReport)
