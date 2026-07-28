@@ -677,7 +677,9 @@ onMounted(() => {
   background: var(--color-info);
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  /* #11515 tokenisation: was a hardcoded #fff. Pre-existing, surfaced because
+     the Stylelint gate lints changed files and this file is touched here. */
+  color: var(--text-on-primary);
   font-size: var(--text-sm);
   cursor: pointer;
   transition: background var(--duration-200);
