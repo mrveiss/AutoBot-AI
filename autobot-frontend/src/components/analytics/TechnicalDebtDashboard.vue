@@ -188,6 +188,10 @@
                 <button class="btn-fix" @click="showFixDetails(item)">{{ $t('analytics.technicalDebt.fix') }}</button>
               </div>
             </div>
+            <TruncationNotice
+              :shown="Math.min(10, roiPriorities.length)"
+              :total="roiPriorities.length"
+            />
           </div>
         </div>
       </div>
@@ -434,6 +438,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import TruncationNotice from './TruncationNotice.vue';
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils';

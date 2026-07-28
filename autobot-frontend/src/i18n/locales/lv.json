@@ -2505,6 +2505,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "Rāda {shown} no {total}"
     }
   },
   "knowledge": {
