@@ -45,6 +45,7 @@ Usage in CI / Claude Code session gate:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -64,16 +65,23 @@ FRONTEND_SRC = REPO_ROOT / "autobot-frontend" / "src"
 
 # Frontend files we never treat as real consumers
 FE_EXCLUDE_PATTERNS = (
-    "__tests__", "/test/", "/tests/", ".test.", ".spec.", "/mocks/",
-    ".stories.", "/stories/", "/generated/", "test-config", "template",
+    "__tests__",
+    "/test/",
+    "/tests/",
+    ".test.",
+    ".spec.",
+    "/mocks/",
+    ".stories.",
+    "/stories/",
+    "/generated/",
+    "test-config",
+    "template",
 )
 
 ROUTE_DECORATOR_RE = re.compile(
     r"@(?:router|app|api_router)\.(get|post|put|delete|patch|websocket|head|options)\(\s*[\'\"]([^\'\"]*)"
 )
-INCLUDE_ROUTER_RE = re.compile(
-    r"include_router\(\s*([A-Za-z_][\w.]*)[^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S
-)
+INCLUDE_ROUTER_RE = re.compile(r"include_router\(\s*([A-Za-z_][\w.]*)[^)]*?prefix\s*=\s*[\'\"]([^\'\"]+)", re.S)
 FE_API_RE = re.compile(r"[\'\"`](/api/[A-Za-z0-9_/${}():.\-]+)")
 # #12326: the dominant idiom composes the path from a helper —
 # ``apiClient.get(`${getApiBase()}/knowledge_base/health/status`)``. getApiBase()
@@ -81,9 +89,7 @@ FE_API_RE = re.compile(r"[\'\"`](/api/[A-Za-z0-9_/${}():.\-]+)")
 # ``/api`` + the captured suffix. Without this the audit only saw literal
 # ``'/api/...'`` strings (~42% of calls) and reported a clean bill while dozens of
 # ``${getApiBase()}/...`` calls hit non-existent routes.
-GETAPIBASE_CALL_RE = re.compile(
-    r"\$\{getApiBase\(\)\}(/[A-Za-z0-9_/${}():.\-]+)"
-)
+GETAPIBASE_CALL_RE = re.compile(r"\$\{getApiBase\(\)\}(/[A-Za-z0-9_/${}():.\-]+)")
 # #10037: ``${getBackendUrl()}/<path>`` calls. getBackendUrl() is host-level
 # (no /api), so any <path> that omits /api hits a path the backend doesn't
 # serve. We only flag the high-confidence case where /api<path> IS a real
@@ -95,14 +101,15 @@ PARAM_RE = re.compile(r"\{[^}]*\}")
 def norm_path(p: str) -> str:
     """Normalize a path: collapse params to {p}, strip trailing slash."""
     p = p.split("?")[0]
-    p = re.sub(r"\$\{[^}]*\}?", "{p}", p)          # ${id}, ${encodeURIComponent(...
-    p = re.sub(r"/:([A-Za-z_]\w*)", "/{p}", p)      # /:id
-    p = PARAM_RE.sub("{p}", p)                       # {device_id}
-    p = re.sub(r"\{p\}[^/]*", "{p}", p)              # trailing junk after a param
+    p = re.sub(r"\$\{[^}]*\}?", "{p}", p)  # ${id}, ${encodeURIComponent(...
+    p = re.sub(r"/:([A-Za-z_]\w*)", "/{p}", p)  # /:id
+    p = PARAM_RE.sub("{p}", p)  # {device_id}
+    p = re.sub(r"\{p\}[^/]*", "{p}", p)  # trailing junk after a param
     return p.rstrip("/") or "/"
 
 
 # ---------------------------------------------------------------- backend ----
+
 
 def _runtime_websocket_paths(app) -> set[str]:  # noqa: ANN001
     """Best-effort runtime WebSocketRoute walk of ``app.routes``.
@@ -112,6 +119,7 @@ def _runtime_websocket_paths(app) -> set[str]:  # noqa: ANN001
     on alone — see static_websocket_paths() for why (#12381).
     """
     from starlette.routing import WebSocketRoute  # type: ignore
+
     return {r.path for r in app.routes if isinstance(r, WebSocketRoute)}
 
 
@@ -125,6 +133,7 @@ def dump_openapi(out_path: str) -> int:
     os.chdir(BACKEND)
     try:
         from app_factory import create_app  # type: ignore
+
         app = create_app()
         spec = app.openapi()
         # FastAPI omits WebSocket routes from OpenAPI — record them in a
@@ -166,6 +175,7 @@ def dump_slm_openapi(out_path: str) -> int:
     os.chdir(SLM_BACKEND)
     try:
         from main import app  # type: ignore
+
         spec = app.openapi()
         # Same runtime+static WebSocket union as dump_openapi() (GH#9864, #12381).
         ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
@@ -288,8 +298,11 @@ def _combine_prefixed_paths(
             for candidate in candidates:
                 paths.add(norm_path(candidate) if candidate else norm_path(own or reg or "/"))
                 for pre in prefixes:
-                    paths.add(norm_path(pre + (candidate if candidate.startswith("/")
-                                               else "/" + candidate if candidate else "")))
+                    paths.add(
+                        norm_path(
+                            pre + (candidate if candidate.startswith("/") else "/" + candidate if candidate else "")
+                        )
+                    )
     return paths
 
 
@@ -322,10 +335,7 @@ def static_websocket_paths(root: Path) -> set[str]:
     instead of none at all.
     """
     raw, module_prefix, prefixes = _scan_route_decorators(root)
-    ws_routes = {
-        sp: [path for method, path in entries if method == "websocket"]
-        for sp, entries in raw.items()
-    }
+    ws_routes = {sp: [path for method, path in entries if method == "websocket"] for sp, entries in raw.items()}
     ws_routes = {sp: paths for sp, paths in ws_routes.items() if paths}
     registry_prefixes = _registry_module_prefixes(root)
     return _combine_prefixed_paths(ws_routes, module_prefix, prefixes, registry_prefixes)
@@ -353,8 +363,7 @@ def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
     registry/factory — directly or via sibling-module include_router chains
     (e.g. api/analytics.py sub-including analytics_engagement, GH#9864)."""
     registry_txt = ""
-    for src in [BACKEND / "initialization", BACKEND / "app_factory.py",
-                REPO_ROOT / "main.py", BACKEND / "llc"]:
+    for src in [BACKEND / "initialization", BACKEND / "app_factory.py", REPO_ROOT / "main.py", BACKEND / "llc"]:
         if src.is_dir():
             for py in src.rglob("*.py"):
                 if "api" in py.parts and py.parent.name == "api":
@@ -370,11 +379,13 @@ def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
         module_txt = {
             py.stem: py.read_text(encoding="utf-8", errors="ignore")
             for py in api_dir.glob("*.py")
-            if py.stem != "__init__" and not py.stem.endswith("_test")
-            and not py.stem.startswith("test_")
+            if py.stem != "__init__" and not py.stem.endswith("_test") and not py.stem.startswith("test_")
         }
-        init_txt = (api_dir / "__init__.py").read_text(encoding="utf-8", errors="ignore") \
-            if (api_dir / "__init__.py").exists() else ""
+        init_txt = (
+            (api_dir / "__init__.py").read_text(encoding="utf-8", errors="ignore")
+            if (api_dir / "__init__.py").exists()
+            else ""
+        )
 
         # Transitive vouching: registry-mounted modules vouch for siblings
         # they sub-include via `<name>.router`, to a fixpoint (GH#9864 —
@@ -405,6 +416,7 @@ def find_unmounted_routers(backend: set[str] | None = None) -> list[str]:
 
 
 # --------------------------------------------------------------- frontend ----
+
 
 def frontend_calls() -> dict[str, set[str]]:
     """Normalized /api/ path -> set of consuming files (tests/mocks excluded)."""
@@ -460,6 +472,7 @@ def find_missing_api_prefix(backend: set[str]) -> dict[str, set[str]]:
 
 # ------------------------------------------------------------------ match ----
 
+
 def _segments_match(fe: str, b: str) -> bool:
     """Segment-wise comparison where {p} (a runtime-resolved template segment
     or a path parameter) matches any single concrete segment on either side."""
@@ -475,7 +488,7 @@ def matches(fe: str, backend: set[str]) -> bool:
     # /api-stripped variant (static-mode tables lack the /api prefix) — but
     # not when the next segment is a wildcard: /{p}/x would re-match /api/x.
     if fe.startswith("/api/") and not fe.startswith("/api/{p}"):
-        candidates.add(fe[len("/api"):])
+        candidates.add(fe[len("/api") :])
     # `…x${qs}` template tails are usually query strings appended to the path
     # (norm turns them into a glued `x{p}`) — also try the stripped path.
     for c in list(candidates):
@@ -496,7 +509,92 @@ def matches(fe: str, backend: set[str]) -> bool:
     return False
 
 
+# ------------------------------------------------------------- suggestions ----
+
+# Below this score a "closest match" is noise — an unrelated route that merely
+# shares a prefix. Better to print nothing than to send someone rewiring a call
+# to the wrong endpoint (#12738).
+SUGGESTION_FLOOR = 0.55
+
+
+def _leading_agreement(fe_segs: list[str], cand_segs: list[str]) -> int:
+    """Number of segments the two paths agree on from the left."""
+    count = 0
+    for x, y in zip(fe_segs, cand_segs):
+        if x != y:
+            break
+        count += 1
+    return count
+
+
+def _similarity(fe: str, candidate: str) -> float:
+    """Segment-aware similarity in [0, 1] between a call and a real route.
+
+    A rename almost always changes the LAST segment and keeps the namespace, so
+    agreement on the leading segments is weighted alongside overall positional
+    agreement; raw string distance only breaks ties. Pure ``difflib`` on the
+    whole path ranks by character overlap, which favours long unrelated routes
+    over the short renamed sibling that is usually the right answer.
+
+    Leading agreement also suppresses static mode's route-table artifacts: it
+    combines every registry prefix with every route, so ``/voice/<x>`` and
+    ``/ai-stack/<x>`` shadow the real ``/<x>`` and would otherwise score well on
+    positional agreement alone despite belonging to another namespace entirely.
+    """
+    fe_segs, cand_segs = fe.strip("/").split("/"), candidate.strip("/").split("/")
+    span = max(len(fe_segs), len(cand_segs))
+    aligned = sum(1 for x, y in zip(fe_segs, cand_segs) if x == y)
+    leading = _leading_agreement(fe_segs, cand_segs)
+    text_score = difflib.SequenceMatcher(None, fe, candidate).ratio()
+    return 0.45 * (aligned / span) + 0.35 * (leading / span) + 0.20 * text_score
+
+
+def suggest_routes(fe: str, backend: set[str], limit: int = 3) -> list[str]:
+    """Closest surviving routes for an unwired call — "did you mean …?" (#12738).
+
+    Turns detection into guided repair: the gate already says ``/api/foo/removed``
+    is dead, but not that ``/api/foo/renamed`` is what replaced it.
+
+    Both the call and its ``/api``-stripped variant are scored, because static
+    mode's route table has no ``/api`` prefix while authoritative (OpenAPI) mode
+    does — the same reason ``matches()`` tries both.
+
+    Returns up to *limit* routes, best first; empty when nothing scores above
+    ``SUGGESTION_FLOOR`` or shares a path segment with the call.
+    """
+    if not backend:
+        return []
+
+    variants = {fe}
+    if fe.startswith("/api/"):
+        variants.add(fe[len("/api") :])
+
+    fe_segments = {s for v in variants for s in v.strip("/").split("/") if s and s != "{p}"}
+    scored: list[tuple[float, str]] = []
+    for candidate in backend:
+        # Require a shared concrete segment: without it a "closest match" is
+        # just the least-dissimilar unrelated route.
+        if not fe_segments & set(candidate.strip("/").split("/")):
+            continue
+        score = max(_similarity(v, candidate) for v in variants)
+        if score >= SUGGESTION_FLOOR:
+            scored.append((score, candidate))
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [path for _, path in scored[:limit]]
+
+
+def _print_call(path: str, files: set[str], backend: set[str]) -> None:
+    """Print one finding with its callers and closest-match suggestions."""
+    print(f"  {path}")
+    for suggestion in suggest_routes(path, backend):
+        print(f"      ?  did you mean {suggestion}")
+    for f in sorted(files)[:3]:
+        print(f"      <- {f}")
+
+
 # ---------------------------------------------------------------- baseline ----
+
 
 def load_baseline(path: str | None) -> set[str]:
     """Load a committed list of known/tracked-unwired frontend paths (#12381).
@@ -530,32 +628,83 @@ def partition_baseline(
     return tracked, new
 
 
+def audit_baseline(
+    baseline: set[str],
+    unwired_all: dict[str, set[str]],
+    frontend: dict[str, set[str]],
+    backend: set[str],
+) -> dict[str, list[tuple[str, list[str]]]]:
+    """Classify baseline entries so removals cannot hide in there forever (#12738).
+
+    The baseline suppresses "known unwired" calls from the gate. That is the
+    right pattern for endpoints nobody has implemented yet, but it also
+    silently absorbs endpoints that were REMOVED or RENAMED after their caller
+    was baselined: the gate stays green while the button is dead. Nothing
+    distinguished the two cases.
+
+    Returns three buckets:
+
+    ``rematch``
+        Baselined calls with a close surviving route — almost always a rename.
+        These want rewiring, not suppression, so they are reported with their
+        suggestions instead of being swallowed by the baseline.
+    ``resolved``
+        Baselined calls that now match a real route. The entry is stale and
+        should be pruned, otherwise the baseline only ever grows.
+    ``absent``
+        Baselined calls no caller makes any more. Also prunable — the frontend
+        code moved on and the entry is pure residue.
+    """
+    resolved: list[tuple[str, list[str]]] = []
+    absent: list[tuple[str, list[str]]] = []
+    rematch: list[tuple[str, list[str]]] = []
+
+    for path in sorted(baseline):
+        if path not in frontend:
+            absent.append((path, []))
+        elif path not in unwired_all:
+            resolved.append((path, []))
+        else:
+            suggestions = suggest_routes(path, backend)
+            if suggestions:
+                rematch.append((path, suggestions))
+
+    return {"rematch": rematch, "resolved": resolved, "absent": absent}
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--openapi", help="openapi.json path or URL (authoritative mode)")
-    ap.add_argument("--dump-openapi", metavar="OUT",
-                    help="import app_factory.create_app() and dump spec, then exit")
-    ap.add_argument("--slm-openapi", metavar="FILE",
-                    help="second openapi.json (SLM control-plane backend, "
-                         "autobot-slm-backend) whose paths are UNIONed into the known "
-                         "backend route table (#12381) — produce it with "
-                         "--dump-slm-openapi first")
-    ap.add_argument("--dump-slm-openapi", metavar="OUT",
-                    help="import autobot-slm-backend/main.py's app and dump spec, "
-                         "then exit")
-    ap.add_argument("--baseline", metavar="FILE",
-                    help="file of known/tracked unwired frontend paths (one per line) "
-                         "excluded from the --fail-on-unwired exit code (#12381) — "
-                         "still reported, just not gated")
-    ap.add_argument("--dead-surface", action="store_true",
-                    help="also report backend paths with no frontend consumer")
-    ap.add_argument("--fail-on-unwired", action="store_true",
-                    help="exit non-zero if any unwired call or unmounted router found")
-    ap.add_argument("--only-prefix", metavar="PREFIX",
-                    help="restrict unwired-call reporting and exit code to frontend "
-                         "calls under PREFIX (e.g. /api/llc). Lets CI gate one module "
-                         "while other pre-existing findings are tracked separately.")
+    ap.add_argument("--dump-openapi", metavar="OUT", help="import app_factory.create_app() and dump spec, then exit")
+    ap.add_argument(
+        "--slm-openapi",
+        metavar="FILE",
+        help="second openapi.json (SLM control-plane backend, "
+        "autobot-slm-backend) whose paths are UNIONed into the known "
+        "backend route table (#12381) — produce it with "
+        "--dump-slm-openapi first",
+    )
+    ap.add_argument(
+        "--dump-slm-openapi", metavar="OUT", help="import autobot-slm-backend/main.py's app and dump spec, " "then exit"
+    )
+    ap.add_argument(
+        "--baseline",
+        metavar="FILE",
+        help="file of known/tracked unwired frontend paths (one per line) "
+        "excluded from the --fail-on-unwired exit code (#12381) — "
+        "still reported, just not gated",
+    )
+    ap.add_argument("--dead-surface", action="store_true", help="also report backend paths with no frontend consumer")
+    ap.add_argument(
+        "--fail-on-unwired", action="store_true", help="exit non-zero if any unwired call or unmounted router found"
+    )
+    ap.add_argument(
+        "--only-prefix",
+        metavar="PREFIX",
+        help="restrict unwired-call reporting and exit code to frontend "
+        "calls under PREFIX (e.g. /api/llc). Lets CI gate one module "
+        "while other pre-existing findings are tracked separately.",
+    )
     args = ap.parse_args()
 
     if args.dump_openapi:
@@ -581,28 +730,41 @@ def main() -> int:
 
     unwired_all = {p: files for p, files in sorted(fe.items()) if not matches(p, backend)}
     if args.only_prefix:
-        unwired_all = {p: files for p, files in unwired_all.items()
-                       if p.startswith(args.only_prefix)}
+        unwired_all = {p: files for p, files in unwired_all.items() if p.startswith(args.only_prefix)}
         print(f"(scoped to {args.only_prefix})")
     baseline = load_baseline(args.baseline)
     tracked, unwired = partition_baseline(unwired_all, baseline)
     if tracked:
         print(f"== TRACKED UNWIRED CALLS (baselined, non-gating): {len(tracked)} ==")
         for p, files in tracked.items():
-            print(f"  {p}")
-            for f in sorted(files)[:3]:
-                print(f"      <- {f}")
+            _print_call(p, files, backend)
     print(f"== UNWIRED FRONTEND CALLS: {len(unwired)} ==")
     for p, files in unwired.items():
-        print(f"  {p}")
-        for f in sorted(files)[:3]:
-            print(f"      <- {f}")
+        _print_call(p, files, backend)
+
+    # #12738: a removed endpoint whose caller is already baselined would leave
+    # the gate green while the button is dead. Report what the baseline is
+    # absorbing — non-gating, so the blocking behaviour is unchanged.
+    if baseline:
+        health = audit_baseline(baseline, unwired_all, fe, backend)
+        rematch, resolved, absent = health["rematch"], health["resolved"], health["absent"]
+        print(
+            f"\n== BASELINE HEALTH: {len(rematch)} rematch, "
+            f"{len(resolved)} resolved, {len(absent)} no-longer-called =="
+        )
+        for path, suggestions in rematch:
+            print(f"  REMOVED-ENDPOINT DRIFT  {path}")
+            for suggestion in suggestions:
+                print(f"      ?  did you mean {suggestion}")
+        for path, _ in resolved:
+            print(f"  RESOLVED (prune from baseline)  {path}")
+        for path, _ in absent:
+            print(f"  NO LONGER CALLED (prune from baseline)  {path}")
 
     # #10037: getBackendUrl() calls that forgot /api (only when /api<path> is real).
     missing_api = find_missing_api_prefix(backend) if args.openapi else {}
     if args.only_prefix:
-        missing_api = {p: f for p, f in missing_api.items()
-                       if ("/api" + p).startswith(args.only_prefix)}
+        missing_api = {p: f for p, f in missing_api.items() if ("/api" + p).startswith(args.only_prefix)}
     print(f"\n== getBackendUrl() CALLS MISSING /api: {len(missing_api)} ==")
     for p, files in sorted(missing_api.items()):
         print(f"  {p}  (should be /api{p})")
@@ -616,8 +778,7 @@ def main() -> int:
 
     if args.dead_surface:
         fe_norm = set(fe)
-        dead = [b for b in sorted(backend)
-                if not any(matches(f, {b}) for f in fe_norm)]
+        dead = [b for b in sorted(backend) if not any(matches(f, {b}) for f in fe_norm)]
         print(f"\n== BACKEND PATHS WITH NO FRONTEND CONSUMER: {len(dead)} ==")
         for d in dead[:100]:
             print(f"  {d}")

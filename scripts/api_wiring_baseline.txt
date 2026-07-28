@@ -43,7 +43,6 @@
 /api/system/backup/create
 /api/system/backup/list
 /api/system/backup/restore/{p}
-/api/system/backup/{p}
 /api/system/restart
 /api/system/shutdown
 
@@ -54,7 +53,6 @@
 /api/knowledge_base/category/{p}
 /api/knowledge_base/documents/{p}
 /api/knowledge_base/documents/{p}/similar
-/api/transcriber/recordings/{p}/progress
 
 # --- #12364: analytics/code-intelligence redesign, deferred ---
 /api/code-intelligence/analysis/{p}
@@ -63,7 +61,6 @@
 /api/code-intelligence/history
 /api/code-intelligence/quality-score
 /api/code-intelligence/trends
-/api/analytics/bug-prediction
 
 # --- #12381: extraction false positive, not a live call ---
 # autobot-frontend/src/services/CacheService.ts:49 — `/api/user/profile` is a
