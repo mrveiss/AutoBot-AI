@@ -443,9 +443,8 @@ async def _filter_user_sessions(sessions: list, username: str) -> list:
 
     Helper for list_sessions (#684).
     """
-    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
-
     from api.chat_sessions_errors import OwnershipUnavailableError
+    from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 
     try:
         redis = await get_redis_mgr(async_client=True, database="main")
