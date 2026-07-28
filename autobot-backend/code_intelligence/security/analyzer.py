@@ -28,6 +28,7 @@ from .constants import (
     VulnerabilityType,
 )
 from .finding import SecurityFinding
+from ..shared.line_index import LineIndex
 from .patterns import SECRET_PATTERNS, SQL_INJECTION_PATTERNS
 
 logger = get_logger(__name__)
@@ -53,11 +54,15 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
 
     def _check_hardcoded_secrets(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for hardcoded secrets."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
 
         for pattern, vuln_type, cwe_id in SECRET_PATTERNS:
             for match in re.finditer(pattern, content):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 code = lines[line_num - 1] if line_num <= len(lines) else ""
 
                 if "os.getenv" in code or "os.environ" in code:
@@ -87,11 +92,15 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
 
     def _check_sql_injection(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for SQL injection patterns."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
 
         for pattern, description in SQL_INJECTION_PATTERNS:
             for match in re.finditer(pattern, content, re.IGNORECASE):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 code = lines[line_num - 1] if line_num <= len(lines) else ""
 
                 findings.append(
@@ -115,11 +124,15 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
 
     def _check_path_traversal(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for path traversal vulnerabilities."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
         path_traversal_pattern = r'open\s*\(\s*[^)]*\+[^)]*\)|open\s*\(\s*f["\']'
 
         for match in re.finditer(path_traversal_pattern, content):
-            line_num = content[: match.start()].count("\n") + 1
+            line_num = _line_index.line_of(match.start())
             code = lines[line_num - 1] if line_num <= len(lines) else ""
 
             context_start = max(0, line_num - 3)
@@ -167,13 +180,17 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
 
     def _check_weak_encryption(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for weak/broken symmetric encryption algorithm usage."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
 
         for match in self._WEAK_ENCRYPTION_IMPORT_PATTERN.finditer(content):
             module_name = match.group("from_name") or match.group("attr_name")
             key = self._WEAK_ENCRYPTION_MODULE_TO_KEY[module_name]
             msg, cwe_id = WEAK_ENCRYPTION[key]
-            line_num = content[: match.start()].count("\n") + 1
+            line_num = _line_index.line_of(match.start())
             code = lines[line_num - 1] if line_num <= len(lines) else ""
 
             findings.append(
