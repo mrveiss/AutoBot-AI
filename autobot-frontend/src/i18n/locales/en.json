@@ -899,7 +899,14 @@
       "disabledMessage": "Local usage metrics disabled. No metrics will be recorded.",
       "loadFailed": "Failed to load telemetry settings",
       "updateFailed": "Failed to update telemetry settings"
-    }
+    },
+    "subtitle": "Customize your AutoBot experience with personalized preferences",
+    "featureFlags": "Feature Flags",
+    "telegram": "Telegram",
+    "notifications": "Notifications",
+    "mobileDevices": "Mobile Devices",
+    "privacy": "Privacy",
+    "providerAuthDesc": "Connect to providers using your existing subscription instead of a billed API key. Tokens are stored securely in the AutoBot secrets vault."
   },
   "voice": {
     "title": "Voice",

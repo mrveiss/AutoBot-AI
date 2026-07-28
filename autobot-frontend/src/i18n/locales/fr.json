@@ -899,7 +899,14 @@
       "disabledMessage": "Métriques d'utilisation locales désactivées. Aucune métrique ne sera enregistrée.",
       "loadFailed": "Échec du chargement des paramètres de télémétrie",
       "updateFailed": "Échec de la mise à jour des paramètres de télémétrie"
-    }
+    },
+    "subtitle": "Personnalisez votre expérience AutoBot selon vos préférences",
+    "featureFlags": "Indicateurs de fonctionnalités",
+    "telegram": "Telegram",
+    "notifications": "Notifications",
+    "mobileDevices": "Appareils mobiles",
+    "privacy": "Confidentialité",
+    "providerAuthDesc": "Connectez-vous aux fournisseurs avec votre abonnement existant plutôt qu'avec une clé API facturée. Les jetons sont stockés en toute sécurité dans le coffre de secrets AutoBot."
   },
   "voice": {
     "title": "Voix",
