@@ -49,7 +49,10 @@
 
   /* Text on colored backgrounds */
   --text-on-primary: #ffffff;
-  --text-on-success: #ffffff;
+  /* #12730: was #ffffff = 2.54:1 on --color-success, below WCAG AA (3.0:1 for
+     UI text). Black gives 8.28:1 and matches the treatment this file already
+     uses for the other light fill, --text-on-warning. */
+  --text-on-success: #000000;
   --text-on-warning: #000000;
   --text-on-error: #ffffff;
 

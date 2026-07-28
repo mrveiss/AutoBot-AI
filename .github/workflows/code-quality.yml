@@ -166,6 +166,9 @@ jobs:
     - name: Block print/console regressions (#1082, #6785)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
 
+    - name: Check design-token contrast meets WCAG AA (#12730)
+      run: python3 scripts/check_token_contrast.py
+
     - name: Check for unused imports with autoflake
       run: |
         python3 -m autoflake --check --recursive \
