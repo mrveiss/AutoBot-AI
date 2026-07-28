@@ -25,7 +25,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Set
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Set
 
 import yaml
 
@@ -168,8 +168,8 @@ class NPUWorkerClient:
 
     def __init__(
         self,
-        npu_endpoint: str = None,
-        use_auth: bool = None,
+        npu_endpoint: Optional[str] = None,
+        use_auth: Optional[bool] = None,
     ):
         """
         Initialize NPU client with endpoint and HTTP client.
@@ -835,8 +835,8 @@ class NPUTaskQueue:
         """Initialize task queue with NPU client and worker pool."""
         self.npu_client = npu_client
         self.max_concurrent = max_concurrent
-        self.queue = asyncio.Queue()
-        self.workers = []
+        self.queue: "asyncio.Queue[Dict[str, Any]]" = asyncio.Queue()
+        self.workers: List["asyncio.Task[None]"] = []
         self.running = False
 
     async def start_workers(self):
@@ -888,7 +888,7 @@ class NPUTaskQueue:
         if not self.running:
             await self.start_workers()
 
-        future = asyncio.Future()
+        future: "asyncio.Future[Dict[str, Any]]" = asyncio.Future()
         task_data = {"task_type": task_type, "data": data, "future": future}
 
         await self.queue.put(task_data)
@@ -902,7 +902,10 @@ class NPUTaskQueue:
 
 
 async def process_with_npu_fallback(
-    task_type: str, data: Dict[str, Any], fallback_func: callable, queue_getter: callable
+    task_type: str,
+    data: Dict[str, Any],
+    fallback_func: Callable[[], Awaitable[Dict[str, Any]]],
+    queue_getter: Callable[[], Awaitable["NPUTaskQueue"]],
 ) -> Dict[str, Any]:
     """Try the NPU worker, falling back to local processing if unavailable.
 
