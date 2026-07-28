@@ -39,6 +39,7 @@ Related: #599 - SSOT Configuration System Epic
 
 from __future__ import annotations
 
+import logging
 import os
 from enum import Enum
 from functools import lru_cache
@@ -2830,3 +2831,38 @@ __all__ = [
     "get_agent_model",
     "get_agent_provider",
 ]
+
+
+def database_pool_settings() -> dict:
+    """Canonical SQLAlchemy pool settings from SSOT config (#2860, #12645).
+
+    This exact body was duplicated byte-for-byte in
+    ``autobot-backend/user_management/database.py`` and
+    ``autobot-slm-backend/user_management/database.py``, with a third
+    tuple-shaped variant in ``autobot-slm-backend/config.py``. Three copies of
+    one fallback table means a tuning change lands in one engine and silently
+    not the others.
+
+    The defaults below are the fallback when SSOT config cannot be read; they
+    are deliberately identical to what both copies used, so this is a
+    de-duplication and not a re-tuning.
+    """
+    try:
+        pool_cfg = get_config().database_pool
+        return {
+            "pool_size": pool_cfg.pool_size,
+            "max_overflow": pool_cfg.max_overflow,
+            "pool_recycle": pool_cfg.pool_recycle,
+            "pool_timeout": pool_cfg.pool_timeout,
+        }
+    except Exception:
+        # Module-local logger: ssot_config has no module-level `logger`, and the
+        # fallback path is exactly when SSOT config is already failing — a
+        # NameError here would mask the real problem.
+        logging.getLogger(__name__).warning("Could not load SSOT database pool config, using defaults")
+        return {
+            "pool_size": 10,
+            "max_overflow": 10,
+            "pool_recycle": 3600,
+            "pool_timeout": 30,
+        }
