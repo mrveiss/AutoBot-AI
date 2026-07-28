@@ -7,7 +7,6 @@ Environment Variable Analyzer using Redis and NPU acceleration
 Analyzes codebase for hardcoded values that should be environment variables
 """
 
-from utils.line_index import LineIndex  # #12884
 from __future__ import annotations
 
 import ast
@@ -23,6 +22,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL, config
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from utils.line_index import LineIndex  # #12884
 
 # Issue #542: Handle imports for both standalone execution and backend import
 # When imported from backend, project root is in sys.path

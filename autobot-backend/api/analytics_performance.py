@@ -9,7 +9,6 @@ Issue #222: Identifies performance anti-patterns like N+1 queries,
 unnecessary loops, blocking I/O in async contexts, and cache misuse.
 """
 
-from utils.line_index import LineIndex  # #12884
 import ast
 import asyncio
 import re
@@ -42,6 +41,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

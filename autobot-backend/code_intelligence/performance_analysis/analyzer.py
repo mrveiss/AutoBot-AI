@@ -10,7 +10,6 @@ Issue #554: Added Vector/Redis/LLM infrastructure for semantic analysis.
 Contains the main PerformanceAnalyzer class and convenience functions.
 """
 
-from utils.line_index import LineIndex  # #12884
 import re
 from typing import Any, Callable, Dict, List
 
@@ -20,6 +19,7 @@ from code_intelligence.shared.analysis_base import (
     SIMILARITY_MEDIUM,
     BaseCodeAnalyzer,
 )
+from utils.line_index import LineIndex  # #12884
 
 from .ast_visitor import PerformanceASTVisitor
 from .types import PerformanceIssue, PerformanceIssueType, PerformanceSeverity

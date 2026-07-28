@@ -5,10 +5,11 @@
 Simple performance analysis focusing on critical patterns
 """
 
-from utils.line_index import LineIndex  # #12884
 import re
 from pathlib import Path
 from typing import Any, Dict, List
+
+from utils.line_index import LineIndex  # #12884
 
 
 class SimplePerformanceAnalyzer:

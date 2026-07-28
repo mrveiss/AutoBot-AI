@@ -9,7 +9,6 @@ Provides automated code review with pattern checking, security analysis,
 and AI-generated review comments. Learns from past reviews.
 """
 
-from utils.line_index import LineIndex  # #12884
 import asyncio
 import json
 import re
@@ -52,6 +51,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

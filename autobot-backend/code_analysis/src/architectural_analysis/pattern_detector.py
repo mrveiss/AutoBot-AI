@@ -9,13 +9,13 @@ Detects design patterns in code.
 Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 """
 
-from utils.line_index import LineIndex  # #12884
 import ast
 import re
 from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

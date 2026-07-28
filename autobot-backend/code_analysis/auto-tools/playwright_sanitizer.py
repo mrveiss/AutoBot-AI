@@ -13,7 +13,6 @@ Author: AutoBot Playwright Security Specialist
 Version: 1.0.0
 """
 
-from utils.line_index import LineIndex  # #12884
 import hashlib
 import json
 import logging
@@ -26,6 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 # Configure logging for security fixer
 logging.basicConfig(level=logging.INFO, format="%(message)s")

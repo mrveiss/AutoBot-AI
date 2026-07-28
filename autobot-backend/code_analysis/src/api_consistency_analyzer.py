@@ -5,7 +5,6 @@ API Consistency Analyzer using Redis and NPU acceleration
 Analyzes API endpoints for consistency, patterns, and best practices
 """
 
-from utils.line_index import LineIndex  # #12884
 import ast
 import json
 import re
@@ -17,6 +16,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_1_HOUR
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

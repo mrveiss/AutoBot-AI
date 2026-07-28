@@ -5,7 +5,6 @@
 Focused analysis for critical hardcoded environment variables
 """
 
-from utils.line_index import LineIndex  # #12884
 import re
 from pathlib import Path
 from typing import Any, Dict, List
@@ -13,6 +12,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

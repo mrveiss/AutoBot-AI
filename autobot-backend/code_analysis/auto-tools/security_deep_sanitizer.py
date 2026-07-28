@@ -23,12 +23,12 @@ NOTE: __init__ method (~141 lines) is an ACCEPTABLE EXCEPTION per Issue #490 -
 initialization of security agent with comprehensive report structure. Low priority.
 """
 
-from utils.line_index import LineIndex  # #12884
 import logging
 import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")

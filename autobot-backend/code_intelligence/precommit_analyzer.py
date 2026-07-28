@@ -16,7 +16,6 @@ Part of Issue #223 - Git Pre-commit Hook Analyzer
 Parent Epic: #217 - Advanced Code Intelligence
 """
 
-from utils.line_index import LineIndex  # #12884
 import concurrent.futures
 import re
 import subprocess  # nosec B404 - controlled git process execution
@@ -28,6 +27,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

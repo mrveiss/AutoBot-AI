@@ -8,7 +8,6 @@ Pattern Extractor Service (Issue #903)
 Extracts code patterns from AutoBot codebase for ML training and completion.
 """
 
-from utils.line_index import LineIndex  # #12884
 import ast
 import json
 import re
@@ -18,6 +17,7 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

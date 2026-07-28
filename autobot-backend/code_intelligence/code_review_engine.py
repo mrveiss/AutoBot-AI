@@ -25,7 +25,6 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 - Historical review pattern learning via embeddings
 """
 
-from utils.line_index import LineIndex  # #12884
 import re
 import subprocess  # nosec B404 - code review tools require subprocess
 from dataclasses import dataclass, field
@@ -36,6 +35,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 

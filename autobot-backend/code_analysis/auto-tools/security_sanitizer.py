@@ -19,12 +19,12 @@ Author: AutoBot Security Fix Agent
 Version: 1.0.0
 """
 
-from utils.line_index import LineIndex  # #12884
 import logging
 import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
