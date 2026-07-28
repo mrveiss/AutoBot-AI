@@ -61,7 +61,10 @@ except (ImportError, ModuleNotFoundError):
         STANDARD_DELAY = 1
         SHORT_TIMEOUT = 30
 
-    async def get_http_client():  # type: ignore
+    def get_http_client():  # type: ignore
+        # #12656: sync, matching autobot_shared.http_client.get_http_client.
+        # The fallback used to be `async def` while the real import is `def`,
+        # so the shared call site could not be correct for both — see below.
         import aiohttp
 
         return aiohttp.ClientSession()
@@ -242,9 +245,9 @@ class NPUWorkerClient:
                     "Failed to create authenticated client, falling back to " "unauthenticated mode: %s",
                     e,
                 )
-                self._http_client = await get_http_client()
+                self._http_client = get_http_client()
         else:
-            self._http_client = await get_http_client()
+            self._http_client = get_http_client()
 
         return self._http_client
 
