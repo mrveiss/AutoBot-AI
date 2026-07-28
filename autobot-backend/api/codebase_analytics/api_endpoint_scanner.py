@@ -951,6 +951,25 @@ class EndpointMatcher:
 
         return True
 
+    @staticmethod
+    def _is_reportable_call(path: str) -> bool:
+        """Is *path* a real API call worth reporting as missing (#12745)?
+
+        The 2400-finding report was padded with strings that were never
+        endpoints: bare examples from docstrings (``/endpoint``, ``/save``) and
+        base-path fragments left over from URL concatenation
+        (``/api/adapters/``, ``/api/secrets/``, both at absurd line numbers).
+        Reporting those as drift trains people to ignore the report.
+        """
+        if not path or not path.startswith("/api"):
+            return False
+        # A base-path fragment: "/api/adapters/" is the prefix a call builds on,
+        # not a route. A real route has a segment after the resource name.
+        stripped = path.rstrip("/")
+        if path.endswith("/") and len(stripped.strip("/").split("/")) <= 2:
+            return False
+        return True
+
     def _match_calls_to_endpoints(
         self,
         used_endpoints: List[EndpointUsageItem],
@@ -995,7 +1014,7 @@ class EndpointMatcher:
                         )
                     break
 
-            if not matched and not call.is_dynamic:
+            if not matched and not call.is_dynamic and self._is_reportable_call(call.path):
                 missing_endpoints.append(
                     EndpointMismatchItem(
                         type="missing",
@@ -1041,6 +1060,36 @@ class EndpointMatcher:
 
         return orphaned
 
+    def _empty_scan_analysis(self) -> APIEndpointAnalysis:
+        """Result for a backend scan that found no routes at all (#12745).
+
+        Deliberately reports zero missing rather than "every call is missing":
+        the comparison has no basis, and emitting it buried the genuine drift
+        under thousands of false positives. ``scan_error`` carries the reason so
+        the state is visible instead of looking like a clean report.
+        """
+        reason = (
+            "Backend endpoint scan found 0 routes — missing-endpoint comparison "
+            "suppressed because it would report every frontend call as missing. "
+            "Check that the analyzed source tree is indexed and reachable."
+        )
+        logger.error("api_endpoint_scanner: %s", reason)
+        return APIEndpointAnalysis(
+            backend_endpoints=0,
+            frontend_calls=len(self.calls),
+            used_endpoints=0,
+            orphaned_endpoints=0,
+            missing_endpoints=0,
+            coverage_percentage=0.0,
+            endpoints=[],
+            api_calls=self.calls,
+            orphaned=[],
+            missing=[],
+            used=[],
+            scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
+            scan_error=reason,
+        )
+
     def analyze(self) -> APIEndpointAnalysis:
         """
         Perform full endpoint analysis.
@@ -1053,6 +1102,13 @@ class EndpointMatcher:
         """
         used_endpoints: List[EndpointUsageItem] = []
         missing_endpoints: List[EndpointMismatchItem] = []
+
+        # #12745: with an empty endpoint map every call matches nothing, so the
+        # report claimed 2400 missing endpoints of which 97.4% actually existed.
+        # A scan that found no routes cannot conclude anything about drift —
+        # report the failure instead of manufacturing findings from it.
+        if not self.endpoints:
+            return self._empty_scan_analysis()
 
         # Match calls to endpoints (Issue #665: uses helper)
         used_endpoint_ids = self._match_calls_to_endpoints(used_endpoints, missing_endpoints)
