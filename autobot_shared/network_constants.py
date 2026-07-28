@@ -409,6 +409,8 @@ class ServiceURLs(metaclass=_LazyURLMeta):
     ALERTMANAGER_API: str
 
     GRAFANA_URL: str
+
+
 class NetworkConfig:
     """
     Dynamic network configuration based on environment.
