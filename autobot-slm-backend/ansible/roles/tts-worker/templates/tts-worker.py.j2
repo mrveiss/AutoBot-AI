@@ -447,6 +447,19 @@ def _run_create_voice(name: str, audio_path: str) -> str:
     return vid
 
 
+def _run_clone_synthesis(text: str, audio_path: str) -> bytes:
+    """One-shot synthesis in the reference audio's voice (#12886).
+
+    Deliberately does NOT persist a profile: the caller
+    (``tts_client.clone_voice``) wants audio back, not a registry entry,
+    so the derived state is used once and dropped. ``/voices/create`` is
+    the endpoint for a reusable voice.
+    """
+    voice_state = _model.get_state_for_audio_prompt(audio_path)
+    audio = _model.generate_audio(voice_state, text)
+    return _to_wav_bytes(audio, _model.sample_rate)
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     """Health check with model status.
@@ -536,6 +549,47 @@ async def synthesize_stream(
             logger.error("Streaming synthesis error: %s", e)
 
     return StreamingResponse(_framed(), media_type="application/octet-stream")
+
+
+@app.post("/tts/clone-voice")
+async def clone_voice(
+    text: str = Form(...),
+    reference_audio: UploadFile = File(...),
+) -> StreamingResponse:
+    """Synthesize ``text`` in the uploaded reference speaker's voice (#12886).
+
+    Field names match ``tts_client.clone_voice``, which has posted here
+    since the backend route existed while the worker never served it —
+    every ``/api/voice/clone-voice`` call 404'd.
+    """
+    if not _model_loaded:
+        raise HTTPException(503, detail=f"Model not ready: {_model_error}")
+    degraded, reason = _compute_degraded_state()
+    if degraded:
+        # The public fallback weights cannot reproduce the reference
+        # speaker — they would return audio in some *other* voice rather
+        # than fail, so say so instead of shipping the wrong voice.
+        raise HTTPException(503, detail=reason or "Voice cloning unavailable")
+    import tempfile
+
+    audio_bytes = await reference_audio.read()
+    suffix = Path(reference_audio.filename or "reference.wav").suffix or ".wav"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
+    loop = asyncio.get_event_loop()
+    try:
+        wav = await loop.run_in_executor(None, _run_clone_synthesis, text, tmp_path)
+    except Exception as e:
+        logger.error("Voice cloning error: %s", e)
+        raise HTTPException(500, detail=f"Voice cloning failed: {e}") from e
+    finally:
+        os.unlink(tmp_path)
+    return StreamingResponse(
+        io.BytesIO(wav),
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=cloned.wav"},
+    )
 
 
 @app.get("/voices")
