@@ -1145,6 +1145,12 @@ async def _init_slm_client():
     Falls back gracefully if SLM is unavailable.
     """
     logger.info("✅ [ 89%] SLM Client: Initializing SLM client for agent configs...")
+    # #12781: register the control-link probe BEFORE attempting to connect —
+    # the decorator only fires on import, and a node whose SLM init raises is
+    # precisely the node whose link state must be reported. Registering inside
+    # the try would omit the component on exactly the broken nodes.
+    from services import slm_link_probe  # noqa: F401
+
     try:
         # Issue #768: Get SLM URL from SSOT config, fallback to env var
         from autobot_shared.ssot_config import get_config
