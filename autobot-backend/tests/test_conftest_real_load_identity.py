@@ -58,9 +58,9 @@ def test_already_real_module_is_not_re_executed(loader, tmp_path):
 
     try:
         assert second is first, "module was re-executed and replaced"
-        assert second.Marker is first_marker, (
-            "class object was rebuilt — isinstance() against the original would now fail"
-        )
+        assert (
+            second.Marker is first_marker
+        ), "class object was rebuilt — isinstance() against the original would now fail"
     finally:
         sys.modules.pop("identity_probe_mod", None)
 
