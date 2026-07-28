@@ -84,6 +84,5 @@ def test_no_test_names_the_real_repo_config(test_file):
     source = (PATH.BACKEND_DIR / test_file).read_text(encoding="utf-8")
 
     assert 'Path("config/npu_workers.yaml")' not in source, (
-        f"{test_file} points a manager at the real repo config; a save would "
-        "write into the working tree"
+        f"{test_file} points a manager at the real repo config; a save would " "write into the working tree"
     )

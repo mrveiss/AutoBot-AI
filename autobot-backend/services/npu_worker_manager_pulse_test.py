@@ -12,8 +12,8 @@ Covers:
 - MVA-1399: Heartbeat reachability — stale last_heartbeat → failure class
 """
 
-from datetime import datetime, timedelta, timezone
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
