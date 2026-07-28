@@ -9,6 +9,8 @@ Routes:
   POST  /api/llc/boards/sprint         — get or create sprint board for a sprint
   GET   /api/llc/boards/{board_id}     — get board metadata + columns
   GET   /api/llc/boards/{board_id}/items — get board with work items grouped by column
+  PUT   /api/llc/boards/{board_id}     — rename a board
+  DELETE /api/llc/boards/{board_id}    — delete a board and its columns
   POST  /api/llc/boards/{board_id}/move  — move work item to a column
 """
 
@@ -48,6 +50,12 @@ class SprintBoardRequest(BaseModel):
     company_id: str
     sprint_id: str
     name: Optional[str] = None
+
+
+class BoardUpdateRequest(BaseModel):
+    """GH#12695: rename a board. Only the name is updatable — see BoardService.update_board."""
+
+    name: str
 
 
 class MoveItemRequest(BaseModel):
@@ -238,6 +246,59 @@ async def get_board_items(
         "board": _board_response(board),
         "columns": columns_with_items,
     }
+
+
+@router.put("/{board_id}")
+async def update_board(
+    board_id: str,
+    body: BoardUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    svc: BoardService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> Dict[str, Any]:
+    """Rename a board (GH#12695). Boards were the only entity with no backend update."""
+    try:
+        uuid.UUID(board_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid board_id")
+
+    # GH#10296: verify tenant ownership BEFORE any cross-tenant mutation.
+    owner = await svc.get_board(session, board_id)
+    if owner is None or str(owner.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail=f"Board {board_id} not found")
+
+    board = await svc.update_board(session, board_id, body.name)
+    if board is None:
+        raise HTTPException(status_code=404, detail=f"Board {board_id} not found")
+    await session.commit()
+    return _board_response(board)
+
+
+@router.delete("/{board_id}", status_code=204)
+async def delete_board(
+    board_id: str,
+    session: AsyncSession = Depends(get_session),
+    svc: BoardService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> None:
+    """Delete a board and its columns (GH#12695).
+
+    Work items are untouched — they belong to the project, not the board, so
+    deleting a view must not destroy the work it displays.
+    """
+    try:
+        uuid.UUID(board_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid board_id")
+
+    owner = await svc.get_board(session, board_id)
+    if owner is None or str(owner.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail=f"Board {board_id} not found")
+
+    await svc.delete_board(session, board_id)
+    await session.commit()
 
 
 @router.post("/{board_id}/move")
