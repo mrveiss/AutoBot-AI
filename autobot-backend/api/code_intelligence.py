@@ -1334,31 +1334,42 @@ async def get_security_score(
         raise_invalid_input("path", f"does not exist: {path}")
 
     try:
-        analyzer = SecurityAnalyzer(project_root=path)
-        await asyncio.to_thread(analyzer.analyze_directory)
-        summary = analyzer.get_summary()
+        # #12866: this used to run analyzer.analyze_directory() inline via
+        # asyncio.to_thread. That is not a substitute for a separate process
+        # here — the scan is pure-Python and GIL-bound, so the worker thread
+        # holds the GIL and starves the event loop for the whole scan. Every
+        # other request on this worker stalls with it, which is what pushed
+        # /service-monitor/vms/status past the GUI's probe budget and made a
+        # healthy backend report itself "Unreachable" (p90 12s, 27.5% of polls).
+        #
+        # The Celery path for exactly this work already exists
+        # (POST /security/score/analyze -> run_security_analysis). Serve the
+        # latest completed result and enqueue a refresh instead of scanning in
+        # the request. Same response shape either way, so callers are unchanged.
+        cached = await get_latest_task_result(_REDIS_PREFIX)
+        if cached and cached.get("result"):
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "from_cache": True,
+                    "completed_at": cached.get("completed_at"),
+                    "path": path,
+                    **cached["result"],
+                },
+            )
 
-        # Generate grade and status using extracted helpers
-        score = summary["security_score"]
-        grade = get_grade_from_score(score)
-        status = _get_security_status_message(score)
-
+        queued = run_security_analysis.delay(path)
+        await store_latest_task_id(_REDIS_PREFIX, queued.id)
+        logger.info("Security score not cached; queued analysis task %s for %s", queued.id, path)
         return JSONResponse(
             status_code=200,
             content={
-                "status": "success",
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "status": "pending",
+                "task_id": queued.id,
                 "path": path,
-                "security_score": score,
-                "grade": grade,
-                "risk_level": summary["risk_level"],
-                "status_message": status,
-                "total_findings": summary["total_findings"],
-                "critical_issues": summary["critical_issues"],
-                "high_issues": summary["high_issues"],
-                "files_analyzed": summary["files_analyzed"],
-                "severity_breakdown": summary["by_severity"],
-                "owasp_breakdown": summary["by_owasp_category"],
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "message": "Security analysis queued; poll this endpoint for the completed score.",
             },
         )
 
