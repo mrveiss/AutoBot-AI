@@ -878,6 +878,33 @@ _slm_client: SLMClient | None = None
 _discovery_cache = ServiceDiscoveryCache(ttl_seconds=60)
 
 
+def slm_link_state() -> dict:
+    """Snapshot of the backend→SLM control link for health reporting (#12781).
+
+    The link degrades silently today: after ``_WS_AUTH_FAIL_THRESHOLD``
+    rejected handshakes the client pins its backoff to the maximum interval and
+    stops logging, so a node that cannot reach the control plane looks
+    identical to a healthy one from outside. Both paths by which a node reports
+    itself were broken on the node in #12781 and nothing surfaced it — the
+    crash loop in #12777 went unseen in the GUI as a direct result.
+
+    Returns a plain dict (no exceptions) so a health probe can render it even
+    when the client was never initialized.
+    """
+    client = get_slm_client()
+    if client is None:
+        return {"initialized": False, "connected": False, "auth_failures": 0, "backoff_pinned": False}
+
+    return {
+        "initialized": True,
+        "connected": bool(client._ws_connected),
+        "auth_failures": int(client._ws_auth_fail_count),
+        # The tell-tale of a link that has given up rather than one still retrying.
+        "backoff_pinned": client._reconnect_delay >= client._max_reconnect_delay,
+        "slm_url": client.slm_url,
+    }
+
+
 def get_slm_client() -> SLMClient | None:
     """
     Get the global SLM client instance.
