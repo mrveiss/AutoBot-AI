@@ -202,3 +202,92 @@ class TestComputeDriftExclusions:
 
             assert report["drift_detected"] is False
             assert report["drifted_files"] == []
+
+
+class TestTemplatedComponentDrift:
+    """Render-invariant drift for template-deployed components (#12886).
+
+    ``autobot-tts-worker`` is deployed as a rendered Jinja2 template, so a
+    directory checksum walk reports nothing but fake drift (the repo dir ships
+    main.py; the host runs tts-worker.py). It was therefore excluded from drift
+    entirely — and silently fell behind the backend calling it until users hit
+    a runtime 404 on /tts/synthesize/stream. These tests pin both halves of the
+    replacement: a render must NOT read as drift, a missing route MUST.
+    """
+
+    REPO_ROOT = Path(__file__).parent.parent.parent.parent
+    TEMPLATE_REL, DEPLOYED_REL = drift_checker._TEMPLATED_COMPONENTS["autobot-tts-worker"]
+
+    def _render(self) -> str:
+        """Substitute every Jinja expression the way ansible's template task would."""
+        import re
+
+        template = (self.REPO_ROOT / self.TEMPLATE_REL).read_text(encoding="utf-8")
+        assert "{{" in template, "template has no Jinja expressions — test is vacuous"
+        return re.sub(r"{{.*?}}", "/opt/autobot/rendered-value", template)
+
+    def _drift_for(self, deployed_text: str | None, monkeypatch):
+        monkeypatch.setattr(drift_checker, "DEFAULT_REPO_PATH", str(self.REPO_ROOT))
+        with tempfile.TemporaryDirectory() as dep_root:
+            if deployed_text is not None:
+                (Path(dep_root) / self.DEPLOYED_REL).write_text(deployed_text, encoding="utf-8")
+            return compute_drift("unused-for-templated-components", dep_root, "autobot-tts-worker")
+
+    def test_visible_but_not_resolve_capable(self):
+        """Drift surfaces see the worker; resolve still rejects it (no re-render path)."""
+        assert "autobot-tts-worker" in drift_checker.VISIBILITY_COMPONENTS
+        assert "autobot-tts-worker" not in drift_checker.ALLOWED_COMPONENTS
+
+    def test_faithful_render_is_not_drift(self, monkeypatch):
+        """Substituted values must never register as drift — the fake-drift guard."""
+        drifted, total = self._drift_for(self._render(), monkeypatch)
+
+        assert drifted == [], f"faithful render reported fake drift: {drifted}"
+        assert total == 1
+
+    def test_missing_route_is_drift(self, monkeypatch):
+        """A stale worker missing a route the backend calls must be reported."""
+        stale = self._render().replace('@app.post("/tts/synthesize/stream")', '@app.post("/tts/unused")')
+        drifted, total = self._drift_for(stale, monkeypatch)
+
+        assert total == 1
+        assert [d["status"] for d in drifted] == ["modified"]
+        assert drifted[0]["path"] == self.DEPLOYED_REL
+
+    def test_dropped_function_is_drift(self, monkeypatch):
+        """Structure comparison catches removed code, not just changed route strings."""
+        rendered = self._render()
+        marker = "def _run_clone_synthesis(text: str, audio_path: str) -> bytes:"
+        assert marker in rendered, "clone-synthesis helper missing from template (#12886)"
+        stale = rendered.replace(marker, "def _run_clone_synthesis(text, audio_path):")
+
+        drifted, _ = self._drift_for(stale, monkeypatch)
+
+        assert [d["status"] for d in drifted] == ["modified"]
+
+    def test_absent_deployed_file_is_drift(self, monkeypatch):
+        """A host that never received the rendered file reads as source_only, not silence."""
+        drifted, total = self._drift_for(None, monkeypatch)
+
+        assert total == 1
+        assert drifted[0]["status"] == "source_only"
+        assert drifted[0]["deployed_checksum"] is None
+
+    def test_unparseable_deployed_file_is_drift(self, monkeypatch):
+        """Corrupt deployed code falls back to a raw checksum rather than reporting clean."""
+        drifted, _ = self._drift_for("def broken( :\n", monkeypatch)
+
+        assert [d["status"] for d in drifted] == ["modified"]
+        assert drifted[0]["deployed_checksum"] is not None
+
+    def test_different_rendered_values_are_not_drift(self, monkeypatch):
+        """Two hosts rendered with different vars must both read clean."""
+        import re
+
+        template = (self.REPO_ROOT / self.TEMPLATE_REL).read_text(encoding="utf-8")
+        other_host = re.sub(r"{{.*?}}", "/srv/elsewhere/other-value", template)
+
+        drifted, total = self._drift_for(other_host, monkeypatch)
+
+        assert drifted == [], f"a differently-rendered host reported drift: {drifted}"
+        assert total == 1

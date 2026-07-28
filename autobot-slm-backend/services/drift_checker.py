@@ -9,6 +9,7 @@ Compares file checksums between the code_source directory and the deployed
 directory to detect files that have been manually patched or missed by Ansible.
 """
 
+import ast
 import hashlib
 import logging
 import os
@@ -105,7 +106,10 @@ ALLOWED_COMPONENTS = frozenset(
 # NOT resolve-capable (confirmed unmappable, see #12450 PR notes):
 #   - autobot-tts-worker: deployed via a single Jinja2-templated file
 #     (tts-worker.py.j2 -> tts-worker.py), not a 1:1 sync of the repo's
-#     autobot-tts-worker/ directory — comparing them would report fake drift.
+#     autobot-tts-worker/ directory. It is still VISIBLE — see
+#     _TEMPLATED_COMPONENTS, which compares it render-invariantly instead of
+#     by directory checksum (#12886). Resolve stays blocked because
+#     re-rendering the template needs the ansible var context.
 #   - autobot-celery / celery-beat: no distinct deployed directory — both run
 #     FROM the autobot-backend deployed dir (systemd WorkingDirectory), so
 #     they are already covered by the existing "autobot-backend" entry.
@@ -113,7 +117,31 @@ ALLOWED_COMPONENTS = frozenset(
 #     packages): synced into TWO deployed locations (autobot-frontend/ and
 #     autobot-slm-frontend/), so there is no single canonical deployed target
 #     to compare against — needs an owner decision on which (or both) to scan.
-EXTRA_VISIBILITY_COMPONENTS = frozenset({"plugins"})
+EXTRA_VISIBILITY_COMPONENTS = frozenset({"plugins", "autobot-tts-worker"})
+
+# Components deployed as a *rendered* Jinja2 template rather than a 1:1 file
+# sync (#12886). Maps component -> (template path relative to the repo root,
+# rendered file path relative to the deployed component dir).
+#
+# A directory checksum walk is meaningless for these: the repo dir holds
+# different files entirely (autobot-tts-worker/ ships main.py; the host runs
+# tts-worker.py), so every file would report source_only/deployed_only. That is
+# the fake drift the exclusion above was written to avoid — but excluding the
+# component outright traded noise for *no* signal, and the worker silently fell
+# behind the backend calling it until a user hit a runtime 404.
+#
+# _compute_templated_drift compares structure instead: both sides are parsed as
+# Python and every string constant is blanked before hashing. Rendering only
+# substitutes inside string literals, so a rendered value (install dir, model
+# id, port) can never register as drift, while a missing route, dropped helper
+# or changed call still does — which is exactly the class of skew that broke
+# /tts/synthesize/stream.
+_TEMPLATED_COMPONENTS: dict[str, tuple[str, str]] = {
+    "autobot-tts-worker": (
+        "autobot-slm-backend/ansible/roles/tts-worker/templates/tts-worker.py.j2",
+        "tts-worker.py",
+    ),
+}
 
 # Union of the resolve-capable allowlist and the read-only extras — used by
 # the GET-only drift surfaces (/status stale_components, GET /drift). The
@@ -259,6 +287,137 @@ def _collect_checksums(
     return checksums
 
 
+def _string_constants(tree: ast.AST) -> List[ast.Constant]:
+    """String-literal nodes of *tree* in a stable walk order."""
+    return [n for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+
+
+def _render_invariant_digests(template_src: str, deployed_src: str | None) -> Tuple[str, str | None] | None:
+    """Digest a .j2 template and its rendered file so the two are comparable.
+
+    Only the string literals the template actually *renders* — the ones holding
+    a Jinja expression — are blanked, on both sides at the same walk position.
+    A substituted install dir or model id therefore cannot read as drift, while
+    an ordinary string constant such as a route path still can: blanking every
+    literal would have made a renamed ``/tts/synthesize/stream`` invisible,
+    which is the very skew this exists to catch (#12886).
+
+    Args:
+        template_src: Raw .j2 template text (valid Python — all Jinja
+            expressions sit inside string literals).
+        deployed_src: The rendered file's text, or ``None`` to digest the
+            template alone (deployed file absent).
+
+    Returns:
+        Tuple of (template_digest, deployed_digest_or_None), or ``None`` when
+        either side does not parse as Python.
+    """
+    try:
+        template_tree = ast.parse(template_src)
+    except SyntaxError:
+        return None
+
+    template_strings = _string_constants(template_tree)
+    rendered_at = [i for i, node in enumerate(template_strings) if "{{" in node.value]
+
+    deployed_strings: List[ast.Constant] = []
+    deployed_tree = None
+    if deployed_src is not None:
+        try:
+            deployed_tree = ast.parse(deployed_src)
+        except SyntaxError:
+            return None
+        deployed_strings = _string_constants(deployed_tree)
+
+    for index in rendered_at:
+        template_strings[index].value = ""
+        # Misaligned lengths mean the structures already differ; the digests
+        # will disagree and report drift, which is the right answer.
+        if index < len(deployed_strings):
+            deployed_strings[index].value = ""
+
+    return (
+        _dump_digest(template_tree),
+        _dump_digest(deployed_tree) if deployed_tree is not None else None,
+    )
+
+
+def _dump_digest(tree: ast.AST) -> str:
+    """SHA-256 over an AST dump."""
+    return hashlib.sha256(ast.dump(tree).encode("utf-8")).hexdigest()
+
+
+def _compute_templated_drift(component: str, deployed_dir: str) -> Tuple[List[dict], int]:
+    """Structure-only drift for a template-rendered component (#12886).
+
+    Args:
+        component: A key of ``_TEMPLATED_COMPONENTS``.
+        deployed_dir: Absolute path to the deployed component directory.
+
+    Returns:
+        Tuple of (list_of_drift_dicts, total_files_compared) — same shape as
+        ``compute_drift``, always covering the single rendered file.
+    """
+    template_rel, deployed_rel = _TEMPLATED_COMPONENTS[component]
+    template_path = Path(DEFAULT_REPO_PATH) / template_rel
+    deployed_path = Path(deployed_dir) / deployed_rel
+
+    try:
+        template_src = template_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("drift_checker: cannot read template for %s: %s", component, exc)
+        return [], 0
+
+    try:
+        deployed_src: str | None = deployed_path.read_text(encoding="utf-8")
+    except OSError:
+        deployed_src = None
+
+    digests = _render_invariant_digests(template_src, deployed_src)
+    if digests is None and deployed_src is not None:
+        # The template is known-parseable (pinned by test), so a failure here
+        # means the DEPLOYED file no longer parses — real drift. Fall back to
+        # its raw checksum, which cannot collide with an AST digest.
+        digests = _render_invariant_digests(template_src, None)
+        if digests is not None:
+            return (
+                _templated_drift_entry(deployed_rel, digests[0], _file_checksum(deployed_path), "modified"),
+                1,
+            )
+
+    if digests is None:
+        # An unparseable template is a repo defect, not deployment drift —
+        # there is nothing to compare against. Pinned by drift_checker_test.
+        logger.error("drift_checker: template does not parse as Python: %s", template_path)
+        return [], 0
+
+    source_digest, deployed_digest = digests
+    if deployed_digest is None:
+        return _templated_drift_entry(deployed_rel, source_digest, None, "source_only"), 1
+
+    if deployed_digest == source_digest:
+        return [], 1
+
+    return _templated_drift_entry(deployed_rel, source_digest, deployed_digest, "modified"), 1
+
+
+def _templated_drift_entry(
+    rel_path: str,
+    source_digest: str,
+    deployed_digest: str | None,
+    status: str,
+) -> List[dict]:
+    """Wrap a templated-component comparison in the standard drift dict shape."""
+    return [
+        {
+            "path": rel_path,
+            "source_checksum": source_digest,
+            "deployed_checksum": deployed_digest,
+            "status": status,
+        }
+    ]
+
+
 def compute_drift(
     source_dir: str,
     deployed_dir: str,
@@ -287,6 +446,11 @@ def compute_drift(
     Returns:
         Tuple of (list_of_drift_dicts, total_files_compared).
     """
+    # Template-rendered components never match by directory walk — their repo
+    # dir holds different files than the host does (#12886).
+    if component in _TEMPLATED_COMPONENTS:
+        return _compute_templated_drift(component, deployed_dir)
+
     src_path = Path(source_dir)
     dep_path = Path(deployed_dir)
 
