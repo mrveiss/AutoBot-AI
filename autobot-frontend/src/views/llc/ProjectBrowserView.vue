@@ -167,7 +167,10 @@
         <!-- GH#11271: findings proposal queue -->
         <div v-if="p.code_source_id" class="card-findings">
           <div class="findings-header">
+            <!-- GH#12734: the findings feature is OFF by default, so an
+                 ungated button could only ever return 403. -->
             <BaseButton
+              v-if="findingsEnabled"
               variant="secondary"
               size="sm"
               :loading="scanningProject === p.id"
@@ -176,6 +179,7 @@
             >
               {{ scanningProject === p.id ? t('llcBrowser.findings.scanning') : t('llcBrowser.findings.scan') }}
             </BaseButton>
+            <span v-else class="findings-disabled-note">{{ t('llcBrowser.findings.disabled') }}</span>
           </div>
           <ErrorBanner v-if="findingsError[p.id]" :message="findingsError[p.id]" class="browser-error" />
           <div v-if="proposals[p.id] && proposals[p.id].length === 0" class="findings-empty">
@@ -462,6 +466,10 @@ const lifecycleError = ref<Record<string, string>>({})
 // GH#11271: findings proposal queue state (keyed by project id)
 const proposals = ref<Record<string, FindingProposal[]>>({})
 const scanningProject = ref<string | null>(null)
+// GH#12734: the scan action is gated on the server-side findings policy, which
+// defaults to OFF. Assume disabled until the policy says otherwise so the
+// button never appears during load and then vanishes.
+const findingsEnabled = ref(false)
 const findingsError = ref<Record<string, string>>({})
 
 function velocityFor(projectId: string): number[] {
@@ -774,10 +782,29 @@ async function dismissProposal(project: ProjectResponse, proposal: FindingPropos
   }
 }
 
-onMounted(loadProjects)
+async function loadFindingsPolicy(): Promise<void> {
+  try {
+    const policy = await api.get<{ enabled: boolean }>('/api/llc/findings/policy')
+    findingsEnabled.value = Boolean(policy?.enabled)
+  } catch (err) {
+    // A policy we cannot read is treated as disabled: showing an action that
+    // cannot work is worse than hiding one that might (GH#12734).
+    logger.error('Failed to load findings policy', err)
+    findingsEnabled.value = false
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadProjects(), loadFindingsPolicy()])
+})
 </script>
 
 <style scoped>
+.findings-disabled-note {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
 .llc-browser {
   padding: 1.5rem;
 }

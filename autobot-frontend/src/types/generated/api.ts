@@ -49648,6 +49648,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/findings/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy
+         * @description Return the findings policy so clients can gate the scan action (#12734).
+         *
+         *     The feature is OFF by default, and the policy was previously readable only
+         *     inside the backend — so the UI rendered a prominent "Scan for findings"
+         *     button that could only ever return 403. A client cannot gate on a value it
+         *     has no way to read.
+         */
+        get: operations["get_policy_api_llc_findings_policy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/projects/{project_id}/findings/scan": {
         parameters: {
             query?: never;
@@ -73664,6 +73689,25 @@ export interface components {
             score: number | null;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * FindingsPolicyResponse
+         * @description Client-visible findings policy (#12734).
+         *
+         *     Only the fields a caller needs to decide whether, and how, to offer the
+         *     scan action. Deliberately excludes operational tuning (verify_batch_size,
+         *     run_on_index) — those are SLM-side concerns and exposing them would invite
+         *     the UI to depend on values it has no business reacting to.
+         */
+        FindingsPolicyResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Min Severity */
+            min_severity: string;
+            /** Require Approval To Promote */
+            require_approval_to_promote: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -167654,6 +167698,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_policy_api_llc_findings_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingsPolicyResponse"];
                 };
             };
         };
