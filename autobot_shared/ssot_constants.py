@@ -24,9 +24,9 @@ This module replaces:
   - autobot-backend/voice_processing/constants.py
 """
 
-from enum import Enum
 import re
 from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, FrozenSet, List
