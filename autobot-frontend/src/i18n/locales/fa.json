@@ -1905,6 +1905,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "نمایش {shown} از {total}"
     }
   },
   "knowledge": {
