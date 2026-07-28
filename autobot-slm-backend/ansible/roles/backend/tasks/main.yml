@@ -13,6 +13,13 @@
   ansible.builtin.import_tasks: clean.yml
   tags: ['clean']
 
+# #12777: detect (and optionally fix) discarded core dumps before anything else
+# runs, so the report is visible near the top of the deploy output rather than
+# buried after the install steps.
+- name: "Backend | Include core-capture diagnostics"
+  ansible.builtin.import_tasks: core_capture.yml
+  tags: ['backend', 'diagnostics']
+
 # ============================================================
 # Per-role service account  (#926 Phase 4)
 # ============================================================

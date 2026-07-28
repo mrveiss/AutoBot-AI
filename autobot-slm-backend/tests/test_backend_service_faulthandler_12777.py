@@ -70,3 +70,64 @@ def test_restart_always_is_retained():
     """The crash loop is survivable only because systemd restarts the unit;
     the diagnostics change must not alter that."""
     assert "Restart=always" in _render()
+
+
+# ---------------------------------------------------------------------------
+# Core capture (#12777 item 2) — the other half of the destroyed forensic trail.
+#
+# This file previously asserted that only faulthandler was fixable here. That
+# was wrong: ansible owns the host, so both the RLIMIT_CORE the unit grants and
+# the kernel core_pattern are this repo's to set. What is genuinely NOT this
+# role's call is flipping a host-wide setting by default, hence the opt-in.
+# ---------------------------------------------------------------------------
+
+_ROLE_DIR = Path(__file__).resolve().parents[1] / "ansible" / "roles" / "backend"
+
+
+def _yaml_text(relative: str) -> str:
+    return (_ROLE_DIR / relative).read_text(encoding="utf-8")
+
+
+def test_unit_grants_a_core_limit():
+    """systemd defaults RLIMIT_CORE to 0 — without this no core is ever written."""
+    assert "LimitCORE=" in _render()
+
+
+def test_core_limit_is_overridable():
+    """A node that must not write cores can cap it without editing the template."""
+    assert "LimitCORE=0" in _render(backend_core_limit="0")
+
+
+def test_core_capture_is_opt_in():
+    """Rewriting kernel.core_pattern affects every process on the node."""
+    defaults = _yaml_text("defaults/main.yml")
+
+    assert "backend_core_capture: false" in defaults
+    assert "backend_core_dir:" in defaults
+
+
+def test_broken_core_handler_is_always_reported():
+    """The failure mode is silence: code=dumped while the core is discarded.
+
+    Detection must not be gated on the opt-in, or the state stays invisible on
+    exactly the nodes that did not enable capture.
+    """
+    tasks = _yaml_text("tasks/core_capture.yml")
+    report = tasks.split("Report that cores are being discarded")[1]
+
+    assert "core_pattern" in tasks
+    assert "not (backend_core_capture | default(false) | bool)" in report
+
+
+def test_core_pattern_is_only_rewritten_when_enabled():
+    """The sysctl write is the one genuinely invasive step — it must be gated."""
+    tasks = _yaml_text("tasks/core_capture.yml")
+    sysctl_task = tasks.split("Point core_pattern at a real path")[1]
+
+    assert "kernel.core_pattern" in sysctl_task
+    assert "when: backend_core_capture | default(false) | bool" in sysctl_task
+
+
+def test_core_capture_tasks_are_wired_into_the_role():
+    """An unincluded task file is dead code — the #12777 lesson twice over."""
+    assert "core_capture.yml" in _yaml_text("tasks/main.yml")

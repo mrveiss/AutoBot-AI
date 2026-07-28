@@ -1,0 +1,81 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Core-dump capture for the backend SIGABRT crash loop (#12777).
+#
+# The backend aborts every ~25-55 min from native code and leaves no forensic
+# trail. faulthandler (see the unit template) covers the Python side, but a
+# fatal fault inside a C extension is only fully diagnosable from a core.
+#
+# On the deployment platform core capture is not merely absent, it is BROKEN:
+# core_pattern pipes cores to a handler binary that does not exist, so the
+# kernel still reports `code=dumped` while discarding the core. That is worse
+# than having no capture configured, because the abort *looks* recorded.
+#
+# These tasks always DETECT and REPORT that state, so it can never again be
+# silently true. Rewriting core_pattern is opt-in (`backend_core_capture`,
+# default false) because it is a host-wide kernel setting that affects every
+# process on the node, not just this service — see defaults/main.yml.
+
+# Read with `cat`, not slurp: procfs entries report size 0 and slurp is not
+# reliable across kernels for them.
+- name: "Backend | Read the kernel core_pattern (#12777)"
+  ansible.builtin.command: cat /proc/sys/kernel/core_pattern
+  register: backend_core_pattern_raw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: ['backend', 'diagnostics']
+
+- name: "Backend | Resolve the configured core handler (#12777)"
+  ansible.builtin.set_fact:
+    # A leading '|' means the kernel pipes the core to a handler binary; the
+    # first token is its absolute path. Anything else is a plain file pattern.
+    backend_core_pattern: "{{ backend_core_pattern_raw.stdout | default('') | trim }}"
+  tags: ['backend', 'diagnostics']
+
+- name: "Backend | Stat the core handler when core_pattern pipes to one (#12777)"
+  ansible.builtin.stat:
+    path: "{{ backend_core_pattern[1:].split(' ')[0] }}"
+  register: backend_core_handler
+  become: true
+  when: backend_core_pattern is defined and backend_core_pattern.startswith('|')
+  tags: ['backend', 'diagnostics']
+
+- name: "Backend | Report that cores are being discarded (#12777)"
+  ansible.builtin.debug:
+    msg: >-
+      Core capture is BROKEN on this node: core_pattern pipes cores to
+      '{{ backend_core_pattern[1:].split(' ')[0] }}', which does not exist, so
+      the kernel reports code=dumped and discards the core. faulthandler still
+      records a Python traceback to the backend error log. Set
+      backend_core_capture=true to redirect cores to
+      {{ backend_core_dir }} instead — note this changes core_pattern for
+      EVERY process on the node, which is why it is not the default.
+  when:
+    - backend_core_handler.stat is defined
+    - not (backend_core_handler.stat.exists | default(true))
+    - not (backend_core_capture | default(false) | bool)
+  tags: ['backend', 'diagnostics']
+
+- name: "Backend | Create the core dump directory (#12777)"
+  ansible.builtin.file:
+    path: "{{ backend_core_dir }}"
+    state: directory
+    owner: "{{ backend_service_user | default('autobot') }}"
+    group: "{{ backend_service_group | default('autobot') }}"
+    mode: '0750'
+  become: true
+  when: backend_core_capture | default(false) | bool
+  tags: ['backend', 'diagnostics']
+
+- name: "Backend | Point core_pattern at a real path (#12777)"
+  ansible.builtin.sysctl:
+    name: kernel.core_pattern
+    value: "{{ backend_core_dir }}/core.%e.%p.%t"
+    state: present
+    sysctl_set: true
+    reload: true
+  become: true
+  when: backend_core_capture | default(false) | bool
+  tags: ['backend', 'diagnostics']

@@ -36,6 +36,15 @@ backend_workers: 4
 backend_start_timeout_sec: 900
 backend_stop_timeout_sec: 45
 
+# #12777: core-dump capture for the SIGABRT crash loop. OFF by default and that
+# is a recorded decision, not an oversight: kernel.core_pattern is host-wide, so
+# enabling it changes where EVERY process on the node writes cores, and on a
+# co-located install that is not this role's to decide. The deploy always
+# reports when the configured handler is missing (cores silently discarded), so
+# the broken state stays visible either way — see tasks/core_capture.yml.
+backend_core_capture: false
+backend_core_dir: /var/lib/autobot/cores
+
 # Celery worker settings (Issue #863)
 celery_concurrency: 4  # Number of worker processes
 celery_max_tasks_per_child: 1000  # Restart worker after N tasks (prevents memory leaks)
