@@ -1,0 +1,33 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# GH#12871: render backend.env.j2 with the backend role's defaults in scope.
+#
+# The self-update playbook used to render this template from a bare
+# playbook-level `template:` task. Role defaults are not in scope there, so the
+# task died on `AnsibleUndefinedVariable: 'backend_chromadb_auth_token'` — PLAY 2
+# failed and PLAY 3 never ran. That variable was only the first of 37 the
+# template needs and the play does not define.
+#
+# Loading the defaults with `include_vars` would have been worse than the bug:
+# include_vars outranks task vars (verified empirically on ansible 2.17), so it
+# would have overwritten the five secrets the caller reads off the live host
+# (backend_secret_key, backend_jwt_secret, autobot_internal_api_key,
+# backend_postgres_password, autobot_admin_password) with the role's empty /
+# "change-me-in-production" placeholders — writing broken secrets into a
+# production .env.
+#
+# Invoking this file via include_role puts the defaults at role-default
+# precedence, so they fill the other 32 while the caller's overrides still win.
+#
+# Caller must set: backend_env_dest, backend_env_owner, backend_env_group.
+---
+- name: "Backend | Render .env from template (#12871)"
+  ansible.builtin.template:
+    src: backend.env.j2
+    dest: "{{ backend_env_dest }}"
+    mode: "0600"
+    owner: "{{ backend_env_owner }}"
+    group: "{{ backend_env_group }}"
+    backup: true
+  become: true
+  tags: ['backend', 'env']
