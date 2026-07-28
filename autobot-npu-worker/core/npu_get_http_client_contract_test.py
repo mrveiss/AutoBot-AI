@@ -26,7 +26,8 @@ from pathlib import Path
 
 import pytest
 
-_WORKER_SRC = Path(__file__).resolve().parent / "npu_integration.py"
+# #12656: the client moved to autobot_shared/npu — the contract follows it.
+_WORKER_SRC = Path(__file__).resolve().parents[2] / "autobot_shared" / "npu" / "integration.py"
 _SHARED_SRC = Path(__file__).resolve().parents[2] / "autobot_shared" / "http_client.py"
 
 
@@ -53,10 +54,18 @@ def test_shared_get_http_client_is_sync():
     assert not _is_async_def(_SHARED_SRC, "get_http_client")
 
 
-def test_worker_fallback_matches_the_shared_signature():
-    """A fallback that differs in async-ness makes the call site unfixable."""
-    assert _is_sync_def(_WORKER_SRC, "get_http_client"), "fallback must be `def`, matching autobot_shared"
+def test_shared_module_imports_it_rather_than_redefining_it():
+    """#12656 removed the possibility of disagreement rather than fixing it.
+
+    There is no second `get_http_client` to drift out of step with the shared
+    one — the NPU client imports it directly, so the async-ness mismatch that
+    caused #12910 cannot recur.
+    """
+    source = _WORKER_SRC.read_text(encoding="utf-8")
+
+    assert "from autobot_shared.http_client import HTTPClientManager, get_http_client" in source
     assert not _is_async_def(_WORKER_SRC, "get_http_client")
+    assert not _is_sync_def(_WORKER_SRC, "get_http_client"), "no local redefinition should exist"
 
 
 def test_call_sites_do_not_await_it():
