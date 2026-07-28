@@ -1634,6 +1634,13 @@ class CodeSyncStatusResponse(BaseModel):
     # Non-empty means a managed component is stale even if node code_version
     # matches latest — so consumers must not report "up to date" while this is set.
     stale_components: list[str] = []
+    # #12776: post-hoc verdict on the last self-update run. The self-update path
+    # restarts this backend mid-run by design, so the process that launched the
+    # playbook is gone before it finishes — completion can only be judged from
+    # the log afterwards. Without this, a run that died after Play 1 still
+    # reported a successful update (#12596, invisible across two fix attempts).
+    self_update_incomplete: bool = False
+    self_update_detail: str | None = None
 
 
 class CodeSyncRefreshResponse(BaseModel):
