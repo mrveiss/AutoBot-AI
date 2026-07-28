@@ -9,10 +9,8 @@ Business logic for user management operations including CRUD,
 authentication, and role assignment.
 """
 
-import logging
 import secrets
 import uuid
-from datetime import datetime, timezone
 from typing import List
 
 from sqlalchemy import func, or_, select
@@ -20,11 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from autobot_shared.auth.jwt_core import hash_password, verify_password
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
+from user_management.services.session_service import SessionService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserServiceError(Exception):
@@ -296,7 +297,18 @@ class UserService(BaseService):
         include_inactive: bool = False,
         search: str | None = None,
     ) -> tuple[List[User], int]:
-        """List users with pagination and optional search filtering."""
+        """
+        List users with pagination.
+
+        Args:
+            limit: Maximum number of users to return
+            offset: Number of users to skip
+            include_inactive: Include deactivated users
+            search: Search term for email, username, or display_name
+
+        Returns:
+            Tuple of (users list, total count)
+        """
         base_query = self._build_user_list_base_query(include_inactive, search)
 
         # Get total count
@@ -371,7 +383,7 @@ class UserService(BaseService):
 
     async def _finalize_user_update(self, user: User, user_id: uuid.UUID, changes: dict) -> None:
         """Finalize user update with timestamp and audit logging. Issue #620."""
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         if changes:
@@ -430,6 +442,7 @@ class UserService(BaseService):
         current_password: str | None,
         new_password: str,
         require_current: bool = True,
+        current_token: str | None = None,
     ) -> bool:
         """
         Change user password.
@@ -439,6 +452,7 @@ class UserService(BaseService):
             current_password: Current password (for verification)
             new_password: New password
             require_current: Whether to require current password verification
+            current_token: Current JWT token to preserve (other sessions invalidated)
 
         Returns:
             True if password changed
@@ -456,14 +470,21 @@ class UserService(BaseService):
                 raise InvalidCredentialsError("Current password is incorrect")
 
         user.password_hash = self.hash_password(new_password)
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
+
+        # Invalidate all sessions except current one
+        session_service = SessionService()
+        invalidated_count = await session_service.invalidate_user_sessions(user_id=user_id, except_token=current_token)
 
         await self._audit_log(
             action=AuditAction.PASSWORD_CHANGED,
             resource_type=AuditResourceType.USER,
             resource_id=user_id,
-            details={"method": "user_initiated"},
+            details={
+                "method": "user_initiated",
+                "sessions_invalidated": invalidated_count,
+            },
         )
 
         return True
@@ -486,7 +507,7 @@ class UserService(BaseService):
             raise UserNotFoundError(f"User {user_id} not found")
 
         user.is_active = False
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -517,7 +538,7 @@ class UserService(BaseService):
             raise UserNotFoundError(f"User {user_id} not found")
 
         user.is_active = True
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -530,13 +551,23 @@ class UserService(BaseService):
         logger.info("Activated user: %s", user_id)
         return True
 
-    async def delete_user(self, user_id: uuid.UUID, hard_delete: bool = False) -> bool:
+    async def delete_user(
+        self,
+        user_id: uuid.UUID,
+        hard_delete: bool = False,
+        reassign_to: uuid.UUID | None = None,
+    ) -> bool:
         """
         Delete a user account.
 
         Args:
             user_id: User ID to delete
             hard_delete: If True, permanently delete; otherwise soft delete
+            reassign_to: When provided, ownership of the user's memory records
+                is transferred to this user BEFORE the row is deleted.  For a
+                hard delete this is fail-closed: if reassignment raises
+                unexpectedly the delete is aborted so data is never
+                hard-destroyed-then-orphaned.  Soft delete proceeds regardless.
 
         Returns:
             True if deleted
@@ -548,22 +579,42 @@ class UserService(BaseService):
         if not user:
             raise UserNotFoundError(f"User {user_id} not found")
 
+        reassign_counts: dict = {}
+        if reassign_to is not None:
+            # Lazy import avoids heavy circular deps at module load time.
+            from memory.ownership_reassign import reassign_user_memory  # noqa: PLC0415
+
+            if hard_delete:
+                # Fail-closed for hard delete: propagate any unexpected error so
+                # the caller knows the data was not destroyed.
+                reassign_counts = await reassign_user_memory(str(user_id), str(reassign_to))
+            else:
+                try:
+                    reassign_counts = await reassign_user_memory(str(user_id), str(reassign_to))
+                except Exception as exc:
+                    logger.warning("delete_user: memory reassign failed (soft delete continues): %s", exc)
+
         if hard_delete:
             await self.session.delete(user)
         else:
-            user.deleted_at = datetime.now(timezone.utc)
+            user.deleted_at = now_utc()
             user.is_active = False
 
         await self.session.flush()
+
+        audit_details: dict = {"hard_delete": hard_delete}
+        if reassign_to is not None:
+            audit_details["reassign_to"] = str(reassign_to)
+            audit_details["reassign_counts"] = reassign_counts
 
         await self._audit_log(
             action=AuditAction.USER_DELETED,
             resource_type=AuditResourceType.USER,
             resource_id=user_id,
-            details={"hard_delete": hard_delete},
+            details=audit_details,
         )
 
-        logger.info("Deleted user: %s (hard=%s)", user_id, hard_delete)
+        logger.info("Deleted user: %s (hard=%s, reassign_to=%s)", user_id, hard_delete, reassign_to)
         return True
 
     # -------------------------------------------------------------------------
@@ -634,7 +685,7 @@ class UserService(BaseService):
             return None
 
         # Update last login
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
