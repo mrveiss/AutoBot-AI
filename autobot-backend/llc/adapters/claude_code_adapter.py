@@ -88,6 +88,19 @@ def _state_path(output_dir: str, run_id: str) -> str:
     return os.path.join(output_dir, f"llc_state_{safe_run}.json")
 
 
+def _is_unresumable_session_output(text: str) -> bool:
+    """True when CLI output says the resume session id does not exist (#12683).
+
+    Matched on the CLI's own wording. Kept deliberately narrow: a broader match
+    would clear a valid session on unrelated errors, forcing agents to lose
+    conversation continuity for no reason.
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    return "no conversation found with session id" in lowered
+
+
 def _stderr_path(output_file: str) -> str:
     """Sidecar stderr capture next to the stdout .jsonl (GH#9992)."""
     return f"{output_file}.stderr.log"
@@ -154,7 +167,12 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         The prompt is passed positionally after ``--`` so a prompt starting with
         ``-`` can never be parsed as an option (matches the execution backend).
         """
-        cmd: list[str] = [cli, "--output-format", "stream-json", "--print"]
+        # #12683: Claude Code rejects `--print --output-format stream-json`
+        # unless --verbose is also present ("Error: When using --print,
+        # --output-format=stream-json requires --verbose"), so every fresh run
+        # died before doing any work. --verbose does not change the stream-json
+        # payload we parse; it only satisfies that CLI precondition.
+        cmd: list[str] = [cli, "--output-format", "stream-json", "--print", "--verbose"]
         if resume_session_id:
             cmd += ["--resume", resume_session_id]
         else:
@@ -333,6 +351,20 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
                 status=LLCRunStatus.RATE_LIMITED,
                 error="provider rate-limited (detected in CLI output)",
             )
+
+        # #12683: a stored session id the CLI cannot resume ("No conversation
+        # found with session ID: ...") otherwise fails EVERY subsequent
+        # heartbeat — the same bad id is replayed forever with no way out.
+        # Dropping it degrades the next run to a fresh session instead.
+        if _is_unresumable_session_output(stderr_tail) or _is_unresumable_session_output(tail):
+            agent_id_for_clear: str = agent_config.get("agent_id", "")
+            logger.warning(
+                "ClaudeCodeAdapter: session for agent %s is not resumable — clearing stored id "
+                "so the next heartbeat starts a fresh session (run %s)",
+                agent_id_for_clear,
+                run_id,
+            )
+            await self._clear_session(agent_id_for_clear)
 
         # Surface non-rate-limit stderr so a failed/killed run is diagnosable
         # instead of silent (the PIPE was previously never drained).
