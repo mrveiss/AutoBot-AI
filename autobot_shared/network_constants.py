@@ -318,12 +318,16 @@ _LAZY_SERVICE_URLS: dict = {
     "REDIS_LOCAL": lambda: f"redis://{NetworkConstants.LOCALHOST_IP}:{NetworkConstants.REDIS_PORT}",
     "OLLAMA_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}",
     "VNC_DESKTOP": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.VNC_PORT}/vnc.html",
-    "CHROME_DEBUGGER_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.CHROME_DEBUGGER_PORT}",
+    "CHROME_DEBUGGER_LOCAL": lambda: (
+        f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.CHROME_DEBUGGER_PORT}"
+    ),
     "VNC_LOCAL": lambda: f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}/vnc.html",
     "BROWSER_SERVICE": lambda: f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}",
     "AI_STACK_SERVICE": lambda: f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.AI_STACK_PORT}",
     "NPU_WORKER_SERVICE": lambda: f"http://{NetworkConstants.NPU_WORKER_VM_IP}:{NetworkConstants.NPU_WORKER_PORT}",
-    "NPU_WORKER_WINDOWS_SERVICE": lambda: f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.NPU_WORKER_WINDOWS_PORT}",
+    "NPU_WORKER_WINDOWS_SERVICE": lambda: (
+        f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.NPU_WORKER_WINDOWS_PORT}"
+    ),
     "PROMETHEUS_API": lambda: f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.PROMETHEUS_PORT}",
     "ALERTMANAGER_API": lambda: f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.ALERTMANAGER_PORT}",
     "GRAFANA_URL": lambda: f"http://{NetworkConstants.REDIS_VM_IP}:{NetworkConstants.GRAFANA_PORT}",
