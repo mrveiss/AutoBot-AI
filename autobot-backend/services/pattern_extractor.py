@@ -8,6 +8,7 @@ Pattern Extractor Service (Issue #903)
 Extracts code patterns from AutoBot codebase for ML training and completion.
 """
 
+from utils.line_index import LineIndex  # #12884
 import ast
 import json
 import re
@@ -264,6 +265,9 @@ class PatternExtractor:
 
         # Extract composable functions
         composable_pattern = r"export\s+function\s+(use[A-Z]\w+)\s*\([^)]*\)\s*:\s*(\{[^}]+\})"
+        # #12884: build the offset->line map once; the per-match
+        # `content[:start].count()` was O(n*m) and held the GIL.
+        _line_index = LineIndex(content)
         for match in re.finditer(composable_pattern, content):
             func_name, return_type = match.groups()
             pattern = {
@@ -273,13 +277,16 @@ class PatternExtractor:
                 "signature": f"export function {func_name}",
                 "body": match.group(0)[:200],  # First 200 chars
                 "file_path": str(file_path.relative_to(self.base_path)),
-                "line_number": content[: match.start()].count("\n") + 1,
+                "line_number": _line_index.line_of(match.start()),
                 "context": {"return_type": return_type},
             }
             self.patterns["composable"].append(pattern)
 
         # Extract interface patterns
         interface_pattern = r"export\s+interface\s+(\w+)\s*\{([^}]+)\}"
+        # #12884: build the offset->line map once; the per-match
+        # `content[:start].count()` was O(n*m) and held the GIL.
+        _line_index = LineIndex(content)
         for match in re.finditer(interface_pattern, content, re.MULTILINE):
             interface_name, body = match.groups()
             pattern = {
@@ -289,7 +296,7 @@ class PatternExtractor:
                 "signature": f"export interface {interface_name}",
                 "body": match.group(0),
                 "file_path": str(file_path.relative_to(self.base_path)),
-                "line_number": content[: match.start()].count("\n") + 1,
+                "line_number": _line_index.line_of(match.start()),
                 "context": {},
             }
             self.patterns["interface"].append(pattern)

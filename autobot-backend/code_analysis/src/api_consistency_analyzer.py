@@ -5,6 +5,7 @@ API Consistency Analyzer using Redis and NPU acceleration
 Analyzes API endpoints for consistency, patterns, and best practices
 """
 
+from utils.line_index import LineIndex  # #12884
 import ast
 import json
 import re
@@ -294,8 +295,11 @@ class APIConsistencyAnalyzer:
         # Issue #510: Use precompiled patterns for O(1) regex creation
         for framework, compiled_list in self._compiled_framework_patterns.items():
             for compiled_pattern, description in compiled_list:
+                # #12884: build the offset->line map once; the per-match
+                # `content[:start].count()` was O(n*m) and held the GIL.
+                _line_index = LineIndex(content)
                 for match in compiled_pattern.finditer(content):
-                    line_num = content[: match.start()].count("\n") + 1
+                    line_num = _line_index.line_of(match.start())
 
                     if framework == "fastapi":
                         method = match.group(1).upper()

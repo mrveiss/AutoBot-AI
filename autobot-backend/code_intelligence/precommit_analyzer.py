@@ -16,6 +16,7 @@ Part of Issue #223 - Git Pre-commit Hook Analyzer
 Parent Epic: #217 - Advanced Code Intelligence
 """
 
+from utils.line_index import LineIndex  # #12884
 import concurrent.futures
 import re
 import subprocess  # nosec B404 - controlled git process execution
@@ -455,8 +456,11 @@ class PrecommitAnalyzer:
         results: List[CheckResult],
     ) -> None:
         """Run multiline pattern matching against entire file content. Issue #620."""
+        # #12884: build the offset->line map once; the per-match
+        # `content[:start].count()` was O(n*m) and held the GIL.
+        _line_index = LineIndex(content)
         for match in pattern.finditer(content):
-            line_num = content[: match.start()].count("\n") + 1
+            line_num = _line_index.line_of(match.start())
             snippet = self._get_snippet(lines, line_num)
             results.append(self._create_check_result(check, filepath, line_num, snippet))
 

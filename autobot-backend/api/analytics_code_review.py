@@ -9,6 +9,7 @@ Provides automated code review with pattern checking, security analysis,
 and AI-generated review comments. Learns from past reviews.
 """
 
+from utils.line_index import LineIndex  # #12884
 import asyncio
 import json
 import re
@@ -276,9 +277,12 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
     for pattern_id, pattern_def in REVIEW_PATTERNS.items():
         if pattern_def.get("pattern"):
             try:
+                # #12884: build the offset->line map once; the per-match
+                # `content[:start].count()` was O(n*m) and held the GIL.
+                _line_index = LineIndex(content)
                 for match in re.finditer(pattern_def["pattern"], content, re.IGNORECASE | re.MULTILINE):
                     # Calculate line number
-                    line_num = content[: match.start()].count("\n") + 1
+                    line_num = _line_index.line_of(match.start())
                     code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
 
                     comments.append(
@@ -298,8 +302,11 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                 logger.warning("Invalid regex pattern: %s", pattern_id)
 
     # Check for long functions
+    # #12884: build the offset->line map once; the per-match
+    # `content[:start].count()` was O(n*m) and held the GIL.
+    _line_index = LineIndex(content)
     for match in _FUNC_DEFINITION_RE.finditer(content):
-        func_start = content[: match.start()].count("\n") + 1
+        func_start = _line_index.line_of(match.start())
         # Find function end (simple heuristic)
         remaining = content[match.end() :]
         indent_match = _NEXT_TOPLEVEL_RE.search(remaining)

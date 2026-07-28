@@ -23,6 +23,7 @@ NOTE: __init__ method (~141 lines) is an ACCEPTABLE EXCEPTION per Issue #490 -
 initialization of security agent with comprehensive report structure. Low priority.
 """
 
+from utils.line_index import LineIndex  # #12884
 import logging
 import sys
 from pathlib import Path
@@ -268,8 +269,11 @@ class SecurityFixAgent(SecurityFixToolBase):
 
             matches = list(re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE))
 
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in matches:
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 match_text = match.group()
 
                 # Skip if this appears to be safe in context

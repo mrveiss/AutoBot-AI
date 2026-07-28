@@ -19,6 +19,7 @@ Author: AutoBot Security Fix Agent
 Version: 1.0.0
 """
 
+from utils.line_index import LineIndex  # #12884
 import logging
 import sys
 from pathlib import Path
@@ -118,8 +119,11 @@ class SecurityFixAgent(SecurityFixToolBase):
         for vuln_type, pattern in self.xss_patterns.items():
             matches = list(re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE))
 
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in matches:
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 context_start = max(0, match.start() - 50)
                 context_end = min(len(content), match.end() + 50)
                 context = content[context_start:context_end].strip()

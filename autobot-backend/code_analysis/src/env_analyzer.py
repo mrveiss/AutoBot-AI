@@ -7,6 +7,7 @@ Environment Variable Analyzer using Redis and NPU acceleration
 Analyzes codebase for hardcoded values that should be environment variables
 """
 
+from utils.line_index import LineIndex  # #12884
 from __future__ import annotations
 
 import ast
@@ -770,8 +771,11 @@ class EnvironmentAnalyzer:
 
         # Use precompiled combined patterns
         for category, compiled in self._compiled_patterns.items():
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in compiled.finditer(content):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
 
                 # Issue #632: Skip matches inside docstrings
                 if line_num in docstring_lines:

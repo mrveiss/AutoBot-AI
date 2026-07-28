@@ -9,6 +9,7 @@ Detects design patterns in code.
 Extracted from ArchitecturalPatternAnalyzer as part of Issue #394.
 """
 
+from utils.line_index import LineIndex  # #12884
 import ast
 import re
 from pathlib import Path
@@ -161,8 +162,11 @@ class PatternDetector:
         detected_patterns: List[Dict[str, Any]],
     ) -> None:
         """Match a single pattern and record matches."""
+        # #12884: build the offset->line map once; the per-match
+        # `content[:start].count()` was O(n*m) and held the GIL.
+        _line_index = LineIndex(content)
         for match in re.finditer(regex_pattern, content, re.MULTILINE | re.IGNORECASE):
-            line_num = content[: match.start()].count("\n") + 1
+            line_num = _line_index.line_of(match.start())
             detected_patterns.append(
                 {
                     "pattern": pattern_name,

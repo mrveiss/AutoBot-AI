@@ -9,6 +9,7 @@ Issue #222: Identifies performance anti-patterns like N+1 queries,
 unnecessary loops, blocking I/O in async contexts, and cache misuse.
 """
 
+from utils.line_index import LineIndex  # #12884
 import ast
 import asyncio
 import re
@@ -392,9 +393,12 @@ def analyze_with_regex(
 
         try:
             regex = re.compile(pattern.regex_pattern, re.MULTILINE)
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in regex.finditer(content):
                 # Find line number
-                line_start = content[: match.start()].count("\n") + 1
+                line_start = _line_index.line_of(match.start())
 
                 # Get snippet
                 snippet_start = max(0, line_start - 2)
