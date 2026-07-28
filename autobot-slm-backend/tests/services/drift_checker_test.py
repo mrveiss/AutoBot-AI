@@ -291,3 +291,40 @@ class TestTemplatedComponentDrift:
 
         assert drifted == [], f"a differently-rendered host reported drift: {drifted}"
         assert total == 1
+
+
+class TestExclusionRationales:
+    """The drift exclusions must be asserted, not just argued in a comment (#12886).
+
+    ``autobot-celery`` / ``autobot-celery-beat`` are excluded on the grounds
+    that they run FROM the autobot-backend deployed directory and are therefore
+    already covered by that component's drift entry. That is only true while
+    their systemd units keep pointing at the backend's WorkingDirectory — so
+    pin it, rather than trusting a comment that nothing re-checks.
+    """
+
+    UNIT_DIR = Path(__file__).parent.parent.parent / "ansible" / "roles" / "backend" / "templates"
+
+    def _working_directory(self, unit: str) -> str:
+        import re
+
+        text = (self.UNIT_DIR / unit).read_text(encoding="utf-8")
+        found = re.findall(r"^WorkingDirectory=(.+)$", text, re.MULTILINE)
+        assert len(found) == 1, f"{unit}: expected exactly one WorkingDirectory, got {found}"
+        return found[0].strip()
+
+    def test_celery_units_share_the_backend_working_directory(self):
+        """Celery drift is covered by "autobot-backend" only while this holds."""
+        backend_dir = self._working_directory("autobot-backend.service.j2")
+
+        for unit in ("autobot-celery.service.j2", "autobot-celery-beat.service.j2"):
+            assert self._working_directory(unit) == backend_dir, (
+                f"{unit} no longer runs from the backend deployed dir — it needs its own "
+                "drift entry, since the autobot-backend walk no longer covers it"
+            )
+
+    def test_celery_is_not_silently_dropped_from_both_sets(self):
+        """Celery must stay excluded *because* of the shared dir, not by accident."""
+        for component in ("autobot-celery", "autobot-celery-beat"):
+            assert component not in drift_checker.VISIBILITY_COMPONENTS
+        assert "autobot-backend" in drift_checker.VISIBILITY_COMPONENTS
