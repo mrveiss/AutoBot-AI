@@ -53,9 +53,10 @@ def test_every_client_call_is_served_by_the_worker():
     """The defect in #12886: /tts/clone-voice was called but never served."""
     unserved = sorted(_client_calls() - _worker_routes())
 
-    assert not unserved, (
-        "tts_client.py calls routes the worker template does not serve — these 404 at runtime: "
-        + ", ".join(f"{method.upper()} {path}" for method, path in unserved)
+    assert (
+        not unserved
+    ), "tts_client.py calls routes the worker template does not serve — these 404 at runtime: " + ", ".join(
+        f"{method.upper()} {path}" for method, path in unserved
     )
 
 
