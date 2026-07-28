@@ -21,7 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
 from autobot_shared.time_utils import now_utc
-from constants.threshold_constants import CategoryDefaults
+from autobot_shared.ssot_constants import CategoryDefaults
 from user_management.models.base import Base
 
 if TYPE_CHECKING:
