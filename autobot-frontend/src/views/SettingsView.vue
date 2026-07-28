@@ -15,10 +15,10 @@ Issue #753: User preference management interface
         <div class="header-content">
           <h1 class="page-title">
             <Icon name="cog" />
-            Settings
+            {{ $t('settings.title') }}
           </h1>
           <p class="page-description">
-            Customize your AutoBot experience with personalized preferences
+            {{ $t('settings.subtitle') }}
           </p>
         </div>
       </div>
@@ -30,7 +30,7 @@ Issue #753: User preference management interface
           :class="['settings-tab', { active: activeTab === 'appearance' }]"
         >
           <Icon name="paint-brush" />
-          Appearance
+          {{ $t('settings.appearance') }}
         </button>
         <button
           @click="activeTab = 'language'"
@@ -44,7 +44,7 @@ Issue #753: User preference management interface
           :class="['settings-tab', { active: activeTab === 'voice' }]"
         >
           <Icon name="microphone" />
-          Voice
+          {{ $t('settings.voice') }}
         </button>
         <button
           @click="activeTab = 'webresearch'"
@@ -72,7 +72,7 @@ Issue #753: User preference management interface
           :class="['settings-tab', { active: activeTab === 'featureflags' }]"
         >
           <Icon name="shield-alt" />
-          Feature Flags
+          {{ $t('settings.featureFlags') }}
         </button>
         <button
           @click="activeTab = 'presets'"
@@ -86,28 +86,28 @@ Issue #753: User preference management interface
           :class="['settings-tab', { active: activeTab === 'telegram' }]"
         >
           <Icon name="paper-plane" />
-          Telegram
+          {{ $t('settings.telegram') }}
         </button>
         <button
           @click="activeTab = 'notifications'"
           :class="['settings-tab', { active: activeTab === 'notifications' }]"
         >
           <Icon name="bell" />
-          Notifications
+          {{ $t('settings.notifications') }}
         </button>
         <button
           @click="activeTab = 'devices'"
           :class="['settings-tab', { active: activeTab === 'devices' }]"
         >
           <Icon name="mobile" />
-          Mobile Devices
+          {{ $t('settings.mobileDevices') }}
         </button>
         <button
           @click="activeTab = 'privacy'"
           :class="['settings-tab', { active: activeTab === 'privacy' }]"
         >
           <Icon name="shield-alt" />
-          Privacy
+          {{ $t('settings.privacy') }}
         </button>
       </div>
 
@@ -117,7 +117,7 @@ Issue #753: User preference management interface
           <div class="section-header">
             <h2 class="section-title">
               <Icon name="paint-brush" />
-              Appearance
+              {{ $t('settings.appearance') }}
             </h2>
             <p class="section-description">{{ $t('settings.appearanceDesc') }}</p>
           </div>
@@ -146,7 +146,7 @@ Issue #753: User preference management interface
           <div class="section-header">
             <h2 class="section-title">
               <Icon name="microphone" />
-              Voice
+              {{ $t('settings.voice') }}
             </h2>
             <p class="section-description">{{ $t('settings.voiceDesc') }}</p>
           </div>
@@ -186,8 +186,7 @@ Issue #753: User preference management interface
             <div class="provider-auth-section">
               <h3 class="provider-auth-heading">Provider sign-in (subscription-based)</h3>
               <p class="provider-auth-desc">
-                Connect to providers using your existing subscription instead of a billed API key.
-                Tokens are stored securely in the AutoBot secrets vault.
+                {{ $t('settings.providerAuthDesc') }}
               </p>
               <div class="provider-auth-list">
                 <ProviderOAuthConnect
@@ -278,7 +277,7 @@ Issue #753: User preference management interface
           <div class="section-header">
             <h2 class="section-title">
               <Icon name="shield-alt" />
-              Feature Flags
+              {{ $t('settings.featureFlags') }}
             </h2>
             <p class="section-description">Manage feature flags, enforcement modes, and access control</p>
           </div>
@@ -322,7 +321,7 @@ Issue #753: User preference management interface
           <div class="section-header">
             <h2 class="section-title">
               <Icon name="bell" />
-              Notifications
+              {{ $t('settings.notifications') }}
             </h2>
             <p class="section-description">Manage browser push notifications for this device.</p>
           </div>
@@ -336,7 +335,7 @@ Issue #753: User preference management interface
           <div class="section-header">
             <h2 class="section-title">
               <Icon name="mobile" />
-              Mobile Devices
+              {{ $t('settings.mobileDevices') }}
             </h2>
             <p class="section-description">Manage your paired mobile devices for push notifications and offline sync.</p>
           </div>

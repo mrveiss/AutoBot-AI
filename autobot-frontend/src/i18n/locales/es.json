@@ -899,7 +899,14 @@
       "disabledMessage": "Métricas de uso local deshabilitadas. No se registrarán métricas.",
       "loadFailed": "No se pudieron cargar los ajustes de telemetría",
       "updateFailed": "No se pudieron actualizar los ajustes de telemetría"
-    }
+    },
+    "subtitle": "Personaliza tu experiencia de AutoBot con preferencias propias",
+    "featureFlags": "Indicadores de funciones",
+    "telegram": "Telegram",
+    "notifications": "Notificaciones",
+    "mobileDevices": "Dispositivos móviles",
+    "privacy": "Privacidad",
+    "providerAuthDesc": "Conéctate a los proveedores usando tu suscripción existente en lugar de una clave de API de pago. Los tokens se almacenan de forma segura en el almacén de secretos de AutoBot."
   },
   "voice": {
     "title": "Voz",

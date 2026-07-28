@@ -6710,7 +6710,14 @@
       "disabledMessage": "מדדי שימוש מקומיים הושבתו. לא יירשמו מדדים.",
       "loadFailed": "טעינת הגדרות הטלמטריה נכשלה",
       "updateFailed": "עדכון הגדרות הטלמטריה נכשל"
-    }
+    },
+    "subtitle": "התאם אישית את חוויית AutoBot שלך באמצעות העדפות אישיות",
+    "featureFlags": "דגלי תכונות",
+    "telegram": "טלגרם",
+    "notifications": "התראות",
+    "mobileDevices": "מכשירים ניידים",
+    "privacy": "פרטיות",
+    "providerAuthDesc": "התחבר לספקים באמצעות המנוי הקיים שלך במקום מפתח API בתשלום. האסימונים נשמרים באופן מאובטח בכספת הסודות של AutoBot."
   },
   "visualizations": {
     "systemArchitecture": {
