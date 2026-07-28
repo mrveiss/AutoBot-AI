@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
@@ -44,7 +45,7 @@ except ValueError:
 # Higher values = faster indexing but more CPU/memory usage
 # Default: 1 (sequential processing), Range: 1-8
 try:
-    _parallel = int(config.codebase_index_parallel_batches)
+    _parallel = int(blank_to_none(config.codebase_index_parallel_batches) or 1)
     PARALLEL_BATCH_COUNT = max(1, min(_parallel, 8))
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_PARALLEL_BATCHES, using default 1")
