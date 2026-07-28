@@ -41,6 +41,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 
@@ -392,9 +393,12 @@ def analyze_with_regex(
 
         try:
             regex = re.compile(pattern.regex_pattern, re.MULTILINE)
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in regex.finditer(content):
                 # Find line number
-                line_start = content[: match.start()].count("\n") + 1
+                line_start = _line_index.line_of(match.start())
 
                 # Get snippet
                 snippet_start = max(0, line_start - 2)

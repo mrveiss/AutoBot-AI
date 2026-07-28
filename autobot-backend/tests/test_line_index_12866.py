@@ -25,7 +25,7 @@ def _load_line_index():
 
     spec = importlib.util.spec_from_file_location(
         "_line_index_12866",
-        Path(__file__).parent.parent / "code_intelligence" / "shared" / "line_index.py",
+        Path(__file__).parent.parent / "utils" / "line_index.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

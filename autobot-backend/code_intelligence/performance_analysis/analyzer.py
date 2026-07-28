@@ -19,6 +19,7 @@ from code_intelligence.shared.analysis_base import (
     SIMILARITY_MEDIUM,
     BaseCodeAnalyzer,
 )
+from utils.line_index import LineIndex  # #12884
 
 from .ast_visitor import PerformanceASTVisitor
 from .types import PerformanceIssue, PerformanceIssueType, PerformanceSeverity
@@ -53,8 +54,11 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
         findings: List[PerformanceIssue] = []
         list_lookup_pattern = r"if\s+\w+\s+in\s+\[.*\]:"
 
+        # #12884: build the offset->line map once; the per-match
+        # `content[:start].count()` was O(n*m) and held the GIL.
+        _line_index = LineIndex(content)
         for match in re.finditer(list_lookup_pattern, content):
-            line_num = content[: match.start()].count("\n") + 1
+            line_num = _line_index.line_of(match.start())
             code = lines[line_num - 1] if line_num <= len(lines) else ""
 
             findings.append(
@@ -132,9 +136,12 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
         findings: List[PerformanceIssue] = []
 
         for pattern, call_desc, fix in self._UNCLOSED_RESOURCE_PATTERNS:
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in re.finditer(pattern, content):
                 # Skip matches already inside a 'with' statement on the same line.
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 code = lines[line_num - 1] if line_num <= len(lines) else ""
                 if re.match(r"\s*with\b", code):
                     continue
@@ -170,8 +177,11 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
         findings: List[PerformanceIssue] = []
         string_append_pattern = r"\w+\s*\+=\s*['\"]"
 
+        # #12884: build the offset->line map once; the per-match
+        # `content[:start].count()` was O(n*m) and held the GIL.
+        _line_index = LineIndex(content)
         for match in re.finditer(string_append_pattern, content):
-            line_num = content[: match.start()].count("\n") + 1
+            line_num = _line_index.line_of(match.start())
             # Check if in a loop context (simple heuristic)
             context_start = max(0, line_num - 5)
             context = "\n".join(lines[context_start:line_num])

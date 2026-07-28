@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -268,8 +269,11 @@ class SecurityFixAgent(SecurityFixToolBase):
 
             matches = list(re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE))
 
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in matches:
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 match_text = match.group()
 
                 # Skip if this appears to be safe in context
