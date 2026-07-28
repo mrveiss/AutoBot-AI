@@ -11,6 +11,7 @@ coroutine (and emitting a "coroutine was never awaited" RuntimeWarning). It is
 now `async` and awaits the save directly.
 """
 
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -89,7 +90,8 @@ async def test_load_workers_from_config_does_not_save_when_file_present(tmp_path
 @pytest.mark.asyncio
 async def test_initialize_impl_awaits_load_workers_from_config():
     """_initialize_impl must directly await _load_workers_from_config (no fire-and-forget)."""
-    mgr = _make_manager(Path("config/npu_workers.yaml"))
+    # #12857: a real repo path here risks a write into the working tree.
+    mgr = _make_manager(Path(tempfile.gettempdir()) / "autobot-test-npu-workers.yaml")
     mgr._load_workers_from_config = AsyncMock()
 
     result = await mgr._initialize_impl()

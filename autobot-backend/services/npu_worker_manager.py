@@ -20,6 +20,7 @@ import aiofiles
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from constants.path_constants import PATH
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.threshold_constants import TimingConstants
 from events.bus import PersistStrategy, publish_event
@@ -96,7 +97,13 @@ class NPUWorkerManager(AsyncInitializable):
             redis_client: Redis client for state storage
         """
         super().__init__(component_name="npu_worker_manager")
-        self.config_file = config_file or Path("config/npu_workers.yaml")
+        # #12857: the default was CWD-relative, so a bootstrap write landed
+        # wherever the process happened to be running — under pytest that was the
+        # repo working tree (the NPU-workers websocket endpoint saves a default
+        # config during initialize). Anchoring to BACKEND_DIR keeps the same
+        # conventional location, <backend>/config/npu_workers.yaml, but makes it
+        # independent of CWD so a stray write cannot land in an arbitrary place.
+        self.config_file = config_file or (PATH.BACKEND_DIR / "config" / "npu_workers.yaml")
         self.redis_client = redis_client
         self._workers: Dict[str, NPUWorkerConfig] = {}
         self._worker_clients: Dict[str, NPUWorkerClient] = {}

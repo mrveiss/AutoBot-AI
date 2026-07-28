@@ -120,6 +120,11 @@ secrets.key
 # === CONFIGURATION FILES ===
 # Configuration files with sensitive data
 config/*.yaml
+# #12857: runtime worker registrations written by NPUWorkerManager.save_worker_config()
+# (the NPU-workers websocket endpoint bootstraps one on initialize). Never source —
+# it has never been tracked. The rule above is anchored to the repo root, so it does
+# not reach autobot-backend/config/, which is why this kept appearing untracked.
+autobot-backend/config/npu_workers.yaml
 config/settings.json
 backend/config/settings.json
 .env

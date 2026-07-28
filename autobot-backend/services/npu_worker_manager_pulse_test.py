@@ -13,6 +13,7 @@ Covers:
 """
 
 from datetime import datetime, timedelta, timezone
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -67,7 +68,9 @@ def _make_manager(redis_client=None) -> NPUWorkerManager:
         "latency_throttle_multiplier": 3.0,
     }
     mgr.redis_client = redis_client
-    mgr.config_file = Path("config/npu_workers.yaml")
+    # #12857: never name the real repo config — a save would write into the
+    # working tree. These tests do not read it; they only need a path.
+    mgr.config_file = Path(tempfile.gettempdir()) / "autobot-test-npu-workers.yaml"
     return mgr
 
 
