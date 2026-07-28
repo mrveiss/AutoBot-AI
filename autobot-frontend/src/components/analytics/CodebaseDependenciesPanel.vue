@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
+import TruncationNotice from './TruncationNotice.vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import DependencyTreemap from '@/components/charts/DependencyTreemap.vue'
@@ -196,6 +197,10 @@ const emit = defineEmits<{
             <span class="dep-name">{{ dep.package }}</span>
             <span class="dep-count">{{ dep.usage_count }} imports</span>
           </div>
+          <TruncationNotice
+            :shown="Math.min(20, dependencyData.external_dependencies.length)"
+            :total="dependencyData.external_dependencies.length"
+          />
         </div>
       </div>
     </div>

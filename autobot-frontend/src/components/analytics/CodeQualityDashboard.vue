@@ -85,6 +85,10 @@
               {{ rec }}
             </li>
           </ul>
+          <TruncationNotice
+            :shown="Math.min(3, healthScore.recommendations.length)"
+            :total="healthScore.recommendations.length"
+          />
         </div>
       </div>
     </div>
@@ -449,6 +453,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import TruncationNotice from './TruncationNotice.vue';
 import type { DirectiveBinding } from 'vue';
 import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router';

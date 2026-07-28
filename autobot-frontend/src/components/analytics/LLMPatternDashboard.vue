@@ -256,6 +256,10 @@
                 </div>
                 <p class="cache-preview">{{ opp.prompt_preview }}</p>
               </div>
+              <TruncationNotice
+                :shown="Math.min(5, cacheOpportunities.length)"
+                :total="cacheOpportunities.length"
+              />
             </div>
           </div>
         </div>
@@ -324,6 +328,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import TruncationNotice from './TruncationNotice.vue'
 import { useExpansion } from '@/composables/useExpansion'
 import {
   useLLMPatternData,
