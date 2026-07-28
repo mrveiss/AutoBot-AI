@@ -19,6 +19,7 @@ from code_intelligence.shared.analysis_base import (
     BaseCodeAnalyzer,
 )
 
+from ..shared.line_index import LineIndex
 from .ast_visitor import SecurityASTVisitor
 from .constants import (
     OWASP_MAPPING,
@@ -28,7 +29,6 @@ from .constants import (
     VulnerabilityType,
 )
 from .finding import SecurityFinding
-from ..shared.line_index import LineIndex
 from .patterns import SECRET_PATTERNS, SQL_INJECTION_PATTERNS
 
 logger = get_logger(__name__)

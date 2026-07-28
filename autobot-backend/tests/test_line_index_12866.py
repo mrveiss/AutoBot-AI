@@ -16,6 +16,7 @@ import time
 
 import pytest
 
+
 def _load_line_index():
     """Load by path: the suite stubs the code_intelligence package, whose
     __init__ pulls in autobot_shared and fails under the test harness."""
@@ -87,5 +88,5 @@ def test_the_old_idiom_is_gone_from_the_traced_analyzer():
 
     src = (Path(__file__).parent.parent / "code_intelligence" / "security" / "analyzer.py").read_text(encoding="utf-8")
 
-    assert 'content[: match.start()].count' not in src
+    assert "content[: match.start()].count" not in src
     assert src.count("LineIndex(content)") == 4, "every checker in this file must build the index once"
