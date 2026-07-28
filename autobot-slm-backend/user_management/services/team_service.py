@@ -9,20 +9,20 @@ Business logic for team management operations including CRUD,
 membership management, and role assignment within teams.
 """
 
-import logging
 import uuid
-from datetime import datetime, timezone
 from typing import List
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 from user_management.models import Team, TeamMembership
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TeamServiceError(Exception):
@@ -291,7 +291,7 @@ class TeamService(BaseService):
         if settings is not None:
             team.settings = settings
 
-        team.updated_at = datetime.now(timezone.utc)
+        team.updated_at = now_utc()
         await self.session.flush()
 
         if changes:
@@ -324,7 +324,7 @@ class TeamService(BaseService):
         if hard_delete:
             await self.session.delete(team)
         else:
-            team.deleted_at = datetime.now(timezone.utc)
+            team.deleted_at = now_utc()
 
         await self.session.flush()
 
@@ -402,7 +402,7 @@ class TeamService(BaseService):
             team_id=team_id,
             user_id=user_id,
             role=role,
-            joined_at=datetime.now(timezone.utc),
+            joined_at=now_utc(),
         )
 
     async def add_member(
@@ -556,7 +556,7 @@ class TeamService(BaseService):
         await self._validate_role_change(team_id, old_role, new_role)
 
         membership.role = new_role
-        membership.updated_at = datetime.now(timezone.utc)
+        membership.updated_at = now_utc()
         await self.session.flush()
 
         await self._log_role_change(team_id, user_id, old_role, new_role)
