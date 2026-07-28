@@ -2230,6 +2230,17 @@ class BatchSchedule(BaseModel):
     next_run: datetime
 
 
+class BatchScheduleUpdate(BaseModel):
+    """Request body for PATCH /schedules/{schedule_id} — partial update.
+
+    Issue #12380: supports toggling ``enabled`` (frontend's primary use case)
+    plus ``cron_expression`` for trivial general partial-update support.
+    """
+
+    enabled: bool | None = None
+    cron_expression: str | None = None
+
+
 class BatchJobList(BaseModel):
     """Response model for job list."""
 

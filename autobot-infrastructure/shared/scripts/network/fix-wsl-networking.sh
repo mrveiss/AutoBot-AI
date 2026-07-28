@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Fix WSL networking for AutoBot frontend-backend communication
 # This script ensures proper port forwarding and network configuration
 

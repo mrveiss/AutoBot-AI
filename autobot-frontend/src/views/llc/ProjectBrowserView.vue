@@ -167,7 +167,10 @@
         <!-- GH#11271: findings proposal queue -->
         <div v-if="p.code_source_id" class="card-findings">
           <div class="findings-header">
+            <!-- GH#12734: the findings feature is OFF by default, so an
+                 ungated button could only ever return 403. -->
             <BaseButton
+              v-if="findingsEnabled"
               variant="secondary"
               size="sm"
               :loading="scanningProject === p.id"
@@ -176,6 +179,7 @@
             >
               {{ scanningProject === p.id ? t('llcBrowser.findings.scanning') : t('llcBrowser.findings.scan') }}
             </BaseButton>
+            <span v-else class="findings-disabled-note">{{ t('llcBrowser.findings.disabled') }}</span>
           </div>
           <ErrorBanner v-if="findingsError[p.id]" :message="findingsError[p.id]" class="browser-error" />
           <div v-if="proposals[p.id] && proposals[p.id].length === 0" class="findings-empty">
@@ -462,6 +466,10 @@ const lifecycleError = ref<Record<string, string>>({})
 // GH#11271: findings proposal queue state (keyed by project id)
 const proposals = ref<Record<string, FindingProposal[]>>({})
 const scanningProject = ref<string | null>(null)
+// GH#12734: the scan action is gated on the server-side findings policy, which
+// defaults to OFF. Assume disabled until the policy says otherwise so the
+// button never appears during load and then vanishes.
+const findingsEnabled = ref(false)
 const findingsError = ref<Record<string, string>>({})
 
 function velocityFor(projectId: string): number[] {
@@ -774,10 +782,29 @@ async function dismissProposal(project: ProjectResponse, proposal: FindingPropos
   }
 }
 
-onMounted(loadProjects)
+async function loadFindingsPolicy(): Promise<void> {
+  try {
+    const policy = await api.get<{ enabled: boolean }>('/api/llc/findings/policy')
+    findingsEnabled.value = Boolean(policy?.enabled)
+  } catch (err) {
+    // A policy we cannot read is treated as disabled: showing an action that
+    // cannot work is worse than hiding one that might (GH#12734).
+    logger.error('Failed to load findings policy', err)
+    findingsEnabled.value = false
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadProjects(), loadFindingsPolicy()])
+})
 </script>
 
 <style scoped>
+.findings-disabled-note {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
 .llc-browser {
   padding: 1.5rem;
 }
@@ -828,7 +855,7 @@ onMounted(loadProjects)
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
 }
@@ -915,7 +942,7 @@ onMounted(loadProjects)
 .action-link {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent, var(--projbrowser-accent-text)));
   text-decoration: none;
 }
 
@@ -944,7 +971,7 @@ onMounted(loadProjects)
 .create-textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -956,7 +983,7 @@ onMounted(loadProjects)
 .create-select {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default);
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -970,7 +997,7 @@ onMounted(loadProjects)
 }
 
 .create-help-error {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 /* GH#11129: repo linkage styles */
@@ -1004,7 +1031,7 @@ onMounted(loadProjects)
 
 .repo-link {
   font-size: 0.8125rem;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent, var(--projbrowser-accent-text)));
   text-decoration: none;
   word-break: break-all;
 }
@@ -1019,7 +1046,7 @@ onMounted(loadProjects)
   color: var(--text-secondary);
   background: var(--bg-hover);
   padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   word-break: break-all;
 }
 
@@ -1033,18 +1060,18 @@ onMounted(loadProjects)
 }
 
 .repo-status-ready {
-  color: var(--color-success, #16a34a);
-  background: var(--color-success-bg, #dcfce7);
+  color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .repo-status-error {
-  color: var(--color-error, #dc2626);
-  background: var(--color-error-bg, #fee2e2);
+  color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .repo-status-syncing {
-  color: var(--color-warning, #d97706);
-  background: var(--color-warning-bg, #fef3c7);
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .repo-actions {
@@ -1062,7 +1089,7 @@ onMounted(loadProjects)
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
   transition: color var(--duration-200);
 }
 
@@ -1092,18 +1119,18 @@ onMounted(loadProjects)
 }
 
 .lifecycle-active {
-  color: var(--color-success, #16a34a);
-  background: var(--color-success-bg, #dcfce7);
+  color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .lifecycle-archived {
-  color: var(--color-warning, #d97706);
-  background: var(--color-warning-bg, #fef3c7);
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .lifecycle-pending_disposal {
-  color: var(--color-error, #dc2626);
-  background: var(--color-error-bg, #fee2e2);
+  color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .lifecycle-disposed {

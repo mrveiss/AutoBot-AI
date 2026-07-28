@@ -142,18 +142,12 @@ function actor() {
   return userStore.currentUser?.username ?? 'operator'
 }
 
-// Secrets routes require the X-Agent-Company-Id header (backend _check_company_access
-// equality guard); ApiClient does not inject it, so pass it explicitly per call.
-function companyHeaders() {
-  return { headers: { 'X-Agent-Company-Id': props.companyId ?? '' } }
-}
-
 async function loadSecrets() {
   if (!props.companyId) return
   isLoading.value = true
   loadError.value = ''
   try {
-    secrets.value = await api.get<SecretSummary[]>(`/api/llc/secrets/${props.companyId}`, companyHeaders())
+    secrets.value = await api.get<SecretSummary[]>(`/api/llc/secrets/${props.companyId}`)
   } catch (err) {
     logger.error('Failed to load secrets', err)
     loadError.value = t('llc.secrets.loadFailed')
@@ -185,11 +179,11 @@ async function submitEditor() {
   saving.value = true
   editorError.value = ''
   try {
-    await api.post(
-      `/api/llc/secrets/${props.companyId}`,
-      { name: form.value.name, value: form.value.value, actor: actor() },
-      companyHeaders(),
-    )
+    await api.post(`/api/llc/secrets/${props.companyId}`, {
+      name: form.value.name,
+      value: form.value.value,
+      actor: actor(),
+    })
     editorOpen.value = false
     await loadSecrets()
   } catch (err) {
@@ -210,7 +204,7 @@ async function revokeSecret(secret: SecretSummary) {
   try {
     // actor is a required query param on the revoke route (backend contract).
     const path = `/api/llc/secrets/${props.companyId}/${encodeURIComponent(secret.name)}`
-    await api.delete(`${path}?actor=${encodeURIComponent(actor())}`, companyHeaders())
+    await api.delete(`${path}?actor=${encodeURIComponent(actor())}`)
     await loadSecrets()
   } catch (err) {
     logger.error('Failed to revoke secret', err)
@@ -242,22 +236,22 @@ onMounted(() => void loadSecrets())
 .view-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .view-sub {
   font-size: 0.8125rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   margin-top: 0.125rem;
 }
 
 .state-msg {
   padding: 1.5rem 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .state-error {
-  color: var(--color-danger, #b91c1c);
+  color: var(--color-danger);
 }
 
 .secrets-grid-wrapper {
@@ -276,27 +270,27 @@ onMounted(() => void loadSecrets())
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted, #6b7280);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .secrets-grid td {
   padding: 0.625rem 0.75rem;
-  color: var(--text-secondary, #374151);
-  border-bottom: 1px solid var(--border-subtle, #f3f4f6);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .secret-name code {
   font-family: var(--font-mono, monospace);
   font-size: 0.8125rem;
-  background: var(--bg-code, #f3f4f6);
+  background: var(--bg-code, var(--secretsview-bg-code));
   padding: 0.125rem 0.375rem;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
 }
 
 .secret-actor {
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .status-badge {
@@ -308,13 +302,13 @@ onMounted(() => void loadSecrets())
 }
 
 .status-active {
-  background: var(--color-success-subtle, #dcfce7);
-  color: var(--color-success-text, #15803d);
+  background: var(--color-success-subtle, var(--secretsview-success-bg));
+  color: var(--color-success-text, var(--secretsview-success-text));
 }
 
 .status-revoked {
-  background: var(--bg-muted, #e5e7eb);
-  color: var(--text-muted, #6b7280);
+  background: var(--bg-muted, var(--secretsview-status-revoked-bg));
+  color: var(--text-muted);
 }
 
 .secret-actions {
@@ -327,9 +321,9 @@ onMounted(() => void loadSecrets())
   font-size: 0.875rem;
   font-weight: 600;
   border: none;
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-accent, #c4651a);
-  color: #fff;
+  border-radius: var(--radius-md);
+  background: var(--color-accent, var(--secretsview-accent));
+  color: var(--secretsview-on-accent);
   cursor: pointer;
 }
 
@@ -341,10 +335,10 @@ onMounted(() => void loadSecrets())
 .btn-sm {
   padding: 0.25rem 0.625rem;
   font-size: 0.8125rem;
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #111827);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -354,8 +348,8 @@ onMounted(() => void loadSecrets())
 }
 
 .btn-danger {
-  color: var(--color-danger, #b91c1c);
-  border-color: var(--color-danger-subtle, #fecaca);
+  color: var(--color-danger);
+  border-color: var(--color-danger-subtle, var(--secretsview-danger-border));
 }
 
 .btn-close {
@@ -363,7 +357,7 @@ onMounted(() => void loadSecrets())
   background: none;
   font-size: 1rem;
   cursor: pointer;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .modal-overlay {
@@ -378,8 +372,8 @@ onMounted(() => void loadSecrets())
 
 .modal {
   width: min(30rem, 92vw);
-  background: var(--bg-surface, #fff);
-  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -388,7 +382,7 @@ onMounted(() => void loadSecrets())
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .modal-body {
@@ -404,28 +398,28 @@ onMounted(() => void loadSecrets())
   gap: 0.25rem;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--text-secondary, #4b5563);
+  color: var(--text-secondary);
 }
 
 .field input {
   padding: 0.4375rem 0.5rem;
   font-size: 0.875rem;
   font-weight: 400;
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #111827);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .field input:disabled {
-  background: var(--bg-muted, #f3f4f6);
-  color: var(--text-muted, #6b7280);
+  background: var(--bg-muted, var(--secretsview-input-disabled-bg));
+  color: var(--text-muted);
 }
 
 .field-hint {
   font-weight: 400;
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .modal-actions {

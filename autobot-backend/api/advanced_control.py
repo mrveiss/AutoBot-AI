@@ -34,7 +34,7 @@ from api.schemas_workflows import (
     AdvancedControlTakeoverSessionStatusResponse,
     AdvancedControlTakeoverSystemStatusResponse,
 )
-from api.ws_security import enforce_ws_origin
+from api.ws_security import enforce_ws_admin, enforce_ws_origin
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -42,12 +42,18 @@ from constants.error_constants import ERR_SESSION_NOT_FOUND
 from constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import get_desktop_streaming
 from memory import TaskPriority  # canonical enum (#10626)
+from metrics.system_monitor import evaluate_resource_thresholds
 from takeover_manager import TakeoverTrigger, get_takeover_manager
 from task_execution_tracker import get_task_tracker
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["advanced_control"])
+
+# Map the resource classifier's verdict to this control plane's health vocabulary
+# (#12243). "warning" (approaching a threshold) is a soft degrade; "critical"
+# (over a threshold) is unhealthy.
+_RESOURCE_STATUS_TO_HEALTH = {"ok": "healthy", "warning": "degraded", "critical": "unhealthy"}
 
 
 # Desktop Streaming Endpoints
@@ -161,30 +167,19 @@ async def request_takeover(
 
     Issue #744: Requires admin authentication.
     """
-    # Convert string enum to TakeoverTrigger
-    trigger_mapping = {
-        "MANUAL_REQUEST": TakeoverTrigger.MANUAL_REQUEST,
-        "CRITICAL_ERROR": TakeoverTrigger.CRITICAL_ERROR,
-        "SECURITY_CONCERN": TakeoverTrigger.SECURITY_CONCERN,
-        "USER_INTERVENTION_REQUIRED": TakeoverTrigger.USER_INTERVENTION_REQUIRED,
-        "SYSTEM_OVERLOAD": TakeoverTrigger.SYSTEM_OVERLOAD,
-        "APPROVAL_REQUIRED": TakeoverTrigger.APPROVAL_REQUIRED,
-        "TIMEOUT_EXCEEDED": TakeoverTrigger.TIMEOUT_EXCEEDED,
-    }
+    # Convert request strings to enums via direct name lookup so each enum is the
+    # single source of truth (#12208 — the old hand-maintained maps mirrored every
+    # member by hand and silently dropped any new one, rejecting a valid trigger
+    # with a 400). Enum member names are the UPPER strings the client sends.
+    try:
+        trigger = TakeoverTrigger[request.trigger.upper()]
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Invalid trigger: {request.trigger}") from None
 
-    trigger = trigger_mapping.get(request.trigger.upper())
-    if not trigger:
-        raise HTTPException(status_code=400, detail=f"Invalid trigger: {request.trigger}")
-
-    # Convert priority string to TaskPriority
-    priority_mapping = {
-        "LOW": TaskPriority.LOW,
-        "MEDIUM": TaskPriority.MEDIUM,
-        "HIGH": TaskPriority.HIGH,
-        "CRITICAL": TaskPriority.CRITICAL,
-    }
-
-    priority = priority_mapping.get(request.priority.upper(), TaskPriority.HIGH)
+    try:
+        priority = TaskPriority[request.priority.upper()]
+    except KeyError:
+        priority = TaskPriority.HIGH  # preserve current default-on-unknown behaviour
 
     request_id = await get_takeover_manager().request_takeover(
         trigger=trigger,
@@ -226,10 +221,10 @@ async def approve_takeover(
         logger.info("Takeover approved: %s -> %s", request_id, session_id)
         return {"success": True, "session_id": session_id}
 
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Internal server error")
-    except RuntimeError:
-        raise HTTPException(status_code=409, detail="Internal server error")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.post("/takeover/sessions/{session_id}/action", response_model=AdvancedControlTakeoverActionResponse)
@@ -258,8 +253,8 @@ async def execute_takeover_action(
         logger.info(f"Takeover action executed: {action.action_type} in session {session_id}")
         return {"success": True, "result": result}
 
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Internal server error")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/takeover/sessions/{session_id}/pause", response_model=AdvancedControlTakeoverSessionStatusResponse)
@@ -404,6 +399,8 @@ async def get_system_status(
     Issue #744: Requires admin authentication.
     """
     # Get resource usage
+    import time
+
     import psutil
 
     resource_usage = {
@@ -420,11 +417,32 @@ async def get_system_status(
     # Get takeover data
     pending_takeovers = await get_takeover_manager().get_pending_requests()
     active_takeovers = await get_takeover_manager().get_active_sessions()
+    # #12177: both fields were mistakenly set to psutil.boot_time() (an absolute
+    # boot epoch). timestamp is when this snapshot was taken; uptime_seconds is a
+    # duration (now - boot).
+    now = time.time()
+    # #12243: derive status from the metrics this response actually reports rather
+    # than a hardcoded "healthy". Grade the already-collected resource_usage against
+    # the canonical thresholds; if desktop streaming (this panel's core capability)
+    # is unavailable, that is at least a degraded control plane.
+    resource_verdict = evaluate_resource_thresholds(
+        {
+            "cpu_percent": resource_usage["cpu_percent"],
+            "memory_percent": resource_usage["memory_percent"],
+            "disk_percent": resource_usage["disk_usage"],
+        }
+    )
+    status = _RESOURCE_STATUS_TO_HEALTH[resource_verdict["status"]]
+    streaming_available = bool(get_desktop_streaming().vnc_manager.vnc_available)
+    if not streaming_available and status == "healthy":
+        status = "degraded"
+
     system_status = {
-        "status": "healthy",
-        "timestamp": psutil.boot_time(),
-        "uptime_seconds": psutil.boot_time(),
+        "status": status,
+        "timestamp": now,
+        "uptime_seconds": now - psutil.boot_time(),
         "streaming_capabilities": get_desktop_streaming().get_system_capabilities(),
+        "resource_alerts": resource_verdict["critical_alerts"] + resource_verdict["warnings"],
     }
 
     response = SystemMonitoringResponse(
@@ -487,9 +505,13 @@ async def get_system_health(
     try:
         dsm = get_desktop_streaming()
         tm = get_takeover_manager()
+        # #12243: reflect the real subsystem state instead of a constant "healthy".
+        # Desktop streaming (VNC) is this control plane's core capability — when it
+        # is unavailable the panel is degraded, not healthy.
+        streaming_available = dsm.vnc_manager.vnc_available
         health_status = {
-            "status": "healthy",
-            "desktop_streaming_available": dsm.vnc_manager.vnc_available,
+            "status": "healthy" if streaming_available else "degraded",
+            "desktop_streaming_available": streaming_available,
             "novnc_available": dsm.vnc_manager.novnc_available,
             "active_streaming_sessions": len(dsm.vnc_manager.active_sessions),
             "pending_takeovers": len(await tm.get_pending_requests()),
@@ -514,6 +536,8 @@ async def get_system_health(
 async def monitoring_websocket(websocket: WebSocket):
     """WebSocket endpoint for real-time system monitoring"""
     if not await enforce_ws_origin(websocket):
+        return
+    if not await enforce_ws_admin(websocket):
         return
     await websocket.accept()
     logger.info("Monitoring WebSocket client connected")
@@ -555,6 +579,8 @@ async def desktop_streaming_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for desktop streaming control"""
     if not await enforce_ws_origin(websocket):
         return
+    if not await enforce_ws_admin(websocket):
+        return
     await websocket.accept()
 
     try:
@@ -589,12 +615,12 @@ async def advanced_control_info(
             "Emergency stop capabilities",
         ],
         "endpoints": {
-            "streaming": "/api/control/streaming/",
-            "takeover": "/api/control/takeover/",
-            "system": "/api/control/system/",
+            "streaming": "/api/advanced-control/streaming/",
+            "takeover": "/api/advanced-control/takeover/",
+            "system": "/api/advanced-control/system/",
             "websockets": {
-                "monitoring": "/api/control/ws/monitoring",
-                "desktop": "/api/control/ws/desktop/{session_id}",
+                "monitoring": "/api/advanced-control/ws/monitoring",
+                "desktop": "/api/advanced-control/ws/desktop/{session_id}",
             },
         },
     }

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # MCP Helper Script for AutoBot Development
 
 # Function to call MCP server and parse JSON response

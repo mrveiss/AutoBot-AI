@@ -108,7 +108,6 @@
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
-import { useKnowledgeVectorization } from '@/composables/useKnowledgeVectorization'
 import type { DocumentVectorizationState } from '@/composables/useKnowledgeVectorization'
 
 // Metadata attached to a knowledge tree node. Mirrors the KnowledgeFactLike
@@ -118,7 +117,7 @@ export interface TreeNodeMetadata {
   title?: string
   source?: string
   content?: string
-  full_content?: string
+  // Issue #12370: full_content removed — lazy-loaded via GET /fact/{fact_key}.
   timestamp?: string
   created_at?: string
   category?: string
@@ -161,9 +160,6 @@ defineEmits<{
   'vectorize-folder': [node: TreeNode]
 }>()
 
-// Get document status from vectorization composable
-const { getDocumentStatus } = useKnowledgeVectorization()
-
 // Computed properties
 const nodeIcon = computed(() => {
   if (props.node.type === 'folder') {
@@ -178,7 +174,9 @@ const isSelected = computed(() => {
 
 const vectorizationStatus = computed(() => {
   const state = props.vectorizationStates.get(props.node.id)
-  return state?.status || getDocumentStatus(props.node.id)
+  // parent (KnowledgeBrowser) owns the authoritative state map via the
+  // vectorization-states prop; 'pending' is the default for unknown docs
+  return state?.status || 'pending'
 })
 
 const canVectorize = computed(() => {
@@ -193,7 +191,8 @@ const unvectorizedCount = computed(() => {
   const countUnvectorized = (node: TreeNode): number => {
     if (node.type === 'file') {
       const state = props.vectorizationStates.get(node.id)
-      const status = state?.status || getDocumentStatus(node.id)
+      // parent (KnowledgeBrowser) owns the authoritative state map
+      const status = state?.status || 'pending'
       return status !== 'vectorized' ? 1 : 0
     }
 

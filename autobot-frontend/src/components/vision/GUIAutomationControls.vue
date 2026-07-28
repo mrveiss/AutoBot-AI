@@ -391,7 +391,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-3);
-  padding: 60px 20px;
+  padding: 60px var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
@@ -434,8 +434,8 @@ onMounted(() => {
 }
 
 .element-type-badge {
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -538,15 +538,15 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-4);
-  padding: 60px 20px;
+  padding: 60px var(--spacing-5);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
+  width: var(--spacing-20);
+  height: var(--spacing-20);
   border-radius: 50%;
   background: var(--bg-tertiary);
   display: flex;
@@ -623,8 +623,8 @@ onMounted(() => {
 }
 
 .type-icon {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;

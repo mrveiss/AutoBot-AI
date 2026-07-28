@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { reloadConfig, runtimeHttpProto } from '../ssot-config';
+import { reloadConfig, runtimeHttpProto, getBackendUrl } from '../ssot-config';
 
 // Note: In a real test environment, we would need to mock import.meta.env
 // For now, these tests validate the TypeScript structure and default values
@@ -566,5 +566,58 @@ describe('SSOT Config Service Lookup', () => {
     expect(getVmIp('main')).toBe('10.0.0.1');
     expect(getVmIp('redis')).toBe('10.0.0.4');
     expect(getVmIp('unknown')).toBeUndefined();
+  });
+});
+
+
+// =============================================================================
+// Issue #12339: getBackendUrl() defaults to proxy-mode so a baked backend host
+// does not compose an absolute origin that CSP `connect-src 'self'` blocks.
+// =============================================================================
+
+describe('getBackendUrl() — proxy-mode default (#12339)', () => {
+  // getBackendUrl() reads import.meta.env directly, so we mutate/restore keys.
+  const ENV_KEYS = ['VITE_API_BASE_URL', 'VITE_API_URL', 'VITE_BACKEND_HOST', 'VITE_BACKEND_PORT'] as const;
+  let saved: Record<string, unknown>;
+
+  beforeEach(() => {
+    saved = {};
+    for (const k of ENV_KEYS) {
+      saved[k] = (import.meta.env as Record<string, unknown>)[k];
+      delete (import.meta.env as Record<string, unknown>)[k];
+    }
+  });
+
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) {
+        delete (import.meta.env as Record<string, unknown>)[k];
+      } else {
+        (import.meta.env as Record<string, unknown>)[k] = saved[k];
+      }
+    }
+  });
+
+  it('returns "" (proxy mode) when a baked VITE_BACKEND_HOST + VITE_BACKEND_PORT is set but no VITE_API_BASE_URL', () => {
+    (import.meta.env as Record<string, unknown>).VITE_BACKEND_HOST = '10.0.0.42';
+    (import.meta.env as Record<string, unknown>).VITE_BACKEND_PORT = '8443';
+    expect(getBackendUrl()).toBe('');
+  });
+
+  it('returns the explicit VITE_API_BASE_URL unchanged (cross-origin override preserved)', () => {
+    (import.meta.env as Record<string, unknown>).VITE_API_BASE_URL = 'https://api.example.com';
+    // Even with a baked host present, the explicit base URL wins.
+    (import.meta.env as Record<string, unknown>).VITE_BACKEND_HOST = '10.0.0.42';
+    (import.meta.env as Record<string, unknown>).VITE_BACKEND_PORT = '8443';
+    expect(getBackendUrl()).toBe('https://api.example.com');
+  });
+
+  it('returns the legacy VITE_API_URL unchanged when set (override alias)', () => {
+    (import.meta.env as Record<string, unknown>).VITE_API_URL = 'https://legacy.example.com';
+    expect(getBackendUrl()).toBe('https://legacy.example.com');
+  });
+
+  it('returns "" (proxy mode) when neither host nor base URL is set', () => {
+    expect(getBackendUrl()).toBe('');
   });
 });

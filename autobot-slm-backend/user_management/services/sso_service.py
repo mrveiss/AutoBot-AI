@@ -72,6 +72,10 @@ def _extract_redirect_url(saml_result: Any) -> str | None:
 
 def _pkce_challenge_s256(verifier: str) -> str:
     """Derive the RFC 7636 S256 code_challenge from a code_verifier."""
+    # RFC 7636 §4.2 mandates SHA-256 for the S256 code_challenge transform. `verifier`
+    # is an ephemeral, high-entropy code_verifier — not a stored password — so a slow
+    # password KDF is inapplicable and would break OAuth PKCE interoperability (CodeQL
+    # false positive: it misclassifies the verifier as password material).
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
@@ -417,7 +421,7 @@ class SSOService(BaseService):
         base_dn = provider.config.get("base_dn", "dc=example,dc=com")
         safe_username = sanitize_ldap_filter(username)
         search_filter = provider.config.get("search_filter", "(uid={})").format(safe_username)
-        conn.search(  # codeql[py/ldap-injection] safe_username is RFC-4515-escaped by sanitize_ldap_filter above
+        conn.search(  # safe_username is RFC-4515-escaped by sanitize_ldap_filter above
             base_dn, search_filter, search_scope=SUBTREE
         )
         if conn.entries:

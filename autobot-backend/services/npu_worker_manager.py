@@ -21,6 +21,7 @@ import yaml
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
+from constants.path_constants import PATH
 from constants.threshold_constants import TimingConstants
 from events.bus import PersistStrategy, publish_event
 from models.npu_models import (
@@ -96,7 +97,13 @@ class NPUWorkerManager(AsyncInitializable):
             redis_client: Redis client for state storage
         """
         super().__init__(component_name="npu_worker_manager")
-        self.config_file = config_file or Path("config/npu_workers.yaml")
+        # #12857: the default was CWD-relative, so a bootstrap write landed
+        # wherever the process happened to be running — under pytest that was the
+        # repo working tree (the NPU-workers websocket endpoint saves a default
+        # config during initialize). Anchoring to BACKEND_DIR keeps the same
+        # conventional location, <backend>/config/npu_workers.yaml, but makes it
+        # independent of CWD so a stray write cannot land in an arbitrary place.
+        self.config_file = config_file or (PATH.BACKEND_DIR / "config" / "npu_workers.yaml")
         self.redis_client = redis_client
         self._workers: Dict[str, NPUWorkerConfig] = {}
         self._worker_clients: Dict[str, NPUWorkerClient] = {}
@@ -117,7 +124,7 @@ class NPUWorkerManager(AsyncInitializable):
 
     async def _initialize_impl(self) -> bool:
         """Load worker configurations from YAML (deferred from __init__ to avoid blocking I/O)."""
-        await asyncio.to_thread(self._load_workers_from_config)
+        await self._load_workers_from_config()
         return True
 
     def _parse_single_worker(self, worker_data: dict) -> bool:
@@ -138,16 +145,25 @@ class NPUWorkerManager(AsyncInitializable):
             logger.error("Failed to load worker config: %s", e)
             return False
 
-    def _load_workers_from_config(self) -> None:
-        """Load worker configurations from YAML file"""
+    def _read_config_file(self) -> Dict[str, Any]:
+        """Blocking YAML read (Issue #12526: run via asyncio.to_thread, never on the event loop)."""
+        with open(self.config_file, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    async def _load_workers_from_config(self) -> None:
+        """Load worker configurations from YAML file.
+
+        Issue #12526: made async so the config-missing branch can actually
+        `await self._save_workers_to_config()` instead of discarding the
+        coroutine. Blocking file I/O is offloaded via `asyncio.to_thread`.
+        """
         try:
-            if not self.config_file.exists():
+            if not await asyncio.to_thread(self.config_file.exists):
                 logger.warning("Worker config file not found: %s", self.config_file)
-                self._save_workers_to_config()
+                await self._save_workers_to_config()
                 return
 
-            with open(self.config_file, "r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
+            data = await asyncio.to_thread(self._read_config_file)
 
             # Load workers using helper (Issue #315: reduced nesting)
             workers_data = data.get("workers", [])

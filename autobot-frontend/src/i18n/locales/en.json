@@ -160,6 +160,10 @@
         "overseer": "Overseer",
         "tool-code": "Code",
         "tool-output": "Output"
+      },
+      "fallback": {
+        "badge": "Via fallback",
+        "tooltip": "Primary provider unavailable — answered via a fallback provider ({primary} → {fallback})."
       }
     },
     "response": "response",
@@ -234,7 +238,8 @@
       "deleteFailed": "Failed to delete some chats",
       "sharedSuccess": "Chat shared successfully",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Show fallback badge"
     },
     "folders": {
       "folders": "Folders",
@@ -727,7 +732,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "Couldn't delete the chat. Please try again.",
+      "createFailed": "Failed to create chat: {error}",
+      "loadSessionsFailed": "Failed to load chat sessions: {error}",
+      "loadMessagesFailed": "Failed to load messages: {error}",
+      "saveFailed": "Failed to save chat: {error}",
+      "resetFailed": "Failed to reset chat: {error}",
+      "clearFailed": "Failed to clear chats: {error}",
+      "invalidFormat": "Invalid message format. Please check your input and try again.",
+      "serviceUnavailable": "Chat service not available. Please refresh the page and try again.",
+      "serverError": "Server error occurred. Please try again in a moment.",
+      "networkFailed": "Network connection failed. Please check your internet connection.",
+      "timeout": "Request timed out. Please try again with a shorter message.",
+      "sendFailed": "Failed to send message: {error}",
+      "sendFailedAfterRetries": "Failed to send message after {attempts} attempts: {error}. Please check your connection and try again.",
+      "invalidFormatDetail": "Invalid message format: {error}. Please check your input and try again.",
+      "networkFailedRetry": "Network connection failed. Please check your internet connection and try again."
+    }
   },
   "settings": {
     "title": "Settings",
@@ -876,7 +899,14 @@
       "disabledMessage": "Local usage metrics disabled. No metrics will be recorded.",
       "loadFailed": "Failed to load telemetry settings",
       "updateFailed": "Failed to update telemetry settings"
-    }
+    },
+    "subtitle": "Customize your AutoBot experience with personalized preferences",
+    "featureFlags": "Feature Flags",
+    "telegram": "Telegram",
+    "notifications": "Notifications",
+    "mobileDevices": "Mobile Devices",
+    "privacy": "Privacy",
+    "providerAuthDesc": "Connect to providers using your existing subscription instead of a billed API key. Tokens are stored securely in the AutoBot secrets vault."
   },
   "voice": {
     "title": "Voice",
@@ -902,7 +932,8 @@
     "creating": "Creating...",
     "confirmDeleteVoice": "Delete voice \"{name}\"?",
     "languageVoicesActive": "{count} language-specific voice(s) configured",
-    "confirmDeleteVoiceTitle": "Delete voice profile"
+    "confirmDeleteVoiceTitle": "Delete voice profile",
+    "tapToEnableAudio": "Tap anywhere to enable audio playback"
   },
   "analytics": {
     "title": "Analytics",
@@ -2474,6 +2505,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "Showing {shown} of {total}"
     }
   },
   "knowledge": {
@@ -7577,6 +7611,17 @@
       "templates": "Scrape Templates",
       "exitRegionMode": "Exit region mode",
       "markRegions": "Mark regions"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "serviceMessages": {
@@ -7646,6 +7691,8 @@
     "adminSandbox": "Sandbox",
     "budgetPolicies": "Budget Policies",
     "systemHealth": "System Health",
+    "providerFallback": "Provider Fallback",
+    "advancedControl": "Advanced Control",
     "sharedLinks": "Shared Chat Links",
     "companyOs": "Company OS",
     "llcDashboard": "Dashboard",
@@ -7688,6 +7735,28 @@
     "documents": "AI Documents",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it."
+  },
+  "llcCompanyStatus": {
+    "showArchived": "Show archived",
+    "delete": "Delete",
+    "confirmDeleteTitle": "Delete company",
+    "confirmDelete": "Delete \"{name}\"? This removes the archived company and its data. This cannot be undone from here.",
+    "deleteError": "Could not delete the company.",
+    "deleteHasChildren": "This company has sub-companies. Remove or re-parent them before deleting it.",
+    "onboarding": "Onboarding",
+    "active": "Active",
+    "paused": "Paused",
+    "offboarding": "Offboarding",
+    "archived": "Archived",
+    "activate": "Activate",
+    "suspend": "Suspend",
+    "offboard": "Offboard",
+    "archive": "Archive",
+    "confirmTitle": "Confirm status change",
+    "confirmOffboard": "Offboard \"{name}\"? This starts winding the company down.",
+    "confirmArchive": "Archive \"{name}\"? This is a terminal state and cannot be undone.",
+    "confirm": "Confirm",
+    "updateError": "Could not change the company status."
   },
   "llcMembers": {
     "title": "Members",
@@ -7799,22 +7868,7 @@
       "createFailed": "Failed to create company"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ New",
-      "selectCompany": "Select a company to view threads.",
-      "loading": "Loading...",
-      "noThreads": "No threads yet.",
-      "emptyState": "Select a thread or create a new one.",
-      "loadingMessages": "Loading messages...",
-      "noMessages": "No messages yet.",
-      "messagePlaceholder": "Type a message...",
-      "send": "Send",
-      "newThreadTitle": "New Thread",
-      "titleLabel": "Title",
-      "titlePlaceholder": "Thread title...",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating..."
+      "selectCompany": "Select a company to view threads."
     },
     "dashboard": {
       "title": "Company Dashboard",
@@ -7946,7 +8000,15 @@
       "count": "{count} boards",
       "loading": "Loading boards…",
       "empty": "No boards yet — boards are created per project (Kanban) and per sprint (Sprint).",
-      "created": "Created {date}"
+      "created": "Created {date}",
+      "newKanban": "New Kanban Board",
+      "createTitle": "Create Kanban Board",
+      "project": "Project",
+      "selectProject": "Select a project…",
+      "loadingProjects": "Loading projects…",
+      "noProjects": "No projects yet — create a project first.",
+      "creating": "Creating…",
+      "create": "Create Board"
     },
     "kanban": {
       "title": "Kanban Board",
@@ -7985,7 +8047,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "Scoped to {name}",
+      "showAll": "Show whole company"
     },
     "backlog": {
       "title": "Backlog",
@@ -8069,7 +8133,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "Couldn't save your change. Please try again."
+      }
     },
     "orgChart": {
       "title": "Org Chart",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
     },
-    "ceoChat": {
-      "sendError": "Failed to send your message. It has been restored so you can retry."
-    },
     "timeline": {
       "rescheduleError": "Failed to save the new schedule. The change was reverted."
     },
@@ -8603,6 +8667,22 @@
       "error": "Failed to load system health",
       "refresh": "Refresh",
       "noSources": "No content sources configured"
+    },
+    "providerFallback": {
+      "title": "Provider Fallback",
+      "subtitle": "Live LLM provider and model fallback activity",
+      "status": "Status",
+      "stateHealthy": "No active fallbacks",
+      "stateDegraded": "Fallback active",
+      "active": "Active fallbacks",
+      "chains": "Configured chains",
+      "timeline": "Live activity",
+      "switched": "Switched",
+      "exhausted": "Exhausted",
+      "refresh": "Refresh",
+      "loading": "Loading fallback status…",
+      "noData": "No provider fallback activity",
+      "none": "none"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} was updated",
   "chat.modelPicker.label": "Model",
   "chat.modelPicker.auto": "Auto (default model)",
-  "chat.modelPicker.title": "Choose the model and provider for this conversation"
+  "chat.modelPicker.title": "Choose the model and provider for this conversation",
+  "budgetPolicies": {
+    "title": "Budget Policies",
+    "subtitle": "Manage spend thresholds and auto-pause rules for agents",
+    "newPolicy": "New Policy",
+    "scope": "Scope",
+    "scopeAll": "All",
+    "scopeAgent": "Agent",
+    "scopeProject": "Project",
+    "scopeTask": "Task",
+    "scopeTenant": "Tenant",
+    "loading": "Loading policies…",
+    "empty": "No budget policies found. Create one to enforce spend limits.",
+    "colName": "Name",
+    "colScope": "Scope",
+    "colScopeId": "Scope ID",
+    "colPeriod": "Period",
+    "colThreshold": "Threshold",
+    "colWarning": "Warning",
+    "colAction": "Action",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "statusEnabled": "enabled",
+    "statusDisabled": "disabled",
+    "checkPauseTitle": "Check Agent Pause Status",
+    "agentIdPlaceholder": "Agent ID…",
+    "checkStatus": "Check Status",
+    "labelAgent": "Agent:",
+    "labelPaused": "Paused:",
+    "labelReason": "Reason:",
+    "labelSince": "Since:",
+    "resumeAgent": "Resume Agent",
+    "modalEditTitle": "Edit Policy",
+    "modalNewTitle": "New Budget Policy",
+    "fieldName": "Name",
+    "fieldNamePlaceholder": "My policy",
+    "fieldDescription": "Description",
+    "fieldDescriptionPlaceholder": "Optional",
+    "fieldScope": "Scope",
+    "fieldScopeId": "Scope ID",
+    "fieldScopeIdPlaceholder": "e.g. agent-uuid",
+    "fieldPeriod": "Period",
+    "periodHour": "Hour",
+    "periodDay": "Day",
+    "periodMonth": "Month",
+    "fieldThreshold": "Threshold USD",
+    "fieldWarning": "Warning % (0–100)",
+    "fieldAction": "Action",
+    "actionAlert": "Alert only",
+    "actionPause": "Pause",
+    "actionAlertThenPause": "Alert then Pause",
+    "fieldEnabled": "Enabled",
+    "saveChanges": "Save Changes",
+    "createPolicy": "Create Policy",
+    "deleteTitle": "Delete Policy",
+    "deleteConfirm": "Are you sure you want to delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "telemetryConsent": {
+    "title": "Local Usage Metrics",
+    "intro": "AutoBot can record {metrics} locally to power your own monitoring dashboards. This data stays on your infrastructure and is {never}.",
+    "introMetrics": "anonymous operational metrics",
+    "introNever": "never sent to anyone",
+    "summaryTitle": "What's recorded locally:",
+    "dataApi": "API endpoint usage and response times",
+    "dataVoice": "Voice session duration and token counts",
+    "dataFeature": "Feature usage patterns",
+    "privacyLabel": "Never recorded:",
+    "privacyText": "personal data, code content, or chat messages.",
+    "footer": "You can change this preference anytime in {settings}.",
+    "footerSettings": "Settings → Privacy",
+    "keepOff": "Keep Off",
+    "enable": "Enable"
+  },
+  "hireAgent": {
+    "title": "Hire Agent",
+    "agentName": "Agent name",
+    "agentNamePlaceholder": "e.g. Builder-1",
+    "model": "Model",
+    "modelSonnet": "Sonnet (default)",
+    "modelHaiku": "Haiku (assistant)",
+    "orgRole": "Org role",
+    "roleWorker": "Worker",
+    "roleSpecialist": "Specialist",
+    "roleCoordinator": "Coordinator",
+    "roleManager": "Manager",
+    "adapter": "Adapter",
+    "hiring": "Hiring…",
+    "hire": "Hire"
+  },
+  "advancedControl": {
+    "title": "Advanced Control",
+    "subtitle": "Approve takeover requests and manage active human-control sessions",
+    "tabListAriaLabel": "Advanced Control tabs",
+    "loading": "Loading takeover queue…",
+    "tabs": {
+      "takeoverQueue": "Takeover Queue",
+      "streaming": "Streaming",
+      "monitoring": "Monitoring",
+      "comingSoon": "Coming soon",
+      "comingSoonMessage": "This tab is not yet available.",
+      "streamingTitle": "Desktop Streaming",
+      "monitoringTitle": "System Monitoring"
+    },
+    "summary": {
+      "pending": "Pending",
+      "active": "Active",
+      "paused": "Paused",
+      "completed": "Completed",
+      "systemStatus": "System Status",
+      "statusNormal": "Normal",
+      "statusTakeoverActive": "Takeover Active",
+      "statusEmergency": "Emergency"
+    },
+    "pending": {
+      "title": "Pending Takeover Requests",
+      "colTrigger": "Trigger",
+      "colReason": "Reason",
+      "colPriority": "Priority",
+      "colRequestedBy": "Requested By",
+      "colCreatedAt": "Created",
+      "colActions": "Actions",
+      "unknownAgent": "Unknown agent",
+      "emptyTitle": "No pending requests",
+      "emptyMessage": "There are no takeover requests waiting for approval."
+    },
+    "active": {
+      "title": "Active Takeover Sessions",
+      "colOperator": "Operator",
+      "colStatus": "Status",
+      "colStartedAt": "Started",
+      "colActionsExecuted": "Actions Executed",
+      "emptyTitle": "No active sessions",
+      "emptyMessage": "There are no active human-control sessions right now."
+    },
+    "actions": {
+      "approve": "Approve",
+      "pause": "Pause",
+      "resume": "Resume",
+      "complete": "Complete"
+    },
+    "streaming": {
+      "title": "Streaming Sessions",
+      "newSession": "New Session",
+      "terminate": "Terminate",
+      "capVncAvailable": "VNC Available",
+      "capNovncAvailable": "noVNC Available",
+      "capMaxSessions": "Max Sessions",
+      "formUserIdLabel": "User ID",
+      "formUserIdPlaceholder": "e.g. user-123",
+      "formResolutionLabel": "Resolution",
+      "formResolutionPlaceholder": "e.g. 1920x1080",
+      "formDepthLabel": "Color Depth",
+      "colSessionId": "Session ID",
+      "colUser": "User",
+      "colStatus": "Status",
+      "colDisplay": "Display",
+      "colCreatedAt": "Created",
+      "colActions": "Actions",
+      "emptyTitle": "No active streaming sessions",
+      "emptyMessage": "There are no active desktop streaming sessions right now."
+    },
+    "monitoring": {
+      "loading": "Loading system monitoring data…",
+      "healthTitle": "System Health",
+      "healthStatus": "Health Status",
+      "statusHealthy": "Healthy",
+      "statusUnhealthy": "Unhealthy",
+      "desktopStreamingAvailable": "Desktop Streaming Available",
+      "novncAvailable": "noVNC Available",
+      "activeStreamingSessions": "Active Streaming Sessions",
+      "pendingTakeovers": "Pending Takeovers",
+      "activeTakeovers": "Active Takeovers",
+      "pausedTasks": "Paused Tasks",
+      "resourceTitle": "Resource Usage",
+      "cpuUsage": "CPU Usage",
+      "memoryUsage": "Memory Usage",
+      "diskUsage": "Disk Usage",
+      "processCount": "Process Count",
+      "loadAverage": "Load Average (1m / 5m / 15m)",
+      "uptime": "Uptime",
+      "emergencyStopTitle": "Danger Zone",
+      "emergencyStop": "Emergency Stop",
+      "emergencyStopDescription": "Immediately halts all autonomous operations and requests an auto-approved human takeover. This cannot be undone — use only when autonomous behavior must stop right now.",
+      "emergencyStopConfirmTitle": "Activate emergency stop?",
+      "emergencyStopConfirmMessage": "This will immediately pause all autonomous tasks and start a CRITICAL-priority human takeover. This action cannot be undone. Continue?",
+      "emergencyStopSuccess": "Emergency stop activated — all autonomous operations have been paused.",
+      "emptyTitle": "No monitoring data",
+      "emptyMessage": "System status could not be loaded."
+    }
+  },
+  "adminUsers": {
+    "title": "User Management",
+    "subtitle": "Manage users, roles, and account status",
+    "addUser": "Add User",
+    "searchPlaceholder": "Search by username, email, or name…",
+    "loading": "Loading users…",
+    "colUsername": "Username",
+    "colEmail": "Email",
+    "colDisplayName": "Display Name",
+    "colRole": "Role",
+    "colVoiceBundle": "Voice Bundle",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "roleAdmin": "admin",
+    "roleUser": "user",
+    "roleReadonly": "readonly",
+    "statusActive": "active",
+    "statusInactive": "inactive",
+    "titleDeactivate": "Deactivate",
+    "titleActivate": "Activate",
+    "titleAssignBundle": "Assign Voice Bundle",
+    "empty": "No users found.",
+    "fieldEmail": "Email",
+    "fieldUsername": "Username",
+    "fieldPassword": "Password",
+    "fieldDisplayName": "Display Name",
+    "createUser": "Create User",
+    "userLabel": "User:",
+    "fieldVoiceBundle": "Voice Bundle",
+    "useRoleDefault": "— Use role default —",
+    "deleteUserTitle": "Delete User",
+    "deleteConfirm": "Delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "Background schedulers",
+    "description": "Turn background jobs on or off. Changes take effect on the job's next cycle — no restart needed.",
+    "refresh": "Refresh",
+    "loading": "Loading schedulers…",
+    "empty": "No schedulers registered.",
+    "overridden": "Overridden",
+    "defaultLabel": "Default",
+    "runtimeLabel": "Runtime",
+    "on": "On",
+    "off": "Off",
+    "revertToDefault": "Revert to default",
+    "enableTitle": "Enable this job",
+    "disableTitle": "Disable this job",
+    "toggleAria": "Toggle {name}",
+    "loadFailed": "Could not load schedulers.",
+    "toggleFailed": "Could not change {name}.",
+    "resetFailed": "Could not revert {name} to its default."
+  }
 }

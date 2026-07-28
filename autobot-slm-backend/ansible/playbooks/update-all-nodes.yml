@@ -262,6 +262,30 @@
         - autobot_shared
       tags: [slm]
 
+    # #12223 (#12202): the self-update path deploys the SLM backend via the
+    # unarchive above and never runs the slm_manager role — where the #12202
+    # marker-write lives — so without this the .deployed_commit marker is never
+    # written and _get_slm_deployed_commit() always returns None (self-update
+    # always fires, never skips-when-current). Record the just-deployed commit
+    # here too, mirroring the slm_manager role, so the skip-check works.
+    - name: "[PLAY 1] SLM | Record deployed commit marker (#12223, #12202)"
+      ansible.builtin.shell:
+        cmd: >-
+          git -C {{ code_source_dir | default('/opt/autobot/code_source') }} rev-parse HEAD
+          > /opt/autobot/autobot-slm-backend/.deployed_commit
+      changed_when: false
+      become: true
+      tags: [slm]
+
+    - name: "[PLAY 1] SLM | Own the deployed-commit marker (#12223)"
+      file:
+        path: /opt/autobot/autobot-slm-backend/.deployed_commit
+        owner: autobot
+        group: autobot
+        mode: "0644"
+      become: true
+      tags: [slm]
+
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
       ansible.builtin.file:
@@ -650,13 +674,32 @@
       no_log: true
       tags: [backend, env]
 
-    # Full user management requires the autobot_app DB password, written by the
-    # single-box provisioning play into autobot-db-credentials.env (#10636).
-    - name: "[PLAY 2] Backend | Read autobot_app DB password (#10636)"
+    # Full user management requires the autobot_app DB password (#10636).
+    #
+    # GH#12883: this used to read ONLY /etc/autobot/autobot-db-credentials.env.
+    # On a live host that file was a month stale and held a value PostgreSQL
+    # rejects — that is what tried to overwrite a working credential and would
+    # have taken the database out on the next backend restart.
+    #
+    # /etc/autobot/db-credentials.env is the canonical store: PLAY 1 already
+    # slurps it for the SLM migrations above, and its value is the one that
+    # actually authenticates. Prefer it; keep the legacy file as a fallback for
+    # hosts provisioned before it existed.
+    #
+    # `tail -n 1` is load-bearing, not defensive. db-credentials.env is appended
+    # to rather than rewritten, so this key can appear more than once with the
+    # CURRENT value LAST. That matches `set -a; . file` semantics (last
+    # assignment wins); a `head -1` would read the stale first copy and
+    # reintroduce the exact outage this fixes.
+    - name: "[PLAY 2] Backend | Read autobot_app DB password (#10636, #12883)"
       ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
-          /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
+        cmd: |
+          k=AUTOBOT_DB_PASSWORD
+          v=$(grep -oP "^${k}=\K.*" /etc/autobot/db-credentials.env 2>/dev/null | tail -n 1)
+          if [ -z "$v" ]; then
+            v=$(grep -oP "^${k}=\K.*" /etc/autobot/autobot-db-credentials.env 2>/dev/null | tail -n 1)
+          fi
+          printf '%s' "$v"
       register: existing_autobot_db_password
       become: true
       when: "'backend' in group_names"
@@ -689,17 +732,69 @@
       when: "'backend' in group_names"
       tags: [backend, env]
 
-    - name: "[PLAY 2] Backend | Regenerate .env from template (#2649)"
-      ansible.builtin.template:
-        src: ../roles/backend/templates/backend.env.j2
-        dest: /opt/autobot/autobot-backend/.env
-        mode: "0600"
-        owner: autobot
-        group: autobot
-        backup: true
+    # GH#12883: this render was unreachable until #12871 was fixed, and the first
+    # time it ran it overwrote a WORKING AUTOBOT_POSTGRES_PASSWORD with one
+    # PostgreSQL rejects — the next backend restart would have lost the database.
+    #
+    # Two stores claimed to hold this secret and they disagreed:
+    #   /etc/autobot/autobot-db-credentials.env   (legacy, observed a month stale)
+    #   /etc/autobot/db-credentials.env           (canonical; authenticates)
+    #
+    # The read task above now prefers the canonical store (last-wins), which is
+    # the convergence this issue asked for. This check stays as defence in depth:
+    # it costs nothing, and it still catches any host whose stores diverge for a
+    # reason we have not seen yet. A visibly failed update is recoverable; a dead
+    # credential on next restart is an outage.
+    - name: "[PLAY 2] Backend | Read the DB password currently in use (#12883)"
+      ansible.builtin.shell:
+        cmd: >-
+          grep -oP '^AUTOBOT_POSTGRES_PASSWORD=\K.*'
+          /opt/autobot/autobot-backend/.env 2>/dev/null || true
+      register: current_env_db_password
       become: true
       when: "'backend' in group_names"
+      failed_when: false
+      changed_when: false
+      no_log: true
+      tags: [backend, env]
+
+    - name: "[PLAY 2] Backend | Refuse to overwrite a working DB password (#12883)"
       vars:
+        _current: "{{ current_env_db_password.stdout | default('') | trim }}"
+        _incoming: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
+      ansible.builtin.fail:
+        msg: >-
+          Refusing to rewrite .env: the DB password in
+          /etc/autobot/autobot-db-credentials.env differs from the one currently
+          authenticating in /opt/autobot/autobot-backend/.env. Writing it would
+          break PostgreSQL auth on the next backend restart (#12883). Reconcile
+          the two credential stores, then re-run. The working value is the one in
+          the live .env.
+      when:
+        - "'backend' in group_names"
+        - _current | length > 0
+        - _incoming | length > 0
+        - _current != _incoming
+      tags: [backend, env]
+
+    # GH#12871: was a bare playbook-level `template:` task, which cannot see the
+    # backend role's defaults — it died on AnsibleUndefinedVariable
+    # 'backend_chromadb_auth_token', failing PLAY 2 so PLAY 3 never ran. That
+    # variable was only the first of 37 the template needs and this play does
+    # not define. include_role puts the defaults in scope at role-default
+    # precedence, so they fill the other 32 while the secret overrides below
+    # (read off the live host) still win. include_vars would NOT be safe here:
+    # it outranks task vars, so it would replace those secrets with the role's
+    # empty / "change-me-in-production" placeholders.
+    - name: "[PLAY 2] Backend | Regenerate .env from template (#2649, #12871)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: env_only
+      when: "'backend' in group_names"
+      vars:
+        backend_env_dest: /opt/autobot/autobot-backend/.env
+        backend_env_owner: autobot
+        backend_env_group: autobot
         # backend_secret_key uses a register var specific to this playbook
         backend_secret_key: "{{ existing_secret_key.stdout | default(lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true), true) }}"
         # #10400: prefer SLM_SECRET_KEY when present, else keep the role default.

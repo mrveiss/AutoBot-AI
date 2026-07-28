@@ -12,6 +12,7 @@
  */
 
 import { onMounted, onUnmounted, computed } from 'vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatDateTime } from '@/composables/useTimezone'
 
@@ -89,10 +90,6 @@ function statusBadgeClass(status: string): string {
 /**
  * Format duration for display.
  */
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms.toFixed(0)}ms`
-  return `${(ms / 1000).toFixed(2)}s`
-}
 
 function formatDate(dateStr: string): string {
   return formatDateTime(dateStr)
@@ -143,19 +140,19 @@ function formatDate(dateStr: string): string {
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
         <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.avgLatency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(avgLatency)]">
-          {{ formatDuration(avgLatency) }}
+          {{ formatDuration(avgLatency, { style: 'msSeconds2dp' }) }}
         </p>
-        <p class="text-xs text-gray-400 mt-1">P95: {{ formatDuration(p95Latency) }}</p>
+        <p class="text-xs text-gray-400 mt-1">P95: {{ formatDuration(p95Latency, { style: 'msSeconds2dp' }) }}</p>
       </div>
 
       <!-- P95 Latency -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4">
         <p class="text-sm text-gray-500 mb-1">{{ $t('performance.performanceOverview.p95Latency') }}</p>
         <p :class="['text-3xl font-bold', latencyColor(p95Latency)]">
-          {{ formatDuration(p95Latency) }}
+          {{ formatDuration(p95Latency, { style: 'msSeconds2dp' }) }}
         </p>
         <p class="text-xs text-gray-400 mt-1">
-          P99: {{ formatDuration(overview?.p99_latency_ms ?? 0) }}
+          P99: {{ formatDuration(overview?.p99_latency_ms ?? 0, { style: 'msSeconds2dp' }) }}
         </p>
       </div>
 
@@ -226,7 +223,7 @@ function formatDate(dateStr: string): string {
               </td>
               <td class="px-4 py-2 text-sm font-mono">
                 <span :class="latencyColor(trace.duration_ms)">
-                  {{ formatDuration(trace.duration_ms) }}
+                  {{ formatDuration(trace.duration_ms, { style: 'msSeconds2dp' }) }}
                 </span>
               </td>
               <td class="px-4 py-2 text-sm text-gray-600">{{ trace.span_count }}</td>

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - FIXED Check Status of All VM Services
 # Comprehensive health check for all distributed VM services with proper error detection
 

@@ -82,6 +82,7 @@ from code_intelligence.security import (
     SecuritySeverity,
     get_vulnerability_types,
 )
+from code_intelligence.shared.scoring import get_grade_from_score
 from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_security_analysis
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
@@ -293,29 +294,6 @@ REDIS_OPTIMIZATION_CATEGORIES = (
 # =============================================================================
 # Helper Functions for Score Grading (Issue #315 - extracted/refactored)
 # =============================================================================
-
-
-def _calculate_grade_from_score(score: float) -> str:
-    """
-    Calculate letter grade from numeric score.
-
-    (Issue #315 - extracted/refactored)
-
-    Args:
-        score: Numeric score from 0-100
-
-    Returns:
-        Letter grade: A, B, C, D, or F
-    """
-    if score >= 90:
-        return "A"
-    if score >= 80:
-        return "B"
-    if score >= 70:
-        return "C"
-    if score >= 60:
-        return "D"
-    return "F"
 
 
 def _get_redis_status_message(score: float) -> str:
@@ -914,7 +892,7 @@ async def get_codebase_health_score(
         score = _calculate_health_score(report.anti_patterns)
 
         # Determine grade using extracted helper
-        grade = _calculate_grade_from_score(score)
+        grade = get_grade_from_score(score)
 
         return JSONResponse(
             status_code=200,
@@ -1160,7 +1138,7 @@ async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
     results = await asyncio.to_thread(optimizer.analyze_directory, path)
 
     score = _calculate_redis_health_score(results)
-    grade = _calculate_grade_from_score(score)
+    grade = get_grade_from_score(score)
     status = _get_redis_status_message(score)
 
     return {
@@ -1356,31 +1334,42 @@ async def get_security_score(
         raise_invalid_input("path", f"does not exist: {path}")
 
     try:
-        analyzer = SecurityAnalyzer(project_root=path)
-        await asyncio.to_thread(analyzer.analyze_directory)
-        summary = analyzer.get_summary()
+        # #12866: this used to run analyzer.analyze_directory() inline via
+        # asyncio.to_thread. That is not a substitute for a separate process
+        # here — the scan is pure-Python and GIL-bound, so the worker thread
+        # holds the GIL and starves the event loop for the whole scan. Every
+        # other request on this worker stalls with it, which is what pushed
+        # /service-monitor/vms/status past the GUI's probe budget and made a
+        # healthy backend report itself "Unreachable" (p90 12s, 27.5% of polls).
+        #
+        # The Celery path for exactly this work already exists
+        # (POST /security/score/analyze -> run_security_analysis). Serve the
+        # latest completed result and enqueue a refresh instead of scanning in
+        # the request. Same response shape either way, so callers are unchanged.
+        cached = await get_latest_task_result(_REDIS_PREFIX)
+        if cached and cached.get("result"):
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "success",
+                    "from_cache": True,
+                    "completed_at": cached.get("completed_at"),
+                    "path": path,
+                    **cached["result"],
+                },
+            )
 
-        # Generate grade and status using extracted helpers
-        score = summary["security_score"]
-        grade = _calculate_grade_from_score(score)
-        status = _get_security_status_message(score)
-
+        queued = run_security_analysis.delay(path)
+        await store_latest_task_id(_REDIS_PREFIX, queued.id)
+        logger.info("Security score not cached; queued analysis task %s for %s", queued.id, path)
         return JSONResponse(
             status_code=200,
             content={
-                "status": "success",
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "status": "pending",
+                "task_id": queued.id,
                 "path": path,
-                "security_score": score,
-                "grade": grade,
-                "risk_level": summary["risk_level"],
-                "status_message": status,
-                "total_findings": summary["total_findings"],
-                "critical_issues": summary["critical_issues"],
-                "high_issues": summary["high_issues"],
-                "files_analyzed": summary["files_analyzed"],
-                "severity_breakdown": summary["by_severity"],
-                "owasp_breakdown": summary["by_owasp_category"],
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                "message": "Security analysis queued; poll this endpoint for the completed score.",
             },
         )
 

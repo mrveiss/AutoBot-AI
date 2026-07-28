@@ -21,12 +21,12 @@ import asyncio
 import json
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from enum import Enum
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
+from autobot_shared.status_enums import LLMProvider  # noqa: F401 (re-exported, #12661)
 from autobot_shared.time_utils import now_utc, utc_timestamp
 from constants.model_constants import (
     ANTHROPIC_CLAUDE_HAIKU4_5,
@@ -60,17 +60,14 @@ PRICING_VERSION: str = "2026-03-22"
 PRICING_STALENESS_DAYS: int = 90
 
 
-class LLMProvider(str, Enum):
-    """Supported LLM providers"""
-
-    ANTHROPIC = "anthropic"
-    OPENAI = "openai"
-    OLLAMA = "ollama"
-    GOOGLE = "google"
-    OPENROUTER = "openrouter"
-    MISTRAL = "mistral"
-    LOCAL = "local"
-
+# LLMProvider: single canonical source of truth (#12661). This module used
+# to define its own ``str, Enum`` fork that disagreed with
+# ``autobot_shared.status_enums.LLMProvider`` and
+# ``llm_shared/types.py::ProviderType`` (e.g. it had ``GOOGLE``/``OPENROUTER``
+# that the other two lacked). Imported directly above from the canonical
+# module — unused by name anywhere in this codebase (verified by grep), so
+# no behavioural change; every ``.value`` string it defined is preserved on
+# the canonical enum.
 
 # Model pricing per 1M tokens (USD) - single source of truth in
 # constants/model_constants.py (#3528). Update PRICING_VERSION above when

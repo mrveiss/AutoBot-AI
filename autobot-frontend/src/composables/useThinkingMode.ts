@@ -4,6 +4,7 @@
 // Persists to server API when available; falls back to localStorage.
 import { ref, watch } from 'vue'
 import { getApiBase } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useThinkingMode')
@@ -43,7 +44,7 @@ function writeLocalPrefs(prefs: ThinkingPreferences): void {
 
 async function fetchServerPrefs(sessionId: string): Promise<ThinkingPreferences | null> {
   try {
-    const res = await fetch(`${getApiBase()}/sessions/${sessionId}/thinking-preferences`, {
+    const res = await fetchWithAuth(`${getApiBase()}/sessions/${sessionId}/thinking-preferences`, {
       credentials: 'include',
     })
     if (!res.ok) return null
@@ -56,7 +57,7 @@ async function fetchServerPrefs(sessionId: string): Promise<ThinkingPreferences 
 
 async function putServerPrefs(sessionId: string, prefs: ThinkingPreferences): Promise<void> {
   try {
-    await fetch(`${getApiBase()}/sessions/${sessionId}/thinking-preferences`, {
+    await fetchWithAuth(`${getApiBase()}/sessions/${sessionId}/thinking-preferences`, {
       method: 'PUT',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

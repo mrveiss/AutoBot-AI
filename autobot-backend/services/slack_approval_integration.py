@@ -26,7 +26,7 @@ import time
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from circuit_breaker import CircuitState
 
 logger = get_logger(__name__)
@@ -100,7 +100,7 @@ class SlackApprovalManager:
         }
 
         try:
-            client = await get_redis_client(async_client=True, database=_APPROVAL_REDIS_DB)
+            client = await get_async_redis_client(database=_APPROVAL_REDIS_DB)
             if client is None:
                 self._record_redis_failure("store_approval_thread", "Redis client is None")
                 return None
@@ -147,7 +147,7 @@ class SlackApprovalManager:
             return None
 
         try:
-            client = await get_redis_client(async_client=True, database=_APPROVAL_REDIS_DB)
+            client = await get_async_redis_client(database=_APPROVAL_REDIS_DB)
             if client is None:
                 self._record_redis_failure("load_approval_thread", "Redis client is None")
                 return None
@@ -202,7 +202,7 @@ class SlackApprovalManager:
             return False
 
         try:
-            client = await get_redis_client(async_client=True, database=_APPROVAL_REDIS_DB)
+            client = await get_async_redis_client(database=_APPROVAL_REDIS_DB)
             if client is None:
                 self._record_redis_failure("manage_channel_mapping", "Redis client is None")
                 return False

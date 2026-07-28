@@ -210,8 +210,8 @@ function formatOperationName(operation: string): string {
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -297,7 +297,7 @@ function formatOperationName(operation: string): string {
 }
 
 .progress-bar {
-  height: 6px;
+  height: var(--spacing-1-5);
   background: var(--bg-secondary);
   border-radius: var(--radius-full);
   overflow: hidden;
@@ -372,8 +372,8 @@ function formatOperationName(operation: string): string {
 }
 
 .top-rank {
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -433,8 +433,8 @@ function formatOperationName(operation: string): string {
   }
 
   .stat-icon {
-    width: 40px;
-    height: 40px;
+    width: var(--spacing-10);
+    height: var(--spacing-10);
     font-size: var(--text-lg);
   }
 

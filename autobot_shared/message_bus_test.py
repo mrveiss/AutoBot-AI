@@ -33,12 +33,33 @@ def _install_redis_stub():
     inside message_bus.py resolves to our stub.
     """
     mod_name = "autobot_shared.redis_client"
-    if mod_name in sys.modules:
-        return  # Already loaded (real or stub)
+    existing = sys.modules.get(mod_name)
+    if existing is not None:
+        # Already loaded — real, or a stub installed by a sibling test module.
+        # #12900: do NOT replace it (other modules may hold references), but do
+        # make sure the symbol message_bus imports resolves. A sibling's stub
+        # that predates the async migration lacks it, and whether this module
+        # collects at all then depends purely on test ordering: it passed
+        # standalone and failed in a full-package run.
+        if not hasattr(existing, "get_async_redis_client"):
+            existing.get_async_redis_client = AsyncMock(name="stub_get_async_redis_client")
+        return
 
-    stub = types.ModuleType(mod_name)
-    stub.get_redis_client = MagicMock(name="stub_get_redis_client")
-    sys.modules[mod_name] = stub
+    # #12900: the stub used to hand-list only `get_redis_client`. message_bus.py
+    # later migrated to `get_async_redis_client`, the stub was never updated, and
+    # the whole module failed at COLLECTION — so it silently contributed zero
+    # tests instead of failing loudly. Resolving names on demand means a future
+    # symbol added to message_bus's imports cannot rot this stub the same way.
+    class _RedisClientStub(types.ModuleType):
+        def __getattr__(self, name: str):
+            # Async factories are awaited by the caller, so they need AsyncMock;
+            # a MagicMock would return a non-awaitable and fail at the await.
+            factory = AsyncMock if name.startswith("get_async") else MagicMock
+            mock = factory(name=f"stub_{name}")
+            setattr(self, name, mock)
+            return mock
+
+    sys.modules[mod_name] = _RedisClientStub(mod_name)
 
 
 _install_redis_stub()
@@ -83,21 +104,26 @@ def sample_message():
 async def bus_and_redis(mock_redis):
     """Create a ServiceMessageBus wired to the mock Redis client.
 
-    Patches ``get_redis_client`` in the already-imported module so that
+    Patches ``get_async_redis_client`` in the already-imported module so that
     ``_get_redis()`` returns *mock_redis*.
+
+    #12900: this patched ``get_redis_client``, the name message_bus imported
+    before it moved to the async client. Because the module never collected,
+    nothing reported the stale name — the fixture was patching an attribute
+    that no longer existed.
     """
     import autobot_shared.message_bus as mb_module
 
-    async def _mock_get_redis(async_client=False, database="logs"):
+    async def _mock_get_async_redis(database="logs", **kwargs):
         return mock_redis
 
-    original = mb_module.get_redis_client
-    mb_module.get_redis_client = _mock_get_redis
+    original = mb_module.get_async_redis_client
+    mb_module.get_async_redis_client = _mock_get_async_redis
     try:
         bus = ServiceMessageBus()
         yield bus, mock_redis
     finally:
-        mb_module.get_redis_client = original
+        mb_module.get_async_redis_client = original
         # Reset singleton so tests don't leak state
         mb_module._bus_instance = None
 

@@ -130,7 +130,7 @@ const { start: startContextPolling } = usePollingJob<DesktopContext | null>(
     loading.value = true
     error.value = null
     try {
-      const data = await ApiClient.get<DesktopContext>('/vnc/desktop/context')
+      const data = await ApiClient.get<DesktopContext>('/api/vnc/desktop/context')
       context.value = data
       return data
     } catch (err: unknown) {

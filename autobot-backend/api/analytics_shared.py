@@ -33,6 +33,25 @@ async def resolve_source_or_404(source_id: str | None) -> None:
         raise HTTPException(status_code=404, detail=f"Source '{source_id}' not found")
 
 
+def no_data_response(message: str, **extra_fields) -> dict:
+    """Standardized no-data response envelope (Issue #543, extracted #12705).
+
+    Every analytics endpoint returns ``status="no_data"`` plus a message when
+    there is nothing to report. The empty result containers differ per
+    endpoint (e.g. "issues"/"summary" vs "timeline"/"patterns"/"trends"), so
+    callers supply those as keyword arguments.
+
+    Args:
+        message: Explanation for why there is no data.
+        extra_fields: Endpoint-specific empty result containers merged into
+            the response (e.g. ``issues=[], summary={}``).
+
+    Returns:
+        Dict with status="no_data", message, and the supplied extra fields.
+    """
+    return {"status": "no_data", "message": message, **extra_fields}
+
+
 async def resolve_source_root_or_404(source_id: str | None) -> Path | None:
     """Validate source_id and return its filesystem root path.
 

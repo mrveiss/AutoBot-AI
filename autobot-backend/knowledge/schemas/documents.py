@@ -139,3 +139,74 @@ class DocsWatcherControlResponse(BaseModel):
     success: bool = False
     message: str | None = None
     watcher: Dict[str, Any] | None = None
+
+
+class SystemDocMetadata(BaseModel):
+    """Optional per-document metadata for the System Docs viewer (#12314)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    wordCount: int | None = None
+    lastModified: str | None = None
+    author: str | None = None
+
+
+class SystemDoc(BaseModel):
+    """A single system documentation file (#12314).
+
+    Field names mirror the frontend ``SystemDoc`` interface
+    (``useKnowledgeSystemDocs.ts``) so the contract is explicit in
+    ``/openapi.json``. ``content`` is empty in list responses and
+    populated only by the single-document endpoint.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    title: str
+    path: str
+    content: str = ""
+    type: str = "markdown"
+    category: str = ""
+    metadata: SystemDocMetadata | None = None
+
+
+class SystemDocCategory(BaseModel):
+    """A documentation category node for the System Docs tree (#12314)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    path: str
+    icon: str = "folder"
+    children: List["SystemDocCategory"] = Field(default_factory=list)
+    docs: List[SystemDoc] = Field(default_factory=list)
+    docCount: int = 0
+
+
+class SystemDocsCategoriesResponse(BaseModel):
+    """Shape of ``GET /api/knowledge_base/system-docs/categories`` (#12314)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    categories: List[SystemDocCategory] = Field(default_factory=list)
+
+
+class SystemDocsCategoryResponse(BaseModel):
+    """Shape of ``GET /api/knowledge_base/system-docs/category/{path}`` (#12314)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    docs: List[SystemDoc] = Field(default_factory=list)
+
+
+class SystemDocContentResponse(BaseModel):
+    """Shape of ``GET /api/knowledge_base/system-docs/{doc_id}`` (#12314)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    doc: SystemDoc
+
+
+SystemDocCategory.model_rebuild()

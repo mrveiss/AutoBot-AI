@@ -15,7 +15,6 @@ Response shape: plain JSONResponse (matches chat_presets.py pattern).
 
 import json
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, Request
@@ -25,6 +24,7 @@ from api.schemas_chat import FolderCreate, FolderUpdate, SessionFolderAssign
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from constants.redis_constants import REDIS_KEY
 
 logger = get_logger(__name__)
@@ -143,7 +143,7 @@ async def create_folder(
         "owner": username,
         "pinned": False,
         "archived": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": utc_timestamp(),
         "session_ids": [],
     }
     folders.append(folder)

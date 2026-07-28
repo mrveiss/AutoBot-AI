@@ -14,6 +14,7 @@
  */
 
 import { ref, onMounted, onUnmounted } from 'vue'
+import { formatBytes } from '@/utils/formatHelpers'
 import { getBackendUrl } from '@/config/ssot-config'
 import i18n from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -69,13 +70,6 @@ function formatUptime(seconds: number | null): string {
   return `${h}h ${m}m`
 }
 
-function formatBytes(bytes: number | null): string {
-  if (bytes === null || bytes === undefined) return '-'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 function statusDotClass(status: string | undefined): string {
   switch (status) {
     case 'running': return 'bg-green-500'
@@ -98,7 +92,7 @@ function statusTextClass(status: string | undefined): string {
 
 async function fetchStatus(): Promise<void> {
   try {
-    const response = await fetch(`${getBackendUrl()}/api/redis-service/status`, {
+    const response = await fetch(`${getBackendUrl()}/redis-service/status`, {
       headers: authHeaders(),
     })
     if (!response.ok) {
@@ -122,7 +116,7 @@ async function performAction(action: 'start' | 'stop' | 'restart'): Promise<void
   successMessage.value = null
 
   try {
-    const response = await fetch(`${getBackendUrl()}/api/redis-service/${action}`, {
+    const response = await fetch(`${getBackendUrl()}/redis-service/${action}`, {
       method: 'POST',
       headers: authHeaders(),
     })
@@ -246,13 +240,13 @@ onUnmounted(() => {
       <div class="bg-white px-4 py-3">
         <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.memoryUsed') }}</div>
         <div class="text-sm font-semibold text-gray-900">
-          {{ redisStatus ? formatBytes(redisStatus.memory_used_bytes) : '-' }}
+          {{ redisStatus ? formatBytes(redisStatus.memory_used_bytes, { units: ['B', 'KB', 'MB'], decimals: 1, keepTrailingZeros: true, integerBase: true, nullText: '-' }) : '-' }}
         </div>
       </div>
       <div class="bg-white px-4 py-3">
         <div class="text-xs text-gray-500 mb-0.5">{{ $t('redisServicePanel.peakMemory') }}</div>
         <div class="text-sm font-semibold text-gray-900">
-          {{ redisStatus ? formatBytes(redisStatus.memory_peak_bytes) : '-' }}
+          {{ redisStatus ? formatBytes(redisStatus.memory_peak_bytes, { units: ['B', 'KB', 'MB'], decimals: 1, keepTrailingZeros: true, integerBase: true, nullText: '-' }) : '-' }}
         </div>
       </div>
       <div class="bg-white px-4 py-3">

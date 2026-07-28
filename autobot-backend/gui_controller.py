@@ -12,65 +12,125 @@ interaction, with configurable safety settings and fail-safes.
 import asyncio
 import os
 import subprocess
+from typing import Any, Dict
 
 import pyautogui
 
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 
 logger = get_logger(__name__)
 
+# Issue #11579: Canonical desktop-control display, shared with
+# api/vnc_manager.py + api/vnc_mcp.py (xdotool/x11vnc/noVNC). GUIController
+# used to start its OWN private ``Xvfb :99``, invisible to the human
+# observer who watches the display owned by vnc_manager. It now attaches to
+# this single, shared display instead. See NetworkConstants.DESKTOP_DISPLAY
+# for the env-driven single source of truth (AUTOBOT_DESKTOP_DISPLAY).
+CANONICAL_DISPLAY = NetworkConstants.DESKTOP_DISPLAY
+
 
 class GUIController:
     def __init__(self):
-        """Initialize the GUIController with safety settings and virtual
-        display if needed.
+        """Initialize the GUIController with safety settings, attached to
+        the canonical (human-observed) desktop display.
         """
         # Enable failsafe to stop script by moving mouse to upper-left corner
         pyautogui.FAILSAFE = True
         # Add a small pause after each PyAutoGUI call for safety
         pyautogui.PAUSE = 0.5
-        self.screen_width, self.screen_height = pyautogui.size()
         self.virtual_display = False
         self.xvfb_process = None
-        # Check if running under Xvfb or need virtual display
-        if "DISPLAY" not in os.environ:
-            self.virtual_display = True
-            logger.warning("DISPLAY environment variable not set. " "Attempting to start virtual display.")
-            self.start_virtual_display()
+        # Issue #11579: always attach to the canonical display rather than
+        # only reacting to a missing DISPLAY env var — this guarantees
+        # convergence even if some other DISPLAY was inherited from the
+        # environment. Never starts a second/competing X server here; the
+        # canonical display's X server is owned by
+        # api.vnc_manager.start_vnc_server() (Issue #74).
+        self.attach_to_canonical_display()
+        # Issue #11579: pyautogui.size() hard-raises if the canonical
+        # display's X server (owned by api.vnc_manager) isn't up yet — a
+        # real startup race if this worker constructs before
+        # start_vnc_server() runs. Guard it: log and defer rather than
+        # crash construction; screen_width/height stay None until a later
+        # call succeeds (e.g. the next GUIController() on this worker).
+        try:
+            self.screen_width, self.screen_height = pyautogui.size()
+        except Exception as e:
+            self.screen_width, self.screen_height = None, None
+            logger.warning(
+                "Could not determine screen size on canonical display %s (%s). "
+                "Is the VNC/X server started yet? (see api.vnc_manager.start_vnc_server)",
+                CANONICAL_DISPLAY,
+                e,
+            )
 
     def __del__(self):
         """Destructor to clean up resources."""
         self.stop_virtual_display()
 
-    def start_virtual_display(self):
-        """Start Xvfb virtual display if not already running."""
-        try:
-            # Check if Xvfb is installed
-            if subprocess.run(["which", "Xvfb"], capture_output=True).returncode != 0:  # nosec B603 B607 - fixed argv,
-                logger.error("Xvfb is not installed. Please install it to use the virtual display.")
-                return
+    def attach_to_canonical_display(self):
+        """Point pyautogui at the canonical (human-observed) desktop display.
 
-            # Start Xvfb
-            self.xvfb_process = subprocess.Popen(  # nosec B603 B607 - fixed argv for Xvfb virtual display
-                ["Xvfb", ":99", "-screen", "0", "1280x1024x24"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+        Issue #11579: previously started a private ``Xvfb :99`` here, which
+        drove a screen the human operator could never see (#11506 audit).
+        This method only ATTACHES to the shared display; it does not spawn
+        Xvfb/Xtigervnc. The X server for the canonical display is owned and
+        started by api.vnc_manager.start_vnc_server().
+
+        #11506 T1 (control-lock) will hook in here — the agent (this
+        controller) and the human (noVNC on the same display) need to
+        arbitrate simultaneous input on this shared display. Not implemented
+        in this change; scope is display convergence only.
+        """
+        os.environ["DISPLAY"] = CANONICAL_DISPLAY
+        config.display = CANONICAL_DISPLAY
+        self.virtual_display = True
+        if self._is_canonical_display_active():
+            logger.info("GUIController attached to canonical display %s", CANONICAL_DISPLAY)
+        else:
+            logger.warning(
+                "Canonical desktop display %s is not active yet. GUI "
+                "automation will fail until the VNC/X server owning it is "
+                "started (see api.vnc_manager.start_vnc_server).",
+                CANONICAL_DISPLAY,
             )
-            config.display = ":99"
-            logger.info("Virtual display started on :99")
+
+    def _is_canonical_display_active(self) -> bool:
+        """Check whether an X server is already listening on the canonical display."""
+        try:
+            result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+                ["pgrep", "-f", f"Xtigervnc {CANONICAL_DISPLAY}"],
+                capture_output=True,
+                timeout=5,
+            )
+            return result.returncode == 0
         except Exception as e:
-            logger.error("Error starting virtual display: %s", e)
+            logger.debug("Could not probe canonical display %s: %s", CANONICAL_DISPLAY, e)
+            return False
+
+    def start_virtual_display(self):
+        """Deprecated alias, retained for backward compatibility.
+
+        Issue #11579: no longer starts a private Xvfb on :99 — attaches to
+        the canonical (human-observed) display instead. See
+        attach_to_canonical_display().
+        """
+        self.attach_to_canonical_display()
 
     def stop_virtual_display(self):
-        """Stop the Xvfb virtual display if it was started by this controller."""
+        """Clean up controller-owned resources.
+
+        Issue #11579: GUIController no longer owns the canonical display's X
+        server process (api.vnc_manager does), so there is nothing to
+        terminate here beyond any legacy Xvfb handle.
+        """
         if self.xvfb_process:
             self.xvfb_process.terminate()
             self.xvfb_process = None
-            if "DISPLAY" in os.environ:
-                del config.display
             logger.info("Virtual display stopped")
 
     async def capture_screen(self):
@@ -81,6 +141,40 @@ class GUIController:
             logger.error("Error capturing screenshot: %s", e)
             return None
 
+    async def read_text_from_region(self, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
+        """OCR-read text from a region of the canonical desktop display.
+
+        Issue #11579: this capability (task type ``gui_read_text_from_region``,
+        see task_handlers/gui_handlers.py) has no xdotool/vnc_manager
+        equivalent that plugs into ``ctx.worker.gui_controller`` today, so it
+        is preserved here unchanged except for the display it now targets —
+        the canonical, human-observed display instead of the retired
+        ``:99`` Xvfb. Uses the same pytesseract dependency as
+        api.vnc_manager's ``/ocr`` endpoint (Issue #74 Area 5).
+        """
+        try:
+            import pytesseract
+        except ImportError:
+            logger.error("pytesseract not installed; cannot read text from region")
+            return {
+                "status": "error",
+                "message": "pytesseract not installed. Run: pip install pytesseract pillow",
+                "text": "",
+            }
+
+        try:
+            screenshot = await asyncio.to_thread(pyautogui.screenshot, region=(x, y, width, height))
+            text = await asyncio.to_thread(pytesseract.image_to_string, screenshot)
+            logger.debug("Read text from region (%s,%s,%s,%s)", x, y, width, height)
+            return {
+                "status": "success",
+                "message": "GUI text read completed",
+                "text": text.strip(),
+            }
+        except Exception as e:
+            logger.error("Error reading text from region (%s,%s,%s,%s): %s", x, y, width, height, e)
+            return {"status": "error", "message": "Operation failed", "text": ""}
+
     async def click_at(self, x, y):
         """Simulate a mouse click at the specified coordinates."""
         try:
@@ -89,13 +183,96 @@ class GUIController:
         except Exception as e:
             logger.error("Error clicking at (%s, %s): %s", x, y, e)
 
-    async def type_text(self, text):
-        """Simulate typing the specified text."""
+    async def click_element(
+        self,
+        image_path: str,
+        confidence: float = 0.9,
+        button: str = "left",
+        clicks: int = 1,
+        interval: float = 0.0,
+    ) -> Dict[str, Any]:
+        """Locate an element by image and click it (Issue #11970 parity).
+
+        Interface parity with gui_controller_dummy.GUIController.click_element,
+        required by task_handlers/gui_handlers.py's GUIClickElementHandler.
+        """
         try:
-            await asyncio.to_thread(pyautogui.write, text)
+            location = await self.locate_element_by_image(image_path, confidence=confidence)
+            if not location:
+                return {
+                    "status": "error",
+                    "message": f"Element not found for image: {image_path}",
+                }
+            await asyncio.to_thread(
+                pyautogui.click,
+                location.x,
+                location.y,
+                clicks=clicks,
+                interval=interval,
+                button=button,
+            )
+            logger.debug("Clicked element '%s' at %s", image_path, location)
+            return {"status": "success", "message": "GUI click completed"}
+        except Exception as e:
+            logger.error("Error clicking element '%s': %s", image_path, e)
+            return {"status": "error", "message": "Operation failed"}
+
+    async def type_text(self, text: str, interval: float = 0.0) -> Dict[str, Any]:
+        """Simulate typing the specified text.
+
+        Issue #11970: accepts ``interval`` (dummy-controller parity) and
+        returns a status dict, required by task_handlers/gui_handlers.py's
+        GUITypeTextHandler (``result.get("status", ...)``).
+        """
+        try:
+            await asyncio.to_thread(pyautogui.write, text, interval=interval)
             logger.debug("Typed text: %s", text)
+            return {"status": "success", "message": "GUI text type completed"}
         except Exception as e:
             logger.error("Error typing text: %s", e)
+            return {"status": "error", "message": "Operation failed"}
+
+    async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
+        """Move the mouse to the specified coordinates (Issue #11970 parity).
+
+        Interface parity with gui_controller_dummy.GUIController.move_mouse,
+        required by task_handlers/gui_handlers.py's GUIMoveMouseHandler.
+        """
+        try:
+            await asyncio.to_thread(pyautogui.moveTo, x, y, duration=duration)
+            logger.debug("Moved mouse to (%s, %s)", x, y)
+            return {"status": "success", "message": "GUI mouse move completed"}
+        except Exception as e:
+            logger.error("Error moving mouse to (%s, %s): %s", x, y, e)
+            return {"status": "error", "message": "Operation failed"}
+
+    async def bring_window_to_front(self, app_title: str) -> Dict[str, Any]:
+        """Bring a window matching app_title to the foreground (Issue #11970 parity).
+
+        Uses xdotool (same tool already relied on by api.vnc_manager for
+        desktop interaction on the canonical display), since pyautogui has
+        no native cross-platform window-focus API. Interface parity with
+        gui_controller_dummy.GUIController.bring_window_to_front, required
+        by task_handlers/gui_handlers.py's GUIBringWindowToFrontHandler.
+        """
+        try:
+            result = await asyncio.to_thread(
+                subprocess.run,  # nosec B603 B607 - fixed argv, app_title passed as a single arg (no shell)
+                ["/usr/bin/xdotool", "search", "--name", app_title, "windowactivate"],
+                capture_output=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                logger.debug("Brought window '%s' to front", app_title)
+                return {"status": "success", "message": "GUI window bring to front completed"}
+            logger.warning("xdotool could not find/activate window '%s'", app_title)
+            return {"status": "error", "message": f"Window not found: {app_title}"}
+        except FileNotFoundError:
+            logger.error("xdotool not installed; cannot bring window '%s' to front", app_title)
+            return {"status": "error", "message": "xdotool not installed"}
+        except Exception as e:
+            logger.error("Error bringing window '%s' to front: %s", app_title, e)
+            return {"status": "error", "message": "Operation failed"}
 
     async def locate_element_by_image(self, image_path, confidence=0.8):
         """Locate an element on the screen by matching an image."""

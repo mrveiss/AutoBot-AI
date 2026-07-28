@@ -133,10 +133,7 @@ import {
 import {
   type Entity,
 } from '@/composables/useKnowledgeGraph'
-import { useFocusTrap } from '@/composables/useFocusTrap'
-import { useFocusRestore } from '@/composables/useFocusRestore'
-import { useInitialFocus } from '@/composables/useInitialFocus'
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
 import { getEntityTypeColor as getTypeColor } from '../constants'
 import RelationshipViewer from './RelationshipViewer.vue'
 

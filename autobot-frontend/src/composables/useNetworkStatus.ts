@@ -30,6 +30,7 @@
 import { ref, readonly, onMounted, onScopeDispose, getCurrentInstance, getCurrentScope } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('useNetworkStatus')
 
@@ -71,7 +72,7 @@ function _registerProbeFailure(): void {
 async function _probe(): Promise<void> {
   const url = `${getApiBase()}/health`
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithAuth(url, {
       method: 'HEAD',
       cache: 'no-store',
       signal: AbortSignal.timeout(4500), // must resolve within 5 s window

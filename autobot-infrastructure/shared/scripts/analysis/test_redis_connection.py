@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Test Redis connection using the Service Registry
@@ -127,7 +128,7 @@ def test_agent_communication_fix():
 
     try:
         # This would be the code path that was failing before
-        from utils.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_redis_client
 
         # This should now use the service registry
         redis_client = get_redis_client()

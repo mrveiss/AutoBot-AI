@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Report Processing & Archival System
 Coordinated multi-agent parallel processing with error analysis and archival

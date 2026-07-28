@@ -42,14 +42,23 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
 
   const hasCompanies = computed(() => companies.value.length > 0)
 
-  /** Load the company list from the backend (parsed JSON, no envelope). */
-  async function fetchCompanies(): Promise<void> {
+  /**
+   * Load the company list from the backend (parsed JSON, no envelope).
+   *
+   * #12212: ARCHIVED companies are hidden by default; pass
+   * ``includeArchived`` to surface them (the selector's "show archived" toggle)
+   * so retired companies stay recoverable.
+   */
+  async function fetchCompanies(includeArchived = false): Promise<void> {
     const api = useApiClient()
     isLoading.value = true
     error.value = null
     unavailable.value = false
     try {
-      const resp = await api.get<LlcCompany[]>(COMPANIES_ENDPOINT)
+      const endpoint = includeArchived
+        ? `${COMPANIES_ENDPOINT}?include_archived=true`
+        : COMPANIES_ENDPOINT
+      const resp = await api.get<LlcCompany[]>(endpoint)
       companies.value = Array.isArray(resp) ? resp : []
       // Drop a persisted selection that no longer exists on the backend.
       if (
@@ -82,6 +91,32 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     selectedCompanyId.value = ''
   }
 
+  /**
+   * Patch a company's llc_status in-place after a status transition (#12231),
+   * so the selector badge reflects the new state without a full refetch.
+   */
+  function applyStatus(id: string, status: string): void {
+    const company = companies.value.find((c) => c.id === id)
+    if (company) company.llc_status = status
+  }
+
+  /**
+   * Soft-delete a company (#12212) via ``DELETE /api/llc/companies/{id}`` and
+   * drop it from the in-memory list on success. The row's own id is sent as the
+   * ``X-Organization-Id`` tenant scope so the backend ``assert_company_access``
+   * guard authorises the delete regardless of which company is currently
+   * selected. Clears the persisted selection if the deleted company was active.
+   * Re-throws so the caller can surface a specific error (e.g. 409 has children).
+   */
+  async function deleteCompany(id: string): Promise<void> {
+    const api = useApiClient()
+    await api.delete(`${COMPANIES_ENDPOINT}${id}`, {
+      headers: { 'X-Organization-Id': id },
+    })
+    companies.value = companies.value.filter((c) => c.id !== id)
+    if (selectedCompanyId.value === id) selectedCompanyId.value = ''
+  }
+
   return {
     companies,
     selectedCompanyId,
@@ -93,6 +128,8 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
     fetchCompanies,
     selectCompany,
     clearSelection,
+    applyStatus,
+    deleteCompany,
   }
 }, {
   persist: {

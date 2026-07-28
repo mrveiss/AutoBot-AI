@@ -16,12 +16,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
+from llc.deps import assert_company_access
 from llc.services.portability import PortabilityService
 from llc.services.portability import TemplateImportError as LLCImportError
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 router = APIRouter(prefix="/import", tags=["llc-import"])
-
 
 # ---------------------------------------------------------------------------
 # Request / response schemas
@@ -70,7 +72,14 @@ class ImportExecuteResponse(BaseModel):
 async def preview_import(
     body: ImportPreviewRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ImportPreviewResponse:
+    # A target_company_id names an existing tenant to import into, so a
+    # cross-tenant caller must be rejected. When None, the import creates a
+    # brand-new company scoped to the caller, so only auth is required.
+    if body.target_company_id is not None:
+        assert_company_access(ctx, body.target_company_id)
     svc = PortabilityService(session=session)
     try:
         result = await svc.preview_import(body.template, target_company_id=body.target_company_id)
@@ -88,7 +97,12 @@ async def preview_import(
 async def execute_import(
     body: ImportExecuteRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ImportExecuteResponse:
+    # See preview_import: target_company_id is optional (new-company import).
+    if body.target_company_id is not None:
+        assert_company_access(ctx, body.target_company_id)
     remapping = body.remapping_options.model_dump(exclude_none=True) if body.remapping_options else {}
     svc = PortabilityService(session=session)
     try:

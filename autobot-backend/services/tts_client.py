@@ -16,6 +16,9 @@ Usage:
         wav_bytes = await client.synthesize("Hello world", voice_id="alba")
 """
 
+import asyncio
+from collections.abc import AsyncIterator
+
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
@@ -68,6 +71,39 @@ class TTSClient:
                     body = await resp.text()
                     raise RuntimeError(f"TTS worker error {resp.status}: {body}")
                 return await resp.read()
+
+    async def synthesize_stream(self, text: str, voice_id: str = "", language: str = "") -> AsyncIterator[bytes]:
+        """Stream TTS audio from the worker as individually-decodable WAV chunks (#12501).
+
+        Consumes the worker's length-prefixed framing
+        (``[4-byte big-endian length][WAV bytes]``, see
+        ``/tts/synthesize/stream`` in tts-worker.py.j2) and yields each
+        chunk's raw WAV bytes as soon as it arrives, so the caller can
+        forward audio to the client the instant the first ~250ms is ready
+        instead of waiting for the whole utterance.
+        """
+        timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            data = aiohttp.FormData()
+            data.add_field("text", text)
+            if voice_id:
+                data.add_field("voice_id", voice_id)
+            if language:
+                data.add_field("language", language)
+            async with session.post(f"{self.base_url}/tts/synthesize/stream", data=data) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise RuntimeError(f"TTS worker error {resp.status}: {body}")
+                while True:
+                    try:
+                        header = await resp.content.readexactly(4)
+                    except asyncio.IncompleteReadError:
+                        break
+                    chunk_len = int.from_bytes(header, "big")
+                    try:
+                        yield await resp.content.readexactly(chunk_len)
+                    except asyncio.IncompleteReadError as e:
+                        raise RuntimeError("TTS stream truncated mid-chunk") from e
 
     async def clone_voice(self, text: str, reference_audio: bytes) -> bytes:
         """Send text + reference audio to TTS worker; returns WAV bytes."""

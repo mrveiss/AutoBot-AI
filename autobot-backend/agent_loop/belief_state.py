@@ -14,9 +14,9 @@ Update flow:
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Any
 
+from agent_loop.text_utils import slugify
 from agent_loop.types import (
     Assertion,
     ContradictionRecord,
@@ -29,13 +29,6 @@ if TYPE_CHECKING:
     from agent_loop.types import TaskContext
 
 logger = get_logger(__name__)
-
-
-def _slugify(text: str) -> str:
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_-]+", "_", text)
-    return text[:80]
 
 
 def build_extractor_key(tool_name: str, tool_args: dict) -> str | None:
@@ -53,7 +46,7 @@ def build_extractor_key(tool_name: str, tool_args: dict) -> str | None:
     elif tool_name == "web_search":
         query = tool_args.get("query") or tool_args.get("q") or tool_args.get("search_query")
         if query:
-            return f"web_search:{_slugify(str(query))}:answered"
+            return f"web_search:{slugify(str(query))}:answered"
     elif tool_name == "run_command":
         from agent_loop.extractors.run_command import _classify_command
 

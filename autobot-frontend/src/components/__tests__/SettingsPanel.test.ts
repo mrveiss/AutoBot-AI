@@ -4,28 +4,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/vue'
 import SettingsPanel from '../settings/SettingsPanel.vue'
 import { renderComponent } from '../../test/utils/test-utils'
-import axios from 'axios'
+import apiClient from '@/utils/ApiClient'
 
 // ── Mock dependencies ──────────────────────────────────────────────────
-// SettingsPanel imports axios directly for all API calls.
-// The global vitest-setup.ts runs vi.clearAllMocks() in beforeEach,
-// which wipes mockResolvedValue set in vi.mock factories.
-// We must re-configure return values in our own beforeEach using
-// the imported (mocked) axios instance.
-
-vi.mock('axios', () => ({
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-    create: vi.fn().mockReturnThis(),
-    interceptors: {
-      request: { use: vi.fn(), eject: vi.fn() },
-      response: { use: vi.fn(), eject: vi.fn() },
-    },
-  },
-}))
+// #12363 Phase 2: SettingsPanel now calls the canonical ApiClient for all API
+// calls (axios retired). ApiClient convenience methods return PARSED JSON
+// directly (no axios `.data` envelope), so the mocks below resolve with the
+// raw payloads. The global vitest-setup.ts runs vi.clearAllMocks() in
+// beforeEach, which wipes return values set in the vi.mock factory — so we
+// re-configure them in our own beforeEach.
 
 vi.mock('@/utils/ApiClient', () => ({
   default: {
@@ -84,43 +71,45 @@ const mockHealthResponse = {
 }
 
 /**
- * Configure axios mock return values for all endpoints SettingsPanel
+ * Configure ApiClient mock return values for all endpoints SettingsPanel
  * calls on mount:
  *   GET /api/settings/           -> loadSettings
  *   GET /api/cache/stats         -> checkCacheApiAvailability + refreshCacheStats
  *   GET /api/system/health/detailed -> loadHealthStatus
  *   GET /api/system/health       -> loadHealthStatus fallback
+ *
+ * ApiClient.get resolves with PARSED JSON directly (no `.data` envelope).
  */
-function setupAxiosMocks() {
-  vi.mocked(axios.get).mockImplementation((url: string, ..._args: unknown[]) => {
+function setupApiClientMocks() {
+  vi.mocked(apiClient.get).mockImplementation((url: string, ..._args: unknown[]) => {
     if (url === '/api/settings/') {
-      return Promise.resolve({ data: mockSettingsResponse })
+      return Promise.resolve(mockSettingsResponse)
     }
     if (url === '/api/cache/stats') {
-      return Promise.resolve({ data: { hits: 0, misses: 0 } })
+      return Promise.resolve({ hits: 0, misses: 0 })
     }
     if (url === '/api/system/health/detailed') {
-      return Promise.resolve({ data: mockHealthResponse })
+      return Promise.resolve(mockHealthResponse)
     }
     if (url === '/api/system/health') {
-      return Promise.resolve({ data: { status: 'healthy' } })
+      return Promise.resolve({ status: 'healthy' })
     }
     if (url === '/api/prompts') {
-      return Promise.resolve({ data: [] })
+      return Promise.resolve([])
     }
-    // Default: resolve with empty data to prevent undefined crashes
-    return Promise.resolve({ data: {} })
+    // Default: resolve with empty object to prevent undefined crashes
+    return Promise.resolve({})
   })
 
-  vi.mocked(axios.post).mockResolvedValue({ data: { success: true } })
-  vi.mocked(axios.put).mockResolvedValue({ data: { success: true } })
-  vi.mocked(axios.delete).mockResolvedValue({ data: { success: true } })
+  vi.mocked(apiClient.post).mockResolvedValue({ success: true })
+  vi.mocked(apiClient.put).mockResolvedValue({ success: true })
+  vi.mocked(apiClient.delete).mockResolvedValue({ success: true })
 }
 
 describe('SettingsPanel', () => {
   beforeEach(() => {
-    // Re-configure axios mocks after global vi.clearAllMocks() wipes them
-    setupAxiosMocks()
+    // Re-configure mocks after global vi.clearAllMocks() wipes them
+    setupApiClientMocks()
   })
 
   afterEach(() => {
@@ -155,7 +144,7 @@ describe('SettingsPanel', () => {
       renderSettings()
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith('/api/settings/')
+        expect(apiClient.get).toHaveBeenCalledWith('/api/settings/', expect.anything())
       })
     })
 
@@ -163,7 +152,7 @@ describe('SettingsPanel', () => {
       renderSettings()
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith('/api/system/health/detailed')
+        expect(apiClient.get).toHaveBeenCalledWith('/api/system/health/detailed', expect.anything())
       })
     })
 
@@ -171,7 +160,7 @@ describe('SettingsPanel', () => {
       renderSettings()
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith(
+        expect(apiClient.get).toHaveBeenCalledWith(
           '/api/cache/stats',
           expect.objectContaining({ timeout: 3000 })
         )
@@ -193,12 +182,12 @@ describe('SettingsPanel', () => {
     })
 
     it('shows offline status when settings API fails', async () => {
-      vi.mocked(axios.get).mockImplementation((url: string) => {
+      vi.mocked(apiClient.get).mockImplementation((url: string) => {
         if (url === '/api/settings/') {
           return Promise.reject(new Error('Network error'))
         }
         // Other endpoints still resolve to prevent cascading errors
-        return Promise.resolve({ data: {} })
+        return Promise.resolve({})
       })
 
       renderSettings()
@@ -215,7 +204,7 @@ describe('SettingsPanel', () => {
       renderSettings()
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith('/api/settings/')
+        expect(apiClient.get).toHaveBeenCalledWith('/api/settings/', expect.anything())
       })
 
       // After loading, the component should no longer show loading state
@@ -230,7 +219,7 @@ describe('SettingsPanel', () => {
 
       // First call should go through
       await waitFor(() => {
-        const settingsCalls = vi.mocked(axios.get).mock.calls.filter(
+        const settingsCalls = vi.mocked(apiClient.get).mock.calls.filter(
           (call) => call[0] === '/api/settings/'
         )
         // Should only call settings endpoint once (guard prevents concurrent)
@@ -245,11 +234,11 @@ describe('SettingsPanel', () => {
         chat: { auto_scroll: false, max_messages: 50, message_retention_days: 7 },
       })
 
-      vi.mocked(axios.get).mockImplementation((url: string) => {
+      vi.mocked(apiClient.get).mockImplementation((url: string) => {
         if (url === '/api/settings/') {
           return Promise.reject(new Error('Network error'))
         }
-        return Promise.resolve({ data: {} })
+        return Promise.resolve({})
       })
 
       renderSettings()
@@ -293,28 +282,28 @@ describe('SettingsPanel', () => {
       renderSettings()
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith('/api/system/health/detailed')
+        expect(apiClient.get).toHaveBeenCalledWith('/api/system/health/detailed', expect.anything())
       })
     })
 
     it('falls back to basic health when detailed fails', async () => {
-      vi.mocked(axios.get).mockImplementation((url: string) => {
+      vi.mocked(apiClient.get).mockImplementation((url: string) => {
         if (url === '/api/settings/') {
-          return Promise.resolve({ data: mockSettingsResponse })
+          return Promise.resolve(mockSettingsResponse)
         }
         if (url === '/api/system/health/detailed') {
           return Promise.reject(new Error('Not found'))
         }
         if (url === '/api/system/health') {
-          return Promise.resolve({ data: { status: 'healthy' } })
+          return Promise.resolve({ status: 'healthy' })
         }
-        return Promise.resolve({ data: {} })
+        return Promise.resolve({})
       })
 
       renderSettings()
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith('/api/system/health')
+        expect(apiClient.get).toHaveBeenCalledWith('/api/system/health', expect.anything())
       })
     })
   })
@@ -324,7 +313,7 @@ describe('SettingsPanel', () => {
       renderSettings()
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledWith(
+        expect(apiClient.get).toHaveBeenCalledWith(
           '/api/cache/stats',
           expect.objectContaining({ timeout: 3000 })
         )
@@ -336,7 +325,7 @@ describe('SettingsPanel', () => {
 
       await waitFor(() => {
         // Should have at least the availability check call
-        const cacheCalls = vi.mocked(axios.get).mock.calls.filter(
+        const cacheCalls = vi.mocked(apiClient.get).mock.calls.filter(
           (call) => call[0] === '/api/cache/stats'
         )
         expect(cacheCalls.length).toBeGreaterThanOrEqual(1)
@@ -344,17 +333,17 @@ describe('SettingsPanel', () => {
     })
 
     it('handles cache API unavailability gracefully', async () => {
-      vi.mocked(axios.get).mockImplementation((url: string) => {
+      vi.mocked(apiClient.get).mockImplementation((url: string) => {
         if (url === '/api/settings/') {
-          return Promise.resolve({ data: mockSettingsResponse })
+          return Promise.resolve(mockSettingsResponse)
         }
         if (url === '/api/cache/stats') {
           return Promise.reject(new Error('Cache unavailable'))
         }
         if (url === '/api/system/health/detailed') {
-          return Promise.resolve({ data: mockHealthResponse })
+          return Promise.resolve(mockHealthResponse)
         }
-        return Promise.resolve({ data: {} })
+        return Promise.resolve({})
       })
 
       renderSettings()
@@ -369,7 +358,7 @@ describe('SettingsPanel', () => {
 
   describe('Error Handling', () => {
     it('handles all API failures without crashing', async () => {
-      vi.mocked(axios.get).mockRejectedValue(new Error('All APIs down'))
+      vi.mocked(apiClient.get).mockRejectedValue(new Error('All APIs down'))
 
       renderSettings()
 
@@ -381,11 +370,11 @@ describe('SettingsPanel', () => {
     })
 
     it('shows offline state when settings fail to load', async () => {
-      vi.mocked(axios.get).mockImplementation((url: string) => {
+      vi.mocked(apiClient.get).mockImplementation((url: string) => {
         if (url === '/api/settings/') {
           return Promise.reject(new Error('Offline'))
         }
-        return Promise.resolve({ data: {} })
+        return Promise.resolve({})
       })
 
       renderSettings()
@@ -402,11 +391,11 @@ describe('SettingsPanel', () => {
       renderSettings()
 
       await waitFor(() => {
-        const calledUrls = vi.mocked(axios.get).mock.calls.map((call) => call[0])
+        const calledUrls = vi.mocked(apiClient.get).mock.calls.map((call) => call[0])
         expect(calledUrls).toContain('/api/settings/')
         expect(calledUrls).toContain('/api/system/health/detailed')
         // Cache stats called with timeout option for availability check
-        const cacheCall = vi.mocked(axios.get).mock.calls.find(
+        const cacheCall = vi.mocked(apiClient.get).mock.calls.find(
           (call) => call[0] === '/api/cache/stats'
         )
         expect(cacheCall).toBeDefined()

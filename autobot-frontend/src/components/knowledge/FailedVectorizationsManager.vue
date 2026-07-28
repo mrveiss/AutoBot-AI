@@ -103,7 +103,7 @@ import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { formatDateTime } from '@/utils/formatHelpers'
-import { useKnowledgeVectorization } from '@/composables/knowledge/useKnowledgeVectorization'
+import { useFailedVectorizationJobs } from '@/composables/knowledge/useFailedVectorizationJobs'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 
@@ -119,7 +119,7 @@ const {
   retryJob: retryJobBase,
   deleteJob: deleteJobBase,
   clearAllFailed: clearAllFailedBase,
-} = useKnowledgeVectorization()
+} = useFailedVectorizationJobs()
 
 // Delete a single job — confirm before delegating to composable
 const deleteJob = async (jobId: string) => {

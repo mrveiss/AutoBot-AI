@@ -14,9 +14,23 @@ name: Release
 on:
   push:
     branches: [main]
+    # The workflow's own "chore(release): changelog…" commit touches ONLY these
+    # paths. Ignoring pushes limited to them stops release.yml from re-triggering
+    # on its own changelog PR merge — otherwise git-cliff patch-bumps off the
+    # release range and mints a spurious release every time (infinite loop once
+    # the changelog PR can actually merge, #11855). A real promotion always
+    # touches other files too, so it still triggers exactly one release.
+    paths-ignore:
+      - CHANGELOG.md
+      - changelog/**
 
 permissions:
   contents: write
+  # The final "Open changelog PR to main" step calls `gh pr create`, which
+  # needs pull-requests:write — without it GITHUB_TOKEN fails with
+  # "Resource not accessible by integration (createPullRequest)" and the
+  # changelog history never lands on main (#11853).
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -79,15 +93,25 @@ jobs:
           # or collides. Never release a version <= any existing tag: fall back
           # to patch-bump of the highest existing tag instead.
           HIGHEST_TAG="$(git tag --list 'v[0-9]*' | sort -V | tail -1)"
+          # When the guard rewrites the version, the notes step's `--latest`
+          # range is computed from git-cliff's OWN version view and no longer
+          # matches the guard-overridden tag. Pin the notes range to
+          # <highest_tag>..HEAD so the published notes cover exactly what the
+          # new tag ships (#11861). Empty when the guard is inert -> `--latest`.
+          NOTES_RANGE=""
           if [[ -n "$HIGHEST_TAG" ]] && \
              [[ "$(printf '%s\n%s\n' "$NEXT_VERSION" "$HIGHEST_TAG" | sort -V | tail -1)" == "$HIGHEST_TAG" ]]; then
             IFS=. read -r MAJ MIN PAT <<<"${HIGHEST_TAG#v}"
             NEXT_VERSION="v${MAJ}.${MIN}.$((PAT + 1))"
-            echo "Monotonic guard: git-cliff bump not above existing ${HIGHEST_TAG}; releasing ${NEXT_VERSION}"
+            NOTES_RANGE="${HIGHEST_TAG}..HEAD"
+            echo "Monotonic guard: git-cliff bump not above existing ${HIGHEST_TAG}; releasing ${NEXT_VERSION} (notes range ${NOTES_RANGE})"
           fi
           echo "Next version: $NEXT_VERSION"
-          echo "release_needed=true" >> "$GITHUB_OUTPUT"
-          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "release_needed=true"
+            echo "version=$NEXT_VERSION"
+            echo "notes_range=$NOTES_RANGE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate release notes (git-cliff)
         if: steps.check.outputs.release_needed == 'true'
@@ -95,7 +119,9 @@ jobs:
         uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5  # v4
         with:
           config: cliff.toml
-          args: --latest --strip header
+          # Guard-fire pins an explicit <highest_tag>..HEAD range so notes match
+          # the published version; inert guard keeps git-cliff's --latest (#11861).
+          args: ${{ steps.check.outputs.notes_range != '' && format('{0} --strip header', steps.check.outputs.notes_range) || '--latest --strip header' }}
         env:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}

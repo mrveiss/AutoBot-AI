@@ -12,6 +12,10 @@ transient 429/5xx responses are retried with exponential backoff instead of fail
 Issue #8284: sync() override now integrates #8146 checkpoint (read/write/clear).
 Issue #8286: Connection-level failures (status_code=None) now also raise RetryableError.
 Issue #8152: Added config_version=2 and migrate_config() (v1→v2: max_depth→crawl_depth).
+Issue #12486: A page that yields no ingestable content now records a specific,
+diagnosable reason (HTTP status, robots block, timeout, empty-after-extraction)
+instead of the opaque ``empty/failed``; HTTP-status failures are labelled
+ERR_HTTP_ERROR (not ERR_CONNECTION).
 """
 
 import hashlib
@@ -32,7 +36,19 @@ from knowledge.connectors.models import (
     SyncResult,
 )
 from knowledge.connectors.registry import ConnectorRegistry
-from web_fetch import ERR_CONNECTION, FetchResult, Frontier, RenderMode, RobotsCache, WebFetcher
+from web_fetch import (
+    ERR_CONNECTION,
+    ERR_HTTP_ERROR,
+    ERR_ROBOTS_BLOCKED,
+    ERR_SSRF_BLOCKED,
+    ERR_TIMEOUT,
+    ERR_UNKNOWN,
+    FetchResult,
+    Frontier,
+    RenderMode,
+    RobotsCache,
+    WebFetcher,
+)
 from web_fetch.extractors import extract_markdown
 from web_fetch.frontier import extract_links
 
@@ -71,6 +87,43 @@ def _fetch_result_to_content(result: FetchResult, connector_id: str) -> ContentR
     )
 
 
+def _no_content_reason(result: FetchResult) -> str:
+    """Return a specific, operator-diagnosable reason a page yielded no content.
+
+    Issue #12486: replaces the opaque ``empty/failed: <url>`` by preserving the
+    ``status_code`` / ``error_code`` the fetch already captured, so a bot-block
+    (403), a rate-limit (429), a robots block, a timeout, a network error and a
+    genuinely empty page are all distinguishable in the sync report.
+    """
+    url = result.url
+    if result.success:
+        # 2xx fetch, but HTML→text extraction produced nothing usable. Most
+        # often a JS-rendered shell whose content never reaches a plain fetch —
+        # robust JS/browser rendering is tracked by the web-connector epic.
+        return "empty after extraction (no readable text — page may require JS rendering): %s" % url
+
+    status = result.status_code
+    code = result.error_code or ERR_UNKNOWN
+    if status is not None:
+        if status == 403:
+            return (
+                "failed: HTTP 403 (forbidden — likely an anti-bot / JS challenge; " "needs browser rendering): %s" % url
+            )
+        if status == 401:
+            return "failed: HTTP 401 (authentication required): %s" % url
+        if status == 429:
+            return "failed: HTTP 429 (rate limited): %s" % url
+        return "failed: HTTP %d (%s): %s" % (status, code, url)
+
+    if code == ERR_ROBOTS_BLOCKED:
+        return "failed: blocked by robots.txt: %s" % url
+    if code == ERR_SSRF_BLOCKED:
+        return "failed: blocked — URL is not publicly reachable/allowed: %s" % url
+    if code == ERR_TIMEOUT:
+        return "failed: request timed out: %s" % url
+    return "failed: %s (no HTTP response — connection/network error): %s" % (code, url)
+
+
 async def _ingest_results_to_kb(
     results: List[FetchResult],
     connector: "WebCrawlerConnector",
@@ -80,7 +133,9 @@ async def _ingest_results_to_kb(
     for fetch_result in results:
         content = _fetch_result_to_content(fetch_result, connector.config.connector_id)
         if content is None:
-            sync_result.errors.append("empty/failed: %s" % fetch_result.url)
+            reason = _no_content_reason(fetch_result)
+            logger.warning("web_crawler: %s", reason)
+            sync_result.errors.append(reason)
             continue
         try:
             await connector._ingest_content(content)
@@ -175,12 +230,6 @@ class WebCrawlerConnector(AbstractConnector):
             return False
         except Exception:
             return False
-        result = await WebFetcher.fetch(self._seed_urls[0])
-        if result.success:
-            self.logger.info("web_fetch connectivity OK for %s", self._seed_urls[0])
-            return True
-        self.logger.warning("web_fetch connectivity check failed: %s", result.error_code)
-        return False
 
     async def discover_sources(self) -> List[SourceInfo]:
         """Return a SourceInfo entry for each seed URL (depth=1 only)."""
@@ -267,8 +316,12 @@ class WebCrawlerConnector(AbstractConnector):
 
         try:
 
+            crawled_seed_ids: set[str] = set()
+
             async def _on_seed_done(url: str) -> None:
-                await self._write_checkpoint(_url_to_source_id(url))
+                source_id = _url_to_source_id(url)
+                crawled_seed_ids.add(source_id)
+                await self._write_checkpoint(source_id)
 
             fetched = await self.crawl(
                 seed_urls=pending_seeds,
@@ -279,6 +332,26 @@ class WebCrawlerConnector(AbstractConnector):
                 same_origin=self._same_origin,
                 on_seed_complete=_on_seed_done,
             )
+            # #12744: on_seed_complete is an OPTIONAL callback — a crawl backend
+            # that does not invoke it left the checkpoint empty, so a resumed sync
+            # re-crawled every seed it had already finished.
+            #
+            # #12843: the first fix for that checkpointed every *pending* seed,
+            # which broke GH#8297 in the other direction. crawl() stops dispatching
+            # once max_pages is exhausted, so trailing seeds are never fetched at
+            # all — checkpointing them marks them done and the next incremental
+            # sync skips them permanently. Budget exhaustion is the normal case on
+            # a real crawl, so that silently dropped whole seeds.
+            #
+            # The correct set is the seeds actually crawled: those the callback
+            # reported, plus any with a fetch result to prove it. Derived from
+            # results, never from the input list.
+            fetched_urls = {r.url for r in fetched}
+            for seed_url in pending_seeds:
+                source_id = _url_to_source_id(seed_url)
+                if source_id not in crawled_seed_ids and seed_url in fetched_urls:
+                    await self._write_checkpoint(source_id)
+
             await _ingest_results_to_kb(fetched, self, result)
             result.status = "success" if not result.errors else "partial"
             if result.status == "success":
@@ -415,11 +488,14 @@ class WebCrawlerConnector(AbstractConnector):
         embedded RobotsCache so respect_robots is still honoured.  Transient
         HTTP errors (429/5xx) are retried via fetch_with_retry() (Issue #8144).
 
-        Returns (FetchResult(success=False, ...), "") on any error.
+        Returns (FetchResult(success=False, ...), "") on any error. HTTP-status
+        failures (>=400) carry ``error_code=ERR_HTTP_ERROR`` and the real
+        ``status_code`` so the sync report can name the cause (Issue #12486);
+        connection/network errors (no response) carry ``ERR_CONNECTION``.
         """
         if fetcher._robots is not None:
             if not await fetcher._robots.is_allowed(url):
-                return FetchResult(url=url, success=False, error_code="robots_blocked"), ""
+                return FetchResult(url=url, success=False, error_code=ERR_ROBOTS_BLOCKED), ""
 
         async def _do_fetch():
             h, s = await WebFetcher.fetch_raw_html(url, timeout=30.0)
@@ -430,15 +506,20 @@ class WebCrawlerConnector(AbstractConnector):
         try:
             html, status = await self.fetch_with_retry(_do_fetch)
         except RetryableError as exc:
-            return FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=exc.status_code), ""
+            # Retries exhausted. status_code is preserved so the report can show
+            # HTTP 429/5xx; None means a genuine connection failure.
+            code = ERR_HTTP_ERROR if exc.status_code else ERR_CONNECTION
+            return FetchResult(url=url, success=False, error_code=code, status_code=exc.status_code or None), ""
         except Exception:
             return FetchResult(url=url, success=False, error_code=ERR_CONNECTION), ""
 
-        if html is None or status is None or status >= 400:
-            return (
-                FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=status),
-                "",
-            )
+        if html is None or status is None:
+            return FetchResult(url=url, success=False, error_code=ERR_CONNECTION, status_code=status), ""
+        if status >= 400:
+            # HTTP-level failure (e.g. 403 anti-bot challenge, 404) — this is an
+            # HTTP error, not a connection error. Preserve the status code so
+            # _no_content_reason() can surface it (Issue #12486).
+            return FetchResult(url=url, success=False, error_code=ERR_HTTP_ERROR, status_code=status), ""
 
         title, markdown = extract_markdown(html)
         fetch_result = FetchResult(

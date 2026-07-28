@@ -10,6 +10,8 @@ Extracted from llm_interface.py as part of Issue #381 god class refactoring.
 
 from enum import Enum
 
+from autobot_shared.status_enums import LLMProvider as _CanonicalLLMProvider
+
 
 class ArchitectureFamily(str, Enum):
     """Model architecture family — governs attention backend, NPU dispatch, and
@@ -38,24 +40,16 @@ class ArchitectureFamily(str, Enum):
     MOE = "moe"  # Mixture-of-Experts (from NPU registry, #10892)
 
 
-class ProviderType(Enum):
-    """Supported LLM providers."""
-
-    OLLAMA = "ollama"
-    OPENAI = "openai"
-    ANTHROPIC = "anthropic"
-    VLLM = "vllm"
-    HUGGINGFACE = "huggingface"
-    TRANSFORMERS = "transformers"
-    MOCK = "mock"
-    LOCAL = "local"
-    AI_STACK = "ai_stack"  # Issue #1403
-    PROCESS = "process"  # Issue #1403
-    LAYER_INFERENCE = "layer_inference"  # Issue #3104
-    GROQ = "groq"  # Issue #4096
-    MISTRAL = "mistral"  # Issue #10549
-    VERTEX_AI = "vertexai"  # GH#9009
-    BEDROCK = "bedrock"  # GH#9010
+#: Supported LLM providers.
+#:
+#: Single canonical source of truth (#12661): this used to be its own
+#: ``Enum`` and disagreed with ``autobot_shared.status_enums.LLMProvider``
+#: and ``services.llm_cost_tracker.LLMProvider``. All three member sets are
+#: now unioned onto the canonical enum in ``autobot_shared/status_enums.py``;
+#: this name is a thin alias so every existing ``ProviderType.X`` call site
+#: (``ProviderType.OLLAMA``, ``ProviderType.VLLM``, ...) keeps working
+#: unchanged, and every ``.value`` string is preserved exactly.
+ProviderType = _CanonicalLLMProvider
 
 
 class LLMType(str, Enum):

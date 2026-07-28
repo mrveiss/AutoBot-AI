@@ -8,7 +8,6 @@ Handles sentiment analysis (positive/negative/neutral) and fine-grained
 emotion classification from text input.
 """
 
-import uuid
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -22,7 +21,8 @@ from constants.threshold_constants import LLMDefaults
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
-from .standardized_agent import ActionHandler, StandardizedAgent
+from .base_modality_agent import BaseModalityAgent
+from .standardized_agent import ActionHandler
 
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
@@ -31,10 +31,14 @@ from .standardized_agent import ActionHandler, StandardizedAgent
 logger = get_logger(__name__)
 
 
-class SentimentAnalysisAgent(StandardizedAgent):
+class SentimentAnalysisAgent(BaseModalityAgent):
     """Agent specialized for sentiment analysis and emotion classification."""
 
     AGENT_ID = "sentiment_analysis"
+    QUERY_TEMPERATURE = 0.1
+    QUERY_MAX_TOKENS = LLMDefaults.CHAT_MAX_TOKENS
+    QUERY_ERROR_MESSAGE = "Error analyzing sentiment. Please try again."
+    _LOGGER = logger
 
     def __init__(self):
         """Initialize the Sentiment Analysis Agent with LLM configuration."""
@@ -100,44 +104,11 @@ class SentimentAnalysisAgent(StandardizedAgent):
         )
         return await self.process_query(prompt)
 
-    async def process_query(self, request_text: str, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        """Process a sentiment analysis query using the vLLM-optimised API (Issue #3389)."""
-        try:
-            logger.info("Sentiment Analysis Agent processing: %s...", request_text[:50])
-            session_id = (context or {}).get("session_id") or str(uuid.uuid4())
-            response = await self.llm_interface.chat_optimized(
-                agent_type=self.AGENT_ID,
-                user_message=request_text,
-                session_id=session_id,
-                user_name=(context or {}).get("user_name"),
-                user_role=(context or {}).get("user_role"),
-                temperature=0.1,
-                max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
-                top_p=LLMDefaults.DEFAULT_TOP_P,
-            )
-            response_text = self._extract_content(response)
-            result = {
-                "status": "success",
-                "response": response_text,
-                "response_text": response_text,
-                "agent_type": "sentiment_analysis",
-                "model_used": self.model_name,
-                "token_usage": (response.get("usage", {}) if isinstance(response, dict) else {}),
-            }
-            diary_entry = (
-                f"SESSION:{session_id}|ACTION:sentiment_analysis" f"|OUTCOME:{result['status']}|TOPIC:sentiment"
-            )
-            await self.memory_manager.agent_diary.write(self.AGENT_ID, session_id, diary_entry, topic="sentiment")
-            return result
-        except Exception as e:
-            logger.error("Sentiment Analysis Agent error: %s", e)
-            return {
-                "status": "error",
-                "response": "Error analyzing sentiment. Please try again.",
-                "response_text": str(e),
-                "agent_type": "sentiment_analysis",
-                "model_used": self.model_name,
-            }
+    async def _after_success(self, result: Dict[str, Any], context: Dict[str, Any], session_id: str) -> Dict[str, Any]:
+        """Persist a diary entry recording the sentiment-analysis outcome."""
+        diary_entry = f"SESSION:{session_id}|ACTION:sentiment_analysis" f"|OUTCOME:{result['status']}|TOPIC:sentiment"
+        await self.memory_manager.agent_diary.write(self.AGENT_ID, session_id, diary_entry, topic="sentiment")
+        return result
 
     async def _before_process(self, context: dict) -> dict:
         """Inject cached session sentiment history into context."""
@@ -172,23 +143,6 @@ class SentimentAnalysisAgent(StandardizedAgent):
             "- Include confidence scores for classifications\n"
             "- Handle multi-language text when encountered"
         )
-
-    def _extract_content(self, response: Any) -> str:
-        """Extract text content from LLM response."""
-        if isinstance(response, str):
-            return response.strip()
-        if isinstance(response, dict):
-            msg = response.get("message", {})
-            if isinstance(msg, dict) and msg.get("content"):
-                return msg["content"].strip()
-            choices = response.get("choices", [])
-            if choices and isinstance(choices[0], dict):
-                choice_msg = choices[0].get("message", {})
-                if isinstance(choice_msg, dict) and choice_msg.get("content"):
-                    return choice_msg["content"].strip()
-            if "content" in response:
-                return str(response["content"]).strip()
-        return str(response)
 
 
 get_sentiment_analysis_agent = lazy_singleton(SentimentAnalysisAgent)

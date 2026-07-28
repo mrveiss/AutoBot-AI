@@ -10,17 +10,25 @@ Provides efficient aiohttp client session management to prevent resource exhaust
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import hmac
 import logging
 import threading
 import time
-from typing import Any, Dict
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Dict
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
-from constants.threshold_constants import TimingConstants
+# Re-exported, not defined here: the signature formula lives in a stdlib-only module
+# so callers that only verify signatures do not inherit this module's aiohttp
+# dependency (#12814). Kept importable from here for existing call sites.
+from autobot_shared.service_signing import _service_signature
+
+# #12656: import from the canonical source directly. This previously went via
+# `constants.threshold_constants`, an autobot-backend module that is itself a
+# pure re-export of ssot_constants — so autobot_shared depended on the backend
+# to reach its own constants, and could not be imported standalone.
+from autobot_shared.ssot_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -222,9 +230,7 @@ class HTTPClientManager:
         session = await self.get_session()
 
         # Track active requests for utilization calculation
-        async with self._counter_lock:
-            self._request_count += 1
-            self._active_requests += 1
+        await self.increment_active()
 
         # Issue #697: Inject W3C trace context into outgoing headers
         try:
@@ -252,6 +258,48 @@ class HTTPClientManager:
             else:
                 logger.error("HTTP request failed: %s", e)
             raise
+
+    async def increment_active(self) -> None:
+        """
+        Increment the active-request counter (thread-safe).
+
+        Issue #11656: extracted from ``request()`` so both ``request()`` and
+        ``tracked_session()`` share the SAME counter-increment mechanism
+        instead of duplicating the lock/increment logic.
+        """
+        async with self._counter_lock:
+            self._request_count += 1
+            self._active_requests += 1
+
+    @asynccontextmanager
+    async def tracked_session(self) -> AsyncIterator[ClientSession]:
+        """
+        Async context manager for raw-session access that participates in
+        active-request tracking.
+
+        Issue #11656: callers using the raw ``get_session()`` (e.g. the Jina
+        fetch in ``media/link/pipeline.py``) were invisible to the
+        pool-recreation guard in ``_handle_pool_recreation()`` — a resize
+        driven by concurrent ``request()`` traffic could close the shared
+        session mid-flight. This helper increments/decrements the SAME
+        ``_active_requests`` counter that ``request()`` uses (via
+        ``increment_active()``/``decrement_active()``), so deferred pool
+        recreation now also accounts for in-flight raw-session users.
+
+        Usage:
+            async with http_client.tracked_session() as session:
+                async with session.get(url) as response:
+                    ...
+
+        Exception-safe: the counter is always decremented, even if the
+        caller raises.
+        """
+        await self.increment_active()
+        try:
+            session = await self.get_session()
+            yield session
+        finally:
+            await self.decrement_active()
 
     async def decrement_active(self) -> None:
         """
@@ -455,12 +503,7 @@ def sign_request(
     Returns:
         Dict mapping header name → value, ready to merge into request headers.
     """
-    message = f"{service_id}:{method}:{path}:{timestamp}"
-    signature = hmac.new(
-        service_key.encode(encoding="utf-8"),
-        message.encode(encoding="utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    signature = _service_signature(service_id, method, path, timestamp, service_key)
     return {
         "X-Service-ID": service_id,
         "X-Service-Signature": signature,

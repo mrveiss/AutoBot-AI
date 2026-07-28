@@ -171,6 +171,26 @@ class FeatureFlagStatusResponse(BaseModel):
     data: Any | None = None
 
 
+class SchedulerToggleUpdate(BaseModel):
+    """Request body for PUT /schedulers/{name} (GH#12820)."""
+
+    enabled: bool
+
+
+class SchedulerToggleUpdateResponse(BaseModel):
+    """Response for PUT/DELETE /schedulers/{name}."""
+
+    name: str
+    enabled: bool
+    override_active: bool
+
+
+class SchedulerStateResponse(BaseModel):
+    """Response for GET /schedulers — every registered job with its resolved state."""
+
+    schedulers: List[Dict[str, Any]]
+
+
 class FeatureFlagEnforcementModeResponse(SuccessDataResponse):
     """Response for PUT /feature-flags/enforcement-mode."""
 
@@ -1106,6 +1126,9 @@ class VncRunningResponse(BaseModel):
 class VncStatusMessageResponse(BaseModel):
     status: str
     message: str
+    # Issue #12002 (#11506 T1): True when this call was a no-op because a
+    # human currently holds the desktop control-lock.
+    muted: bool = False
 
 
 class VncScreenshotResponse(BaseModel):
@@ -1198,19 +1221,24 @@ class MouseClickRequest(BaseModel):
     x: int = Field(..., ge=0, description="X coordinate")
     y: int = Field(..., ge=0, description="Y coordinate")
     button: str = Field(default="left", description="Mouse button: left, middle, right")
+    # Issue #12002 (#11506 T1): gates agent actuation against the desktop control-lock.
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class KeyboardTypeRequest(BaseModel):
     text: str = Field(..., description="Text to type")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class SpecialKeyRequest(BaseModel):
     key: str = Field(..., description="Special key name (e.g., Return, Escape, ctrl+c)")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class MouseScrollRequest(BaseModel):
     direction: str = Field(..., description="Scroll direction: up or down")
     amount: int = Field(default=3, ge=1, le=10, description="Scroll amount (1-10)")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class MouseDragRequest(BaseModel):
@@ -1218,6 +1246,7 @@ class MouseDragRequest(BaseModel):
     y1: int = Field(..., ge=0, description="Start Y coordinate")
     x2: int = Field(..., ge=0, description="End X coordinate")
     y2: int = Field(..., ge=0, description="End Y coordinate")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class ClipboardSyncRequest(BaseModel):
@@ -1580,6 +1609,8 @@ class DesktopClickMcpResponse(BaseModel):
     action: str
     coordinates: Dict[str, int]
     button: str
+    # Issue #12002 (#11506 T1): True when muted because a human holds control.
+    muted: bool = False
 
 
 class DesktopKeyboardTypeMcpResponse(BaseModel):
@@ -1587,6 +1618,7 @@ class DesktopKeyboardTypeMcpResponse(BaseModel):
     message: str
     action: str
     text_length: int
+    muted: bool = False
 
 
 class DesktopSpecialKeyMcpResponse(BaseModel):
@@ -1594,6 +1626,7 @@ class DesktopSpecialKeyMcpResponse(BaseModel):
     message: str
     action: str
     key: str
+    muted: bool = False
 
 
 class DesktopScreenshotMcpResponse(BaseModel):
@@ -1612,20 +1645,39 @@ class DesktopObserveStateMcpResponse(BaseModel):
     active_window: str | None = None
     screenshot: str | None = None
     screenshot_format: str | None = None
+    # Issue #12002 (#11506 T1): lets the agent see it should pause.
+    human_active: bool = False
+    control_owner: str | None = None
 
 
 class DesktopMouseClickRequest(BaseModel):
     x: int = Field(..., ge=0)
     y: int = Field(..., ge=0)
     button: str = Field(default="left")
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class DesktopKeyboardTypeRequest(BaseModel):
     text: str
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
 
 
 class DesktopSpecialKeyRequest(BaseModel):
     key: str
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlStatusRequest(BaseModel):
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlStatusMcpResponse(BaseModel):
+    success: bool
+    session_id: str
+    human_active: bool
+    owner: str | None = None
+    acquired_at: str | None = None
+    message: str
 
 
 class DesktopObserveStateRequest(BaseModel):
@@ -1737,50 +1789,81 @@ class BrowserNavigateRequest(BaseModel):
     url: str = Field(..., description="URL to navigate to")
     wait_until: str | None = Field("load", description="Wait condition: 'load', 'domcontentloaded', 'networkidle'")
     timeout: int | None = Field(30000, description="Timeout in milliseconds")
+    session_id: str | None = Field(
+        None,
+        description="Session id for isolated browser-context routing (#11539); omitted uses shared default",
+    )
 
 
 class BrowserClickRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element to click")
     timeout: int | None = Field(5000, description="Timeout in milliseconds")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserFillRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for input field")
     value: str = Field(..., description="Value to fill")
     timeout: int | None = Field(5000, description="Timeout in milliseconds")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserScreenshotRequest(BaseModel):
     selector: str | None = Field(None, description="CSS selector for element (full page if omitted)")
     full_page: bool | None = Field(False, description="Capture full scrollable page")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserEvaluateRequest(BaseModel):
     script: str = Field(..., description="JavaScript code to execute")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserWaitForSelectorRequest(BaseModel):
     selector: str = Field(..., description="CSS selector to wait for")
     timeout: int | None = Field(30000, description="Timeout in milliseconds")
     state: str | None = Field("visible", description="State: 'attached', 'detached', 'visible', 'hidden'")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserGetTextRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserGetAttributeRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element")
     attribute: str = Field(..., description="Attribute name to retrieve")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserSelectRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for select element")
     value: str = Field(..., description="Value to select")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserHoverRequest(BaseModel):
     selector: str = Field(..., description="CSS selector for element to hover")
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
 
 
 class BrowserNavigateResponse(BaseModel):
@@ -1865,6 +1948,107 @@ class BrowserHoverResponse(BaseModel):
     success: bool
     action: str
     selector: str
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserStateRequest(BaseModel):
+    """Request for POST /browser/mcp/state (#11537)."""
+
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+# Stale-index guard (#11538 review MINOR 3): echo a prior browser_state's
+# element_count back so the worker rejects the call if the page changed
+# shape since then, instead of silently acting on the wrong element.
+_EXPECTED_ELEMENT_COUNT_DESCRIPTION = (
+    "Optional: element_count from the browser_state call this index was chosen against"
+)
+
+
+class BrowserClickIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/click_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    timeout: int | None = Field(10000, description="Timeout in milliseconds")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserFillIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/fill_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    value: str = Field(..., description="Value to fill into the element")
+    timeout: int | None = Field(10000, description="Timeout in milliseconds")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserSelectIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/select_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    value: str = Field(..., description="Value to select")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserHoverIndexRequest(BaseModel):
+    """Request for POST /browser/mcp/hover_index (#11537)."""
+
+    index: int = Field(..., description="Element index from the numbered element menu")
+    expected_element_count: int | None = Field(None, description=_EXPECTED_ELEMENT_COUNT_DESCRIPTION)
+    session_id: str | None = Field(
+        None, description="Conversation/session id for isolated browser-context routing (#11539)"
+    )
+
+
+class BrowserStateResponse(BaseModel):
+    success: bool
+    action: str
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserClickIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserFillIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
+    value_length: int
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserSelectIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
+    value: str
+    result: Any | None = None
+    timestamp: str
+
+
+class BrowserHoverIndexResponse(BaseModel):
+    success: bool
+    action: str
+    index: int
     result: Any | None = None
     timestamp: str
 
@@ -3593,6 +3777,28 @@ class VncProxyStatusResponse(BaseModel):
     accessible: bool
     status: int | None = None
     error: str | None = None
+
+
+class DesktopControlAcquireRequest(BaseModel):
+    """Request for POST /vnc-proxy/{vnc_type}/control/acquire (#12002)."""
+
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlReleaseRequest(BaseModel):
+    """Request for POST /vnc-proxy/{vnc_type}/control/release (#12002)."""
+
+    session_id: str = Field(default="default", description="Desktop control-lock session id")
+
+
+class DesktopControlLockResponse(BaseModel):
+    """Response for the desktop control-lock acquire/release/status endpoints (#12002)."""
+
+    success: bool
+    session_id: str
+    owner: str | None = None
+    human_active: bool
+    message: str
 
 
 # ---------------------------------------------------------------------------

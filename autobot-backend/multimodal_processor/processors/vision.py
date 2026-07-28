@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
+from llm_shared.torch_loader import lazy_torch
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult
@@ -28,18 +29,13 @@ if TYPE_CHECKING:
     from PIL import Image
 
 # Issue #3016: lazy module-level imports for torch and PIL
-_torch = None
+# Issue #12714: torch loader unified onto the shared thread-safe llm_shared.torch_loader.
 _PILImage = None
 
 
 def _get_torch():
     """Lazy-load torch on first use. Issue #3016."""
-    global _torch  # noqa: PLW0603
-    if _torch is None:
-        import torch
-
-        _torch = torch
-    return _torch
+    return lazy_torch()
 
 
 def _get_pil_image():

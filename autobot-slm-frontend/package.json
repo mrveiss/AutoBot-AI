@@ -10,8 +10,12 @@
     "build:slm": "VITE_API_URL=/slm vite build",
     "build:check": "vue-tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint . --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "gen:types:openapi": "python3 ../autobot-slm-backend/scripts/dump_openapi.py > openapi.json",
+    "gen:types": "openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties",
+    "verify:types": "git diff --exit-code src/types/generated/api.ts",
     "test": "vitest",
     "test:unit": "vitest run",
     "storybook": "VITE_API_URL=/slm storybook dev -p 6007",
@@ -19,6 +23,7 @@
   },
   "dependencies": {
     "@autobot/terminal": "file:../autobot-plugins/terminal",
+    "@autobot/ui": "file:../libs/autobot-ui",
     "@autobot/vnc": "file:../autobot-plugins/vnc",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
@@ -26,28 +31,34 @@
     "axios": "^1.18.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
-    "vue-i18n": "^11.4.6",
+    "vue-i18n": "^11.4.8",
     "vue-router": "^5.2.0"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   },
   "devDependencies": {
     "@vue/test-utils": "^2.4.11",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.0",
     "vitest": "^4.1.10",
-    "@storybook/addon-docs": "^10.5.2",
-    "@storybook/vue3": "^10.5.2",
-    "@storybook/vue3-vite": "^10.5.2",
+    "@storybook/addon-docs": "^10.5.5",
+    "@storybook/vue3": "^10.5.5",
+    "@storybook/vue3-vite": "^10.5.5",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.1.1",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
-    "eslint": "^10.7.0",
-    "eslint-plugin-vue": "^10.9.2",
-    "postcss": "^8.5.19",
+    "eslint": "^10.8.0",
+    "eslint-plugin-vue": "^10.10.0",
+    "openapi-typescript": "^7.13.0",
+    "postcss": "^8.5.23",
     "storybook": "^10.4.6",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.64.0",
+    "typescript-eslint": "^8.65.0",
     "vite": "^8.0.13",
-    "vue-tsc": "^3.3.7"
+    "vue-tsc": "^3.3.8"
   }
 }

@@ -14,6 +14,7 @@ Provides endpoints to:
 """
 
 import asyncio
+from pathlib import Path
 from typing import Dict
 
 from fastapi import APIRouter, Query
@@ -24,20 +25,54 @@ from autobot_shared.logging_manager import get_logger
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..models import APIEndpointAnalysis
+from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Cache for analysis results (simple in-memory cache)
+# Cache for analysis results (simple in-memory cache).
+# Issue #12330: Keyed by source_id (or "default") to prevent cross-project
+# leakage -- a single global "latest" entry returned one project's endpoint
+# coverage for every other selected source.
 _analysis_cache: Dict[str, APIEndpointAnalysis] = {}
 # Lock for thread-safe access to _analysis_cache (Issue #559)
 _analysis_cache_lock = asyncio.Lock()
 
 
-def _get_checker() -> APIEndpointChecker:
-    """Get or create the API endpoint checker instance."""
-    return APIEndpointChecker()
+def _cache_key(source_id: str | None) -> str:
+    """Cache key for a source. Issue #12330: scope per project, not global."""
+    return source_id or "default"
+
+
+def _get_checker(project_root: Path | None = None) -> APIEndpointChecker:
+    """Get or create the API endpoint checker instance.
+
+    Issue #12330: Bind the checker to the requested source's root so it scans
+    the selected project rather than AutoBot's own root.
+    """
+    return APIEndpointChecker(project_root=project_root)
+
+
+async def _get_or_run_analysis(source_id: str | None) -> APIEndpointAnalysis:
+    """Return cached analysis for a source, or run it scoped to that source.
+
+    Issue #12330: Both the cache lookup and a cache-miss analysis are scoped to
+    the resolved source root so no two projects share results.
+    """
+    key = _cache_key(source_id)
+    async with _analysis_cache_lock:
+        cached = _analysis_cache.get(key)
+    if cached is not None:
+        return cached
+
+    root = await resolve_scan_root(source_id)
+    checker = _get_checker(root)
+    analysis = await asyncio.to_thread(checker.run_full_analysis)
+
+    async with _analysis_cache_lock:
+        _analysis_cache[key] = analysis
+    return analysis
 
 
 @router.get("/api-endpoints")
@@ -46,13 +81,17 @@ def _get_checker() -> APIEndpointChecker:
     operation="get_api_endpoints",
     error_code_prefix="CODEBASE",
 )
-async def get_api_endpoints() -> JSONResponse:
+async def get_api_endpoints(
+    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get all backend API endpoints.
 
     Returns list of all FastAPI route definitions found in the backend.
+    Issue #12330: Scoped to the selected source's clone path.
     """
-    checker = _get_checker()
+    root = await resolve_scan_root(source_id)
+    checker = _get_checker(root)
     endpoints = await asyncio.to_thread(checker.get_backend_endpoints)
 
     return JSONResponse(
@@ -70,13 +109,17 @@ async def get_api_endpoints() -> JSONResponse:
     operation="get_frontend_api_calls",
     error_code_prefix="CODEBASE",
 )
-async def get_frontend_api_calls() -> JSONResponse:
+async def get_frontend_api_calls(
+    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get all frontend API calls.
 
     Returns list of all API calls found in frontend TypeScript/Vue files.
+    Issue #12330: Scoped to the selected source's clone path.
     """
-    checker = _get_checker()
+    root = await resolve_scan_root(source_id)
+    checker = _get_checker(root)
     calls = await asyncio.to_thread(checker.get_frontend_calls)
 
     return JSONResponse(
@@ -95,7 +138,7 @@ async def get_frontend_api_calls() -> JSONResponse:
     error_code_prefix="CODEBASE",
 )
 async def get_endpoint_coverage(
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#12330: scope coverage to the selected code source"),
 ) -> JSONResponse:
     """
     Get full API endpoint coverage analysis.
@@ -107,13 +150,11 @@ async def get_endpoint_coverage(
     - Orphaned endpoints (unused)
     - Missing endpoints (called but not defined)
     - Coverage percentage
-    """
-    checker = _get_checker()
-    analysis = await asyncio.to_thread(checker.run_full_analysis)
 
-    # Cache the result (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        _analysis_cache["latest"] = analysis
+    Issue #12330: Analysis is scoped to the selected source's clone path and
+    cached per-source so one project's coverage never leaks into another's.
+    """
+    analysis = await _get_or_run_analysis(source_id)
 
     return JSONResponse(
         {
@@ -137,19 +178,17 @@ async def get_endpoint_coverage(
     operation="get_endpoint_analysis_full",
     error_code_prefix="CODEBASE",
 )
-async def get_endpoint_analysis_full() -> JSONResponse:
+async def get_endpoint_analysis_full(
+    source_id: str | None = Query(None, description="#12330: scope analysis to the selected code source"),
+) -> JSONResponse:
     """
     Get complete API endpoint analysis with all details.
 
     Returns full analysis including all endpoints, calls, and mismatches.
     Use /endpoint-coverage for a summary only.
+    Issue #12330: Scoped and cached per source.
     """
-    checker = _get_checker()
-    analysis = await asyncio.to_thread(checker.run_full_analysis)
-
-    # Cache the result (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        _analysis_cache["latest"] = analysis
+    analysis = await _get_or_run_analysis(source_id)
 
     return JSONResponse(
         {
@@ -165,21 +204,17 @@ async def get_endpoint_analysis_full() -> JSONResponse:
     operation="get_orphaned_endpoints",
     error_code_prefix="CODEBASE",
 )
-async def get_orphaned_endpoints() -> JSONResponse:
+async def get_orphaned_endpoints(
+    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get orphaned endpoints (defined but never called).
 
     These are backend endpoints that have no matching frontend calls.
     They may be unused code that can be removed.
+    Issue #12330: Scoped and cached per source.
     """
-    # Check cache first (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" in _analysis_cache:
-            analysis = _analysis_cache["latest"]
-        else:
-            checker = _get_checker()
-            analysis = await asyncio.to_thread(checker.run_full_analysis)
-            _analysis_cache["latest"] = analysis
+    analysis = await _get_or_run_analysis(source_id)
 
     return JSONResponse(
         {
@@ -196,21 +231,17 @@ async def get_orphaned_endpoints() -> JSONResponse:
     operation="get_missing_endpoints",
     error_code_prefix="CODEBASE",
 )
-async def get_missing_endpoints() -> JSONResponse:
+async def get_missing_endpoints(
+    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get missing endpoints (called but not defined).
 
     These are frontend API calls that have no matching backend endpoint.
     They may indicate bugs or deprecated endpoint usage.
+    Issue #12330: Scoped and cached per source.
     """
-    # Check cache first (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" in _analysis_cache:
-            analysis = _analysis_cache["latest"]
-        else:
-            checker = _get_checker()
-            analysis = await asyncio.to_thread(checker.run_full_analysis)
-            _analysis_cache["latest"] = analysis
+    analysis = await _get_or_run_analysis(source_id)
 
     return JSONResponse(
         {
@@ -227,20 +258,16 @@ async def get_missing_endpoints() -> JSONResponse:
     operation="get_used_endpoints",
     error_code_prefix="CODEBASE",
 )
-async def get_used_endpoints() -> JSONResponse:
+async def get_used_endpoints(
+    source_id: str | None = Query(None, description="#12330: scope to the selected code source"),
+) -> JSONResponse:
     """
     Get actively used endpoints with their call counts.
 
     Returns endpoints that are both defined in backend and called from frontend.
+    Issue #12330: Scoped and cached per source.
     """
-    # Check cache first (thread-safe, Issue #559)
-    async with _analysis_cache_lock:
-        if "latest" in _analysis_cache:
-            analysis = _analysis_cache["latest"]
-        else:
-            checker = _get_checker()
-            analysis = await asyncio.to_thread(checker.run_full_analysis)
-            _analysis_cache["latest"] = analysis
+    analysis = await _get_or_run_analysis(source_id)
 
     # Sort by call count (most used first)
     sorted_used = sorted(
@@ -271,21 +298,24 @@ async def get_used_endpoints() -> JSONResponse:
     operation="refresh_endpoint_cache",
     error_code_prefix="CODEBASE",
 )
-async def refresh_endpoint_cache() -> JSONResponse:
+async def refresh_endpoint_cache(
+    source_id: str | None = Query(None, description="#12330: refresh the selected source's cache entry"),
+) -> JSONResponse:
     """
-    Force refresh the endpoint analysis cache.
+    Force refresh the endpoint analysis cache for a source.
 
     Call this after making code changes to get updated results.
+    Issue #12330: Rebuilds only the requested source's entry, scoped to that
+    source's clone path, so refreshing one project does not evict or overwrite
+    another project's cached analysis.
     """
-    global _analysis_cache
-
-    checker = _get_checker()
-    analysis = checker.run_full_analysis()
+    root = await resolve_scan_root(source_id)
+    checker = _get_checker(root)
+    analysis = await asyncio.to_thread(checker.run_full_analysis)
 
     # Update cache (thread-safe, Issue #559)
     async with _analysis_cache_lock:
-        _analysis_cache = {}
-        _analysis_cache["latest"] = analysis
+        _analysis_cache[_cache_key(source_id)] = analysis
 
     return JSONResponse(
         {

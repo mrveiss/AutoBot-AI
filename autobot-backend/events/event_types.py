@@ -48,3 +48,10 @@ HUMAN_ANSWER_RECEIVED = "human_answer_received"
 # Emitted when the verifier completes a pass; shown to the human at the
 # approval gate so the operator sees "verifier flagged X" before approving.
 VERIFIER_VERDICT = "verifier_verdict"
+
+# LLM provider routing — fallback/degradation decision (#11995, GH#8998)
+# Emitted from llm_shared.fallback_events.emit_fallback_event(), called from
+# BOTH ModelFallbackCoordinator.execute_with_fallback() (llm_shared/
+# model_fallback_coordinator.py) and services/llm_service.py's inline
+# chat()/stream() fallback loops, so neither call site is inert.
+PROVIDER_FALLBACK = "provider_fallback"

@@ -16,7 +16,7 @@ Tests verify:
 
 import asyncio
 import time
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -30,7 +30,7 @@ from services.gateway import (
     WebAdapter,
     WhatsAppAdapter,
 )
-from services.gateway.message_queue import RateLimiter
+from services.gateway.message_queue import MessageQueue, gateway_rate_limiter
 
 
 class TestSlackAdapter:
@@ -472,43 +472,43 @@ class TestGatewayManager:
         }
 
 
-class TestRateLimiter:
-    """Test rate limiter."""
+class TestPlatformRateLimitWiring:
+    """MessageQueue delegates per-platform rate limiting to the shared
+    RateLimiter's token-bucket mode (``acquire_token``) — migrated off the
+    retired local token-bucket dataclass (#12646). The token-bucket
+    algorithm itself is covered by autobot_shared/rate_limiter_test.py;
+    these tests pin the register_platform -> acquire_token wiring."""
+
+    def test_register_platform_stores_limits(self):
+        queue = MessageQueue()
+        queue.register_platform("slack", 1, 5)
+        assert queue.platform_limits["slack"] == (1, 5)
 
     @pytest.mark.asyncio
-    async def test_rate_limiter_respects_limit(self):
-        """Test rate limiter enforces request limit."""
-        limiter = RateLimiter("test", requests_per_second=2, burst_size=2)
+    async def test_worker_acquires_token_with_registered_limits(self):
+        """The worker must call acquire_token with this platform's exact
+        (requests_per_second, burst_size) before dispatching the handler."""
+        queue = MessageQueue()
+        queue.register_platform("wiring-test-platform", 50, 10)
 
-        start = time.time()
-        # Acquire 4 tokens with 2 req/s = should take ~1 second
-        for _ in range(4):
-            await limiter.acquire()
-        elapsed = time.time() - start
+        processed = []
 
-        # Should take approximately 1 second (with generous tolerance for slow CI)
-        assert elapsed > 0.8  # At least some waiting occurs
+        async def handler(msg):
+            processed.append(msg)
 
-    @pytest.mark.asyncio
-    async def test_rate_limiter_burst(self):
-        """Test rate limiter respects burst size."""
-        limiter = RateLimiter("test", requests_per_second=10, burst_size=5)
+        await queue.enqueue({"platform": "wiring-test-platform", "data": "value"})
 
-        # First 5 should succeed quickly (burst)
-        start = time.time()
-        for _ in range(5):
-            await limiter.acquire()
-        burst_elapsed = time.time() - start
+        with patch.object(gateway_rate_limiter, "acquire_token", AsyncMock()) as mock_acquire:
+            task = asyncio.create_task(queue.process_queue(handler, workers=1))
+            await asyncio.sleep(0.2)
+            queue.processing = False
+            try:
+                await asyncio.wait_for(task, timeout=2.0)
+            except asyncio.TimeoutError:
+                pass
 
-        # Burst should be reasonably fast (not waiting much)
-        assert burst_elapsed < 1.0
-
-        # 6th token should wait
-        start = time.time()
-        await limiter.acquire()
-        wait_elapsed = time.time() - start
-        # With 10 req/s rate, 6th token needs to wait for refill
-        assert wait_elapsed > 0.05  # Should wait some time
+        assert processed == [{"platform": "wiring-test-platform", "data": "value"}]
+        mock_acquire.assert_called_once_with("wiring-test-platform", requests_per_second=50, burst_size=10)
 
 
 class TestMessageQueue:
@@ -517,8 +517,6 @@ class TestMessageQueue:
     @pytest.mark.asyncio
     async def test_message_queue_processing(self):
         """Test message queue processes messages."""
-        from services.gateway.message_queue import MessageQueue
-
         queue = MessageQueue()
         queue.register_platform("test", 100, 200)
 

@@ -21,6 +21,7 @@
  */
 
 import { getApiBase } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useHealthProbeRegistry')
@@ -46,7 +47,7 @@ const _warnedNames = new Set<string>()
 
 async function fetchRegistry(): Promise<Set<string> | null> {
   try {
-    const r = await fetch(`${getApiBase()}/system/health/probes`)
+    const r = await fetchWithAuth(`${getApiBase()}/system/health/probes`)
     if (!r.ok) {
       logger.warn(`probe registry fetch returned ${r.status}; lookups will skip name validation until next call`)
       return null

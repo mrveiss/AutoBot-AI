@@ -92,6 +92,13 @@ async function _processQueue(): Promise<void> {
   _isProcessing.value = false
 }
 
+/** Test-only: reset module-level state to its initial values. */
+export function _resetForTests(): void {
+  _handlers.clear()
+  _queue.value = []
+  _isProcessing.value = false
+}
+
 export function useActionQueue() {
   const { isOnline } = useNetworkStatus()
 

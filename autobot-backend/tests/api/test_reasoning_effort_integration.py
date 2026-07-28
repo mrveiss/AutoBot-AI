@@ -87,7 +87,7 @@ def _redis_get_only(field: str, value: bytes):
 async def test_get_preferences_returns_stored_value():
     mock_redis = AsyncMock()
     mock_redis.get.side_effect = _redis_get_only("reasoning_effort", b"high")
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         pref = await _get_user_preferences_from_redis("user-123")
     assert pref.reasoning_effort == "high"
 
@@ -96,7 +96,7 @@ async def test_get_preferences_returns_stored_value():
 async def test_get_preferences_defaults_to_auto_when_missing():
     mock_redis = AsyncMock()
     mock_redis.get.return_value = None
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         pref = await _get_user_preferences_from_redis("user-456")
     assert pref.reasoning_effort == "auto"
 
@@ -105,7 +105,7 @@ async def test_get_preferences_defaults_to_auto_when_missing():
 async def test_get_preferences_returns_auto_on_redis_error():
     mock_redis = AsyncMock()
     mock_redis.get.side_effect = RedisError("connection refused")
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         pref = await _get_user_preferences_from_redis("user-789")
     assert pref.reasoning_effort == "auto"
 
@@ -113,7 +113,7 @@ async def test_get_preferences_returns_auto_on_redis_error():
 @pytest.mark.asyncio
 async def test_store_preferences_calls_redis_set():
     mock_redis = AsyncMock()
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         await _store_user_preferences_to_redis("user-123", UserPreferences(reasoning_effort="medium"))
     mock_redis.set.assert_any_await("user:user-123:preferences:reasoning_effort", "medium")
 
@@ -131,7 +131,7 @@ async def test_get_preferences_full_flow_returns_correct_effort():
     """Full get-preferences flow: Redis returns stored value → correct pref returned."""
     mock_redis = AsyncMock()
     mock_redis.get.side_effect = _redis_get_only("reasoning_effort", b"low")
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         pref = await _get_user_preferences_from_redis("u-abc")
     assert pref.reasoning_effort == "low"
 
@@ -140,7 +140,7 @@ async def test_get_preferences_full_flow_returns_correct_effort():
 async def test_update_preferences_full_flow_stores_effort():
     """Full update-preferences flow: stores correct value in Redis."""
     mock_redis = AsyncMock()
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         await _store_user_preferences_to_redis("u-xyz", UserPreferences(reasoning_effort="high"))
     mock_redis.set.assert_any_await("user:u-xyz:preferences:reasoning_effort", "high")
 
@@ -194,7 +194,7 @@ async def test_store_appearance_writes_all_fields():
         font_size="large",
         theme_preset="catppuccin-latte",
     )
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         await _store_user_preferences_to_redis("u-app", prefs)
     mock_redis.set.assert_any_await("user:u-app:preferences:theme", "light")
     mock_redis.set.assert_any_await("user:u-app:preferences:accent_color", "purple")
@@ -225,7 +225,7 @@ async def test_appearance_round_trip_returns_stored_values():
         font_size="small",
         theme_preset="solarized-light",
     )
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         await _store_user_preferences_to_redis("u-rt", saved)
         loaded = await _get_user_preferences_from_redis("u-rt")
 
@@ -241,7 +241,7 @@ async def test_update_preferences_raises_redis_error():
     """Redis errors during store propagate as RedisError."""
     mock_redis = AsyncMock()
     mock_redis.set.side_effect = RedisError("timeout")
-    with patch("api.users.get_redis_client", new=_async_redis(mock_redis)):
+    with patch("api.users.get_async_redis_client", new=_async_redis(mock_redis)):
         with pytest.raises(RedisError):
             await _store_user_preferences_to_redis("u-xyz", UserPreferences(reasoning_effort="medium"))
 

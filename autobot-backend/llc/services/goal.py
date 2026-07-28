@@ -129,6 +129,17 @@ class GoalService(LLCServiceBase):
         result = await session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_all_by_company(self, session: AsyncSession, company_id: str) -> List[LLCGoal]:
+        """Every goal for a company, at any depth (#12739).
+
+        ``list_by_company`` forces ``parent_goal_id IS NULL`` when no parent is
+        given, so it returns roots only — which is why children were unreachable
+        without already knowing each parent id. Building a tree needs the whole
+        set in one query rather than one round-trip per level.
+        """
+        result = await session.execute(select(LLCGoal).where(LLCGoal.company_id == company_id))
+        return list(result.scalars().all())
+
     async def update(
         self,
         session: AsyncSession,
@@ -178,6 +189,12 @@ class GoalService(LLCServiceBase):
                 else:
                     setattr(goal, key, value)
         await session.flush()
+        # #12322: `updated_at` (onupdate) is populated inline by the UPDATE's
+        # RETURNING clause because Base sets ``eager_defaults=True`` — so it is
+        # never left expired after flush() and the router's sync
+        # ``GoalResponse.model_validate`` no longer risks MissingGreenlet. The
+        # previous per-call ``session.refresh(goal, ["updated_at"])`` (#12209)
+        # is now redundant and removed.
         # Fix #2: Index after commit, not after flush
         self._schedule_post_commit_index(session, goal)
         return goal

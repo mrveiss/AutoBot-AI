@@ -15,10 +15,13 @@ import requests
 # Add project root to Python path
 sys.path.append(str(Path(__file__).parent))
 
-from desktop_streaming_manager import VNCServerManager, desktop_streaming
+from desktop_streaming_manager import VNCServerManager, get_desktop_streaming
 from memory import TaskPriority
-from takeover_manager import TakeoverTrigger, takeover_manager
+from takeover_manager import TakeoverTrigger, get_takeover_manager
 from tests.test_helpers import get_test_backend_url
+
+desktop_streaming = get_desktop_streaming()
+takeover_manager = get_takeover_manager()
 
 
 def test_api_connectivity():

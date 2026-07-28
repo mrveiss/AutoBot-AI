@@ -20,9 +20,11 @@ from typing import Dict, List, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
+from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.encryption import decrypt_data
 
 logger = logging.getLogger(__name__)
@@ -592,23 +594,11 @@ class DeploymentService:
                 logger.error("Deployment failed: %s - %s", deployment_id, e)
 
     def _find_ansible_playbook(self) -> str:
-        """Find the ansible-playbook executable with system PATH."""
-        # First try with current PATH
-        ansible_path = shutil.which("ansible-playbook")
-        if ansible_path:
-            return ansible_path
+        """Find the ansible-playbook executable with system PATH.
 
-        # Try common system paths if not in current PATH
-        common_paths = [
-            "/usr/bin/ansible-playbook",
-            "/usr/local/bin/ansible-playbook",
-            "/opt/ansible/bin/ansible-playbook",
-        ]
-        for path in common_paths:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-
-        raise FileNotFoundError("ansible-playbook not found. Install Ansible: apt install ansible")
+        Shared search logic lives in services.ansible_utils (Issue #12693).
+        """
+        return _resolve_ansible_playbook()
 
     def _build_ansible_base_command(self, playbook_path: Path, host: str, roles: List[str]) -> List[str]:
         """Build the base ansible-playbook command list.
@@ -954,9 +944,12 @@ class DeploymentService:
             The public key content, or empty string if unavailable.
         """
         # Default SSH key paths for the autobot user
-        ssh_dir = Path.home() / ".ssh"
-        pubkey_path = ssh_dir / "id_rsa.pub"
-        privkey_path = ssh_dir / "id_rsa"
+        # Canonical inter-node fleet key (#12429) — same identity Ansible and
+        # every SSH caller resolve, so the pubkey deployed to nodes matches the
+        # private key later used to connect.
+        privkey_path = ssot_config.path.ssh_key
+        pubkey_path = Path(ssot_config.path.ssh_pubkey_path)
+        ssh_dir = privkey_path.parent
 
         # Try to read existing public key
         if pubkey_path.exists():

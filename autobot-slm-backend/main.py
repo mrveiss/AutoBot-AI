@@ -11,7 +11,6 @@ Main FastAPI application entry point.
 import asyncio
 import logging
 import os
-import sys
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -71,6 +70,11 @@ from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
 from api.voice_proxy import router as voice_proxy_router
 from autobot_shared.integrity_manifest import verify_integrity_at_startup
+from autobot_shared.stream_logging import (
+    build_stderr_handler,
+    build_stdout_handler,
+    load_uvicorn_log_config,
+)
 from config import settings
 from middleware import ApiRequestCounterMiddleware, SecurityHeadersMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
@@ -91,10 +95,15 @@ from services.security_posture_auditor import (
     stop_security_posture_auditor,
 )
 
+# #12488: split root-logger output by level instead of a single stdout
+# handler — WARNING+ (e.g. migration failures, table-collision errors)
+# must reach stderr so systemd's StandardError=append:...-error.log
+# actually captures real errors instead of everything landing in the
+# info log.
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[build_stdout_handler(), build_stderr_handler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -165,10 +174,13 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Reconfigure root logger AFTER uvicorn's setup so application
     # logs (code_sync, git_tracker, etc.) are visible in service logs.
+    # #12488: keep the same stdout/stderr level split as the module-level
+    # basicConfig() above — force=True replaces it, so it must be
+    # re-applied here too.
     logging.basicConfig(
         level=logging.DEBUG if settings.debug else logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[build_stdout_handler(), build_stderr_handler()],
         force=True,
     )
     logger.info("Starting SLM Backend v1.0.0")
@@ -737,6 +749,10 @@ if __name__ == "__main__":
         "port": port,
         "reload": settings.debug,
         "log_level": "debug" if settings.debug else "info",
+        # #12488: split stdout (DEBUG/INFO)/stderr (WARNING+) — only used in
+        # standalone `python main.py` mode; the production `uvicorn main:app`
+        # CLI gets the same config via --log-config in the systemd unit.
+        "log_config": load_uvicorn_log_config(),
     }
 
     if tls_enabled and ssl_keyfile and ssl_certfile:

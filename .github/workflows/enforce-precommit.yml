@@ -7,13 +7,12 @@ name: Enforce Pre-commit Hooks
 on:
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
-    paths:
-      - '**/*.py'
-      - '**/*.ts'
-      - '**/*.vue'
-      - '**/*.yml'
-      - '**/*.yaml'
-      - '.pre-commit-config.yaml'
+    # No `paths:` filter — this workflow is a REQUIRED status check (#12174), and
+    # a required check that is path-filtered out never reports, wedging any PR
+    # that touches only non-matching files (docs, .sh, .css, .json). Running on
+    # every PR guarantees it always reports, and also closes the SPDX coverage
+    # gap: the header check covers .sh/.css/.js/.mjs/.tsx, which the old filter
+    # (.py/.ts/.vue/.yml only) never triggered on.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -64,7 +63,7 @@ jobs:
           echo "✓ All required hooks (black, isort, flake8, autoflake, mypy) are configured"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.14'
 

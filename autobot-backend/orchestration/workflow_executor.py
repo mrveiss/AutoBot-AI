@@ -7,6 +7,35 @@ from __future__ import annotations
 """
 Workflow Executor
 
+DEPRECATED — NOT THE PRODUCTION RUNTIME PATH (#12373). This class has had
+**no production callers since #5058**: ``orchestrator.run_workflow`` was
+migrated to delegate to ``orchestration.workflow_runner.WorkflowRunner``
+instead, and nothing else in the codebase instantiates this class outside of
+its own module (a self-typed parameter on ``SubWorkflowExecutor`` that is
+never populated in production) and its test suite. The canonical, actually-
+wired runtime workflow-execution engine is
+``services.workflow_automation.executor.WorkflowExecutor``, instantiated by
+``WorkflowAutomationManager`` and backing the ``/api/workflow/*`` and
+``/api/workflow-automation/*`` API surfaces.
+
+This module is kept **in place, with all its code intact** — per repo policy
+code is never deleted, only wired in or superseded — because it implements
+capabilities the canonical engine does not yet have: DAG/condition-branch
+execution, checkpoint/resume, sub-workflow composition, parallel step-group
+execution, structured ``${steps.<id>.output}`` variable piping, and
+step-level error-handler actions (retry/skip/fallback/pause/abort). Folding
+these into the canonical engine is scoped to the follow-up consolidation
+issue **#12577** (which also covers migrating the third API surface,
+``/api/orchestrator/workflow/*``, currently backed by ``WorkflowRunner``, a
+separate multi-agent engine — out of scope here). The DAG-specific piece of
+that migration (replacing ``DAGExecutor`` with ``GraphRunner``) is tracked
+separately in #6826; see ``orchestration/graph_runner.py``.
+
+Until #12577 lands, treat this module as reference/staging code for future
+wiring, not as a live execution path.
+
+--- Original extraction history (retained for context) ---
+
 Issue #381: Extracted from enhanced_orchestrator.py god class refactoring.
 Contains workflow execution, step coordination, and agent interaction handling.
 
@@ -86,6 +115,12 @@ def _get_notification_service():
 class WorkflowExecutor:
     """
     Executes workflows with coordinated agent management.
+
+    DEPRECATED — not the production runtime path; see the module docstring
+    above for the full rationale. Canonical: ``services.workflow_automation
+    .executor.WorkflowExecutor``. Capability migration tracked in #12577
+    (#6826 for the DAG piece). Retained in full for future wiring — no code
+    removed (#12373).
 
     Handles:
     - Step execution with dependency management

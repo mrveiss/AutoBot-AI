@@ -306,7 +306,7 @@ export interface paths {
         };
         /**
          * List Schedulers
-         * @description Return all registered background schedulers with their runtime metadata.
+         * @description List every registered scheduler with its effective state and declared default.
          */
         get: operations["list_schedulers_api_admin_schedulers_get"];
         put?: never;
@@ -2089,7 +2089,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/system/system/health/probes": {
+    "/api/system/health/probes": {
         parameters: {
             query?: never;
             header?: never;
@@ -2109,7 +2109,7 @@ export interface paths {
          *     Public endpoint — no auth required (matches /api/system/health).
          *     Cheap call: returns sorted list of strings, no probe execution.
          */
-        get: operations["get_system_health_probes_api_system_system_health_probes_get"];
+        get: operations["get_system_health_probes_api_system_health_probes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2394,7 +2394,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/system/system/backup/status": {
+    "/api/system/backup/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -2408,7 +2408,7 @@ export interface paths {
          *     Issue #3294: Monitoring endpoint for automated backup health.
          *     Requires admin authentication.
          */
-        get: operations["get_backup_status_api_system_system_backup_status_get"];
+        get: operations["get_backup_status_api_system_backup_status_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4824,6 +4824,8 @@ export interface paths {
          * @description Get facts grouped by category for browsing with caching.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #12394: paginated via ``limit``/``offset`` (applied per category) —
+         *     the response was previously unbounded across all categories.
          */
         get: operations["get_facts_by_category_api_knowledge_base_facts_by_category_get"];
         put?: never;
@@ -4971,6 +4973,74 @@ export interface paths {
          *     Issue #744: Requires admin authentication.
          */
         get: operations["get_documentation_stats_api_knowledge_base_docs_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/system-docs/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List System Doc Categories
+         * @description List system documentation categories with per-category counts.
+         *
+         *     Issue #12314: backs ``fetchDocCategories`` in the System Docs viewer.
+         */
+        get: operations["list_system_doc_categories_api_knowledge_base_system_docs_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/system-docs/category/{category_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List System Doc Category
+         * @description List documents in a system-docs category (metadata only, no content).
+         *
+         *     Issue #12314: backs ``fetchCategoryDocs``. Unknown/invalid categories
+         *     resolve to an empty list rather than an error.
+         */
+        get: operations["list_system_doc_category_api_knowledge_base_system_docs_category__category_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/knowledge_base/system-docs/{doc_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get System Doc
+         * @description Return a single system document with its full markdown content.
+         *
+         *     Issue #12314: backs ``fetchDocContent``. ``doc_id`` is the opaque hash
+         *     id emitted by the list endpoints, so no client path reaches the disk.
+         */
+        get: operations["get_system_doc_api_knowledge_base_system_docs__doc_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10632,7 +10702,12 @@ export interface paths {
         };
         /**
          * Get Redis Config
-         * @description Get current Redis configuration
+         * @description Get current Redis configuration.
+         *
+         *     Issue #12748: route handler, not a fork — delegates to
+         *     ConfigService.get_redis_config() (task-transport scope; see that
+         *     method's docstring for why it is distinct from the canonical core
+         *     connection config in config.service_config.ServiceConfigMixin).
          */
         get: operations["get_redis_config_api_redis_config_get"];
         put?: never;
@@ -11787,12 +11862,14 @@ export interface paths {
          * Vnc Mouse Click
          * @description Perform mouse click at specified coordinates with human-like behavior.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseClickRequest with x, y coordinates and button type
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_click_api_vnc_click_post"];
         delete?: never;
@@ -11814,12 +11891,14 @@ export interface paths {
          * Vnc Keyboard Type
          * @description Type text via keyboard with human-like speed and pauses.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: KeyboardTypeRequest with text to type
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_keyboard_type_api_vnc_type_post"];
         delete?: never;
@@ -11841,12 +11920,14 @@ export interface paths {
          * Vnc Special Key
          * @description Send special key or key combination.
          *     Issue #74: Desktop interaction controls.
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: SpecialKeyRequest with key name (e.g., "Return", "ctrl+c")
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_special_key_api_vnc_key_post"];
         delete?: never;
@@ -11868,12 +11949,14 @@ export interface paths {
          * Vnc Mouse Scroll
          * @description Scroll mouse wheel.
          *     Issue #74: Desktop interaction controls.
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseScrollRequest with direction and amount
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_scroll_api_vnc_scroll_post"];
         delete?: never;
@@ -11895,12 +11978,14 @@ export interface paths {
          * Vnc Mouse Drag
          * @description Perform mouse drag operation with curved, human-like movement.
          *     Issue #74: Desktop interaction controls + Area 5 (humanization).
+         *     Issue #12002 (#11506 T1): muted while a DIFFERENT human holds the
+         *     control-lock -- the lock owner's own toolbar keeps working.
          *
          *     Args:
          *         request: MouseDragRequest with start and end coordinates
          *
          *     Returns:
-         *         {"status": "success|error", "message": "..."}
+         *         {"status": "success|error|muted", "message": "..."}
          */
         post: operations["vnc_mouse_drag_api_vnc_drag_post"];
         delete?: never;
@@ -12510,6 +12595,71 @@ export interface paths {
          *         {"status": "success", "message": "..."}
          */
         delete: operations["clear_session_state_api_vnc_session_clear_state_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/acquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acquire Desktop Control
+         * @description Human takeover: acquire the desktop control-lock (#12002, #11506 T1).
+         *
+         *     Muting the agent's actuation calls (api.vnc_manager / api.vnc_mcp) until
+         *     this is released or its idle-TTL expires.
+         */
+        post: operations["acquire_desktop_control_api_vnc_proxy__vnc_type__control_acquire_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Desktop Control
+         * @description Human handback: release the desktop control-lock (#12002, #11506 T1).
+         *
+         *     The agent resumes actuation immediately once released.
+         */
+        post: operations["release_desktop_control_api_vnc_proxy__vnc_type__control_release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc-proxy/{vnc_type}/control/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Desktop Control Status
+         * @description Get current desktop control-lock owner/state (#12002, #11506 T1).
+         */
+        get: operations["get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -13204,6 +13354,7 @@ export interface paths {
          * Desktop Mouse Click Mcp
          * @description MCP tool: Click mouse at coordinates on desktop.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_mouse_click_mcp_api_vnc_mcp_desktop_mouse_click_post"];
         delete?: never;
@@ -13225,6 +13376,7 @@ export interface paths {
          * Desktop Keyboard Type Mcp
          * @description MCP tool: Type text on desktop keyboard.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_keyboard_type_mcp_api_vnc_mcp_desktop_keyboard_type_post"];
         delete?: never;
@@ -13246,6 +13398,7 @@ export interface paths {
          * Desktop Special Key Mcp
          * @description MCP tool: Send special key or key combination.
          *     Issue #74: Agent desktop interaction.
+         *     Issue #12002 (#11506 T1): muted while a human holds the control-lock.
          */
         post: operations["desktop_special_key_mcp_api_vnc_mcp_desktop_special_key_post"];
         delete?: never;
@@ -13288,8 +13441,35 @@ export interface paths {
          * Desktop Observe State Mcp
          * @description MCP tool: Observe current desktop state with metadata.
          *     Issue #74: Agent desktop observation.
+         *     Issue #12002 (#11506 T1): includes control-lock state so the agent knows
+         *     to pause actuation when a human is active.
          */
         post: operations["desktop_observe_state_mcp_api_vnc_mcp_desktop_observe_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vnc/mcp/desktop_control_status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Desktop Control Status Mcp
+         * @description MCP tool: Check whether a human currently holds the desktop control-lock.
+         *
+         *     Issue #12002 (#11506 T1): agents should call this (or read human_active
+         *     from desktop_observe_state) before actuation and pause while a human is
+         *     active -- desktop_mouse_click/keyboard_type/special_key are muted
+         *     automatically, but polling this lets the agent avoid wasted calls.
+         */
+        post: operations["desktop_control_status_mcp_api_vnc_mcp_desktop_control_status_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -14502,6 +14682,106 @@ export interface paths {
          * @description Hover mouse over element
          */
         post: operations["hover_mcp_api_browser_mcp_hover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Browser State Mcp
+         * @description Get the current page state: URL, title, scroll info, numbered elements.
+         */
+        post: operations["browser_state_mcp_api_browser_mcp_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/click_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Click Index Mcp
+         * @description Click an element by its numbered index, resolved server-side.
+         */
+        post: operations["click_index_mcp_api_browser_mcp_click_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/fill_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill Index Mcp
+         * @description Fill an element by its numbered index, resolved server-side.
+         */
+        post: operations["fill_index_mcp_api_browser_mcp_fill_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/select_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Select Index Mcp
+         * @description Select a dropdown option on an element by its numbered index.
+         */
+        post: operations["select_index_mcp_api_browser_mcp_select_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/mcp/hover_index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hover Index Mcp
+         * @description Hover over an element by its numbered index, resolved server-side.
+         */
+        post: operations["hover_index_mcp_api_browser_mcp_hover_index_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19861,6 +20141,8 @@ export interface paths {
          *     Issue #281: Refactored from 146 lines to use extracted helper methods.
          *     Issue #1088: Further refactored with _load_modules_from_chromadb and
          *     _scan_filesystem_imports helpers.
+         *     Issue #12330: Scope the filesystem scan to the requested source's clone path
+         *     so one project cannot see another's dependency graph.
          *
          *     Returns:
          *     - modules: List of all modules/files in the codebase
@@ -19975,6 +20257,11 @@ export interface paths {
          *
          *     This enables bidirectional navigation in the import tree UI.
          *     (Issue #315 - refactored to reduce nesting)
+         *     Issue #12330: Scope the scan to the requested source's clone path so one
+         *     project cannot see another's import tree.
+         *     Issue #12364: Reads from the indexed store first (single source of truth,
+         *     sub-second); falls back to the live filesystem walk -- and kicks off a
+         *     background index job -- only when the index has no data for this source.
          */
         get: operations["get_import_tree_api_analytics_codebase_analytics_import_tree_get"];
         put?: never;
@@ -20078,6 +20365,9 @@ export interface paths {
          *
          *     Issue #281/#665/#711: Refactored with caching.
          *     Issue #713: Enhanced with import-aware cross-module resolution.
+         *     Issue #12330: Scope the scan to the requested source's clone path so one
+         *     project cannot see another's call graph. The cache key is derived from the
+         *     resolved root (path-hashed) so each source keeps a distinct cache entry.
          */
         get: operations["get_call_graph_api_analytics_codebase_analytics_call_graph_get"];
         put?: never;
@@ -20296,6 +20586,9 @@ export interface paths {
          *         include_pattern_analysis: Whether to include code pattern analysis (Issue #208)
          *         quick: If True, skip expensive analyses for faster export
          *         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
+         *         source_id: Scope the report and every sub-analysis to this code source
+         *             (Issue #12372). Falls back to the most recently indexed source, or
+         *             AutoBot's own root only when no source is resolvable.
          *
          *     Returns:
          *         Markdown formatted report as plain text
@@ -20321,6 +20614,7 @@ export interface paths {
          * @description Get all backend API endpoints.
          *
          *     Returns list of all FastAPI route definitions found in the backend.
+         *     Issue #12330: Scoped to the selected source's clone path.
          */
         get: operations["get_api_endpoints_api_analytics_codebase_api_endpoints_get"];
         put?: never;
@@ -20343,6 +20637,7 @@ export interface paths {
          * @description Get all frontend API calls.
          *
          *     Returns list of all API calls found in frontend TypeScript/Vue files.
+         *     Issue #12330: Scoped to the selected source's clone path.
          */
         get: operations["get_frontend_api_calls_api_analytics_codebase_api_calls_get"];
         put?: never;
@@ -20371,6 +20666,9 @@ export interface paths {
          *     - Orphaned endpoints (unused)
          *     - Missing endpoints (called but not defined)
          *     - Coverage percentage
+         *
+         *     Issue #12330: Analysis is scoped to the selected source's clone path and
+         *     cached per-source so one project's coverage never leaks into another's.
          */
         get: operations["get_endpoint_coverage_api_analytics_codebase_endpoint_coverage_get"];
         put?: never;
@@ -20394,6 +20692,7 @@ export interface paths {
          *
          *     Returns full analysis including all endpoints, calls, and mismatches.
          *     Use /endpoint-coverage for a summary only.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_endpoint_analysis_full_api_analytics_codebase_endpoint_analysis_get"];
         put?: never;
@@ -20417,6 +20716,7 @@ export interface paths {
          *
          *     These are backend endpoints that have no matching frontend calls.
          *     They may be unused code that can be removed.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_orphaned_endpoints_api_analytics_codebase_orphaned_endpoints_get"];
         put?: never;
@@ -20440,6 +20740,7 @@ export interface paths {
          *
          *     These are frontend API calls that have no matching backend endpoint.
          *     They may indicate bugs or deprecated endpoint usage.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_missing_endpoints_api_analytics_codebase_missing_endpoints_get"];
         put?: never;
@@ -20462,6 +20763,7 @@ export interface paths {
          * @description Get actively used endpoints with their call counts.
          *
          *     Returns endpoints that are both defined in backend and called from frontend.
+         *     Issue #12330: Scoped and cached per source.
          */
         get: operations["get_used_endpoints_api_analytics_codebase_used_endpoints_get"];
         put?: never;
@@ -20483,9 +20785,12 @@ export interface paths {
         put?: never;
         /**
          * Refresh Endpoint Cache
-         * @description Force refresh the endpoint analysis cache.
+         * @description Force refresh the endpoint analysis cache for a source.
          *
          *     Call this after making code changes to get updated results.
+         *     Issue #12330: Rebuilds only the requested source's entry, scoped to that
+         *     source's clone path, so refreshing one project does not evict or overwrite
+         *     another project's cached analysis.
          */
         post: operations["refresh_endpoint_cache_api_analytics_codebase_refresh_endpoint_cache_post"];
         delete?: never;
@@ -20505,6 +20810,8 @@ export interface paths {
          * Get Environment Analysis
          * @description Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
          *     Issue #665: Refactored to use extracted helpers for cache, analysis, and result building.
+         *     Issue #12330: Scope the scan to the selected source's clone path so one project
+         *     cannot see another's hardcoded-value analysis.
          */
         get: operations["get_environment_analysis_api_analytics_codebase_env_analysis_get"];
         put?: never;
@@ -20528,6 +20835,7 @@ export interface paths {
          *
          *     Returns actionable recommendations for creating/updating .env files
          *     based on detected hardcoded values.
+         *     Issue #12330: Scoped to the selected source's clone path.
          *
          *     Args:
          *         path: Root path to analyze
@@ -20556,6 +20864,7 @@ export interface paths {
          * @description Export full environment analysis results without truncation (Issue #631).
          *     Issue #665: Refactored to use extracted helpers for filtering and sorting.
          *     Issue #2735: Cache load and severity validation extracted to helpers.
+         *     Issue #12330: Scoped to the selected source's cached analysis.
          */
         get: operations["export_env_analysis_api_analytics_codebase_env_analysis_export_get"];
         put?: never;
@@ -20588,6 +20897,9 @@ export interface paths {
          *     Args:
          *         use_llm: Whether to use LLM for semantic analysis (default: True)
          *         use_cache: Whether to cache results (default: True)
+         *         source_id: Scope the scan and cache to the selected code source
+         *             (Issue #12356). Falls back to AutoBot's own root only when no source
+         *             is resolvable.
          *
          *     Returns:
          *         Complete analysis results with all detected patterns
@@ -20612,6 +20924,7 @@ export interface paths {
          *
          *     Returns cached results if available, otherwise returns empty status.
          *     Use POST /cross-language/analyze to trigger a new analysis.
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_cross_language_summary_api_analytics_codebase_cross_language_summary_get"];
         put?: never;
@@ -20634,6 +20947,7 @@ export interface paths {
          * @description Get DTO/type mismatches between backend and frontend.
          *
          *     Returns mismatches where Python models and TypeScript interfaces differ.
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_dto_mismatches_api_analytics_codebase_cross_language_dto_mismatches_get"];
         put?: never;
@@ -20656,6 +20970,7 @@ export interface paths {
          * @description Get duplicated validation logic across languages.
          *
          *     Returns validation rules that exist in both Python and TypeScript.
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_validation_duplications_api_analytics_codebase_cross_language_validation_duplications_get"];
         put?: never;
@@ -20680,6 +20995,8 @@ export interface paths {
          *     Returns endpoints that are:
          *     - Orphaned (backend has, frontend doesn't call)
          *     - Missing (frontend calls, backend doesn't have)
+         *
+         *     Issue #12356: Reads only the selected source's cached analysis.
          */
         get: operations["get_api_contract_mismatches_api_analytics_codebase_cross_language_api_mismatches_get"];
         put?: never;
@@ -20707,6 +21024,7 @@ export interface paths {
          *     Args:
          *         min_similarity: Minimum similarity score (0.0-1.0, default: 0.7)
          *         limit: Maximum number of matches to return (default: 50)
+         *         source_id: Scope to the selected code source (Issue #12356)
          */
         get: operations["get_semantic_matches_api_analytics_codebase_cross_language_semantic_matches_get"];
         put?: never;
@@ -20732,6 +21050,7 @@ export interface paths {
          *         category: Filter by category (api_contract, data_types, validation, etc.)
          *         severity: Filter by severity (critical, high, medium, low, info)
          *         limit: Maximum patterns to return (default: 100)
+         *         source_id: Scope to the selected code source (Issue #12356)
          */
         get: operations["get_patterns_by_category_api_analytics_codebase_cross_language_patterns_get"];
         put?: never;
@@ -20756,6 +21075,8 @@ export interface paths {
          * @description Clear the cross-language analysis cache.
          *
          *     Call this after making code changes to get fresh results.
+         *     Issue #12356: Clears only the requested source's entry so clearing one
+         *     project's cache does not evict another project's cached analysis.
          */
         post: operations["clear_cross_language_cache_api_analytics_codebase_cross_language_clear_cache_post"];
         delete?: never;
@@ -21109,6 +21430,9 @@ export interface paths {
          * @description Get statistics about stored patterns in ChromaDB.
          *
          *     Returns information about the code_patterns collection.
+         *
+         *     Issue #12384: Scopes the stats to source_id so one source's stats never
+         *     aggregate another source's (or AutoBot's own) stored patterns.
          */
         get: operations["get_pattern_storage_stats_api_analytics_codebase_patterns_storage_stats_get"];
         put?: never;
@@ -21132,6 +21456,11 @@ export interface paths {
          *
          *     Issue #208: Fast loading endpoint for already indexed patterns.
          *     Issue #665: Refactored to use extracted helpers.
+         *     Issue #12384: Scopes the query to source_id so one source's summary never
+         *     aggregates another source's (or AutoBot's own) stored patterns.
+         *     Issue #12365: A store-read failure (e.g. ChromaDB unavailable) degrades to a
+         *     graceful no_data 200 instead of a 500, matching the sibling analytics
+         *     /cached endpoints -- the panel can show "no data yet" instead of erroring.
          *     Returns summary data from stored patterns, not requiring full analysis.
          */
         get: operations["get_cached_pattern_summary_api_analytics_codebase_patterns_cached_summary_get"];
@@ -21156,6 +21485,10 @@ export interface paths {
          *
          *     Issue #208: Fast loading of already indexed patterns without re-analysis.
          *     Issue #665: Refactored to use extracted helpers.
+         *     Issue #12384: Always scopes the query to source_id (default sentinel when
+         *     None) so one source's cached patterns never include another source's.
+         *     Issue #12365: A store-read failure degrades to a graceful no_data 200
+         *     instead of a 500, matching the sibling analytics /cached endpoints.
          *     Supports filtering by pattern_type and severity, with pagination.
          */
         get: operations["get_cached_patterns_api_analytics_codebase_patterns_cached_patterns_get"];
@@ -21178,9 +21511,15 @@ export interface paths {
         put?: never;
         /**
          * Clear Pattern Storage
-         * @description Clear all stored patterns from ChromaDB.
+         * @description Clear stored patterns for a single source from ChromaDB.
          *
-         *     WARNING: This is destructive and cannot be undone.
+         *     Issue #12408: Always scopes the clear to source_id (default sentinel
+         *     when None, matching every other ``/patterns/*`` endpoint's convention --
+         *     e.g. ``get_pattern_storage_stats``, ``search_similar_patterns_endpoint``)
+         *     so clearing one source's patterns can never delete another source's (or
+         *     AutoBot's own) stored patterns.
+         *
+         *     WARNING: This is destructive and cannot be undone for the scoped source.
          */
         post: operations["clear_pattern_storage_api_analytics_codebase_patterns_storage_clear_post"];
         delete?: never;
@@ -21201,6 +21540,10 @@ export interface paths {
          * @description Search for similar patterns using vector similarity.
          *
          *     This endpoint uses ChromaDB to find patterns similar to the provided code.
+         *
+         *     Issue #12384: Always scopes the query to source_id (default sentinel when
+         *     None) so a similarity search for one source never surfaces another
+         *     source's stored patterns.
          */
         get: operations["search_similar_patterns_endpoint_api_analytics_codebase_patterns_similar_get"];
         put?: never;
@@ -21300,6 +21643,13 @@ export interface paths {
         /**
          * Create Code Source
          * @description Register a new code source.
+         *
+         *     Issue #12377: captures owner_id from the caller so HTTP-created sources
+         *     are privately scoped like the LLC-created ones (source_service's
+         *     create_github_source(owner_id=...), api/llc/sprints.py::attach_project_repo).
+         *     Uses the same caller-identity derivation (_caller_owner_id) that #12375's
+         *     require_source_access dependency authorizes reads against, so create and
+         *     read agree on what "owned by the caller" means.
          */
         post: operations["create_code_source_api_analytics_codebase_sources_post"];
         delete?: never;
@@ -29836,7 +30186,7 @@ export interface paths {
          *     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
          *     the provider authorize URL. The client never supplies the verifier — the
          *     callback takes it from the stored state (#11297). Requires admin: the stored
-         *     credential is system-wide.
+         *     credential is shared by the admin's org (per-org scoped, #11497).
          */
         post: operations["oauth_initiate_api_llm_auth_oauth_initiate_post"];
         delete?: never;
@@ -29864,7 +30214,7 @@ export interface paths {
          *     provides. This closes the CSRF / code-injection hole where a lured admin could
          *     bind an attacker's account as the shared system credential (#11297).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
         delete?: never;
@@ -29890,7 +30240,7 @@ export interface paths {
          *     ``user_code`` + ``verification_uri`` for the user to complete on another device.
          *     The caller polls ``/device/poll`` until approval or expiry.
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_initiate_api_llm_auth_device_initiate_post"];
         delete?: never;
@@ -29915,7 +30265,7 @@ export interface paths {
          *     Returns ``stored=False`` when the grant is still pending (caller should
          *     retry after the ``interval`` from ``/device/initiate``).
          *
-         *     Requires admin — stored credential is system-wide (shared by all users).
+         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
          */
         post: operations["device_poll_api_llm_auth_device_poll_post"];
         delete?: never;
@@ -29934,6 +30284,10 @@ export interface paths {
         /**
          * Provider Auth Status
          * @description Return the auth connection status for a provider.
+         *
+         *     Dual-read (finding #1, #11497): reports the caller's org-scoped token when
+         *     present, else the legacy ``"global"`` token — so orgs that connected before
+         *     the change still show connected with zero reconnect.
          */
         get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
         put?: never;
@@ -29958,7 +30312,7 @@ export interface paths {
          * Revoke Provider Auth
          * @description Revoke stored OAuth / device-code / session tokens for a provider.
          *
-         *     Requires admin — credential is system-wide (shared by all users).
+         *     Requires admin — credential is per-org scoped (shared within the admin's org, #11497).
          */
         delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
         options?: never;
@@ -30196,6 +30550,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/batch-jobs/{job_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Batch Job Now
+         * @description Trigger on-demand execution of a batch job.
+         *
+         *     Issue #12439: shares the exact same Celery entry point
+         *     (``tasks.run_batch_job``) as the scheduled dispatcher, so manual "run
+         *     now" and cron-driven execution go through one execution path.
+         *
+         *     Args:
+         *         job_id: Job ID
+         *
+         *     Returns:
+         *         BatchJob: Current job state (status unchanged until the worker
+         *         picks up the task and transitions it to running).
+         */
+        post: operations["run_batch_job_now_api_batch_jobs__job_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/batch-jobs/{job_id}/logs": {
         parameters: {
             query?: never;
@@ -30327,7 +30712,17 @@ export interface paths {
         delete: operations["delete_batch_schedule_api_batch_jobs_schedules__schedule_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Batch Schedule
+         * @description Partially update a batch job schedule (e.g. toggle ``enabled``).
+         *
+         *     Issue #12380: frontend's ``toggleSchedule`` PATCHes this route with
+         *     ``{ enabled }`` to flip a schedule on/off; only fields present on the
+         *     request body are applied, matching PATCH semantics.
+         *
+         *     Issue #744: Requires authenticated user.
+         */
+        patch: operations["update_batch_schedule_api_batch_jobs_schedules__schedule_id__patch"];
         trace?: never;
     };
     "/api/batch-jobs/status": {
@@ -33256,6 +33651,7 @@ export interface paths {
          *
          *     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_back_api_playwright_back_post"];
         delete?: never;
@@ -33279,6 +33675,7 @@ export interface paths {
          *
          *     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
          *     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+         *     Issue #11539: threads session_id so this routes to the caller's isolated context.
          */
         post: operations["go_forward_api_playwright_forward_post"];
         delete?: never;
@@ -33298,7 +33695,9 @@ export interface paths {
          * Get Worker Status
          * @description Get browser worker connectivity status from Browser VM (#1130)
          *
-         *     Proxies to Browser VM /status endpoint which checks the persistent navPage.
+         *     Proxies to Browser VM /status endpoint which checks the persistent navPage
+         *     for this caller's session (#11539 — session_id selects which isolated
+         *     context's navPage is inspected; omitted = shared default session).
          */
         get: operations["get_worker_status_api_playwright_worker_status_get"];
         put?: never;
@@ -33323,7 +33722,8 @@ export interface paths {
          * @description Take screenshot of the persistent navigation page on Browser VM (#1130)
          *
          *     Unlike /screenshot which takes a fresh-page screenshot for a given URL,
-         *     this returns a screenshot of the current state of the persistent navPage.
+         *     this returns a screenshot of the current state of the persistent navPage
+         *     for this caller's session (#11539).
          */
         post: operations["take_worker_screenshot_api_playwright_worker_screenshot_post"];
         delete?: never;
@@ -36848,6 +37248,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{agent_id}/rollback-strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll back a learned strategy to its previous revision
+         * @description Revert a task type's learned strategy to its previous revision (GH#11534).
+         *
+         *     Undoes a single bad synthesized/imported strategy without wiping all learned
+         *     state (unlike reset-learning). Admin-gated and tenant-scoped. Returns the
+         *     restored strategy, or None when there is no prior revision to roll back to.
+         */
+        post: operations["rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agents/{agent_id}/knowledge-export": {
         parameters: {
             query?: never;
@@ -37312,7 +37736,9 @@ export interface paths {
          * Get Cached Analysis
          * @description Get the most recent cached analysis results.
          *
-         *     Returns the last analysis if available, or 404 if no cached results exist.
+         *     Returns the last analysis if available, or a graceful "no_data" 200
+         *     response (Issue #12365) if no cached results exist or cache retrieval
+         *     fails — consistent with the other analytics `/cached` endpoints.
          */
         get: operations["get_cached_analysis_api_anti_pattern_cached_get"];
         put?: never;
@@ -44048,6 +44474,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/infrastructure/hosts/{host_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Infrastructure Host
+         * @description Delete a user-configured infrastructure host.
+         *
+         *     Issue #1310: infra hosts are user Secrets entries of type
+         *     ``infrastructure_host``; deleting the host removes its Secrets entry.
+         *     Mirrors the GET read-shim — the host id IS the secret id. Returns 404
+         *     when no matching infrastructure host exists.
+         */
+        delete: operations["delete_infrastructure_host_api_infrastructure_hosts__host_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/entities/extract": {
         parameters: {
             query?: never;
@@ -45108,6 +45559,30 @@ export interface paths {
          */
         post: operations["cleanup_old_metrics_api_admin_access_control_cleanup_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/schedulers/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Scheduler
+         * @description Override a scheduler's state. Takes effect on the job's next cycle.
+         */
+        put: operations["set_scheduler_api_admin_schedulers__name__put"];
+        post?: never;
+        /**
+         * Clear Scheduler
+         * @description Clear the override so the scheduler reverts to its registry default.
+         */
+        delete: operations["clear_scheduler_api_admin_schedulers__name__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -48261,9 +48736,20 @@ export interface paths {
          * @description Get board metadata and column configuration.
          */
         get: operations["get_board_api_llc_boards__board_id__get"];
-        put?: never;
+        /**
+         * Update Board
+         * @description Rename a board (GH#12695). Boards were the only entity with no backend update.
+         */
+        put: operations["update_board_api_llc_boards__board_id__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete Board
+         * @description Delete a board and its columns (GH#12695).
+         *
+         *     Work items are untouched — they belong to the project, not the board, so
+         *     deleting a view must not destroy the work it displays.
+         */
+        delete: operations["delete_board_api_llc_boards__board_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -48437,7 +48923,8 @@ export interface paths {
          * @description Provision a default budget row for an agent (GH#9901).
          *
          *     Returns 201 on creation, 409 if a row already exists.
-         *     Returns 404 if the agent does not exist in agent_org_nodes.
+         *     Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
+         *     a different tenant (GH#12136).
          *     company_id is derived from agent_org_nodes — callers cannot scope rows
          *     to arbitrary companies.
          */
@@ -48573,11 +49060,33 @@ export interface paths {
         };
         /**
          * List Companies
-         * @description List top-level companies (parent_org_id IS NULL).
+         * @description List top-level companies (parent_org_id IS NULL) visible to the caller.
+         *
+         *     Tenant scope (#12233): previously unauthenticated and returned *every*
+         *     tenant's root company — cross-tenant enumeration of names/budgets. Now
+         *     authenticated; non-admins see only companies they are a member of, while
+         *     platform admins still see all roots. Membership is the same tenant
+         *     primitive ``get_tenant_context`` uses to authorise ``X-Organization-Id``.
+         *
+         *     Archive visibility (#12212): ARCHIVED companies are excluded unless
+         *     ``include_archived`` is set, keeping the default list free of retired
+         *     companies while leaving them recoverable via the "show archived" toggle.
          */
         get: operations["list_companies_api_llc_companies__get"];
         put?: never;
-        /** Create Company */
+        /**
+         * Create Company
+         * @description Create a company (root, or a sub-company under an owned parent).
+         *
+         *     Tenant scope (#12233): previously unauthenticated — any caller could create
+         *     a company and, by supplying ``parent_org_id``, graft one under *another*
+         *     tenant's company. Now authenticated; a non-admin may only create a
+         *     sub-company under a parent they belong to (cross-tenant parent → 404, so the
+         *     parent's existence is not disclosed). Root creation (no ``parent_org_id``,
+         *     the creation-wizard flow) is open to any authenticated user. The creator is
+         *     recorded as the company ``OWNER`` so they can immediately access it and it
+         *     surfaces in their tenant-scoped ``list_companies``.
+         */
         post: operations["create_company_api_llc_companies__post"];
         delete?: never;
         options?: never;
@@ -48602,6 +49111,100 @@ export interface paths {
         head?: never;
         /** Update Company */
         patch: operations["update_company_api_llc_companies__company_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Company
+         * @description Transition a company to ACTIVE (from ONBOARDING or PAUSED).
+         *
+         *     Issue #12211: this is the dedicated transition the CompanyUpdate schema
+         *     defers to (``llc_status`` is intentionally not PATCH-able) — without it a
+         *     company was stuck in ONBOARDING forever. Tenant access is enforced the same
+         *     way as ``get_org_chart``/``reorder_backlog``: the caller's org must match
+         *     *company_id* unless they are a platform admin.
+         */
+        post: operations["activate_company_api_llc_companies__company_id__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suspend Company
+         * @description Transition a company to PAUSED (from ONBOARDING or ACTIVE). Issue #12211.
+         *
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
+         */
+        post: operations["suspend_company_api_llc_companies__company_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/offboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Offboard Company
+         * @description Transition a company to OFFBOARDING (from ACTIVE). Issue #12234.
+         *
+         *     Completes the lifecycle started in #12211: OFFBOARDING was already a
+         *     valid archive() source but nothing ever transitioned a company into it.
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
+         */
+        post: operations["offboard_company_api_llc_companies__company_id__offboard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Company
+         * @description Transition a company to ARCHIVED (from PAUSED or OFFBOARDING). Issue #12211.
+         *
+         *     Tenant-scoped: caller's org must match *company_id* unless platform admin.
+         */
+        post: operations["archive_company_api_llc_companies__company_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/companies/{company_id}/tree": {
@@ -48929,6 +49532,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/goals/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Goal Tree
+         * @description Return the company's full goal hierarchy as nested roots (#12739).
+         *
+         *     ``GET /goals`` returns only top-level goals, and children were reachable
+         *     only by already knowing each parent id — so the tree UI could not render
+         *     anything below the roots. One query, assembled in memory, rather than a
+         *     round-trip per level.
+         */
+        get: operations["get_goal_tree_api_llc_goals_tree_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/goals/{goal_id}": {
         parameters: {
             query?: never;
@@ -48946,6 +49574,26 @@ export interface paths {
         head?: never;
         /** Update Goal */
         patch: operations["update_goal_api_llc_goals__goal_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/goals/{goal_id}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Children
+         * @description Direct children of *goal_id* (#12739). Complements the upward /ancestors.
+         */
+        get: operations["list_goal_children_api_llc_goals__goal_id__children_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/goals/{goal_id}/ancestors": {
@@ -49051,6 +49699,31 @@ export interface paths {
          * @description Revoke a secret.  The value becomes permanently inaccessible.
          */
         delete: operations["revoke_secret_api_llc_secrets__company_id___name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/findings/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Policy
+         * @description Return the findings policy so clients can gate the scan action (#12734).
+         *
+         *     The feature is OFF by default, and the policy was previously readable only
+         *     inside the backend — so the UI rendered a prominent "Scan for findings"
+         *     button that could only ever return 403. A client cannot gate on a value it
+         *     has no way to read.
+         */
+        get: operations["get_policy_api_llc_findings_policy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -50578,58 +51251,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/llc/companies/{company_id}/ceo-chat/threads": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Threads */
-        get: operations["list_threads_api_llc_companies__company_id__ceo_chat_threads_get"];
-        put?: never;
-        /** Create Thread */
-        post: operations["create_thread_api_llc_companies__company_id__ceo_chat_threads_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/llc/ceo-chat/threads/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Thread */
-        get: operations["get_thread_api_llc_ceo_chat_threads__thread_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/llc/ceo-chat/threads/{thread_id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Message */
-        post: operations["send_message_api_llc_ceo_chat_threads__thread_id__messages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/llc/companies/{company_id}/decisions/search": {
         parameters: {
             query?: never;
@@ -51013,13 +51634,19 @@ export interface paths {
         };
         /**
          * List Templates
-         * @description List templates visible to the requesting company (GH#8260).
+         * @description List templates visible to the caller's organization (GH#8260).
+         *
+         *     Private-template visibility is scoped to the authenticated org; a
+         *     caller-supplied ``company_id`` must match it (GH#12148).
          */
         get: operations["list_templates_api_llc_templates__get"];
         put?: never;
         /**
          * Publish Template
          * @description Publish a scrubbed company export as a reusable template (GH#8260).
+         *
+         *     The template is owned by the caller's authenticated organization; a
+         *     caller-supplied ``company_id`` must match it (GH#12148).
          */
         post: operations["publish_template_api_llc_templates__post"];
         delete?: never;
@@ -51038,6 +51665,9 @@ export interface paths {
         /**
          * Search Templates
          * @description RAG search over platform:template_kb ChromaDB collection (GH#8260).
+         *
+         *     Returns platform-level template metadata only; requires authentication
+         *     (GH#12148).
          */
         get: operations["search_templates_api_llc_templates_search_get"];
         put?: never;
@@ -51060,7 +51690,7 @@ export interface paths {
          * @description List all built-in company templates (GH#9042).
          *
          *     Returns template metadata only (name, description, category, tags).
-         *     Does not require authentication or database access.
+         *     Requires authentication (GH#12148).
          */
         get: operations["list_built_in_templates_api_llc_templates_built_in_get"];
         put?: never;
@@ -51107,6 +51737,9 @@ export interface paths {
         /**
          * Get Template
          * @description Fetch full template JSON by ID (GH#8260).
+         *
+         *     Access is evaluated against the caller's authenticated org; a
+         *     caller-supplied ``company_id`` must match it (GH#12148).
          */
         get: operations["get_template_api_llc_templates__template_id__get"];
         put?: never;
@@ -51114,6 +51747,9 @@ export interface paths {
         /**
          * Delete Template
          * @description Delete template from DB and ChromaDB collection (GH#8260).
+         *
+         *     Only the owning organization (or a platform admin) may delete a template
+         *     (GH#12148).
          */
         delete: operations["delete_template_api_llc_templates__template_id__delete"];
         options?: never;
@@ -51133,6 +51769,8 @@ export interface paths {
         /**
          * Import Template
          * @description Import template into target company; resolves {{SECRET}} placeholders (GH#8260).
+         *
+         *     The import target must be the caller's authenticated org (GH#12148).
          */
         post: operations["import_template_api_llc_templates__template_id__import_post"];
         delete?: never;
@@ -57247,6 +57885,21 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * BatchScheduleUpdate
+         * @description Request body for PATCH /schedules/{schedule_id} — partial update.
+         *
+         *     Issue #12380: supports toggling ``enabled`` (frontend's primary use case)
+         *     plus ``cron_expression`` for trivial general partial-update support.
+         */
+        BatchScheduleUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Cron Expression */
+            cron_expression?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * BatchStatusResponse
          * @description Response for GET /status — legacy batch processor status.
          */
@@ -57510,6 +58163,16 @@ export interface components {
             mean_precision_at_k?: number | null;
             /** Reason */
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BoardUpdateRequest
+         * @description GH#12695: rename a board. Only the name is updatable — see BoardService.update_board.
+         */
+        BoardUpdateRequest: {
+            /** Name */
+            name: string;
         } & {
             [key: string]: unknown;
         };
@@ -57888,6 +58551,50 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserClickIndexRequest
+         * @description Request for POST /browser/mcp/click_index (#11537).
+         */
+        BrowserClickIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Timeout
+             * @description Timeout in milliseconds
+             * @default 10000
+             */
+            timeout: number | null;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserClickIndexResponse */
+        BrowserClickIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserClickRequest */
         BrowserClickRequest: {
             /**
@@ -57901,6 +58608,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57926,6 +58638,11 @@ export interface components {
              * @description JavaScript code to execute
              */
             script: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57937,6 +58654,57 @@ export interface components {
             action: string;
             /** Script Preview */
             script_preview: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * BrowserFillIndexRequest
+         * @description Request for POST /browser/mcp/fill_index (#11537).
+         */
+        BrowserFillIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Value
+             * @description Value to fill into the element
+             */
+            value: string;
+            /**
+             * Timeout
+             * @description Timeout in milliseconds
+             * @default 10000
+             */
+            timeout: number | null;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserFillIndexResponse */
+        BrowserFillIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Value Length */
+            value_length: number;
             /** Result */
             result?: unknown | null;
             /** Timestamp */
@@ -57962,6 +58730,11 @@ export interface components {
              * @default 5000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -57994,6 +58767,11 @@ export interface components {
              * @description Attribute name to retrieve
              */
             attribute: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58021,6 +58799,11 @@ export interface components {
              * @description CSS selector for element
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58039,6 +58822,44 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserHoverIndexRequest
+         * @description Request for POST /browser/mcp/hover_index (#11537).
+         */
+        BrowserHoverIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserHoverIndexResponse */
+        BrowserHoverIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserHoverRequest */
         BrowserHoverRequest: {
             /**
@@ -58046,6 +58867,11 @@ export interface components {
              * @description CSS selector for element to hover
              */
             selector: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58166,6 +58992,11 @@ export interface components {
              * @default 30000
              */
             timeout: number | null;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58239,6 +59070,11 @@ export interface components {
              * @default false
              */
             full_page: boolean | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58261,6 +59097,51 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserSelectIndexRequest
+         * @description Request for POST /browser/mcp/select_index (#11537).
+         */
+        BrowserSelectIndexRequest: {
+            /**
+             * Index
+             * @description Element index from the numbered element menu
+             */
+            index: number;
+            /**
+             * Value
+             * @description Value to select
+             */
+            value: string;
+            /**
+             * Expected Element Count
+             * @description Optional: element_count from the browser_state call this index was chosen against
+             */
+            expected_element_count?: number | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserSelectIndexResponse */
+        BrowserSelectIndexResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Index */
+            index: number;
+            /** Value */
+            value: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserSelectRequest */
         BrowserSelectRequest: {
             /**
@@ -58273,6 +59154,11 @@ export interface components {
              * @description Value to select
              */
             value: string;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -58385,6 +59271,32 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * BrowserStateRequest
+         * @description Request for POST /browser/mcp/state (#11537).
+         */
+        BrowserStateRequest: {
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BrowserStateResponse */
+        BrowserStateResponse: {
+            /** Success */
+            success: boolean;
+            /** Action */
+            action: string;
+            /** Result */
+            result?: unknown | null;
+            /** Timestamp */
+            timestamp: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** BrowserVncContextResponse */
         BrowserVncContextResponse: {
             /** Success */
@@ -58421,6 +59333,11 @@ export interface components {
              * @default visible
              */
             state: string | null;
+            /**
+             * Session Id
+             * @description Conversation/session id for isolated browser-context routing (#11539)
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -61946,6 +62863,16 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * CompanyStatusTransitionRequest
+         * @description Optional payload for a status transition (e.g. a suspend reason).
+         */
+        CompanyStatusTransitionRequest: {
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * CompanyTreeNode
          * @description Recursive node for GET /companies/{id}/tree.
          */
@@ -62228,7 +63155,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ok" | "degraded" | "down";
+            status: "ok" | "degraded" | "down" | "not_applicable" | "idle";
             /** Detail */
             detail?: string | null;
             /** Latency Ms */
@@ -68873,6 +69800,85 @@ export interface components {
             };
             /** Button */
             button: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlAcquireRequest
+         * @description Request for POST /vnc-proxy/{vnc_type}/control/acquire (#12002).
+         */
+        DesktopControlAcquireRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlLockResponse
+         * @description Response for the desktop control-lock acquire/release/status endpoints (#12002).
+         */
+        DesktopControlLockResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Owner */
+            owner?: string | null;
+            /** Human Active */
+            human_active: boolean;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * DesktopControlReleaseRequest
+         * @description Request for POST /vnc-proxy/{vnc_type}/control/release (#12002).
+         */
+        DesktopControlReleaseRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DesktopControlStatusMcpResponse */
+        DesktopControlStatusMcpResponse: {
+            /** Success */
+            success: boolean;
+            /** Session Id */
+            session_id: string;
+            /** Human Active */
+            human_active: boolean;
+            /** Owner */
+            owner?: string | null;
+            /** Acquired At */
+            acquired_at?: string | null;
+            /** Message */
+            message: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DesktopControlStatusRequest */
+        DesktopControlStatusRequest: {
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -68886,6 +69892,11 @@ export interface components {
             action: string;
             /** Text Length */
             text_length: number;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -68893,6 +69904,12 @@ export interface components {
         DesktopKeyboardTypeRequest: {
             /** Text */
             text: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -68907,6 +69924,12 @@ export interface components {
              * @default left
              */
             button: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -68926,6 +69949,13 @@ export interface components {
             screenshot?: string | null;
             /** Screenshot Format */
             screenshot_format?: string | null;
+            /**
+             * Human Active
+             * @default false
+             */
+            human_active: boolean;
+            /** Control Owner */
+            control_owner?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -68964,6 +69994,11 @@ export interface components {
             action: string;
             /** Key */
             key: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -68971,6 +70006,12 @@ export interface components {
         DesktopSpecialKeyRequest: {
             /** Key */
             key: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -71514,11 +72555,6 @@ export interface components {
              */
             content: string;
             /**
-             * Full Content
-             * @default
-             */
-            full_content: string;
-            /**
              * Category
              * @default
              */
@@ -71583,6 +72619,13 @@ export interface components {
          *
          *     Grouped facts keyed by category name. ``category_filter`` echoes the
          *     optional ``?category=`` query param for client-side confirmation.
+         *
+         *     Issue #12394: ``limit``/``offset`` are applied per category (each
+         *     category's fact index is paginated independently). ``total_facts`` is
+         *     the count actually returned in this page (sum across categories);
+         *     ``total_count`` is the true sum across all matching categories,
+         *     independent of pagination. ``has_more`` is True when at least one
+         *     category has additional facts beyond this page.
          */
         FactsByCategoryResponse: {
             /** Categories */
@@ -71594,6 +72637,26 @@ export interface components {
              * @default 0
              */
             total_facts: number;
+            /**
+             * Total Count
+             * @default 0
+             */
+            total_count: number;
+            /**
+             * Limit
+             * @default 0
+             */
+            limit: number;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Has More
+             * @default false
+             */
+            has_more: boolean;
             /** Category Filter */
             category_filter?: string | null;
             /** Error */
@@ -72696,6 +73759,25 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * FindingsPolicyResponse
+         * @description Client-visible findings policy (#12734).
+         *
+         *     Only the fields a caller needs to decide whether, and how, to offer the
+         *     scan action. Deliberately excludes operational tuning (verify_batch_size,
+         *     run_on_index) — those are SLM-side concerns and exposing them would invite
+         *     the UI to depend on values it has no business reacting to.
+         */
+        FindingsPolicyResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** Min Severity */
+            min_severity: string;
+            /** Require Approval To Promote */
+            require_approval_to_promote: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FlowBottleneck
          * @description Represents a bottleneck in conversation flows.
          */
@@ -73506,6 +74588,50 @@ export interface components {
          * @enum {string}
          */
         GoalStatus: "draft" | "active" | "achieved" | "cancelled" | "on_hold";
+        /**
+         * GoalTreeNode
+         * @description A goal plus its descendants, for the tree read path (#12739).
+         */
+        GoalTreeNode: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Company Id */
+            company_id: string;
+            /** Parent Goal Id */
+            parent_goal_id: string | null;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Level */
+            level: string;
+            /** Status */
+            status: string;
+            /** Owner Agent Id */
+            owner_agent_id: string | null;
+            /** Due Date */
+            due_date: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["GoalTreeNode"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** GoalUpdate */
         GoalUpdate: {
             /** Title */
@@ -75503,6 +76629,12 @@ export interface components {
              * @description Text to type
              */
             text: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -79517,6 +80649,8 @@ export interface components {
             } | null;
             /** Token */
             token?: string | null;
+            /** Access Token */
+            access_token?: string | null;
             /** Session Id */
             session_id?: string | null;
             password_warning?: components["schemas"]["PasswordWarning"] | null;
@@ -81310,46 +82444,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** MessageResponse */
-        MessageResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Thread Id
-             * Format: uuid
-             */
-            thread_id: string;
-            /** Author Type */
-            author_type: string;
-            /** Author User Id */
-            author_user_id: string | null;
-            /** Body */
-            body: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** MessageSend */
-        MessageSend: {
-            /** Message */
-            message: string;
-            /** User Id */
-            user_id?: string | null;
-            /**
-             * Company Name
-             * @default the company
-             */
-            company_name: string;
-        } & {
-            [key: string]: unknown;
-        };
         /**
          * MetadataFieldDefinition
          * @description Definition of a single metadata field (Issue #414).
@@ -81906,6 +83000,12 @@ export interface components {
              * @default left
              */
             button: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -81931,6 +83031,12 @@ export interface components {
              * @description End Y coordinate
              */
             y2: number;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -81947,6 +83053,12 @@ export interface components {
              * @default 3
              */
             amount: number;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -85208,6 +86320,8 @@ export interface components {
             deltaY: number;
             /** Text */
             text?: string | null;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85225,6 +86339,11 @@ export interface components {
              * @default 30000
              */
             timeout: number;
+            /**
+             * Session Id
+             * @description Session id for isolated browser-context routing (#11539); omitted uses shared default
+             */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85251,6 +86370,8 @@ export interface components {
              * @default networkidle
              */
             wait_until: string;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85268,6 +86389,8 @@ export interface components {
              * @default 5000
              */
             wait_timeout: number;
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -85285,6 +86408,18 @@ export interface components {
              * @default 5
              */
             max_results: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PlaywrightSessionRequest
+         * @description Optional body for worker proxy calls with no other payload (#11539):
+         *     /back, /forward, /worker-screenshot. GET /status takes the same id as a
+         *     query param instead (no request body on GET).
+         */
+        PlaywrightSessionRequest: {
+            /** Session Id */
+            session_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -86348,7 +87483,10 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ProviderStatus */
+        /**
+         * ProviderStatus
+         * @description Availability of a single media-generation provider (image or video).
+         */
         ProviderStatus: {
             /** Name */
             name: string;
@@ -89369,6 +90507,18 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * SchedulerStateResponse
+         * @description Response for GET /schedulers — every registered job with its resolved state.
+         */
+        SchedulerStateResponse: {
+            /** Schedulers */
+            schedulers: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
         /** SchedulerStatsResponse */
         SchedulerStatsResponse: {
             /** Success */
@@ -89426,6 +90576,30 @@ export interface components {
             status: string;
             /** Complexity */
             complexity: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SchedulerToggleUpdate
+         * @description Request body for PUT /schedulers/{name} (GH#12820).
+         */
+        SchedulerToggleUpdate: {
+            /** Enabled */
+            enabled: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SchedulerToggleUpdateResponse
+         * @description Response for PUT/DELETE /schedulers/{name}.
+         */
+        SchedulerToggleUpdateResponse: {
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Override Active */
+            override_active: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -92455,6 +93629,12 @@ export interface components {
              * @description Special key name (e.g., Return, Escape, ctrl+c)
              */
             key: string;
+            /**
+             * Session Id
+             * @description Desktop control-lock session id
+             * @default default
+             */
+            session_id: string;
         } & {
             [key: string]: unknown;
         };
@@ -93599,6 +94779,112 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SystemDoc
+         * @description A single system documentation file (#12314).
+         *
+         *     Field names mirror the frontend ``SystemDoc`` interface
+         *     (``useKnowledgeSystemDocs.ts``) so the contract is explicit in
+         *     ``/openapi.json``. ``content`` is empty in list responses and
+         *     populated only by the single-document endpoint.
+         */
+        SystemDoc: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Path */
+            path: string;
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /**
+             * Type
+             * @default markdown
+             */
+            type: string;
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            metadata?: components["schemas"]["SystemDocMetadata"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocCategory
+         * @description A documentation category node for the System Docs tree (#12314).
+         */
+        SystemDocCategory: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /**
+             * Icon
+             * @default folder
+             */
+            icon: string;
+            /** Children */
+            children?: components["schemas"]["SystemDocCategory"][];
+            /** Docs */
+            docs?: components["schemas"]["SystemDoc"][];
+            /**
+             * Doccount
+             * @default 0
+             */
+            docCount: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocContentResponse
+         * @description Shape of ``GET /api/knowledge_base/system-docs/{doc_id}`` (#12314).
+         */
+        SystemDocContentResponse: {
+            doc: components["schemas"]["SystemDoc"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocMetadata
+         * @description Optional per-document metadata for the System Docs viewer (#12314).
+         */
+        SystemDocMetadata: {
+            /** Wordcount */
+            wordCount?: number | null;
+            /** Lastmodified */
+            lastModified?: string | null;
+            /** Author */
+            author?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocsCategoriesResponse
+         * @description Shape of ``GET /api/knowledge_base/system-docs/categories`` (#12314).
+         */
+        SystemDocsCategoriesResponse: {
+            /** Categories */
+            categories?: components["schemas"]["SystemDocCategory"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SystemDocsCategoryResponse
+         * @description Shape of ``GET /api/knowledge_base/system-docs/category/{path}`` (#12314).
+         */
+        SystemDocsCategoryResponse: {
+            /** Docs */
+            docs?: components["schemas"]["SystemDoc"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SystemDynamicImportResponse
          * @description Response for POST /dynamic_import.
          */
@@ -93645,7 +94931,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ok" | "degraded" | "down";
+            status: "ok" | "degraded" | "down" | "not_applicable" | "idle";
             /** Timestamp */
             timestamp: string;
         } & {
@@ -95549,86 +96835,6 @@ export interface components {
          * @enum {string}
          */
         ThinkingStage: "Problem Definition" | "Research" | "Analysis" | "Synthesis" | "Conclusion";
-        /** ThreadCreate */
-        ThreadCreate: {
-            /** Title */
-            title: string;
-            /** Created By User Id */
-            created_by_user_id?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ThreadResponse */
-        ThreadResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /** Title */
-            title: string;
-            /** Resolved Entity Type */
-            resolved_entity_type: string | null;
-            /** Resolved Entity Id */
-            resolved_entity_id: string | null;
-            /** Created By User Id */
-            created_by_user_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ThreadWithMessages */
-        ThreadWithMessages: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Company Id
-             * Format: uuid
-             */
-            company_id: string;
-            /** Title */
-            title: string;
-            /** Resolved Entity Type */
-            resolved_entity_type: string | null;
-            /** Resolved Entity Id */
-            resolved_entity_id: string | null;
-            /** Created By User Id */
-            created_by_user_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /**
-             * Messages
-             * @default []
-             */
-            messages: components["schemas"]["MessageResponse"][];
-        } & {
-            [key: string]: unknown;
-        };
         /** ThreatIntelStatusResponse */
         ThreatIntelStatusResponse: {
             /** Any Service Configured */
@@ -98097,6 +99303,11 @@ export interface components {
             status: string;
             /** Message */
             message: string;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -99878,13 +101089,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ProvidersResponse */
-        api__image_generation__ProvidersResponse: {
-            /** Providers */
-            providers: components["schemas"]["ProviderStatus"][];
-        } & {
-            [key: string]: unknown;
-        };
         /**
          * SearchRequest
          * @description Request for similarity search.
@@ -100291,6 +101495,16 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ProvidersResponse
+         * @description Response for GET /providers — list of provider availability statuses.
+         */
+        api__schemas_media__ProvidersResponse: {
+            /** Providers */
+            providers: components["schemas"]["ProviderStatus"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** ClearAllResponse */
         api__schemas_system__ClearAllResponse: {
             /** Success */
@@ -100355,13 +101569,6 @@ export interface components {
         api__task_workspace_ws__RestoreRequest: {
             /** Checkpoint Name */
             checkpoint_name: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** ProvidersResponse */
-        api__video_generation__ProvidersResponse: {
-            /** Providers */
-            providers: components["schemas"]["ProviderStatus"][];
         } & {
             [key: string]: unknown;
         };
@@ -101122,9 +102329,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SchedulerStateResponse"];
                 };
             };
         };
@@ -103727,7 +104932,7 @@ export interface operations {
             };
         };
     };
-    get_system_health_probes_api_system_system_health_probes_get: {
+    get_system_health_probes_api_system_health_probes_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -104011,7 +105216,7 @@ export interface operations {
             };
         };
     };
-    get_backup_status_api_system_system_backup_status_get: {
+    get_backup_status_api_system_backup_status_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -107468,6 +108673,7 @@ export interface operations {
             query?: {
                 category?: string | null;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -107647,6 +108853,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocsStatsResponse"];
+                };
+            };
+        };
+    };
+    list_system_doc_categories_api_knowledge_base_system_docs_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemDocsCategoriesResponse"];
+                };
+            };
+        };
+    };
+    list_system_doc_category_api_knowledge_base_system_docs_category__category_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemDocsCategoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_system_doc_api_knowledge_base_system_docs__doc_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemDocContentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -117003,6 +118291,109 @@ export interface operations {
             };
         };
     };
+    acquire_desktop_control_api_vnc_proxy__vnc_type__control_acquire_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlAcquireRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    release_desktop_control_api_vnc_proxy__vnc_type__control_release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlReleaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_desktop_control_status_api_vnc_proxy__vnc_type__control_status_get: {
+        parameters: {
+            query?: {
+                session_id?: string;
+            };
+            header?: never;
+            path: {
+                vnc_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlLockResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_vnc_client_api_vnc_proxy__vnc_type__vnc_html_get: {
         parameters: {
             query?: never;
@@ -117998,6 +119389,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DesktopObserveStateMcpResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desktop_control_status_mcp_api_vnc_mcp_desktop_control_status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopControlStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopControlStatusMcpResponse"];
                 };
             };
             /** @description Validation Error */
@@ -119526,6 +120950,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserHoverResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    browser_state_mcp_api_browser_mcp_state_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    click_index_mcp_api_browser_mcp_click_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserClickIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserClickIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fill_index_mcp_api_browser_mcp_fill_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserFillIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserFillIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_index_mcp_api_browser_mcp_select_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserSelectIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserSelectIndexResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hover_index_mcp_api_browser_mcp_hover_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserHoverIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserHoverIndexResponse"];
                 };
             };
             /** @description Validation Error */
@@ -126368,7 +127957,10 @@ export interface operations {
     };
     get_dependencies_api_analytics_codebase_analytics_dependencies_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope dependency scan to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -126382,6 +127974,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -126502,7 +128103,10 @@ export interface operations {
     };
     get_import_tree_api_analytics_codebase_analytics_import_tree_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope import tree to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -126516,6 +128120,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -126639,7 +128252,7 @@ export interface operations {
             query?: {
                 /** @description Force refresh, bypass cache */
                 refresh?: boolean;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope call graph to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -126959,7 +128572,10 @@ export interface operations {
     };
     get_api_endpoints_api_analytics_codebase_api_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -126975,11 +128591,23 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_frontend_api_calls_api_analytics_codebase_api_calls_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -126993,6 +128621,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127000,7 +128637,7 @@ export interface operations {
     get_endpoint_coverage_api_analytics_codebase_endpoint_coverage_get: {
         parameters: {
             query?: {
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope coverage to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -127031,7 +128668,10 @@ export interface operations {
     };
     get_endpoint_analysis_full_api_analytics_codebase_endpoint_analysis_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope analysis to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127045,13 +128685,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_orphaned_endpoints_api_analytics_codebase_orphaned_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127065,13 +128717,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_missing_endpoints_api_analytics_codebase_missing_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127085,13 +128749,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_used_endpoints_api_analytics_codebase_used_endpoints_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127107,11 +128783,23 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     refresh_endpoint_cache_api_analytics_codebase_refresh_endpoint_cache_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12330: refresh the selected source's cache entry */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127125,6 +128813,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127144,7 +128841,7 @@ export interface operations {
                 llm_model?: string;
                 /** @description Priority level to filter: 'high', 'medium', 'low', or 'all' */
                 filter_priority?: string;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope analysis to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -127178,7 +128875,7 @@ export interface operations {
             query?: {
                 /** @description Root path to analyze (defaults to project root) */
                 path?: string;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: scope recommendations to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -127218,7 +128915,7 @@ export interface operations {
                 limit?: number;
                 /** @description Include recommendations in export */
                 include_recommendations?: boolean;
-                /** @description #1772: source_id for API consistency */
+                /** @description #12330: export the selected code source's analysis */
                 source_id?: string | null;
             };
             header?: never;
@@ -127252,6 +128949,7 @@ export interface operations {
             query?: {
                 use_llm?: boolean;
                 use_cache?: boolean;
+                /** @description #12356: scope analysis to the selected code source */
                 source_id?: string | null;
             };
             header?: never;
@@ -127282,7 +128980,10 @@ export interface operations {
     };
     get_cross_language_summary_api_analytics_codebase_cross_language_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127296,13 +128997,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_dto_mismatches_api_analytics_codebase_cross_language_dto_mismatches_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127316,13 +129029,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_validation_duplications_api_analytics_codebase_cross_language_validation_duplications_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127338,11 +129063,23 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_api_contract_mismatches_api_analytics_codebase_cross_language_api_mismatches_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127356,6 +129093,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127365,6 +129111,8 @@ export interface operations {
             query?: {
                 min_similarity?: number;
                 limit?: number;
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -127398,6 +129146,8 @@ export interface operations {
                 category?: string | null;
                 severity?: string | null;
                 limit?: number;
+                /** @description #12356: scope to the selected code source */
+                source_id?: string | null;
             };
             header?: never;
             path?: never;
@@ -127427,7 +129177,10 @@ export interface operations {
     };
     clear_cross_language_cache_api_analytics_codebase_cross_language_clear_cache_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description #12356: clear only this source's cache entry */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127441,6 +129194,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -127962,7 +129724,10 @@ export interface operations {
     };
     get_pattern_storage_stats_api_analytics_codebase_patterns_storage_stats_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Code source to scope stats to (Issue #12384) */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -127980,11 +129745,23 @@ export interface operations {
                     };
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_cached_pattern_summary_api_analytics_codebase_patterns_cached_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Code source to scope the summary to (Issue #12384) */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128000,6 +129777,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -128011,6 +129797,8 @@ export interface operations {
                 pattern_type?: string | null;
                 /** @description Filter by severity */
                 severity?: string | null;
+                /** @description Code source to scope results to (Issue #12384) */
+                source_id?: string | null;
                 /** @description Maximum results */
                 limit?: number;
                 /** @description Offset for pagination */
@@ -128046,7 +129834,10 @@ export interface operations {
     };
     clear_pattern_storage_api_analytics_codebase_patterns_storage_clear_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Code source to scope the clear to (Issue #12408) */
+                source_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -128064,6 +129855,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     search_similar_patterns_endpoint_api_analytics_codebase_patterns_similar_get: {
@@ -128073,6 +129873,8 @@ export interface operations {
                 code: string;
                 /** @description Filter by pattern type */
                 pattern_type?: string | null;
+                /** @description Code source to scope results to (Issue #12384) */
+                source_id?: string | null;
                 /** @description Maximum results */
                 limit?: number;
             };
@@ -139771,6 +141573,37 @@ export interface operations {
             };
         };
     };
+    run_batch_job_now_api_batch_jobs__job_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_job_logs_api_batch_jobs__job_id__logs_get: {
         parameters: {
             query?: never;
@@ -139993,6 +141826,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchScheduleDeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_batch_schedule_api_batch_jobs_schedules__schedule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchScheduleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchSchedule"];
                 };
             };
             /** @description Validation Error */
@@ -144329,7 +146197,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144338,6 +146210,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -144349,7 +146230,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144360,11 +146245,22 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_worker_status_api_playwright_worker_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                session_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -144380,6 +146276,15 @@ export interface operations {
                     "application/json": components["schemas"]["PlaywrightWorkerStatusResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     take_worker_screenshot_api_playwright_worker_screenshot_post: {
@@ -144389,7 +146294,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PlaywrightSessionRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -144398,6 +146307,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaywrightBrowserActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -144777,7 +146695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__image_generation__ProvidersResponse"];
+                    "application/json": components["schemas"]["api__schemas_media__ProvidersResponse"];
                 };
             };
         };
@@ -144830,7 +146748,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["api__video_generation__ProvidersResponse"];
+                    "application/json": components["schemas"]["api__schemas_media__ProvidersResponse"];
                 };
             };
         };
@@ -149061,6 +150979,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResetLearningResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rollback_agent_strategy_api_agents__agent_id__rollback_strategy_post: {
+        parameters: {
+            query?: {
+                /** @description Task type to roll back */
+                task_type?: string | null;
+            };
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnedStrategyResponse"] | null;
                 };
             };
             /** @description Validation Error */
@@ -158160,6 +160112,39 @@ export interface operations {
             };
         };
     };
+    delete_infrastructure_host_api_infrastructure_hosts__host_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                host_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     extract_entities_api_entities_extract_post: {
         parameters: {
             query?: never;
@@ -159364,6 +161349,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessControlCleanupResponse"];
+                };
+            };
+        };
+    };
+    set_scheduler_api_admin_schedulers__name__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulerToggleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulerToggleUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_scheduler_api_admin_schedulers__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulerToggleUpdateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -164078,6 +166129,72 @@ export interface operations {
             };
         };
     };
+    update_board_api_llc_boards__board_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_board_api_llc_boards__board_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_board_items_api_llc_boards__board_id__items_get: {
         parameters: {
             query?: never;
@@ -164587,7 +166704,10 @@ export interface operations {
     };
     list_companies_api_llc_companies__get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Include ARCHIVED companies (hidden by default so retired entries do not clutter the list). */
+                include_archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -164601,6 +166721,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -164712,6 +166841,134 @@ export interface operations {
                 "application/json": components["schemas"]["CompanyUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_company_api_llc_companies__company_id__activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suspend_company_api_llc_companies__company_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CompanyStatusTransitionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    offboard_company_api_llc_companies__company_id__offboard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_company_api_llc_companies__company_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -165314,6 +167571,38 @@ export interface operations {
             };
         };
     };
+    get_goal_tree_api_llc_goals_tree_get: {
+        parameters: {
+            query: {
+                /** @description Company ID to build the goal tree for */
+                company_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalTreeNode"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_goal_api_llc_goals__goal_id__get: {
         parameters: {
             query?: never;
@@ -165396,6 +167685,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["llc__api__goals__GoalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goal_children_api_llc_goals__goal_id__children_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -165494,9 +167814,7 @@ export interface operations {
     list_secrets_api_llc_secrets__company_id__get: {
         parameters: {
             query?: never;
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 company_id: string;
             };
@@ -165527,9 +167845,7 @@ export interface operations {
     set_secret_api_llc_secrets__company_id__post: {
         parameters: {
             query?: never;
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 company_id: string;
             };
@@ -165564,9 +167880,7 @@ export interface operations {
     get_secret_api_llc_secrets__company_id___name__get: {
         parameters: {
             query?: never;
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 name: string;
                 company_id: string;
@@ -165600,9 +167914,7 @@ export interface operations {
             query: {
                 actor: string;
             };
-            header: {
-                "X-Agent-Company-Id": string;
-            };
+            header?: never;
             path: {
                 name: string;
                 company_id: string;
@@ -165625,6 +167937,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_policy_api_llc_findings_policy_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingsPolicyResponse"];
                 };
             };
         };
@@ -168908,138 +171240,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_threads_api_llc_companies__company_id__ceo_chat_threads_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_thread_api_llc_companies__company_id__ceo_chat_threads_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ThreadCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_thread_api_llc_ceo_chat_threads__thread_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadWithMessages"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    send_message_api_llc_ceo_chat_threads__thread_id__messages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MessageSend"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
             /** @description Validation Error */

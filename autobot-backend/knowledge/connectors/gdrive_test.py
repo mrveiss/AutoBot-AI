@@ -165,7 +165,7 @@ class TestGoogleDriveConnector:
             return mock_metadata
 
         with patch.object(connector, "_drive_request", side_effect=mock_request):
-            with patch("knowledge.connectors.gdrive._store_ts", return_value=None):
+            with patch.object(connector, "_store_ts", return_value=None):
                 result = await connector.fetch_content(source_id)
 
                 assert result is not None
@@ -208,7 +208,7 @@ class TestGoogleDriveConnector:
 
         with patch.object(connector, "_drive_request", side_effect=mock_request):
             with patch("knowledge.connectors.gdrive._extract_text_from_pdf", return_value="Extracted PDF text"):
-                with patch("knowledge.connectors.gdrive._store_ts", return_value=None):
+                with patch.object(connector, "_store_ts", return_value=None):
                     result = await connector.fetch_content(source_id)
 
                     assert result is not None
@@ -233,7 +233,7 @@ class TestGoogleDriveConnector:
         ]
 
         with patch.object(connector, "_list_all_files", return_value=mock_files):
-            with patch("knowledge.connectors.gdrive._load_ts", return_value=None):
+            with patch.object(connector, "_load_ts", return_value=None):
                 changes = await connector.detect_changes(since=None)
 
                 assert len(changes) == 1
@@ -259,7 +259,7 @@ class TestGoogleDriveConnector:
         old_timestamp = "2026-06-04T10:00:00Z"  # Older timestamp
 
         with patch.object(connector, "_list_all_files", return_value=mock_files):
-            with patch("knowledge.connectors.gdrive._load_ts", return_value=old_timestamp):
+            with patch.object(connector, "_load_ts", return_value=old_timestamp):
                 changes = await connector.detect_changes(since=now_utc())
 
                 assert len(changes) == 1

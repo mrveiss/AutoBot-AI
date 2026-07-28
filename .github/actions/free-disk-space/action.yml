@@ -29,7 +29,43 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Remove unused toolchains
+    # Self-healing reclaim runs FIRST on the persistent self-hosted runner
+    # (MV-Stealth-VM / "Little-Slave"). Image layers and — critically — the
+    # containerized buildx *builder* cache accumulate across runs and eventually
+    # exhaust the disk, failing the assert below on EVERY PR regardless of
+    # content (GH#11924). Ephemeral GitHub-hosted runners start clean, so this
+    # is skipped there (nothing to reclaim; a prune would be pointless).
+    #
+    # Safe per the no-persistent-data policy (autobot_docker_no_persistent_data):
+    # AutoBot's compose stack keeps no persistent application data, and the
+    # court-transcriber runs on a SEPARATE host/daemon — nothing on this runner's
+    # Docker daemon belongs to it. Every prune is `|| true` so a transient prune
+    # hiccup never fails the job before the real build.
+    - name: Self-healing Docker reclaim (self-hosted)
+      if: runner.environment == 'self-hosted'
+      shell: bash
+      run: |
+        echo "=== Disk before self-hosted reclaim ==="
+        df -h / | grep -v Filesystem
+
+        echo ""
+        echo "=== Pruning Docker (images, containers, networks, volumes, build cache) ==="
+        docker system prune -af --volumes || true
+        # `docker system prune` does NOT reclaim the containerized buildx builder
+        # cache created by docker/setup-buildx-action; it grows unbounded and is
+        # the primary disk hog on the persistent runner — prune it explicitly.
+        docker builder prune -af || true
+        docker buildx prune -af || true
+
+        echo ""
+        echo "=== Disk after self-hosted reclaim ==="
+        df -h / | grep -v Filesystem
+
+    # GitHub-hosted runner images ship large unused toolchains (~45GB). Remove
+    # them so Docker-heavy builds fit. These paths do not exist on the
+    # self-hosted runner, so this step is scoped to github-hosted only.
+    - name: Remove unused toolchains (github-hosted)
+      if: runner.environment == 'github-hosted'
       shell: bash
       run: |
         echo "=== Before cleanup ==="
@@ -52,12 +88,10 @@ runs:
         sudo rm -rf /usr/share/az_*
 
         echo ""
-        echo "=== After cleanup ==="
+        echo "=== After toolchain cleanup ==="
         df -h / | grep -v Filesystem
 
-    - name: Clean Docker system
-      shell: bash
-      run: |
+        echo ""
         echo "=== Cleaning Docker system ==="
         docker system prune -af --volumes || true
         echo ""

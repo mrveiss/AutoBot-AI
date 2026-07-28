@@ -29,6 +29,8 @@ import difflib
 import json
 import logging
 import uuid
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -59,6 +61,35 @@ _REPLAY_FIXTURE_EXCERPT_CAP: int = env_int("LLC_REPLAY_FIXTURE_EXCERPT_CAP", 204
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def _json_safe(value: Any) -> Any:
+    """Recursively coerce a value into something a JSON column can store (#12682).
+
+    Run context and agent snapshots legitimately carry UUIDs, datetimes and
+    Decimals. SQLAlchemy's JSON serializer raises ``TypeError: Object of type
+    UUID is not JSON serializable`` on those, which aborted the whole
+    ``record_run`` write — so a run that genuinely succeeded was reported as
+    ``completed`` with an empty ``output_text`` and its transcript was lost.
+
+    Coercing to ``str`` is right for a replay *snapshot*: it is a record of what
+    the inputs were, not a live object graph, and replay re-dispatches by value.
+    """
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, (uuid.UUID, datetime, date, Decimal)):
+        return str(value)
+    # Anything else (custom objects, bytes) — repr rather than explode. Losing
+    # fidelity on an exotic value is far better than losing the entire run log.
+    try:
+        json.dumps(value)
+        return value
+    except (TypeError, ValueError):
+        return repr(value)
 
 
 class RunReplayService:
@@ -120,9 +151,9 @@ class RunReplayService:
                 replay_of_run_id=None,
                 company_id=company_id,
                 agent_id=agent_id,
-                inputs_snapshot=raw_context,
-                agent_snapshot=raw_agent,
-                recorded_events=capped_events,
+                inputs_snapshot=_json_safe(raw_context),
+                agent_snapshot=_json_safe(raw_agent),
+                recorded_events=_json_safe(capped_events),
                 output_text=capped_output,
                 final_status=final_status,
             )

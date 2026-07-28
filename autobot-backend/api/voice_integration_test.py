@@ -16,9 +16,14 @@ import io
 import time
 import wave
 
+import pytest
 import requests
 
 from autobot_shared.ssot_config import config
+
+# #12510: these tests hit a live backend + TTS worker over real HTTP, so they
+# must be excluded from the unit-test job (pytest -m "not integration ...").
+pytestmark = pytest.mark.integration
 
 # ------------------------------------------------------------------ #
 # Config (#1618: use SSOT — no hardcoded IPs)                         #

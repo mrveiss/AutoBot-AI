@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Infrastructure as Code: Deploy Browser VM VNC Services
 # Uses systemd for proper service management and auto-restart
 

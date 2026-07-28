@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # Converted to logger.info() for pre-commit compliance
 """
@@ -32,7 +33,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ async def _connect_redis_clients(results: dict) -> tuple:
 
     # Connect to Redis (main database)
     try:
-        redis_client = await get_redis_client(database="main", async_client=True)
+        redis_client = await get_async_redis_client(database="main")
 
         if not redis_client:
             logger.error("Failed to connect to Redis")
@@ -85,7 +86,7 @@ async def _connect_redis_clients(results: dict) -> tuple:
 
     # Also check knowledge database
     try:
-        kb_redis_client = await get_redis_client(database="knowledge", async_client=True)
+        kb_redis_client = await get_async_redis_client(database="knowledge")
     except Exception:
         kb_redis_client = None
         logger.warning("Knowledge database not available, skipping")

@@ -9,14 +9,22 @@
  * Provides REST API integration for SSO/OAuth2/LDAP/SAML provider
  * management via the SLM backend.
  * Issue #576 - User Management System Phase 4 (SSO).
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()` and injects the SLM bearer token.
+ *
+ * 401 handling — the previous axios interceptor logged the user out on ANY 401.
+ * For the provider CRUD endpoints (non-auth) the canonical client reproduces
+ * this: it clears the session and redirects to `/login`. The client, however,
+ * intentionally skips its session-clearing handler for `/auth/**` endpoints (a
+ * 401 there is a credential failure, not a rejected session), so the SSO login
+ * flow methods that hit `/auth/sso/**` wrap their call in `withAuthGuard` to
+ * preserve the historic "logout on 401" behavior explicitly.
  */
 
-import axios, { type AxiosInstance } from 'axios'
+import slmApiClient from '@/utils/ApiClient'
 import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
-
-// SLM API is proxied via nginx at /api/
-const SLM_API_BASE = getSlmApiBase()
+import { createAuthGuard } from '@/utils/slmAuthGuard'
 
 // =============================================================================
 // Type Definitions
@@ -106,109 +114,78 @@ export interface SSOProviderHealthResponse {
 export function useSsoApi() {
   const authStore = useAuthStore()
 
-  const client: AxiosInstance = axios.create({
-    baseURL: SLM_API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000,
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
+  // Preserve the historic "logout on 401" behaviour: the canonical client skips
+  // its session-clearing 401 handler for /auth/** endpoints, so the SSO
+  // login-flow methods re-apply it explicitly (shared helper — utils/slmAuthGuard.ts).
+  const withAuthGuard = createAuthGuard(authStore.logout)
 
   // ===========================================================================
-  // SSO Provider CRUD
+  // SSO Provider CRUD (non-auth endpoints — client handles 401 centrally)
   // ===========================================================================
 
   async function listProviders(
     orgId?: string,
     activeOnly?: boolean
   ): Promise<SSOProviderListResponse> {
-    const params: Record<string, string | boolean> = {}
-    if (orgId) params.org_id = orgId
-    if (activeOnly !== undefined) params.active_only = activeOnly
-    const response = await client.get<SSOProviderListResponse>(
-      '/sso-providers',
-      { params }
+    const params = new URLSearchParams()
+    if (orgId) params.set('org_id', orgId)
+    if (activeOnly !== undefined) params.set('active_only', String(activeOnly))
+    const query = params.toString()
+    return slmApiClient.get<SSOProviderListResponse>(
+      query ? `/sso-providers?${query}` : '/sso-providers'
     )
-    return response.data
   }
 
   async function createProvider(
     data: SSOProviderCreate
   ): Promise<SSOProviderResponse> {
-    const response = await client.post<SSOProviderResponse>(
-      '/sso-providers',
-      data
-    )
-    return response.data
+    return slmApiClient.post<SSOProviderResponse>('/sso-providers', data)
   }
 
   async function getProvider(
     providerId: string
   ): Promise<SSOProviderResponse> {
-    const response = await client.get<SSOProviderResponse>(
-      `/sso-providers/${providerId}`
-    )
-    return response.data
+    return slmApiClient.get<SSOProviderResponse>(`/sso-providers/${providerId}`)
   }
 
   async function updateProvider(
     providerId: string,
     data: SSOProviderUpdate
   ): Promise<SSOProviderResponse> {
-    const response = await client.patch<SSOProviderResponse>(
+    return slmApiClient.patch<SSOProviderResponse>(
       `/sso-providers/${providerId}`,
       data
     )
-    return response.data
   }
 
   async function deleteProvider(providerId: string): Promise<void> {
-    await client.delete(`/sso-providers/${providerId}`)
+    await slmApiClient.delete(`/sso-providers/${providerId}`)
   }
 
   async function testProvider(
     providerId: string
   ): Promise<SSOTestResponse> {
-    const response = await client.get<SSOTestResponse>(
+    return slmApiClient.get<SSOTestResponse>(
       `/sso-providers/${providerId}/test`
     )
-    return response.data
   }
 
   // ===========================================================================
-  // SSO Login Flow
+  // SSO Login Flow (`/auth/**` — client skips 401, guard preserves logout)
   // ===========================================================================
 
   async function getActiveProviders(): Promise<ActiveProvider[]> {
-    const response = await client.get<ActiveProvider[]>(
-      '/auth/sso/providers'
+    return withAuthGuard(() =>
+      slmApiClient.get<ActiveProvider[]>('/auth/sso/providers')
     )
-    return response.data
   }
 
   async function initiateSSOLogin(
     providerId: string
   ): Promise<SSOLoginInitResponse> {
-    const response = await client.get<SSOLoginInitResponse>(
-      `/auth/sso/${providerId}/login`
+    return withAuthGuard(() =>
+      slmApiClient.get<SSOLoginInitResponse>(`/auth/sso/${providerId}/login`)
     )
-    return response.data
   }
 
   async function loginWithLDAP(
@@ -216,18 +193,19 @@ export function useSsoApi() {
     username: string,
     password: string
   ): Promise<LDAPLoginResponse> {
-    const response = await client.post<LDAPLoginResponse>(
-      '/auth/sso/ldap/login',
-      { provider_id: providerId, username, password }
+    return withAuthGuard(() =>
+      slmApiClient.post<LDAPLoginResponse>('/auth/sso/ldap/login', {
+        provider_id: providerId,
+        username,
+        password,
+      })
     )
-    return response.data
   }
 
   async function getProvidersHealth(): Promise<SSOProviderHealthResponse[]> {
-    const response = await client.get<SSOProviderHealthResponse[]>(
+    return slmApiClient.get<SSOProviderHealthResponse[]>(
       '/sso-providers/health'
     )
-    return response.data
   }
 
   return {

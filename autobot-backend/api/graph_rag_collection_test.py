@@ -25,9 +25,13 @@ import pytest
 pytest.importorskip("fastapi")
 
 from api.graph_rag import (  # noqa: E402
+    _check_component_health,
     _collect_collection_edges,
+    _determine_overall_status,
+    _probe_component,
     _serialize_graph_nodes,
     collection_graph,
+    graph_rag_health,
 )
 
 
@@ -95,3 +99,95 @@ async def test_collection_graph_returns_nodes_and_edges():
     service.graph.search_entities.assert_awaited_once()
     _, kwargs = service.graph.search_entities.await_args
     assert kwargs.get("tags") == ["col-123"]
+
+
+# ---------------------------------------------------------------------------
+# Graph-RAG /health endpoint — #12316
+#
+# Regression: graph_rag_health 500'd with
+#   AttributeError: 'AutoBotMemoryGraph' object has no attribute 'initialized'
+# A health probe must degrade gracefully — always return a status, never 500.
+# ---------------------------------------------------------------------------
+
+
+class _GraphMissingInitialized:
+    """Stand-in for the pre-fix AutoBotMemoryGraph: truthy but no ``initialized``.
+
+    Accessing ``.initialized`` raises AttributeError — exactly the #12316 crash.
+    """
+
+
+def _health_body(response):
+    return json.loads(bytes(response.body).decode("utf-8"))
+
+
+def test_probe_component_reports_unavailable_on_exception():
+    def _boom() -> bool:
+        raise AttributeError("no attribute 'initialized'")
+
+    assert _probe_component("memory_graph", _boom) == "unavailable"
+
+
+def test_probe_component_healthy_and_unavailable():
+    assert _probe_component("x", lambda: True) == "healthy"
+    assert _probe_component("x", lambda: False) == "unavailable"
+
+
+def test_check_component_health_all_healthy():
+    service = MagicMock()
+    service.rag = MagicMock()
+    service.graph = MagicMock()
+    service.graph.initialized = True
+    components = _check_component_health(service)
+    assert components == {
+        "graph_rag_service": "healthy",
+        "rag_service": "healthy",
+        "memory_graph": "healthy",
+    }
+
+
+def test_check_component_health_degraded_when_graph_uninitialized():
+    service = MagicMock()
+    service.rag = MagicMock()
+    service.graph = MagicMock()
+    service.graph.initialized = False
+    components = _check_component_health(service)
+    assert components["memory_graph"] == "unavailable"
+    assert _determine_overall_status(components) == "degraded"
+
+
+def test_check_component_health_survives_missing_initialized_attr():
+    # The exact #12316 crash: graph object lacks ``initialized``.
+    service = MagicMock()
+    service.rag = MagicMock()
+    service.graph = _GraphMissingInitialized()
+    components = _check_component_health(service)  # must not raise
+    assert components["memory_graph"] == "unavailable"
+
+
+async def test_graph_rag_health_returns_200_when_healthy():
+    service = MagicMock()
+    service.rag = MagicMock()
+    service.graph = MagicMock()
+    service.graph.initialized = True
+
+    response = await graph_rag_health(service=service, current_user={"id": "u1"})
+    assert response.status_code == 200
+    body = _health_body(response)
+    assert body["status"] == "healthy"
+    assert body["components"]["memory_graph"] == "healthy"
+
+
+async def test_graph_rag_health_returns_degraded_not_500_when_subsystem_down():
+    # Subsystem unavailable (graph missing ``initialized``) must yield a usable
+    # status (503 degraded), never the GRAPH_RAG_0310 500 from #12316.
+    service = MagicMock()
+    service.rag = MagicMock()
+    service.graph = _GraphMissingInitialized()
+
+    response = await graph_rag_health(service=service, current_user={"id": "u1"})
+    assert response.status_code == 503
+    body = _health_body(response)
+    assert body["status"] == "degraded"
+    assert "status" in body  # monitoring always gets a status field
+    assert body["components"]["memory_graph"] == "unavailable"

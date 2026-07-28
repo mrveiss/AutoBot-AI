@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -30,6 +30,7 @@ import pytest
 # Obtain it via the class's function globals to guarantee identity.
 import llm_shared.provider_auth as _provider_auth_mod  # standard import path
 from llm_shared.provider_auth import (
+    LEGACY_SUBJECT,
     ApiKeyAuth,
     DeviceCodeAuth,
     OAuthAuth,
@@ -38,6 +39,8 @@ from llm_shared.provider_auth import (
     TokenExpiredError,
     _merge_token_response,
     build_token_data,
+    org_vault_subject,
+    validate_token_response,
 )
 
 # Use the class's actual globals dict as the authoritative module reference.
@@ -219,6 +222,7 @@ class TestOAuthAuth:
         with (
             patch.object(_PA_MOD, "_vault_read", new=AsyncMock(return_value=expired)),
             patch.object(_PA_MOD, "_vault_write", new=AsyncMock()) as mock_write,
+            patch("autobot_shared.security.ssrf_guard.pinned_connector", new=AsyncMock(return_value=MagicMock())),
             patch(
                 "knowledge.connectors.oauth_flow.refresh_access_token",
                 new=AsyncMock(return_value=refreshed),
@@ -414,6 +418,226 @@ class TestTokenHelpers:
         resp = {"access_token": "new_at", "refresh_token": "new_rt", "expires_in": 3600}
         merged = _merge_token_response(old, resp)
         assert merged["refresh_token"] == "new_rt"
+
+
+# ---------------------------------------------------------------------------
+# #11497 finding #1 — per-org vault subject + backward-compatible dual-read
+# ---------------------------------------------------------------------------
+
+
+class TestOrgVaultSubject:
+    def test_none_org_is_legacy_global(self):
+        assert org_vault_subject(None) == LEGACY_SUBJECT == "global"
+
+    def test_empty_org_is_legacy_global(self):
+        assert org_vault_subject("") == "global"
+        assert org_vault_subject("   ") == "global"
+
+    def test_org_id_keyed(self):
+        assert org_vault_subject("acme") == "org:acme"
+        assert org_vault_subject(42) == "org:42"
+
+
+class TestDualRead:
+    """Finding #1 read path: org-scoped subject first, legacy ``global`` fallback."""
+
+    _TOKEN_URL = "https://github.com/login/oauth/access_token"
+
+    def _make_auth(self, subject: str) -> OAuthAuth:
+        return OAuthAuth(
+            provider_name="p",
+            token_url=self._TOKEN_URL,
+            client_id="cid",
+            client_secret="csec",
+            owner_vault_str="system",
+            subject=subject,
+        )
+
+    def _fresh(self, tag: str) -> dict:
+        return {
+            "access_token": tag,
+            "refresh_token": "rt",
+            "expires_at": time.time() + 7200,
+            "created_by": "00000000-0000-0000-0000-000000000000",
+        }
+
+    def test_legacy_global_token_readable_under_org_subject(self):
+        """PROOF: a token stored under legacy ``global`` is still readable when the
+        caller resolves with an org-scoped subject — zero reconnect, no regression."""
+        auth = self._make_auth(subject="org:acme")
+        legacy = self._fresh("at-legacy-global")
+        session = AsyncMock()
+
+        async def fake_read(_session, *, provider_name, subject, owner_vault_str):
+            # Only the legacy "global" entry exists (org:acme has never persisted).
+            return legacy if subject == "global" else None
+
+        with patch.object(_PA_MOD, "_vault_read", new=AsyncMock(side_effect=fake_read)):
+            result = _sync(auth.resolve_token(session))
+
+        assert result == "at-legacy-global"
+
+    def test_org_scoped_token_wins_over_legacy_global(self):
+        auth = self._make_auth(subject="org:acme")
+        org_data = self._fresh("at-org")
+        legacy = self._fresh("at-legacy")
+        session = AsyncMock()
+
+        async def fake_read(_session, *, provider_name, subject, owner_vault_str):
+            return org_data if subject == "org:acme" else legacy
+
+        with patch.object(_PA_MOD, "_vault_read", new=AsyncMock(side_effect=fake_read)):
+            result = _sync(auth.resolve_token(session))
+
+        assert result == "at-org"
+
+    def test_global_subject_single_read_no_fallback(self):
+        """When subject already IS legacy ``global`` there must be no second lookup."""
+        auth = self._make_auth(subject="global")
+        legacy = self._fresh("at-global")
+        session = AsyncMock()
+        read = AsyncMock(return_value=legacy)
+
+        with patch.object(_PA_MOD, "_vault_read", new=read):
+            result = _sync(auth.resolve_token(session))
+
+        assert result == "at-global"
+        read.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# #11497 finding #2 — refresh POST is pinned to a pre-resolved public IP
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshIpPinning:
+    _TOKEN_URL = "https://github.com/login/oauth/access_token"
+
+    def _make_auth(self) -> OAuthAuth:
+        return OAuthAuth(
+            provider_name="test_provider",
+            token_url=self._TOKEN_URL,
+            client_id="cid",
+            client_secret="csec",
+            owner_vault_str="system",
+            subject="global",
+        )
+
+    def _expired(self) -> dict:
+        return {
+            "access_token": "at-expired",
+            "refresh_token": "rt-valid",
+            "expires_at": time.time() - 1,
+            "created_by": "00000000-0000-0000-0000-000000000000",
+        }
+
+    def test_refresh_resolves_once_and_pins_connector(self):
+        auth = self._make_auth()
+        pin = AsyncMock(return_value=MagicMock())
+        refresh = AsyncMock(return_value={"access_token": "at-new", "expires_in": 3600})
+        session = AsyncMock()
+
+        with (
+            patch.object(_PA_MOD, "_vault_read", new=AsyncMock(return_value=self._expired())),
+            patch.object(_PA_MOD, "_vault_write", new=AsyncMock()),
+            patch("autobot_shared.security.ssrf_guard.pinned_connector", new=pin),
+            patch("knowledge.connectors.oauth_flow.refresh_access_token", new=refresh),
+        ):
+            result = _sync(auth.resolve_token(session))
+
+        assert result == "at-new"
+        pin.assert_awaited_once_with(self._TOKEN_URL)  # resolved exactly once
+        # The pinned connector is threaded into the outbound refresh POST.
+        assert "connector" in refresh.await_args.kwargs
+
+    def test_refresh_blocks_when_host_not_public(self):
+        from autobot_shared.security.ssrf_guard import SSRFError
+
+        auth = self._make_auth()
+        refresh = AsyncMock(return_value={"access_token": "at-new", "expires_in": 3600})
+        session = AsyncMock()
+
+        with (
+            patch.object(_PA_MOD, "_vault_read", new=AsyncMock(return_value=self._expired())),
+            patch(
+                "autobot_shared.security.ssrf_guard.pinned_connector",
+                new=AsyncMock(side_effect=SSRFError("non-public")),
+            ),
+            patch("knowledge.connectors.oauth_flow.refresh_access_token", new=refresh),
+        ):
+            with pytest.raises(ProviderAuthError, match="not publicly routable"):
+                _sync(auth.resolve_token(session))
+            refresh.assert_not_awaited()  # never reached the network
+
+
+# ---------------------------------------------------------------------------
+# #11497 finding #3 — token_type / issuer / audience validation before persist
+# ---------------------------------------------------------------------------
+
+
+def _jwt(claims: dict) -> str:
+    """Build an unsigned compact JWS whose payload carries *claims* (test-only)."""
+    import base64
+    import json
+
+    def _seg(obj: dict) -> str:
+        raw = json.dumps(obj).encode("utf-8")
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+    return f"{_seg({'alg': 'none'})}.{_seg(claims)}.sig"
+
+
+class TestValidateTokenResponse:
+    def test_bearer_token_type_accepted(self):
+        validate_token_response({"access_token": "at", "token_type": "Bearer"}, provider_name="p", client_id="cid")
+
+    def test_non_bearer_token_type_rejected(self):
+        with pytest.raises(ProviderAuthError, match="token_type"):
+            validate_token_response({"access_token": "at", "token_type": "mac"}, provider_name="p", client_id="cid")
+
+    def test_missing_token_type_is_lenient(self):
+        # RFC 6749 responses that omit token_type keep working (no regression).
+        validate_token_response({"access_token": "at"}, provider_name="p", client_id="cid")
+
+    def test_id_token_audience_match_accepted(self):
+        resp = {"access_token": "at", "id_token": _jwt({"aud": "cid", "iss": "https://accounts.google.com"})}
+        validate_token_response(resp, provider_name="google", client_id="cid")
+
+    def test_id_token_audience_list_accepted(self):
+        resp = {"access_token": "at", "id_token": _jwt({"aud": ["other", "cid"], "iss": "https://github.com"})}
+        validate_token_response(resp, provider_name="github", client_id="cid")
+
+    def test_id_token_audience_mismatch_rejected(self):
+        resp = {"access_token": "at", "id_token": _jwt({"aud": "someone-else"})}
+        with pytest.raises(ProviderAuthError, match="audience"):
+            validate_token_response(resp, provider_name="google", client_id="cid")
+
+    def test_id_token_azp_fallback_accepted(self):
+        resp = {"access_token": "at", "id_token": _jwt({"aud": "other", "azp": "cid", "iss": "https://github.com"})}
+        validate_token_response(resp, provider_name="github", client_id="cid")
+
+    def test_id_token_issuer_not_allowlisted_rejected(self):
+        resp = {"access_token": "at", "id_token": _jwt({"aud": "cid", "iss": "https://evil.example.com"})}
+        with pytest.raises(ProviderAuthError, match="issuer"):
+            validate_token_response(resp, provider_name="p", client_id="cid")
+
+    def test_id_token_issuer_wrong_for_known_provider_rejected(self):
+        # login.microsoftonline.com is allowlisted, but it is NOT google's issuer.
+        resp = {"access_token": "at", "id_token": _jwt({"aud": "cid", "iss": "https://login.microsoftonline.com/x"})}
+        with pytest.raises(ProviderAuthError, match="issuer"):
+            validate_token_response(resp, provider_name="google", client_id="cid")
+
+    def test_id_token_non_https_issuer_rejected(self):
+        resp = {"access_token": "at", "id_token": _jwt({"aud": "cid", "iss": "http://accounts.google.com"})}
+        with pytest.raises(ProviderAuthError, match="https"):
+            validate_token_response(resp, provider_name="google", client_id="cid")
+
+    def test_malformed_id_token_rejected(self):
+        with pytest.raises(ProviderAuthError, match="well-formed"):
+            validate_token_response({"access_token": "at", "id_token": "not-a-jwt"}, provider_name="p", client_id="cid")
+
+    def test_no_id_token_is_lenient(self):
+        validate_token_response({"access_token": "at", "refresh_token": "rt"}, provider_name="p", client_id="cid")
 
 
 # ---------------------------------------------------------------------------
@@ -769,6 +993,7 @@ class TestOAuthRefreshSsrfGuard:
         with (
             patch.object(_PA_MOD, "_vault_read", new=AsyncMock(return_value=expired)),
             patch.object(_PA_MOD, "_vault_write", new=AsyncMock()),
+            patch("autobot_shared.security.ssrf_guard.pinned_connector", new=AsyncMock(return_value=MagicMock())),
             patch(
                 "knowledge.connectors.oauth_flow.refresh_access_token",
                 new=AsyncMock(return_value=refreshed),
@@ -778,3 +1003,51 @@ class TestOAuthRefreshSsrfGuard:
 
         assert result == "at-new"
         mock_post.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# _vault_write created_by guard (#11849)
+# ---------------------------------------------------------------------------
+
+
+class TestVaultWriteCreatedByGuard:
+    """The JWT ``user_id`` claim is not guaranteed to be a UUID; a malformed id
+    must fall back to the zero-UUID sentinel rather than raise on the write path."""
+
+    def _run(self, created_by_id):
+        import uuid as _uuid
+
+        captured = {}
+
+        class _FakeSvc:
+            async def create(self, session, *, owner_vault, name, secret_type, plaintext, created_by):
+                captured["created_by"] = created_by
+
+        import services.envelope_secrets_service as _ess
+
+        with patch.object(_ess, "EnvelopeSecretsService", _FakeSvc):
+            session = AsyncMock()
+            _sync(
+                _PA_MOD._vault_write(
+                    session,
+                    provider_name="acme",
+                    subject=LEGACY_SUBJECT,
+                    owner_vault_str="system",
+                    token_data={"access_token": "at"},
+                    created_by_id=created_by_id,
+                )
+            )
+        return captured["created_by"], _uuid
+
+    def test_non_uuid_created_by_falls_back_without_raising(self):
+        created_by, _uuid = self._run("admin")  # NOT a valid UUID
+        assert created_by == _uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+    def test_empty_created_by_falls_back_without_raising(self):
+        created_by, _uuid = self._run("")  # empty device-JWT claim
+        assert created_by == _uuid.UUID("00000000-0000-0000-0000-000000000000")
+
+    def test_valid_uuid_created_by_preserved(self):
+        real = "11111111-2222-3333-4444-555555555555"
+        created_by, _uuid = self._run(real)
+        assert created_by == _uuid.UUID(real)

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025-2026 mrveiss
+# Author: mrveiss
+#
+# pre-commit: Target Branch Guard — block direct commits to protected branches
+# ============================================================================
+#
+# Self-contained standalone git hook (no pre-commit framework, no lib sourcing)
+# so it works when copied verbatim into .git/hooks/pre-commit by
+# scripts/install-git-hooks.sh. The enforcement logic mirrors the canonical
+# pre-commit-target-branch-guard (Issue #4113) — kept identical on purpose.
+#
+# Sync source (keep IDENTICAL to avoid drift):
+#   autobot-infrastructure/shared/scripts/hooks/pre-commit-target-branch-guard
+#
+# PROTECTED (commits forbidden): main, master
+# ALLOWED: Dev_new_gui, issue-*, hotfix-*, and any other feature branch
+#
+# Bypass (only when you truly must, e.g. an automated release back-merge):
+#   git commit --no-verify
+#
+# Issue #11598 (installer + standalone hook). Related: #4113, #11581, #11593.
+
+set -uo pipefail
+
+# Color helpers — no-op when not a tty so piped/CI output stays clean.
+if [ -t 2 ]; then
+    RED='\033[0;31m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+else
+    RED=''; CYAN=''; BOLD=''; NC=''
+fi
+
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+
+# Detached HEAD — no branch to guard.
+if [ -z "$CURRENT_BRANCH" ]; then
+    exit 0
+fi
+
+case "$CURRENT_BRANCH" in
+    main|master)
+        printf "\n${BOLD}${RED}COMMIT BLOCKED: Direct commits to '%s' are forbidden (Issue #4113)${NC}\n" "$CURRENT_BRANCH" >&2
+        printf "${CYAN}─────────────────────────────────────────────────────────────${NC}\n" >&2
+        printf "\n  ${BOLD}Why:${NC}\n" >&2
+        printf "    - %s is a protected branch (release/stable code only)\n" "$CURRENT_BRANCH" >&2
+        printf "    - All development must flow through Dev_new_gui first\n" >&2
+        printf "\n  ${BOLD}Correct workflow:${NC}\n" >&2
+        printf "    1. git checkout -b issue-XXXX origin/Dev_new_gui\n" >&2
+        printf "    2. Commit on your feature branch\n" >&2
+        printf "    3. git push -u origin issue-XXXX\n" >&2
+        printf "    4. Open a PR: issue-XXXX -> Dev_new_gui\n" >&2
+        printf "\n  ${BOLD}Current branch:${NC} %s\n" "$CURRENT_BRANCH" >&2
+        printf "${CYAN}─────────────────────────────────────────────────────────────${NC}\n\n" >&2
+        exit 1
+        ;;
+    *)
+        exit 0
+        ;;
+esac

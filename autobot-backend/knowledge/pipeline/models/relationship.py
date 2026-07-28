@@ -43,11 +43,6 @@ RelationType = Literal[
 ]
 
 
-def _utcnow() -> datetime:
-    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return now_utc()
-
-
 class Relationship(BaseModel):
     """
     Represents a directed relationship between two entities.
@@ -71,5 +66,5 @@ class Relationship(BaseModel):
     )
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
     source_chunk_ids: List[UUID] = Field(default_factory=list, description="Chunks where relationship was found")
-    created_at: datetime = Field(default_factory=_utcnow, description="Relationship creation timestamp")
-    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=now_utc, description="Relationship creation timestamp")
+    updated_at: datetime = Field(default_factory=now_utc, description="Last update timestamp")

@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.ssot_config import config
 from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from services.auth import get_current_user
 from services.database import get_db
@@ -376,16 +377,53 @@ async def migrate_role(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Role '{role_name}' has no ansible_playbook configured",
         )
-    return await _run_role_migration(role, migrate_req.target_node_id)  # codeql[py/stack-trace-exposure]
+    result = await run_role_full_procedure(role, migrate_req.target_node_id)
+    if result.get("error") == "playbook_not_found":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Ansible playbook not found",
+        )
+    if result.get("error") == "execution_error":
+        # #12096 review: run_role_full_procedure never raises — an infra failure
+        # (git update, secrets fetch, ...) before ansible even started surfaces
+        # here as a handled 500, not an unhandled trace. The raw exception text
+        # stays server-side (logged in run_role_full_procedure) — never in the
+        # client-facing detail (codeql[py/stack-trace-exposure]).
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Role migration failed to execute — see server logs",
+        )
+    return result
 
 
-async def _run_role_migration(role: Role, target_node_id: str) -> dict:
-    """Execute playbook migration for a role on a target node."""
+async def run_role_full_procedure(role: Role, target_node_id: str) -> dict:
+    """Run *role*'s COMPLETE ansible procedure against *target_node_id* (#12083).
+
+    Canonical entrypoint for a role's full deploy — code + deps + env/systemd
+    render + build + schema migrate + restart + health — via its ansible
+    playbook. Shared by BOTH the interactive per-role Migrate/Redeploy endpoint
+    (this module) and update-all's co-located managed-role pass
+    (api/code_sync.py _resolve_colocated_managed_services) so the two paths can
+    never drift apart (#11820 design: "per-role update runs ALL procedures").
+
+    Never raises: a missing playbook surfaces as success=False with
+    error="playbook_not_found" (or error="no_playbook" when the role has none
+    configured) so callers choose their own handling — an HTTP 422 for the
+    interactive endpoint above, or a logged skip for update-all's fail-safe
+    per-role loop. #12096 review: execute_playbook() runs pre-flight steps
+    (_update_code_source, fetch_deploy_secrets) BEFORE its own try/except, so
+    infra failures there can still propagate past a narrower `except
+    FileNotFoundError` — the whole call is wrapped so ANY exception becomes
+    success=False, error="execution_error" instead of an unhandled trace.
+    """
+    if not role.ansible_playbook:
+        return _role_procedure_result(role, target_node_id, success=False, error="no_playbook")
+
     from services.playbook_executor import PlaybookExecutor
 
     executor = PlaybookExecutor()
     logger.info(
-        "Migrating role %s to node %s via %s",
+        "Running full role procedure: %s -> %s via %s",
         role.name,
         target_node_id,
         role.ansible_playbook,
@@ -401,25 +439,47 @@ async def _run_role_migration(role: Role, target_node_id: str) -> dict:
         )
     except FileNotFoundError as exc:
         logger.exception("Playbook not found: %s", role.ansible_playbook)
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Ansible playbook not found",
-        ) from exc
+        return _role_procedure_result(role, target_node_id, success=False, error="playbook_not_found", output=str(exc))
+    except Exception as exc:
+        logger.exception("Full role procedure %s -> %s failed before completion: %s", role.name, target_node_id, exc)
+        return _role_procedure_result(role, target_node_id, success=False, error="execution_error", output=str(exc))
 
     logger.info(
-        "Migration of role %s to %s: success=%s",
+        "Full role procedure %s -> %s: success=%s",
         role.name,
         target_node_id,
         result["success"],
     )
-    return {
-        "success": result["success"],
+    return _role_procedure_result(
+        role,
+        target_node_id,
+        success=result["success"],
+        output=result["output"],
+        returncode=result["returncode"],
+    )
+
+
+def _role_procedure_result(
+    role: Role,
+    target_node_id: str,
+    *,
+    success: bool,
+    error: str | None = None,
+    output: str = "",
+    returncode: int = -1,
+) -> dict:
+    """Build the standard run_role_full_procedure() return shape."""
+    result = {
+        "success": success,
         "role": role.name,
         "target_node_id": target_node_id,
         "playbook": role.ansible_playbook,
-        "output": result["output"],
-        "returncode": result["returncode"],
+        "output": output,
+        "returncode": returncode,
     }
+    if error:
+        result["error"] = error
+    return result
 
 
 # =========================================================================
@@ -596,7 +656,7 @@ async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
     """Run a command on a node via SSH. Returns (success, output)."""
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: S108
+    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",

@@ -26,6 +26,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
 from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
@@ -1235,7 +1236,6 @@ class BlueGreenService:
                 "-o",
                 "StrictHostKeyChecking=accept-new",
                 "-o",
-                "-o",
                 "ConnectTimeout=10",
                 "-o",
                 "BatchMode=yes",
@@ -1376,7 +1376,7 @@ class BlueGreenService:
                     "bg_deployment_id": bg_deployment_id,
                     "event_type": event_type,
                     "message": message,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": utc_timestamp(),
                 },
             )
         except Exception as e:

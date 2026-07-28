@@ -410,8 +410,8 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .tool-btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
 .tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-btn.btn-experimental { opacity: 0.85; position: relative; }
-.badge-experimental { font-size: 9px; padding: var(--spacing-px) var(--spacing-1); background: var(--color-warning); color: #000; border-radius: var(--radius-default); font-weight: 700; text-transform: uppercase; line-height: 1; }
-.toolbar-divider { width: 1px; height: 24px; background: var(--border-default); margin: var(--spacing-0) var(--spacing-1); }
+.badge-experimental { font-size: 9px; padding: var(--spacing-px) var(--spacing-1); background: var(--color-warning); color: var(--wfcanvas-on-warning); border-radius: var(--radius-default); font-weight: 700; text-transform: uppercase; line-height: 1; }
+.toolbar-divider { width: 1px; height: var(--spacing-6); background: var(--border-default); margin: var(--spacing-0) var(--spacing-1); }
 
 .canvas-area { flex: 1; position: relative; overflow: hidden; background: linear-gradient(var(--border-subtle) 1px, transparent 1px), linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px); background-size: 20px 20px; cursor: grab; }
 .canvas-area:active { cursor: grabbing; }
@@ -426,27 +426,27 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .workflow-node.selected { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-bg); }
 .workflow-node.step .node-header { background: var(--color-primary); }
 .workflow-node.condition .node-header { background: var(--color-warning); }
-.workflow-node.switch .node-header { background: #0891b2; }
+.workflow-node.switch .node-header { background: var(--wfcanvas-node-switch); }
 .workflow-node[class*="vision-"] .node-header { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
 .branch-labels { display: flex; justify-content: space-between; font-size: var(--text-xs); margin-top: var(--spacing-1); }
-.branch-true { color: var(--color-success, #22c55e); font-weight: 600; }
-.branch-false { color: var(--color-error, #ef4444); font-weight: 600; }
+.branch-true { color: var(--color-success); font-weight: 600; }
+.branch-false { color: var(--color-error); font-weight: 600; }
 .switch-cases { display: flex; flex-direction: column; gap: var(--spacing-1); }
 .switch-case-row { display: flex; gap: var(--spacing-1); align-items: center; }
 .switch-case-row input { flex: 1; }
 .delete-case-btn { padding: 2px 6px; background: var(--bg-tertiary); border: 1px solid var(--border-default); border-radius: var(--radius-default); color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); line-height: 1; }
-.delete-case-btn:hover { color: var(--color-error, #ef4444); }
+.delete-case-btn:hover { color: var(--color-error); }
 .add-case-btn { padding: var(--spacing-1) var(--spacing-2); background: transparent; border: 1px dashed var(--border-default); border-radius: var(--radius-default); color: var(--text-secondary); cursor: pointer; font-size: var(--text-xs); text-align: left; }
 .add-case-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
 .dropdown-container { position: relative; display: inline-block; }
-.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-.dropdown-menu button { display: flex; align-items: center; gap: var(--spacing-2); width: 100%; padding: var(--spacing-2) var(--spacing-3); border: none; background: none; color: var(--text-primary, #e2e8f0); cursor: pointer; font-size: 0.85rem; }
-.dropdown-menu button:hover { background: var(--bg-tertiary, #334155); }
-.target-label { font-size: var(--text-xs); color: var(--text-secondary, #94a3b8); }
-.hint { font-size: var(--text-xs); color: var(--text-secondary, #94a3b8); font-style: italic; }
+.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.dropdown-menu button { display: flex; align-items: center; gap: var(--spacing-2); width: 100%; padding: var(--spacing-2) var(--spacing-3); border: none; background: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; }
+.dropdown-menu button:hover { background: var(--bg-tertiary); }
+.target-label { font-size: var(--text-xs); color: var(--text-secondary); }
+.hint { font-size: var(--text-xs); color: var(--text-secondary); font-style: italic; }
 
-.node-header { display: flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-3); color: var(--text-on-primary); border-radius: var(--radius-lg) 8px 0 0; font-size: var(--text-sm); font-weight: 600; }
+.node-header { display: flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-3); color: var(--text-on-primary); border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-size: var(--text-sm); font-weight: 600; }
 .node-header span { flex: 1; }
 .delete-btn { padding: var(--spacing-1); background: transparent; border: none; color: inherit; cursor: pointer; opacity: 0.7; border-radius: var(--radius-default); }
 .delete-btn:hover { opacity: 1; background: rgba(255,255,255,0.2); }
@@ -461,7 +461,7 @@ function confirmSave() { emit('save-workflow', saveName.value, saveDesc.value); 
 .checkbox { display: flex; align-items: center; gap: var(--spacing-1); font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
 .checkbox input { width: 14px; height: 14px; }
 
-.port { position: absolute; width: 12px; height: 12px; background: var(--bg-secondary); border: 2px solid var(--color-primary); border-radius: 50%; cursor: crosshair; top: 50%; transform: translateY(-50%); }
+.port { position: absolute; width: var(--spacing-3); height: var(--spacing-3); background: var(--bg-secondary); border: 2px solid var(--color-primary); border-radius: 50%; cursor: crosshair; top: 50%; transform: translateY(-50%); }
 .port:hover { transform: translateY(-50%) scale(1.3); background: var(--color-primary); }
 .port-in { left: -6px; }
 .port-out { right: -6px; }

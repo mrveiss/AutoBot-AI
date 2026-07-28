@@ -52,7 +52,7 @@ from ..models.enums import (
     WorkItemStatus,
     WorkItemType,
 )
-from ..models.work_item import LLCWorkItemComment
+from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from ..scheduler.heartbeat_scheduler import HeartbeatScheduler
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
@@ -306,7 +306,7 @@ def _coworker_display(item: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
-async def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
+async def _relations_to_list(item: Any, session: AsyncSession) -> List[Dict[str, Any]]:
     """Serialize outgoing relations for the response (GH#8252).
 
     #11684: use ``awaitable_attrs`` so relationship access is async-safe. Items
@@ -316,14 +316,33 @@ async def _relations_to_list(item: Any) -> List[Dict[str, Any]]:
     not-yet-loaded relationship raises ``MissingGreenlet`` (sync IO in an async
     context) → the endpoint 500s even though the row exists. ``awaitable_attrs``
     returns the cached value when already loaded and awaits a load otherwise, so
-    every path serializes correctly. (``outgoing_relations`` is ``lazy=selectin``;
-    each relation's ``target`` is lazy=select — an N+1 when an item has many
-    relations, tracked as a fast-follow.)
+    every path serializes correctly.
+
+    #11686: fetch the referenced targets' three serialized columns
+    (``identifier``/``title``/``status``) in a single bulk query keyed by
+    ``target_id`` instead of lazy-loading each ``rel.target`` (N+1). Selecting
+    columns rather than the ``LLCWorkItem`` entity also avoids eager-loading each
+    target's ``children``/``comments``/``work_products``/relations subtree (all
+    ``lazy=selectin``) — only the fields actually serialized are read.
     """
-    rows = []
     outgoing = await item.awaitable_attrs.outgoing_relations
-    for rel in outgoing or []:
-        tgt = await rel.awaitable_attrs.target
+    if not outgoing:
+        return []
+
+    target_ids = {rel.target_id for rel in outgoing}
+    result = await session.execute(
+        select(
+            LLCWorkItem.id,
+            LLCWorkItem.identifier,
+            LLCWorkItem.title,
+            LLCWorkItem.status,
+        ).where(LLCWorkItem.id.in_(target_ids))
+    )
+    targets = {row.id: row for row in result}
+
+    rows = []
+    for rel in outgoing:
+        tgt = targets.get(rel.target_id)
         rows.append(
             {
                 "id": str(rel.id),
@@ -378,7 +397,7 @@ async def _item_to_dict(item: Any, session: AsyncSession) -> Dict[str, Any]:
         "has_human_handoff_context": bool(getattr(item, "review_brief", None)),
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-        "relations": await _relations_to_list(item),
+        "relations": await _relations_to_list(item, session),
     }
 
 
@@ -531,8 +550,13 @@ async def checkout_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=409, detail="Internal server error")
+        # #12740 (same defect class, found alongside): the status code was
+        # already correct, but the useful reason ("Work item X already checked
+        # out by agent Y") was still replaced with a generic string, so a caller
+        # could not tell WHO holds the checkout. Domain-level message, safe to
+        # surface.
+        logger.info("Rejected work-item checkout conflict: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -581,8 +605,16 @@ async def transition_work_item(
             await _kb_manager.archive_collection(KbCollectionManager.WORK_ITEM_PREFIX, item.id)
         return await _item_to_dict(item, session)
     except InvalidTransition as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=422, detail="Internal server error")
+        # #12740: the service already computed the exact, useful reason
+        # ("Cannot transition from X to Y. Allowed: [...]"). Replacing it with a
+        # generic 422 "Internal server error" threw that away, so the UI could
+        # not tell the user what went wrong or what IS allowed. The message is
+        # purely domain-level — statuses and permitted transitions, no internals
+        # — so it is safe to surface. 409 Conflict is the correct code: the
+        # request is well-formed (422 implies malformed), it conflicts with the
+        # item's current state.
+        logger.info("Rejected illegal work-item transition: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")
@@ -647,8 +679,9 @@ async def claim_work_item(
         await session.commit()
         return await _item_to_dict(item, session)
     except CheckoutConflict as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=409, detail="Internal server error")
+        # #12740 (same defect class): surface WHO holds the checkout.
+        logger.info("Rejected work-item checkout conflict: %s", exc)
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         logger.error("Exception in API handler: %s", exc, exc_info=True)
         raise HTTPException(status_code=404, detail="Internal server error")

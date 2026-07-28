@@ -28,6 +28,20 @@ from .capabilities import Capability, TrustTier
 
 logger = logging.getLogger(__name__)
 
+# Full semver 2.0.0 grammar (https://semver.org/#backusnaur-form-grammar):
+# MAJOR.MINOR.PATCH, each a non-negative integer with no leading zeroes,
+# optionally followed by a dot-separated pre-release (alphanumeric + '-',
+# numeric identifiers may not have leading zeroes) and/or dot-separated
+# build metadata (alphanumeric + '-', leading zeroes allowed). Issue #11652:
+# the strictly-numeric X.Y.Z check rejected valid pre-releases like
+# "1.0.0-beta" and "1.0.0-rc1" on every plugin install.
+_SEMVER_PATTERN = re.compile(
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+
 
 class PluginLoadError(RuntimeError):
     """Raised when a plugin fails to load due to missing required configuration."""
@@ -125,13 +139,13 @@ class PluginManifest(BaseModel):
     @field_validator("version")
     @classmethod
     def validate_version(cls, v: str) -> str:
-        """Validate semantic version format."""
-        parts = v.split(".")
-        if len(parts) != 3:
-            raise ValueError("Version must be in format X.Y.Z")
-        for part in parts:
-            if not part.isdigit():
-                raise ValueError("Version parts must be numeric")
+        """Validate full semantic version (semver.org): X.Y.Z[-pre][+build]."""
+        if not _SEMVER_PATTERN.match(v):
+            raise ValueError(
+                "Version must be valid semver: X.Y.Z with optional "
+                "-prerelease and/or +build metadata (e.g. '1.0.0', "
+                "'1.0.0-beta', '1.0.0-rc.1+build.5')"
+            )
         return v
 
     @field_validator("name")

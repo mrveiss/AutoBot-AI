@@ -88,7 +88,14 @@ class NotificationSuppressionConfig:
         self._filter_map = {f.reason: f for f in self.filters}
 
     def should_suppress(self, reason: NotificationReason, age_days: int) -> bool:
-        """Determine if a notification should be suppressed."""
+        """Determine if a notification should be suppressed.
+
+        Issue #12443: the previous implementation ended with an unconditional
+        ``return filter_config.action == "archive"``, so every "archive"
+        filter suppressed regardless of age — the max_age_days gate only
+        ever fired for the "review" action. Gate "archive" by max_age_days
+        too, per the field's documented "Archive if older than N days".
+        """
         filter_config = self._filter_map.get(reason)
         if not filter_config:
             return False
@@ -96,11 +103,14 @@ class NotificationSuppressionConfig:
         if filter_config.action == "keep":
             return False
 
-        # Archive old notifications even if action is "review"
-        if filter_config.max_age_days and age_days > filter_config.max_age_days:
-            return True
+        if filter_config.action == "archive":
+            if filter_config.max_age_days is None:
+                return True
+            return age_days > filter_config.max_age_days
 
-        return filter_config.action == "archive"
+        # action == "review": archive old notifications even though the
+        # default action is to keep them for manual review.
+        return bool(filter_config.max_age_days and age_days > filter_config.max_age_days)
 
     def get_filter(self, reason: NotificationReason) -> NotificationFilter | None:
         """Get filter configuration for a reason."""

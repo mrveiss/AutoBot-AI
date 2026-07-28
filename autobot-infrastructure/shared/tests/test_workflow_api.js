@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Simple test to verify WorkflowApproval API fix
  * Tests the specific 404 error we fixed

@@ -62,6 +62,19 @@ def _get_synthesis_schema() -> "object":
     return _SYNTHESIS_SCHEMA_CACHE
 
 
+def reset_synthesis_schema_cache() -> None:
+    """Clear the module-level synthesis-schema cache so the next call reloads from disk.
+
+    Primary use is test isolation: the ``is None`` guard in ``_get_synthesis_schema``
+    means the first unpatched load permanently caches the real on-disk schema for the
+    whole process, silently ignoring later ``load_synthesis_schema`` patches. An autouse
+    fixture (see ``conftest.py``) calls this between tests. It is also a manual
+    invalidation seam if a caller ever needs to force a reload at runtime. (#12531)
+    """
+    global _SYNTHESIS_SCHEMA_CACHE
+    _SYNTHESIS_SCHEMA_CACHE = None
+
+
 class RAGService:
     """
     Reusable RAG service providing advanced knowledge retrieval capabilities.

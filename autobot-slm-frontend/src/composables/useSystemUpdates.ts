@@ -8,14 +8,24 @@
  *
  * Provides reactive state and methods for system package update
  * discovery and management across the SLM fleet.
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()`, injects the SLM bearer token,
+ * and centrally handles 401 for these non-auth endpoints (clear session +
+ * redirect to `/login`) — replacing the previous per-composable axios instance
+ * plus request/response interceptors (the response interceptor's #10369
+ * `authStore.logout()` on 401 is now the client's centralised concern). Query
+ * parameters are serialised onto the endpoint since the canonical client takes
+ * a relative path, not an axios `params` object; call sites receive parsed JSON
+ * directly (no axios `.data`). The client throws on non-2xx, so each method
+ * keeps its try/catch and preserves the graceful `null`/`[]`/`false` returns.
+ * The silent poll/badge probes (`fetchSummary`, `pollDiscoverStatus`) request
+ * once (`maxRetries: 1`) and suppress the client's failure WARN so they stay
+ * quiet, matching the previous single-shot axios behaviour.
  */
 
 import { ref, computed, readonly } from 'vue'
-import axios, { type AxiosInstance } from 'axios'
-import { getSlmApiBase } from '@/config/ssot-config'
-import { useAuthStore } from '@/stores/auth'
-
-const API_BASE = getSlmApiBase()
+import slmApiClient from '@/utils/ApiClient'
 
 // =============================================================================
 // Type Definitions
@@ -80,38 +90,17 @@ export interface UpdateJob {
   created_at: string
 }
 
+// Minimal shape of the mutating-endpoint envelopes (apply / apply-all / cancel).
+interface MutationResult {
+  success: boolean
+  message?: string
+}
+
 // =============================================================================
 // Composable
 // =============================================================================
 
 export function useSystemUpdates() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  // #10369 — without a 401 handler an expired/invalid token makes the badge
-  // poller spam 401s forever; log out so the UI redirects to login instead.
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
-
   // ===========================================================================
   // Reactive State
   // ===========================================================================
@@ -166,12 +155,14 @@ export function useSystemUpdates() {
 
   async function fetchSummary(): Promise<UpdateSummary | null> {
     try {
-      const response = await client.get<UpdateSummary>(
-        '/updates/summary',
-      )
-      summary.value = response.data
-      return response.data
-    } catch (e) {
+      // Silent fail for badge polling — single-shot, no failure WARN.
+      const data = await slmApiClient.get<UpdateSummary>('/updates/summary', {
+        maxRetries: 1,
+        suppressErrorLog: true,
+      })
+      summary.value = data
+      return data
+    } catch {
       // Silent fail for badge polling — don't overwrite error
       return null
     }
@@ -184,22 +175,19 @@ export function useSystemUpdates() {
     loading.value = true
     error.value = null
     try {
-      const params: Record<string, string> = {}
-      if (nodeId) params.node_id = nodeId
-      if (severity) params.severity = severity
-      const response = await client.get<PackagesResponse>(
-        '/updates/packages',
-        { params },
+      const query = new URLSearchParams()
+      if (nodeId) query.set('node_id', nodeId)
+      if (severity) query.set('severity', severity)
+      const qs = query.toString()
+      const data = await slmApiClient.get<PackagesResponse>(
+        `/updates/packages${qs ? `?${qs}` : ''}`,
       )
-      packages.value = response.data.packages
-      packagesByNode.value = response.data.by_node
-      return response.data.packages
+      packages.value = data.packages
+      packagesByNode.value = data.by_node
+      return data.packages
     } catch (e) {
       error.value =
         e instanceof Error ? e.message : 'Failed to fetch packages'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return []
     } finally {
       loading.value = false
@@ -213,13 +201,13 @@ export function useSystemUpdates() {
     discovering.value = true
     error.value = null
     try {
-      const response = await client.post<DiscoverResponse>(
+      const data = await slmApiClient.post<DiscoverResponse>(
         '/updates/discover',
         { node_ids: nodeIds || null, role: role || null },
       )
-      if (response.data.success) {
+      if (data.success) {
         discoverStatus.value = {
-          job_id: response.data.job_id,
+          job_id: data.job_id,
           status: 'pending',
           progress: 0,
           message: 'Starting discovery...',
@@ -229,16 +217,13 @@ export function useSystemUpdates() {
           started_at: null,
           completed_at: null,
         }
-        return response.data.job_id
+        return data.job_id
       }
-      error.value = response.data.message
+      error.value = data.message
       return null
     } catch (e) {
       error.value =
         e instanceof Error ? e.message : 'Failed to start discovery'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return null
     } finally {
       discovering.value = false
@@ -249,24 +234,27 @@ export function useSystemUpdates() {
     jobId: string,
   ): Promise<DiscoverStatus | null> {
     try {
-      const response = await client.get<DiscoverStatus>(
+      // Single-shot poll — don't retry/backoff or emit a WARN on a miss.
+      const data = await slmApiClient.get<DiscoverStatus>(
         `/updates/discover/${jobId}`,
+        { maxRetries: 1, suppressErrorLog: true },
       )
-      discoverStatus.value = response.data
-      return response.data
-    } catch (e) {
+      discoverStatus.value = data
+      return data
+    } catch {
       return null
     }
   }
 
   async function fetchJobs(limit = 20): Promise<UpdateJob[]> {
     try {
-      const response = await client.get<{
+      const query = new URLSearchParams({ limit: String(limit) })
+      const data = await slmApiClient.get<{
         jobs: UpdateJob[]
         total: number
-      }>('/updates/jobs', { params: { limit } })
-      jobs.value = response.data.jobs
-      return response.data.jobs
+      }>(`/updates/jobs?${query.toString()}`)
+      jobs.value = data.jobs
+      return data.jobs
     } catch (e) {
       error.value =
         e instanceof Error ? e.message : 'Failed to fetch jobs'
@@ -281,22 +269,19 @@ export function useSystemUpdates() {
     loading.value = true
     error.value = null
     try {
-      const response = await client.post('/updates/apply', {
+      const data = await slmApiClient.post<MutationResult>('/updates/apply', {
         node_id: nodeId,
         update_ids: updateIds,
       })
-      if (response.data.success) {
+      if (data.success) {
         await fetchJobs()
         return true
       }
-      error.value = response.data.message
+      error.value = data.message ?? null
       return false
     } catch (e) {
       error.value =
         e instanceof Error ? e.message : 'Failed to apply updates'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return false
     } finally {
       loading.value = false
@@ -307,22 +292,19 @@ export function useSystemUpdates() {
     loading.value = true
     error.value = null
     try {
-      const response = await client.post('/updates/apply-all', {
+      const data = await slmApiClient.post<MutationResult>('/updates/apply-all', {
         node_id: nodeId,
         upgrade_all: true,
       })
-      if (response.data.success) {
+      if (data.success) {
         await fetchJobs()
         return true
       }
-      error.value = response.data.message
+      error.value = data.message ?? null
       return false
     } catch (e) {
       error.value =
         e instanceof Error ? e.message : 'Failed to upgrade all'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return false
     } finally {
       loading.value = false
@@ -331,10 +313,10 @@ export function useSystemUpdates() {
 
   async function cancelJob(jobId: string): Promise<boolean> {
     try {
-      const response = await client.post(
+      const data = await slmApiClient.post<MutationResult>(
         `/updates/jobs/${jobId}/cancel`,
       )
-      if (response.data.success) {
+      if (data.success) {
         await fetchJobs()
         return true
       }

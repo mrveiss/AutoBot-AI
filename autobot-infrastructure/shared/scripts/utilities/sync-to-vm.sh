@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Universal sync script for AutoBot distributed architecture
 # Uses certificate-based SSH authentication for all VMs

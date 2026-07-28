@@ -17,7 +17,7 @@ circular import when a router is loaded in isolation via importlib (e.g. tests).
 
 Usage::
 
-    from llc.deps import get_session, postgres_required, service_dep
+    from llc.deps import get_session, service_dep
     from llc.services.my_service import MyService
 
     router = APIRouter(...)
@@ -35,31 +35,21 @@ from __future__ import annotations
 
 import functools
 import uuid
-from typing import AsyncGenerator, Callable, Set, Type, TypeVar
+from typing import Any, AsyncGenerator, Callable, Set, Type, TypeVar
 
-from fastapi import Depends, HTTPException
+from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.singleton_factory import lazy_singleton
+from llc.models.sprint import LLCProject
 from user_management.database import get_async_session_factory
+from user_management.services import TenantContext
 
 _T = TypeVar("_T")
 
 
-def postgres_required() -> None:
-    """FastAPI dependency hook for LLC endpoints requiring a Postgres session.
-
-    AutoBot always runs full, Postgres-backed user management (#10636), so this
-    gate always passes.  Retained as a router-level dependency hook so existing
-    router wiring (``APIRouter(dependencies=[Depends(postgres_required)])``)
-    stays in place.
-    """
-    return None
-
-
-async def get_session(
-    _gate: None = Depends(postgres_required),
-) -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """Bare async DB session — no auto-commit or auto-rollback.
 
     Callers are responsible for explicit transaction management
@@ -134,4 +124,67 @@ async def require_board_role(
     return str(user_id)
 
 
-__all__ = ["get_session", "postgres_required", "require_board_role", "service_dep"]
+async def load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
+    """Load a project by id; 404 when missing or owned by a different org.
+
+    IDOR guard (#10148): canonical implementation shared by sprints.py and
+    findings.py, which previously each defined an identical
+    ``_load_owned_project`` (#11359). 404 (not 403) is used for both "missing"
+    and "wrong org" to avoid disclosing project existence to non-owners.
+    """
+    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
+    project = result.scalar_one_or_none()
+    if project is None or str(project.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+def assert_company_access(ctx: TenantContext, company_id: Any) -> None:
+    """Reject cross-tenant access to a company-scoped resource (#12184).
+
+    Canonical tenant-check idiom, consolidated from the near-identical
+    per-router ``_assert_company_match`` copies previously defined in
+    approvals.py, decisions.py, costs.py, goals.py, backlog.py, budget.py,
+    review_gate_policies.py, agent_hires.py, and labels.py. 404 (not 403) so a
+    cross-tenant caller can't distinguish "not my company" from "doesn't
+    exist". Platform admins are exempt. Both sides are ``str()``-coerced so
+    callers may pass either a ``str`` or a ``uuid.UUID``.
+    """
+    if str(company_id) != str(ctx.org_id) and not ctx.is_platform_admin:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+
+async def load_authorized(
+    session: AsyncSession,
+    model: Type[_T],
+    obj_id: Any,
+    ctx: TenantContext,
+    *,
+    id_attr: str = "id",
+    company_attr: str = "company_id",
+    not_found_detail: str = "Not found",
+) -> _T:
+    """Load a *model* row by *obj_id*; 404 if missing or owned by another org (#12184).
+
+    Generic IDOR-guard loader consolidating the per-router
+    ``_get_authorized_<obj>`` / ``_load_authorized_<obj>`` copies, each of
+    which re-implemented "select by id, then compare the row's owning company
+    to ``ctx.org_id``". 404 (not 403) is used for both "missing" and "wrong
+    org" to avoid disclosing row existence to non-owners. Platform admins are
+    exempt.
+    """
+    result = await session.execute(select(model).where(getattr(model, id_attr) == obj_id))
+    row = result.scalar_one_or_none()
+    if row is None or (str(getattr(row, company_attr)) != str(ctx.org_id) and not ctx.is_platform_admin):
+        raise HTTPException(status_code=404, detail=not_found_detail)
+    return row
+
+
+__all__ = [
+    "assert_company_access",
+    "get_session",
+    "load_authorized",
+    "load_owned_project",
+    "require_board_role",
+    "service_dep",
+]

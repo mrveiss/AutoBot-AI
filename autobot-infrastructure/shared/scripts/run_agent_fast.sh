@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Ultra-fast AutoBot startup script - API ready in seconds
 
 echo "🚀 Starting AutoBot with FAST STARTUP mode..."

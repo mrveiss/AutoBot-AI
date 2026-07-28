@@ -54,7 +54,7 @@ The themed tables below break down the capabilities inside the core and these mo
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
 | Voice conversation mode | Shipped | [voice-conversation-mode-design](../archives/plans/2026-02-20-voice-conversation-mode-design.md) | [#9874][i-voice] | Walkie-talkie, hands-free, duplex, and realtime-WebRTC modes (`/voice` WS + `useVoiceConversation`) |
-| Streaming TTS (per-sentence) | Shipped | [archives/plans](../archives/_index.md) | [#9874][i-voice] | Real-time pipelined per-sentence text-to-speech (`_tts_queue_worker`, `AUTOBOT_TTS_PIPELINE_DEPTH`) |
+| Streaming TTS (per-sentence) | Shipped | [archives/plans](../archives/_index.md) | [#9874][i-voice] | Real-time per-sentence text-to-speech with sub-second time-to-first-chunk (`_tts_queue_worker`, worker `generate_audio_stream`, #12501) |
 | Chat knowledge management | Shipped | [CHAT_KNOWLEDGE_MANAGEMENT](CHAT_KNOWLEDGE_MANAGEMENT.md) | [#9874][i-voice] | Chat-scoped knowledge, file associations, conversation→KB compilation (11 endpoints) |
 
 ## Knowledge, RAG & Memory
@@ -95,6 +95,8 @@ The themed tables below break down the capabilities inside the core and these mo
 | Capability | Status | Design doc | Issue | What it does |
 |------------|--------|------------|-------|--------------|
 | Session takeover & control | Shipped | [COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION](COMPLETE_SESSION_TAKEOVER_IMPLEMENTATION.md) | [#9878][i-auto] | Pause/resume, approval gate, risk triggers (`takeover_manager`, `/takeover/*`) |
+| Visual workflow builder | Shipped | [visual-workflow-parallel-execution](../guides/visual-workflow-parallel-execution.md) | [#585](https://github.com/mrveiss/AutoBot-AI/issues/585) | Drag-and-drop workflow canvas for composing multi-step agent workflows, with a code view (`WorkflowBuilderView.vue`, `WorkflowCanvas.vue`, route `/automation`) |
+| Chat approval-gate interrupt | Partial | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | [#11202](https://github.com/mrveiss/AutoBot-AI/issues/11202) | LangGraph human-in-the-loop interrupt in the chat workflow: pauses on a proposed plan and resumes after confirmation. Opt-in per session via `AUTOBOT_CHAT_APPROVAL_GATE` (`chat_workflow/graph.py`, `session_role.CHAT_APPROVAL_GATE_ENABLED`); distinct from session takeover |
 | Terminal safety | Shipped | [TERMINAL_SAFETY_IMPLEMENTATION](TERMINAL_SAFETY_IMPLEMENTATION.md) | [#9878][i-auto] | Command risk assessment + dangerous-command confirmation gate (`command_patterns`, `security_risk_judge`) |
 | Skills system | Shipped | [skills-system](../archives/plans/2026-02-18-skills-system.md) | [#9878][i-auto] | Skill discovery + 3-phase routing (`skill_router`, `/skills`) |
 

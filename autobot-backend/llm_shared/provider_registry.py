@@ -182,9 +182,24 @@ class ProviderRegistry(CredentialGatedRegistry[BaseProvider]):
         except Exception as exc:
             logger.warning("Health check for %s raised: %s", name, exc)
             available = False
+        # #11498: is_available() is a cheap ping that can pass while completions
+        # consistently fail. If this provider's completion breaker is OPEN and
+        # still cooling, treat it as unavailable so selection routes to the
+        # fallback chain instead of repeatedly picking a fail-fasting provider.
+        if available and self._completion_breaker_is_rejecting(name):
+            available = False
         async with self._health_lock:
             self._health_cache[name] = (available, now)
         return available
+
+    @staticmethod
+    def _completion_breaker_is_rejecting(name: str) -> bool:
+        """True when *name*'s ``{name}_service`` completion breaker is OPEN and
+        cooling (#11498). Read-only lookup — never creates a breaker."""
+        from circuit_breaker import get_circuit_breaker_manager
+
+        breaker = get_circuit_breaker_manager().circuit_breakers.get(f"{name}_service")
+        return breaker is not None and breaker.is_rejecting
 
     async def health_check_all(self) -> Dict[str, bool]:
         """

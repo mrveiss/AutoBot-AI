@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot System-Level Cache Clearing Script
 # Comprehensive system cache clearing to prevent configuration issues
 

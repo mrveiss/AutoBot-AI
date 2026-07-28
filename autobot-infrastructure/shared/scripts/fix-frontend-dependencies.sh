@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # AutoBot Frontend Dependencies Fix Script
 # This script resolves the persistent @heroicons/vue import issue

@@ -13,7 +13,7 @@ Tests the following functionality:
 """
 
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -266,8 +266,8 @@ class TestRecreateChromaDBCollection:
         mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            return_value=mock_client,
+            "knowledge.backends.get_async_default_client",
+            new=AsyncMock(return_value=mock_client),
         ):
             result = await _recreate_chromadb_collection("test-task")
 
@@ -293,8 +293,8 @@ class TestRecreateChromaDBCollection:
         mock_client.get_or_create_collection = MagicMock(side_effect=async_get_or_create)
 
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            return_value=mock_client,
+            "knowledge.backends.get_async_default_client",
+            new=AsyncMock(return_value=mock_client),
         ):
             result = await _recreate_chromadb_collection("test-task")
 
@@ -307,12 +307,9 @@ class TestRecreateChromaDBCollection:
         """Should return None if ChromaDB client fails entirely."""
         from api.codebase_analytics.scanner import _recreate_chromadb_collection
 
-        async def async_client_fails(*args, **kwargs):
-            raise ConnectionError("ChromaDB unavailable")
-
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
-            side_effect=async_client_fails,
+            "knowledge.backends.get_async_default_client",
+            new=AsyncMock(side_effect=ConnectionError("ChromaDB unavailable")),
         ):
             result = await _recreate_chromadb_collection("test-task")
 
@@ -320,23 +317,25 @@ class TestRecreateChromaDBCollection:
 
 
 class TestNoDataResponse:
-    """Tests for _no_data_response helper."""
+    """Tests for stats.py's use of the shared no_data_response helper (Issue #12705)."""
 
     def test_returns_json_response(self):
-        """Should return JSONResponse with correct structure."""
+        """stats.py wraps the shared helper's dict in a JSONResponse."""
         from fastapi.responses import JSONResponse
 
-        from api.codebase_analytics.endpoints.stats import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response()
+        result = JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
 
         assert isinstance(result, JSONResponse)
 
     def test_default_message(self):
-        """Should use default message when none provided."""
-        from api.codebase_analytics.endpoints.stats import _no_data_response
+        """Should use stats.py's default message when none provided."""
+        from fastapi.responses import JSONResponse
 
-        result = _no_data_response()
+        from api.analytics_shared import no_data_response
+
+        result = JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
         # JSONResponse body is bytes, need to decode
         import json
 
@@ -350,9 +349,11 @@ class TestNoDataResponse:
         """Should use custom message when provided."""
         import json
 
-        from api.codebase_analytics.endpoints.stats import _no_data_response
+        from fastapi.responses import JSONResponse
 
-        result = _no_data_response("Custom error message")
+        from api.analytics_shared import no_data_response
+
+        result = JSONResponse(no_data_response("Custom error message", stats=None))
         body = json.loads(result.body)
 
         assert body["message"] == "Custom error message"

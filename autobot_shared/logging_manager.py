@@ -14,6 +14,8 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
+from autobot_shared.stream_logging import build_stderr_handler, build_stdout_handler
+
 if TYPE_CHECKING:
     from config.manager import ConfigManager
 
@@ -108,11 +110,28 @@ class LoggingManager:
                 if handler:
                     logger.addHandler(handler)
 
-                # Add console handler for development
-                if _get_config_manager().get("deployment.mode", "local") == "local":
-                    console_handler = logging.StreamHandler()
-                    console_handler.setFormatter(cls._get_formatter())
-                    logger.addHandler(console_handler)
+                # Console handler is intentionally unconditional (#12506).
+                # This used to be gated on `_get_config_manager().get(
+                # "deployment.mode", "local") == "local"`, i.e. "console
+                # handler = local dev only". That gate was a no-op in every
+                # environment: `ConfigManager.get()` does a flat dict lookup
+                # (no dotted-key traversal), no config source ever sets a
+                # literal top-level `"deployment.mode"` key, and the real
+                # env var (`AUTOBOT_DEPLOYMENT_MODE`, see
+                # `autobot_shared.ssot_config.config.deployment_mode`) was
+                # never wired into it — so the lookup always fell through to
+                # the `"local"` default and the console handler was already
+                # unconditional before this change.
+                # Per #12488, that's the behavior we want everywhere: systemd
+                # captures each service's stdout/stderr into its log files
+                # (StandardOutput=append:/StandardError=append:), so the
+                # console handler is production infra, not a dev-only extra.
+                # `build_stdout_handler`/`build_stderr_handler` split by
+                # level (DEBUG/INFO->stdout, WARNING+->stderr) instead of a
+                # single bare stderr StreamHandler().
+                formatter = cls._get_formatter()
+                logger.addHandler(build_stdout_handler(formatter))
+                logger.addHandler(build_stderr_handler(formatter))
 
             # Set log level
             log_level = getattr(logging, _get_config_manager().get("logging.level", "INFO").upper())

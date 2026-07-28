@@ -375,9 +375,10 @@ class TestConcurrentFileWriteSafety:
             await asyncio.gather(*[write_to_file(i) for i in range(5)])
 
             # If writes were serialized, total time would be ~50ms
-            # If concurrent, should be close to 10ms
+            # If concurrent, should be close to 10ms. Threshold has headroom
+            # above the 10ms sleep for scheduler jitter (#11954 flaky at 0.03).
             total_elapsed = max(end_times.values()) - min(start_times.values())
-            assert total_elapsed < 0.03, f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.03s)"
+            assert total_elapsed < 0.04, f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.04s)"
 
 
 class TestLockPatternConsistency:

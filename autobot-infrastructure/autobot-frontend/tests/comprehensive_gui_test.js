@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Comprehensive GUI Test Suite for AutoBot
  * Tests all major components, buttons, and functions

@@ -452,8 +452,8 @@ onUnmounted(() => {
 }
 
 .btn-refresh-sm {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -570,7 +570,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
-  padding: 3px 10px;
+  padding: 3px var(--spacing-2-5);
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -593,7 +593,7 @@ onUnmounted(() => {
 }
 
 .progress-track {
-  height: 6px;
+  height: var(--spacing-1-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-default);
   overflow: hidden;
@@ -626,8 +626,8 @@ onUnmounted(() => {
 }
 
 .timeline-dot {
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   border-radius: 50%;
   display: flex;
   align-items: center;

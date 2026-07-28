@@ -11,6 +11,7 @@
  */
 
 import { ref, reactive, computed, onMounted } from 'vue'
+import { formatBytes } from '@/utils/formatHelpers'
 import { useAuthStore } from '@/stores/auth'
 import { useAutobotApi, type CacheConfig, type CacheStats } from '@/composables/useAutobotApi'
 import { getBackendUrl } from '@/config/ssot-config'
@@ -74,7 +75,7 @@ async function fetchCacheConfig(): Promise<void> {
     if (config) {
       Object.assign(cacheConfig, config)
     }
-  } catch (e) {
+  } catch {
     // Cache API may not be available
     cacheApiAvailable.value = false
   } finally {
@@ -92,7 +93,7 @@ async function fetchCacheStats(): Promise<void> {
     if (statsAny?.redis_databases) {
       redisStats.value = statsAny.redis_databases as Record<string, RedisDbInfo>
     }
-  } catch (e) {
+  } catch {
     // Silently fail - stats may not be available
   }
 }
@@ -167,14 +168,6 @@ async function warmupCaches(): Promise<void> {
   } finally {
     clearing.value = false
   }
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 function formatCacheType(type: string): string {
@@ -373,7 +366,7 @@ onMounted(async () => {
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
             <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.cacheSize') }}</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ formatBytes((cacheStats.size_mb || 0) * 1024 * 1024) }}</p>
+            <p class="text-2xl font-semibold text-gray-900">{{ formatBytes((cacheStats.size_mb || 0) * 1024 * 1024, { units: ['B', 'KB', 'MB', 'GB'], zeroText: '0 B' }) }}</p>
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
             <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.hitRate') }}</p>

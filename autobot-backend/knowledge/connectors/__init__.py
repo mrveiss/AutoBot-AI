@@ -19,7 +19,22 @@ Packages:
 - gdrive     — GoogleDriveConnector (Google Drive API v3)
 - gitlab      — GitLabConnector (GitLab v4 API) / GiteaConnector (Gitea + Forgejo v1 API)
 - nextcloud   — NextcloudConnector (Nextcloud WebDAV)
+- slack       — SlackConnector (Slack Web API) — Issue #10538, feature-flagged
+- confluence  — ConfluenceConnector (Atlassian Confluence REST API) — Issue #10538, feature-flagged
+- jira        — JiraConnector (Atlassian Jira REST API v3) — Issue #10538, feature-flagged
+- mock        — MockConnector (local JSON fixtures, zero network) — Issue #10538, feature-flagged
 - scheduler  — ConnectorScheduler (asyncio task-based)
+
+Issue #10538: The Slack/Confluence/Jira connectors are registered only when
+``AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS=true`` (default disabled — see
+``autobot_shared/feature_flags.py``). Until enabled, their connector types
+are absent from ``ConnectorRegistry`` and cannot be instantiated.
+
+Issue #10538: MockConnector is registered only when
+``AUTOBOT_FEATURE_KB_MOCK_CONNECTOR=true`` (default disabled). It never
+makes a network call — the gate exists solely to keep a "mock" entry out of
+the production ``GET /knowledge_base/connector_types`` listing by default;
+enable it in dev/CI to exercise the sync() pipeline offline.
 
 Example usage::
 
@@ -50,6 +65,7 @@ import knowledge.connectors.nextcloud  # noqa: F401
 import knowledge.connectors.notion  # noqa: F401
 import knowledge.connectors.onedrive  # noqa: F401  # GH#9004
 import knowledge.connectors.web_crawler  # noqa: F401
+from autobot_shared.feature_flags import is_feature_enabled
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
     ChangeInfo,
@@ -60,6 +76,23 @@ from knowledge.connectors.models import (
     SyncResult,
 )
 from knowledge.connectors.registry import CATEGORY_MAP, ConnectorRegistry
+
+# Issue #10538: Slack/Confluence/Jira ship disabled by default — these
+# connectors reach third-party SaaS APIs and no credentials are configured
+# out of the box. Gate their import (and therefore their
+# @ConnectorRegistry.register side effect) behind the subsystem flag so
+# nothing in this module makes them creatable unless explicitly enabled.
+if is_feature_enabled("kb_enterprise_connectors"):
+    import knowledge.connectors.confluence  # noqa: F401
+    import knowledge.connectors.jira  # noqa: F401
+    import knowledge.connectors.slack  # noqa: F401
+
+# Issue #10538: MockConnector makes zero network calls (it replays local JSON
+# fixtures), so it does not need the kb_enterprise_connectors gate above.
+# It has its own flag purely to keep "mock" out of the production connector
+# type listing by default — see the module docstring in knowledge/connectors/mock.py.
+if is_feature_enabled("kb_mock_connector"):
+    import knowledge.connectors.mock  # noqa: F401
 
 __all__ = [
     "AbstractConnector",

@@ -11,6 +11,8 @@ Related to Issue #729.
 
 import asyncio
 import logging
+import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -21,6 +23,9 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from api.nodes_execution import _is_local_ip, _require_online_node, _run_command, _run_via_ssh
+from autobot_shared.auth.permissions import Permission
+from autobot_shared.security.redaction import redact_text
 from config import settings
 from models.database import (
     Deployment,
@@ -33,7 +38,7 @@ from models.database import (
     Service,
     ServiceStatus,
 )
-from services.auth import get_current_user
+from services.auth import get_current_user, require_permission
 from services.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -139,6 +144,26 @@ class LogsResponse(BaseModel):
     total: int
     page: int
     per_page: int
+
+
+class AppLogEntry(BaseModel):
+    """A single parsed line from an on-node application log file (Issue #11302)."""
+
+    line_number: int
+    timestamp: datetime | None = None
+    severity: str | None = None
+    message: str
+
+
+class AppLogsResponse(BaseModel):
+    """Paginated application-log query response (Issue #11302)."""
+
+    entries: List[AppLogEntry]
+    total: int
+    page: int
+    per_page: int
+    node_id: str
+    service: str
 
 
 # =============================================================================
@@ -783,6 +808,227 @@ async def get_logs(
         page=page,
         per_page=per_page,
     )
+
+
+# =============================================================================
+# Application-log viewer (Issue #11302)
+#
+# Real app logs (backend-error.log, celery-error.log, etc.) live on managed
+# nodes as FILES under backend_log_dir (default /var/log/autobot), written via
+# systemd StandardError=append:... — they never reach journald, so the
+# existing /nodes/{node_id}/services/{service_name}/logs (journalctl-based)
+# endpoint cannot see them. This section tails the files directly on the node
+# using the guarded execute primitives from api.nodes_execution (#3406),
+# without duplicating SSH/validation logic.
+# =============================================================================
+
+# Directory app-log files live under on every managed node. Overridable via
+# env for non-default deployments; defaults match
+# ansible/roles/backend/defaults/main.yml:13 (backend_log_dir) and
+# ansible/roles/ai-stack/defaults/main.yml:13 (ai_log_dir) — both /var/log/autobot.
+_APP_LOG_DIR = os.environ.get("SLM_APP_LOG_DIR", "/var/log/autobot")
+
+# Hard cap on lines read via `tail` — never load the full file.
+_APP_LOG_TAIL_LINE_CAP = 2000
+_APP_LOG_TAIL_TIMEOUT_SEC = 15
+
+# Server-side allowlist: service name -> log filename under _APP_LOG_DIR.
+# No user-supplied path ever reaches the filesystem — only these fixed
+# basenames. A `service` not in this map (and not "mcp-bridge", handled
+# separately) is rejected with HTTP 400 before any read is attempted.
+_APP_LOG_SERVICE_FILES: Dict[str, str] = {
+    "backend": "backend-error.log",
+    "celery": "celery-error.log",
+    "celery-beat": "celery-beat-error.log",
+    "chromadb": "chromadb-error.log",
+}
+
+# mcp-bridge is a systemd template unit (mcp-bridge@.service.j2) — the
+# filename carries an instance suffix. The instance is still never a raw
+# path: it is validated against this strict allowlist pattern (alnum,
+# hyphen, underscore only — no '/', no '.') before being interpolated into
+# the fixed "mcp-bridge-<instance>-error.log" basename.
+_MCP_BRIDGE_INSTANCE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_MCP_BRIDGE_DEFAULT_INSTANCE = "default"
+
+# Timestamp prefix at the start of a log line, e.g. "2026-07-23 10:00:00,123"
+# or "2026-07-23T10:00:00.123Z".
+_APP_LOG_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
+_APP_LOG_LEVEL_RE = re.compile(r"\b(CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG)\b")
+
+# Secret redaction applied to every returned line (Security — never leak secrets
+# from application logs through the viewer). Canonical implementation lives in
+# autobot_shared.security.redaction (#12242) — do not add a divergent copy here.
+
+
+def _resolve_app_log_filename(service: str, mcp_instance: str | None) -> str:
+    """Map *service* to its allowlisted log filename under _APP_LOG_DIR.
+
+    Raises HTTP 400 for any service not in the allowlist, and for an
+    mcp-bridge instance name that fails the strict identifier pattern.
+    """
+    if service == "mcp-bridge":
+        instance = mcp_instance or _MCP_BRIDGE_DEFAULT_INSTANCE
+        if not _MCP_BRIDGE_INSTANCE_RE.match(instance):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid mcp_instance — only alphanumeric, '-' and '_' are permitted",
+            )
+        return f"mcp-bridge-{instance}-error.log"
+
+    filename = _APP_LOG_SERVICE_FILES.get(service)
+    if filename is None:
+        allowed = ", ".join(sorted(list(_APP_LOG_SERVICE_FILES) + ["mcp-bridge"]))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown service {service!r} — must be one of: {allowed}",
+        )
+    return filename
+
+
+def _parse_app_log_timestamp(prefix: str) -> datetime | None:
+    """Best-effort parse of a log line's leading timestamp; None if unparseable."""
+    candidate = prefix.replace(",", ".")
+    if candidate.endswith("Z"):
+        candidate = candidate[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _parse_app_log_line(raw: str, line_number: int) -> AppLogEntry:
+    """Parse one raw log line into an AppLogEntry (best-effort timestamp/level, redacted message)."""
+    ts_match = _APP_LOG_TS_RE.match(raw)
+    timestamp = _parse_app_log_timestamp(ts_match.group(0)) if ts_match else None
+
+    level_match = _APP_LOG_LEVEL_RE.search(raw[:200])
+    severity = level_match.group(1).upper() if level_match else None
+    if severity == "WARN":
+        severity = "WARNING"
+
+    return AppLogEntry(
+        line_number=line_number,
+        timestamp=timestamp,
+        severity=severity,
+        message=redact_text(raw),
+    )
+
+
+async def _tail_app_log_file(node: Node, filename: str) -> List[str]:
+    """Tail the last _APP_LOG_TAIL_LINE_CAP lines of *filename* on *node*.
+
+    Reuses the guarded local/SSH execution helpers from api.nodes_execution
+    (#3406) — no shell, tokens passed as an argv list. A missing file (or any
+    other non-zero exit from tail) yields an empty list rather than a 500.
+    """
+    abs_path = f"{_APP_LOG_DIR.rstrip('/')}/{filename}"
+    tokens = ["tail", "-n", str(_APP_LOG_TAIL_LINE_CAP), abs_path]
+
+    if _is_local_ip(node.ip_address or ""):
+        exit_code, stdout, stderr = await _run_command(tokens, _APP_LOG_TAIL_TIMEOUT_SEC)
+    else:
+        ssh_user = node.ssh_user or "autobot"
+        ssh_port = int(node.ssh_port or 22)
+        exit_code, stdout, stderr = await _run_via_ssh(
+            node.ip_address, ssh_user, ssh_port, tokens, _APP_LOG_TAIL_TIMEOUT_SEC
+        )
+
+    if exit_code != 0:
+        logger.info(
+            "app-logs: tail non-zero exit for %s on node=%s (exit=%d): %s",
+            filename,
+            node.node_id,
+            exit_code,
+            stderr.strip(),
+        )
+        return []
+    return stdout.splitlines()
+
+
+def _filter_app_log_entries(
+    entries: List[AppLogEntry],
+    severity: str | None,
+    q: str | None,
+    cutoff: datetime,
+) -> List[AppLogEntry]:
+    """Apply severity/text/since filters to parsed app-log entries."""
+    filtered = entries
+    if severity:
+        want = severity.upper()
+        want = "WARNING" if want == "WARN" else want
+        filtered = [e for e in filtered if e.severity == want]
+    if q:
+        needle = q.lower()
+        filtered = [e for e in filtered if needle in e.message.lower()]
+    filtered = [e for e in filtered if e.timestamp is None or e.timestamp >= cutoff]
+    return filtered
+
+
+def _paginate_app_log_entries(entries: List[AppLogEntry], page: int, per_page: int) -> tuple[List[AppLogEntry], int]:
+    """Return (page slice, total count) for the newest-first entry list."""
+    total = len(entries)
+    start = (page - 1) * per_page
+    return entries[start : start + per_page], total
+
+
+def _build_app_log_entries(raw_lines: List[str]) -> List[AppLogEntry]:
+    """Parse raw tailed lines into newest-first AppLogEntry objects."""
+    entries = [_parse_app_log_line(line, idx + 1) for idx, line in enumerate(raw_lines)]
+    entries.reverse()  # newest-first, matching /logs ordering
+    return entries
+
+
+async def _get_app_logs_core(
+    db: AsyncSession,
+    node_id: str,
+    service: str,
+    severity: str | None = None,
+    hours: int = 1,
+    q: str | None = None,
+    page: int = 1,
+    per_page: int = 100,
+    mcp_instance: str | None = None,
+) -> AppLogsResponse:
+    """Core app-logs implementation with plain (non-Query) defaults — unit-testable in isolation (#11302)."""
+    filename = _resolve_app_log_filename(service, mcp_instance)
+    node = await _require_online_node(node_id, db)
+
+    raw_lines = await _tail_app_log_file(node, filename)
+    entries = _build_app_log_entries(raw_lines)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    filtered = _filter_app_log_entries(entries, severity, q, cutoff)
+    page_entries, total = _paginate_app_log_entries(filtered, page, per_page)
+
+    return AppLogsResponse(
+        entries=page_entries,
+        total=total,
+        page=page,
+        per_page=per_page,
+        node_id=node_id,
+        service=service,
+    )
+
+
+@router.get("/app-logs", response_model=AppLogsResponse)
+async def get_app_logs(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
+    node_id: str = Query(...),
+    service: str = Query(...),
+    severity: str | None = Query(None),
+    hours: int = Query(1, ge=1, le=168),
+    q: str | None = Query(None, max_length=256),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(100, ge=1, le=500),
+    mcp_instance: str | None = Query(None, max_length=64),
+) -> AppLogsResponse:
+    """Tail an application-log file on a node, filtered/paginated (Issue #11302)."""
+    return await _get_app_logs_core(db, node_id, service, severity, hours, q, page, per_page, mcp_instance)
 
 
 def _group_errors_by_type_and_node(errors: List[Any]) -> tuple:

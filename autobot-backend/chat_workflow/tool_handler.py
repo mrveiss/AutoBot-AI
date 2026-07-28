@@ -24,6 +24,7 @@ from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
 from chat_workflow.code_exec.tool_policy import CODEEXEC_READONLY_TOOLS
+from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
 from tools.code_interpreter import CODE_INTERPRETER_SCHEMA
 from utils.errors import RepairableException
@@ -162,6 +163,15 @@ SCRAPE_URL_SCHEMA: dict = {
             "default": "auto",
             "description": "Render mode: auto (Jina+BS4+Playwright), fast (Jina+BS4), playwright (JS render).",
         },
+        "preview": {
+            "type": "boolean",
+            "default": False,
+            "description": (
+                "Return only the page's character count and a short leading snippet "
+                "instead of the full body. Use to judge relevance cheaply, then re-call "
+                "with preview=false to expand the page you actually need."
+            ),
+        },
     },
     "required": ["url"],
 }
@@ -198,6 +208,15 @@ CRAWL_SITE_SCHEMA: dict = {
             "type": "boolean",
             "default": True,
             "description": "Restrict crawl to same scheme+host per seed.",
+        },
+        "preview": {
+            "type": "boolean",
+            "default": True,
+            "description": (
+                "Render each crawled page as its character count plus a short leading "
+                "snippet rather than a large body dump. Leave on to survey many pages "
+                "cheaply, then expand a specific one with scrape_url."
+            ),
         },
     },
     "required": ["seed_urls"],
@@ -266,6 +285,34 @@ EXTRACT_STRUCTURED_DATA_SCHEMA: dict = {
     },
     "required": ["url", "schema"],
 }
+
+# Issue #11540: goal-directed extraction from the *current* live page (the
+# session already sitting behind a login / mid-form, reached via navigate +
+# click_index/fill_index) — unlike extract_structured_data above, which
+# always re-fetches the URL from scratch and so can never see that state.
+EXTRACT_CONTENT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "goal": {
+            "type": "string",
+            "description": (
+                "What to extract from the current live page, e.g. 'the order "
+                "confirmation number' or 'all product prices listed here'. "
+                "Extraction is goal-directed — not a raw page dump."
+            ),
+        },
+    },
+    "required": ["goal"],
+}
+
+# Issue #11540: hardcoded, read-only JS for extract_content's live-page
+# snapshot — plain property reads (no assignment), so it can never match a
+# BLOCKED_JS_PATTERNS entry (those all target writes: ``.innerHTML =``,
+# ``window.location =``, cookie/storage access, etc.). Passed straight to the
+# browser VM's existing ``evaluate`` action, not a new browser primitive.
+_EXTRACT_CONTENT_SNAPSHOT_SCRIPT = (
+    "({url: window.location.href, title: document.title, html: document.documentElement.outerHTML})"
+)
 
 # Browser tool schemas — co-located with BROWSER_TOOL_NAMES (Issue #4726).
 NAVIGATE_SCHEMA: dict = {
@@ -336,6 +383,98 @@ WAIT_FOR_SELECTOR_SCHEMA: dict = {
     "required": ["selector"],
 }
 
+# Issue #11537: indexed interactive-element schemas. OpenManus numbers every
+# interactive element on the page so the model clicks/fills by index instead
+# of inventing a CSS selector — the index below is resolved to a concrete
+# element server-side (autobot-browser-worker/element-index.js).
+#
+# `expected_element_count` (optional, from a prior browser_state's
+# `element_count`) is the stale-index guard: if the live element count no
+# longer matches, the worker rejects the call instead of silently acting on
+# whatever now sits at that index (review #11538 MINOR 3).
+_EXPECTED_ELEMENT_COUNT_FIELD = {
+    "type": "integer",
+    "description": (
+        "Optional: element_count from the browser_state call this index was chosen against. "
+        "If the live page's element count no longer matches, the action is rejected instead of "
+        "silently acting on the wrong element — re-fetch browser_state and retry."
+    ),
+}
+
+CLICK_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Click an interactive element by its numbered index from the page's element menu.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index"],
+}
+
+FILL_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Fill an interactive element by its numbered index from the page's element menu.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "value": {"type": "string", "description": "Value to fill into the element."},
+        "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index", "value"],
+}
+
+SELECT_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Select a dropdown option on an element identified by its numbered index.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "value": {"type": "string", "description": "Value to select."},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index", "value"],
+}
+
+HOVER_INDEX_SCHEMA: dict = {
+    "type": "object",
+    "description": "Hover over an interactive element by its numbered index.",
+    "properties": {
+        "index": {"type": "integer", "description": "Element index from the numbered element menu."},
+        "expected_element_count": _EXPECTED_ELEMENT_COUNT_FIELD,
+    },
+    "required": ["index"],
+}
+
+BROWSER_STATE_SCHEMA: dict = {
+    "type": "object",
+    "description": (
+        "Get the current page state: URL, title, scroll info, and a numbered menu "
+        "of interactive elements for use with click_index/fill_index/select_index/hover_index."
+    ),
+    "properties": {},
+}
+
+# Issue #11537: how many numbered elements to render in the LLM-visible state
+# block per browser tool result (the browser-worker itself caps the raw list
+# via BROWSER_STATE_MAX_ELEMENTS; this bounds the prompt-text rendering).
+BROWSER_STATE_PROMPT_MAX_ELEMENTS = env_int("AUTOBOT_BROWSER_STATE_PROMPT_MAX_ELEMENTS", default=30)
+
+# Issue #11537: text formatters for the four indexed-element tool results,
+# keyed by tool name so _format_browser_action_text stays a flat dispatch.
+_INDEXED_ELEMENT_TOOL_TEXT: dict[str, Any] = {
+    "click_index": lambda params, inner: (
+        f"Clicked element [{params.get('index')}]: "
+        f"{(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}"
+    ),
+    "fill_index": lambda params, inner: (
+        f"Filled element [{params.get('index')}] "
+        f"({(inner.get('resolved') or {}).get('name') or (inner.get('resolved') or {}).get('role', 'element')}) "
+        "with value"
+    ),
+    "select_index": lambda params, inner: (f"Selected '{params.get('value', '')}' in element [{params.get('index')}]"),
+    "hover_index": lambda params, inner: f"Hovered over element [{params.get('index')}]",
+}
+
 # Issue #4529: JSON Schema definitions for built-in tools dispatched directly
 # (not via MCP).  Used by _validate_builtin_tool_arguments() so every dispatch
 # path passes through validate_tool_arguments() before execution.
@@ -354,6 +493,12 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "get_text": GET_TEXT_SCHEMA,
     "get_attribute": GET_ATTRIBUTE_SCHEMA,
     "wait_for_selector": WAIT_FOR_SELECTOR_SCHEMA,
+    # Issue #11537: indexed interactive-element actions.
+    "click_index": CLICK_INDEX_SCHEMA,
+    "fill_index": FILL_INDEX_SCHEMA,
+    "select_index": SELECT_INDEX_SCHEMA,
+    "hover_index": HOVER_INDEX_SCHEMA,
+    "browser_state": BROWSER_STATE_SCHEMA,
     # Imported from tools.code_interpreter — single source of truth for the schema.
     # Issue #4561: was missing, causing code_interpreter args to bypass validation
     # (Issue #4562).  All future built-in tool schemas should follow this pattern:
@@ -364,6 +509,8 @@ _BUILTIN_TOOL_SCHEMAS: dict[str, dict] = {
     "crawl_site": CRAWL_SITE_SCHEMA,
     "map_site": MAP_SITE_SCHEMA,
     "extract_structured_data": EXTRACT_STRUCTURED_DATA_SCHEMA,
+    # Issue #11540: goal-directed extraction from the current live page.
+    "extract_content": EXTRACT_CONTENT_SCHEMA,
     # #10932: Unified content_reach gateway (5 source chains).
     "content_reach": CONTENT_REACH_SCHEMA,
     # #11501: LLC board/CEO-chat work-object tools (create_task, update_goal,
@@ -444,18 +591,31 @@ BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
         "get_text",
         "get_attribute",
         "wait_for_selector",
+        # Issue #11537: indexed interactive-element actions.
+        "click_index",
+        "fill_index",
+        "select_index",
+        "hover_index",
+        "browser_state",
     }
 )
 
 # Issue #7509: web research tools — direct internal dispatch via web_fetch.
 WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
 
+# Issue #11540: goal-directed extraction from the browser session's *current*
+# page — reads whatever the live DOM already shows, never re-fetches a URL.
+LIVE_PAGE_EXTRACT_TOOL_NAMES: frozenset[str] = frozenset({"extract_content"})
+
 # GH#11489: builtin tools sharing the uniform dispatch gate (invalid-call
 # counter reset → Issue #4529 schema validation → handler). ``_builtin_route``
 # maps each name to its handler, so adding a tool here needs no new branch at
 # the ``_dispatch_tool_call`` seam.
 _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
-    BROWSER_TOOL_NAMES | WEB_RESEARCH_TOOL_NAMES | frozenset({"web_search", "execute_command"})
+    BROWSER_TOOL_NAMES
+    | WEB_RESEARCH_TOOL_NAMES
+    | LIVE_PAGE_EXTRACT_TOOL_NAMES
+    | frozenset({"web_search", "execute_command"})
 )
 
 # GH#11160: maps a declared approval category (a work item's
@@ -479,23 +639,11 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     return None
 
 
-# Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
-# Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
-# #11545: the closing `>` is optional — some chat models emit `</TOOL_CALL`
-# (newline/prose after) without it.
-# #11552: the closing tag itself is often TRUNCATED to `</TOOL` (the model drops
-# `_CALL`) or spaced (`</TOOL_ CALL>`), then a hallucinated success line follows.
-# Both previously left the tool call unparsed → raw tag leaked, tool never ran
-# (0 work items, CEO chat). The close now tolerates `</TOOL[_[ ]CALL][>]`: the
-# `_CALL` and trailing `>` are both optional. The close requires a word boundary
-# after `tool` (either the proper `_call\b` continuation, or `\b` when `_CALL` is
-# dropped) so `</tool_callable…`/`</toolbox…` never match; the opening tag
-# (`<TOOL_CALL name=… params=…>`) is still required, so a bare `</tool>` in prose
-# can never match on its own.
-_TOOL_CALL_PATTERN = re.compile(
-    r'<tool_call\s+name="([^"]+)"\s+params=(["\'])(.+?)\2>([^<]*)</tool(?:_?\s*call\b|\b)\s*>?',
-    re.IGNORECASE | re.DOTALL,
-)
+# Issue #11693: the tool-call grammar (parse pattern + close-variant
+# tolerance for #11545/#11552) is now the single canonical source of truth
+# in tool_call_grammar.py, shared with chat_workflow/manager.py. Kept as a
+# module-level alias here for backwards-compatible imports.
+_TOOL_CALL_PATTERN = TOOL_CALL_PATTERN
 
 # Issue #260: Security tool detection pattern for auto-parsing
 _SECURITY_TOOL_PATTERN = re.compile(r"(nmap|nikto|gobuster|ffuf|masscan|nuclei|searchsploit)\b", re.IGNORECASE)
@@ -919,10 +1067,31 @@ def _search_unavailable_message(query: str) -> str:
     )
 
 
-def _format_crawl_results(seed_urls: list, results: list) -> str:
+# #12758: default snippet length for preview mode. Long enough for the agent to
+# judge relevance, short enough that scanning N pages costs far less than N full
+# bodies. Expand with preview=false (crawl) or scrape_url (single page).
+PREVIEW_SNIPPET_CHARS = 400
+
+
+def _page_preview(markdown: str, limit: int = PREVIEW_SNIPPET_CHARS) -> str:
+    """Render a page as charCount + a whitespace-collapsed leading snippet (#12758).
+
+    Collapsing whitespace matters: raw markdown from a scraped page is mostly
+    blank lines and list padding, so an uncollapsed slice of the same length
+    carries a fraction of the actual text.
+    """
+    text = " ".join((markdown or "").split())
+    snippet = text[:limit]
+    truncated = "…" if len(text) > limit else ""
+    return f"({len(markdown or '')} chars) {snippet}{truncated}"
+
+
+def _format_crawl_results(seed_urls: list, results: list, preview: bool = True) -> str:
     """Format BFS crawl FetchResults into a markdown index. Issue #7509.
 
-    Successful pages are rendered as `### <url> (depth N)\\n<first 2000 chars>`.
+    In preview mode (#12758, the default) each successful page renders as its
+    char count plus a collapsed leading snippet, so multi-page research does not
+    pay for N full bodies; ``preview=False`` restores the first-2000-chars dump.
     Failed pages appear as a single-line error note.
     """
     seed_str = ", ".join(seed_urls[:3])
@@ -933,8 +1102,8 @@ def _format_crawl_results(seed_urls: list, results: list) -> str:
     lines = [header]
     for r in results:
         if r.success:
-            preview = (r.markdown or "")[:2000]
-            lines.append(f"### {r.url}\n\n{preview}\n\n---\n")
+            body = _page_preview(r.markdown) if preview else (r.markdown or "")[:2000]
+            lines.append(f"### {r.url}\n\n{body}\n\n---\n")
         else:
             lines.append(f"- **FAILED** {r.url} — {r.error_code}\n")
     return "".join(lines)
@@ -2034,9 +2203,15 @@ class ToolHandlerMixin:
                 )
                 return
 
-            from api.browser_mcp import send_to_browser_vm
+            from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
 
-            result = await send_to_browser_vm(tool_name, params)
+            # #11539: route this call to the BrowserContext dedicated to this
+            # conversation so cookies/login state never bleed into another one.
+            result = await send_to_browser_vm(
+                tool_name,
+                params,
+                session_id=session_id or DEFAULT_BROWSER_SESSION_ID,
+            )
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for browser tools
             result_text = str(result)
@@ -2071,9 +2246,15 @@ class ToolHandlerMixin:
         """Record a successful browser tool execution and return its WorkflowMessage. Issue #2735.
 
         Extracted from _handle_browser_tool to keep parent under 65 lines.
+        Issue #11538: also carries the raw screenshot (if any) into
+        execution_results so the vision-in-the-loop continuation can find it.
         """
         summary = self._format_browser_result(tool_name, params, result)
-        execution_results.append({"tool": tool_name, "status": "success", "output": summary})
+        entry: dict[str, Any] = {"tool": tool_name, "status": "success", "output": summary}
+        base64_image = self._extract_browser_image(result)
+        if base64_image:
+            entry["base64_image"] = base64_image
+        execution_results.append(entry)
         return WorkflowMessage(
             type="command_output",
             content=summary,
@@ -2085,6 +2266,36 @@ class ToolHandlerMixin:
             },
         )
 
+    def _extract_browser_image(self, result: dict[str, Any]) -> str | None:
+        """Pull the base64 PNG out of a browser tool result, if present. Issue #11538.
+
+        Only the ``screenshot`` action returns image bytes today; kept
+        tool-name-agnostic (checks common keys) so a future browser/VNC
+        action that starts returning images is picked up automatically.
+        """
+        inner = result.get("result", result)
+        return inner.get("image") or inner.get("screenshot")
+
+    def _format_page_state_block(self, page_state: dict[str, Any] | None) -> str:
+        """Render the numbered interactive-element menu for LLM consumption. Issue #11537.
+
+        OpenManus-style: the model picks click_index/fill_index targets from
+        this menu instead of guessing a CSS selector. Appended to every
+        browser tool result so the menu is always current (task 4).
+        """
+        if not page_state:
+            return ""
+        elements = page_state.get("elements") or []
+        if not elements:
+            return ""
+        lines = [f"\nInteractive elements ({len(elements)}):"]
+        for el in elements[:BROWSER_STATE_PROMPT_MAX_ELEMENTS]:
+            role = el.get("role", el.get("tag", "element"))
+            name = (el.get("name") or "").strip()
+            label = f' "{name}"' if name else ""
+            lines.append(f"  [{el.get('index')}] {role}{label}")
+        return "\n".join(lines)
+
     def _format_browser_result(
         self,
         tool_name: str,
@@ -2094,10 +2305,25 @@ class ToolHandlerMixin:
         """Format browser tool result as text for LLM context. Issue #1368.
 
         Browser VM returns: {"success": bool, "action": str, "result": {...}}
-        The inner 'result' dict contains tool-specific data.
+        The inner 'result' dict contains tool-specific data. Issue #11537:
+        appends the numbered interactive-element menu when present.
         """
         inner = result.get("result", result)
+        summary = self._format_browser_action_text(tool_name, params, inner, result)
+        # browser_state's payload *is* the page state; every other action
+        # carries it nested under "page_state" (attached post-action).
+        page_state = inner if tool_name == "browser_state" else inner.get("page_state")
+        state_block = self._format_page_state_block(page_state)
+        return summary + state_block if state_block else summary
 
+    def _format_browser_action_text(
+        self,
+        tool_name: str,
+        params: dict[str, Any],
+        inner: dict[str, Any],
+        result: dict[str, Any],
+    ) -> str:
+        """Build the tool-specific summary line for _format_browser_result. Issue #1368/#11537."""
         if tool_name == "navigate":
             url = inner.get("url", params.get("url", ""))
             title = inner.get("title", "")
@@ -2112,7 +2338,12 @@ class ToolHandlerMixin:
         if tool_name == "get_text":
             text = inner.get("text", "")
             if text:
-                return f"Text content: {text[:2000]}"
+                # #12757: browser page text is untrusted third-party content —
+                # sanitize and put it behind a trust boundary before it lands in
+                # the agent's context as if it were operator input.
+                from knowledge.query_sanitizer import sanitize_and_wrap_web_content
+
+                return "Text content: " + sanitize_and_wrap_web_content(text[:2000], params.get("url", ""))
             return "No text found."
 
         if tool_name == "get_attribute":
@@ -2142,6 +2373,13 @@ class ToolHandlerMixin:
         if tool_name == "wait_for_selector":
             sel = params.get("selector", "")
             return f"Element found: {sel}"
+
+        if tool_name in _INDEXED_ELEMENT_TOOL_TEXT:
+            return _INDEXED_ELEMENT_TOOL_TEXT[tool_name](params, inner)
+
+        if tool_name == "browser_state":
+            elements = inner.get("elements") or []
+            return f"Page state: {inner.get('url', '')} — {len(elements)} interactive element(s)"
 
         return json.dumps(result, default=str)[:1000]
 
@@ -2197,12 +2435,12 @@ class ToolHandlerMixin:
 
         try:
             if fetch_full:
-                results = await self._execute_web_search_full(query, max_pages)
+                results = await self._execute_web_search_full(query, max_pages, session_id)
             else:
                 # #7479: snippet path now honors max_pages too (was hardcoded
                 # to 5, ignoring caller's choice — confusingly inconsistent
                 # with fetch_full mode).
-                results = await self._execute_web_search(query, max_pages)
+                results = await self._execute_web_search(query, max_pages, session_id)
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for web_search
             results = await _emit_after_tool_execute("web_search", results, session_id, {})
@@ -2320,6 +2558,7 @@ class ToolHandlerMixin:
 
     async def _exec_scrape_url(self, params: dict) -> str:
         """Fetch a URL and return markdown content. Issue #7509."""
+        from knowledge.query_sanitizer import sanitize_and_wrap_web_content
         from web_fetch import RenderMode, WebFetcher
 
         url = params.get("url", "").strip()
@@ -2330,12 +2569,22 @@ class ToolHandlerMixin:
             return f"## Fetch failed\n\nURL: {url}\nError: {result.error_code}"
         title = f"# {result.title}\n\n" if result.title else ""
         header = f"## Scraped: {url} (status {result.status_code}, source: {result.source})\n\n"
-        return header + title + (result.markdown or "*(no content)*")
+        if bool(params.get("preview", False)):
+            # #12758: preview-before-expand — charCount + snippet only. Re-call
+            # without preview to pay for the full body.
+            body = sanitize_and_wrap_web_content(_page_preview(result.markdown or ""), url)
+            return header + title + body + "\n\n*(preview — re-run with preview=false for the full page)*"
+        # #12757: page body is third-party text — sanitize it and put it behind a
+        # trust boundary before it can reach the LLM. Our own header stays
+        # OUTSIDE the boundary so the page cannot forge it.
+        body = sanitize_and_wrap_web_content(result.markdown or "*(no content)*", url)
+        return header + title + body
 
     async def _exec_crawl_site(self, params: dict) -> str:
         """BFS crawl seed URLs and return a markdown index. Issue #7509."""
         from knowledge.connectors.models import ConnectorConfig
         from knowledge.connectors.web_crawler import WebCrawlerConnector
+        from knowledge.query_sanitizer import sanitize_and_wrap_web_content
 
         seed_urls: list = params.get("seed_urls", [])
         max_depth: int = int(params.get("max_depth", 1))
@@ -2359,17 +2608,24 @@ class ToolHandlerMixin:
             ingest=ingest,
             same_origin=same_origin,
         )
-        return _format_crawl_results(seed_urls, results)
+        # #12757: crawled page text is untrusted third-party content.
+        # #12758: preview by default — expand one page via scrape_url.
+        return sanitize_and_wrap_web_content(
+            _format_crawl_results(seed_urls, results, preview=bool(params.get("preview", True))),
+            ", ".join(seed_urls),
+        )
 
     async def _exec_map_site(self, params: dict) -> str:
         """Discover URLs for a domain via sitemap or BFS. Issue #7509."""
+        from knowledge.query_sanitizer import sanitize_and_wrap_web_content
         from web_fetch.site_mapper import SiteMapper
 
         domain = params.get("domain", "").strip()
         max_urls: int = int(params.get("max_urls", 500))
         respect_robots: bool = bool(params.get("respect_robots", True))
         site_result = await SiteMapper.map_site(domain, max_urls=max_urls, respect_robots=respect_robots)
-        return _format_map_results(site_result)
+        # #12757: discovered URLs/titles are attacker-controlled strings too.
+        return sanitize_and_wrap_web_content(_format_map_results(site_result), domain)
 
     async def _exec_extract_structured_data(self, params: dict) -> str:
         """Extract structured data from a URL using JSON Schema + LLM. Issue #7509."""
@@ -2384,7 +2640,119 @@ class ToolHandlerMixin:
         json_str = json.dumps(result["data"], indent=2, ensure_ascii=False)
         return f"## Extracted data from {url}\n\n```json\n{json_str}\n```"
 
-    async def _execute_web_search(self, query: str, max_pages: int = 5) -> str:
+    # ------------------------------------------------------------------
+    # Issue #11540: goal-directed extraction from the *current* live page
+    # ------------------------------------------------------------------
+
+    async def _handle_extract_content_tool(
+        self,
+        tool_call: dict[str, Any],
+        execution_results: list[dict[str, Any]],
+        session_id: str = "",
+    ):
+        """Dispatch the extract_content builtin. Issue #11540.
+
+        Unlike WEB_RESEARCH_TOOL_NAMES (always re-fetches a URL), this reads
+        whatever page the browser session is already on — post-login,
+        post-click, post-form-fill — so it works behind auth walls a fresh
+        fetch could never reach.
+        """
+        params = tool_call.get("params", {})
+        goal = params.get("goal", "")
+        logger.info("[Issue #11540] extract_content: goal=%s", goal[:100])
+
+        yield WorkflowMessage(
+            type="tool_execution",
+            content=f"Extracting from the live page: {goal[:100]}",
+            metadata={"tool": "extract_content"},
+        )
+
+        try:
+            result = await self._exec_extract_content(params, session_id)
+            execution_results.append({"tool": "extract_content", "status": "success", "output": result})
+            yield WorkflowMessage(
+                type="command_output",
+                content=result,
+                metadata={"tool": "extract_content", "status": "success"},
+            )
+        except Exception as exc:
+            logger.error("[Issue #11540] extract_content failed: %s", exc)
+            execution_results.append({"tool": "extract_content", "status": "error", "error": str(exc)})
+            yield WorkflowMessage(
+                type="error",
+                content=f"extract_content failed: {exc}",
+                metadata={"tool": "extract_content", "error": True},
+            )
+
+    async def _capture_live_page_snapshot(self, session_id: str) -> tuple[str, str]:
+        """Read (html, url) off the browser session's *current* page. Issue #11540.
+
+        Reuses the existing browser VM ``evaluate`` action — the same one
+        ``evaluate`` tool calls use — with a hardcoded, read-only script (no
+        assignment, so ``is_script_safe()`` is a non-issue). No re-fetch: this
+        sees whatever page the session already reached via navigate/clicks.
+        """
+        from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
+
+        vm_response = await send_to_browser_vm(
+            "evaluate",
+            {"script": _EXTRACT_CONTENT_SNAPSHOT_SCRIPT},
+            session_id=session_id or DEFAULT_BROWSER_SESSION_ID,
+        )
+        inner = vm_response.get("result", vm_response)
+        page = inner.get("result") or {}
+        return page.get("html", ""), page.get("url", "")
+
+    async def _answer_goal_from_markdown(self, markdown: str, url: str, goal: str) -> str:
+        """Run the goal-directed LLM sub-extraction over already-fetched markdown. Issue #11540.
+
+        Reuses the same schema-driven LLM sub-call ``extract_structured_data``
+        uses (``llm_shared.structured_ops.extract``, #11520) with a single
+        free-text ``answer`` field described by the goal instead of a full
+        JSON Schema, and the same content-firewall gate ``extract_url()``
+        applies (#10552) before any web content reaches the LLM. ``extract()``
+        auto-chunks input over ``AUTOBOT_EXTRACT_CHUNK_THRESHOLD`` chars — the
+        context-budget-aware cap in place of OpenManus's fixed 2000-char clip.
+        """
+        from llm_shared.structured_ops import extract
+        from security.content_firewall import ContentSource, get_content_firewall
+
+        fw_verdict = await get_content_firewall().inspect(
+            markdown, source=ContentSource.WEB, context_label=url or "live_page"
+        )
+        if fw_verdict.blocked:
+            return f"extract_content blocked by content firewall (risk={fw_verdict.risk.value})"
+
+        answer_schema = {
+            "type": "object",
+            "properties": {"answer": {"type": "string", "description": goal}},
+            "required": ["answer"],
+        }
+        data = await extract(fw_verdict.content, answer_schema)
+        answer = data.get("answer", "") if isinstance(data, dict) else str(data)
+        header = f"## Extracted from live page{f': {url}' if url else ''}\n\nGoal: {goal}\n\n"
+        return header + (answer or "*(nothing relevant found)*")
+
+    async def _exec_extract_content(self, params: dict, session_id: str = "") -> str:
+        """Goal-directed extraction from the browser session's live page. Issue #11540.
+
+        Orchestrates the two halves above: capture the live DOM snapshot,
+        then run the goal-directed LLM sub-extraction over it.
+        """
+        from web_fetch.extractors import extract_markdown
+
+        goal = (params.get("goal") or "").strip()
+        if not goal:
+            return "extract_content requires a 'goal' describing what to extract."
+
+        html_content, url = await self._capture_live_page_snapshot(session_id)
+        if not html_content:
+            return "extract_content: no live page content — navigate to a page first."
+
+        _title, markdown = extract_markdown(html_content)
+        return await self._answer_goal_from_markdown(markdown, url, goal)
+
+    async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.
 
         Tries the existing Playwright search service first (structured results),
@@ -2393,6 +2761,9 @@ class ToolHandlerMixin:
         ``max_pages`` (#7479) — caller-requested result count. Threaded into
         ``_web_search_via_playwright`` so the snippet path returns the same
         number of results that the fetch_full path would.
+
+        ``session_id`` (#11539) — threaded into the browser-VM fallback so it
+        reuses this conversation's isolated browser context.
         """
         # Primary: use existing search_web_embedded (Rule 2: reuse existing code)
         try:
@@ -2403,9 +2774,9 @@ class ToolHandlerMixin:
             logger.debug("[Issue #2306] Playwright search unavailable: %s", e)
 
         # Fallback: browser VM with DuckDuckGo HTML
-        return await self._web_search_final_fallback(query)
+        return await self._web_search_final_fallback(query, session_id)
 
-    async def _execute_web_search_full(self, query: str, max_pages: int) -> str:
+    async def _execute_web_search_full(self, query: str, max_pages: int, session_id: str = "") -> str:
         """Search + full-page fetch mode. Issue #7404.
 
         Gets structured entries from Playwright, fans out WebFetcher.fetch
@@ -2418,10 +2789,12 @@ class ToolHandlerMixin:
         call via ``_web_search_via_playwright`` — wasteful when
         ``_web_search_structured_entries`` already determined Playwright
         unavailable (#7478).
+
+        ``session_id`` (#11539) — threaded into the browser-VM fallback.
         """
         entries = await self._web_search_structured_entries(query, max_pages)
         if not entries:
-            return await self._web_search_final_fallback(query)
+            return await self._web_search_final_fallback(query, session_id)
         enriched = await _fetch_pages_concurrent(entries, max_pages)
         return _format_full_search_results(query, enriched)
 
@@ -2478,7 +2851,7 @@ class ToolHandlerMixin:
             lines.append(f"{i}. **{title}**\n   {url}\n   {snippet}\n")
         return "\n".join(lines)
 
-    async def _web_search_final_fallback(self, query: str) -> str:
+    async def _web_search_final_fallback(self, query: str, session_id: str = "") -> str:
         """Browser-VM last resort with actionable guidance instead of silence (#11665).
 
         When the registry and Playwright yielded nothing and even the browser
@@ -2487,30 +2860,39 @@ class ToolHandlerMixin:
         configuration that unlocks topic search.
         """
         try:
-            result = await self._web_search_via_browser_vm(query)
+            result = await self._web_search_via_browser_vm(query, session_id)
             if result:
                 return result
         except Exception as exc:
             logger.debug("[#11665] Browser VM search fallback unavailable: %s", exc)
         return _search_unavailable_message(query)
 
-    async def _web_search_via_browser_vm(self, query: str) -> str:
+    async def _web_search_via_browser_vm(self, query: str, session_id: str = "") -> str:
         """Fallback: search via browser VM DuckDuckGo HTML page. Issue #2306."""
         from urllib.parse import (  # stdlib — lazy to match surrounding pattern
             quote_plus,
         )
 
-        from api.browser_mcp import send_to_browser_vm  # lazy to avoid circular import
+        from api.browser_mcp import (  # lazy to avoid circular import
+            DEFAULT_BROWSER_SESSION_ID,
+            send_to_browser_vm,
+        )
 
         search_url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+        # #11539: route through this conversation's isolated browser context.
+        vm_session_id = session_id or DEFAULT_BROWSER_SESSION_ID
 
-        nav_result = await send_to_browser_vm("navigate", {"url": search_url})
+        nav_result = await send_to_browser_vm("navigate", {"url": search_url}, session_id=vm_session_id)
         if not nav_result.get("success", True):
             raise RuntimeError(f"Failed to navigate to search page: {nav_result.get('error', 'unknown')}")
 
         # Try results div first, then fall back to body
         for selector in ("div.results", "body"):
-            text_result = await send_to_browser_vm("get_text", {"selector": selector})
+            text_result = await send_to_browser_vm(
+                "get_text",
+                {"selector": selector},
+                session_id=vm_session_id,
+            )
             inner = text_result.get("result", text_result)
             raw_text = inner.get("text", "")
             if raw_text:
@@ -2874,6 +3256,8 @@ class ToolHandlerMixin:
             return self._handle_web_search_tool(tool_call, execution_results, session_id)
         if tool_name in WEB_RESEARCH_TOOL_NAMES:  # Issue #7509
             return self._handle_web_research_tool(tool_name, tool_call, execution_results, session_id)
+        if tool_name in LIVE_PAGE_EXTRACT_TOOL_NAMES:  # Issue #11540
+            return self._handle_extract_content_tool(tool_call, execution_results, session_id)
         if tool_name == "execute_command":
             return self._dispatch_execute_command(
                 tool_call,

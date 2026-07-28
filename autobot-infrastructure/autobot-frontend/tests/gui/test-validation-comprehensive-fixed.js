@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test')
 
 test.describe('AutoBot Frontend Comprehensive Validation - Fixed Version', () => {

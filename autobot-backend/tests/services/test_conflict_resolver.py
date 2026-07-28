@@ -40,6 +40,27 @@ from api.knowledge_grounding_models import (
 from services.conflict_resolver import ConflictResolver
 
 
+@pytest.fixture(autouse=True)
+def _mock_async_redis_client(monkeypatch):
+    """Prevent real Redis I/O in resolution-logic tests.
+
+    ``ConflictResolver.resolve()`` calls ``flag_for_human_review()`` (which
+    performs Redis writes) whenever a result requires human review. Unit tests
+    that only assert on resolution *logic* do not pre-set ``_redis``, so the
+    lazy ``_get_redis()`` would otherwise open a real async client and block.
+    Patching the mixin factory returns an ``AsyncMock`` client, keeping these
+    tests deterministic and scoped-safe. Tests that explicitly assign
+    ``resolver._redis`` (persistence/audit tests) are unaffected because
+    ``_get_redis()`` short-circuits on the pre-set instance client.
+    """
+    fake_redis = AsyncMock()
+    monkeypatch.setattr(
+        "autobot_shared.redis_mixin.get_async_redis_client",
+        AsyncMock(return_value=fake_redis),
+    )
+    return fake_redis
+
+
 class TestConflictResolverInit:
     """Tests for ConflictResolver initialization."""
 

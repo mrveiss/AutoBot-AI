@@ -30,35 +30,22 @@ Issue #10724: real SSM/linear/hybrid kernels replacing NOT_APPLICABLE stubs.
 
 from __future__ import annotations
 
-import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, List
 
 from autobot_shared.logging_manager import get_logger
 
+from ..torch_loader import lazy_torch
+
 logger = get_logger(__name__)
 
-# Issue #10916: double-checked lock prevents two threads from racing past the
-# None check and importing torch concurrently.
-_torch: Any = None
-_torch_lock = threading.Lock()
+_TORCH_REQUIRED_MSG = "torch is required for SSM/linear/hybrid kernels. Install with: pip install torch>=2.0.0"
 
 
 def _get_torch() -> Any:
     """Return the torch module, importing it lazily on first use (thread-safe)."""
-    global _torch  # noqa: PLW0603
-    if _torch is None:
-        with _torch_lock:
-            if _torch is None:
-                try:
-                    import torch  # noqa: PLC0415
-                except ImportError as exc:  # pragma: no cover - env-dependent
-                    raise ImportError(
-                        "torch is required for SSM/linear/hybrid kernels. Install with: pip install torch>=2.0.0"
-                    ) from exc
-                _torch = torch
-    return _torch
+    return lazy_torch(required=True, error_message=_TORCH_REQUIRED_MSG)
 
 
 class LayerKind(str, Enum):

@@ -122,6 +122,11 @@ class APIEndpointAnalysis(BaseModel):
     missing: List[EndpointMismatchItem]
     used: List[EndpointUsageItem]
     scan_timestamp: str
+    # #12745: set when the backend route scan produced nothing. In that state
+    # every frontend call looks "missing" (2400 of them on a real source), which
+    # is a scan failure, not 2400 defects — so `missing` is suppressed and this
+    # explains why, instead of the UI flooding with false positives.
+    scan_error: str | None = None
 
 
 # =============================================================================

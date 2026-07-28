@@ -37,6 +37,35 @@ def _warn_once(path: str, detail: str) -> None:
     )
 
 
+def build_ssh_base_cmd(host: str, user: str, port: int, key) -> list:
+    """Build the canonical ssh base argv shared by every direct-exec caller.
+
+    Single source of truth for ``api/nodes.py`` (``_build_node_ssh_cmd``) and
+    ``services/sync_orchestrator.py`` (``_build_ssh_command``), which had
+    drifted into two near-identical builders (#12690, round-2 of #12645):
+    the orchestrator's copy was missing ``-o ConnectTimeout=10``, so a
+    role-sync against an unreachable node could hang indefinitely instead of
+    failing fast. Both call sites now build this argv and append their own
+    trailing command / positional args.
+
+    Returns ``["ssh", "-o", "StrictHostKeyChecking=accept-new", "-o",
+    "ConnectTimeout=10", "-p", str(port), ["-i", key] if usable, "user@host"]``.
+    """
+    cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=accept-new",
+        "-o",
+        "ConnectTimeout=10",
+        "-p",
+        str(port),
+    ]
+    if _ssh_key_usable(key):
+        cmd.extend(["-i", os.fspath(key)])
+    cmd.append(f"{user}@{host}")
+    return cmd
+
+
 def _ssh_key_usable(key_path) -> bool:
     """Return True only when *key_path* is confirmed readable.
 

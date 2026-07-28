@@ -14,6 +14,9 @@
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
 import {
   useCodeSync,
+  isSelfUpdateReconnecting,
+  classifyUpdateAllPollError,
+  SLM_SELF_UPDATE_STAGE,
   type PendingNode,
   type SyncOptions,
   type UpdateSchedule,
@@ -21,6 +24,7 @@ import {
   type FileDriftReport,
   type UpdateAllJob,
   type UpdateAllStage,
+  type ComponentSyncJobStatus,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -70,6 +74,17 @@ const isDriftLoading = ref(false)
 const isResolvingDrift = ref(false) // #7149: separate from drift-check spinner
 const showDriftDetails = ref(false)
 const selectedDriftComponent = ref('autobot-slm-backend')
+
+// Async drift/resolve job polling (#11303) — mirrors the update-all pattern so
+// the Resync button returns immediately instead of blocking on the rsync +
+// post-sync steps (which can take 40-120s and may restart the component itself).
+const resolveDriftJob = ref<ComponentSyncJobStatus | null>(null)
+const resolveDriftPolling = ref(false)
+const resolveDriftTransientErrors = ref(0)
+const RESOLVE_DRIFT_MAX_TRANSIENT_ERRORS = 90 // ~3 min at 2s intervals
+const RESOLVE_DRIFT_LOST_CONTACT_ERRORS = 30 // ~1 min before "lost contact" banner
+const resolveDriftLostContact = ref(false)
+let resolveDriftPollTimer: ReturnType<typeof setTimeout> | null = null
 
 // Clear stale results when the user switches to a different component (#3433)
 watch(selectedDriftComponent, () => {
@@ -141,6 +156,15 @@ function stageStatusText(stage: UpdateAllStage): string | null {
   return null
 }
 
+// #12593: while reconnecting, the stage-3 box shows "reconnecting..." instead
+// of the generic "updating..." so the self-restart window doesn't read as dead.
+function stageRunningStatusKey(stage: UpdateAllStage): string {
+  if (stage.name === SLM_SELF_UPDATE_STAGE && updateAllReconnecting.value) {
+    return 'codeSyncView.pipelineStageReconnecting'
+  }
+  return stageStatusI18nKey(stage)
+}
+
 const updateAllButtonLabel = computed(() => {
   const job = updateAllJob.value
   if (!job) {
@@ -156,6 +180,20 @@ const updateAllButtonLabel = computed(() => {
 const updateAllIsRunning = computed(() => {
   const s = updateAllJob.value?.status
   return s === 'pending' || s === 'running'
+})
+
+// #12593: reconnecting affordance during the stage-3 (slm_self_update) window,
+// when the SLM control plane restarts itself and polling fails transiently.
+// Derives from the last-known running stage + transient-error count, so it
+// resets to false automatically as soon as a poll succeeds again.
+const updateAllReconnecting = computed(() =>
+  isSelfUpdateReconnecting(updateAllJob.value, updateAllTransientErrors.value),
+)
+
+// #12593: auto-expand stage-3 logs while reconnecting so the backend
+// "service will restart" message is visible during the restart window.
+watch(updateAllReconnecting, (reconnecting) => {
+  if (reconnecting) expandedStageLogs.value.add(SLM_SELF_UPDATE_STAGE)
 })
 
 function toggleStageLog(name: string): void {
@@ -495,21 +533,101 @@ async function handleCheckDrift(): Promise<void> {
   }
 }
 
-// #7149: Resync the selected component from code_source/, then re-check drift.
+function _stopResolveDriftPoll(): void {
+  if (resolveDriftPollTimer) {
+    clearTimeout(resolveDriftPollTimer)
+    resolveDriftPollTimer = null
+  }
+  resolveDriftPolling.value = false
+}
+
+/**
+ * A transient error means the request never reached the poller (e.g. the
+ * component restarting itself). Returns true if polling should continue.
+ */
+function _handleResolveDriftTransientError(): boolean {
+  resolveDriftTransientErrors.value += 1
+  if (resolveDriftTransientErrors.value >= RESOLVE_DRIFT_MAX_TRANSIENT_ERRORS) {
+    resolveDriftLostContact.value = true
+    _stopResolveDriftPoll()
+    isResolvingDrift.value = false
+    return false
+  }
+  if (resolveDriftTransientErrors.value >= RESOLVE_DRIFT_LOST_CONTACT_ERRORS) {
+    resolveDriftLostContact.value = true
+  }
+  return true
+}
+
+/** Job reached a terminal status ('completed'/'failed') — stop polling and report. */
+async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Promise<void> {
+  _stopResolveDriftPoll()
+  isResolvingDrift.value = false
+  if (result.status === 'completed' && result.success) {
+    successMessage.value = result.message || `Resynced ${result.component} from code_source`
+    await handleCheckDrift()
+  } else {
+    codeSync.setError(result.message || 'Drift resolve job failed')
+  }
+}
+
+/**
+ * Resilient polling loop for the async drift/resolve job (#11303). Mirrors
+ * _scheduleUpdateAllPoll: undefined = transient error (component's own
+ * restart) → keep polling; null = unknown job_id → stop; otherwise update the
+ * job state and keep polling until a terminal status.
+ */
+function _scheduleResolveDriftPoll(jobId: string): void {
+  if (resolveDriftPolling.value) return
+  resolveDriftPolling.value = true
+  resolveDriftTransientErrors.value = 0
+
+  const poll = async () => {
+    const result = await codeSync.getResolveDriftStatus(jobId)
+
+    if (result === undefined) {
+      if (_handleResolveDriftTransientError()) {
+        resolveDriftPollTimer = setTimeout(poll, 2000)
+      }
+      return
+    }
+
+    resolveDriftLostContact.value = false
+    resolveDriftTransientErrors.value = 0
+
+    if (result === null) {
+      _stopResolveDriftPoll()
+      isResolvingDrift.value = false
+      return
+    }
+
+    resolveDriftJob.value = result
+    if (result.status === 'running' || result.status === 'queued') {
+      resolveDriftPollTimer = setTimeout(poll, 2000)
+      return
+    }
+
+    await _handleResolveDriftTerminal(result)
+  }
+
+  resolveDriftPollTimer = setTimeout(poll, 1000)
+}
+
+// #7149/#11303: Resync the selected component from code_source/ as an async
+// job so the button returns immediately instead of blocking on the rsync +
+// post-sync steps (which can take 40-120s and may restart the component).
 async function handleResolveDrift(): Promise<void> {
   if (!driftReport.value?.drift_detected) return
+  codeSync.clearError()
+  resolveDriftLostContact.value = false
+  resolveDriftJob.value = null
   isResolvingDrift.value = true
-  try {
-    const result = await codeSync.resolveDrift(selectedDriftComponent.value)
-    if (result?.success) {
-      successMessage.value = `Resynced ${result.component} from code_source`
-      // Re-run drift check to confirm resolution
-      await handleCheckDrift()
-    }
-    // Errors are surfaced via codeSync.error already
-  } finally {
+  const job = await codeSync.startResolveDriftAsync(selectedDriftComponent.value)
+  if (!job) {
     isResolvingDrift.value = false
+    return
   }
+  _scheduleResolveDriftPoll(job.job_id)
 }
 
 // =============================================================================
@@ -541,17 +659,24 @@ function _scheduleUpdateAllPoll(): void {
     if (result === undefined) {
       // Transient error (SLM restart in progress)
       updateAllTransientErrors.value += 1
-      if (updateAllTransientErrors.value >= UPDATE_ALL_MAX_TRANSIENT_ERRORS) {
+      const decision = classifyUpdateAllPollError(
+        updateAllTransientErrors.value,
+        UPDATE_ALL_LOST_CONTACT_ERRORS,
+        UPDATE_ALL_MAX_TRANSIENT_ERRORS,
+      )
+      if (decision === 'giveup') {
         // Gave up — show "lost contact" banner, re-enable CTA
         updateAllLostContact.value = true
         updateAllPolling.value = false
         updateAllPollTimer = null
         return
       }
-      if (updateAllTransientErrors.value >= UPDATE_ALL_LOST_CONTACT_ERRORS) {
+      if (decision === 'lost-contact') {
         updateAllLostContact.value = true
       }
-      // Keep polling (backoff: 2s)
+      // Keep polling (backoff: 2s). During stage-3, updateAllReconnecting is
+      // already true (transient errors >= 1) so the reconnecting affordance
+      // shows immediately without waiting for the lost-contact threshold.
       updateAllPollTimer = setTimeout(poll, 2000)
       return
     }
@@ -621,6 +746,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
   _stopUpdateAllPoll()
+  _stopResolveDriftPoll()
 })
 </script>
 
@@ -704,6 +830,16 @@ onUnmounted(() => {
 
       <!-- Pipeline progress display (shown when job exists) -->
       <div v-if="updateAllJob" class="mt-5">
+        <!-- #12593: inline reconnecting notice during the stage-3 self-restart window -->
+        <div
+          v-if="updateAllReconnecting"
+          class="mb-3 flex items-center gap-2 text-sm text-amber-700"
+        >
+          <svg class="w-4 h-4 animate-spin shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
+        </div>
         <!-- Stage track -->
         <div class="flex items-start gap-0 overflow-x-auto">
           <template v-for="(stage, idx) in updateAllJob.stages" :key="stage.name">
@@ -719,9 +855,10 @@ onUnmounted(() => {
                   <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  <!-- Fleet progress shows numeric fraction; others use i18n status key -->
+                  <!-- Fleet progress shows numeric fraction; others use i18n status key
+                       (stage-3 shows "reconnecting..." while the control plane restarts, #12593) -->
                   <span v-if="stageStatusText(stage) !== null">{{ stageStatusText(stage) }}</span>
-                  <span v-else>{{ $t(stageStatusI18nKey(stage)) }}</span>
+                  <span v-else>{{ $t(stageRunningStatusKey(stage)) }}</span>
                 </div>
                 <!-- F2: terminal/pending status via i18n -->
                 <div v-else class="text-xs">{{ $t(stageStatusI18nKey(stage)) }}</div>
@@ -792,21 +929,36 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- F1: Lost contact banner — shown when polling gives up after transient errors -->
+    <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
+         during the stage-3 self-restart window; escalates to a static warning
+         with a retry CTA only once polling has lost contact / given up. -->
     <div
-      v-if="updateAllLostContact"
+      v-if="updateAllLostContact || updateAllReconnecting"
       class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center justify-between"
     >
       <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          v-if="updateAllReconnecting && !updateAllLostContact"
+          class="w-5 h-5 text-amber-600 animate-spin"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <svg v-else class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div class="flex-1">
           <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-          <div class="text-sm text-amber-700">{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</div>
+          <div class="text-sm text-amber-700">
+            <span v-if="updateAllReconnecting && !updateAllLostContact">
+              {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
+            </span>
+            <span v-else>{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</span>
+          </div>
         </div>
       </div>
       <button
+        v-if="updateAllLostContact"
         @click="updateAllLostContact = false; handleUpdateAll()"
         class="btn btn-secondary text-sm shrink-0 ml-4"
       >
@@ -1039,7 +1191,7 @@ onUnmounted(() => {
           <select
             id="drift-component-select"
             v-model="selectedDriftComponent"
-            :disabled="isDriftLoading"
+            :disabled="isDriftLoading || isResolvingDrift"
             class="form-select text-sm rounded border-gray-300 focus:border-primary-500 focus:ring-primary-500"
           >
             <option value="autobot-slm-backend">autobot-slm-backend</option>
@@ -1124,6 +1276,31 @@ onUnmounted(() => {
           >
             {{ showDriftDetails ? $t('codeSyncView.hideDetails') : $t('codeSyncView.showDetails') }}
           </button>
+        </div>
+
+        <!-- #11303: Async resolve job progress (rsync/pip/build/restart may take 40-120s) -->
+        <div
+          v-if="isResolvingDrift && resolveDriftJob && !resolveDriftLostContact"
+          class="text-sm text-gray-600 mb-3 flex items-center gap-2"
+        >
+          <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {{ resolveDriftJob.post_steps[resolveDriftJob.post_steps.length - 1] || $t('codeSyncView.resyncing') }}
+        </div>
+
+        <!-- #11303: Lost contact banner — component's own service restart drops the connection -->
+        <div
+          v-if="resolveDriftLostContact"
+          class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center gap-3"
+        >
+          <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <div class="font-medium text-amber-900 text-sm">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
+            <div class="text-sm text-amber-700">{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</div>
+          </div>
         </div>
 
         <!-- Drifted files table -->

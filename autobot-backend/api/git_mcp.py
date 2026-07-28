@@ -868,7 +868,7 @@ async def get_git_repo_info() -> Metadata:
 
             except Exception as e:
                 logger.error("Error getting repo info: %s", e)
-                repo_info["error"] = str(e)
+                repo_info["error"] = "Failed to read repository info"
 
         repos_info.append(repo_info)
 

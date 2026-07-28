@@ -102,6 +102,29 @@ _TYPED_ATTRS = frozenset(
     }
 )
 
+# Issue #11537: ARIA roles considered "interactive" for indexed element
+# numbering — the accessibility-tree analogue of the DOM-role allowlist used
+# by autobot-browser-worker/element-index.js for the chat tool's live page.
+INTERACTIVE_ROLES = frozenset(
+    {
+        "button",
+        "link",
+        "textbox",
+        "searchbox",
+        "checkbox",
+        "radio",
+        "combobox",
+        "listbox",
+        "menuitem",
+        "menuitemcheckbox",
+        "menuitemradio",
+        "switch",
+        "slider",
+        "spinbutton",
+        "tab",
+    }
+)
+
 
 class AccessibilitySnapshot:
     """Captures and queries the accessibility tree of a Playwright page.
@@ -169,6 +192,51 @@ class AccessibilitySnapshot:
         if tree is None:
             return ""
         lines = self._node_to_lines(tree, indent)
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Indexed interactive elements (#11537)
+    # ------------------------------------------------------------------
+
+    def index_interactive(self, tree: AccessibilityTree) -> List[Dict[str, Any]]:
+        """Assign a stable, document-order index to every interactive node.
+
+        Mirrors the numbered-element pattern used by the chat tool's live
+        browser worker (autobot-browser-worker/element-index.js) — the
+        OpenManus fix for LLM selector-guessing — for the accessibility-tree
+        snapshots captured by this class (research-browser sessions).
+
+        Args:
+            tree: Root node returned by :meth:`capture`.
+
+        Returns:
+            List of ``{"index": int, "role": str, "name": str}`` dicts in
+            document order; empty when *tree* is ``None`` or has no
+            interactive nodes.
+        """
+        if tree is None:
+            return []
+        nodes: List[AccessibilityNode] = []
+        self._collect(tree, lambda n: n.role.lower() in INTERACTIVE_ROLES, nodes)
+        return [{"index": i, "role": n.role, "name": n.name} for i, n in enumerate(nodes)]
+
+    def to_indexed_text(self, tree: AccessibilityTree) -> str:
+        """Render the numbered interactive-element menu as plain text for LLM consumption.
+
+        Args:
+            tree: Root node returned by :meth:`capture`.
+
+        Returns:
+            One ``[index] role "name"`` line per interactive element, or an
+            empty string when there are none.
+        """
+        elements = self.index_interactive(tree)
+        if not elements:
+            return ""
+        lines = []
+        for el in elements:
+            prefix = f'[{el["index"]}] {el["role"]}'
+            lines.append(f'{prefix} "{el["name"]}"' if el["name"] else prefix)
         return "\n".join(lines)
 
     # ------------------------------------------------------------------

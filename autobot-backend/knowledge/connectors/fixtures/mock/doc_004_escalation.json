@@ -1,0 +1,8 @@
+{
+  "id": "doc-004",
+  "title": "Customer Support Escalation Policy",
+  "category": "support",
+  "author": "support-lead",
+  "updated_at": "2026-04-18T16:45:00+00:00",
+  "content": "Escalate to on-call engineering when: a customer reports data loss, an outage affects more than one tenant, or a security concern is raised. Tier-1 handles password resets and billing questions directly; everything else routes through the escalation queue with a 15-minute SLA acknowledgement."
+}

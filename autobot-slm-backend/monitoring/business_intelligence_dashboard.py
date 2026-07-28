@@ -21,7 +21,7 @@ import logging
 import os
 import statistics
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -37,6 +37,7 @@ from performance_monitor import ALERT_THRESHOLDS
 from autobot_shared.monitoring.prometheus_query import query_instant
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.ssot_config import get_config
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -439,7 +440,7 @@ class BusinessIntelligenceDashboard:
             )
 
             return ROIMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 hardware_investment_usd=total_hardware_cost,
                 operational_cost_monthly_usd=monthly_operational_cost,
                 performance_improvement_percent=performance_improvement,
@@ -453,7 +454,7 @@ class BusinessIntelligenceDashboard:
         except Exception as e:
             self.logger.error("Error calculating ROI metrics: %s", e)
             return ROIMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 hardware_investment_usd=0.0,
                 operational_cost_monthly_usd=0.0,
                 performance_improvement_percent=0.0,
@@ -612,7 +613,7 @@ class BusinessIntelligenceDashboard:
 
                 cost_analyses.append(
                     CostAnalysis(
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=utc_timestamp(),
                         component=component,
                         monthly_cost_usd=data["monthly_cost"],
                         utilization_percent=utilization,
@@ -741,7 +742,7 @@ class BusinessIntelligenceDashboard:
         try:
             if len(data) < 5:
                 return PerformancePrediction(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=utc_timestamp(),
                     metric_name=metric_name,
                     current_value=0.0,
                     predicted_7d=0.0,
@@ -762,7 +763,7 @@ class BusinessIntelligenceDashboard:
             recommendation = self._generate_metric_recommendation(metric_name, trend_direction, predicted_30d)
 
             return PerformancePrediction(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 metric_name=metric_name,
                 current_value=current_value,
                 predicted_7d=predicted_7d,
@@ -775,7 +776,7 @@ class BusinessIntelligenceDashboard:
         except Exception as e:
             self.logger.error("Error predicting trend for %s: %s", metric_name, e)
             return PerformancePrediction(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 metric_name=metric_name,
                 current_value=0.0,
                 predicted_7d=0.0,
@@ -937,7 +938,7 @@ class BusinessIntelligenceDashboard:
             )
 
             return SystemHealthScore(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 overall_score=overall_score,
                 availability_score=availability_score,
                 performance_score=performance_score,
@@ -951,7 +952,7 @@ class BusinessIntelligenceDashboard:
         except Exception as e:
             self.logger.error("Error calculating system health score: %s", e)
             return SystemHealthScore(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 overall_score=0.0,
                 availability_score=0.0,
                 performance_score=0.0,
@@ -971,7 +972,7 @@ class BusinessIntelligenceDashboard:
             health_score = await self.calculate_system_health_score()
 
             dashboard_report = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
                 "summary": {
                     "overall_health_score": health_score.overall_score,
                     "total_roi_percent": roi_metrics.total_roi_percent,
@@ -1000,12 +1001,12 @@ class BusinessIntelligenceDashboard:
             self.logger.error("Error generating dashboard report: %s", e)
             return {
                 "error": "Failed to generate dashboard report",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
 
     async def _store_dashboard_report(self, report: Dict[str, Any]):
         """Store dashboard report in Redis and files."""
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = utc_timestamp()
 
         if self.redis_client:
             try:

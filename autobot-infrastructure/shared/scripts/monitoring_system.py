@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Advanced Monitoring and Alerting System for AutoBot
@@ -41,7 +42,7 @@ except ImportError:
     import aiohttp
 
 # Import centralized Redis client
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -335,7 +336,7 @@ class SystemMonitor:
         """
         try:
             # Issue #666: Use async_client=True to avoid blocking the event loop
-            r = await get_redis_client(async_client=True, database="main")
+            r = await get_async_redis_client(database="main")
             if r:
                 await r.ping()
                 service_metrics["status"] = "healthy"
@@ -562,7 +563,7 @@ class SystemMonitor:
 
             elif check["service"] == "redis" and check["endpoint"] == "ping":
                 # Issue #666: Fixed blocking I/O - use async Redis client
-                r = await get_redis_client(async_client=True, database="main")
+                r = await get_async_redis_client(database="main")
                 if r:
                     await r.ping()
                     result["response_time_ms"] = (time.time() - start_time) * 1000

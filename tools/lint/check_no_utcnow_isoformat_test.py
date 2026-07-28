@@ -154,19 +154,42 @@ def test_non_iso_strftime_not_flagged(tmp_path: Path) -> None:
     assert rc == 0
 
 
-def test_bare_utcnow_without_isoformat_not_flagged(tmp_path: Path) -> None:
-    # Pattern A/B/C (#5211 territory) — the bare utcnow() call is NOT
-    # the responsibility of THIS hook; #5211's own enforcement (Ruff
-    # DTZ003) will cover it once enabled.
+def test_bare_utcnow_is_flagged_with_datetime_now_fix(tmp_path: Path) -> None:
+    # This test previously asserted bare `datetime.utcnow()` was NOT this hook's
+    # responsibility, deferring to #5211's Ruff DTZ003. #7436 (PR #7593)
+    # deliberately changed that by adding the `bare-utcnow` pattern to eliminate
+    # utcnow() drift, but did not update this test — so it has been failing ever
+    # since (#12670). The hook's actual, intended behaviour is asserted here.
     f = _write(
         tmp_path,
-        "ok.py",
+        "bare.py",
         "from datetime import datetime\n"
         "started_at = datetime.utcnow()\n"
         "delta = (datetime.utcnow() - started_at).total_seconds()\n",
     )
     rc = hook.main(["check_no_utcnow_isoformat", str(f)])
-    assert rc == 0
+    assert rc == 1
+
+    hits = hook._scan(f, tmp_path)
+    assert [h[1] for h in hits] == ["bare-utcnow", "bare-utcnow"]
+    # The fix it names must be datetime_now(), not the timestamp-string helper.
+    assert "datetime_now()" in hits[0][2]
+    assert "utc_timestamp()" not in hits[0][2]
+
+
+def test_utcnow_isoformat_line_reports_one_hit_not_two(tmp_path: Path) -> None:
+    """`bare-utcnow` must not re-report a line `isoformat` already caught (#12670)."""
+    f = _write(
+        tmp_path,
+        "iso.py",
+        "from datetime import datetime\nts = datetime.utcnow().isoformat()\n",
+    )
+    hits = hook._scan(f, tmp_path)
+
+    assert [h[1] for h in hits] == ["isoformat"]
+    # And the message names the timestamp helper, without contradicting itself.
+    assert "utc_timestamp()" in hits[0][2]
+    assert "datetime_now()" not in hits[0][2]
 
 
 # ---------------------------------------------------------------------------
@@ -312,17 +335,12 @@ def test_suggestion_uses_helper_for_default_path() -> None:
     assert "autobot_shared.time_utils" in msg
 
 
-def test_suggestion_uses_inline_for_slm_agent_standalone() -> None:
-    # Standalone agent runs on remote nodes possibly without autobot_shared
-    msg = hook._suggestion_for("autobot-slm-agent/agent.py")
-    assert "datetime.now(timezone.utc).isoformat()" in msg
-    assert "inline" in msg
-
-
 def test_suggestion_uses_inline_for_slm_backend_agent_subpackage() -> None:
-    # Same agent code lives under slm-backend/slm/agent/ — also remote-deployed
+    # Standalone agent runs on remote nodes possibly without autobot_shared
+    # (autobot-slm-backend/slm/agent/ — also remote-deployed)
     msg = hook._suggestion_for("autobot-slm-backend/slm/agent/health_collector.py")
     assert "datetime.now(timezone.utc).isoformat()" in msg
+    assert "inline" in msg
 
 
 def test_suggestion_uses_inline_for_ansible_synced_copy() -> None:
@@ -340,7 +358,7 @@ def test_suggestion_uses_inline_for_infra_shared_scripts() -> None:
 def test_scan_emits_path_aware_suggestion_in_message(tmp_path: Path) -> None:
     # End-to-end: a violation in an inline-path file produces a message
     # recommending the inline form, not utc_timestamp().
-    target = tmp_path / "autobot-slm-agent" / "agent.py"
+    target = tmp_path / "autobot-slm-backend" / "slm" / "agent" / "agent.py"
     target.parent.mkdir(parents=True)
     target.write_text(
         "from datetime import datetime\nts = datetime.utcnow().isoformat()\n",

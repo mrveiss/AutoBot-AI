@@ -328,13 +328,13 @@ function formatDate(dateStr: string | null): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
 }
 
 .modal-content {
-  background: var(--bg-secondary, #1e1e2e);
-  color: var(--text-primary, #fff);
-  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg);
   width: 600px;
   max-width: 90vw;
   max-height: 80vh;
@@ -346,75 +346,75 @@ function formatDate(dateStr: string | null): string {
 .modal-header {
   display: flex;
   align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #333);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-header h3 {
   margin: 0;
   flex: 1;
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
 }
 
 .hostname {
-  color: var(--text-muted, #888);
-  margin-right: 16px;
+  color: var(--text-muted);
+  margin-right: var(--spacing-4);
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: var(--text-2xl);
   cursor: pointer;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
 }
 
 .modal-body {
-  padding: 20px;
+  padding: var(--spacing-5);
   overflow-y: auto;
   flex: 1;
 }
 
 .loading {
-  padding: 40px;
+  padding: var(--spacing-10);
   text-align: center;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
 }
 
 .section {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .section h4 {
-  margin: 0 0 12px 0;
-  color: var(--text-secondary, #aaa);
-  font-size: 14px;
+  margin: 0 0 var(--spacing-3) 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   text-transform: uppercase;
 }
 
 .empty-message {
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .role-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .role-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg-tertiary, #2a2a3e);
-  border-radius: 4px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-default);
 }
 
 .role-name {
   font-weight: 500;
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
 }
 
 .role-badge {
@@ -425,13 +425,13 @@ function formatDate(dateStr: string | null): string {
 }
 
 .role-badge.auto {
-  background: var(--info-bg, #1e3a5f);
-  color: var(--info-color, #60a5fa);
+  background: var(--info-bg);
+  color: var(--info-color);
 }
 
 .role-badge.manual {
-  background: var(--warning-bg, #5f4b1e);
-  color: var(--warning-color, #fbbf24);
+  background: var(--warning-bg);
+  color: var(--warning-color);
 }
 
 .role-table {
@@ -441,113 +441,113 @@ function formatDate(dateStr: string | null): string {
 
 .role-table th,
 .role-table td {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   text-align: left;
-  border-bottom: 1px solid var(--border-color, #333);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .role-table td {
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
 }
 
 .role-table th {
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   font-weight: 500;
-  font-size: 12px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 
 .status {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 2px var(--spacing-2);
   border-radius: 3px;
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .status-active {
-  background: var(--success-bg, #1e5f3a);
-  color: var(--success-color, #34d399);
+  background: var(--success-bg);
+  color: var(--success-color);
 }
 
 .status-inactive {
-  background: var(--warning-bg, #5f4b1e);
-  color: var(--warning-color, #fbbf24);
+  background: var(--warning-bg);
+  color: var(--warning-color);
 }
 
 .status-not-installed {
-  background: var(--bg-tertiary, #2a2a3e);
-  color: var(--text-muted, #888);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
 }
 
 .actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .assign-form {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .role-select {
   flex: 1;
-  padding: 8px 12px;
-  background: var(--bg-tertiary, #2a2a3e);
-  border: 1px solid var(--border-color, #333);
-  border-radius: 4px;
-  color: var(--text-primary, #fff);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-default);
+  color: var(--text-primary);
 }
 
 .port-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .port-badge {
-  padding: 4px 8px;
-  background: var(--bg-tertiary, #2a2a3e);
-  color: var(--text-primary, #fff);
-  border-radius: 4px;
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: var(--radius-default);
   font-family: monospace;
 }
 
 .port-process {
-  color: var(--text-muted, #888);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
 
 .sync-message {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--info-bg, #1e3a5f);
-  border-radius: 4px;
-  color: var(--info-color, #60a5fa);
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: var(--info-bg);
+  border-radius: var(--radius-default);
+  color: var(--info-color);
 }
 
 .modal-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color, #333);
+  padding: var(--spacing-4) var(--spacing-5);
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .btn {
-  padding: 8px 16px;
+  padding: var(--spacing-2) var(--spacing-4);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   cursor: pointer;
   font-weight: 500;
 }
 
 .btn-sm {
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: var(--spacing-1) var(--spacing-2);
+  font-size: var(--text-xs);
 }
 
 .btn-primary {
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color);
   color: white;
 }
 
@@ -557,45 +557,45 @@ function formatDate(dateStr: string | null): string {
 }
 
 .btn-secondary {
-  background: var(--bg-tertiary, #2a2a3e);
-  color: var(--text-primary, #fff);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .btn-danger {
-  background: var(--danger-color, #ef4444);
+  background: var(--danger-color);
   color: white;
 }
 
 /* Removal confirmation dialog (Issue #1041) */
 .confirm-overlay {
-  margin-top: 16px;
-  padding: 16px;
-  background: var(--bg-tertiary, #2a2a3e);
-  border: 1px solid var(--danger-color, #ef4444);
-  border-radius: 6px;
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-4);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--danger-color);
+  border-radius: var(--radius-md);
 }
 
 .confirm-dialog h4 {
-  margin: 0 0 8px 0;
-  color: var(--text-primary, #fff);
-  font-size: 14px;
+  margin: 0 0 var(--spacing-2) 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .confirm-warning {
-  margin: 0 0 12px 0;
-  color: var(--warning-color, #fbbf24);
+  margin: 0 0 var(--spacing-3) 0;
+  color: var(--warning-color);
   font-size: 13px;
 }
 
 .confirm-text {
-  margin: 0 0 12px 0;
-  color: var(--text-muted, #888);
+  margin: 0 0 var(--spacing-3) 0;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .confirm-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
   flex-wrap: wrap;
 }
 

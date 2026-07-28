@@ -12,6 +12,7 @@ returns fresh results instead of stale pre-scan values.
 """
 
 import importlib.util
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,9 +20,10 @@ import pytest
 
 def _load_progress_tracker():
     """Load progress_tracker.py without triggering the heavy analyzers import chain."""
+    module_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "progress_tracker.py")
     spec = importlib.util.spec_from_file_location(
         "progress_tracker_under_test",
-        "autobot-backend/api/codebase_analytics/progress_tracker.py",
+        module_path,
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

@@ -41,12 +41,7 @@ describe('Sequential Thinking Server Integration', () => {
         version: "1.0.0"
       },
       {
-        capabilities: {
-          tools: {
-            list: true,
-            call: true
-          }
-        }
+        capabilities: {}
       }
     );
 

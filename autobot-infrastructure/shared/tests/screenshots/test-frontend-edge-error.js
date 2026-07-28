@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Comprehensive frontend error testing with Edge browser behavior simulation
  * Tests specifically for "An unexpected response format was received" error

@@ -194,7 +194,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "سلامت سیستم"
+    "systemHealth": "سلامت سیستم",
+    "providerFallback": "جایگزینی ارائه‌دهنده",
+    "advancedControl": "کنترل پیشرفته"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "نمایش بایگانی‌شده‌ها",
+    "delete": "حذف",
+    "confirmDeleteTitle": "حذف شرکت",
+    "confirmDelete": "«{name}» حذف شود؟ این کار شرکت بایگانی‌شده و داده‌های آن را حذف می‌کند. این عمل از اینجا قابل بازگردانی نیست.",
+    "deleteError": "حذف شرکت ممکن نشد.",
+    "deleteHasChildren": "این شرکت زیرشرکت دارد. پیش از حذف، آن‌ها را حذف یا جابه‌جا کنید.",
+    "onboarding": "راه‌اندازی",
+    "active": "فعال",
+    "paused": "متوقف‌شده",
+    "offboarding": "خروج",
+    "archived": "بایگانی‌شده",
+    "activate": "فعال‌سازی",
+    "suspend": "توقف موقت",
+    "offboard": "خروج",
+    "archive": "بایگانی",
+    "confirmTitle": "تأیید تغییر وضعیت",
+    "confirmOffboard": "خروج «{name}»؟ این کار تعطیلی شرکت را آغاز می‌کند.",
+    "confirmArchive": "بایگانی «{name}»؟ این یک وضعیت نهایی است و قابل بازگشت نیست.",
+    "confirm": "تأیید",
+    "updateError": "تغییر وضعیت شرکت ممکن نشد."
   },
   "llcMembers": {
     "title": "اعضا",
@@ -1881,6 +1905,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "نمایش {shown} از {total}"
     }
   },
   "knowledge": {
@@ -4332,6 +4359,17 @@
       "presetHigh": "High",
       "presetMediumDesc": "Balanced quality and performance",
       "delay": "Delay:"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "redis": {
@@ -4957,7 +4995,8 @@
       "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
       "deletedSuccess": "Deleted {count} chats",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "نمایش نشان جایگزین"
     },
     "overseer": {
       "copyCommand": "Copy command",
@@ -5389,6 +5428,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "از طریق جایگزین",
+        "tooltip": "ارائه‌دهنده اصلی در دسترس نیست — پاسخ از طریق ارائه‌دهنده جایگزین ({primary} → {fallback})."
       }
     },
     "docResult": {
@@ -5518,7 +5561,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "حذف گفتگو ممکن نشد. لطفاً دوباره تلاش کنید.",
+      "createFailed": "ایجاد گفتگو ممکن نشد: {error}",
+      "loadSessionsFailed": "بارگذاری جلسات گفتگو ممکن نشد: {error}",
+      "loadMessagesFailed": "بارگذاری پیام‌ها ممکن نشد: {error}",
+      "saveFailed": "ذخیره گفتگو ممکن نشد: {error}",
+      "resetFailed": "بازنشانی گفتگو ممکن نشد: {error}",
+      "clearFailed": "پاک کردن گفتگوها ممکن نشد: {error}",
+      "invalidFormat": "قالب پیام نامعتبر است. لطفاً ورودی خود را بررسی کرده و دوباره تلاش کنید.",
+      "serviceUnavailable": "سرویس گفتگو در دسترس نیست. لطفاً صفحه را تازه‌سازی کرده و دوباره تلاش کنید.",
+      "serverError": "خطای سرور رخ داد. لطفاً لحظه‌ای دیگر دوباره تلاش کنید.",
+      "networkFailed": "اتصال شبکه ناموفق بود. لطفاً اتصال اینترنت خود را بررسی کنید.",
+      "timeout": "زمان درخواست به پایان رسید. لطفاً با پیام کوتاه‌تری دوباره تلاش کنید.",
+      "sendFailed": "ارسال پیام ممکن نشد: {error}",
+      "sendFailedAfterRetries": "ارسال پیام پس از {attempts} تلاش ممکن نشد: {error}. لطفاً اتصال خود را بررسی کرده و دوباره تلاش کنید.",
+      "invalidFormatDetail": "قالب پیام نامعتبر است: {error}. لطفاً ورودی خود را بررسی کرده و دوباره تلاش کنید.",
+      "networkFailedRetry": "اتصال شبکه ناموفق بود. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید."
+    }
   },
   "serviceMessages": {
     "metadata": "Metadata",
@@ -6652,7 +6713,14 @@
       "disabledMessage": "معیارهای استفاده محلی غیرفعال شد. هیچ معیاری ثبت نخواهد شد.",
       "loadFailed": "بارگذاری تنظیمات تله‌متری ناموفق بود",
       "updateFailed": "به‌روزرسانی تنظیمات تله‌متری ناموفق بود"
-    }
+    },
+    "subtitle": "تجربه AutoBot خود را با تنظیمات شخصی سفارشی کنید",
+    "featureFlags": "پرچم‌های قابلیت",
+    "telegram": "تلگرام",
+    "notifications": "اعلان‌ها",
+    "mobileDevices": "دستگاه‌های همراه",
+    "privacy": "حریم خصوصی",
+    "providerAuthDesc": "با استفاده از اشتراک فعلی خود به‌جای کلید API پولی به ارائه‌دهندگان متصل شوید. توکن‌ها به‌صورت امن در مخزن اسرار AutoBot ذخیره می‌شوند."
   },
   "visualizations": {
     "systemArchitecture": {
@@ -7187,7 +7255,8 @@
     "custom": "custom",
     "stopListening": "Stop listening",
     "stop": "Stop",
-    "confirmDeleteVoiceTitle": "حذف نمایه صدا"
+    "confirmDeleteVoiceTitle": "حذف نمایه صدا",
+    "tapToEnableAudio": "برای فعال‌سازی پخش صدا هر جایی را لمس کنید"
   },
   "auth": {
     "login": {
@@ -7810,22 +7879,7 @@
       "createFailed": "Failed to create company"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ New",
-      "selectCompany": "Select a company to view threads.",
-      "loading": "Loading...",
-      "noThreads": "No threads yet.",
-      "emptyState": "Select a thread or create a new one.",
-      "loadingMessages": "Loading messages...",
-      "noMessages": "No messages yet.",
-      "messagePlaceholder": "Type a message...",
-      "send": "Send",
-      "newThreadTitle": "New Thread",
-      "titleLabel": "Title",
-      "titlePlaceholder": "Thread title...",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating..."
+      "selectCompany": "Select a company to view threads."
     },
     "dashboard": {
       "title": "Company Dashboard",
@@ -7957,7 +8011,15 @@
       "count": "{count} boards",
       "loading": "Loading boards…",
       "empty": "No boards yet — boards are created per project (Kanban) and per sprint (Sprint).",
-      "created": "Created {date}"
+      "created": "Created {date}",
+      "newKanban": "New Kanban Board",
+      "createTitle": "Create Kanban Board",
+      "project": "Project",
+      "selectProject": "Select a project…",
+      "loadingProjects": "Loading projects…",
+      "noProjects": "No projects yet — create a project first.",
+      "creating": "Creating…",
+      "create": "Create Board"
     },
     "kanban": {
       "title": "Kanban Board",
@@ -7996,7 +8058,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "محدود به {name}",
+      "showAll": "نمایش کل شرکت"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "ذخیره تغییر ممکن نشد. لطفاً دوباره تلاش کنید."
+      }
     },
     "orgChart": {
       "title": "Org Chart",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
     },
-    "ceoChat": {
-      "sendError": "Failed to send your message. It has been restored so you can retry."
-    },
     "timeline": {
       "rescheduleError": "Failed to save the new schedule. The change was reverted."
     },
@@ -8603,6 +8667,22 @@
       "error": "بارگذاری سلامت سیستم ناموفق بود",
       "refresh": "بازنشانی",
       "noSources": "هیچ منبع محتوایی پیکربندی نشده است"
+    },
+    "providerFallback": {
+      "title": "جایگزینی ارائه‌دهنده",
+      "subtitle": "فعالیت زندهٔ جایگزینی ارائه‌دهندگان و مدل‌های LLM",
+      "status": "وضعیت",
+      "stateHealthy": "بدون جایگزینی فعال",
+      "stateDegraded": "جایگزینی فعال",
+      "active": "جایگزینی‌های فعال",
+      "chains": "زنجیره‌های پیکربندی‌شده",
+      "timeline": "فعالیت زنده",
+      "switched": "تغییر یافت",
+      "exhausted": "تمام‌شده",
+      "refresh": "تازه‌سازی",
+      "loading": "در حال بارگیری وضعیت جایگزینی…",
+      "noData": "هیچ فعالیت جایگزینی ارائه‌دهنده‌ای نیست",
+      "none": "هیچ"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} به‌روز شد",
   "chat.modelPicker.label": "مدل",
   "chat.modelPicker.auto": "خودکار (مدل پیش‌فرض)",
-  "chat.modelPicker.title": "مدل و ارائه‌دهنده را برای این گفتگو انتخاب کنید"
+  "chat.modelPicker.title": "مدل و ارائه‌دهنده را برای این گفتگو انتخاب کنید",
+  "budgetPolicies": {
+    "title": "Budget Policies",
+    "subtitle": "Manage spend thresholds and auto-pause rules for agents",
+    "newPolicy": "New Policy",
+    "scope": "Scope",
+    "scopeAll": "All",
+    "scopeAgent": "Agent",
+    "scopeProject": "Project",
+    "scopeTask": "Task",
+    "scopeTenant": "Tenant",
+    "loading": "Loading policies…",
+    "empty": "No budget policies found. Create one to enforce spend limits.",
+    "colName": "Name",
+    "colScope": "Scope",
+    "colScopeId": "Scope ID",
+    "colPeriod": "Period",
+    "colThreshold": "Threshold",
+    "colWarning": "Warning",
+    "colAction": "Action",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "statusEnabled": "enabled",
+    "statusDisabled": "disabled",
+    "checkPauseTitle": "Check Agent Pause Status",
+    "agentIdPlaceholder": "Agent ID…",
+    "checkStatus": "Check Status",
+    "labelAgent": "Agent:",
+    "labelPaused": "Paused:",
+    "labelReason": "Reason:",
+    "labelSince": "Since:",
+    "resumeAgent": "Resume Agent",
+    "modalEditTitle": "Edit Policy",
+    "modalNewTitle": "New Budget Policy",
+    "fieldName": "Name",
+    "fieldNamePlaceholder": "My policy",
+    "fieldDescription": "Description",
+    "fieldDescriptionPlaceholder": "Optional",
+    "fieldScope": "Scope",
+    "fieldScopeId": "Scope ID",
+    "fieldScopeIdPlaceholder": "e.g. agent-uuid",
+    "fieldPeriod": "Period",
+    "periodHour": "Hour",
+    "periodDay": "Day",
+    "periodMonth": "Month",
+    "fieldThreshold": "Threshold USD",
+    "fieldWarning": "Warning % (0–100)",
+    "fieldAction": "Action",
+    "actionAlert": "Alert only",
+    "actionPause": "Pause",
+    "actionAlertThenPause": "Alert then Pause",
+    "fieldEnabled": "Enabled",
+    "saveChanges": "Save Changes",
+    "createPolicy": "Create Policy",
+    "deleteTitle": "Delete Policy",
+    "deleteConfirm": "Are you sure you want to delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "telemetryConsent": {
+    "title": "Local Usage Metrics",
+    "intro": "AutoBot can record {metrics} locally to power your own monitoring dashboards. This data stays on your infrastructure and is {never}.",
+    "introMetrics": "anonymous operational metrics",
+    "introNever": "never sent to anyone",
+    "summaryTitle": "What's recorded locally:",
+    "dataApi": "API endpoint usage and response times",
+    "dataVoice": "Voice session duration and token counts",
+    "dataFeature": "Feature usage patterns",
+    "privacyLabel": "Never recorded:",
+    "privacyText": "personal data, code content, or chat messages.",
+    "footer": "You can change this preference anytime in {settings}.",
+    "footerSettings": "Settings → Privacy",
+    "keepOff": "Keep Off",
+    "enable": "Enable"
+  },
+  "hireAgent": {
+    "title": "Hire Agent",
+    "agentName": "Agent name",
+    "agentNamePlaceholder": "e.g. Builder-1",
+    "model": "Model",
+    "modelSonnet": "Sonnet (default)",
+    "modelHaiku": "Haiku (assistant)",
+    "orgRole": "Org role",
+    "roleWorker": "Worker",
+    "roleSpecialist": "Specialist",
+    "roleCoordinator": "Coordinator",
+    "roleManager": "Manager",
+    "adapter": "Adapter",
+    "hiring": "Hiring…",
+    "hire": "Hire"
+  },
+  "advancedControl": {
+    "title": "کنترل پیشرفته",
+    "subtitle": "درخواست‌های تصاحب را تأیید کنید و نشست‌های فعال کنترل انسانی را مدیریت کنید",
+    "tabListAriaLabel": "برگه‌های کنترل پیشرفته",
+    "loading": "در حال بارگذاری صف تصاحب…",
+    "tabs": {
+      "takeoverQueue": "صف تصاحب",
+      "streaming": "پخش زنده",
+      "monitoring": "پایش",
+      "comingSoon": "به‌زودی",
+      "comingSoonMessage": "این برگه هنوز در دسترس نیست.",
+      "streamingTitle": "پخش دسکتاپ",
+      "monitoringTitle": "پایش سیستم"
+    },
+    "summary": {
+      "pending": "در انتظار",
+      "active": "فعال",
+      "paused": "متوقف‌شده",
+      "completed": "تکمیل‌شده",
+      "systemStatus": "وضعیت سیستم",
+      "statusNormal": "عادی",
+      "statusTakeoverActive": "تصاحب فعال",
+      "statusEmergency": "اضطراری"
+    },
+    "pending": {
+      "title": "درخواست‌های تصاحب در انتظار",
+      "colTrigger": "محرک",
+      "colReason": "دلیل",
+      "colPriority": "اولویت",
+      "colRequestedBy": "درخواست‌دهنده",
+      "colCreatedAt": "ایجادشده",
+      "colActions": "عملیات",
+      "unknownAgent": "عامل ناشناس",
+      "emptyTitle": "درخواستی در انتظار نیست",
+      "emptyMessage": "هیچ درخواست تصاحبی منتظر تأیید نیست."
+    },
+    "active": {
+      "title": "نشست‌های فعال تصاحب",
+      "colOperator": "اپراتور",
+      "colStatus": "وضعیت",
+      "colStartedAt": "شروع‌شده",
+      "colActionsExecuted": "عملیات اجراشده",
+      "emptyTitle": "نشست فعالی وجود ندارد",
+      "emptyMessage": "در حال حاضر هیچ نشست کنترل انسانی فعالی وجود ندارد."
+    },
+    "actions": {
+      "approve": "تأیید",
+      "pause": "توقف",
+      "resume": "ازسرگیری",
+      "complete": "تکمیل"
+    },
+    "streaming": {
+      "title": "نشست‌های پخش زنده",
+      "newSession": "نشست جدید",
+      "terminate": "پایان دادن",
+      "capVncAvailable": "VNC در دسترس",
+      "capNovncAvailable": "noVNC در دسترس",
+      "capMaxSessions": "حداکثر نشست‌ها",
+      "formUserIdLabel": "شناسه کاربر",
+      "formUserIdPlaceholder": "مثلاً: user-123",
+      "formResolutionLabel": "وضوح تصویر",
+      "formResolutionPlaceholder": "مثلاً: 1920x1080",
+      "formDepthLabel": "عمق رنگ",
+      "colSessionId": "شناسه نشست",
+      "colUser": "کاربر",
+      "colStatus": "وضعیت",
+      "colDisplay": "نمایشگر",
+      "colCreatedAt": "ایجادشده",
+      "colActions": "عملیات",
+      "emptyTitle": "نشست پخش زنده فعالی وجود ندارد",
+      "emptyMessage": "در حال حاضر هیچ نشست پخش زنده دسکتاپ فعالی وجود ندارد."
+    },
+    "monitoring": {
+      "loading": "در حال بارگذاری داده‌های نظارت بر سیستم…",
+      "healthTitle": "سلامت سیستم",
+      "healthStatus": "وضعیت سلامت",
+      "statusHealthy": "سالم",
+      "statusUnhealthy": "ناسالم",
+      "desktopStreamingAvailable": "در دسترس بودن پخش زنده دسکتاپ",
+      "novncAvailable": "در دسترس بودن noVNC",
+      "activeStreamingSessions": "نشست‌های پخش زنده فعال",
+      "pendingTakeovers": "تصاحب‌های در انتظار",
+      "activeTakeovers": "تصاحب‌های فعال",
+      "pausedTasks": "وظایف متوقف‌شده",
+      "resourceTitle": "استفاده از منابع",
+      "cpuUsage": "استفاده از پردازنده",
+      "memoryUsage": "استفاده از حافظه",
+      "diskUsage": "استفاده از دیسک",
+      "processCount": "تعداد فرآیندها",
+      "loadAverage": "میانگین بار (۱ دقیقه / ۵ دقیقه / ۱۵ دقیقه)",
+      "uptime": "زمان کارکرد",
+      "emergencyStopTitle": "منطقه خطر",
+      "emergencyStop": "توقف اضطراری",
+      "emergencyStopDescription": "بلافاصله همه عملیات خودمختار را متوقف کرده و درخواست تصاحب انسانی با تأیید خودکار می‌دهد. این عمل قابل بازگشت نیست — فقط زمانی استفاده شود که رفتار خودمختار باید فوراً متوقف شود.",
+      "emergencyStopConfirmTitle": "توقف اضطراری فعال شود؟",
+      "emergencyStopConfirmMessage": "این کار بلافاصله همه وظایف خودمختار را متوقف کرده و یک تصاحب انسانی با اولویت بحرانی را آغاز می‌کند. این عمل قابل بازگشت نیست. ادامه می‌دهید؟",
+      "emergencyStopSuccess": "توقف اضطراری فعال شد — همه عملیات خودمختار متوقف شدند.",
+      "emptyTitle": "داده‌ای برای نظارت وجود ندارد",
+      "emptyMessage": "بارگذاری وضعیت سیستم ممکن نشد."
+    }
+  },
+  "adminUsers": {
+    "title": "User Management",
+    "subtitle": "Manage users, roles, and account status",
+    "addUser": "Add User",
+    "searchPlaceholder": "Search by username, email, or name…",
+    "loading": "Loading users…",
+    "colUsername": "Username",
+    "colEmail": "Email",
+    "colDisplayName": "Display Name",
+    "colRole": "Role",
+    "colVoiceBundle": "Voice Bundle",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "roleAdmin": "admin",
+    "roleUser": "user",
+    "roleReadonly": "readonly",
+    "statusActive": "active",
+    "statusInactive": "inactive",
+    "titleDeactivate": "Deactivate",
+    "titleActivate": "Activate",
+    "titleAssignBundle": "Assign Voice Bundle",
+    "empty": "No users found.",
+    "fieldEmail": "Email",
+    "fieldUsername": "Username",
+    "fieldPassword": "Password",
+    "fieldDisplayName": "Display Name",
+    "createUser": "Create User",
+    "userLabel": "User:",
+    "fieldVoiceBundle": "Voice Bundle",
+    "useRoleDefault": "— Use role default —",
+    "deleteUserTitle": "Delete User",
+    "deleteConfirm": "Delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "زمان‌بندهای پس‌زمینه",
+    "description": "کارهای پس‌زمینه را روشن یا خاموش کنید. تغییرات در چرخهٔ بعدی اعمال می‌شود — بدون راه‌اندازی مجدد.",
+    "refresh": "تازه‌سازی",
+    "loading": "در حال بارگذاری زمان‌بندها…",
+    "empty": "هیچ زمان‌بندی ثبت نشده است.",
+    "overridden": "بازنویسی‌شده",
+    "defaultLabel": "پیش‌فرض",
+    "runtimeLabel": "محیط اجرا",
+    "on": "روشن",
+    "off": "خاموش",
+    "revertToDefault": "بازگشت به پیش‌فرض",
+    "enableTitle": "فعال‌سازی این کار",
+    "disableTitle": "غیرفعال‌سازی این کار",
+    "toggleAria": "تغییر {name}",
+    "loadFailed": "بارگذاری زمان‌بندها ممکن نشد.",
+    "toggleFailed": "تغییر {name} ممکن نشد.",
+    "resetFailed": "بازگرداندن {name} به پیش‌فرض ممکن نشد."
+  }
 }

@@ -64,11 +64,11 @@ const getIconPath = (type: string): string => {
 .toast-container {
   position: fixed;
   top: 80px;
-  right: 20px;
+  right: var(--spacing-5);
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-2);
   max-width: 400px;
   pointer-events: none;
 }
@@ -76,9 +76,9 @@ const getIconPath = (type: string): string => {
 .toast {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 8px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-lg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   pointer-events: auto;
   min-width: 300px;
@@ -136,8 +136,8 @@ const getIconPath = (type: string): string => {
   background: transparent;
   border: none;
   color: var(--a11y-text-muted);
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--spacing-8);
+  min-height: var(--spacing-8);
   border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
@@ -180,8 +180,8 @@ const getIconPath = (type: string): string => {
 
 @media (max-width: 480px) {
   .toast-container {
-    left: 12px;
-    right: 12px;
+    left: var(--spacing-3);
+    right: var(--spacing-3);
     top: 70px;
     max-width: none;
   }

@@ -14,7 +14,7 @@ Covers:
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -56,7 +56,12 @@ def _make_analytics_with_stub():
     """Return (analytics, redis_stub) with Redis injected."""
     analytics = AgentAnalytics()
     stub = _make_redis_stub()
-    analytics._redis_client = stub
+    # Issue #12446: the mixin's lazy-init client attribute is `_redis`
+    # (see AsyncRedisClientMixin), not `_redis_client`. This fixture was
+    # stale after the migration to AsyncRedisClientMixin and silently
+    # injected the mock into an attribute nobody read, which conftest
+    # previously masked (#12441). Same shape as the sister fix #12442.
+    analytics._redis = stub
     return analytics, stub
 
 
@@ -265,6 +270,9 @@ async def test_execute_with_tracking_calls_analytics():
         def get_capabilities(self):
             return []
 
+        async def is_available(self) -> bool:
+            return True
+
     dummy = _DummyAgent()
     mock_analytics = AsyncMock()
     mock_analytics.track_task_start = AsyncMock(return_value=MagicMock())
@@ -300,6 +308,9 @@ async def test_execute_with_tracking_records_failure():
 
         def get_capabilities(self):
             return []
+
+        async def is_available(self) -> bool:
+            return True
 
     broken = _BrokenAgent()
     request = AgentRequest(
@@ -415,17 +426,21 @@ async def test_usage_endpoint_returns_structure():
 @pytest.mark.asyncio
 async def test_usage_endpoint_outcome_filter():
     """outcome= query param filters the daily_trends to matching tasks only."""
+    # Issue #12446: use dates relative to "now" (not a hardcoded past date)
+    # so the endpoint's `days` lookback window doesn't filter these tasks
+    # out as the calendar advances — a hardcoded absolute date rots.
+    now = datetime.now(tz=timezone.utc)
     mock_tasks = [
         {
             "agent_id": "chat",
             "status": "completed",
-            "started_at": "2026-01-01T10:00:00+00:00",
+            "started_at": (now - timedelta(hours=2)).isoformat(),
             "duration_ms": 100.0,
         },
         {
             "agent_id": "chat",
             "status": "failed",
-            "started_at": "2026-01-01T11:00:00+00:00",
+            "started_at": (now - timedelta(hours=1)).isoformat(),
             "duration_ms": 50.0,
         },
     ]

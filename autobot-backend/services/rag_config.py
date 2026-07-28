@@ -382,3 +382,18 @@ def update_rag_config(updates: Metadata) -> RAGConfig:
 
         logger.info("RAG configuration updated: %s", list(updates.keys()))
         return _rag_config_instance
+
+
+def reset_rag_config() -> None:
+    """Reset the module-level RAG config singleton (test isolation, #12539).
+
+    Tests that call ``update_rag_config`` mutate the process-wide
+    ``_rag_config_instance``.  Without a reset the mutated instance leaks into
+    later test suites (e.g. a runtime ``enable_reranking=False`` update makes a
+    subsequent ``get_rag_config()`` return the wrong default).  Calling this in
+    an autouse fixture nulls the singleton so the next ``get_rag_config()``
+    rebuilds a fresh instance from defaults.
+    """
+    global _rag_config_instance
+    with _rag_config_lock:
+        _rag_config_instance = None

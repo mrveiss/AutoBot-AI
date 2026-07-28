@@ -78,6 +78,12 @@ _SUPPORTED_TYPES = [
     "forgejo",
     "gdrive",
     "onedrive",
+    # Issue #10538: registered only when AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS=true
+    # (default off) — get_registered_class() returns None otherwise, so the
+    # create_connector() call below still 422s until the flag is enabled.
+    "slack",
+    "confluence",
+    "jira",
 ]
 
 # Marker auth_type for connectors whose bearer credential is an OAuth bundle

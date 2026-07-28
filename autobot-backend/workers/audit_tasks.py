@@ -17,6 +17,7 @@ Beat pidfile MUST NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
 """
 
 import json
+import os
 import re
 import subprocess  # nosec B404 — internal git/gh CLI calls only
 import sys
@@ -25,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -33,6 +35,18 @@ logger = get_logger(__name__)
 _TESTGAPS_LAST_RUN_KEY = "audit:testgaps:last_run"
 _DEAD_CODE_INVENTORY_KEY = "audit:dead_code:last_inventory"
 _CLAIMS_LAST_RUN_KEY = "audit:claims:last_run"
+
+# Dead-letter queue: findings that could not be filed (e.g. gh unauthenticated)
+# are persisted here for retry on the next run instead of being discarded (#12319).
+_DEFERRED_FINDINGS_KEY = "audit:deferred_findings"
+
+# Upper bound on the dead-letter queue so it cannot grow without limit while
+# filing is broken. Overflow is logged in full (never silently truncated); the
+# oldest findings are shed first. Overridable via env for large backlogs.
+try:
+    _MAX_DEFERRED = max(1, int(os.getenv("AUTOBOT_AUDIT_MAX_DEFERRED", "10000")))
+except ValueError:
+    _MAX_DEFERRED = 10000
 
 # GitHub repo used for filing issues
 _GH_REPO = "mrveiss/AutoBot-AI"
@@ -126,6 +140,16 @@ def _list_open_issues(label: str | None = None) -> list[str]:
         return []
 
 
+def _gh_available() -> bool:
+    """Return True if the gh CLI is authenticated and can file issues.
+
+    Checked once per task run so a missing credential produces a single CRITICAL
+    log instead of one ERROR per lost finding (#12319).
+    """
+    code, _, _ = _run(["gh", "auth", "status"])
+    return code == 0
+
+
 def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     """Create a GitHub issue. Returns True on success."""
     code, _, err = _run(
@@ -149,20 +173,88 @@ def _file_issue(title: str, body: str, labels: str = _AUDIT_LABELS) -> bool:
     return True
 
 
-def _dedupe_and_file(findings: list[dict], existing_titles: set[str], label: str) -> int:
-    """File GitHub issues for findings whose title is not in *existing_titles*.
+def _load_deferred(redis) -> list[dict]:
+    """Return the dead-letter queue of findings awaiting a retry."""
+    queued = _redis_get(redis, _DEFERRED_FINDINGS_KEY)
+    return queued if isinstance(queued, list) else []
 
-    Returns the number of newly filed issues.
+
+def _persist_deferred(redis, deferred: list[dict]) -> int:
+    """Persist unfileable findings for retry, deduped by title. Returns queue size.
+
+    Enforces ``_MAX_DEFERRED`` by shedding the oldest findings first, logging the
+    exact titles dropped and why — never a silent truncation (#12319).
     """
+    by_title: dict[str, dict] = {}
+    for finding in deferred:
+        by_title[finding["title"]] = finding
+    unique = list(by_title.values())
+
+    if len(unique) > _MAX_DEFERRED:
+        dropped = unique[: len(unique) - _MAX_DEFERRED]
+        unique = unique[len(unique) - _MAX_DEFERRED :]
+        logger.error(
+            "audit dead-letter queue exceeded cap %d — shedding %d oldest finding(s) "
+            "(set AUTOBOT_AUDIT_MAX_DEFERRED higher to retain them). Dropped titles: %s",
+            _MAX_DEFERRED,
+            len(dropped),
+            [f["title"] for f in dropped],
+        )
+
+    _redis_set(redis, _DEFERRED_FINDINGS_KEY, unique)
+    return len(unique)
+
+
+def _dedupe_and_file(
+    findings: list[dict],
+    existing_titles: set[str],
+    label: str,
+    redis=None,
+) -> tuple[int, int]:
+    """File GitHub issues for new findings; persist any that cannot be filed.
+
+    Drains the dead-letter queue first (retrying previously deferred findings),
+    then processes *findings*. A finding is *filed* when ``gh issue create``
+    succeeds, *skipped* when its title already exists, and *deferred* to the
+    Redis dead-letter queue when filing is impossible (unauthenticated gh) or
+    fails. No finding is ever silently discarded (#12319).
+
+    Returns ``(filed, deferred)`` where ``filed + deferred`` accounts for every
+    non-duplicate finding drawn from both the queue and *findings*.
+    """
+    gh_ok = _gh_available()
+    pending = _load_deferred(redis)
+
     filed = 0
-    for finding in findings:
-        title = finding["title"]
+    still_deferred: list[dict] = []
+
+    def _attempt(title: str, body: str, lbl: str) -> None:
+        nonlocal filed
         if title in existing_titles:
-            continue
-        if _file_issue(title, finding["body"], label):
+            return
+        if gh_ok and _file_issue(title, body, lbl):
             existing_titles.add(title)
             filed += 1
-    return filed
+        else:
+            still_deferred.append({"title": title, "body": body, "label": lbl})
+
+    for item in pending:
+        _attempt(item["title"], item["body"], item.get("label", label))
+    for finding in findings:
+        _attempt(finding["title"], finding["body"], label)
+
+    if not gh_ok and still_deferred:
+        logger.critical(
+            "gh CLI unauthenticated — %d audit finding(s) deferred to the Redis "
+            "dead-letter queue (%s) instead of being filed or lost. Configure a "
+            "GH_TOKEN for the worker to restore issue filing; deferred findings "
+            "are retried automatically once it is available.",
+            len(still_deferred),
+            _DEFERRED_FINDINGS_KEY,
+        )
+
+    deferred_count = _persist_deferred(redis, still_deferred)
+    return filed, deferred_count
 
 
 # ---------------------------------------------------------------------------
@@ -257,14 +349,14 @@ def audit_testgaps(self) -> dict:
     """Every-6h task: find Python modules changed since last run that lack tests."""
     redis = _get_redis()
     last_run = _redis_get(redis, _TESTGAPS_LAST_RUN_KEY)
-    run_at = datetime.now(timezone.utc).isoformat()
+    run_at = utc_timestamp()
 
     repo_root = _repo_root()
     modules = _changed_python_modules(last_run, repo_root)
 
     findings = _testgap_findings(modules, repo_root)
     existing_titles = set(_list_open_issues(label="observability"))
-    filed = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS)
+    filed, deferred = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
 
     _redis_set(redis, _TESTGAPS_LAST_RUN_KEY, run_at)
 
@@ -274,12 +366,14 @@ def audit_testgaps(self) -> dict:
         "modules_checked": len(modules),
         "gaps_found": len(findings),
         "issues_filed": filed,
+        "issues_deferred": deferred,
     }
     logger.info(
-        "audit_testgaps complete: modules_checked=%d gaps_found=%d issues_filed=%d",
+        "audit_testgaps complete: modules_checked=%d gaps_found=%d " "issues_filed=%d issues_deferred=%d",
         len(modules),
         len(findings),
         filed,
+        deferred,
     )
     return result
 
@@ -341,23 +435,25 @@ def audit_dead_code(self) -> dict:
         findings.append({"title": title, "body": body})
 
     existing_titles = set(_list_open_issues(label="observability"))
-    filed = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS)
+    filed, deferred = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
 
     # Persist current full inventory for next run's diff
     _redis_set(redis, _DEAD_CODE_INVENTORY_KEY, list(current_fps.keys()))
 
     result = {
         "status": "success",
-        "run_at": datetime.now(timezone.utc).isoformat(),
+        "run_at": utc_timestamp(),
         "total_findings": len(current_lines),
         "new_findings": len(new_findings_raw),
         "issues_filed": filed,
+        "issues_deferred": deferred,
     }
     logger.info(
-        "audit_dead_code complete: total_findings=%d new_findings=%d issues_filed=%d",
+        "audit_dead_code complete: total_findings=%d new_findings=%d " "issues_filed=%d issues_deferred=%d",
         len(current_lines),
         len(new_findings_raw),
         filed,
+        deferred,
     )
     return result
 
@@ -379,10 +475,13 @@ def _extract_capability_claims(repo_root: Path) -> list[dict]:
         re.IGNORECASE,
     )
     claims = []
+    # Exclude the audit's own generated report so it does not re-audit its own
+    # output — that self-reference inflated findings into five figures (#12319).
+    self_report = (repo_root / "docs" / "verification.md").resolve()
     search_paths = [repo_root / "README.md"] + list((repo_root / "docs").glob("**/*.md"))
 
     for src in search_paths:
-        if not src.is_file():
+        if not src.is_file() or src.resolve() == self_report:
             continue
         rel = src.relative_to(repo_root)
         for lineno, line in enumerate(src.read_text(errors="ignore").splitlines(), 1):
@@ -452,7 +551,7 @@ def audit_claims(self) -> dict:
     """Weekly task: verify README/docs capability claims have wired implementations."""
     redis = _get_redis()
     _redis_get(redis, _CLAIMS_LAST_RUN_KEY)
-    run_at = datetime.now(timezone.utc).isoformat()
+    run_at = utc_timestamp()
 
     repo_root = _repo_root()
     claims = _extract_capability_claims(repo_root)
@@ -489,7 +588,7 @@ def audit_claims(self) -> dict:
         findings.append({"title": title, "body": body})
 
     existing_titles = set(_list_open_issues(label="observability"))
-    filed = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS)
+    filed, deferred = _dedupe_and_file(findings, existing_titles, _AUDIT_LABELS, redis)
 
     _redis_set(redis, _CLAIMS_LAST_RUN_KEY, run_at)
     _redis_set(
@@ -505,13 +604,15 @@ def audit_claims(self) -> dict:
         "verified": len(verified),
         "unverified": len(unverified),
         "issues_filed": filed,
+        "issues_deferred": deferred,
         "verification_doc": str(doc_path.relative_to(repo_root)),
     }
     logger.info(
-        "audit_claims complete: claims_checked=%d verified=%d unverified=%d issues_filed=%d",
+        "audit_claims complete: claims_checked=%d verified=%d unverified=%d " "issues_filed=%d issues_deferred=%d",
         len(claims),
         len(verified),
         len(unverified),
         filed,
+        deferred,
     )
     return result

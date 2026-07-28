@@ -184,7 +184,6 @@ class AgentSecretsIntegration:
             mapping: The AgentSecretMapping to register
         """
         self._custom_mappings[mapping.agent_type] = mapping
-        # codeql[py/clear-text-logging-sensitive-data]
         logger.info("Registered secret mapping for agent: %s", mapping.agent_type)
 
     def _determine_types_to_fetch(
@@ -253,7 +252,6 @@ class AgentSecretsIntegration:
         """
         mapping = self.get_agent_mapping(agent_type)
         if mapping is None:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.debug("No secret mapping found for agent type: %s", agent_type)
             return {}
 

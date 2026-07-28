@@ -136,6 +136,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "Przez zapasowy",
+        "tooltip": "Główny dostawca niedostępny — odpowiedź udzielona przez dostawcę zapasowego ({primary} → {fallback})."
       }
     },
     "response": "odpowiedź",
@@ -210,7 +214,8 @@
       "deleteFailed": "Nie udało się usunąć niektórych czatów",
       "sharedSuccess": "Czat został udostępniony",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Pokaż odznakę awaryjną"
     },
     "interface": {
       "loadFailed": "Nie udało się załadować interfejsu czatu",
@@ -727,7 +732,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "Nie udało się usunąć czatu. Spróbuj ponownie.",
+      "createFailed": "Nie udało się utworzyć czatu: {error}",
+      "loadSessionsFailed": "Nie udało się załadować sesji czatu: {error}",
+      "loadMessagesFailed": "Nie udało się załadować wiadomości: {error}",
+      "saveFailed": "Nie udało się zapisać czatu: {error}",
+      "resetFailed": "Nie udało się zresetować czatu: {error}",
+      "clearFailed": "Nie udało się wyczyścić czatów: {error}",
+      "invalidFormat": "Nieprawidłowy format wiadomości. Sprawdź swoje dane i spróbuj ponownie.",
+      "serviceUnavailable": "Usługa czatu jest niedostępna. Odśwież stronę i spróbuj ponownie.",
+      "serverError": "Wystąpił błąd serwera. Spróbuj ponownie za chwilę.",
+      "networkFailed": "Połączenie sieciowe nie powiodło się. Sprawdź połączenie z internetem.",
+      "timeout": "Upłynął limit czasu żądania. Spróbuj ponownie z krótszą wiadomością.",
+      "sendFailed": "Nie udało się wysłać wiadomości: {error}",
+      "sendFailedAfterRetries": "Nie udało się wysłać wiadomości po {attempts} próbach: {error}. Sprawdź połączenie i spróbuj ponownie.",
+      "invalidFormatDetail": "Nieprawidłowy format wiadomości: {error}. Sprawdź swoje dane i spróbuj ponownie.",
+      "networkFailedRetry": "Połączenie sieciowe nie powiodło się. Sprawdź połączenie z internetem i spróbuj ponownie."
+    }
   },
   "settings": {
     "title": "Ustawienia",
@@ -876,7 +899,14 @@
       "disabledMessage": "Lokalne metryki użycia wyłączone. Żadne metryki nie będą rejestrowane.",
       "loadFailed": "Nie udało się załadować ustawień telemetrii",
       "updateFailed": "Nie udało się zaktualizować ustawień telemetrii"
-    }
+    },
+    "subtitle": "Dostosuj swoje doświadczenie AutoBot za pomocą własnych preferencji",
+    "featureFlags": "Flagi funkcji",
+    "telegram": "Telegram",
+    "notifications": "Powiadomienia",
+    "mobileDevices": "Urządzenia mobilne",
+    "privacy": "Prywatność",
+    "providerAuthDesc": "Połącz się z dostawcami przy użyciu istniejącej subskrypcji zamiast płatnego klucza API. Tokeny są bezpiecznie przechowywane w sejfie sekretów AutoBot."
   },
   "voice": {
     "title": "Głos",
@@ -902,7 +932,8 @@
     "creating": "Tworzenie...",
     "confirmDeleteVoice": "Usunąć głos „{name}”?",
     "languageVoicesActive": "Skonfigurowano głosy specyficzne dla języka {count}",
-    "confirmDeleteVoiceTitle": "Usuń profil głosu"
+    "confirmDeleteVoiceTitle": "Usuń profil głosu",
+    "tapToEnableAudio": "Dotknij dowolnego miejsca, aby włączyć odtwarzanie dźwięku"
   },
   "analytics": {
     "title": "Analityka",
@@ -2474,6 +2505,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "Wyświetlanie {shown} z {total}"
     }
   },
   "knowledge": {
@@ -7528,6 +7562,17 @@
       "templates": "Scrape Templates",
       "exitRegionMode": "Exit region mode",
       "markRegions": "Mark regions"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "serviceMessages": {
@@ -7638,7 +7683,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Kondycja systemu"
+    "systemHealth": "Kondycja systemu",
+    "providerFallback": "Przełączanie dostawcy",
+    "advancedControl": "Sterowanie zaawansowane"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "Pokaż zarchiwizowane",
+    "delete": "Usuń",
+    "confirmDeleteTitle": "Usuń firmę",
+    "confirmDelete": "Usunąć „{name}”? Spowoduje to usunięcie zarchiwizowanej firmy i jej danych. Tej operacji nie można tu cofnąć.",
+    "deleteError": "Nie udało się usunąć firmy.",
+    "deleteHasChildren": "Ta firma ma firmy podrzędne. Usuń je lub zmień ich przypisanie przed usunięciem.",
+    "onboarding": "Wdrażanie",
+    "active": "Aktywna",
+    "paused": "Wstrzymana",
+    "offboarding": "Wygaszanie",
+    "archived": "Zarchiwizowana",
+    "activate": "Aktywuj",
+    "suspend": "Wstrzymaj",
+    "offboard": "Wygaś",
+    "archive": "Archiwizuj",
+    "confirmTitle": "Potwierdź zmianę statusu",
+    "confirmOffboard": "Wygasić „{name}”? Rozpoczyna to zamykanie firmy.",
+    "confirmArchive": "Zarchiwizować „{name}”? To stan końcowy, którego nie można cofnąć.",
+    "confirm": "Potwierdź",
+    "updateError": "Nie udało się zmienić statusu firmy."
   },
   "llcMembers": {
     "title": "Czlonkowie",
@@ -7810,22 +7879,7 @@
       "createFailed": "Failed to create company"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ New",
-      "selectCompany": "Select a company to view threads.",
-      "loading": "Loading...",
-      "noThreads": "No threads yet.",
-      "emptyState": "Select a thread or create a new one.",
-      "loadingMessages": "Loading messages...",
-      "noMessages": "No messages yet.",
-      "messagePlaceholder": "Type a message...",
-      "send": "Send",
-      "newThreadTitle": "New Thread",
-      "titleLabel": "Title",
-      "titlePlaceholder": "Thread title...",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating..."
+      "selectCompany": "Select a company to view threads."
     },
     "dashboard": {
       "title": "Company Dashboard",
@@ -7957,7 +8011,15 @@
       "count": "{count} boards",
       "loading": "Loading boards…",
       "empty": "No boards yet — boards are created per project (Kanban) and per sprint (Sprint).",
-      "created": "Created {date}"
+      "created": "Created {date}",
+      "newKanban": "New Kanban Board",
+      "createTitle": "Create Kanban Board",
+      "project": "Project",
+      "selectProject": "Select a project…",
+      "loadingProjects": "Loading projects…",
+      "noProjects": "No projects yet — create a project first.",
+      "creating": "Creating…",
+      "create": "Create Board"
     },
     "kanban": {
       "title": "Kanban Board",
@@ -7996,7 +8058,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "Zawężono do {name}",
+      "showAll": "Pokaż całą firmę"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "Nie udało się zapisać zmiany. Spróbuj ponownie."
+      }
     },
     "orgChart": {
       "title": "Org Chart",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Nie udało się zapisać Twojej decyzji. Spróbuj ponownie."
     },
-    "ceoChat": {
-      "sendError": "Nie udało się wysłać wiadomości. Została przywrócona, aby można było spróbować ponownie."
-    },
     "timeline": {
       "rescheduleError": "Nie udało się zapisać nowego harmonogramu. Zmiana została cofnięta."
     },
@@ -8603,6 +8667,22 @@
       "error": "Nie udało się załadować kondycji systemu",
       "refresh": "Odśwież",
       "noSources": "Brak skonfigurowanych źródeł treści"
+    },
+    "providerFallback": {
+      "title": "Przełączanie dostawcy",
+      "subtitle": "Aktywność przełączania dostawców i modeli LLM na żywo",
+      "status": "Status",
+      "stateHealthy": "Brak aktywnych przełączeń",
+      "stateDegraded": "Przełączenie aktywne",
+      "active": "Aktywne przełączenia",
+      "chains": "Skonfigurowane łańcuchy",
+      "timeline": "Aktywność na żywo",
+      "switched": "Przełączono",
+      "exhausted": "Wyczerpano",
+      "refresh": "Odśwież",
+      "loading": "Ładowanie stanu przełączania…",
+      "noData": "Brak aktywności przełączania dostawcy",
+      "none": "brak"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} został zaktualizowany",
   "chat.modelPicker.label": "Model",
   "chat.modelPicker.auto": "Automatycznie (model domyślny)",
-  "chat.modelPicker.title": "Wybierz model i dostawcę dla tej rozmowy"
+  "chat.modelPicker.title": "Wybierz model i dostawcę dla tej rozmowy",
+  "budgetPolicies": {
+    "title": "Zasady budżetu",
+    "subtitle": "Zarządzaj progami wydatków i regułami automatycznej pauzy dla agentów",
+    "newPolicy": "Nowa zasada",
+    "scope": "Zakres",
+    "scopeAll": "Wszystkie",
+    "scopeAgent": "Agent",
+    "scopeProject": "Projekt",
+    "scopeTask": "Zadanie",
+    "scopeTenant": "Najemca",
+    "loading": "Ładowanie zasad…",
+    "empty": "Nie znaleziono zasad budżetu. Utwórz jedną, aby wymusić limity wydatków.",
+    "colName": "Nazwa",
+    "colScope": "Zakres",
+    "colScopeId": "ID zakresu",
+    "colPeriod": "Okres",
+    "colThreshold": "Próg",
+    "colWarning": "Ostrzeżenie",
+    "colAction": "Akcja",
+    "colStatus": "Status",
+    "colActions": "Akcje",
+    "statusEnabled": "włączone",
+    "statusDisabled": "wyłączone",
+    "checkPauseTitle": "Sprawdź status pauzy agenta",
+    "agentIdPlaceholder": "ID agenta…",
+    "checkStatus": "Sprawdź status",
+    "labelAgent": "Agent:",
+    "labelPaused": "Wstrzymano:",
+    "labelReason": "Powód:",
+    "labelSince": "Od:",
+    "resumeAgent": "Wznów agenta",
+    "modalEditTitle": "Edytuj zasadę",
+    "modalNewTitle": "Nowa zasada budżetu",
+    "fieldName": "Nazwa",
+    "fieldNamePlaceholder": "Moja zasada",
+    "fieldDescription": "Opis",
+    "fieldDescriptionPlaceholder": "Opcjonalnie",
+    "fieldScope": "Zakres",
+    "fieldScopeId": "ID zakresu",
+    "fieldScopeIdPlaceholder": "np. agent-uuid",
+    "fieldPeriod": "Okres",
+    "periodHour": "Godzina",
+    "periodDay": "Dzień",
+    "periodMonth": "Miesiąc",
+    "fieldThreshold": "Próg USD",
+    "fieldWarning": "Ostrzeżenie % (0–100)",
+    "fieldAction": "Akcja",
+    "actionAlert": "Tylko alert",
+    "actionPause": "Wstrzymaj",
+    "actionAlertThenPause": "Alert, potem wstrzymaj",
+    "fieldEnabled": "Włączone",
+    "saveChanges": "Zapisz zmiany",
+    "createPolicy": "Utwórz zasadę",
+    "deleteTitle": "Usuń zasadę",
+    "deleteConfirm": "Czy na pewno chcesz usunąć",
+    "deleteUndone": "Tej operacji nie można cofnąć."
+  },
+  "telemetryConsent": {
+    "title": "Lokalne metryki użycia",
+    "intro": "AutoBot może lokalnie rejestrować {metrics}, aby zasilać Twoje własne pulpity monitorowania. Te dane pozostają w Twojej infrastrukturze i {never}.",
+    "introMetrics": "anonimowe metryki operacyjne",
+    "introNever": "nigdy nie są nikomu wysyłane",
+    "summaryTitle": "Co jest rejestrowane lokalnie:",
+    "dataApi": "Użycie punktów końcowych API i czasy odpowiedzi",
+    "dataVoice": "Czas trwania sesji głosowych i liczba tokenów",
+    "dataFeature": "Wzorce użycia funkcji",
+    "privacyLabel": "Nigdy nie rejestrowane:",
+    "privacyText": "dane osobowe, treść kodu ani wiadomości czatu.",
+    "footer": "Możesz zmienić tę preferencję w dowolnym momencie w {settings}.",
+    "footerSettings": "Ustawienia → Prywatność",
+    "keepOff": "Pozostaw wyłączone",
+    "enable": "Włącz"
+  },
+  "hireAgent": {
+    "title": "Zatrudnij agenta",
+    "agentName": "Nazwa agenta",
+    "agentNamePlaceholder": "np. Builder-1",
+    "model": "Model",
+    "modelSonnet": "Sonnet (domyślny)",
+    "modelHaiku": "Haiku (asystent)",
+    "orgRole": "Rola w organizacji",
+    "roleWorker": "Pracownik",
+    "roleSpecialist": "Specjalista",
+    "roleCoordinator": "Koordynator",
+    "roleManager": "Menedżer",
+    "adapter": "Adapter",
+    "hiring": "Zatrudnianie…",
+    "hire": "Zatrudnij"
+  },
+  "advancedControl": {
+    "title": "Sterowanie zaawansowane",
+    "subtitle": "Zatwierdzaj żądania przejęcia i zarządzaj aktywnymi sesjami sterowania ręcznego",
+    "tabListAriaLabel": "Karty sterowania zaawansowanego",
+    "loading": "Wczytywanie kolejki przejęć…",
+    "tabs": {
+      "takeoverQueue": "Kolejka przejęć",
+      "streaming": "Strumieniowanie",
+      "monitoring": "Monitorowanie",
+      "comingSoon": "Wkrótce dostępne",
+      "comingSoonMessage": "Ta karta nie jest jeszcze dostępna.",
+      "streamingTitle": "Strumieniowanie pulpitu",
+      "monitoringTitle": "Monitorowanie systemu"
+    },
+    "summary": {
+      "pending": "Oczekujące",
+      "active": "Aktywne",
+      "paused": "Wstrzymane",
+      "completed": "Zakończone",
+      "systemStatus": "Stan systemu",
+      "statusNormal": "Normalny",
+      "statusTakeoverActive": "Przejęcie aktywne",
+      "statusEmergency": "Awaria"
+    },
+    "pending": {
+      "title": "Oczekujące żądania przejęcia",
+      "colTrigger": "Wyzwalacz",
+      "colReason": "Powód",
+      "colPriority": "Priorytet",
+      "colRequestedBy": "Zgłoszone przez",
+      "colCreatedAt": "Utworzono",
+      "colActions": "Działania",
+      "unknownAgent": "Nieznany agent",
+      "emptyTitle": "Brak oczekujących żądań",
+      "emptyMessage": "Nie ma żądań przejęcia oczekujących na zatwierdzenie."
+    },
+    "active": {
+      "title": "Aktywne sesje przejęcia",
+      "colOperator": "Operator",
+      "colStatus": "Stan",
+      "colStartedAt": "Rozpoczęto",
+      "colActionsExecuted": "Wykonane działania",
+      "emptyTitle": "Brak aktywnych sesji",
+      "emptyMessage": "Obecnie nie ma aktywnych sesji sterowania ręcznego."
+    },
+    "actions": {
+      "approve": "Zatwierdź",
+      "pause": "Wstrzymaj",
+      "resume": "Wznów",
+      "complete": "Zakończ"
+    },
+    "streaming": {
+      "title": "Sesje strumieniowania",
+      "newSession": "Nowa sesja",
+      "terminate": "Zakończ",
+      "capVncAvailable": "VNC dostępne",
+      "capNovncAvailable": "noVNC dostępne",
+      "capMaxSessions": "Maks. liczba sesji",
+      "formUserIdLabel": "ID użytkownika",
+      "formUserIdPlaceholder": "np. user-123",
+      "formResolutionLabel": "Rozdzielczość",
+      "formResolutionPlaceholder": "np. 1920x1080",
+      "formDepthLabel": "Głębia koloru",
+      "colSessionId": "ID sesji",
+      "colUser": "Użytkownik",
+      "colStatus": "Stan",
+      "colDisplay": "Ekran",
+      "colCreatedAt": "Utworzono",
+      "colActions": "Działania",
+      "emptyTitle": "Brak aktywnych sesji strumieniowania",
+      "emptyMessage": "Obecnie nie ma aktywnych sesji strumieniowania pulpitu."
+    },
+    "monitoring": {
+      "loading": "Ładowanie danych monitorowania systemu…",
+      "healthTitle": "Kondycja systemu",
+      "healthStatus": "Stan zdrowia",
+      "statusHealthy": "Sprawny",
+      "statusUnhealthy": "Niesprawny",
+      "desktopStreamingAvailable": "Dostępność strumieniowania pulpitu",
+      "novncAvailable": "Dostępność noVNC",
+      "activeStreamingSessions": "Aktywne sesje strumieniowania",
+      "pendingTakeovers": "Oczekujące przejęcia",
+      "activeTakeovers": "Aktywne przejęcia",
+      "pausedTasks": "Wstrzymane zadania",
+      "resourceTitle": "Wykorzystanie zasobów",
+      "cpuUsage": "Wykorzystanie CPU",
+      "memoryUsage": "Wykorzystanie pamięci",
+      "diskUsage": "Wykorzystanie dysku",
+      "processCount": "Liczba procesów",
+      "loadAverage": "Średnie obciążenie (1 min / 5 min / 15 min)",
+      "uptime": "Czas działania",
+      "emergencyStopTitle": "Strefa zagrożenia",
+      "emergencyStop": "Zatrzymanie awaryjne",
+      "emergencyStopDescription": "Natychmiast zatrzymuje wszystkie autonomiczne operacje i żąda automatycznie zatwierdzonego przejęcia przez człowieka. Tej czynności nie można cofnąć — używaj tylko wtedy, gdy autonomiczne działanie musi zostać natychmiast zatrzymane.",
+      "emergencyStopConfirmTitle": "Aktywować zatrzymanie awaryjne?",
+      "emergencyStopConfirmMessage": "Spowoduje to natychmiastowe wstrzymanie wszystkich autonomicznych zadań i rozpocznie przejęcie przez człowieka o priorytecie KRYTYCZNYM. Tej czynności nie można cofnąć. Kontynuować?",
+      "emergencyStopSuccess": "Zatrzymanie awaryjne aktywowane — wszystkie autonomiczne operacje zostały wstrzymane.",
+      "emptyTitle": "Brak danych monitorowania",
+      "emptyMessage": "Nie udało się załadować stanu systemu."
+    }
+  },
+  "adminUsers": {
+    "title": "Zarządzanie użytkownikami",
+    "subtitle": "Zarządzaj użytkownikami, rolami i statusem kont",
+    "addUser": "Dodaj użytkownika",
+    "searchPlaceholder": "Szukaj według nazwy użytkownika, e-maila lub nazwy…",
+    "loading": "Ładowanie użytkowników…",
+    "colUsername": "Nazwa użytkownika",
+    "colEmail": "E-mail",
+    "colDisplayName": "Nazwa wyświetlana",
+    "colRole": "Rola",
+    "colVoiceBundle": "Pakiet głosowy",
+    "colStatus": "Status",
+    "colActions": "Akcje",
+    "roleAdmin": "administrator",
+    "roleUser": "użytkownik",
+    "roleReadonly": "tylko do odczytu",
+    "statusActive": "aktywny",
+    "statusInactive": "nieaktywny",
+    "titleDeactivate": "Dezaktywuj",
+    "titleActivate": "Aktywuj",
+    "titleAssignBundle": "Przypisz pakiet głosowy",
+    "empty": "Nie znaleziono użytkowników.",
+    "fieldEmail": "E-mail",
+    "fieldUsername": "Nazwa użytkownika",
+    "fieldPassword": "Hasło",
+    "fieldDisplayName": "Nazwa wyświetlana",
+    "createUser": "Utwórz użytkownika",
+    "userLabel": "Użytkownik:",
+    "fieldVoiceBundle": "Pakiet głosowy",
+    "useRoleDefault": "— Użyj domyślnej dla roli —",
+    "deleteUserTitle": "Usuń użytkownika",
+    "deleteConfirm": "Usuń",
+    "deleteUndone": "Tej operacji nie można cofnąć."
+  },
+  "schedulers": {
+    "title": "Harmonogramy w tle",
+    "description": "Włączaj i wyłączaj zadania w tle. Zmiany działają od następnego cyklu — bez restartu.",
+    "refresh": "Odśwież",
+    "loading": "Wczytywanie harmonogramów…",
+    "empty": "Brak zarejestrowanych harmonogramów.",
+    "overridden": "Nadpisane",
+    "defaultLabel": "Domyślnie",
+    "runtimeLabel": "Środowisko",
+    "on": "Wł.",
+    "off": "Wył.",
+    "revertToDefault": "Przywróć domyślne",
+    "enableTitle": "Włącz to zadanie",
+    "disableTitle": "Wyłącz to zadanie",
+    "toggleAria": "Przełącz {name}",
+    "loadFailed": "Nie udało się wczytać harmonogramów.",
+    "toggleFailed": "Nie udało się zmienić {name}.",
+    "resetFailed": "Nie udało się przywrócić domyślnych dla {name}."
+  }
 }

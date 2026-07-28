@@ -23,7 +23,6 @@ validation errors (ValueError/TypeError) fail fast and are never retried.
 
 import json
 import logging
-from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Dict
 
@@ -33,6 +32,7 @@ from autobot_shared.redis_client import get_async_redis_client, get_redis_client
 from autobot_shared.retry_mechanism import RETRYABLE_EXCEPTIONS
 from autobot_shared.ssot_config import config
 from autobot_shared.status_enums import TaskStatus
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ def park_dead_letter(task_name: str, task_id: str, args_summary: str, error: str
         "args_summary": args_summary,
         "error": error,
         "status": TaskStatus.PARKED.value,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": utc_timestamp(),
     }
     logger.error("Celery task parked in dead-letter queue: %s (%s) — %s", task_name, task_id, error)
     try:

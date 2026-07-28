@@ -146,7 +146,7 @@ export function usePerformanceMonitoring(options: {
   ): Promise<T> {
     const response = await fetch(url, {
       ...options,
-      headers: { ...getHeaders(), ...(options.headers as Record<string, string> || {}) },
+      headers: { ...getHeaders(), ...(options.headers as Record<string, string>) },
     })
     if (!response.ok) {
       const body = await response.text().catch(() => '')

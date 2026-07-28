@@ -689,9 +689,11 @@ class NLDatabaseService:
 
                 ddl_parts = []
                 for tbl in tables:
-                    await cur.execute(  # nosemgrep: autobot-sql-string-format  # nosemgrep
-                        f"SHOW CREATE TABLE `{tbl}`"
-                    )  # noqa: S608
+                    # Identifier can't be a bind param; escape backticks per the
+                    # MySQL grammar so metacharacters stay inert data. (#12284)
+                    safe_tbl = tbl.replace("`", "``")
+                    show_sql = f"SHOW CREATE TABLE `{safe_tbl}`"  # nosec B608
+                    await cur.execute(show_sql)  # noqa: S608
                     row = await cur.fetchone()
                     if row:
                         ddl_parts.append(list(row.values())[1])

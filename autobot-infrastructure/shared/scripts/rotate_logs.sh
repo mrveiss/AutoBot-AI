@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Log Rotation Script
 
 LOGS_DIR="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs"

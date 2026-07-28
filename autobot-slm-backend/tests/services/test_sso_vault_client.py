@@ -21,6 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.time_utils import utc_timestamp
+
 # Directory of the autobot-slm-backend package root
 _BACKEND = Path(__file__).parent.parent.parent
 
@@ -266,7 +268,7 @@ class TestSSORotationStaleness:
 
     def test_check_staleness_fresh_not_stale(self):
         pid = uuid.uuid4()
-        fresh = datetime.now(timezone.utc).isoformat()
+        fresh = utc_timestamp()
         config = {"client_secret_rotated_at": fresh}
         report = _sso_rotation_mod.check_staleness(pid, config, fields=["client_secret"])
         assert report["client_secret"]["stale"] is False

@@ -189,10 +189,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import { useFocusTrap } from '@/composables/useFocusTrap';
-import { useFocusRestore } from '@/composables/useFocusRestore';
-import { useInitialFocus } from '@/composables/useInitialFocus';
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock';
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -705,8 +702,8 @@ onUnmounted(() => {
 }
 
 .host-icon {
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -833,8 +830,8 @@ onUnmounted(() => {
 }
 
 .checkmark {
-  width: 20px;
-  height: 20px;
+  width: var(--spacing-5);
+  height: var(--spacing-5);
   border: 2px solid var(--border-secondary);
   border-radius: var(--radius-sm);
   margin-right: var(--spacing-2);
@@ -850,7 +847,7 @@ onUnmounted(() => {
 .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
   content: '\2713';
   position: absolute;
-  top: -2px;
+  top: var(--spacing-neg-2px);
   left: 3px;
   color: var(--text-on-primary);
   font-size: var(--font-size-sm);

@@ -54,6 +54,9 @@ EXPECTED_TASKS: list[str] = [
     "memory.compact_snapshot",
     # workspace_cleanup.py  (GH#6471)
     "tasks.cleanup_stale_workspaces",
+    # batch_job_tasks.py  (GH#12439)
+    "tasks.run_batch_job",
+    "tasks.dispatch_due_batch_schedules",
 ]
 
 

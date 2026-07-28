@@ -41,7 +41,10 @@
 
     <!-- Browser Tab Content (Issue #1130: screenshot-based visual browser) -->
     <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col min-h-0">
-      <VisualBrowserPanel class="flex-1" />
+      <!-- #11539: thread the chat conversation id through so this conversation's
+           browser actions land in an isolated worker context (own cookie jar),
+           never the shared default one another conversation might be using. -->
+      <VisualBrowserPanel class="flex-1" :session-id="currentSessionId" />
     </div>
 
     <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config, Issue #4977: DesktopInterface) -->
@@ -138,7 +141,12 @@ import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/file-browser/FileBrowser.vue'
 import VisualBrowserPanel from '@/components/chat/VisualBrowserPanel.vue'  // Issue #1130: screenshot-based browser
 import HostSelector from '@/components/ui/HostSelector.vue'  // Issue #715: Dynamic host selection
-import SSHTerminal from '@/components/terminal/SSHTerminal.vue'    // Issue #715: SSH terminal component
+// Issue #715: SSH terminal component.
+// Issue #12342: lazy-load so xterm + its addons (~336KB) are fetched only
+// when a host is selected and the terminal actually renders — not at /chat
+// first paint. Rendered behind v-if="selectedSshHost", so the chunk loads
+// on demand.
+const SSHTerminal = defineAsyncComponent(() => import('@/components/terminal/SSHTerminal.vue'))
 import DesktopInterface from '@/components/desktop/DesktopInterface.vue'  // Issue #4977: full VNC component
 
 /**

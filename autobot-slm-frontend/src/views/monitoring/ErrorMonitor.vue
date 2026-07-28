@@ -11,6 +11,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { usePagination } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type {
   RecentError,
@@ -44,9 +45,23 @@ const selectedError = ref<RecentError | null>(null)
 const filterSeverity = ref<string>('all')
 const filterResolved = ref<string>('all')
 const searchQuery = ref('')
-const currentPage = ref(1)
 const totalErrors = ref(0)
-const perPage = 20
+
+// Server-side pagination via shared @autobot/ui composable (#10885).
+// The API owns the page slice; the composable drives page state + navigation
+// and re-fetches through onPageChange. serverTotalItems tracks the reactive
+// total so page-count/next/prev stay in sync after each fetch.
+const {
+  currentPage,
+  totalPages,
+  itemsPerPage: perPage,
+  next: nextPage,
+  prev: prevPage,
+} = usePagination<RecentError>(errors, {
+  itemsPerPage: 20,
+  serverTotalItems: totalErrors,
+  onPageChange: () => fetchData(),
+})
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null
 
@@ -137,7 +152,7 @@ async function fetchData() {
         api.getErrorStatistics(),
         api.getRecentErrors({
           page: currentPage.value,
-          per_page: perPage,
+          per_page: perPage.value,
           severity: severityFilter,
           resolved: resolvedFilter,
         }),
@@ -199,20 +214,6 @@ async function clearOldErrors() {
 function onFilterChange() {
   currentPage.value = 1
   fetchData()
-}
-
-function nextPage() {
-  if (currentPage.value * perPage < totalErrors.value) {
-    currentPage.value++
-    fetchData()
-  }
-}
-
-function prevPage() {
-  if (currentPage.value > 1) {
-    currentPage.value--
-    fetchData()
-  }
 }
 
 onMounted(() => {
@@ -406,7 +407,7 @@ onUnmounted(() => {
             v-if="totalErrors > perPage"
             class="px-4 py-3 border-t border-gray-200 flex items-center justify-between"
           >
-            <span class="text-sm text-gray-500">{{ $t('monitoring.errorMonitor.pageValue0OfValue1', { value0: currentPage, value1: Math.ceil(totalErrors / perPage) }) }}</span>
+            <span class="text-sm text-gray-500">{{ $t('monitoring.errorMonitor.pageValue0OfValue1', { value0: currentPage, value1: totalPages }) }}</span>
             <div class="flex gap-2">
               <button
                 @click="prevPage"

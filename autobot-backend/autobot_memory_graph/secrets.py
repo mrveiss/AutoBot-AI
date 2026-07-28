@@ -167,11 +167,9 @@ class SecretManagementMixin:
             entity = await self._create_and_link_secret_entity(
                 name, secret_type, owner_id, scope, session_id, shared_with, metadata
             )
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.info("Created secret entity: %s (scope: %s)", name, scope)
             return entity
         except Exception as e:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to create secret entity: %s", e)
             raise
 
@@ -216,7 +214,6 @@ class SecretManagementMixin:
             return entity
 
         except Exception as e:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to create secret usage audit: %s", e)
             raise
 
@@ -308,6 +305,5 @@ class SecretManagementMixin:
             return owned + shared
 
         except Exception as e:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to get user secrets: %s", e)
             return []

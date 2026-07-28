@@ -221,7 +221,7 @@ onUnmounted(() => {
 .view-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .feed-header-actions {
@@ -235,7 +235,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: var(--text-secondary, #4b5563);
+  color: var(--text-secondary);
 }
 
 .feed-filters {
@@ -245,7 +245,7 @@ onUnmounted(() => {
   gap: 0.75rem;
   padding: 0.75rem 0;
   margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .filter {
@@ -254,7 +254,7 @@ onUnmounted(() => {
   gap: 0.25rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .filter input,
@@ -262,19 +262,19 @@ onUnmounted(() => {
   padding: 0.375rem 0.5rem;
   font-size: 0.875rem;
   font-weight: 400;
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #111827);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .state-msg {
   padding: 1.5rem 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .state-error {
-  color: var(--color-danger, #b91c1c);
+  color: var(--color-danger);
 }
 
 .event-list {
@@ -288,7 +288,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border-subtle, #f3f4f6);
+  border-bottom: 1px solid var(--border-subtle);
   font-size: 0.875rem;
 }
 
@@ -302,23 +302,23 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   border-radius: 999px;
-  background: var(--bg-muted, #f3f4f6);
-  color: var(--text-secondary, #4b5563);
+  background: var(--bg-muted, var(--actfeed-badge-neutral-bg));
+  color: var(--text-secondary);
 }
 
 .actor-agent {
-  background: var(--color-accent-subtle, #fcefe0);
-  color: var(--color-accent-text, #c4651a);
+  background: var(--color-accent-subtle, var(--actfeed-accent-subtle));
+  color: var(--color-accent-text, var(--actfeed-accent-text));
 }
 
 .actor-user {
-  background: var(--color-info-subtle, #dbeafe);
-  color: var(--color-info-text, #1d4ed8);
+  background: var(--color-info-subtle, var(--actfeed-info-subtle));
+  color: var(--color-info-text, var(--actfeed-info-text));
 }
 
 .actor-system {
-  background: var(--bg-muted, #e5e7eb);
-  color: var(--text-muted, #6b7280);
+  background: var(--bg-muted, var(--actfeed-system-badge-bg));
+  color: var(--text-muted);
 }
 
 .event-body {
@@ -332,28 +332,28 @@ onUnmounted(() => {
 
 .event-action {
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .event-entity {
-  color: var(--text-secondary, #4b5563);
+  color: var(--text-secondary);
 }
 
 .event-entity-id {
   font-family: var(--font-mono, monospace);
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .event-actor-name {
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .event-time {
   flex: none;
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -367,7 +367,7 @@ onUnmounted(() => {
 
 .page-info {
   font-size: 0.8125rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .page-buttons {
@@ -378,10 +378,10 @@ onUnmounted(() => {
 .btn-sm {
   padding: 0.3125rem 0.75rem;
   font-size: 0.8125rem;
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #111827);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -392,6 +392,6 @@ onUnmounted(() => {
 
 .btn-ghost {
   border-color: transparent;
-  color: var(--color-accent-text, #c4651a);
+  color: var(--color-accent-text, var(--actfeed-accent-text));
 }
 </style>

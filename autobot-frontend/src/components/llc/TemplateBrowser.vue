@@ -443,32 +443,56 @@ onMounted(() => {
 }
 
 .category-software-team {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(
+    135deg,
+    var(--tmplbrowser-cat-software-start) 0%,
+    var(--tmplbrowser-cat-software-end) 100%
+  );
   color: white;
 }
 
 .category-marketing-agency {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(
+    135deg,
+    var(--tmplbrowser-cat-marketing-start) 0%,
+    var(--tmplbrowser-cat-marketing-end) 100%
+  );
   color: white;
 }
 
 .category-consulting-firm {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: linear-gradient(
+    135deg,
+    var(--tmplbrowser-cat-consulting-start) 0%,
+    var(--tmplbrowser-cat-consulting-end) 100%
+  );
   color: white;
 }
 
 .category-research-lab {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  background: linear-gradient(
+    135deg,
+    var(--tmplbrowser-cat-research-start) 0%,
+    var(--tmplbrowser-cat-research-end) 100%
+  );
   color: white;
 }
 
 .category-startup {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  background: linear-gradient(
+    135deg,
+    var(--tmplbrowser-cat-startup-start) 0%,
+    var(--tmplbrowser-cat-startup-end) 100%
+  );
   color: white;
 }
 
 .category-custom {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  background: linear-gradient(
+    135deg,
+    var(--tmplbrowser-cat-custom-start) 0%,
+    var(--tmplbrowser-cat-custom-end) 100%
+  );
   color: white;
 }
 

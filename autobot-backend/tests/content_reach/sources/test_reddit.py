@@ -140,6 +140,61 @@ async def test_reddit_url_mode_no_double_json():
 
 
 # ---------------------------------------------------------------------------
+# RedditJsonBackend — reddit host detection (#12281 incomplete-url-substring)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://reddit.com/r/python",
+        "https://www.reddit.com/r/python",
+        "https://old.reddit.com/r/python",
+        "https://REDDIT.COM/r/python",
+    ],
+)
+def test_is_reddit_url_accepts_genuine_reddit_hosts(url):
+    """Exact host and reddit.com subdomains are recognised as reddit URLs."""
+    from content_reach.sources.reddit import _is_reddit_url
+
+    assert _is_reddit_url(url) is True
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://reddit.com.evil.com/r/python",  # suffix-attached lookalike
+        "https://evil.com/?redirect=reddit.com",  # substring in query
+        "https://notreddit.com/r/python",  # missing dot boundary
+        "https://reddit.com.attacker.net/",
+        "https://evilreddit.com/",
+    ],
+)
+def test_is_reddit_url_rejects_bypass_payloads(url):
+    """Lookalike hosts that a substring check would accept are rejected."""
+    from content_reach.sources.reddit import _is_reddit_url
+
+    assert _is_reddit_url(url) is False
+
+
+@pytest.mark.asyncio
+async def test_reddit_spoofed_host_falls_back_to_search(monkeypatch):
+    """A reddit.com-lookalike URL is NOT fetched directly; it uses the search endpoint."""
+    import content_reach.sources.reddit as reddit_mod
+    from content_reach.sources.reddit import RedditJsonBackend
+
+    monkeypatch.setattr(reddit_mod, "ensure_public_url", AsyncMock())
+    mock_client, _ = _make_async_mock_client(200, _REDDIT_SEARCH_JSON)
+    backend = RedditJsonBackend(client=mock_client)
+    request = ContentRequest(url="https://reddit.com.evil.com/r/python", query="python")
+    await backend.fetch(request)
+
+    called_url = mock_client.get.call_args.args[0]
+    # Spoofed host must not be fetched directly; falls back to the reddit search endpoint.
+    assert called_url == "https://www.reddit.com/search.json"
+
+
+# ---------------------------------------------------------------------------
 # RedditJsonBackend — error cases
 # ---------------------------------------------------------------------------
 

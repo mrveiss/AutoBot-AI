@@ -205,11 +205,17 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * Issue #650: Add or update a message with ID-based deduplication.
    * Issue #656: Enhanced with version-based updates to prevent processing old chunks.
+   * Issue #11843: Dedup by the STABLE backend server id so a re-hydration / poll /
+   *   live-event echo updates the existing bubble instead of rendering a second one.
    *
-   * Used for streaming messages where chunks arrive with the same ID.
-   * The version field (from StreamingMessage) ensures we only process newer updates.
+   * Used for streaming messages where chunks arrive with the same ID, and for any
+   * backend-originated message that may be delivered twice by the two event buses
+   * (RedisEventStreamManager vs LiveEventManager). The server id can surface either
+   * as the frontend `id` (stream/normal path) or as `message_id` (poll/echo path);
+   * both are treated as the same identity. The version field ensures we only process
+   * newer streaming updates.
    *
-   * @param message - Message with optional id and version fields
+   * @param message - Message with optional id, message_id and version fields
    * @returns The message ID (new or existing)
    */
   function addOrUpdateMessage(message: Partial<ChatMessage> & { content: string; sender: ChatMessage['sender'] }): string {
@@ -217,9 +223,14 @@ export const useChatStore = defineStore('chat', () => {
       createNewSession()
     }
 
-    // If message has an ID, check if it already exists (streaming update)
-    if (message.id) {
-      const existingIndex = currentSession.value!.messages.findIndex(m => m.id === message.id)
+    // #11843: Resolve the stable server identity. The stream/normal path carries
+    // it as `id`; a poll or live-event echo carries it as `message_id`. Match an
+    // existing message on either field so the same reply never double-renders.
+    const serverId = message.id ?? message.message_id
+    if (serverId) {
+      const existingIndex = currentSession.value!.messages.findIndex(
+        m => m.id === serverId || m.message_id === serverId
+      )
       if (existingIndex >= 0) {
         const existing = currentSession.value!.messages[existingIndex]
 
@@ -228,9 +239,9 @@ export const useChatStore = defineStore('chat', () => {
         const existingVersion = existing.metadata?.version ?? 0
 
         if (incomingVersion <= existingVersion) {
-          // Already processed this version, skip update
-          logger.debug(`[Issue #656] Skipping old version: incoming=${incomingVersion}, existing=${existingVersion}`)
-          return message.id
+          // Already processed this version (or an echo of it) - no-op, keep one bubble
+          logger.debug(`[#11843] Skipping duplicate/old version for serverId=${serverId}: incoming=${incomingVersion}, existing=${existingVersion}`)
+          return existing.id
         }
 
         // Update existing message (streaming chunk accumulation)
@@ -238,6 +249,8 @@ export const useChatStore = defineStore('chat', () => {
           ...existing,
           content: message.content,  // Replace with accumulated content
           type: message.type || existing.type,  // Issue #650: Preserve display type
+          // #11843: persist the backend id so later echoes on either field match
+          message_id: message.message_id ?? existing.message_id ?? serverId,
           metadata: {
             ...existing.metadata,
             ...message.metadata,
@@ -245,8 +258,8 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
         currentSession.value!.updatedAt = new Date()
-        logger.debug(`[Issue #656] Updated message ${message.id} to version ${incomingVersion}`)
-        return message.id
+        logger.debug(`[#11843] Reconciled message ${existing.id} (serverId=${serverId}) to version ${incomingVersion}`)
+        return existing.id
       }
     }
 
@@ -258,12 +271,14 @@ export const useChatStore = defineStore('chat', () => {
       sender: message.sender,
       type: message.type,
       status: message.status,
+      // #11843: persist the backend id so a later poll/echo dedups against it
+      message_id: message.message_id,
       metadata: message.metadata
     }
 
     currentSession.value!.messages.push(newMessage)
     currentSession.value!.updatedAt = new Date()
-    logger.debug(`[Issue #656] Added new message: ${newMessage.id}, version: ${message.metadata?.version ?? 0}`)
+    logger.debug(`[#11843] Added new message: ${newMessage.id}, serverId=${serverId ?? 'none'}, version: ${message.metadata?.version ?? 0}`)
 
     return newMessage.id
   }

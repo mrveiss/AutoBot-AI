@@ -29,7 +29,14 @@ import aiohttp
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.ssot_config import config
+
+# Single-window duration used by the per-client rate limiters below — both
+# VirusTotal and URLVoid clients were rate-limited on a 1-minute window
+# (Issue #12646 fold-in of security/threat_intelligence.py's local
+# RateLimiter onto the shared implementation's custom-window mode).
+_RATE_LIMIT_WINDOW_SECONDS = 60
 
 logger = get_logger(__name__)
 
@@ -112,48 +119,6 @@ class ThreatIntelligenceCache:
             self._cache = {k: v for k, v in self._cache.items() if v["expires_at"] > current_time}
 
 
-class RateLimiter:
-    """Async rate limiter for API calls"""
-
-    def __init__(self, requests_per_minute: int = 4):
-        """Initialize rate limiter with requests per minute limit."""
-        self._requests_per_minute = requests_per_minute
-        self._window_size = 60.0  # 1 minute window
-        self._requests: list[float] = []
-        self._lock = asyncio.Lock()
-
-    async def acquire(self) -> bool:
-        """
-        Acquire rate limit slot. Returns True if allowed, False if rate limited.
-        Blocks if necessary to wait for available slot.
-        """
-        async with self._lock:
-            current_time = time.time()
-            window_start = current_time - self._window_size
-
-            # Remove requests outside the current window
-            self._requests = [t for t in self._requests if t > window_start]
-
-            if len(self._requests) >= self._requests_per_minute:
-                # Calculate wait time until oldest request expires
-                wait_time = self._requests[0] - window_start
-                if wait_time > 0:
-                    logger.debug("Rate limited, waiting %.2f seconds", wait_time)
-                    await asyncio.sleep(wait_time)
-                    # Re-check after waiting
-                    return await self.acquire()
-
-            self._requests.append(current_time)
-            return True
-
-    def get_remaining(self) -> int:
-        """Get remaining requests in current window."""
-        current_time = time.time()
-        window_start = current_time - self._window_size
-        active_requests = [t for t in self._requests if t > window_start]
-        return max(0, self._requests_per_minute - len(active_requests))
-
-
 class VirusTotalClient:
     """VirusTotal API v3 client for URL/domain reputation checking"""
 
@@ -174,7 +139,9 @@ class VirusTotalClient:
             timeout: Request timeout in seconds
         """
         self._api_key = api_key or config.virustotal_api_key
-        self._rate_limiter = RateLimiter(rate_limit)
+        self._rate_limiter = _SharedRateLimiter(scope_prefix="threat_intel")
+        self._rate_limit = rate_limit
+        self._rl_key = f"virustotal:{id(self)}"
         self._timeout = timeout
         self._http_client = get_http_client()
 
@@ -227,7 +194,9 @@ class VirusTotalClient:
             return self._build_error_response("VirusTotal API key not configured")
 
         try:
-            await self._rate_limiter.acquire()
+            await self._rate_limiter.acquire_window(
+                self._rl_key, max_requests=self._rate_limit, window_seconds=_RATE_LIMIT_WINDOW_SECONDS, wait=True
+            )
 
             url_id = self._get_url_id(url)
             endpoint = f"{self.BASE_URL}/urls/{url_id}"
@@ -250,7 +219,9 @@ class VirusTotalClient:
     async def _submit_url_for_analysis(self, url: str) -> Dict[str, Any]:
         """Submit URL for analysis if not found in VirusTotal database."""
         try:
-            await self._rate_limiter.acquire()
+            await self._rate_limiter.acquire_window(
+                self._rl_key, max_requests=self._rate_limit, window_seconds=_RATE_LIMIT_WINDOW_SECONDS, wait=True
+            )
 
             endpoint = f"{self.BASE_URL}/urls"
             headers = {
@@ -343,7 +314,9 @@ class URLVoidClient:
             timeout: Request timeout in seconds
         """
         self._api_key = api_key or config.urlvoid_api_key
-        self._rate_limiter = RateLimiter(rate_limit)
+        self._rate_limiter = _SharedRateLimiter(scope_prefix="threat_intel")
+        self._rate_limit = rate_limit
+        self._rl_key = f"urlvoid:{id(self)}"
         self._timeout = timeout
         self._http_client = get_http_client()
 
@@ -404,7 +377,9 @@ class URLVoidClient:
         domain = self._extract_domain_from_url(url)
 
         try:
-            await self._rate_limiter.acquire()
+            await self._rate_limiter.acquire_window(
+                self._rl_key, max_requests=self._rate_limit, window_seconds=_RATE_LIMIT_WINDOW_SECONDS, wait=True
+            )
             endpoint = f"{self.BASE_URL}/{self._api_key}/host/{domain}/"
 
             async with await self._http_client.get(
@@ -706,14 +681,20 @@ class ThreatIntelligenceService:
 
     async def get_service_status(self) -> Dict[str, Any]:
         """Get status of configured threat intelligence services."""
+        vt = self._virustotal
+        uv = self._urlvoid
         return {
             "virustotal": {
-                "configured": self._virustotal.is_configured,
-                "remaining_requests": self._virustotal._rate_limiter.get_remaining(),
+                "configured": vt.is_configured,
+                "remaining_requests": await vt._rate_limiter.get_remaining_in_window(
+                    vt._rl_key, max_requests=vt._rate_limit, window_seconds=_RATE_LIMIT_WINDOW_SECONDS
+                ),
             },
             "urlvoid": {
-                "configured": self._urlvoid.is_configured,
-                "remaining_requests": self._urlvoid._rate_limiter.get_remaining(),
+                "configured": uv.is_configured,
+                "remaining_requests": await uv._rate_limiter.get_remaining_in_window(
+                    uv._rl_key, max_requests=uv._rate_limit, window_seconds=_RATE_LIMIT_WINDOW_SECONDS
+                ),
             },
         }
 

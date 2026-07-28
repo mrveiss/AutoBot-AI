@@ -88,7 +88,7 @@ class EnterpriseFeatureManager:
             "npu_worker_host": config.npu_worker_host,
             "npu_worker_port": config.npu_worker_port,
             "redis_host": config.redis_host,
-            "redis_port": config.redis_port,
+            "redis_port": config.port.redis,
             "ai_stack_host": config.vm.aistack,
             "ai_stack_port": config.port.aistack,
             "browser_host": config.vm.browser,

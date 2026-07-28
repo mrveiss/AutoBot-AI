@@ -805,7 +805,7 @@ Estimated **8-12 components** use connection testing:
 - BackendSettings.vue (230 lines → 87 lines)
 - ConnectionStatus.vue (78 lines → 35 lines)
 - NPUWorkersSettings.vue (est. 40 lines → 15 lines)
-- KnowledgeManager.vue (est. 25 lines → 10 lines)
+- KnowledgeHealth.vue (est. 25 lines → 10 lines)
 - MCPDashboard.vue (est. 30 lines → 12 lines)
 - SystemStatus.vue (est. 35 lines → 14 lines)
 - Additional components (est. 50 lines → 20 lines)

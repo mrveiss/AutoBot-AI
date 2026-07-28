@@ -9,13 +9,14 @@ Compares file checksums between the code_source directory and the deployed
 directory to detect files that have been manually patched or missed by Ansible.
 """
 
+import ast
 import hashlib
 import logging
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from autobot_shared.time_utils import utc_timestamp
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
 from services.git_tracker import DEFAULT_REPO_PATH
 
@@ -74,8 +75,115 @@ ALLOWED_COMPONENTS = frozenset(
         # crash-looping every backend that imports it. Resolving it restarts all
         # dependent services (see _COMPONENT_SERVICES in api/code_sync.py).
         "autobot_shared",
+        # #12450: worker components promoted from read-only visibility to a real
+        # per-component resolve path. Each has an explicit post-sync definition in
+        # api/code_sync.py (_WORKER_COMPONENTS / _WORKER_COMPONENT_PIP /
+        # _COMPONENT_SERVICES) traced to its actual ansible deploy task — notably
+        # the restart target is NOT derivable from the component name for two of
+        # them (slm-agent -> autobot-agent, browser-worker -> autobot-playwright).
+        "autobot-ai-stack",
+        "autobot-npu-worker",
+        "autobot-browser-worker",
+        "autobot-slm-agent",
     }
 )
+
+# Deployed components that are visible to the drift walk but still have NO
+# resolve wiring — READ-ONLY. Do NOT add an entry here without either giving it
+# a post-sync definition (then it belongs in ALLOWED_COMPONENTS instead) or
+# recording why it cannot have one. Whitelisting resolve without post-sync would
+# rsync files but never restart the right service — half-working and worse than
+# the current 400.
+#
+# #12450 phase 2 promoted ai-stack, npu-worker, browser-worker and slm-agent out
+# of this set into ALLOWED_COMPONENTS once each had a verified post-sync
+# definition. `plugins` stays here — see below.
+#
+# Every entry must be verified against its actual ansible deploy task before
+# being added here — see _NONSTANDARD_COMPONENT_PATHS below for the ones whose
+# layout isn't the standard code_source/<name> -> /opt/autobot/<name> shape.
+#
+# NOT resolve-capable (confirmed unmappable, see #12450 PR notes):
+#   - autobot-tts-worker: deployed via a single Jinja2-templated file
+#     (tts-worker.py.j2 -> tts-worker.py), not a 1:1 sync of the repo's
+#     autobot-tts-worker/ directory. It is still VISIBLE — see
+#     _TEMPLATED_COMPONENTS, which compares it render-invariantly instead of
+#     by directory checksum (#12886). Resolve stays blocked because
+#     re-rendering the template needs the ansible var context.
+#   - autobot-celery / celery-beat: no distinct deployed directory — both run
+#     FROM the autobot-backend deployed dir (systemd WorkingDirectory), so
+#     they are already covered by the existing "autobot-backend" entry.
+#   - autobot-plugins (the @autobot/vnc, @autobot/terminal npm workspace
+#     packages): synced into TWO deployed locations (autobot-frontend/ and
+#     autobot-slm-frontend/), so there is no single canonical deployed target
+#     to compare against — needs an owner decision on which (or both) to scan.
+EXTRA_VISIBILITY_COMPONENTS = frozenset({"plugins", "autobot-tts-worker"})
+
+# Components deployed as a *rendered* Jinja2 template rather than a 1:1 file
+# sync (#12886). Maps component -> (template path relative to the repo root,
+# rendered file path relative to the deployed component dir).
+#
+# A directory checksum walk is meaningless for these: the repo dir holds
+# different files entirely (autobot-tts-worker/ ships main.py; the host runs
+# tts-worker.py), so every file would report source_only/deployed_only. That is
+# the fake drift the exclusion above was written to avoid — but excluding the
+# component outright traded noise for *no* signal, and the worker silently fell
+# behind the backend calling it until a user hit a runtime 404.
+#
+# _compute_templated_drift compares structure instead: both sides are parsed as
+# Python and every string constant is blanked before hashing. Rendering only
+# substitutes inside string literals, so a rendered value (install dir, model
+# id, port) can never register as drift, while a missing route, dropped helper
+# or changed call still does — which is exactly the class of skew that broke
+# /tts/synthesize/stream.
+_TEMPLATED_COMPONENTS: dict[str, tuple[str, str]] = {
+    "autobot-tts-worker": (
+        "autobot-slm-backend/ansible/roles/tts-worker/templates/tts-worker.py.j2",
+        "tts-worker.py",
+    ),
+}
+
+# Union of the resolve-capable allowlist and the read-only extras — used by
+# the GET-only drift surfaces (/status stale_components, GET /drift). The
+# resolve/resolve-async endpoints must keep checking ALLOWED_COMPONENTS only
+# (#12450).
+VISIBILITY_COMPONENTS = ALLOWED_COMPONENTS | EXTRA_VISIBILITY_COMPONENTS
+
+# Source/deployed path overrides for components whose layout does not follow
+# the code_source/<component> -> <SLM_DEPLOYED_ROOT>/<component> convention
+# assumed by get_default_source_dir/get_default_deployed_dir (#12450). Paths
+# are relative to DEFAULT_REPO_PATH / SLM_DEPLOYED_ROOT respectively. Verified
+# against the live ansible deploy tasks — do not add an entry without tracing
+# it to the actual unarchive/copy/synchronize task.
+_NONSTANDARD_COMPONENT_PATHS: dict[str, tuple[str, str]] = {
+    # ai-stack has no top-level code_source/autobot-ai-stack dir; it lives
+    # under autobot-infrastructure/ and deploys with --strip-components=4 so
+    # the ai-stack/ subtree contents land directly under the deployed root
+    # (ansible/playbooks/update-all-nodes.yml ~135-141, ~1060-1064).
+    "autobot-ai-stack": (
+        "autobot-infrastructure/shared/docker/ai-stack",
+        "autobot-ai-stack",
+    ),
+    # slm-agent has no top-level code_source/autobot-slm-agent dir either;
+    # its source of truth is the individual per-file `copy:` tasks in the
+    # slm_agent role, all of which live under files/slm/agent/ and land at
+    # <slm_agent_dir>/slm/agent/ (ansible/roles/slm_agent/tasks/main.yml
+    # ~132-213). config.yaml/role.json/version.json are Jinja2 templates
+    # (not raw source files) and are intentionally excluded from this scan.
+    "autobot-slm-agent": (
+        "autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent",
+        "autobot-slm-agent/slm/agent",
+    ),
+    # plugins/ ships at the repo root, a SIBLING of autobot-backend/, and is
+    # rsynced into the backend's own plugins/ subdirectory rather than its
+    # own top-level /opt/autobot/plugins tree (ansible/roles/backend/tasks/
+    # main.yml #10294).
+    "plugins": (
+        "plugins",
+        "autobot-backend/plugins",
+    ),
+}
+
 
 # Directory names / suffixes to skip entirely during traversal. Sourced from the
 # canonical deploy-artifact vocabulary (#11459) so the drift walk and the
@@ -179,6 +287,137 @@ def _collect_checksums(
     return checksums
 
 
+def _string_constants(tree: ast.AST) -> List[ast.Constant]:
+    """String-literal nodes of *tree* in a stable walk order."""
+    return [n for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+
+
+def _render_invariant_digests(template_src: str, deployed_src: str | None) -> Tuple[str, str | None] | None:
+    """Digest a .j2 template and its rendered file so the two are comparable.
+
+    Only the string literals the template actually *renders* — the ones holding
+    a Jinja expression — are blanked, on both sides at the same walk position.
+    A substituted install dir or model id therefore cannot read as drift, while
+    an ordinary string constant such as a route path still can: blanking every
+    literal would have made a renamed ``/tts/synthesize/stream`` invisible,
+    which is the very skew this exists to catch (#12886).
+
+    Args:
+        template_src: Raw .j2 template text (valid Python — all Jinja
+            expressions sit inside string literals).
+        deployed_src: The rendered file's text, or ``None`` to digest the
+            template alone (deployed file absent).
+
+    Returns:
+        Tuple of (template_digest, deployed_digest_or_None), or ``None`` when
+        either side does not parse as Python.
+    """
+    try:
+        template_tree = ast.parse(template_src)
+    except SyntaxError:
+        return None
+
+    template_strings = _string_constants(template_tree)
+    rendered_at = [i for i, node in enumerate(template_strings) if "{{" in node.value]
+
+    deployed_strings: List[ast.Constant] = []
+    deployed_tree = None
+    if deployed_src is not None:
+        try:
+            deployed_tree = ast.parse(deployed_src)
+        except SyntaxError:
+            return None
+        deployed_strings = _string_constants(deployed_tree)
+
+    for index in rendered_at:
+        template_strings[index].value = ""
+        # Misaligned lengths mean the structures already differ; the digests
+        # will disagree and report drift, which is the right answer.
+        if index < len(deployed_strings):
+            deployed_strings[index].value = ""
+
+    return (
+        _dump_digest(template_tree),
+        _dump_digest(deployed_tree) if deployed_tree is not None else None,
+    )
+
+
+def _dump_digest(tree: ast.AST) -> str:
+    """SHA-256 over an AST dump."""
+    return hashlib.sha256(ast.dump(tree).encode("utf-8")).hexdigest()
+
+
+def _compute_templated_drift(component: str, deployed_dir: str) -> Tuple[List[dict], int]:
+    """Structure-only drift for a template-rendered component (#12886).
+
+    Args:
+        component: A key of ``_TEMPLATED_COMPONENTS``.
+        deployed_dir: Absolute path to the deployed component directory.
+
+    Returns:
+        Tuple of (list_of_drift_dicts, total_files_compared) — same shape as
+        ``compute_drift``, always covering the single rendered file.
+    """
+    template_rel, deployed_rel = _TEMPLATED_COMPONENTS[component]
+    template_path = Path(DEFAULT_REPO_PATH) / template_rel
+    deployed_path = Path(deployed_dir) / deployed_rel
+
+    try:
+        template_src = template_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("drift_checker: cannot read template for %s: %s", component, exc)
+        return [], 0
+
+    try:
+        deployed_src: str | None = deployed_path.read_text(encoding="utf-8")
+    except OSError:
+        deployed_src = None
+
+    digests = _render_invariant_digests(template_src, deployed_src)
+    if digests is None and deployed_src is not None:
+        # The template is known-parseable (pinned by test), so a failure here
+        # means the DEPLOYED file no longer parses — real drift. Fall back to
+        # its raw checksum, which cannot collide with an AST digest.
+        digests = _render_invariant_digests(template_src, None)
+        if digests is not None:
+            return (
+                _templated_drift_entry(deployed_rel, digests[0], _file_checksum(deployed_path), "modified"),
+                1,
+            )
+
+    if digests is None:
+        # An unparseable template is a repo defect, not deployment drift —
+        # there is nothing to compare against. Pinned by drift_checker_test.
+        logger.error("drift_checker: template does not parse as Python: %s", template_path)
+        return [], 0
+
+    source_digest, deployed_digest = digests
+    if deployed_digest is None:
+        return _templated_drift_entry(deployed_rel, source_digest, None, "source_only"), 1
+
+    if deployed_digest == source_digest:
+        return [], 1
+
+    return _templated_drift_entry(deployed_rel, source_digest, deployed_digest, "modified"), 1
+
+
+def _templated_drift_entry(
+    rel_path: str,
+    source_digest: str,
+    deployed_digest: str | None,
+    status: str,
+) -> List[dict]:
+    """Wrap a templated-component comparison in the standard drift dict shape."""
+    return [
+        {
+            "path": rel_path,
+            "source_checksum": source_digest,
+            "deployed_checksum": deployed_digest,
+            "status": status,
+        }
+    ]
+
+
 def compute_drift(
     source_dir: str,
     deployed_dir: str,
@@ -207,6 +446,11 @@ def compute_drift(
     Returns:
         Tuple of (list_of_drift_dicts, total_files_compared).
     """
+    # Template-rendered components never match by directory walk — their repo
+    # dir holds different files than the host does (#12886).
+    if component in _TEMPLATED_COMPONENTS:
+        return _compute_templated_drift(component, deployed_dir)
+
     src_path = Path(source_dir)
     dep_path = Path(deployed_dir)
 
@@ -275,7 +519,7 @@ def build_drift_report(
     Returns:
         Dict matching the ``FileDriftReport`` schema.
     """
-    drifted, total = compute_drift(source_dir, deployed_dir, component)  # codeql[py/path-injection]
+    drifted, total = compute_drift(source_dir, deployed_dir, component)
 
     return {
         "source_dir": source_dir,
@@ -283,7 +527,7 @@ def build_drift_report(
         "drifted_files": drifted,
         "total_compared": total,
         "drift_detected": len(drifted) > 0,
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": utc_timestamp(),
     }
 
 
@@ -291,7 +535,9 @@ def get_default_deployed_dir(component: str = "autobot-slm-backend") -> str:
     """Return the expected deployed path for *component* under /opt/autobot.
 
     Reads ``SLM_DEPLOYED_ROOT`` from the environment so the path is
-    configurable without hardcoding.
+    configurable without hardcoding. Components listed in
+    ``_NONSTANDARD_COMPONENT_PATHS`` (#12450) use their verified override
+    sub-path instead of the standard ``<root>/<component>`` convention.
 
     Args:
         component: Sub-directory name under the deployed root.
@@ -300,7 +546,9 @@ def get_default_deployed_dir(component: str = "autobot-slm-backend") -> str:
         Absolute path string for the deployed component directory.
     """
     deployed_root = os.environ.get("SLM_DEPLOYED_ROOT", "/opt/autobot")
-    return str(Path(deployed_root) / component)
+    override = _NONSTANDARD_COMPONENT_PATHS.get(component)
+    rel_path = override[1] if override else component
+    return str(Path(deployed_root) / rel_path)
 
 
 def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
@@ -308,6 +556,10 @@ def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
 
     Uses ``DEFAULT_REPO_PATH`` from ``services.git_tracker``, which resolves
     ``SLM_REPO_PATH`` with the same fallback, ensuring a single source of truth.
+    Components listed in ``_NONSTANDARD_COMPONENT_PATHS`` (#12450) use their
+    verified override sub-path instead of the standard
+    ``code_source/<component>`` convention (e.g. ai-stack, which lives under
+    ``autobot-infrastructure/``).
 
     Args:
         component: Sub-directory name inside the code_source repository.
@@ -315,7 +567,9 @@ def get_default_source_dir(component: str = "autobot-slm-backend") -> str:
     Returns:
         Absolute path string for the source directory to compare against.
     """
-    candidate = Path(DEFAULT_REPO_PATH) / component
+    override = _NONSTANDARD_COMPONENT_PATHS.get(component)
+    rel_path = override[0] if override else component
+    candidate = Path(DEFAULT_REPO_PATH) / rel_path
     if not candidate.is_dir():
         raise ValueError(f"drift_checker: source component directory does not exist: {candidate}")
     return str(candidate)

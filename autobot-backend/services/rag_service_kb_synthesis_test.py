@@ -67,7 +67,7 @@ class TestGetKbSynthesisContext:
         svc = _make_service()
 
         with patch(
-            "utils.chromadb_client.get_async_chromadb_client",
+            "utils.async_chromadb_client.get_async_chromadb_client",
             new_callable=AsyncMock,
             side_effect=ConnectionError("chroma down"),
         ):
@@ -84,7 +84,7 @@ class TestGetKbSynthesisContext:
 
         with (
             patch(
-                "utils.chromadb_client.get_async_chromadb_client",
+                "utils.async_chromadb_client.get_async_chromadb_client",
                 new_callable=AsyncMock,
                 return_value=client,
             ),
@@ -134,7 +134,7 @@ class TestGetKbSynthesisContext:
 
         with (
             patch(
-                "utils.chromadb_client.get_async_chromadb_client",
+                "utils.async_chromadb_client.get_async_chromadb_client",
                 new_callable=AsyncMock,
                 return_value=client,
             ),
@@ -181,7 +181,7 @@ class TestGetKbSynthesisContext:
 
         with (
             patch(
-                "utils.chromadb_client.get_async_chromadb_client",
+                "utils.async_chromadb_client.get_async_chromadb_client",
                 new_callable=AsyncMock,
                 return_value=client,
             ),
@@ -210,7 +210,7 @@ class TestGetKbSynthesisContext:
 
         with (
             patch(
-                "utils.chromadb_client.get_async_chromadb_client",
+                "utils.async_chromadb_client.get_async_chromadb_client",
                 new_callable=AsyncMock,
                 return_value=client,
             ),

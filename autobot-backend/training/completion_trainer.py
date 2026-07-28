@@ -295,6 +295,11 @@ class CompletionTrainer:
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
+        # `weights_only=True` restricts unpickling to tensors/plain data and refuses
+        # arbitrary global/reduce execution — the PyTorch-documented mitigation against
+        # pickle-based RCE (CodeQL false positive: its taint model does not treat this
+        # kwarg as a sanitizer). `version` only selects an on-disk filename the app
+        # itself wrote via `torch.save`, so the deserialized bytes are trusted.
         checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
 
         # Restore model

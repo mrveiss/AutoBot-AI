@@ -60,7 +60,7 @@ class RedisCache:
     non-critical cache operations.
 
     Args:
-        client:      An async Redis client (e.g. from ``get_redis_client(async_client=True)``).
+        client:      An async Redis client (e.g. from ``get_async_redis_client()``).
         default_ttl: Default expiry in seconds applied to :meth:`set_json` when
                      the caller does not supply an explicit *ttl*.  Pass ``None``
                      to store without expiry.

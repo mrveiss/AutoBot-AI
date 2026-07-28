@@ -32,8 +32,17 @@ class TokenResponse(BaseModel):
     """JWT token response."""
 
     access_token: str
+    # #12216: also expose the JWT under `token` so a client written against the
+    # core backend (whose login returns `token`) reads the SLM response correctly.
+    token: str | None = None
     token_type: str = "bearer"
     expires_in: int
+
+    @model_validator(mode="after")
+    def _mirror_token_field(self) -> "TokenResponse":
+        if self.token is None:
+            self.token = self.access_token
+        return self
 
 
 class MfaChallengeResponse(BaseModel):
@@ -561,10 +570,18 @@ class UpdateInfoResponse(BaseModel):
 
 
 class UpdateCheckResponse(BaseModel):
-    """Update check response."""
+    """Update check response.
+
+    code_update_available/code_status (#11964) surface the SAME
+    node.code_status field the fleet update-summary badge reads
+    (NodeUpdateSummary below), so the live per-node check and the
+    badge can never disagree.
+    """
 
     updates: List[UpdateInfoResponse]
     total: int
+    code_update_available: bool = False
+    code_status: str = "unknown"
 
 
 class UpdateApplyRequest(BaseModel):
@@ -822,9 +839,21 @@ class ServiceListResponse(BaseModel):
 
 
 class ServiceActionRequest(BaseModel):
-    """Service action request."""
+    """Request for a service action (start/stop/restart via orchestration).
 
-    action: str = Field(..., description="start, stop, or restart")
+    Issue #12755: canonicalized from the duplicate defined in
+    api/orchestration.py — action is carried in the URL path, this body
+    only carries optional targeting/behavior flags.
+    """
+
+    node_id: str | None = Field(
+        None,
+        description="Target node ID. If not specified, uses default host from SSOT config.",
+    )
+    force: bool = Field(
+        False,
+        description="Force the action even if service appears to be in desired state.",
+    )
 
 
 class ServiceActionResponse(BaseModel):
@@ -1601,6 +1630,17 @@ class CodeSyncStatusResponse(BaseModel):
     has_update: bool = False
     outdated_nodes: int = 0
     total_nodes: int = 0
+    # #11820: components deployed on this box whose files drift from code_source.
+    # Non-empty means a managed component is stale even if node code_version
+    # matches latest — so consumers must not report "up to date" while this is set.
+    stale_components: list[str] = []
+    # #12776: post-hoc verdict on the last self-update run. The self-update path
+    # restarts this backend mid-run by design, so the process that launched the
+    # playbook is gone before it finishes — completion can only be judged from
+    # the log afterwards. Without this, a run that died after Play 1 still
+    # reported a successful update (#12596, invisible across two fix attempts).
+    self_update_incomplete: bool = False
+    self_update_detail: str | None = None
 
 
 class CodeSyncRefreshResponse(BaseModel):

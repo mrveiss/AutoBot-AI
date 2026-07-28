@@ -322,10 +322,15 @@ async def get_current_user_info(request: Request):
         if not user_data:
             raise HTTPException(status_code=401, detail="Not authenticated")
 
-        # Return safe user data (no sensitive info)
+        # #12135: use .get() with safe fallbacks, not hard `[...]` access.
+        # Every _extract_user_from_* path is expected to populate
+        # "username"/"role", but a valid, already-authenticated request
+        # must never 500 on an unexpected claim shape — degrade gracefully
+        # instead (matches the sub/user_id/username fallback convention
+        # used elsewhere, e.g. api/documents.py, api/voice.py).
         return {
-            "username": user_data["username"],
-            "role": user_data["role"],
+            "username": user_data.get("username") or user_data.get("sub") or user_data.get("user_id", "unknown"),
+            "role": user_data.get("role", "user"),
             "email": user_data.get("email", ""),
             "auth_method": user_data.get("auth_method", "unknown"),
             "authenticated": True,

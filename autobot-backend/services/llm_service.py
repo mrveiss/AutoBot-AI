@@ -50,6 +50,7 @@ from autobot_shared.tracing import get_tracer
 from llm_shared import ProviderRegistry, get_provider_registry
 from llm_shared.cache import CachedResponse, get_llm_cache
 from llm_shared.fallback_chain import get_fallback_chain_manager
+from llm_shared.fallback_events import emit_fallback_event
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.rate_limit_backoff import extract_rate_limit_info
 from llm_shared.tiered_routing import TierConfig, TieredModelRouter
@@ -314,6 +315,15 @@ class LLMService:
                         primary_provider=primary_provider_name,
                         fallback_provider=provider.provider_name,
                     )
+                    await emit_fallback_event(
+                        conversation_id=conversation_id,
+                        primary_model=primary_model_name,
+                        fallback_model=current_model,
+                        primary_provider=primary_provider_name,
+                        fallback_provider=provider.provider_name,
+                        chain_tried=list(attempted_models),
+                        request_id=request.request_id,
+                    )
                 # #10597: cache successful responses for identical future requests.
                 if cache_key and response.content:
                     await self._optimized_store_cache(cache_key, response, request.request_id)
@@ -362,6 +372,10 @@ class LLMService:
                 response.error,
                 " → ".join(attempted_models),
             )
+            if len(attempted_models) > 1:
+                await self._emit_exhausted_fallback(
+                    conversation_id, attempted_models, current_model, request.request_id
+                )
             self._track_usage(response, conversation_id)
             return response
 
@@ -372,6 +386,8 @@ class LLMService:
             len(attempted_models),
             " → ".join(attempted_models),
         )
+        if len(attempted_models) > 1:
+            await self._emit_exhausted_fallback(conversation_id, attempted_models, current_model, request.request_id)
         return _build_error_response(
             request,
             f"All fallback models exhausted ({len(attempted_models)} attempts)",
@@ -483,6 +499,15 @@ class LLMService:
                         primary_provider=primary_provider_name,
                         fallback_provider=provider.provider_name,
                     )
+                    await emit_fallback_event(
+                        conversation_id=conversation_id,
+                        primary_model=primary_model_name,
+                        fallback_model=current_model,
+                        primary_provider=primary_provider_name,
+                        fallback_provider=provider.provider_name,
+                        chain_tried=list(attempted_models),
+                        request_id=request.request_id,
+                    )
                 return
 
             except Exception as exc:
@@ -538,6 +563,10 @@ class LLMService:
                     exc,
                     " → ".join(attempted_models),
                 )
+                if len(attempted_models) > 1:
+                    await self._emit_exhausted_fallback(
+                        conversation_id, attempted_models, current_model, request.request_id
+                    )
                 raise
 
         # Max attempts reached
@@ -547,6 +576,8 @@ class LLMService:
             len(attempted_models),
             " → ".join(attempted_models),
         )
+        if len(attempted_models) > 1:
+            await self._emit_exhausted_fallback(conversation_id, attempted_models, current_model, request.request_id)
         raise RuntimeError(f"All fallback models exhausted ({len(attempted_models)} attempts)")
 
     # ------------------------------------------------------------------
@@ -628,6 +659,29 @@ class LLMService:
                 exc_info=True,
             )
 
+    @staticmethod
+    async def _emit_exhausted_fallback(
+        conversation_id: str | None,
+        attempted_models: list,
+        current_model: str | None,
+        request_id: str,
+    ) -> None:
+        """Emit PROVIDER_FALLBACK(exhausted=True). #11995: chat()/stream() never
+        tracked the exhaustion case at all (only successful fallbacks were)."""
+        primary_attempt = attempted_models[0]
+        primary_provider_name = primary_attempt.split(":")[0]
+        primary_model_name = primary_attempt.split(":", 1)[1] if ":" in primary_attempt else ""
+        await emit_fallback_event(
+            conversation_id=conversation_id,
+            primary_model=primary_model_name,
+            fallback_model=current_model,
+            primary_provider=primary_provider_name,
+            fallback_provider=attempted_models[-1].split(":")[0],
+            chain_tried=list(attempted_models),
+            exhausted=True,
+            request_id=request_id,
+        )
+
     def get_stats(self) -> Dict[str, Any]:
         """Return service-level statistics."""
         return {
@@ -639,6 +693,33 @@ class LLMService:
     # ------------------------------------------------------------------
     # Optimized chat (vLLM prefix-cache variant) (#3185)
     # ------------------------------------------------------------------
+
+    async def _build_prompt_clauses(
+        self,
+        *,
+        agent_type: str,
+        user_message: str,
+        available_tools: List | None,
+        additional_params: Dict | None,
+    ) -> tuple[str | None, str | None]:
+        """Pre-fetch the async prompt clauses for :meth:`chat_optimized` (#12829).
+
+        Returns ``(preference_clause, skill_clause)``, either of which may be
+        ``None`` when there is nothing to add. Tenant scoping is taken from
+        ``additional_params`` when the caller supplied it; without it the
+        aggregator falls back to unscoped biases.
+        """
+        from prompt_manager import build_preference_clause, build_skill_clause
+
+        params = additional_params or {}
+        preference_clause = await build_preference_clause(
+            list(available_tools or []),
+            task_class=agent_type,
+            user_id=params.get("user_id"),
+            org_id=params.get("org_id"),
+        )
+        skill_clause = await build_skill_clause(user_message)
+        return preference_clause, skill_clause
 
     async def chat_optimized(
         self,
@@ -711,6 +792,20 @@ class LLMService:
                 exc_info=True,
             )
 
+        # #12829: get_optimized_prompt accepts a preference clause (#10545) and a
+        # skill clause (#12810), but nothing ever passed either — both halves were
+        # built, tested and left disconnected, so learned tenant preferences and
+        # ranked skills never reached a prompt. Both are async lookups, which is
+        # why they are pre-fetched here rather than inside the sync assembler.
+        # Each helper returns None on any failure, so prompt assembly is unaffected
+        # when the aggregator or ranker is unavailable.
+        preference_clause, skill_clause = await self._build_prompt_clauses(
+            agent_type=agent_type,
+            user_message=user_message,
+            available_tools=available_tools,
+            additional_params=additional_params,
+        )
+
         system_prompt = get_optimized_prompt(
             base_prompt_key=get_base_prompt_for_agent(agent_type),
             session_id=session_id,
@@ -720,6 +815,8 @@ class LLMService:
             recent_context=recent_context,
             additional_params=additional_params,
             tool_descriptions=tool_descriptions,
+            preference_clause=preference_clause,
+            skill_clause=skill_clause,
         )
 
         request_id: str = llm_params.pop("request_id", str(uuid.uuid4()))

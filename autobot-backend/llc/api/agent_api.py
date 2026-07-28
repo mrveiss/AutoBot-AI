@@ -40,6 +40,25 @@ def _agent_context(request: Request) -> tuple[str, str]:
     return agent_id, company_id
 
 
+async def _assert_item_in_company(item_id: str, company_id: str) -> None:
+    """GH#12156: 404 unless the work item belongs to the caller's company.
+
+    KB collections are keyed by work_item_id alone, so tenant isolation must be
+    enforced at the handler by verifying ownership before any KB read.
+    """
+    from autobot_shared.singleton_factory import lazy_singleton
+    from user_management.database import get_async_session_factory
+
+    from ..services.work_item_service import WorkItemService
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        svc = lazy_singleton(WorkItemService)()
+        item = await svc.get(session, item_id)
+    if item is None or str(item.company_id) != str(company_id):
+        raise HTTPException(status_code=404, detail="Work item not found")
+
+
 @router.get("/work-items/next")
 async def get_next_work_item(request: Request) -> Dict[str, Any]:
     agent_id, company_id = _agent_context(request)
@@ -187,6 +206,8 @@ async def agent_upload_attachment(
 @router.get("/context/{item_id}")
 async def get_item_context(item_id: uuid.UUID, request: Request) -> Dict[str, Any]:
     """Return agent context for a work item, including any human handoff KB notes (GH#8232)."""
+    _, company_id = _agent_context(request)  # GH#12148: authenticated agent context
+    await _assert_item_in_company(str(item_id), company_id)  # GH#12156: tenant scope
     from ..kb.work_item_kb import WorkItemKB
 
     kb = WorkItemKB()

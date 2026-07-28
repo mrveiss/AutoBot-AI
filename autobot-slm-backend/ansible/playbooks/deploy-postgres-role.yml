@@ -1,0 +1,25 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# postgres per-role Migrate/Redeploy entry point (#12170, umbrella #11820)
+#
+# The `postgres` role had ansible_playbook: None, so /api/roles/postgres/migrate
+# returned HTTP 422 — postgres was the one managed role with no deployable
+# playbook. This gives it a dedicated entry point.
+#
+# It DELEGATES to the complete, tested deploy-user-management-db.yml rather than
+# re-authoring the per-host DB / user / listen-address / pg_hba / firewall /
+# verification logic — keeping that logic one-of-a-kind (no duplication).
+#
+# run_role_full_procedure (api/roles.py) invokes this with
+# `--limit <target_node_id>`, so only the phase whose `hosts:` matches the
+# migrated node runs, with that phase's correct per-host vars:
+#   - SLM node  -> Phase 1 (slm, slm_users databases, listen localhost)
+#   - DB VM     -> Phase 2 (autobot_users database, remote access + firewall)
+# The extra `role_name=postgres` var passed by the caller is unused here (harmless).
+---
+
+- name: "postgres role Migrate — delegate to the full user-management DB deploy (#12170)"
+  ansible.builtin.import_playbook: deploy-user-management-db.yml

@@ -350,9 +350,9 @@ class MemoryManager:
         """
         if not task_id or not task_id.strip():
             raise ValueError("task_id cannot be empty")
-        if "duration_seconds" in kwargs and kwargs["duration_seconds"] < 0:
+        if kwargs.get("duration_seconds") is not None and kwargs["duration_seconds"] < 0:
             raise ValueError("duration_seconds cannot be negative")
-        if "retry_count" in kwargs and kwargs["retry_count"] < 0:
+        if kwargs.get("retry_count") is not None and kwargs["retry_count"] < 0:
             raise ValueError("retry_count cannot be negative")
         await self._ensure_initialized()
         return await self._task_storage.update_task(task_id, status=status, **kwargs)
@@ -753,6 +753,51 @@ class MemoryManager:
         else:
             logger.warning("Task not found for failure: %s", task_id)
         return result
+
+    # ------------------------------------------------------------------
+    # Async task-write variants (#12185)
+    #
+    # The sync task-write methods above perform blocking SQLite I/O and must
+    # never run on the event loop. Rather than have every async caller remember
+    # to wrap them in ``asyncio.to_thread(...)`` (8 hand-rolled sites across 4
+    # files — a forgotten one silently reintroduces the #11679/#11680/#12101
+    # event-loop block), these variants own the offload internally. Async code
+    # calls ``await manager.a<method>(...)`` and cannot forget it.
+    # ------------------------------------------------------------------
+
+    async def acreate_task_record(
+        self,
+        task_name: str,
+        description: str,
+        priority: "TaskPriority | None" = None,
+        agent_type: str | None = None,
+        inputs: Dict | None = None,
+        parent_task_id: str | None = None,
+        metadata: Dict | None = None,
+    ) -> str:
+        """Async variant of :meth:`create_task_record` (offloads the sync write)."""
+        return await asyncio.to_thread(
+            self.create_task_record,
+            task_name,
+            description,
+            priority,
+            agent_type,
+            inputs,
+            parent_task_id,
+            metadata,
+        )
+
+    async def astart_task(self, task_id: str) -> bool:
+        """Async variant of :meth:`start_task` (offloads the sync write)."""
+        return await asyncio.to_thread(self.start_task, task_id)
+
+    async def acomplete_task(self, task_id: str, outputs: Dict | None = None, status=None) -> bool:
+        """Async variant of :meth:`complete_task` (offloads the sync write)."""
+        return await asyncio.to_thread(self.complete_task, task_id, outputs, status)
+
+    async def afail_task(self, task_id: str, error_message: str, retry_count: int = 0) -> bool:
+        """Async variant of :meth:`fail_task` (offloads the sync write)."""
+        return await asyncio.to_thread(self.fail_task, task_id, error_message, retry_count)
 
     def add_markdown_reference(
         self,

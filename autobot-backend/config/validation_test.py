@@ -77,21 +77,41 @@ class TestFalsyValidValues:
         redis_errors = [e for e in result.errors if "redis.host" in e]
         assert redis_errors == [], f"Unexpected errors: {redis_errors}"
 
-    def test_server_host_none_is_rejected(self):
-        """Only an actual None value must produce a required-key error."""
-        cfg = _base_config()
-        cfg["backend"]["server_host"] = None
-        result = validate_startup_config(cfg)
-        host_errors = [e for e in result.errors if "server_host" in e]
-        assert len(host_errors) == 1
+    def test_server_host_is_no_longer_required(self):
+        """GH#9232 removed backend.server_host from the required set.
 
-    def test_server_host_missing_key_is_rejected(self):
-        """A completely absent key must produce a required-key error."""
-        cfg = _base_config()
-        del cfg["backend"]["server_host"]
-        result = validate_startup_config(cfg)
-        host_errors = [e for e in result.errors if "server_host" in e]
-        assert len(host_errors) == 1
+        _REQUIRED_CONFIG_KEYS is now empty (validation.py) because server_host
+        defaults to 0.0.0.0 in config/defaults.py. These two cases previously
+        asserted it WAS required and so failed on every run.
+        """
+        for mutate in (
+            lambda c: c["backend"].__setitem__("server_host", None),
+            lambda c: c["backend"].pop("server_host"),
+        ):
+            cfg = _base_config()
+            mutate(cfg)
+            result = validate_startup_config(cfg)
+            assert [e for e in result.errors if "server_host" in e] == []
+
+    def test_conditionally_required_key_uses_is_none_not_truthiness(self):
+        """The is-None-vs-falsy invariant this class exists for, on a key that
+        IS still required.
+
+        memory.redis.host is conditionally required when memory.redis.enabled,
+        and validation.py gates it on `if value is None`. So None/absent must
+        error, while a falsy-but-present value ('0', tested above) must not —
+        which is exactly the distinction #9232 left untested once server_host
+        stopped being required.
+        """
+        for mutate in (
+            lambda c: c["memory"]["redis"].__setitem__("host", None),
+            lambda c: c["memory"]["redis"].pop("host"),
+        ):
+            cfg = _base_config()
+            cfg["memory"]["redis"]["enabled"] = True
+            mutate(cfg)
+            result = validate_startup_config(cfg)
+            assert len([e for e in result.errors if "redis.host" in e]) == 1
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - Legacy Python Environment Cleanup Script
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
 # Issue #1924: Remove stale pyenv and conda installations from VMs.

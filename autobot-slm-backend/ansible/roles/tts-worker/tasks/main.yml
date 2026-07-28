@@ -27,6 +27,19 @@
     state: present
   tags: ['tts', 'users']
 
+# #12425: supplementary (not primary) membership in the shared `autobot`
+# group so this role can write into the shared, setgid /var/log/autobot dir
+# (see common role) via group permission, without owning that directory
+# itself — see the "Create service directories" task below, which
+# deliberately excludes tts_log_dir from the owner/group it applies to the
+# role's own, exclusively-owned dirs.
+- name: "TTS Worker | Join shared autobot log group (#12425)"
+  ansible.builtin.user:
+    name: "{{ tts_user }}"
+    groups: autobot
+    append: true
+  tags: ['tts', 'users']
+
 # ============================================================
 # Per-role env at /etc/autobot/
 # ============================================================
@@ -86,9 +99,40 @@
     group: "{{ tts_group }}"
   loop:
     - "{{ tts_install_dir }}"
-    - "{{ tts_log_dir }}"
     - "{{ tts_models_dir }}"
     - "{{ tts_voices_dir }}"
+  tags: ['tts', 'dirs']
+
+# #12425: tts_log_dir defaults to the SHARED /var/log/autobot (common role),
+# not a TTS-exclusive path — re-chowning it to tts_user/tts_group above (as
+# the other three, genuinely TTS-exclusive dirs correctly are) clobbered
+# common's autobot:autobot ownership on every run of this role, leaving the
+# `autobot` service user (autobot-slm-backend) unable to create its own
+# self-update-ansible.log. Converge to the SAME canonical ownership the
+# common role applies, regardless of which role runs last; the group-write
+# bit + this role's own membership in the `autobot` group (above) is what
+# lets tts_user still write its log files here.
+- name: "TTS Worker | Ensure shared log directory uses canonical ownership (#12425)"
+  ansible.builtin.file:
+    path: "{{ tts_log_dir }}"
+    state: directory
+    mode: "02775"
+    owner: autobot
+    group: autobot
+  # Only applies the shared canonical ownership while tts_log_dir actually
+  # points at the shared dir; a future group_vars override to a
+  # TTS-exclusive path falls through to the tts_user-owned dir below instead.
+  when: tts_log_dir == '/var/log/autobot'
+  tags: ['tts', 'dirs']
+
+- name: "TTS Worker | Create TTS-exclusive log directory (override path only, #12425)"
+  ansible.builtin.file:
+    path: "{{ tts_log_dir }}"
+    state: directory
+    mode: "0755"
+    owner: "{{ tts_user }}"
+    group: "{{ tts_group }}"
+  when: tts_log_dir != '/var/log/autobot'
   tags: ['tts', 'dirs']
 
 - name: "TTS Worker | Fix HF model cache ownership (hub/xet may be owned by earlier user)"
@@ -170,7 +214,13 @@
 - name: "TTS Worker | Install pocket-tts and audio dependencies"
   ansible.builtin.pip:
     name:
-      - pocket-tts
+      # pocket-tts>=2.0.0 is required for TTSModel.generate_audio_stream()
+      # (incremental audio-chunk streaming used by /tts/synthesize/stream,
+      # #12501) — verified present on 1.1.1, 2.0.0, and 2.1.0 (latest at
+      # pin time). Floor pinned to the earliest version validated against
+      # the worker's streaming code path, rather than an unbounded
+      # latest-wins resolve.
+      - pocket-tts>=2.0.0
       - soundfile>=0.12.0
       - numpy>=1.24.0
       - scipy>=1.10.0

@@ -18,10 +18,7 @@ function createServer() {
     },
     {
       capabilities: {
-        tools: {
-          list: true,
-          call: true
-        }
+        tools: {}
       }
     }
   );

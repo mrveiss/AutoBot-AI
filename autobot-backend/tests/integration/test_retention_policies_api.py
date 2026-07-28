@@ -15,6 +15,7 @@ Tests for data retention policy CRUD endpoints:
 
 import uuid
 from typing import AsyncGenerator
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -24,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.asyncio.session import async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from api.admin_retention_policies import _require_admin
 from api.admin_retention_policies import router as retention_router
 from api.user_management.dependencies import get_db_session
 from user_management.models.base import Base
@@ -90,36 +90,56 @@ def regular_user():
     }
 
 
+# Holds the user the patched auth middleware returns for the current test.
+_CURRENT: dict = {"user": None}
+
+
+@pytest.fixture(autouse=True)
+def _patch_auth_middleware():
+    """Feed the canonical require_role() gate (#12704) the injected test user.
+
+    Retention endpoints use ``require_role("admin", "superadmin")``, which reads
+    the user via ``auth_rbac.get_auth_middleware()``.
+    """
+    mw = MagicMock()
+    mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
+    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+        yield
+    _CURRENT["user"] = None
+
+
 @pytest.fixture
 def test_client_admin(test_db_session, admin_user):
     """Create a test FastAPI client with admin user."""
+    _CURRENT["user"] = admin_user
     app = FastAPI()
     app.include_router(retention_router, prefix="/api")
-
-    # Override dependencies
     app.dependency_overrides[get_db_session] = lambda: test_db_session
-    app.dependency_overrides[_require_admin] = lambda: admin_user
+    return TestClient(app)
 
+
+@pytest.fixture
+def test_client_superadmin(test_db_session):
+    """superadmin must also reach admin retention endpoints (#12704 unlock)."""
+    _CURRENT["user"] = {
+        "id": str(uuid.uuid4()),
+        "user_id": str(uuid.uuid4()),
+        "email": "root@example.com",
+        "role": "superadmin",
+    }
+    app = FastAPI()
+    app.include_router(retention_router, prefix="/api")
+    app.dependency_overrides[get_db_session] = lambda: test_db_session
     return TestClient(app)
 
 
 @pytest.fixture
 def test_client_regular(test_db_session, regular_user):
     """Create a test FastAPI client with regular user (should be rejected)."""
+    _CURRENT["user"] = regular_user
     app = FastAPI()
     app.include_router(retention_router, prefix="/api")
-
-    # Override dependencies
     app.dependency_overrides[get_db_session] = lambda: test_db_session
-
-    # Regular user will fail admin check
-    def reject_non_admin():
-        from utils.catalog_http_exceptions import raise_auth_error
-
-        raise_auth_error("AUTH_0003", "Admin permission required")
-
-    app.dependency_overrides[_require_admin] = reject_non_admin
-
     return TestClient(app)
 
 
@@ -333,6 +353,22 @@ async def test_validation_retention_days_max(test_client_admin, test_db_session)
     )
 
     assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_superadmin_rbac_enforcement(test_client_superadmin, test_db_session):
+    """superadmin is accepted on admin retention endpoints (#12704 unlock)."""
+    response = test_client_superadmin.post(
+        "/api/admin/retention-policies",
+        json={
+            "policy_type": "chat",
+            "retention_days": 90,
+            "anonymize_instead_of_delete": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["policy_type"] == "chat"
 
 
 @pytest.mark.asyncio

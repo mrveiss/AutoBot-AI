@@ -109,7 +109,7 @@ export function useBatchProcessingApi() {
 
     async listTemplates(): Promise<BatchTemplatesListResponse | null> {
       try {
-        return await api.get<BatchTemplatesListResponse>(`${getApiBase()}/batch-templates`)
+        return await api.get<BatchTemplatesListResponse>(`${getApiBase()}/batch-jobs/templates/`)
       } catch (error: unknown) {
         logger.error('Failed to load batch templates', error)
         showSubtleErrorNotification('Error', 'Failed to load batch templates', 'error')
@@ -119,7 +119,7 @@ export function useBatchProcessingApi() {
 
     async createTemplate(request: CreateBatchTemplateRequest): Promise<BatchTemplate | null> {
       try {
-        return await api.post<BatchTemplate>(`${getApiBase()}/batch-templates`, request)
+        return await api.post<BatchTemplate>(`${getApiBase()}/batch-jobs/templates/`, request)
       } catch (error: unknown) {
         logger.error('Failed to create batch template', error)
         showSubtleErrorNotification('Error', 'Failed to create batch template', 'error')
@@ -129,7 +129,7 @@ export function useBatchProcessingApi() {
 
     async deleteTemplate(templateId: string): Promise<{ status: string } | null> {
       try {
-        return await api.delete<{ status: string }>(`${getApiBase()}/batch-templates/${templateId}`)
+        return await api.delete<{ status: string }>(`${getApiBase()}/batch-jobs/templates/${templateId}`)
       } catch (error: unknown) {
         logger.error('Failed to delete batch template', error)
         showSubtleErrorNotification('Error', 'Failed to delete batch template', 'error')
@@ -139,7 +139,7 @@ export function useBatchProcessingApi() {
 
     async listSchedules(): Promise<BatchSchedulesListResponse | null> {
       try {
-        return await api.get<BatchSchedulesListResponse>(`${getApiBase()}/batch-schedules`)
+        return await api.get<BatchSchedulesListResponse>(`${getApiBase()}/batch-jobs/schedules/`)
       } catch (error: unknown) {
         logger.error('Failed to load batch schedules', error)
         showSubtleErrorNotification('Error', 'Failed to load batch schedules', 'error')
@@ -149,7 +149,7 @@ export function useBatchProcessingApi() {
 
     async createSchedule(request: CreateBatchScheduleRequest): Promise<BatchSchedule | null> {
       try {
-        return await api.post<BatchSchedule>(`${getApiBase()}/batch-schedules`, request)
+        return await api.post<BatchSchedule>(`${getApiBase()}/batch-jobs/schedules/`, request)
       } catch (error: unknown) {
         logger.error('Failed to create batch schedule', error)
         showSubtleErrorNotification('Error', 'Failed to create batch schedule', 'error')
@@ -159,7 +159,9 @@ export function useBatchProcessingApi() {
 
     async toggleSchedule(scheduleId: string, enabled: boolean): Promise<BatchSchedule | null> {
       try {
-        return await api.patch(`${getApiBase()}/batch-schedules/${scheduleId}`, { enabled })
+        // #12326: corrected prefix to /batch-jobs/schedules.
+        // #12380: backend PATCH /api/batch-jobs/schedules/{id} added.
+        return await api.patch<BatchSchedule>(`${getApiBase()}/batch-jobs/schedules/${scheduleId}`, { enabled })
       } catch (error: unknown) {
         logger.error('Failed to update batch schedule', error)
         showSubtleErrorNotification('Error', 'Failed to update batch schedule', 'error')
@@ -169,7 +171,7 @@ export function useBatchProcessingApi() {
 
     async deleteSchedule(scheduleId: string): Promise<{ status: string } | null> {
       try {
-        return await api.delete<{ status: string }>(`${getApiBase()}/batch-schedules/${scheduleId}`)
+        return await api.delete<{ status: string }>(`${getApiBase()}/batch-jobs/schedules/${scheduleId}`)
       } catch (error: unknown) {
         logger.error('Failed to delete batch schedule', error)
         showSubtleErrorNotification('Error', 'Failed to delete batch schedule', 'error')

@@ -252,12 +252,21 @@ async def require_org_context(
     """
     Dependency that requires organization context.
 
-    Raises HTTPException if no org context is available.
+    Raises HTTPException if no org context is available (#12215): the detail
+    message names the ``X-Organization-Id`` header explicitly, since routes
+    whose path has no ``company_id``/``id`` param (see
+    ``_extract_request_org_id``) cannot resolve org context from the URL and
+    the caller's JWT carries no ``org_id`` claim. See
+    ``docs/llc/tenant-context.md`` for the full resolution contract.
     """
     if not context.org_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization context required",
+            detail=(
+                "Organization context required — supply an 'X-Organization-Id' "
+                "request header (or a company_id path/query param, where the "
+                "route has one). See docs/llc/tenant-context.md."
+            ),
         )
     return context
 

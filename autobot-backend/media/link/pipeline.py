@@ -164,14 +164,14 @@ class LinkPipeline(BasePipeline):
 
         jina_url = f"{_JINA_BASE_URL}{url}"
         try:
-            session = await _get_jina_session()
-            async with session.get(jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT) as response:
-                if response.status == 200:
-                    text = await response.text(encoding="utf-8", errors="replace")
-                    _record_jina_success()
-                    return text
-                # Non-200 counts as a failure for circuit-breaker purposes.
-                _record_jina_failure()
+            async with _get_jina_session() as session:
+                async with session.get(jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT) as response:
+                    if response.status == 200:
+                        text = await response.text(encoding="utf-8", errors="replace")
+                        _record_jina_success()
+                        return text
+                    # Non-200 counts as a failure for circuit-breaker purposes.
+                    _record_jina_failure()
         except Exception as exc:
             logger.debug("Jina Reader fast-path failed for %s: %s", url, exc)
             _record_jina_failure()
@@ -446,18 +446,24 @@ async def process_url(url: str, render: str = "auto", timeout: float = 30.0) -> 
 # ----------------------------------------------------------------------
 
 
-async def _get_jina_session() -> "aiohttp.ClientSession":
-    """Return the shared pooled aiohttp session.
+def _get_jina_session():
+    """Return an async context manager yielding the shared pooled aiohttp session.
 
     Issue #11641: the private module-level Jina session forked the concept
     owned by ``autobot_shared.http_client.HTTPClientManager``. Delegates to
     the canonical singleton (lifecycle managed there); the Jina-specific
     timeout stays per-request via ``_JINA_TIMEOUT``. Kept as an indirection
     point — tests patch this seam.
+
+    Issue #11656: delegates to ``HTTPClientManager.tracked_session()`` (not
+    the raw ``get_session()``) so a Jina fetch is counted in the SAME
+    ``_active_requests`` counter ``request()`` uses. Without this, a pool
+    resize driven by concurrent ``request()`` traffic could close the
+    shared session out from under an in-flight Jina fetch.
     """
     from autobot_shared.http_client import get_http_client
 
-    return await get_http_client().get_session()
+    return get_http_client().tracked_session()
 
 
 def _record_jina_failure() -> None:

@@ -28,11 +28,6 @@ FactType = Literal[
 ]
 
 
-def _utcnow() -> datetime:
-    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return now_utc()
-
-
 class AtomicFact(BaseModel):
     """
     Represents an atomic factual statement extracted from document processing.
@@ -71,8 +66,8 @@ class AtomicFact(BaseModel):
         default=1,
         description="Number of chunks supporting this fact (cross-validation)",
     )
-    created_at: datetime = Field(default_factory=_utcnow, description="Fact creation timestamp")
-    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=now_utc, description="Fact creation timestamp")
+    updated_at: datetime = Field(default_factory=now_utc, description="Last update timestamp")
 
     def as_triple(self) -> tuple[str, str, str]:
         """Return fact as (subject, predicate, object) triple for graph representation."""

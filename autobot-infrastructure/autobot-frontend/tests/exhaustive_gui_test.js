@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Exhaustive GUI Test for AutoBot - Tests Every Single Element
  * This test comprehensively validates every GUI component and interaction

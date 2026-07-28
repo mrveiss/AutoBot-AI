@@ -8,7 +8,7 @@ Unit tests for analytics_code_review.py source_id scoping (Issue #3436)
 Tests the following functionality:
 - parse_diff helper function
 - calculate_review_score helper function
-- _no_data_response helper function
+- no_data_response shared helper (api.analytics_shared)
 - _resolve_source_or_404 guard logic (mocked via sys.modules)
 """
 
@@ -125,22 +125,22 @@ class TestCalculateReviewScore:
 
 
 class TestNoDataResponse:
-    """Tests for _no_data_response helper."""
+    """Tests for the shared no_data_response helper (Issue #12705)."""
 
     def test_default_message(self):
         """Should include no_data status and message key."""
-        from api.analytics_code_review import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response()
+        result = no_data_response("No code review data. Run a code review first.", review=None, comments=[], summary={})
         assert result["status"] == "no_data"
         assert "message" in result
         assert "comments" in result
 
     def test_custom_message(self):
         """Should accept a custom message."""
-        from api.analytics_code_review import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response("Custom message")
+        result = no_data_response("Custom message", review=None, comments=[], summary={})
         assert result["message"] == "Custom message"
 
 

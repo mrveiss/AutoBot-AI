@@ -16,7 +16,7 @@ import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
+import { getApiBase, getBackendWsUrl } from '@/config/ssot-config'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from './useLoadingState'
@@ -255,12 +255,15 @@ export function usePrometheusMetrics(
   const lastUpdate = ref<Date | null>(null)
   const isConnected = ref(false)
 
-  // Build the monitoring WebSocket URL
+  // Build the monitoring WebSocket URL.
+  // #12313: derive the base from the SSOT (getBackendWsUrl) instead of composing
+  // an absolute `host:VITE_BACKEND_PORT` origin. The old inline fallback baked in
+  // the dead port 8443 — nothing listens there behind nginx, and any absolute
+  // backend origin is blocked by CSP `connect-src 'self'` (see defaults #10348).
+  // getBackendWsUrl() returns a same-origin `wss://<page-host>` in proxy mode, so
+  // the socket inherits whatever scheme/host/port nginx actually serves.
   const _buildWsUrl = (): string => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = import.meta.env.VITE_API_BASE_URL?.replace(/^https?:\/\//, '') ||
-                   `${import.meta.env.VITE_BACKEND_HOST || window.location.hostname}:${import.meta.env.VITE_BACKEND_PORT || '8443'}`
-    return `${wsProtocol}//${wsHost}/api/monitoring/realtime`
+    return `${getBackendWsUrl()}/api/monitoring/realtime`
   }
 
   // WebSocket managed via useWebSocket composable

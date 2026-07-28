@@ -151,6 +151,43 @@ class BoardService(LLCServiceBase):
         )
         return result.scalars().all()
 
+    # ------------------------------------------------------------------
+    # Update / Delete (GH#12695 — boards were the only entity with no
+    # backend PUT/DELETE, so a board created by mistake could never be
+    # renamed or removed.)
+    # ------------------------------------------------------------------
+
+    async def update_board(self, session: AsyncSession, board_id: str, name: str) -> Optional[LLCBoard]:
+        """Rename a board. Returns None when it does not exist.
+
+        Only ``name`` is updatable by design: type/project_id/sprint_id
+        participate in the uq_llc_boards_company_project_type and
+        ..._sprint_type constraints, so changing them would silently collide
+        with an existing board rather than doing what the caller meant.
+        """
+        board = await self.get_board(session, board_id)
+        if board is None:
+            return None
+        board.name = name
+        await session.flush()
+        await session.refresh(board)
+        return board
+
+    async def delete_board(self, session: AsyncSession, board_id: str) -> bool:
+        """Delete a board and its columns. Returns False when it does not exist.
+
+        Columns go with it: LLCBoardColumn declares ondelete="CASCADE" and the
+        relationship is cascade="all, delete-orphan", so no orphan rows remain.
+        Work items are NOT touched — they belong to the project, not the board,
+        and deleting a view must not destroy the work it displays.
+        """
+        board = await self.get_board(session, board_id)
+        if board is None:
+            return False
+        await session.delete(board)
+        await session.flush()
+        return True
+
     async def get_board_items(self, session: AsyncSession, board_id: str) -> Dict[str, Any]:
         """Return board columns with work items grouped per column.
 

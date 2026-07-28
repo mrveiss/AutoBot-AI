@@ -7,7 +7,7 @@ This document demonstrates how to migrate existing components to use the central
 ## Table of Contents
 
 1. [SecretsManager.vue Migration](#secretsmanagervue-migration)
-2. [KnowledgeManager.vue Migration](#knowledgemanagervue-migration)
+2. [KnowledgeEntries.vue Migration](#knowledgeentriesvue-migration)
 3. [BackendSettings.vue Migration](#backendsettingsvue-migration)
 4. [MCPDashboard.vue Migration](#mcpdashboardvue-migration)
 5. [Quick Reference](#quick-reference)
@@ -258,7 +258,7 @@ const openTransferModal = (secret) => {
 
 ---
 
-## KnowledgeManager.vue Migration
+## KnowledgeEntries.vue Migration
 
 ### ❌ BEFORE
 
@@ -674,7 +674,7 @@ For each component with modal state management:
 | Component | Lines Before | Lines After | Saved |
 |-----------|--------------|-------------|-------|
 | SecretsManager.vue | 48 | 10 | 38 |
-| KnowledgeManager.vue | 30 | 15 | 15 |
+| KnowledgeEntries.vue | 30 | 15 | 15 |
 | BackendSettings.vue | 16 | 3 | 13 |
 | MCPDashboard.vue | 30 | 20 | 10 |
 | DatabaseManager.vue | ~24 | 10 | 14 |

@@ -283,8 +283,9 @@ async def test_reddit_url_mode_ssrf_block_no_fetch(monkeypatch):
 
     mock_client = AsyncMock()
     backend = RedditJsonBackend(client=mock_client)
-    # reddit.com URL so the url-mode branch is taken
-    request = ContentRequest(url="http://10.0.0.1/reddit.com/r/test")
+    # Genuine reddit.com host so the url-mode branch is taken; the SSRF guard
+    # (_is_public_url_async stubbed False) must then block before any fetch.
+    request = ContentRequest(url="https://www.reddit.com/r/test")
 
     with pytest.raises(BackendError):
         await backend.fetch(request)

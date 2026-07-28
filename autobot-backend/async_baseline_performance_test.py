@@ -38,7 +38,7 @@ import aiohttp
 from autobot_shared.logging_manager import get_logger
 
 # Import canonical Redis client pattern
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
@@ -243,7 +243,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = get_redis_client(async_client=True, database="metrics")  # METRICS_DB
+        redis_client = await get_async_redis_client(database="metrics")  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -341,7 +341,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = get_redis_client(async_client=True, database="metrics")  # METRICS_DB
+        redis_client = await get_async_redis_client(database="metrics")  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -406,7 +406,7 @@ class AsyncBaselineTest:
             try:
                 if vm_name == "redis":
                     # Special handling for Redis (not HTTP) using canonical pattern
-                    redis_client = get_redis_client(async_client=True, database="main")  # MAIN_DB (default DB 0)
+                    redis_client = await get_async_redis_client(database="main")  # MAIN_DB (default DB 0)
                     try:
                         start = time.perf_counter()
                         await redis_client.ping()

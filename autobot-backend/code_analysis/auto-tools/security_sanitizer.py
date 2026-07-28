@@ -20,8 +20,11 @@ Version: 1.0.0
 """
 
 import logging
+import sys
+from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -30,21 +33,31 @@ logger = get_logger(__name__)
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
 _HTML_EXTENSIONS = (".html", ".htm")
 
-import hashlib
-import json
-import os
-import re
-import shutil
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+# Issue #12660: auto-tools/ has no __init__.py (hyphenated dir name isn't a
+# valid package identifier) — add this directory to sys.path so the shared
+# tool skeleton can be imported by every standalone script here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import hashlib  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+from typing import Any, Dict, List, Tuple  # noqa: E402
+
+from tool_base import SecurityFixToolBase  # noqa: E402
 
 
-class SecurityFixAgent:
+class SecurityFixAgent(SecurityFixToolBase):
     """
     Automated security fix agent for XSS vulnerability remediation.
+
+    Issue #12660: create_backup/save_report/cli_main now live on
+    ``SecurityFixToolBase``; this class only provides the XSS scan/fix
+    logic and the security_tool.py-specific report text.
     """
+
+    REPORT_FILE_PREFIX = "security_fix_report"
+    USAGE_PROGRAM_NAME = "security_tool.py"
 
     def __init__(self):
         self.fixes_applied = []
@@ -99,26 +112,6 @@ class SecurityFixAgent:
             },
         }
 
-    def create_backup(self, file_path: str) -> str:
-        """Create a backup of the original file."""
-        try:
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-            backup_name = f"{Path(file_path).name}.backup_{timestamp}"
-
-            if not self.backup_dir:
-                self.backup_dir = Path(file_path).parent / "security_backups"
-                self.backup_dir.mkdir(exist_ok=True)
-
-            backup_path = self.backup_dir / backup_name
-            shutil.copy2(file_path, backup_path)
-
-            logger.info("Backup created: %sbackup_path ")
-            return str(backup_path)
-
-        except Exception:
-            logger.error("Failed to create backup: %se ")
-            return ""
-
     def scan_for_vulnerabilities(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan content for XSS vulnerabilities."""
         vulnerabilities = []
@@ -126,8 +119,11 @@ class SecurityFixAgent:
         for vuln_type, pattern in self.xss_patterns.items():
             matches = list(re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE))
 
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in matches:
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 context_start = max(0, match.start() - 50)
                 context_end = min(len(content), match.end() + 50)
                 context = content[context_start:context_end].strip()
@@ -622,29 +618,6 @@ class SecurityFixAgent:
 
         return report_content
 
-    def save_report(self, report_content: str, output_dir: str) -> str:
-        """Save the security report to file."""
-        try:
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-            report_filename = f"security_fix_report_{timestamp}.md"
-            report_path = os.path.join(output_dir, report_filename)
-
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.write(report_content)
-
-            # Also save JSON version for machine processing
-            json_filename = f"security_fix_report_{timestamp}.json"
-            json_path = os.path.join(output_dir, json_filename)
-
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(self.report, f, indent=2)
-
-            return report_path
-
-        except Exception:
-            logger.error("Error saving report: %se ")
-            return ""
-
     def run(self, target_path: str) -> None:
         """Main execution method."""
         logger.info("🛡️  AutoBot Security Fix Agent v1.0.0")
@@ -701,20 +674,7 @@ class SecurityFixAgent:
 
 def main():
     """Main entry point."""
-    if len(sys.argv) != 2:
-        logger.info("Usage: python security_tool.py <file_or_directory_path>")
-        logger.info("Example: python security_tool.py /path/to/playwright-report/")
-        sys.exit(1)
-
-    target_path = sys.argv[1]
-
-    if not os.path.exists(target_path):
-        logger.error("Error: Path '%starget_path ' does not exist")
-        sys.exit(1)
-
-    # Create and run the security fix agent
-    agent = SecurityFixAgent()
-    agent.run(target_path)
+    SecurityFixAgent.cli_main()
 
 
 if __name__ == "__main__":

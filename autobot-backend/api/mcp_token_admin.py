@@ -23,14 +23,13 @@ import secrets
 import time
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
-from auth_middleware import get_auth_middleware
+from auth_rbac import require_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from utils.catalog_http_exceptions import raise_auth_error
 
 logger = get_logger(__name__)
 
@@ -81,17 +80,6 @@ class RevokeTokenResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _require_admin(request: Request) -> bool:
-    """Dependency: reject callers without admin or superadmin role."""
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
-    role = user_data.get("role", "")
-    if role not in ("admin", "superadmin"):
-        raise_auth_error("AUTH_0003", "Admin permission required")
-    return True
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -129,7 +117,7 @@ _INDEX_KEY = "mcp:tokens:index"
 )
 async def create_mcp_token(
     body: CreateTokenRequest,
-    _admin: bool = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> CreateTokenResponse:
     """Generate a new scoped MCP client token.
 
@@ -195,7 +183,7 @@ async def create_mcp_token(
     error_code_prefix="MCP",
 )
 async def list_mcp_tokens(
-    _admin: bool = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> ListTokensResponse:
     """List all active MCP tokens.
 
@@ -246,7 +234,7 @@ async def list_mcp_tokens(
 )
 async def revoke_mcp_token(
     token_id: str = Path(..., description="Token ID to revoke"),
-    _admin: bool = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> RevokeTokenResponse:
     """Revoke an MCP token by its ID.
 

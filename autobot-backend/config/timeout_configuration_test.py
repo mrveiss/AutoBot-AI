@@ -12,6 +12,7 @@ Validates:
 """
 
 import os
+from unittest.mock import patch
 
 import pytest
 
@@ -211,18 +212,27 @@ class TestBackwardCompatibility:
         assert self.config.get_timeout("redis", "default") == 5.0
 
     def test_environment_variable_override(self):
-        """Test that AUTOBOT_LLM_TIMEOUT env var still works"""
-        original = config.llm_timeout
-        try:
-            config.llm_timeout = "999.0"
-            # Reload config would be needed here
-            # For now, just test the mechanism exists
-            assert "AUTOBOT_LLM_TIMEOUT" in os.environ
-        finally:
-            if original:
-                config.llm_timeout = original
-            elif "AUTOBOT_LLM_TIMEOUT" in os.environ:
-                del config.llm_timeout
+        """AUTOBOT_LLM_TIMEOUT must override the default on a fresh config.
+
+        This previously assigned `config.llm_timeout = "999.0"` and then asserted
+        `"AUTOBOT_LLM_TIMEOUT" in os.environ` — assignment to the proxy does not
+        write the environment, so the assertion failed on every run. Its own
+        comment conceded it only "test[ed] the mechanism exists".
+
+        The real mechanism is pydantic-settings reading the env at construction.
+        The module-level `config` proxy is built once and cached, so the override
+        must be observed on a NEW instance.
+        """
+        from autobot_shared.ssot_config import AutoBotConfig
+
+        default_timeout = AutoBotConfig().llm_timeout
+
+        with patch.dict(os.environ, {"AUTOBOT_LLM_TIMEOUT": "999.0"}):
+            assert AutoBotConfig().llm_timeout == 999
+
+        # And it is genuinely the env doing the work, not a coincidence.
+        assert AutoBotConfig().llm_timeout == default_timeout
+        assert default_timeout != 999
 
 
 class TestIntegration:

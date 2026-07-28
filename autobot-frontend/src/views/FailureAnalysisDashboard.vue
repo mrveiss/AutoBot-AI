@@ -334,7 +334,7 @@ function levelClass(level: string): string {
 
 .required {
   color: var(--color-red-500);
-  margin-left: 2px;
+  margin-left: var(--spacing-0-5);
 }
 
 .form-input,
@@ -373,7 +373,7 @@ function levelClass(level: string): string {
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-5);
   background: var(--color-blue-600);
-  color: #fff;
+  color: var(--faildash-on-accent);
   border: none;
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
@@ -409,10 +409,10 @@ function levelClass(level: string): string {
 
 .spinner {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: var(--spacing-3-5);
+  height: var(--spacing-3-5);
   border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  border-top-color: var(--faildash-on-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -427,10 +427,10 @@ function levelClass(level: string): string {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-4);
-  background: var(--color-red-50, #fef2f2);
-  border: 1px solid var(--color-red-200, #fecaca);
+  background: var(--color-red-50);
+  border: 1px solid var(--color-red-200);
   border-radius: var(--radius-md);
-  color: var(--color-red-700, #b91c1c);
+  color: var(--color-red-700);
   font-size: var(--text-sm);
 }
 
@@ -451,8 +451,8 @@ function levelClass(level: string): string {
 }
 
 .dismiss-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 /* Result panel */
@@ -475,25 +475,25 @@ function levelClass(level: string): string {
 
 .summary-badge {
   padding: var(--spacing-1) var(--spacing-3);
-  border-radius: var(--radius-full, 9999px);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.05em;
 }
 
 .badge-critical {
-  background: var(--color-red-100, #fee2e2);
-  color: var(--color-red-800, #991b1b);
+  background: var(--color-red-100);
+  color: var(--color-red-800);
 }
 
 .badge-degraded {
-  background: var(--color-amber-100, #fef3c7);
-  color: var(--color-amber-800, #92400e);
+  background: var(--color-amber-100);
+  color: var(--color-amber-800);
 }
 
 .badge-warning {
-  background: var(--color-yellow-100, #fef9c3);
-  color: var(--color-yellow-800, #854d0e);
+  background: var(--color-yellow-100);
+  color: var(--color-yellow-800);
 }
 
 .summary-meta {
@@ -555,7 +555,7 @@ function levelClass(level: string): string {
 }
 
 .root-cause-card {
-  border-left: 3px solid var(--color-red-500, #ef4444);
+  border-left: 3px solid var(--color-red-500);
 }
 
 .event-header {
@@ -572,7 +572,7 @@ function levelClass(level: string): string {
 }
 
 .event-type-badge {
-  padding: 2px var(--spacing-2);
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary, var(--bg-secondary));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
@@ -582,12 +582,12 @@ function levelClass(level: string): string {
 
 .confidence-pill {
   margin-left: auto;
-  padding: 2px var(--spacing-2);
-  background: var(--color-blue-50, #eff6ff);
-  border-radius: var(--radius-full, 9999px);
+  padding: var(--spacing-0-5) var(--spacing-2);
+  background: var(--color-blue-50);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--color-blue-700, #1d4ed8);
+  color: var(--color-blue-700);
 }
 
 .event-description {
@@ -620,14 +620,14 @@ function levelClass(level: string): string {
 
 .chain-index {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--color-blue-600, #2563eb);
-  color: #fff;
+  background: var(--color-blue-600);
+  color: var(--faildash-on-accent);
   font-size: var(--text-xs);
   font-weight: 700;
   margin-top: var(--spacing-1);
@@ -675,7 +675,7 @@ function levelClass(level: string): string {
 }
 
 .rec-type-badge {
-  padding: 2px var(--spacing-2);
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -683,18 +683,18 @@ function levelClass(level: string): string {
 }
 
 .rec-immediate {
-  background: var(--color-red-100, #fee2e2);
-  color: var(--color-red-700, #b91c1c);
+  background: var(--color-red-100);
+  color: var(--color-red-700);
 }
 
 .rec-short {
-  background: var(--color-amber-100, #fef3c7);
-  color: var(--color-amber-700, #b45309);
+  background: var(--color-amber-100);
+  color: var(--color-amber-700);
 }
 
 .rec-long {
-  background: var(--color-blue-100, #dbeafe);
-  color: var(--color-blue-700, #1d4ed8);
+  background: var(--color-blue-100);
+  color: var(--color-blue-700);
 }
 
 .intv-description {
@@ -718,30 +718,30 @@ function levelClass(level: string): string {
 }
 
 .meta-pill {
-  padding: 2px var(--spacing-2);
+  padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-full, 9999px);
+  border-radius: var(--radius-full);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
 
 .level-high {
-  background: var(--color-red-50, #fef2f2);
-  border-color: var(--color-red-200, #fecaca);
-  color: var(--color-red-700, #b91c1c);
+  background: var(--color-red-50);
+  border-color: var(--color-red-200);
+  color: var(--color-red-700);
 }
 
 .level-medium {
-  background: var(--color-amber-50, #fffbeb);
-  border-color: var(--color-amber-200, #fde68a);
-  color: var(--color-amber-700, #b45309);
+  background: var(--color-amber-50);
+  border-color: var(--color-amber-200);
+  color: var(--color-amber-700);
 }
 
 .level-low {
-  background: var(--color-green-50, #f0fdf4);
-  border-color: var(--color-green-200, #bbf7d0);
-  color: var(--color-green-700, #15803d);
+  background: var(--color-green-50);
+  border-color: var(--color-green-200);
+  color: var(--color-green-700);
 }
 
 .evidence-list {
@@ -751,7 +751,7 @@ function levelClass(level: string): string {
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
 }
 
 /* Confounders */
@@ -792,8 +792,8 @@ function levelClass(level: string): string {
 }
 
 .empty-icon {
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   color: var(--border-default);
 }
 </style>

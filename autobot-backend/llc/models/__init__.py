@@ -9,7 +9,6 @@ from .agent_wiki import LLCAgentWikiEntry
 from .approval import LLCApproval
 from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
-from .ceo_chat import LLCCeoChatMessage, LLCCeoChatThread
 from .company import (
     CompanyAncestor,
     CompanyCreate,
@@ -80,8 +79,6 @@ __all__ = [
     "LLCApproval",
     "LLCBase",
     "LLCBoard",
-    "LLCCeoChatMessage",
-    "LLCCeoChatThread",
     "LLCBoardColumn",
     "LLCCompanyMembership",
     "LLCCompanyStatus",

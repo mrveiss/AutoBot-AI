@@ -16,7 +16,7 @@ from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_process_init
+from celery.signals import beat_init, worker_process_init
 from kombu import Queue
 
 from autobot_shared.logging_manager import get_logger as _get_logger
@@ -145,6 +145,9 @@ celery_app.conf.update(
         "analytics.run_bug_prediction_analysis": {"queue": "analytics"},
         "analytics.run_security_analysis": {"queue": "analytics"},
         "analytics.run_dashboard_analysis": {"queue": "analytics"},
+        # Issue #12365: anti-pattern background analysis + daily cache population
+        "analytics.run_anti_pattern_analysis": {"queue": "analytics"},
+        "analytics.populate_all_caches": {"queue": "analytics"},
         # GH#11262: priority tiers on the shared default queue (audit > maintenance).
         **_PRIORITY_TASK_ROUTES,
     },
@@ -172,14 +175,20 @@ celery_app.conf.update(
     task_send_sent_event=True,
 )
 
-# Auto-discover tasks from tasks and workers modules
-celery_app.autodiscover_tasks(["tasks", "workers"])
-# GH#6480: pricing refresh task lives in services/, not tasks/ — import explicitly so
-# workers register it. autodiscover_tasks only scans the listed packages.
+# GH#12318: register every task package. autodiscover_tasks defaults to
+# related_name="tasks", i.e. it imports "<pkg>.tasks" (tasks/tasks.py,
+# workers/tasks.py) — neither exists, so the call was a silent no-op and only
+# explicitly-imported modules registered. Beat then dispatched names (credential
+# reconcile, snapshot cleanup, LLC sprint auto-close, audit daemons) to workers
+# that never registered them ("Received unregistered task of type ...") and the
+# jobs never ran. related_name=None imports each PACKAGE __init__ instead, which
+# re-exports its task modules (tasks/__init__.py, workers/__init__.py,
+# llc/scheduler/__init__.py), so their @celery_app.task / @shared_task
+# decorators all run at worker/beat startup.
+celery_app.autodiscover_tasks(["tasks", "workers", "llc.scheduler"], related_name=None)
+# GH#6480: pricing refresh lives in services/, outside the discovered packages —
+# import explicitly so workers register pricing.refresh_daily.
 import services.pricing_refresh  # noqa: F401
-
-# GH#4463: Mobile device tasks module
-import tasks.mobile_device_tasks  # noqa: F401
 from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 # =========================================================================
@@ -235,6 +244,12 @@ celery_app.conf.beat_schedule = {
         "task": "memory.consolidate_trajectories",
         "schedule": crontab(hour=4, minute=0),  # 04:00 UTC, after nightly cleanup
     },
+    # A3 (#12554): nightly fact-lane decay/prune (delete-only, guarded, dry-run
+    # by default) so the always-loaded essential-story facts self-improve.
+    "memory-consolidate-facts-daily": {
+        "task": "memory.consolidate_facts",
+        "schedule": crontab(hour=4, minute=20),  # 04:20 UTC, after trajectory pass
+    },
     # GH#6471: nightly eviction of stale per-task git worktree workspaces
     "workspace-cleanup-nightly": {
         "task": "tasks.cleanup_stale_workspaces",
@@ -286,15 +301,77 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab_from_string(getattr(ssot_config.misc, "kb_retention_schedule", None) or "45 1 * * *"),
         "kwargs": {"dry_run": False},
     },
+    # GH#12439: single-tick dispatcher — scans BatchSchedule records every
+    # minute and enqueues tasks.run_batch_job for each due+enabled schedule
+    # (claims by advancing next_run before enqueue; skips a schedule whose
+    # job is already running).
+    "batch-schedules-tick": {
+        "task": "tasks.dispatch_due_batch_schedules",
+        "schedule": crontab(minute="*"),
+    },
+    # Issue #12365: daily off-peak population of the analytics /cached stores
+    # (bug-prediction, security-score, anti-pattern, dependencies, duplicates,
+    # import-tree). Schedule configurable via AUTOBOT_ANALYTICS_CACHE_POPULATION_SCHEDULE.
+    "analytics-cache-population-daily": {
+        "task": "analytics.populate_all_caches",
+        "schedule": crontab_from_string(ssot_config.analytics_cache_population_schedule),
+    },
 }
 
-import llc.scheduler.project_disposal_sweep  # noqa: F401
-import tasks.audit_log_retention  # noqa: F401
 
-# GH#8995: import retention tasks so Celery registers them at worker startup
-import tasks.chat_retention  # noqa: F401
-import tasks.file_retention  # noqa: F401
-import tasks.knowledge_retention  # noqa: F401
+# GH#12318: fail loudly if Beat is configured to dispatch a task no worker will
+# ever register. Force task discovery (import_default_modules runs the lazy
+# autodiscover callbacks), then assert every beat_schedule entry resolves to a
+# registered task. Previously such mismatches surfaced only as "Received
+# unregistered task of type ..." in a log nobody reads, and four scheduled
+# maintenance jobs silently never ran.
+def _assert_beat_tasks_registered() -> None:
+    celery_app.loader.import_default_modules()
+    registered = set(celery_app.tasks)
+    scheduled = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
+    missing = sorted(scheduled - registered)
+    if missing:
+        logger.critical(
+            "Beat-scheduled tasks are NOT registered and will be dropped as "
+            "'Received unregistered task of type ...': %s",
+            missing,
+        )
+
+
+_assert_beat_tasks_registered()
+
+
+# GH#12354: complement to _assert_beat_tasks_registered() (#12353, which guards
+# the forward direction — every scheduled task is registered). This guards the
+# reverse: prune any entry the on-disk PersistentScheduler store is still
+# carrying whose task is no longer declared in beat_schedule, e.g. a
+# renamed/removed task lingering in the shelve file. Celery's own
+# PersistentScheduler already does an equivalent merge by entry NAME on every
+# clean startup, but silently; this makes it explicit, task-name-based (not
+# just key-based), and loud, running on the beat_init signal — i.e. only in
+# the actual `celery beat` process, after Celery has finished setting up its
+# scheduler (celery.beat.Service.start() accesses self.scheduler, which runs
+# setup_schedule(), before it sends beat_init).
+@beat_init.connect
+def _reconcile_persisted_beat_schedule(sender=None, **kwargs) -> None:
+    scheduler = getattr(sender, "scheduler", None)
+    if scheduler is None:
+        logger.warning("beat_init: no scheduler on sender %r — skipping reconciliation (#12354)", sender)
+        return
+
+    from utils.celery_beat_reconcile import reconcile_schedule
+
+    valid_tasks = {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
+    pruned = reconcile_schedule(scheduler.schedule, valid_tasks)
+    if pruned:
+        scheduler.sync()
+    logger.info(
+        "beat_init: %d schedule entries active after reconciliation (%d pruned: %s) — GH#12354",
+        len(scheduler.schedule),
+        len(pruned),
+        pruned,
+    )
+
 
 # GH#4459: Register web-push task_success signal so tasks that pass user_id
 # in their kwargs trigger a browser push notification on completion.

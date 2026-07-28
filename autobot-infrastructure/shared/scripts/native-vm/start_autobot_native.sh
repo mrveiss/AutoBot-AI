@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Native VM - Single Startup Procedure
 # Connects to all VMs and starts required services automatically
 

@@ -35,6 +35,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import TimingConstants
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 
@@ -554,8 +555,11 @@ class CodeReviewEngine(_BaseClass):
                 if not (path.suffix == "" and ".py" in pattern_def.file_extensions):
                     continue
 
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in pattern.finditer(content):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 comments.append(
                     self._create_pattern_comment(
                         pattern_id,

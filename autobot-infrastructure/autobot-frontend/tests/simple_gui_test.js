@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Simple GUI Test for AutoBot - Standalone Version
  * Tests basic functionality without Playwright test runner

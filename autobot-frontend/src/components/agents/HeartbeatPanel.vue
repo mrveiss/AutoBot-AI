@@ -189,8 +189,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 
-import { getBackendUrl } from '@/config/ssot-config'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { useEventBus } from '@/composables/useEventBus'
 import { useExpansion } from '@/composables/useExpansion'
@@ -310,16 +309,17 @@ onUnmounted(() => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function apiBase(): string {
-  return `${getBackendUrl()}/api/heartbeat`
-}
+const API_BASE = '/api/heartbeat'
 
-async function apiFetch(path: string, init?: RequestInit): Promise<unknown> {
-  const resp = await fetchWithAuth(`${apiBase()}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    ...init,
+// Base URL + auth resolved by apiClient (#12363). rawRequest preserves the exact
+// status/text error shape and 204→null contract the panel relies on.
+async function apiFetch(
+  path: string,
+  init?: { method?: string; body?: unknown },
+): Promise<unknown> {
+  const resp = await apiClient.rawRequest(`${API_BASE}${path}`, {
+    method: init?.method ?? 'GET',
+    body: init?.body,
   })
   if (!resp.ok) {
     const text = await resp.text()
@@ -359,11 +359,11 @@ async function saveConfig(): Promise<void> {
   try {
     const updated = await apiFetch(`/${agentId.value}/config`, {
       method: 'PUT',
-      body: JSON.stringify({
+      body: {
         heartbeat_enabled: editEnabled.value,
         heartbeat_interval_seconds: editInterval.value,
         max_run_duration_seconds: editMaxDuration.value,
-      }),
+      },
     })
     config.value = updated as HeartbeatConfig
   } catch (err) {
@@ -396,7 +396,7 @@ async function queueWakeup(): Promise<void> {
   try {
     await apiFetch(`/${agentId.value}/wakeup`, {
       method: 'POST',
-      body: JSON.stringify({ priority: 0, reason: 'Manual wakeup from UI' }),
+      body: { priority: 0, reason: 'Manual wakeup from UI' },
     })
     const wakeupsRes = await apiFetch(`/${agentId.value}/wakeup`)
     pendingWakeups.value = wakeupsRes as WakeupRequest[]
@@ -414,7 +414,7 @@ async function pauseAgent(): Promise<void> {
   try {
     const updated = await apiFetch(`/${agentId.value}/pause`, {
       method: 'POST',
-      body: JSON.stringify({ reason: 'Manual pause from UI', paused_by: 'user' }),
+      body: { reason: 'Manual pause from UI', paused_by: 'user' },
     })
     config.value = updated as HeartbeatConfig
   } catch (err) {
@@ -484,7 +484,7 @@ function statusClass(status: string): string {
   flex-direction: column;
   gap: var(--spacing-4);
   font-size: var(--text-sm);
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
 }
 .panel-header {
   display: flex;
@@ -503,11 +503,11 @@ function statusClass(status: string): string {
   gap: var(--spacing-2);
 }
 .agent-selector label {
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
 }
 .agent-selector input {
-  background: var(--bg-input, #1e293b);
-  border: 1px solid var(--border, #334155);
+  background: var(--bg-input);
+  border: 1px solid var(--border, var(--hbpanel-border));
   border-radius: var(--radius-default);
   color: inherit;
   padding: var(--spacing-1) var(--spacing-2);
@@ -517,12 +517,12 @@ function statusClass(status: string): string {
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.4);
   border-radius: var(--radius-md);
-  color: #fca5a5;
+  color: var(--hbpanel-error-text);
   padding: var(--spacing-2) var(--spacing-3);
 }
 .card {
-  background: var(--bg-card, #1e293b);
-  border: 1px solid var(--border, #334155);
+  background: var(--bg-card);
+  border: 1px solid var(--border, var(--hbpanel-border));
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
 }
@@ -546,7 +546,7 @@ function statusClass(status: string): string {
 }
 .config-row .label {
   width: 130px;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 .mono {
@@ -557,7 +557,7 @@ function statusClass(status: string): string {
   align-items: center;
   gap: var(--spacing-3);
   flex-wrap: wrap;
-  border-top: 1px solid var(--border, #334155);
+  border-top: 1px solid var(--border, var(--hbpanel-border));
   padding-top: var(--spacing-3);
 }
 .toggle-label {
@@ -572,16 +572,16 @@ function statusClass(status: string): string {
   gap: var(--spacing-micro-5);
 }
 .interval-input label {
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 .interval-input input {
   width: 70px;
-  background: var(--bg-input, #0f172a);
-  border: 1px solid var(--border, #334155);
+  background: var(--bg-input);
+  border: 1px solid var(--border, var(--hbpanel-border));
   border-radius: var(--radius-default);
   color: inherit;
-  padding: 0.2rem 0.4rem;
+  padding: var(--spacing-micro-3) var(--spacing-micro-5);
 }
 .data-table {
   width: 100%;
@@ -590,12 +590,12 @@ function statusClass(status: string): string {
 }
 .data-table th {
   text-align: left;
-  color: var(--text-secondary, #94a3b8);
-  padding: 0.3rem 0.5rem;
-  border-bottom: 1px solid var(--border, #334155);
+  color: var(--text-secondary);
+  padding: var(--spacing-micro-4) var(--spacing-2);
+  border-bottom: 1px solid var(--border, var(--hbpanel-border));
 }
 .data-table td {
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem var(--spacing-2);
   border-bottom: 1px solid rgba(51, 65, 85, 0.4);
 }
 .run-row {
@@ -606,10 +606,10 @@ function statusClass(status: string): string {
 }
 .chevron {
   text-align: right;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
 }
 .events-row td {
-  background: var(--bg-input, #0f172a);
+  background: var(--bg-input);
   padding: var(--spacing-0);
 }
 .events-container {
@@ -619,7 +619,7 @@ function statusClass(status: string): string {
   gap: var(--spacing-1);
 }
 .error-message {
-  color: #fca5a5;
+  color: var(--hbpanel-error-text);
   margin-bottom: var(--spacing-2);
 }
 .event-row {
@@ -628,7 +628,7 @@ function statusClass(status: string): string {
   align-items: baseline;
 }
 .event-time {
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 .event-type {
@@ -637,27 +637,27 @@ function statusClass(status: string): string {
   flex-shrink: 0;
 }
 .event-msg {
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text-primary);
 }
 .empty-state {
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   font-style: italic;
   padding: var(--spacing-2) var(--spacing-0);
 }
 .count-badge {
-  background: var(--bg-input, #0f172a);
+  background: var(--bg-input);
   border-radius: var(--radius-xl);
   font-size: var(--text-xs);
-  padding: 0.1rem 0.4rem;
+  padding: 0.1rem var(--spacing-micro-5);
 }
 button {
-  background: var(--bg-btn, #334155);
-  border: 1px solid var(--border, #475569);
+  background: var(--bg-btn, var(--hbpanel-btn-bg));
+  border: 1px solid var(--border, var(--hbpanel-btn-border));
   border-radius: var(--radius-default);
   color: inherit;
   cursor: pointer;
   font-size: 0.8rem;
-  padding: 0.3rem 0.6rem;
+  padding: var(--spacing-micro-4) 0.6rem;
   transition: background var(--duration-150);
 }
 button:disabled {
@@ -665,7 +665,7 @@ button:disabled {
   opacity: 0.5;
 }
 button:not(:disabled):hover {
-  background: var(--bg-btn-hover, #475569);
+  background: var(--bg-btn-hover, var(--hbpanel-btn-hover-bg));
 }
 .btn-load,
 .btn-save {
@@ -690,7 +690,7 @@ button:not(:disabled):hover {
 .btn-pause {
   background: rgba(249, 115, 22, 0.25);
   border-color: rgba(249, 115, 22, 0.6);
-  color: #fb923c;
+  color: var(--hbpanel-orange-text);
 }
 .btn-pause:not(:disabled):hover {
   background: rgba(249, 115, 22, 0.4);
@@ -698,7 +698,7 @@ button:not(:disabled):hover {
 .btn-resume {
   background: rgba(16, 185, 129, 0.2);
   border-color: rgba(16, 185, 129, 0.5);
-  color: #34d399;
+  color: var(--hbpanel-success-text);
 }
 .btn-resume:not(:disabled):hover {
   background: rgba(16, 185, 129, 0.35);
@@ -714,10 +714,10 @@ button:not(:disabled):hover {
   padding: 0.1rem 0.45rem;
   text-transform: uppercase;
 }
-.badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.badge-gray { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
-.badge-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-.badge-yellow { background: rgba(234, 179, 8, 0.2); color: #facc15; }
-.badge-red { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-.badge-orange { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
+.badge-green { background: rgba(16, 185, 129, 0.2); color: var(--hbpanel-success-text); }
+.badge-gray { background: rgba(100, 116, 139, 0.2); color: var(--hbpanel-neutral-text); }
+.badge-blue { background: rgba(59, 130, 246, 0.2); color: var(--hbpanel-info-text); }
+.badge-yellow { background: rgba(234, 179, 8, 0.2); color: var(--hbpanel-warning-text); }
+.badge-red { background: rgba(239, 68, 68, 0.2); color: var(--hbpanel-danger-text); }
+.badge-orange { background: rgba(249, 115, 22, 0.2); color: var(--hbpanel-orange-text); }
 </style>

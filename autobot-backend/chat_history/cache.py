@@ -14,6 +14,7 @@ Provides caching functionality for chat sessions:
 import json
 from typing import Any, Dict
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from chat_history.file_io import run_in_chat_io_executor
@@ -34,7 +35,10 @@ logger = get_logger(__name__)
 # by default). Override via env var when tuning memory pressure.
 def _resolve_chat_session_cache_ttl() -> int:
     """Return TTL seconds for chat:session:* Redis keys."""
-    raw = config.misc.chat_session_cache_ttl
+    # #12782: ssot_config declares optional knobs as `str = Field(default="")`,
+    # so an unset var arrives as "" and `raw is None` never fires — int("") then
+    # raised and warned on every boot about a value nobody set.
+    raw = blank_to_none(config.misc.chat_session_cache_ttl)
     if raw is None:
         return TTL_24_HOURS
     try:
@@ -72,7 +76,7 @@ _CHAT_RECENT_MAX_ENTRIES_DEFAULT = 1000
 
 def _resolve_chat_recent_max_entries() -> int:
     """Return max members for the chat:recent sorted set."""
-    raw = config.misc.chat_recent_max_entries
+    raw = blank_to_none(config.misc.chat_recent_max_entries)  # #12782
     if raw is None:
         return _CHAT_RECENT_MAX_ENTRIES_DEFAULT
     try:

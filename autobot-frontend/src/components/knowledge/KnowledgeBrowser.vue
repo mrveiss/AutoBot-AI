@@ -170,11 +170,12 @@
             @vectorize-folder="handleVectorizeFolder"
           />
 
-          <!-- Load More button for cursor-based pagination (only for user knowledge modes) -->
-          <div v-if="(props.mode === 'user' || props.mode === 'user-knowledge') && hasMoreEntries && !isLoadingMore" class="load-more-container">
+          <!-- Load More button for the categorized (by_category) browse tree
+               (Issue #12394: the endpoint is now paginated per category). -->
+          <div v-if="hasMoreCategoryFacts && !isLoadingMoreCategoryFacts" class="load-more-container">
             <BaseButton
               variant="primary"
-              @click="loadMoreEntries"
+              @click="loadMoreCategoryFacts"
               class="load-more-btn"
             >
               <Icon name="chevron-down" />
@@ -182,7 +183,7 @@
             </BaseButton>
           </div>
 
-          <div v-if="(props.mode === 'user' || props.mode === 'user-knowledge') && isLoadingMore" class="loading-more">
+          <div v-if="isLoadingMoreCategoryFacts" class="loading-more">
             <Icon name="spinner" class="animate-spin" />
             <span>{{ $t('knowledge.browser.loadingMoreEntries') }}</span>
           </div>
@@ -318,7 +319,8 @@ interface KnowledgeFactLike {
   title?: string
   source?: string
   content?: string
-  full_content?: string
+  // Issue #12370: full_content removed from the browse list — lazy-loaded
+  // per fact via GET /fact/{fact_key}.
   timestamp?: string
   created_at?: string
   category?: string
@@ -400,6 +402,18 @@ const allLoadedEntries = ref<Record<string, unknown>[]>([])
 const entriesCursor = ref<string>('0')
 const hasMoreEntries = ref<boolean>(true)
 const isLoadingMore = ref<boolean>(false)
+
+// Offset-based pagination for the categorized (by_category) browse tree
+// (Issue #12394: the endpoint was previously unbounded). `limit`/`offset`
+// are applied per category by the backend; page size matches the prior
+// unbounded default of 100 so the initial tree looks the same as before.
+const CATEGORY_FACTS_PAGE_SIZE = 100
+const categoryFactsOffset = ref<number>(0)
+const hasMoreCategoryFacts = ref<boolean>(false)
+const isLoadingMoreCategoryFacts = ref<boolean>(false)
+// Accumulated raw facts per category across all loaded pages — the tree is
+// rebuilt from this on every page (mirrors loadMoreEntries/buildTreeFromEntries).
+const accumulatedFactsByCategory = ref<Record<string, Record<string, unknown>[]>>({})
 
 // Fetch function for cursor-based pagination — delegates to useKnowledgeBrowser
 const fetchEntries = fetchEntriesPage
@@ -565,19 +579,21 @@ const buildNestedTree = (facts: Record<string, unknown>[], category: string): Tr
         if (!current._files) current._files = []
         // Extract the actual fact ID from the Redis key (e.g., "fact:UUID" -> "UUID")
         const factId = fact.key ? fact.key.replace('fact:', '') : `fact-${category}-${factIdx}`
-        const fileContent = (fact.full_content || fact.content || '') as string
+        // Issue #12370: the browse list carries only the snippet (content).
+        // The full document is lazy-loaded on open via GET /fact/{fact_key}
+        // (see loadFileContent), so we never ship full_content in the list.
+        const snippet = (fact.content || '') as string
         current._files.push({
           id: factId, // Use actual fact ID from Redis, not synthetic ID
           name: part,
           type: 'file' as const,
           path: `/${category}/${filename}`,
           category: category,
-          size: fileContent.length,
-          content: fileContent,
+          size: snippet.length,
+          content: snippet,
           metadata: {
             ...fact.metadata,
-            key: fact.key,
-            full_content: fact.full_content
+            key: fact.key
           }
         })
       } else {
@@ -762,40 +778,84 @@ const retryLoadKnowledgeTree = () => {
   })
 }
 
+// Rebuild treeData from the accumulated per-category facts (Issue #12394).
+// Called after both the initial page and every "load more" page.
+const buildTreeFromCategoryFacts = () => {
+  const categories = Object.keys(accumulatedFactsByCategory.value)
+
+  // Update category counts
+  const counts: Record<string, number> = {}
+  categories.forEach(cat => {
+    counts[cat] = accumulatedFactsByCategory.value[cat].length
+  })
+  categoryCounts.value = counts
+
+  treeData.value = categories.map((category: string, idx: number) => {
+    const facts = accumulatedFactsByCategory.value[category] || []
+
+    // Build nested folder structure based on file paths
+    const children = buildNestedTree(facts, category)
+
+    return {
+      id: `folder-${idx}`,
+      name: formatCategoryName(category),
+      type: 'folder' as const,
+      path: `/${category}`,
+      category: category,
+      children: children
+    }
+  })
+}
+
 const loadKnowledgeTreeFn = async () => {
-  // Load facts from knowledge base by category
-  const data = await fetchFactsByCategory()
+  // Load the first page of facts from knowledge base by category
+  // (Issue #12394: bounded — previously fetched every fact unconditionally).
+  categoryFactsOffset.value = 0
+  const data = await fetchFactsByCategory({ limit: CATEGORY_FACTS_PAGE_SIZE, offset: 0 })
 
   if (data && data.categories) {
-    // Build tree structure from categories
-    const categoriesByName = data.categories as Record<string, Record<string, unknown>[]>
-    const categories = Object.keys(categoriesByName)
+    accumulatedFactsByCategory.value = data.categories as Record<string, Record<string, unknown>[]>
+    hasMoreCategoryFacts.value = Boolean(data.has_more)
+    categoryFactsOffset.value = CATEGORY_FACTS_PAGE_SIZE
 
-    // Update category counts
-    const counts: Record<string, number> = {}
-    categories.forEach(cat => {
-      counts[cat] = categoriesByName[cat].length
-    })
-    categoryCounts.value = counts
-
-    treeData.value = categories.map((category: string, idx: number) => {
-      const facts = categoriesByName[category] || []
-
-      // Build nested folder structure based on file paths
-      const children = buildNestedTree(facts, category)
-
-      return {
-        id: `folder-${idx}`,
-        name: formatCategoryName(category),
-        type: 'folder' as const,
-        path: `/${category}`,
-        category: category,
-        children: children
-      }
-    })
+    buildTreeFromCategoryFacts()
 
     // Issue #162: Fetch vectorization status for all files after tree is built
     await fetchVectorizationStatuses(treeData.value)
+  }
+}
+
+// Fetch the next page of categorized facts and merge into the existing tree,
+// preserving expanded folders (Issue #12394).
+const loadMoreCategoryFacts = async () => {
+  if (isLoadingMoreCategoryFacts.value || !hasMoreCategoryFacts.value) return
+
+  const expandedPaths = getExpandedPaths(treeData.value, expandedNodes.value)
+  isLoadingMoreCategoryFacts.value = true
+  try {
+    const data = await fetchFactsByCategory({
+      limit: CATEGORY_FACTS_PAGE_SIZE,
+      offset: categoryFactsOffset.value
+    })
+
+    if (data && data.categories) {
+      const newCategories = data.categories as Record<string, Record<string, unknown>[]>
+      const merged = { ...accumulatedFactsByCategory.value }
+      Object.keys(newCategories).forEach(cat => {
+        merged[cat] = [...(merged[cat] || []), ...newCategories[cat]]
+      })
+      accumulatedFactsByCategory.value = merged
+      hasMoreCategoryFacts.value = Boolean(data.has_more)
+      categoryFactsOffset.value += CATEGORY_FACTS_PAGE_SIZE
+
+      buildTreeFromCategoryFacts()
+      restoreExpandedState(treeData.value, expandedPaths)
+      await fetchVectorizationStatuses(treeData.value)
+    }
+  } catch (err) {
+    logger.error('Failed to load more categorized facts:', err)
+  } finally {
+    isLoadingMoreCategoryFacts.value = false
   }
 }
 
@@ -807,7 +867,12 @@ const _loadUserKnowledge = async () => {
   buildTreeFromEntries(allLoadedEntries.value)
 }
 
-const loadMoreEntries = async () => {
+// Issue #12394: the "Load More" button now drives loadMoreCategoryFacts
+// (the by_category tree actually shown for every mode). This cursor-based
+// /entries pagination is kept as deferred wire-in scaffolding — same
+// pattern as `_loadUserKnowledge` above — not currently reachable from the
+// template.
+const _loadMoreEntries = async () => {
   // Save expanded paths before rebuild to preserve tree state
   const expandedPaths = getExpandedPaths(treeData.value, expandedNodes.value)
 
@@ -1067,11 +1132,11 @@ const loadFolderContents = async (folder: TreeNode) => {
 const loadFileContent = async (file: TreeNode) => {
   contentError.value = null
   await loadFileContentOp(async () => {
-    // First check if we have full_content in metadata
-    if (file.metadata?.full_content) {
-      fileContent.value = file.metadata.full_content
-    } else if (file.content && !file.content.endsWith('...')) {
-      // Use content if it's not truncated
+    // Issue #12370: the browse list no longer carries full_content. Short
+    // facts arrive whole in the snippet (no trailing ellipsis); anything
+    // truncated is lazy-loaded in full from the per-fact detail endpoint.
+    if (file.content && !file.content.endsWith('...')) {
+      // Snippet is the complete fact — use it directly.
       fileContent.value = file.content
     } else {
       // Need to fetch full content from Redis
@@ -1079,7 +1144,7 @@ const loadFileContent = async (file: TreeNode) => {
       const factKey = file.metadata?.key || file.path?.split('/').pop()
 
       if (factKey) {
-        // Fetch full fact data from backend
+        // Fetch full fact data from backend (GET /fact/{fact_key})
         const response = await fetchFactContent(factKey)
 
         if (response && response.content) {

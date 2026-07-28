@@ -13,6 +13,13 @@
   ansible.builtin.import_tasks: clean.yml
   tags: ['clean']
 
+# #12777: detect (and optionally fix) discarded core dumps before anything else
+# runs, so the report is visible near the top of the deploy output rather than
+# buried after the install steps.
+- name: "Backend | Include core-capture diagnostics"
+  ansible.builtin.import_tasks: core_capture.yml
+  tags: ['backend', 'diagnostics']
+
 # ============================================================
 # Per-role service account  (#926 Phase 4)
 # ============================================================
@@ -142,6 +149,48 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #11507: Derive AUTOBOT_INTERNAL_API_KEY from /etc/autobot/slm-secrets.env (the
+# single source of truth — the SLM SystemSecret; slm_manager writes it there) and
+# set autobot_internal_api_key BEFORE rendering EITHER env file. Previously the
+# /etc/autobot/autobot-backend.env below was rendered from the raw inventory var
+# while the code-dir .env (rendered later, after the #10636 read-back) used the
+# slm-secrets value — so the managed backend and the SLM drifted onto two keys and
+# every cross-service call 401'd. Reading it here converges both env files on one
+# value. Gated on a non-empty read so a host without slm-secrets.env keeps the
+# inventory/vault var (mirrors the #10400 SLM_SECRET_KEY pattern above).
+# #12145: stat first so the read-retry below only spins while the file exists.
+- name: "Backend | Stat slm-secrets.env for the internal-key read (#12145)"
+  ansible.builtin.stat:
+    path: /etc/autobot/slm-secrets.env
+  register: _slm_secrets_stat
+  tags: ['backend', 'config']
+
+- name: "Backend | Read AUTOBOT_INTERNAL_API_KEY from slm-secrets.env (#11507)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
+      /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_internal_api_key
+  changed_when: false
+  failed_when: false
+  no_log: true
+  # #12145: retry on a transient empty read (file mid-write during a concurrent
+  # deploy) so the key is not silently left drifted; short-circuits when the file
+  # is absent (nothing to align).
+  until: >-
+    (_backend_internal_api_key.stdout | default('') | trim | length > 0)
+    or (not (_slm_secrets_stat.stat.exists | default(false)))
+  retries: 5
+  delay: 2
+  tags: ['backend', 'config']
+
+- name: "Backend | Align autobot_internal_api_key with slm-secrets.env when present (#11507)"
+  ansible.builtin.set_fact:
+    autobot_internal_api_key: "{{ _backend_internal_api_key.stdout | trim }}"
+  when: (_backend_internal_api_key.stdout | default('') | trim) | length > 0
+  no_log: true
+  tags: ['backend', 'config']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service
@@ -156,702 +205,840 @@
     - restart backend
   tags: ['backend', 'config']
 
+# #11670/#11671: The rendered unit above is the SINGLE source of truth. Retire the
+# hand-placed drop-ins under autobot-backend.service.d/ (from the one-off
+# fix-backend-deadlock.sh / fix-backend-worker-deadlock.yml scripts) that shadowed
+# it — single-worker.conf overrode ExecStart (so template changes like #11668's
+# graceful-shutdown never reached the box), timeout.conf forced the 15-min stop
+# hang, and override.conf set AUTOBOT_USER_MODE=single_user, silently disabling
+# full user management (CRITICAL, #11671). Those concerns now live in the template
+# (worker count via backend_workers, timeouts via backend_start/stop_timeout_sec),
+# so remove the whole manual drop-in dir on every deploy — ansible owns no drop-in,
+# so the rendered unit stays authoritative and the box can no longer drift.
+- name: "Backend | Remove stale manual systemd drop-ins so the rendered unit is authoritative (#11670/#11671)"
+  ansible.builtin.file:
+    path: /etc/systemd/system/autobot-backend.service.d
+    state: absent
+  notify:
+    - reload systemd
+    - restart backend
+  tags: ['backend', 'config']
+
 - name: "Backend | Reload systemd so the unit is registered before start (#9914)"
   ansible.builtin.systemd:
     daemon_reload: true
   tags: ['backend', 'config']
 
-# MVA-1633: Prevent systemd Restart=always race during env updates.
-# The backend service may restart BEFORE the new .env is written if we use
-# async notify. Stop explicitly, write env files, verify they exist, then start.
-- name: "Backend | Stop service before env update (MVA-1633)"
-  ansible.builtin.systemd:
-    name: autobot-backend
-    state: stopped
-    daemon_reload: false
-  changed_when: false
-  failed_when: false
-  tags: ['backend', 'config']
-
-- name: "Backend | Deploy /etc/autobot/autobot-backend.env"
-  ansible.builtin.template:
-    src: backend.env.j2
-    dest: /etc/autobot/autobot-backend.env
-    mode: "0640"
-    owner: root
-    group: "{{ backend_service_account }}"
-  tags: ['backend', 'config']
-
-# Issue #2953: Write deployment.mode into config/config.yaml so the backend
-# config loader can read it without relying on env alone.
-- name: "Backend | Ensure config directory exists"
-  ansible.builtin.file:
-    path: "{{ backend_code_dir }}/config"
-    state: directory
-    mode: "0755"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-  tags: ['backend', 'config']
-
-- name: "Backend | Write deployment section to config/config.yaml (#2953)"
-  ansible.builtin.template:
-    src: config.yaml.j2
-    dest: "{{ backend_code_dir }}/config/config.yaml"
-    mode: "0644"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-    force: false  # Never overwrite an existing config.yaml — it may have user customisations
-  tags: ['backend', 'config']
-
 # ============================================================
-# Backend-specific system dependencies (Python 3.14 now in shared Phase 0)
+# #12139: Always-restart safety net around the MVA-1633
+# stop -> heavy-work -> start window.
+# The MVA-1633 stop below explicitly stops autobot-backend, then ~670 lines of
+# risky work (apt/pip install, code sync, alembic migrations, ownership fixes)
+# run BEFORE the service is started again. If ANY task in that window FAILS, the
+# block aborts straight to `always:`, which unconditionally starts the service
+# so the backend is never left DEAD on a mid-deploy error (the 2026-07-23 login
+# outage: backend stopped 12:01, not recovered until a manual start at 12:48).
+# The existing explicit `state: started` tasks are kept; the `always` is a
+# belt-and-suspenders guarantee on top of them.
+# NOTE: `always` runs on task FAILURE / mid-deploy error, but NOT if the ansible
+# process is hard-KILLED (SIGKILL) mid-run — that process-kill case is separately
+# handled by #11492's executor detach (already merged) once deployed. This fix
+# handles the task-failure/mid-deploy-error case, which is what left the backend
+# dead today.
 # ============================================================
-# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
-- name: "Backend | Refresh apt cache (best-effort, bounded; #6719)"
-  ansible.builtin.command:
-    cmd: >-
-      timeout 60 apt-get update -qq
-      -o Acquire::Retries=0
-      -o Acquire::http::Timeout=10
-  become: true
-  changed_when: false
-  failed_when: false
-  tags: ['backend', 'packages']
+- name: "Backend | Restart-guarded env-update + heavy-work window (#12139)"
+  block:
+  # MVA-1633: Prevent systemd Restart=always race during env updates.
+  # The backend service may restart BEFORE the new .env is written if we use
+  # async notify. Stop explicitly, write env files, verify they exist, then start.
+  - name: "Backend | Stop service before env update (MVA-1633)"
+    ansible.builtin.systemd:
+      name: autobot-backend
+      state: stopped
+      daemon_reload: false
+    changed_when: false
+    failed_when: false
+    tags: ['backend', 'config']
 
-- name: "Backend | Install backend-specific system dependencies"
-  ansible.builtin.apt:
-    name:
-      - build-essential
-      - libssl-dev
-      - zlib1g-dev
-      - libbz2-dev
-      - libreadline-dev
-      - libsqlite3-dev
-      - libncursesw5-dev
-      - xz-utils
-      - tk-dev
-      - libxml2-dev
-      - libxmlsec1-dev
-      - libffi-dev
-      - liblzma-dev
-      - git
-      - curl
-      # GUI / display (VNC, xvfb headless, GUI automation)
-      - xvfb
-      - x11-utils
-      - x11-apps
-      # Audio / voice processing (PyAudio, librosa, Whisper)
-      - ffmpeg
-      - libsndfile1
-      - libsndfile1-dev
-      - portaudio19-dev
-      # Text-to-speech engine for pyttsx3 (#10566): without espeak-ng the backend
-      # reports "no speech voices installed" and TTS output is unavailable.
-      - espeak-ng
-      - espeak-ng-data
-      # OCR / CAPTCHA solver (tesseract, Issue #206)
-      - tesseract-ocr
-      - libtesseract-dev
-      # Matplotlib GUI backend
-      - python3-tk
-      # PostgreSQL client — pg_dump for the fail-closed pre-migration backup
-      # of a REMOTE (colocated SLM) Postgres before Alembic upgrades (#10045)
-      - postgresql-client
-    state: present
-  tags: ['backend', 'packages']
+  - name: "Backend | Deploy /etc/autobot/autobot-backend.env"
+    ansible.builtin.template:
+      src: backend.env.j2
+      dest: /etc/autobot/autobot-backend.env
+      mode: "0640"
+      owner: root
+      group: "{{ backend_service_account }}"
+    tags: ['backend', 'config']
+
+  # Issue #2953: Write deployment.mode into config/config.yaml so the backend
+  # config loader can read it without relying on env alone.
+  - name: "Backend | Ensure config directory exists"
+    ansible.builtin.file:
+      path: "{{ backend_code_dir }}/config"
+      state: directory
+      mode: "0755"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+    tags: ['backend', 'config']
+
+  - name: "Backend | Write deployment section to config/config.yaml (#2953)"
+    ansible.builtin.template:
+      src: config.yaml.j2
+      dest: "{{ backend_code_dir }}/config/config.yaml"
+      mode: "0644"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+      force: false  # Never overwrite an existing config.yaml — it may have user customisations
+    tags: ['backend', 'config']
+
+  # ============================================================
+  # Backend-specific system dependencies (Python 3.14 now in shared Phase 0)
+  # ============================================================
+  # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+  - name: "Backend | Refresh apt cache (best-effort, bounded; #6719)"
+    ansible.builtin.command:
+      cmd: >-
+        timeout 60 apt-get update -qq
+        -o Acquire::Retries=0
+        -o Acquire::http::Timeout=10
+    become: true
+    changed_when: false
+    failed_when: false
+    tags: ['backend', 'packages']
+
+  - name: "Backend | Install backend-specific system dependencies"
+    ansible.builtin.apt:
+      name:
+        - build-essential
+        - libssl-dev
+        - zlib1g-dev
+        - libbz2-dev
+        - libreadline-dev
+        - libsqlite3-dev
+        - libncursesw5-dev
+        - xz-utils
+        - tk-dev
+        - libxml2-dev
+        - libxmlsec1-dev
+        - libffi-dev
+        - liblzma-dev
+        - git
+        - curl
+        # GUI / display (VNC, xvfb headless, GUI automation)
+        - xvfb
+        - x11-utils
+        - x11-apps
+        # Audio / voice processing (PyAudio, librosa, Whisper)
+        - ffmpeg
+        - libsndfile1
+        - libsndfile1-dev
+        - portaudio19-dev
+        # Text-to-speech engine for pyttsx3 (#10566): without espeak-ng the backend
+        # reports "no speech voices installed" and TTS output is unavailable.
+        - espeak-ng
+        - espeak-ng-data
+        # OCR / CAPTCHA solver (tesseract, Issue #206)
+        - tesseract-ocr
+        - libtesseract-dev
+        # Matplotlib GUI backend
+        - python3-tk
+        # PostgreSQL client — pg_dump for the fail-closed pre-migration backup
+        # of a REMOTE (colocated SLM) Postgres before Alembic upgrades (#10045)
+        - postgresql-client
+      state: present
+    tags: ['backend', 'packages']
 
 
-- name: Create autobot user
-  ansible.builtin.user:
-    name: "{{ backend_user }}"
-    shell: /bin/bash
-    create_home: true
-    state: present
+  - name: Create autobot user
+    ansible.builtin.user:
+      name: "{{ backend_user }}"
+      shell: /bin/bash
+      create_home: true
+      state: present
 
-- name: Create backend directories
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    mode: "{{ item.mode }}"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-  loop:
-    - {path: "{{ backend_install_dir }}", mode: "0755"}
-    - {path: "{{ backend_log_dir }}", mode: "0755"}
-    - {path: "{{ backend_data_dir }}", mode: "0755"}
-    - {path: "{{ backend_data_dir }}/conversation_files", mode: "0755"}
-    # #10911: service-keys holds the durable RSA JWT keypair; 0700 so only the
-    # backend user can read the private key.
-    - {path: "{{ backend_data_dir }}/service-keys", mode: "0700"}
+  - name: Create backend directories
+    ansible.builtin.file:
+      path: "{{ item.path }}"
+      state: directory
+      mode: "{{ item.mode }}"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+    loop:
+      - {path: "{{ backend_install_dir }}", mode: "0755"}
+      - {path: "{{ backend_log_dir }}", mode: "0755"}
+      - {path: "{{ backend_data_dir }}", mode: "0755"}
+      - {path: "{{ backend_data_dir }}/conversation_files", mode: "0755"}
+      # #10911: service-keys holds the durable RSA JWT keypair; 0700 so only the
+      # backend user can read the private key.
+      - {path: "{{ backend_data_dir }}/service-keys", mode: "0700"}
 
-- name: Sync autobot-backend code from code_source
-  ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/"
-    dest: "{{ backend_code_dir }}/"
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=*.pyc"
-      - "--exclude=*.egg-info"
-      - "--exclude=.git"
-      - "--exclude=venv"
-  notify:
-    - restart backend
-    - restart celery
-  tags: ['backend', 'deploy']
+  - name: Sync autobot-backend code from code_source
+    ansible.posix.synchronize:
+      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/"
+      dest: "{{ backend_code_dir }}/"
+      rsync_opts:
+        - "--exclude=__pycache__"
+        - "--exclude=*.pyc"
+        - "--exclude=*.egg-info"
+        - "--exclude=.git"
+        - "--exclude=venv"
+    notify:
+      - restart backend
+      - restart celery
+    tags: ['backend', 'deploy']
 
-- name: "Backend | Fix ownership of backend code dir after sync"
-  ansible.builtin.file:
-    path: "{{ backend_code_dir }}"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-    recurse: true
-  tags: ['backend', 'deploy']
+  - name: "Backend | Fix ownership of backend code dir after sync"
+    ansible.builtin.file:
+      path: "{{ backend_code_dir }}"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+      recurse: true
+    tags: ['backend', 'deploy']
 
-# MVA-1633: Ensure startup validation script is executable
-- name: "Backend | Make startup validation script executable (MVA-1633)"
-  ansible.builtin.file:
-    path: "{{ backend_code_dir }}/startup_validation.py"
-    mode: "0755"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-  tags: ['backend', 'deploy']
+  # MVA-1633: Ensure startup validation script is executable
+  - name: "Backend | Make startup validation script executable (MVA-1633)"
+    ansible.builtin.file:
+      path: "{{ backend_code_dir }}/startup_validation.py"
+      mode: "0755"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+    tags: ['backend', 'deploy']
 
-# GH#9084: Write manifest listing vars that startup_validation.py must find non-empty.
-# Ansible owns this list — validator reads it so the two stay in sync automatically.
-- name: "Backend | Write startup validation vars manifest (#9084)"
-  ansible.builtin.copy:
-    dest: "{{ backend_code_dir }}/.validation_vars"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-    mode: "0640"
-    content: |
-      # Auto-generated by Ansible — do not edit manually.
-      # Lists env vars startup_validation.py checks are non-empty after provisioning.
-      # Must match vars emitted by backend.env.j2 with no | default() guard.
-      AUTOBOT_REDIS_URL
-      AUTOBOT_AI_STACK_HOST
-      AUTOBOT_CHROMADB_HOST
-      AUTOBOT_DEFAULT_LLM_MODEL
-  tags: ['backend', 'deploy']
+  # GH#9084: Write manifest listing vars that startup_validation.py must find non-empty.
+  # Ansible owns this list — validator reads it so the two stay in sync automatically.
+  - name: "Backend | Write startup validation vars manifest (#9084)"
+    ansible.builtin.copy:
+      dest: "{{ backend_code_dir }}/.validation_vars"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+      mode: "0640"
+      content: |
+        # Auto-generated by Ansible — do not edit manually.
+        # Lists env vars startup_validation.py checks are non-empty after provisioning.
+        # Must match vars emitted by backend.env.j2 with no | default() guard.
+        AUTOBOT_REDIS_URL
+        AUTOBOT_AI_STACK_HOST
+        AUTOBOT_CHROMADB_HOST
+        AUTOBOT_DEFAULT_LLM_MODEL
+    tags: ['backend', 'deploy']
 
-- name: Sync backend config directory from code_source
-  ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
-    dest: "{{ backend_code_dir }}/config/"
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=*.pyc"
-  notify: restart backend
-  tags: ['backend', 'deploy']
+  - name: Sync backend config directory from code_source
+    ansible.posix.synchronize:
+      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot-backend/config/"
+      dest: "{{ backend_code_dir }}/config/"
+      rsync_opts:
+        - "--exclude=__pycache__"
+        - "--exclude=*.pyc"
+    notify: restart backend
+    tags: ['backend', 'deploy']
 
-# Issue #10294: plugins ship at the repo root (code_source/plugins/), a SIBLING of
-# autobot-backend/, so the autobot-backend code sync never copied them. The backend
-# resolves plugins at {{ backend_code_dir }}/plugins (AUTOBOT_BASE_DIR/plugins), which
-# did not exist → discover_plugins() found nothing and every core plugin (image/video
-# generation, kb-event, etc.) silently failed to register. Sync them into place.
-- name: Sync plugins directory from code_source (#10294)
-  ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/plugins/"
-    dest: "{{ backend_code_dir }}/plugins/"
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=*.pyc"
-  notify: restart backend
-  tags: ['backend', 'deploy']
+  # Issue #10294: plugins ship at the repo root (code_source/plugins/), a SIBLING of
+  # autobot-backend/, so the autobot-backend code sync never copied them. The backend
+  # resolves plugins at {{ backend_code_dir }}/plugins (AUTOBOT_BASE_DIR/plugins), which
+  # did not exist → discover_plugins() found nothing and every core plugin (image/video
+  # generation, kb-event, etc.) silently failed to register. Sync them into place.
+  - name: Sync plugins directory from code_source (#10294)
+    ansible.posix.synchronize:
+      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/plugins/"
+      dest: "{{ backend_code_dir }}/plugins/"
+      rsync_opts:
+        - "--exclude=__pycache__"
+        - "--exclude=*.pyc"
+    notify: restart backend
+    tags: ['backend', 'deploy']
 
-# Issue #10020: The old rsync task created a real directory copy of autobot_shared
-# inside backend_install_dir (/opt/autobot/autobot-backend/autobot_shared/).
-# Because PYTHONPATH lists backend_install_dir first, that embedded copy shadowed
-# the standalone /opt/autobot/autobot_shared/ on every partial sync — the root cause
-# of stale-shadow divergence. Replaced with a symlink so the embedded path always
-# resolves to the single canonical standalone copy, making import priority irrelevant.
-#
-# Step 1: stat the embedded path so subsequent tasks can gate on whether it is a
-# real directory (needs removal) or already a symlink (leave it; force: true handles update).
-- name: "Backend | Stat embedded autobot_shared path (#10020)"
-  ansible.builtin.stat:
-    path: "{{ backend_install_dir }}/autobot_shared"
-  register: _embedded_shared_stat
-  tags: ['backend', 'deploy']
+  # Issue #10020: The old rsync task created a real directory copy of autobot_shared
+  # inside backend_install_dir (/opt/autobot/autobot-backend/autobot_shared/).
+  # Because PYTHONPATH lists backend_install_dir first, that embedded copy shadowed
+  # the standalone /opt/autobot/autobot_shared/ on every partial sync — the root cause
+  # of stale-shadow divergence. Replaced with a symlink so the embedded path always
+  # resolves to the single canonical standalone copy, making import priority irrelevant.
+  #
+  # Step 1: stat the embedded path so subsequent tasks can gate on whether it is a
+  # real directory (needs removal) or already a symlink (leave it; force: true handles update).
+  - name: "Backend | Stat embedded autobot_shared path (#10020)"
+    ansible.builtin.stat:
+      path: "{{ backend_install_dir }}/autobot_shared"
+    register: _embedded_shared_stat
+    tags: ['backend', 'deploy']
 
-# Step 2: If a real directory exists (not a symlink), remove it before creating the symlink.
-# ansible.builtin.file with state: link + force: true can replace an existing symlink but
-# will fail if a non-empty directory occupies the destination.
-- name: "Backend | Remove stale embedded autobot_shared real-dir if present (#10020)"
-  ansible.builtin.file:
-    path: "{{ backend_install_dir }}/autobot_shared"
-    state: absent
-  when:
-    - _embedded_shared_stat.stat.exists
-    - not _embedded_shared_stat.stat.islnk
-  tags: ['backend', 'deploy']
+  # Step 2: If a real directory exists (not a symlink), remove it before creating the symlink.
+  # ansible.builtin.file with state: link + force: true can replace an existing symlink but
+  # will fail if a non-empty directory occupies the destination.
+  - name: "Backend | Remove stale embedded autobot_shared real-dir if present (#10020)"
+    ansible.builtin.file:
+      path: "{{ backend_install_dir }}/autobot_shared"
+      state: absent
+    when:
+      - _embedded_shared_stat.stat.exists
+      - not _embedded_shared_stat.stat.islnk
+    tags: ['backend', 'deploy']
 
-# Step 3: Create (or update) the symlink. force: true updates the link target when the
-# destination is already a symlink pointing elsewhere (e.g. old partial-path symlinks).
-- name: "Backend | Symlink embedded autobot_shared to standalone canonical copy (#10020)"
-  ansible.builtin.file:
-    src: "{{ backend_shared_standalone_dir }}"
-    dest: "{{ backend_install_dir }}/autobot_shared"
-    state: link
-    force: true
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-  notify:
-    - restart backend
-    - restart celery
-  tags: ['backend', 'deploy']
+  # Step 3: Create (or update) the symlink. force: true updates the link target when the
+  # destination is already a symlink pointing elsewhere (e.g. old partial-path symlinks).
+  - name: "Backend | Symlink embedded autobot_shared to standalone canonical copy (#10020)"
+    ansible.builtin.file:
+      src: "{{ backend_shared_standalone_dir }}"
+      dest: "{{ backend_install_dir }}/autobot_shared"
+      state: link
+      force: true
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+    notify:
+      - restart backend
+      - restart celery
+    tags: ['backend', 'deploy']
 
-# Issue #3649: Sync the single canonical autobot_shared to the standalone PYTHONPATH dir.
-# Workers, Celery, and MCP-bridge services all import from here. The backend's embedded
-# path is now a symlink to this directory, so syncing here is sufficient for all consumers.
-- name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
-  ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
-    dest: "{{ backend_shared_standalone_dir }}/"
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=*.pyc"
-      - "--exclude=*.egg-info"
-      - "--exclude=.git"
-      - "--delete"
-  notify:
-    - restart backend
-    - restart celery
-  tags: ['backend', 'deploy']
+  # Issue #3649: Sync the single canonical autobot_shared to the standalone PYTHONPATH dir.
+  # Workers, Celery, and MCP-bridge services all import from here. The backend's embedded
+  # path is now a symlink to this directory, so syncing here is sufficient for all consumers.
+  - name: "Backend | Sync autobot_shared to standalone PYTHONPATH dir (#3649)"
+    ansible.posix.synchronize:
+      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/autobot_shared/"
+      dest: "{{ backend_shared_standalone_dir }}/"
+      rsync_opts:
+        - "--exclude=__pycache__"
+        - "--exclude=*.pyc"
+        - "--exclude=*.egg-info"
+        - "--exclude=.git"
+        - "--delete"
+    notify:
+      - restart backend
+      - restart celery
+    tags: ['backend', 'deploy']
 
-- name: "Backend | Fix ownership of standalone autobot_shared (#3649)"
-  ansible.builtin.file:
-    path: "{{ backend_shared_standalone_dir }}"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-    recurse: true
+  - name: "Backend | Fix ownership of standalone autobot_shared (#3649)"
+    ansible.builtin.file:
+      path: "{{ backend_shared_standalone_dir }}"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+      recurse: true
 
-- name: "Backend | Sync docs directory from code_source (#4100)"
-  ansible.posix.synchronize:
-    src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/docs/"
-    dest: "{{ backend_install_dir }}/../docs/"
-    delete: true
-    rsync_opts:
-      - "--exclude=__pycache__"
-      - "--exclude=*.pyc"
-      - "--exclude=.git"
-      - "--exclude=archives"
-  tags: ['backend', 'deploy']
+  - name: "Backend | Sync docs directory from code_source (#4100)"
+    ansible.posix.synchronize:
+      src: "{{ code_source_dir | default('/opt/autobot/code_source') }}/docs/"
+      dest: "{{ backend_install_dir }}/../docs/"
+      delete: true
+      rsync_opts:
+        - "--exclude=__pycache__"
+        - "--exclude=*.pyc"
+        - "--exclude=.git"
+        - "--exclude=archives"
+    tags: ['backend', 'deploy']
 
-# Issue #10020: backend_install_dir/autobot_shared is now a symlink to
-# backend_shared_standalone_dir — cleaning one is enough, but both find
-# commands are kept for clarity; find follows the symlink, so the second
-# is effectively a no-op when the target is the same directory.
-- name: "Backend | Clear stale .pyc files after source sync (#6193)"
-  ansible.builtin.shell: |
-    find "{{ backend_code_dir }}" -name '*.pyc' -delete
-    find "{{ backend_shared_standalone_dir }}" -name '*.pyc' -delete 2>/dev/null || true
-  changed_when: false
-  tags: ['backend', 'deploy']
+  # Issue #10020: backend_install_dir/autobot_shared is now a symlink to
+  # backend_shared_standalone_dir — cleaning one is enough, but both find
+  # commands are kept for clarity; find follows the symlink, so the second
+  # is effectively a no-op when the target is the same directory.
+  - name: "Backend | Clear stale .pyc files after source sync (#6193)"
+    ansible.builtin.shell: |
+      find "{{ backend_code_dir }}" -name '*.pyc' -delete
+      find "{{ backend_shared_standalone_dir }}" -name '*.pyc' -delete 2>/dev/null || true
+    changed_when: false
+    tags: ['backend', 'deploy']
 
-# Issue #912: Deploy error catalog so it is always available on the VM.
-# path_constants.py resolves PROJECT_ROOT as 3 levels up from constants/,
-# putting CONFIG_DIR at /opt/autobot/infrastructure/shared/config/ which is
-# not synced by default. Deploying via Ansible ensures it is always present.
-- name: Create infrastructure shared config directory  # Issue #912
-  ansible.builtin.file:
-    path: "{{ backend_install_dir | dirname }}/infrastructure/shared/config"
-    state: directory
-    mode: "0755"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
+  # Issue #912: Deploy error catalog so it is always available on the VM.
+  # path_constants.py resolves PROJECT_ROOT as 3 levels up from constants/,
+  # putting CONFIG_DIR at /opt/autobot/infrastructure/shared/config/ which is
+  # not synced by default. Deploying via Ansible ensures it is always present.
+  - name: Create infrastructure shared config directory  # Issue #912
+    ansible.builtin.file:
+      path: "{{ backend_install_dir | dirname }}/infrastructure/shared/config"
+      state: directory
+      mode: "0755"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
 
-- name: Deploy error catalog to infrastructure config path  # Issue #912
-  ansible.builtin.copy:
-    src: error_messages.yaml
-    dest: "{{ backend_install_dir | dirname }}/infrastructure/shared/config/error_messages.yaml"
-    mode: "0644"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
+  - name: Deploy error catalog to infrastructure config path  # Issue #912
+    ansible.builtin.copy:
+      src: error_messages.yaml
+      dest: "{{ backend_install_dir | dirname }}/infrastructure/shared/config/error_messages.yaml"
+      mode: "0644"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
 
-# Issue #3873: permission_rules.yaml is read from /opt/autobot/config/ at
-# runtime (three levels up from services/permission_matcher.py).  The clean
-# task that previously wiped /opt/autobot/config has been removed; this task
-# ensures the directory and file are always present after each deploy.
-- name: "Backend | Ensure /opt/autobot/config directory exists (#3873)"
-  ansible.builtin.file:
-    path: "{{ backend_install_dir | dirname }}/config"
-    state: directory
-    mode: "0755"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-  tags: ['backend', 'config']
+  # Issue #3873: permission_rules.yaml is read from /opt/autobot/config/ at
+  # runtime (three levels up from services/permission_matcher.py).  The clean
+  # task that previously wiped /opt/autobot/config has been removed; this task
+  # ensures the directory and file are always present after each deploy.
+  - name: "Backend | Ensure /opt/autobot/config directory exists (#3873)"
+    ansible.builtin.file:
+      path: "{{ backend_install_dir | dirname }}/config"
+      state: directory
+      mode: "0755"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+    tags: ['backend', 'config']
 
-- name: "Backend | Deploy permission_rules.yaml to infrastructure config path (#3873)"
-  ansible.builtin.copy:
-    src: permission_rules.yaml
-    dest: "{{ backend_install_dir | dirname }}/config/permission_rules.yaml"
-    mode: "0644"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-  notify: restart backend
-  tags: ['backend', 'config']
+  - name: "Backend | Deploy permission_rules.yaml to infrastructure config path (#3873)"
+    ansible.builtin.copy:
+      src: permission_rules.yaml
+      dest: "{{ backend_install_dir | dirname }}/config/permission_rules.yaml"
+      mode: "0644"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+    notify: restart backend
+    tags: ['backend', 'config']
 
-- name: Check if backend code already synced
-  ansible.builtin.stat:
-    path: "{{ backend_code_dir }}/main.py"
-  register: _backend_code_present
+  - name: Check if backend code already synced
+    ansible.builtin.stat:
+      path: "{{ backend_code_dir }}/main.py"
+    register: _backend_code_present
 
-- name: Clone/update AutoBot repository
-  ansible.builtin.git:
-    repo: "{{ backend_repo_url }}"
-    dest: "{{ backend_install_dir }}"
-    version: "{{ backend_version }}"
-    force: true
-  become_user: "{{ backend_user }}"
-  when:
-    - backend_deploy_from_git | default(true)
-    - not _backend_code_present.stat.exists
+  - name: Clone/update AutoBot repository
+    ansible.builtin.git:
+      repo: "{{ backend_repo_url }}"
+      dest: "{{ backend_install_dir }}"
+      version: "{{ backend_version }}"
+      force: true
+    become_user: "{{ backend_user }}"
+    when:
+      - backend_deploy_from_git | default(true)
+      - not _backend_code_present.stat.exists
 
-- name: Check if venv directory itself is a symlink (legacy layout)
-  ansible.builtin.stat:
-    path: "{{ backend_code_dir }}/venv"
-  register: venv_check
+  - name: Check if venv directory itself is a symlink (legacy layout)
+    ansible.builtin.stat:
+      path: "{{ backend_code_dir }}/venv"
+    register: venv_check
 
-- name: Remove old/broken venv if the directory is a symlink
-  ansible.builtin.file:
-    path: "{{ backend_code_dir }}/venv"
-    state: absent
-  when: venv_check.stat.exists and venv_check.stat.islnk
+  - name: Remove old/broken venv if the directory is a symlink
+    ansible.builtin.file:
+      path: "{{ backend_code_dir }}/venv"
+      state: absent
+    when: venv_check.stat.exists and venv_check.stat.islnk
 
-# #7052: Detect partially-corrupted venv from a prior failed install.
-# A venv with a working python3.14 binary but stale .pth files (e.g. from
-# an editable install whose finder module was removed during venv rebuild)
-# breaks pip on first import. The `Create venv` task below skips when
-# bin/activate exists, so without this check the corruption survives reinstall.
-- name: "Backend | Check venv health (pip importable, #7052)"
-  ansible.builtin.command:
-    cmd: "{{ backend_code_dir }}/venv/bin/python3.14 -c 'import pip'"
-  register: _venv_health
-  changed_when: false
-  failed_when: false
-  when: venv_check.stat.exists and venv_check.stat.isdir
+  # #7052: Detect partially-corrupted venv from a prior failed install.
+  # A venv with a working python3.14 binary but stale .pth files (e.g. from
+  # an editable install whose finder module was removed during venv rebuild)
+  # breaks pip on first import. The `Create venv` task below skips when
+  # bin/activate exists, so without this check the corruption survives reinstall.
+  - name: "Backend | Check venv health (pip importable, #7052)"
+    ansible.builtin.command:
+      cmd: "{{ backend_code_dir }}/venv/bin/python3.14 -c 'import pip'"
+    register: _venv_health
+    changed_when: false
+    failed_when: false
+    when: venv_check.stat.exists and venv_check.stat.isdir
 
-- name: "Backend | Remove broken venv when health check failed (#7052)"
-  ansible.builtin.file:
-    path: "{{ backend_code_dir }}/venv"
-    state: absent
-  when:
-    - venv_check.stat.exists and venv_check.stat.isdir
-    - (_venv_health.rc | default(0)) != 0
+  - name: "Backend | Remove broken venv when health check failed (#7052)"
+    ansible.builtin.file:
+      path: "{{ backend_code_dir }}/venv"
+      state: absent
+    when:
+      - venv_check.stat.exists and venv_check.stat.isdir
+      - (_venv_health.rc | default(0)) != 0
 
-- name: "Backend | Enforce venv target Python version (env-drift fix)"
-  ansible.builtin.include_role:
-    name: python314
-    tasks_from: ensure_venv_version
-  vars:
-    venv_path: "{{ backend_code_dir }}/venv"
-    venv_python: python3.14
+  - name: "Backend | Enforce venv target Python version (env-drift fix)"
+    ansible.builtin.include_role:
+      name: python314
+      tasks_from: ensure_venv_version
+    vars:
+      venv_path: "{{ backend_code_dir }}/venv"
+      venv_python: python3.14
 
-- name: Create Python 3.14 virtual environment via deadsnakes
-  ansible.builtin.command:
-    cmd: "python3.14 -m venv {{ backend_code_dir }}/venv"
-    creates: "{{ backend_code_dir }}/venv/bin/activate"
-  become_user: "{{ backend_user }}"
+  - name: Create Python 3.14 virtual environment via deadsnakes
+    ansible.builtin.command:
+      cmd: "python3.14 -m venv {{ backend_code_dir }}/venv"
+      creates: "{{ backend_code_dir }}/venv/bin/activate"
+    become_user: "{{ backend_user }}"
 
-- name: Fix venv ownership
-  ansible.builtin.file:
-    path: "{{ backend_code_dir }}/venv"
-    state: directory
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-    recurse: true
+  - name: Fix venv ownership
+    ansible.builtin.file:
+      path: "{{ backend_code_dir }}/venv"
+      state: directory
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+      recurse: true
 
-- name: Upgrade pip
-  ansible.builtin.pip:
-    name: pip
-    state: latest
-    virtualenv: "{{ backend_code_dir }}/venv"
-  become_user: "{{ backend_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 120  # Issue #2835: prevent indefinite hang on network issues
+  - name: Upgrade pip
+    ansible.builtin.pip:
+      name: pip
+      state: latest
+      virtualenv: "{{ backend_code_dir }}/venv"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+    timeout: 120  # Issue #2835: prevent indefinite hang on network issues
 
-- name: Install autobot_shared as editable package
-  ansible.builtin.pip:
-    name: "{{ backend_install_dir }}/autobot_shared"
-    editable: true
-    virtualenv: "{{ backend_code_dir }}/venv"
-  become_user: "{{ backend_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 120  # Issue #2835: prevent indefinite hang
-  when: backend_install_dir is defined
-  notify:
-    - restart backend
-    - restart celery
+  - name: Install autobot_shared as editable package
+    ansible.builtin.pip:
+      name: "{{ backend_install_dir }}/autobot_shared"
+      editable: true
+      virtualenv: "{{ backend_code_dir }}/venv"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+    timeout: 120  # Issue #2835: prevent indefinite hang
+    when: backend_install_dir is defined
+    notify:
+      - restart backend
+      - restart celery
 
-# The filtered file is written to /tmp, so its `-c ../constraints/shared.txt`
-# (kept from requirements.txt, #10524) would resolve relative to /tmp and fail
-# (pip errors on a missing constraint file). Rewrite it to the canonical
-# code_source constraints path, which always exists as the git checkout, so the
-# pinned constraints are actually applied on deploy (#11117).
-- name: Resolve absolute constraints path for filtered requirements
-  ansible.builtin.set_fact:
-    backend_constraints_abs: "{{ code_source_dir | default('/opt/autobot/code_source') }}/constraints/"
+  # The filtered file is written to /tmp, so its sibling-relative `-c
+  # ../constraints/shared.txt` (#10524) and `-r ../requirements.txt` (#11135)
+  # includes would resolve relative to /tmp and fail (pip errors on a missing
+  # file). Delegate the filter+rewrite to the canonical
+  # scripts/build-filtered-requirements.sh (#11134), which rewrites both to the
+  # code_source path, which always exists as the git checkout, so the pinned
+  # constraints AND root runtime deps are actually applied on deploy (#11117,
+  # #11135). services/role_registry.py's backend post_sync_cmd invokes the same
+  # script, so both deploy paths share one implementation instead of drifting.
+  - name: Create filtered backend requirements file
+    ansible.builtin.shell:
+      cmd: >-
+        bash {{ code_source_dir | default('/opt/autobot/code_source') }}/scripts/build-filtered-requirements.sh
+        {{ backend_code_dir }}/requirements.txt
+        {{ code_source_dir | default('/opt/autobot/code_source') }}
+        > /tmp/requirements-filtered.txt
+    become_user: "{{ backend_user }}"
 
-- name: Create filtered backend requirements file
-  ansible.builtin.shell:
-    cmd: >-
-      grep -Ev '^-e.*autobot[-_]shared|^-r' {{ backend_code_dir }}/requirements.txt
-      | sed 's|^-c \.\./constraints/|-c {{ backend_constraints_abs }}|'
-      > /tmp/requirements-filtered.txt
-  become_user: "{{ backend_user }}"
+  # (#2872) Removed failed_when: false — pip install failures must surface.
+  # The Ansible pip module raises on any pip error; the old bypass (Issue #892)
+  # masked real dependency failures during deployment.
+  - name: Install filtered backend requirements
+    ansible.builtin.pip:
+      requirements: "/tmp/requirements-filtered.txt"
+      virtualenv: "{{ backend_code_dir }}/venv"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+      PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
+    timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
+    register: pip_install_result
 
-# (#2872) Removed failed_when: false — pip install failures must surface.
-# The Ansible pip module raises on any pip error; the old bypass (Issue #892)
-# masked real dependency failures during deployment.
-- name: Install filtered backend requirements
-  ansible.builtin.pip:
-    requirements: "/tmp/requirements-filtered.txt"
-    virtualenv: "{{ backend_code_dir }}/venv"
-  become_user: "{{ backend_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-    PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
-  timeout: 600  # Issue #2835: prevent indefinite hang on dependency resolution conflicts
-  register: pip_install_result
+  # GPU / vLLM extras (#10288): vllm was moved to an opt-in requirements-gpu.txt
+  # (#10251/#10287) to keep the default CPU image lean. Install it ONLY on a
+  # GPU-enabled backend that opts into vLLM, so CPU deploys stay slim.
+  - name: "Backend | Detect NVIDIA GPU for vLLM extras (#10288)"
+    ansible.builtin.command:
+      cmd: nvidia-smi --query-gpu=name --format=csv,noheader
+    register: backend_nvidia_smi_result
+    changed_when: false
+    # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
+    # optional GPU-reqs install below, so a non-zero rc is expected on CPU nodes.
+    failed_when: false
+    when:
+      - backend_vllm_enabled | bool
+      - backend_has_gpu == "auto"
 
-# GPU / vLLM extras (#10288): vllm was moved to an opt-in requirements-gpu.txt
-# (#10251/#10287) to keep the default CPU image lean. Install it ONLY on a
-# GPU-enabled backend that opts into vLLM, so CPU deploys stay slim.
-- name: "Backend | Detect NVIDIA GPU for vLLM extras (#10288)"
-  ansible.builtin.command:
-    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
-  register: backend_nvidia_smi_result
-  changed_when: false
-  # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
-  # optional GPU-reqs install below, so a non-zero rc is expected on CPU nodes.
-  failed_when: false
-  when:
-    - backend_vllm_enabled | bool
-    - backend_has_gpu == "auto"
+  - name: "Backend | Resolve GPU availability for vLLM extras (#10288)"
+    ansible.builtin.set_fact:
+      backend_gpu_available: "{{ (backend_nvidia_smi_result.rc | default(1)) == 0 and (backend_nvidia_smi_result.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
+    when: backend_vllm_enabled | bool
 
-- name: "Backend | Resolve GPU availability for vLLM extras (#10288)"
-  ansible.builtin.set_fact:
-    backend_gpu_available: "{{ (backend_nvidia_smi_result.rc | default(1)) == 0 and (backend_nvidia_smi_result.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
-  when: backend_vllm_enabled | bool
+  # Install GPU/vLLM requirements only when vLLM is enabled AND a GPU is present.
+  # Uses the repo-root requirements-gpu.txt from code_source (sibling of the
+  # autobot-backend subtree; not part of the backend code rsync).
+  - name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
+    ansible.builtin.pip:
+      requirements: "{{ code_source_dir | default('/opt/autobot/code_source') }}/requirements-gpu.txt"
+      virtualenv: "{{ backend_code_dir }}/venv"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+    timeout: 1800  # CUDA-built torch + vllm wheels are large
+    when:
+      - backend_vllm_enabled | bool
+      - backend_gpu_available | default(false) | bool
 
-# Install GPU/vLLM requirements only when vLLM is enabled AND a GPU is present.
-# Uses the repo-root requirements-gpu.txt from code_source (sibling of the
-# autobot-backend subtree; not part of the backend code rsync).
-- name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
-  ansible.builtin.pip:
-    requirements: "{{ code_source_dir | default('/opt/autobot/code_source') }}/requirements-gpu.txt"
-    virtualenv: "{{ backend_code_dir }}/venv"
-  become_user: "{{ backend_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 1800  # CUDA-built torch + vllm wheels are large
-  when:
-    - backend_vllm_enabled | bool
-    - backend_gpu_available | default(false) | bool
+  - name: Deploy aioredis compatibility shim for Python 3.14
+    ansible.builtin.template:
+      src: aioredis_shim.py.j2
+      dest: "{{ backend_code_dir }}/venv/lib/python3.14/site-packages/aioredis.py"
+      mode: '0644'
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
 
-- name: Deploy aioredis compatibility shim for Python 3.14
-  ansible.builtin.template:
-    src: aioredis_shim.py.j2
-    dest: "{{ backend_code_dir }}/venv/lib/python3.14/site-packages/aioredis.py"
-    mode: '0644'
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
+  - name: Reinstall autobot_shared to pick up ssot_config fixes
+    ansible.builtin.pip:
+      name: "{{ backend_install_dir }}/autobot_shared"
+      editable: true
+      virtualenv: "{{ backend_code_dir }}/venv"
+      state: forcereinstall
+      extra_args: "--no-deps"
+    become_user: "{{ backend_user }}"
+    environment:
+      PIP_DEFAULT_TIMEOUT: "120"
+    timeout: 120  # Issue #2835: prevent indefinite hang
+    when: backend_install_dir is defined
+    notify:
+      - restart backend
+      - restart celery
 
-- name: Reinstall autobot_shared to pick up ssot_config fixes
-  ansible.builtin.pip:
-    name: "{{ backend_install_dir }}/autobot_shared"
-    editable: true
-    virtualenv: "{{ backend_code_dir }}/venv"
-    state: forcereinstall
-    extra_args: "--no-deps"
-  become_user: "{{ backend_user }}"
-  environment:
-    PIP_DEFAULT_TIMEOUT: "120"
-  timeout: 120  # Issue #2835: prevent indefinite hang
-  when: backend_install_dir is defined
-  notify:
-    - restart backend
-    - restart celery
+  # ==========================================================
+  # PostgreSQL for User Management (Issue #2953)
+  # AutoBot always runs full user management (#10713); every supported user mode
+  # is Postgres-backed, so this always runs.
+  # Re-uses the shared postgresql role with autobot_users DB.
+  # ==========================================================
+  - name: "Backend | Configure PostgreSQL for user management (#2953)"
+    ansible.builtin.include_role:
+      name: postgresql
+    vars:
+      db_user: "{{ backend_postgres_user | default('autobot_app') }}"
+      db_env_prefix: "AUTOBOT"
+      db_host: "127.0.0.1"
+      databases:
+        - "{{ backend_postgres_db | default('autobot_users') }}"
+      postgresql_listen_addresses: "localhost"
+      # #10636: On a collapsed single-box deploy this instance already hosts the
+      # SLM (slm_app) whose creds live in the DEFAULT db-credentials.env. Writing
+      # the backend's AUTOBOT_DB_* creds into that same file would overwrite the
+      # SLM's SLM_DB_* entries — the SLM systemd unit's EnvironmentFile then loads
+      # nothing and the SLM loses DB access. Give the backend its OWN creds file so
+      # both coexist; the SLM's file is never touched. On multi-VM fleets this is
+      # a separate instance/host, so a distinct filename is harmless there too.
+      postgresql_credentials_file: "autobot-db-credentials.env"
+      # #10636: The postgresql role's pg_hba render is additive (it discovers every
+      # existing login role first — see roles/postgresql/tasks/configure.yml — so
+      # slm_app's rules survive), and this second run must ONLY reload, never
+      # restart, the shared instance. postgresql.conf renders identically on both
+      # runs (both pass listen_addresses=localhost), so no restart is triggered.
+    tags: ['backend', 'postgresql']
 
-# ==========================================================
-# PostgreSQL for User Management (Issue #2953)
-# AutoBot always runs full user management (#10713); every supported user mode
-# is Postgres-backed, so this always runs.
-# Re-uses the shared postgresql role with autobot_users DB.
-# ==========================================================
-- name: "Backend | Configure PostgreSQL for user management (#2953)"
-  ansible.builtin.include_role:
-    name: postgresql
-  vars:
-    db_user: "{{ backend_postgres_user | default('autobot_app') }}"
-    db_env_prefix: "AUTOBOT"
-    db_host: "127.0.0.1"
-    databases:
-      - "{{ backend_postgres_db | default('autobot_users') }}"
-    postgresql_listen_addresses: "localhost"
-    # #10636: On a collapsed single-box deploy this instance already hosts the
-    # SLM (slm_app) whose creds live in the DEFAULT db-credentials.env. Writing
-    # the backend's AUTOBOT_DB_* creds into that same file would overwrite the
-    # SLM's SLM_DB_* entries — the SLM systemd unit's EnvironmentFile then loads
-    # nothing and the SLM loses DB access. Give the backend its OWN creds file so
-    # both coexist; the SLM's file is never touched. On multi-VM fleets this is
-    # a separate instance/host, so a distinct filename is harmless there too.
-    postgresql_credentials_file: "autobot-db-credentials.env"
-    # #10636: The postgresql role's pg_hba render is additive (it discovers every
-    # existing login role first — see roles/postgresql/tasks/configure.yml — so
-    # slm_app's rules survive), and this second run must ONLY reload, never
-    # restart, the shared instance. postgresql.conf renders identically on both
-    # runs (both pass listen_addresses=localhost), so no restart is triggered.
-  tags: ['backend', 'postgresql']
+  # ==========================================================
+  # TLS Certificate Generation (Issue #892)
+  # ==========================================================
+  - name: Create TLS certificate directory
+    ansible.builtin.file:
+      path: /etc/autobot/certs
+      state: directory
+      mode: "0755"
+      owner: root
+      group: root
 
-# ==========================================================
-# TLS Certificate Generation (Issue #892)
-# ==========================================================
-- name: Create TLS certificate directory
-  ansible.builtin.file:
-    path: /etc/autobot/certs
-    state: directory
-    mode: "0755"
-    owner: root
-    group: root
+  - name: Check if TLS certificate exists
+    ansible.builtin.stat:
+      path: /etc/autobot/certs/server-cert.pem
+    register: backend_cert_stat
 
-- name: Check if TLS certificate exists
-  ansible.builtin.stat:
-    path: /etc/autobot/certs/server-cert.pem
-  register: backend_cert_stat
+  - name: Check certificate expiry
+    ansible.builtin.command:
+      cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
+    register: backend_cert_valid
+    changed_when: false
+    # (#2872) Intentional: openssl exits rc=1 when cert expires within the
+    # check window — that is a valid "needs renewal" signal, not an error.
+    failed_when: false
+    when: backend_cert_stat.stat.exists
 
-- name: Check certificate expiry
-  ansible.builtin.command:
-    cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
-  register: backend_cert_valid
-  changed_when: false
-  # (#2872) Intentional: openssl exits rc=1 when cert expires within the
-  # check window — that is a valid "needs renewal" signal, not an error.
-  failed_when: false
-  when: backend_cert_stat.stat.exists
+  - name: Generate self-signed TLS certificate
+    ansible.builtin.command:
+      cmd: >-
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048
+        -keyout /etc/autobot/certs/server-key.pem
+        -out /etc/autobot/certs/server-cert.pem
+        -subj '/C=US/ST=State/L=City/O=AutoBot/CN=autobot-backend'
+    when: >-
+      not backend_cert_stat.stat.exists
+      or (backend_cert_valid.rc | default(1)) != 0
+    notify: restart backend
 
-- name: Generate self-signed TLS certificate
-  ansible.builtin.command:
-    cmd: >-
-      openssl req -x509 -nodes -days 365 -newkey rsa:2048
-      -keyout /etc/autobot/certs/server-key.pem
-      -out /etc/autobot/certs/server-cert.pem
-      -subj '/C=US/ST=State/L=City/O=AutoBot/CN=autobot-backend'
-  when: >-
-    not backend_cert_stat.stat.exists
-    or (backend_cert_valid.rc | default(1)) != 0
-  notify: restart backend
+  - name: Set certificate key permissions
+    ansible.builtin.file:
+      path: "{{ item }}"
+      mode: "0600"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+    loop:
+      - /etc/autobot/certs/server-key.pem
+      - /etc/autobot/certs/server-cert.pem
 
-- name: Set certificate key permissions
-  ansible.builtin.file:
-    path: "{{ item }}"
-    mode: "0600"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-  loop:
-    - /etc/autobot/certs/server-key.pem
-    - /etc/autobot/certs/server-cert.pem
+  # #10636: full-user-management secrets for the runtime .env. The DB password
+  # is created by the postgresql role above (db_password); the initial-admin
+  # password (which seeds the default admin on first boot) comes from
+  # /etc/autobot/slm-secrets.env (written by slm_manager). The internal service API
+  # key is read earlier from the same file (#11507) so both env files carry one key.
+  # Without these the clean-install .env has no DB password / admin → /login has
+  # no account, matching the deploy-path wiring in update-all-nodes.yml.
+  - name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636)"
+    ansible.builtin.shell:
+      cmd: >-
+        grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
+        || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
+        || true
+    register: _backend_admin_password
+    changed_when: false
+    failed_when: false
+    no_log: true
+    tags: ['backend', 'config']
 
-# #10636: full-user-management secrets for the runtime .env. The DB password
-# is created by the postgresql role above (db_password); the internal service
-# API key and the initial-admin password (which seeds the default admin on
-# first boot) come from /etc/autobot/slm-secrets.env (written by slm_manager).
-# Without these the clean-install .env has no DB password / admin → /login has
-# no account, matching the deploy-path wiring in update-all-nodes.yml.
-- name: "Backend | Read AUTOBOT_INTERNAL_API_KEY for .env (#10636)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-      /etc/autobot/slm-secrets.env 2>/dev/null || true
-  register: _backend_internal_api_key
-  changed_when: false
-  failed_when: false
-  no_log: true
-  tags: ['backend', 'config']
+  # #10636 / #12520: autobot-db-credentials.env is the SINGLE role-managed
+  # authority for the autobot_app DB password. The postgresql include above
+  # ALTERs the autobot_app role in Postgres and records that exact value as
+  # AUTOBOT_DB_PASSWORD (reuse-existing so a redeploy never regenerates it —
+  # #12224). Read that authority UNCONDITIONALLY (never the SLM's
+  # db-credentials.env) so backend_postgres_password — and therefore the .env's
+  # AUTOBOT_POSTGRES_PASSWORD, which autobot-backend.service.j2 loads as the ONLY
+  # EnvironmentFile carrying it — is rendered FROM the role-managed credential and
+  # cannot drift from Postgres (#12520). Reading even when the in-memory
+  # db_password fact is present is safe: the role wrote both in the same include,
+  # so they are identical in a full run; on a tag-skip / separate-provisioning
+  # run the file is the only truth.
+  - name: "Backend | Read role-managed AUTOBOT_DB_PASSWORD (single authority, #10636, #12520)"
+    ansible.builtin.shell:
+      cmd: >-
+        grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
+        /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
+    register: _backend_db_password_file
+    changed_when: false
+    failed_when: false
+    no_log: true
+    tags: ['backend', 'config']
 
-- name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-      || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-      || true
-  register: _backend_admin_password
-  changed_when: false
-  failed_when: false
-  no_log: true
-  tags: ['backend', 'config']
+  - name: "Backend | Set full-user-management .env facts (#10636, #12520)"
+    ansible.builtin.set_fact:
+      # autobot_internal_api_key is set earlier from slm-secrets.env (#11507) so both
+      # env files render one value; do not re-set (and never blank) it here.
+      autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
+      # #12520: role-managed creds file FIRST (the value actually applied to
+      # Postgres), then the in-memory db_password from this run, then a deliberate
+      # external override (a genuinely remote DB has no local creds file, so the
+      # override survives). This order makes the .env render structurally from the
+      # single role-managed authority; the assert below is the regression guard.
+      backend_postgres_password: >-
+        {{ (_backend_db_password_file.stdout | default('') | trim)
+           | default(db_password | default(''), true)
+           | default(backend_postgres_password | default(''), true) }}
+    no_log: true
+    tags: ['backend', 'config']
 
-# #10636: db_password is set in-memory by the postgresql include above when it
-# runs in this play. On a tag-filtered re-run that skips that include (or when
-# the DB was provisioned by a separate playbook), read the backend's OWN creds
-# file — autobot-db-credentials.env, never the SLM's db-credentials.env — so the
-# .env still renders a valid AUTOBOT_POSTGRES_PASSWORD without clobbering the SLM.
-- name: "Backend | Read AUTOBOT_DB_PASSWORD from backend creds file (fallback, #10636)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -oP '^AUTOBOT_DB_PASSWORD=\K.*'
-      /etc/autobot/autobot-db-credentials.env 2>/dev/null || true
-  register: _backend_db_password_file
-  changed_when: false
-  failed_when: false
-  no_log: true
-  when: db_password is not defined
-  tags: ['backend', 'config']
+  # Issue #2824: Deploy .env to backend_code_dir so the systemd
+  # EnvironmentFile directive can find it.  Previous code deployed to
+  # backend_install_dir which diverges when playbooks override
+  # backend_code_dir (e.g. setup-user-backend.yml sets it to
+  # backend_install_dir/autobot-backend).  The path expression here
+  # mirrors the one used in autobot-backend.service.j2 line 15.
+  - name: "Backend | Deploy .env to code dir (matches systemd EnvironmentFile) (#2824)"
+    ansible.builtin.template:
+      src: backend.env.j2
+      dest: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
+      mode: "0600"
+      owner: "{{ backend_user }}"
+      group: "{{ backend_group }}"
+      backup: true
+    tags: ['backend', 'config']
 
-- name: "Backend | Set full-user-management .env facts (#10636)"
-  ansible.builtin.set_fact:
-    autobot_internal_api_key: "{{ _backend_internal_api_key.stdout | default('') | trim }}"
-    autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
-    backend_postgres_password: >-
-      {{ db_password
-         | default(_backend_db_password_file.stdout | default('') | trim, true)
-         | default(backend_postgres_password | default(''), true) }}
-  no_log: true
-  tags: ['backend', 'config']
+  # MVA-1633: Verify .env file exists (will be read by service on restart)
+  - name: "Backend | Verify .env file readable (MVA-1633)"
+    ansible.builtin.stat:
+      path: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
+    register: _backend_env_stat
+    failed_when: not _backend_env_stat.stat.exists
+    tags: ['backend', 'config']
 
-# Issue #2824: Deploy .env to backend_code_dir so the systemd
-# EnvironmentFile directive can find it.  Previous code deployed to
-# backend_install_dir which diverges when playbooks override
-# backend_code_dir (e.g. setup-user-backend.yml sets it to
-# backend_install_dir/autobot-backend).  The path expression here
-# mirrors the one used in autobot-backend.service.j2 line 15.
-- name: "Backend | Deploy .env to code dir (matches systemd EnvironmentFile) (#2824)"
-  ansible.builtin.template:
-    src: backend.env.j2
-    dest: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
-    mode: "0600"
-    owner: "{{ backend_user }}"
-    group: "{{ backend_group }}"
-    backup: true
-  tags: ['backend', 'config']
+  # ==========================================================
+  # #12520: Regression guard — the backend .env AUTOBOT_POSTGRES_PASSWORD MUST
+  # match the role-managed autobot-db-credentials.env AUTOBOT_DB_PASSWORD.
+  #
+  # The autobot_app DB password has ONE authority: the postgresql role, which
+  # ALTERs the autobot_app role in Postgres and records the value as
+  # AUTOBOT_DB_PASSWORD in autobot-db-credentials.env (reuse-existing, #12224).
+  # The backend systemd unit loads ONLY its private .env, whose
+  # AUTOBOT_POSTGRES_PASSWORD is rendered from backend_postgres_password. If that
+  # ever drifts from the role-managed value the backend bakes a wrong password
+  # and fails asyncpg auth on the next restart — the #12520 outage (same class
+  # as #12297). This turns that silent runtime failure into a hard, early deploy
+  # failure so the drift can never reach a restart.
+  #
+  # Scope: assert only for the co-located topology (local DB). When the backend
+  # targets a REMOTE Postgres (backend_postgres_host is not localhost),
+  # backend_postgres_password is a deliberate remote override that need not match
+  # any local creds file, so the check is skipped — mirrors #12297's
+  # "differing value = deliberate override, preserved".
+  #
+  # SECURITY: every message below renders BOOLEANS / KEY NAMES ONLY. A password
+  # value must NEVER reach Ansible stdout/logs (learned from the #12297 fail_msg
+  # leak): the parsed maps' VALUES are the DB password, so they are never emitted.
+  # ==========================================================
+  - name: "Backend | #12520: stat role-managed creds file"
+    ansible.builtin.stat:
+      path: "/etc/autobot/autobot-db-credentials.env"
+    register: _backend_dbcreds_stat
+    tags: ['backend', 'config']
 
-# MVA-1633: Verify .env file exists (will be read by service on restart)
-- name: "Backend | Verify .env file readable (MVA-1633)"
-  ansible.builtin.stat:
-    path: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
-  register: _backend_env_stat
-  failed_when: not _backend_env_stat.stat.exists
-  tags: ['backend', 'config']
+  - name: "Backend | #12520: verify .env DB password matches role-managed creds"
+    when:
+      - _backend_env_stat.stat.exists
+      - _backend_dbcreds_stat.stat.exists
+      - (backend_postgres_host | default('127.0.0.1')) in ['127.0.0.1', 'localhost', '::1']
+    tags: ['backend', 'config']
+    block:
+      - name: "Backend | #12520: slurp role-managed creds file"
+        ansible.builtin.slurp:
+          src: "/etc/autobot/autobot-db-credentials.env"
+        register: _backend_dbcreds_raw
+        no_log: true
 
-# MVA-1633: Explicit start to match the unconditional stop above. Without this,
-# idempotent tag-filtered runs (--tags backend,config) stop the service and
-# never restart it when no change-detected task accumulates notify: restart backend.
-- name: "Backend | Start service after env update (MVA-1633)"
-  ansible.builtin.systemd:
-    name: autobot-backend
-    state: started
-    daemon_reload: false
-  tags: ['backend', 'config']
+      - name: "Backend | #12520: slurp rendered backend .env"
+        ansible.builtin.slurp:
+          src: "{{ backend_code_dir | default(backend_install_dir) }}/.env"
+        register: _backend_env_raw
+        no_log: true
 
-- name: Enable and start backend service
-  ansible.builtin.systemd:
-    name: autobot-backend
-    state: started
-    enabled: true
-    daemon_reload: true
+      - name: "Backend | #12520: parse role-managed AUTOBOT_DB_PASSWORD (key->value)"
+        ansible.builtin.set_fact:
+          _backend_dbcreds_map: >-
+            {{ dict(_backend_dbcreds_raw.content | b64decode
+                    | regex_findall('(?m)^(AUTOBOT_DB_PASSWORD)=(.*)$')) }}
+        no_log: true
+
+      - name: "Backend | #12520: parse rendered AUTOBOT_POSTGRES_PASSWORD (key->value)"
+        ansible.builtin.set_fact:
+          _backend_env_map: >-
+            {{ dict(_backend_env_raw.content | b64decode
+                    | regex_findall('(?m)^(AUTOBOT_POSTGRES_PASSWORD)=(.*)$')) }}
+        no_log: true
+
+      # KEYS / BOOLEANS ONLY in every message. The `that` expressions reference
+      # the map values by variable, and Ansible prints the LITERAL assertion
+      # string (variable names) on failure, never the resolved secret; fail_msg
+      # renders only key-presence booleans.
+      - name: "Backend | #12520: assert .env DB password matches role-managed creds"
+        ansible.builtin.assert:
+          that:
+            - "'AUTOBOT_DB_PASSWORD' in _backend_dbcreds_map"
+            - "'AUTOBOT_POSTGRES_PASSWORD' in _backend_env_map"
+            - (_backend_env_map['AUTOBOT_POSTGRES_PASSWORD'] | trim) == (_backend_dbcreds_map['AUTOBOT_DB_PASSWORD'] | trim)
+          fail_msg: >-
+            backend .env AUTOBOT_POSTGRES_PASSWORD drifted from the role-managed
+            autobot-db-credentials.env AUTOBOT_DB_PASSWORD
+            (role_pw_present={{ 'AUTOBOT_DB_PASSWORD' in _backend_dbcreds_map }},
+             env_pw_present={{ 'AUTOBOT_POSTGRES_PASSWORD' in _backend_env_map }}).
+            Re-run the backend postgresql include so both derive from the single
+            role-managed authority (#12520).
+          success_msg: "backend .env AUTOBOT_POSTGRES_PASSWORD matches role-managed creds (#12520)."
+        tags: ['backend', 'config']
+
+  # MVA-1633: Explicit start to match the unconditional stop above. Without this,
+  # idempotent tag-filtered runs (--tags backend,config) stop the service and
+  # never restart it when no change-detected task accumulates notify: restart backend.
+  - name: "Backend | Start service after env update (MVA-1633)"
+    ansible.builtin.systemd:
+      name: autobot-backend
+      state: started
+      daemon_reload: false
+    tags: ['backend', 'config']
+
+  - name: Enable and start backend service
+    ansible.builtin.systemd:
+      name: autobot-backend
+      state: started
+      enabled: true
+      daemon_reload: true
+  always:
+    # #12139: Guarantee autobot-backend ends STARTED whether the block succeeded
+    # or a mid-task failure aborted it. Idempotent when the explicit MVA-1633
+    # start / enable-and-start above already ran. `failed_when: false` so this
+    # guard can never itself abort the `always` (the always must never fail-out).
+    # Tagged backend,config to match the MVA-1633 stop above, so any run that can
+    # stop the service (backend/config tags, or a full run) also runs the guard.
+    - name: "Backend | Always-restart guard so backend can't be left dead (#12139)"
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: started
+        daemon_reload: true
+      failed_when: false
+      tags: ['backend', 'config']
 
 # Issue #863: Deploy Celery worker service for background tasks
 - name: Deploy Celery worker systemd service

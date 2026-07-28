@@ -56,7 +56,19 @@ const micAccessAvailable = ref(
 )
 
 // Hands-free mode state (#1030)
-const silenceThreshold = ref(1500)
+// Silence tolerance is the SINGLE user-facing knob for end-of-turn
+// endpointing (#12505). It is the "silence" slider in
+// VoiceConversationPanel / VoiceConversationOverlay (range 500-3000ms) and
+// now actually drives every endpointer: the Silero VAD `redemptionMs`
+// (hands-free) and the AudioWorklet silence window (full-duplex). It was
+// previously dead config while the real endpointers used a hardcoded 250ms
+// (Silero) / ~21ms (worklet), cutting speech off on a natural pause. 800ms
+// lets a conversational half-second pause through while still ending on a
+// real stop.
+export const DEFAULT_SILENCE_THRESHOLD_MS = 800
+const MIN_SILENCE_THRESHOLD_MS = 500
+const MAX_SILENCE_THRESHOLD_MS = 3000
+const silenceThreshold = ref(DEFAULT_SILENCE_THRESHOLD_MS)
 const audioLevel = ref(0)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,15 +85,43 @@ let _fallbackStream: MediaStream | null = null
 // AbortController for transcription requests — aborts in-flight call when new recording starts.
 let _transcribeController: AbortController | null = null
 
-// Issue #1371: Cooldown timer to prevent TTS echo from triggering VAD
+// Issue #1371: Cooldown timer to prevent TTS echo from triggering VAD.
 let _ttsCooldownTimer: ReturnType<typeof setTimeout> | null = null
-const _TTS_COOLDOWN_MS = 600 // Must exceed Silero redemptionMs (250ms)
+// #12505: the cooldown must outlast the VAD silence-redemption window (now
+// `silenceThreshold`), plus a margin, so buffered TTS echo has fully ended
+// before mic input is accepted again. Computed per-resume from the live knob.
+const _TTS_COOLDOWN_MARGIN_MS = 350
 
 // Response message types that should be spoken (skip thoughts/planning/debug)
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 
 // Max chars to send to TTS — Pocket TTS at ~200ms/chunk (#1054)
 const _MAX_SPEECH_CHARS = 2000
+
+// AudioWorklet render quantum is fixed at 128 samples (#1031); one VAD
+// silence "frame" therefore lasts 128/sampleRate seconds.
+const _WORKLET_FRAME_SAMPLES = 128
+
+/**
+ * Map the silence-tolerance knob (ms) to the Silero VAD `redemptionMs`
+ * (frames-of-silence-before-end), clamped to the supported slider range.
+ * Single source of truth for end-of-turn tolerance (#12505).
+ */
+export function _silenceMsToRedemptionMs(ms: number): number {
+  return Math.min(
+    MAX_SILENCE_THRESHOLD_MS,
+    Math.max(MIN_SILENCE_THRESHOLD_MS, Math.round(ms)),
+  )
+}
+
+/**
+ * Map the silence-tolerance knob (ms) to the number of consecutive
+ * sub-threshold AudioWorklet frames that confirm end-of-speech (#12505).
+ */
+export function _silenceMsToOffsetFrames(ms: number, sampleRate: number): number {
+  const frameMs = (_WORKLET_FRAME_SAMPLES / sampleRate) * 1000
+  return Math.max(1, Math.round(_silenceMsToRedemptionMs(ms) / frameMs))
+}
 
 function _generateId(): string {
   return `vb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -192,7 +232,17 @@ async function _initVad(): Promise<void> {
     await _vadAudioCtx.audioWorklet.addModule('/audio-vad-processor.js')
 
     const source = _vadAudioCtx.createMediaStreamSource(_micStream)
-    _vadNode = new AudioWorkletNode(_vadAudioCtx, 'vad-processor')
+    _vadNode = new AudioWorkletNode(_vadAudioCtx, 'vad-processor', {
+      // #12505: derive the worklet silence window from the single
+      // tolerance knob so full-duplex barge-in endpointing matches
+      // hands-free (was a hardcoded ~21ms cutoff).
+      processorOptions: {
+        offsetFrames: _silenceMsToOffsetFrames(
+          silenceThreshold.value,
+          _vadAudioCtx.sampleRate,
+        ),
+      },
+    })
 
     _vadNode.port.onmessage = (event) => {
       const { speaking } = event.data
@@ -471,7 +521,7 @@ function _resumeAutoListening(): void {
     // state becomes 'listening', creating an echo feedback loop.
     _ttsCooldownTimer = setTimeout(() => {
       _ttsCooldownTimer = null
-    }, _TTS_COOLDOWN_MS)
+    }, silenceThreshold.value + _TTS_COOLDOWN_MARGIN_MS)
     state.value = 'listening'
   }
 }
@@ -538,12 +588,12 @@ function _dispatchTranscript(text: string): void {
       speakStreaming(speechText)
       flushStreaming()
       // #6823: removed local one-shot `watch(isSpeaking, ...)` here.
-      // The factory-level watcher (below) is the single source of truth
-      // for TTS-completion handling — pre-fix this duplicate caused
-      // both `_resumeAutoListening` AND `_onSpeakingDone` to fire on
-      // every walkie-talkie/hands-free TTS burst, double-triggering
-      // the hands-free TTS cooldown timer and bouncing state through
-      // 'idle' → 'listening' → 'idle' → 'listening'.
+      // The module-level watcher (#12153, defined above this function) is
+      // the single source of truth for TTS-completion handling — pre-fix
+      // this duplicate caused both `_resumeAutoListening` AND
+      // `_onSpeakingDone` to fire on every walkie-talkie/hands-free TTS
+      // burst, double-triggering the hands-free TTS cooldown timer and
+      // bouncing state through 'idle' → 'listening' → 'idle' → 'listening'.
     }
   }).catch((err) => {
     logger.error('Failed to send voice transcript:', err)
@@ -634,7 +684,9 @@ async function _startHandsFree(): Promise<void> {
       onnxWASMBasePath: '/',
       positiveSpeechThreshold: 0.8,
       minSpeechMs: 150,
-      redemptionMs: 250,
+      // #12505: derive from the single silence-tolerance knob (was a
+      // hardcoded 250ms that cut speech off on a natural pause).
+      redemptionMs: _silenceMsToRedemptionMs(silenceThreshold.value),
       onSpeechEnd: (audio: Float32Array) => {
         _handleVadSpeechEnd(audio)
       },
@@ -698,10 +750,69 @@ function _handleVadSpeechEnd(audio: Float32Array): void {
     })
 }
 
+/** Test-only: reset module-level state to its initial values. */
+export function _resetForTests(): void {
+  state.value = 'idle'
+  mode.value = 'walkie-talkie'
+  currentTranscript.value = ''
+  bubbles.value = []
+  isActive.value = false
+  errorMessage.value = ''
+  silenceThreshold.value = DEFAULT_SILENCE_THRESHOLD_MS
+  audioLevel.value = 0
+  currentLanguage.value = 'en'
+  _recognition = null
+  _voiceUnsubscribe = null
+  _vadAudioCtx = null
+  _vadNode = null
+  _micStream = null
+  _sileroVad = null
+  _whisperFallback = false
+  _fallbackRecorder = null
+  _fallbackStream = null
+  _transcribeController = null
+  _ttsCooldownTimer = null
+}
+
+// ─── Module-level watchers (#12153) ──────────────────────
+// Registered ONCE at module load — NOT inside useVoiceConversation(). That
+// function is invoked once per mounted caller (VoiceConversationPanel,
+// VoiceConversationOverlay, ChatInterface); a watch() registered in its body
+// added ANOTHER watcher on these module-singleton refs per mounted caller,
+// so `_resumeAutoListening` (and the language handler) fired once PER
+// mounted caller on every TTS-completion / language-preference change
+// instead of once. `isSpeaking` / `language` are themselves module-singleton
+// refs (useVoiceOutput.ts / usePreferences.ts), so resolving them here —
+// like the `_realtimeVoice` singleton above (#7345) — is safe and stable
+// for the app's lifetime.
+const { isSpeaking } = useVoiceOutput()
+const { language: prefLanguage } = usePreferences()
+
+// #6823: single source of truth for TTS-completion handling. Routes
+// through `_resumeAutoListening` (not the redundant `_onSpeakingDone`)
+// so the hands-free TTS cooldown timer is set exactly once per burst
+// — was previously fired by both the inner `_dispatchTranscript`
+// watcher AND this outer one.
+watch(isSpeaking, (speaking) => {
+  if (!speaking && state.value === 'speaking') {
+    _resumeAutoListening()
+  }
+})
+
+// #1334: Update STT language when preference changes mid-conversation
+watch(prefLanguage, (newLang) => {
+  currentLanguage.value = newLang || 'en'
+  if (_recognition && state.value === 'listening') {
+    const bcp47 = _LANG_TO_BCP47[newLang] || newLang
+    _recognition.lang = bcp47
+  }
+  logger.debug('Language preference changed:', newLang)
+})
+
 // ─── Main composable ────────────────────────────────────
 
 export function useVoiceConversation() {
-  const { isSpeaking, unlockAudio, stopSpeaking } = useVoiceOutput()
+  const { unlockAudio, stopSpeaking } = useVoiceOutput()
 
   const isListening = computed(() => state.value === 'listening')
   const isProcessing = computed(() => state.value === 'processing')
@@ -833,28 +944,6 @@ export function useVoiceConversation() {
     }
     logger.debug('Mode switched to:', newMode)
   }
-
-  // #6823: single source of truth for TTS-completion handling. Routes
-  // through `_resumeAutoListening` (not the redundant `_onSpeakingDone`)
-  // so the hands-free TTS cooldown timer is set exactly once per burst
-  // — was previously fired by both the inner `_dispatchTranscript`
-  // watcher AND this outer one.
-  watch(isSpeaking, (speaking) => {
-    if (!speaking && state.value === 'speaking') {
-      _resumeAutoListening()
-    }
-  })
-
-  // #1334: Update STT language when preference changes mid-conversation
-  const { language: prefLanguage } = usePreferences()
-  watch(prefLanguage, (newLang) => {
-    currentLanguage.value = newLang || 'en'
-    if (_recognition && state.value === 'listening') {
-      const bcp47 = _LANG_TO_BCP47[newLang] || newLang
-      _recognition.lang = bcp47
-    }
-    logger.debug('Language preference changed:', newLang)
-  })
 
   function cleanup(): void {
     deactivate()

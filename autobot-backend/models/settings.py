@@ -240,7 +240,15 @@ class AutoBotSettings(BaseSettings):
         }
 
     def get_redis_config(self) -> Metadata:
-        """Get Redis configuration as dict for backward compatibility."""
+        """Get Redis configuration as dict for backward compatibility.
+
+        Issue #12748: same-shape duplicate of the canonical core Redis
+        config (config.service_config.ServiceConfigMixin.get_redis_config())
+        but this entire module (AutoBotSettings and its `settings` singleton)
+        has zero live importers anywhere in the codebase — orphaned, not a
+        caller-facing fork requiring convergence. Left unconverged pending
+        an owner decision (wire in vs formally deprecate): see #12750.
+        """
         return {
             "enabled": self.redis.enabled,
             "host": self.redis.host,

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 from autobot_shared.models.service_message import ServiceMessage
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ class ServiceMessageBus:
     async def _get_redis(self) -> Any:
         """Return an async Redis client, creating on first use."""
         if self._redis is None:
-            self._redis = await get_redis_client(async_client=True, database="logs")
+            self._redis = await get_async_redis_client(database="logs")
             logger.debug("ServiceMessageBus Redis connection established")
         return self._redis
 

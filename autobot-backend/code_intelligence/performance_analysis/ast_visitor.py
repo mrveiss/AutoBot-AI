@@ -572,25 +572,30 @@ class PerformanceASTVisitor(ast.NodeVisitor):
 
         code = self._get_source_segment(node.lineno, node.lineno)
 
-        # Step 1: HIGH confidence patterns
+        # Step 1: time.sleep special case (Issue #12362: must run before the
+        # generic HIGH confidence loop below — "time.sleep" is also present
+        # in BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE, which previously matched
+        # first and returned a generic BLOCKING_IO_IN_ASYNC/HIGH finding,
+        # making SYNC_IN_ASYNC/CRITICAL unreachable for the single most
+        # common blocking call in async code).
+        if self._check_time_sleep_in_async(call_name, node):
+            return
+
+        # Step 2: HIGH confidence patterns
         if self._check_high_confidence_blocking(call_name, node, code):
             return
 
-        # Step 2: Skip SAFE patterns
+        # Step 3: Skip SAFE patterns
         for safe_pattern in SAFE_PATTERNS:
             if safe_pattern in call_name_lower:
                 return
 
-        # Step 3: MEDIUM confidence patterns
+        # Step 4: MEDIUM confidence patterns
         if self._check_medium_confidence_blocking(call_name_lower, call_name, node, code):
             return
 
-        # Step 4: Legacy fallback patterns
-        if self._check_legacy_blocking_patterns(call_name_lower, call_name, node, code):
-            return
-
-        # Step 5: time.sleep special case
-        self._check_time_sleep_in_async(call_name, node)
+        # Step 5: Legacy fallback patterns
+        self._check_legacy_blocking_patterns(call_name_lower, call_name, node, code)
 
     def _check_sequential_awaits(self, node: ast.AsyncFunctionDef) -> None:
         """Check for sequential awaits that could be parallel."""

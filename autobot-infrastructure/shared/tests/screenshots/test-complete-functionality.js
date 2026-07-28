@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Comprehensive Playwright testing of all AutoBot functionality
  * Including Edge browser error detection and terminal testing

@@ -188,7 +188,15 @@ async def stop_hot_reload():
 async def probe_hot_reload(
     request: Request | None = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for hot-reload file watcher."""
+    """Issue #3333 / #12459: probe registration for the hot-reload file watcher.
+
+    The watcher is dev-only tooling — nothing starts it automatically at
+    boot (only the admin-only ``POST /hot-reload/start`` endpoint does), so
+    "not running" is the expected steady state in every deployment,
+    including production. Report ``not_applicable`` rather than
+    ``degraded`` so this opt-in dev feature never drags overall
+    system-health down.
+    """
     try:
         from utils.hot_reload_manager import hot_reload_manager
 
@@ -197,8 +205,8 @@ async def probe_hot_reload(
             return ComponentHealth(name="hot_reload", status="ok")
         return ComponentHealth(
             name="hot_reload",
-            status="degraded",
-            detail="watcher not running",
+            status="not_applicable",
+            detail="watcher not running (dev-only, off by default — start via POST /hot-reload/start)",
         )
     except Exception as exc:
         return ComponentHealth(

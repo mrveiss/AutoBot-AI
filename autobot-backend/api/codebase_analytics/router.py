@@ -33,11 +33,14 @@ from .endpoints import (
     sources,
     stats,
 )
+from .endpoints.shared import require_source_access  # Issue #12358: per-source authz
 
 # Create main router — prefix provided by analytics_routers.py registry (#1027)
+# Issue #12358: check_admin_permission gates the router; require_source_access adds
+# per-source ownership so one admin cannot read another admin's PRIVATE source.
 router = APIRouter(
     tags=["codebase-analytics"],
-    dependencies=[Depends(check_admin_permission)],
+    dependencies=[Depends(check_admin_permission), Depends(require_source_access)],
 )
 
 # Include all endpoint routers

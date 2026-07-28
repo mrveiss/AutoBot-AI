@@ -34,7 +34,9 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import assert_company_access
 from llc.services.model_tiers import get_model_tier_service
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -135,7 +137,8 @@ class QuotaWindow(BaseModel):
 async def costs_by_agent_model(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
     session: AsyncSession = Depends(get_async_session),
-    ctx: TenantContext = Depends(lambda: None),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCost]:
     """Return normalised token usage per agent/model pair.
 
@@ -143,7 +146,9 @@ async def costs_by_agent_model(
     across Anthropic, OpenAI, and Google so callers receive a consistent schema.
     ``cachedInputTokens`` is ``0`` for providers without cache hit reporting.
     """
-    effective_company_id = company_id or (str(ctx.org_id) if ctx else None)
+    if company_id:
+        assert_company_access(ctx, company_id)
+    effective_company_id = company_id or str(ctx.org_id)
     if not effective_company_id:
         return []
 
@@ -201,7 +206,8 @@ async def costs_by_agent_model(
 async def quota_windows(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
     session: AsyncSession = Depends(get_async_session),
-    ctx: TenantContext = Depends(lambda: None),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[QuotaWindow]:
     """Return provider quota window structures for all configured providers.
 
@@ -210,7 +216,9 @@ async def quota_windows(
     Anthropic).  Actual headroom values require provider API key configuration
     and are populated by the quota monitor (phase 3).
     """
-    effective_company_id = company_id or (str(ctx.org_id) if ctx else None)
+    if company_id:
+        assert_company_access(ctx, company_id)
+    effective_company_id = company_id or str(ctx.org_id)
     svc = get_model_tier_service()
 
     # Determine which providers are actively used by looking at cost events

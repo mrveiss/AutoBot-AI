@@ -23,10 +23,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.singleton_factory import lazy_singleton
+from llc.deps import assert_company_access
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
-from ..models.goal import GoalLevel, GoalStatus
+from ..models.goal import GoalLevel, GoalStatus, LLCGoal
 from ..models.work_item import LLCWorkItem
 from ..services.goal import GoalService
 
@@ -80,6 +83,12 @@ class GoalResponse(BaseModel):
         from_attributes = True
 
 
+class GoalTreeNode(GoalResponse):
+    """A goal plus its descendants, for the tree read path (#12739)."""
+
+    children: List["GoalTreeNode"] = []
+
+
 class WorkItemSummaryResponse(BaseModel):
     """Compact work item projection returned by GET /llc/goals/{id}/tasks (GH#6469)."""
 
@@ -98,6 +107,40 @@ class WorkItemSummaryResponse(BaseModel):
         from_attributes = True
 
 
+async def _get_authorized_goal(session: AsyncSession, goal_id: uuid.UUID, ctx: TenantContext) -> LLCGoal:
+    """Load a goal and enforce tenant isolation; 404 if missing or cross-tenant (GH#12136).
+
+    Uses the service getter (not the generic bare-select ``load_authorized``)
+    because ``GoalService.get`` is the seam tests mock (test_goals_idor.py) —
+    swapping to a raw ``session.execute(select(...))`` here would bypass that
+    mock in the test harness and change observable behaviour.
+    """
+    goal = await _svc().get(session, goal_id)
+    if goal is None or (str(goal.company_id) != str(ctx.org_id) and not ctx.is_platform_admin):
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return goal
+
+
+def _build_goal_forest(goals: list) -> List["GoalTreeNode"]:
+    """Assemble flat goals into nested roots (#12739).
+
+    Orphans — a goal whose parent is missing or belongs to another company — are
+    surfaced as roots rather than dropped. Silently discarding them would make
+    the tree disagree with the flat list, which is the failure mode this
+    endpoint exists to end.
+    """
+    nodes = {g.id: GoalTreeNode.model_validate(g) for g in goals}
+    roots: List[GoalTreeNode] = []
+    for goal in goals:
+        node = nodes[goal.id]
+        parent = nodes.get(goal.parent_goal_id) if goal.parent_goal_id else None
+        if parent is None:
+            roots.append(node)
+        else:
+            parent.children.append(node)
+    return roots
+
+
 # ------------------------------------------------------------------ Routes
 
 
@@ -106,7 +149,10 @@ async def list_goals(
     company_id: str = Query(..., description="Company ID to filter goals"),
     parent_goal_id: Optional[uuid.UUID] = Query(None),
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
+    assert_company_access(ctx, company_id)
     goals = await _svc().list_by_company(session, company_id, parent_goal_id)
     return [GoalResponse.model_validate(g) for g in goals]
 
@@ -115,7 +161,10 @@ async def list_goals(
 async def create_goal(
     body: GoalCreate,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
+    assert_company_access(ctx, body.company_id)
     goal = await _svc().create(
         session,
         company_id=body.company_id,
@@ -130,14 +179,36 @@ async def create_goal(
     return GoalResponse.model_validate(goal)
 
 
+# NOTE: /tree is declared BEFORE /{goal_id} on purpose. FastAPI matches routes in
+# declaration order, so a later /tree would never be reached — "tree" would bind
+# to {goal_id} and fail UUID parsing instead (#12739).
+@router.get("/tree", response_model=List[GoalTreeNode])
+async def get_goal_tree(
+    company_id: str = Query(..., description="Company ID to build the goal tree for"),
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> List[GoalTreeNode]:
+    """Return the company's full goal hierarchy as nested roots (#12739).
+
+    ``GET /goals`` returns only top-level goals, and children were reachable
+    only by already knowing each parent id — so the tree UI could not render
+    anything below the roots. One query, assembled in memory, rather than a
+    round-trip per level.
+    """
+    assert_company_access(ctx, company_id)
+    goals = await _svc().list_all_by_company(session, company_id)
+    return _build_goal_forest(goals)
+
+
 @router.get("/{goal_id}", response_model=GoalResponse)
 async def get_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
-    goal = await _svc().get(session, goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    goal = await _get_authorized_goal(session, goal_id, ctx)
     return GoalResponse.model_validate(goal)
 
 
@@ -146,7 +217,10 @@ async def update_goal(
     goal_id: uuid.UUID,
     body: GoalUpdate,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> GoalResponse:
+    await _get_authorized_goal(session, goal_id, ctx)
     updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     goal = await _svc().update(session, goal_id, **updates)
     if goal is None:
@@ -158,20 +232,36 @@ async def update_goal(
 async def delete_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    await _get_authorized_goal(session, goal_id, ctx)
     deleted = await _svc().delete(session, goal_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Goal not found")
+
+
+@router.get("/{goal_id}/children", response_model=List[GoalResponse])
+async def list_goal_children(
+    goal_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> List[GoalResponse]:
+    """Direct children of *goal_id* (#12739). Complements the upward /ancestors."""
+    goal = await _get_authorized_goal(session, goal_id, ctx)
+    children = await _svc().list_by_company(session, str(goal.company_id), goal_id)
+    return [GoalResponse.model_validate(c) for c in children]
 
 
 @router.get("/{goal_id}/ancestors", response_model=List[GoalResponse])
 async def get_ancestors(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[GoalResponse]:
-    goal = await _svc().get(session, goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    await _get_authorized_goal(session, goal_id, ctx)
     ancestors = await _svc().get_ancestors(session, goal_id)
     return [GoalResponse.model_validate(a) for a in ancestors]
 
@@ -180,11 +270,11 @@ async def get_ancestors(
 async def list_tasks_for_goal(
     goal_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[WorkItemSummaryResponse]:
     """Return all work items linked to a goal (GH#6469)."""
-    goal = await _svc().get(session, goal_id)
-    if goal is None:
-        raise HTTPException(status_code=404, detail="Goal not found")
+    await _get_authorized_goal(session, goal_id, ctx)
     result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.goal_id == goal_id))
     items = result.scalars().all()
     return [WorkItemSummaryResponse.model_validate(item) for item in items]

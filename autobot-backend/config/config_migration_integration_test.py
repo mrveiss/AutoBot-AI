@@ -106,34 +106,28 @@ class TestConfigurationMigration:
                 pass
 
     def test_config_environment_variable_priorities(self):
-        """Test environment variable priority order (AUTOBOT_, AB_, none)"""
-        test_config = ConfigManager()
+        """Env-var override is ConfigRegistry's job, via the AUTOBOT_ prefix.
 
-        # Test priority order: AUTOBOT_ > AB_ > unprefixed
-        with patch.dict(
-            os.environ,
-            {
-                "AUTOBOT_TEST_KEY": "autobot_value",
-                "AB_TEST_KEY": "ab_value",
-                "TEST_KEY": "unprefixed_value",
-            },
-        ):
-            # Should prefer AUTOBOT_ prefix
-            assert test_config.get("test.key") == "autobot_value"
+        This previously asserted a three-tier AUTOBOT_ > AB_ > unprefixed order
+        against ConfigManager.get(). ConfigManager.get() is a FLAT dict lookup
+        (config/sync_ops.py) — it resolves neither dotted paths nor env vars —
+        and no AB_/unprefixed tier exists anywhere in the codebase. The test was
+        asserting a migration-era design that was never implemented.
 
-        # Test AB_ prefix when AUTOBOT_ not available
-        with patch.dict(
-            os.environ,
-            {"AB_TEST_KEY2": "ab_value2", "TEST_KEY2": "unprefixed_value2"},
-            clear=True,
-        ):
-            # Should use AB_ prefix
-            assert test_config.get("test.key2") == "ab_value2"
+        ConfigRegistry.get() is the component that does consult the environment,
+        and it builds exactly one key: AUTOBOT_<KEY_WITH_DOTS_AS_UNDERSCORES>.
+        """
+        from config.registry import ConfigRegistry
 
-        # Test unprefixed when neither AUTOBOT_ nor AB_ available
-        with patch.dict(os.environ, {"TEST_KEY3": "unprefixed_value3"}, clear=True):
-            # Should use unprefixed
-            assert test_config.get("test.key3") == "unprefixed_value3"
+        ConfigRegistry.clear_cache()
+        with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
+            with patch.dict(os.environ, {"AUTOBOT_TEST_KEY": "autobot_value"}, clear=True):
+                assert ConfigRegistry.get("test.key") == "autobot_value"
+
+            # No AB_ tier and no unprefixed tier: the caller default stands.
+            ConfigRegistry.clear_cache()
+            with patch.dict(os.environ, {"AB_TEST_KEY2": "ab", "TEST_KEY2": "plain"}, clear=True):
+                assert ConfigRegistry.get("test.key2", default="fallback") == "fallback"
 
     def test_unified_multimodal_processor_config_usage(self):
         """Test that unified multimodal processor uses centralized config"""
@@ -141,13 +135,15 @@ class TestConfigurationMigration:
 
         # Create test config with vision settings
         test_config = ConfigManager()
-        test_config.set("multimodal.vision.confidence_threshold", 0.9)
-        test_config.set("multimodal.vision.processing_timeout", 60)
-        test_config.set("multimodal.vision.enabled", False)
+        # set() is a FLAT dict write (config/sync_ops.py), so a dotted key would
+        # not land in the nested tree that get_config_section() reads.
+        test_config.set_nested("multimodal.vision.confidence_threshold", 0.9)
+        test_config.set_nested("multimodal.vision.processing_timeout", 60)
+        test_config.set_nested("multimodal.vision.enabled", False)
 
         with patch(
             "multimodal_processor.processors.vision.get_config_section",
-            lambda section: test_config.get_section(section),
+            lambda section: test_config.get_config_section(section),
         ):
             vision_proc = VisionProcessor()
 
@@ -161,8 +157,9 @@ class TestConfigurationMigration:
         cm = ConfigManager()
 
         # Test that all expected sections exist in default config
+        # NOTE: "llm" is deliberately absent — it is not a top-level section;
+        # LLM config lives under backend.llm (see config/defaults.py).
         required_sections = [
-            "llm",
             "deployment",
             "data",
             "redis",
@@ -177,7 +174,7 @@ class TestConfigurationMigration:
         ]
 
         for section in required_sections:
-            config_section = cm.get_section(section)
+            config_section = cm.get_config_section(section)
             assert isinstance(config_section, dict), f"Section {section} should be a dict"
             assert len(config_section) > 0, f"Section {section} should not be empty"
 
@@ -186,56 +183,68 @@ class TestConfigurationMigration:
         cm = ConfigManager()
 
         # Test boolean values
-        assert isinstance(cm.get("multimodal.vision.enabled"), bool)
-        assert isinstance(cm.get("security.enable_sandboxing"), bool)
-        assert isinstance(cm.get("hardware.acceleration.enabled"), bool)
+        assert isinstance(cm.get_nested("multimodal.vision.enabled"), bool)
+        assert isinstance(cm.get_nested("security.enable_sandboxing"), bool)
+        assert isinstance(cm.get_nested("hardware.acceleration.enabled"), bool)
 
         # Test integer values
-        assert isinstance(cm.get("redis.port"), int)
-        assert isinstance(cm.get("deployment.port"), int)
-        assert isinstance(cm.get("llm.ollama.port"), int)
+        assert isinstance(cm.get_nested("redis.port"), int)
+        assert isinstance(cm.get_nested("deployment.port"), int)
+        assert isinstance(cm.get_nested("backend.server_port"), int)
 
         # Test float values
-        assert isinstance(cm.get("multimodal.vision.confidence_threshold"), (int, float))
-        assert isinstance(cm.get("multimodal.voice.confidence_threshold"), (int, float))
+        assert isinstance(cm.get_nested("multimodal.vision.confidence_threshold"), (int, float))
+        assert isinstance(cm.get_nested("multimodal.voice.confidence_threshold"), (int, float))
 
         # Test string values
-        assert isinstance(cm.get("llm.orchestrator_llm"), str)
-        assert isinstance(cm.get("deployment.host"), str)
-        assert isinstance(cm.get("redis.host"), str)
+        assert isinstance(cm.get_nested("backend.llm.provider_type"), str)
+        assert isinstance(cm.get_nested("deployment.host"), str)
+        assert isinstance(cm.get_nested("redis.host"), str)
 
         # Test list values
-        assert isinstance(cm.get("hardware.acceleration.priority_order"), list)
-        assert isinstance(cm.get("security.blocked_commands"), list)
+        assert isinstance(cm.get_nested("hardware.acceleration.priority_order"), list)
+        assert isinstance(cm.get_nested("security.blocked_commands"), list)
 
     def test_config_migration_backward_compatibility(self):
         """Test that migration maintains backward compatibility"""
         # Test that old config patterns still work during transition period
-        from utils.config_manager import config
+        # The backward-compat wrapper is config.compat.Config. `utils.config_manager`
+        # (the old import path) no longer exists, and `from config import config`
+        # yields the SSOT _ConfigProxy, which exposes neither .config nor .get.
+        from config.compat import Config
+
+        legacy = Config(config_manager)
 
         # The backward compatibility wrapper should work
-        assert hasattr(config, "config")  # Old interface
-        assert hasattr(config, "get")  # Old interface
+        assert hasattr(legacy, "config")  # Old interface
+        assert hasattr(legacy, "get")  # Old interface
 
-        # Should return same values as new interface
-        assert config.get("llm.orchestrator_llm") == config_manager.get("llm.orchestrator_llm")
+        # Should return the same values as the new interface. Use a key that
+        # actually EXISTS — the previous "llm.orchestrator_llm" is absent from
+        # the config tree, so both sides were None and the assertion was vacuous.
+        assert legacy.get("redis") == config_manager.get("redis")
+        assert isinstance(legacy.config, dict) and legacy.config
 
     def test_config_default_value_handling(self):
         """Test proper handling of default values across components"""
         cm = ConfigManager()
 
-        # Test that defaults are reasonable and consistent
-        # LLM defaults
-        assert cm.get("llm.orchestrator_llm") in ["ollama", "openai"]
-        assert cm.get("llm.ollama.base_url").startswith("http")
+        # LLM defaults. NOTE: "llm.orchestrator_llm" and "llm.ollama.base_url"
+        # do not exist — LLM config lives under backend.llm, whose provider URL
+        # is local.providers.ollama.host.
+        assert isinstance(cm.get_nested("backend.llm.provider_type"), str)
+        assert cm.get_nested("backend.llm.local.providers.ollama.host").startswith("http")
 
-        # Redis defaults
-        assert cm.get("redis.host") in ["localhost", "127.0.0.1"]
-        assert 1 <= cm.get("redis.port") <= 65535
+        # Redis defaults. The host is deployment-specific (it is an SSOT value,
+        # not a literal), so assert it is a non-empty string rather than pinning
+        # it to localhost — pinning made this fail on every real deployment.
+        assert isinstance(cm.get_nested("redis.host"), str)
+        assert cm.get_nested("redis.host")
+        assert 1 <= cm.get_nested("redis.port") <= 65535
 
         # Security defaults should be secure by default
-        assert cm.get("security.enable_sandboxing") is True
-        assert len(cm.get("security.blocked_commands")) > 0
+        assert cm.get_nested("security.enable_sandboxing") is True
+        assert len(cm.get_nested("security.blocked_commands")) > 0
 
 
 if __name__ == "__main__":

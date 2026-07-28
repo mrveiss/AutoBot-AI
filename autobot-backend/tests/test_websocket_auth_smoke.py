@@ -170,7 +170,7 @@ class TestWsLiveHappyPath:
 
 
 class TestWsLiveNegativePaths:
-    """Missing or invalid bearer → close before accept (code 4001)."""
+    """Missing or invalid bearer → accept-then-close (code 4001, #12366)."""
 
     def test_no_bearer_rejected(self):
         verify = _verify_none  # always fail auth

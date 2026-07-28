@@ -4,6 +4,7 @@
 # Author: mrveiss
 """LLC per-agent budget API routes (GH#8215)."""
 
+import uuid
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -12,11 +13,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, get_tenant_context, require_org_context
 from autobot_shared.logging_manager import get_logger
+from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
 from user_management.database import get_async_session
+from user_management.services import TenantContext
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/budget", tags=["llc-budget"])
@@ -125,11 +129,14 @@ async def provision_budget(
     agent_id: str,
     body: ProvisionRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
 ) -> BudgetResponse:
     """Provision a default budget row for an agent (GH#9901).
 
     Returns 201 on creation, 409 if a row already exists.
-    Returns 404 if the agent does not exist in agent_org_nodes.
+    Returns 404 if the agent does not exist in agent_org_nodes, or belongs to
+    a different tenant (GH#12136).
     company_id is derived from agent_org_nodes — callers cannot scope rows
     to arbitrary companies.
     """
@@ -142,7 +149,11 @@ async def provision_budget(
     if agent_record is None:
         raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found")
 
-    company_id = str(agent_record[0])
+    # str(uuid.UUID(...)) canonicalises to the dashed lower-case form regardless
+    # of how the raw text() query returns the UUID column across dialects
+    # (GH#12136 — needed for the tenant-match comparison below).
+    company_id = str(uuid.UUID(str(agent_record[0])))
+    assert_company_access(ctx, company_id)
 
     svc = BudgetService()
     row, created = await svc.provision_budget(session, agent_id, company_id, body.budget_limit)
@@ -160,8 +171,11 @@ async def provision_budget(
 async def list_budgets(
     company_id: str = Query(..., description="Filter by company UUID"),
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
     """List all per-agent budget rows for a company (GH#8551, GH#8997)."""
+    assert_company_access(ctx, company_id)
     result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.company_id == company_id))
     rows = result.scalars().all()
     svc = BudgetService()
@@ -189,14 +203,20 @@ async def list_budgets(
 async def get_budget(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
 ) -> BudgetResponse:
     # GH#8461: single SELECT — fetch the row directly and compute derived fields
     # here rather than calling check_budget() (which does its own SELECT) then
     # re-fetching the same row.
-    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
-    row = result.scalar_one_or_none()
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
+    row = await load_authorized(
+        session,
+        LLCAgentBudget,
+        agent_id,
+        ctx,
+        id_attr="agent_id",
+        not_found_detail=f"No budget row for agent {agent_id}",
+    )
 
     remaining, is_over, alert = _derive_status(row)
     return _build_response(row, remaining, is_over, alert)
@@ -207,7 +227,17 @@ async def ingest_cost(
     agent_id: str,
     body: IngestRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
 ) -> IngestResponse:
+    await load_authorized(
+        session,
+        LLCAgentBudget,
+        agent_id,
+        ctx,
+        id_attr="agent_id",
+        not_found_detail=f"No budget row for agent {agent_id}",
+    )
     svc = BudgetService()
     try:
         cost = await svc.ingest_cost_event(session, agent_id, body.tokens_in, body.tokens_out, body.model)
@@ -222,12 +252,18 @@ async def update_limit(
     agent_id: str,
     body: UpdateLimitRequest,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(get_tenant_context),
 ) -> BudgetResponse:
     """Update budget limits and mode (GH#8215, GH#8997)."""
-    result = await session.execute(select(LLCAgentBudget).where(LLCAgentBudget.agent_id == agent_id))
-    row = result.scalar_one_or_none()
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"No budget row for agent {agent_id}")
+    row = await load_authorized(
+        session,
+        LLCAgentBudget,
+        agent_id,
+        ctx,
+        id_attr="agent_id",
+        not_found_detail=f"No budget row for agent {agent_id}",
+    )
 
     # GH#8462: pass Decimal directly — Pydantic already validates it as Decimal,
     # no str() conversion needed (which would silently coerce to TEXT in the ORM).
@@ -286,6 +322,8 @@ async def list_cost_events(
     company_id: str = Query(..., description="Filter by company UUID"),
     limit: int = Query(100, ge=1, le=500),
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[Dict[str, Any]]:
     """Return per-agent budget spend summary as cost events (GH#8551).
 
@@ -293,6 +331,7 @@ async def list_cost_events(
     A dedicated cost-event store is not yet implemented; this derives the
     data from LLCAgentBudget rows.
     """
+    assert_company_access(ctx, company_id)
     result = await session.execute(
         select(LLCAgentBudget)
         .where(LLCAgentBudget.company_id == company_id)
@@ -341,6 +380,8 @@ class AgentModelCostRow(BaseModel):
 async def costs_by_agent_model(
     company_id: str,
     session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCostRow]:
     """Return token usage broken down by agent and model for a company.
 
@@ -359,6 +400,7 @@ async def costs_by_agent_model(
     a future migration adds the columns.  The endpoint is intentionally
     available from day one so dashboards can start wiring up immediately.
     """
+    assert_company_access(ctx, company_id)
     result = await session.execute(
         text("""
             SELECT

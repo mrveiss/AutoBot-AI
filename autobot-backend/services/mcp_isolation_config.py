@@ -25,7 +25,6 @@ from enum import Enum
 from typing import Dict, List
 
 from autobot_shared.env_utils import env_int
-from autobot_shared.ssot_config import config
 
 
 class IsolationMode(str, Enum):
@@ -54,8 +53,17 @@ _ALWAYS_INPROCESS = frozenset({"knowledge_mcp", "sequential_thinking_mcp", "stru
 
 
 def _global_mode() -> IsolationMode:
-    """Resolve global default isolation mode from env."""
-    raw = config.mcp_isolation_mode.lower()
+    """Resolve global default isolation mode from env.
+
+    Reads os.environ directly (not the cached ssot_config singleton) so
+    that per-test overrides via monkeypatch/patch.dict take effect, per
+    the module docstring's "read lazily so tests can override" contract.
+    Issue #12443: config.mcp_isolation_mode is populated once at process
+    startup and never reacts to later env changes.
+    """
+    raw = os.environ.get(
+        "MCP_ISOLATION_MODE", ""
+    ).lower()  # ssot-config-exempt: must be lazy for test overrides (#12443)
     try:
         return IsolationMode(raw)
     except ValueError:
