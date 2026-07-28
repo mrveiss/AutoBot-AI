@@ -10,7 +10,7 @@ lost while their vectors survived, the Knowledge Browser reported everything
 "unvectorized" on every reload.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
