@@ -26,7 +26,7 @@ import pytest
 def _build(resume=None, cfg=None):
     from llc.adapters.claude_code_adapter import ClaudeCodeAdapter
 
-    return ClaudeCodeAdapter._build_command("claude", resume, cfg or {}, "do the thing")
+    return ClaudeCodeAdapter._build_command("claude", resume, cfg or {}, "do the thing", session_id="fresh-sid")
 
 
 def test_stream_json_print_includes_verbose():
