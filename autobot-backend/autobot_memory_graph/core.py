@@ -148,16 +148,27 @@ class AutoBotMemoryGraphCore:
         if not self._initialized:
             raise RuntimeError("AutoBotMemoryGraph not initialized — call await initialize() first")
 
-    async def initialize(self) -> None:
+    async def initialize(self) -> bool:
         """
         Initialize Redis connection and search indexes.
 
         This method is idempotent and thread-safe.
+
+        Returns:
+            True once the graph is usable.
+
+        #12873: this used to be declared ``-> None`` and returned nothing, but
+        ``chat_history/base.py`` does ``initialized = await
+        memory_graph.initialize()`` and then ``if initialized:``. A SUCCESSFUL
+        init therefore returned None, which is falsy, so conversation entity
+        tracking was disabled on every boot while the graph itself was fine —
+        and nothing logged an error, because nothing had failed. That is why
+        #12780's fix removed the visible errors without recovering the feature.
         """
         async with self._lock:
             if self._initialized:
                 logger.debug("AutoBotMemoryGraph already initialized")
-                return
+                return True
 
             try:
                 # Initialize Redis client
@@ -174,6 +185,7 @@ class AutoBotMemoryGraphCore:
 
                 self._initialized = True
                 logger.info("AutoBotMemoryGraph initialized successfully")
+                return True
 
             except Exception as e:
                 logger.error(f"Failed to initialize AutoBotMemoryGraph: {e}")

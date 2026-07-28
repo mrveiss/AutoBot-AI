@@ -250,8 +250,16 @@ class ChatHistoryBase:
                 self.memory_graph_enabled = True
                 logger.info("✅ Memory Graph initialized successfully for conversation tracking")
             else:
+                # #12873: a falsy return here used to be unactionable — the graph
+                # logs its own failures and raises, so reaching this branch means
+                # initialize() completed without raising yet reported not-ready.
+                # Report what it actually said about itself instead of just the
+                # outcome, so this cannot go undiagnosed again.
                 logger.warning(
-                    "⚠️ Memory Graph initialization returned False - " "conversation entity tracking disabled"
+                    "⚠️ Memory Graph reported not-ready (returned %r, is_initialized=%s) — "
+                    "conversation entity tracking disabled",
+                    initialized,
+                    getattr(self.memory_graph, "is_initialized", "unknown"),
                 )
                 self.memory_graph = None
 
