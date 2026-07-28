@@ -129,6 +129,17 @@ class GoalService(LLCServiceBase):
         result = await session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_all_by_company(self, session: AsyncSession, company_id: str) -> List[LLCGoal]:
+        """Every goal for a company, at any depth (#12739).
+
+        ``list_by_company`` forces ``parent_goal_id IS NULL`` when no parent is
+        given, so it returns roots only — which is why children were unreachable
+        without already knowing each parent id. Building a tree needs the whole
+        set in one query rather than one round-trip per level.
+        """
+        result = await session.execute(select(LLCGoal).where(LLCGoal.company_id == company_id))
+        return list(result.scalars().all())
+
     async def update(
         self,
         session: AsyncSession,
