@@ -20,12 +20,9 @@
 
 # --- #12378: browser-automation panel (aspirational, no backend) ---
 /api/browser/automation/run
-/api/browser/click
 /api/browser/close
 /api/browser/execute
 /api/browser/launch
-/api/browser/navigate
-/api/browser/screenshot
 /api/browser/session/{p}
 /api/browser/type
 
