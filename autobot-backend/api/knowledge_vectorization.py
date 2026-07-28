@@ -56,6 +56,36 @@ router = APIRouter(tags=["knowledge_vectorization"])
 # ===== HELPER FUNCTIONS FOR BATCH VECTORIZATION STATUS =====
 
 
+async def _vectorized_ids_from_vector_store(kb_instance, fact_ids: List[str]) -> set | None:
+    """Ask ChromaDB which of *fact_ids* actually have a vector (#12733).
+
+    Vectorization status used to be read from a Redis key
+    (``llama_index/vector_{id}``), i.e. a flag written beside the fact rather
+    than the vector store's own membership. Any Redis/ChromaDB drift therefore
+    made the indicator wrong — and when facts were lost while their 22 vectors
+    survived, the browser reported everything unvectorized on every reload.
+
+    Returns ``None`` (not an empty set) when the vector store cannot be reached,
+    so the caller can fall back rather than report all facts unvectorized — a
+    false "nothing is vectorized" is worse than a stale flag.
+    """
+    try:
+        from knowledge.backends import get_default_client
+
+        client = await asyncio.to_thread(
+            get_default_client,
+            db_path=str(kb_instance.chromadb_path),
+            allow_reset=False,
+            anonymized_telemetry=False,
+        )
+        collection = await asyncio.to_thread(client.get_collection, kb_instance.chromadb_collection)
+        found = await asyncio.to_thread(collection.get, ids=list(fact_ids), include=[])
+        return set(found.get("ids") or [])
+    except Exception as exc:  # noqa: BLE001 - status must degrade, never fail the request
+        logger.warning("Vector-store membership check unavailable, falling back to Redis flags: %s", exc)
+        return None
+
+
 async def _execute_pipeline_exists_check(kb_instance, vector_keys: List[str]) -> list:
     """
     Execute Redis pipeline for batch EXISTS checks.
@@ -169,8 +199,15 @@ async def _check_vectorization_batch_internal(
     vector_keys = [f"llama_index/vector_{fact_id}" for fact_id in fact_ids]
 
     try:
-        # Execute pipeline EXISTS checks (Issue #620: uses helper)
-        results = await _execute_pipeline_exists_check(kb_instance, vector_keys)
+        # #12733: prefer the vector store's own membership over the Redis-side
+        # flag, so the indicator cannot drift from reality.
+        vectorized_ids = await _vectorized_ids_from_vector_store(kb_instance, fact_ids)
+        if vectorized_ids is None:
+            # Vector store unreachable — fall back to the legacy Redis flags
+            # rather than claiming nothing is vectorized.
+            results = await _execute_pipeline_exists_check(kb_instance, vector_keys)
+        else:
+            results = [fact_id in vectorized_ids for fact_id in fact_ids]
 
         # Build status map (Issue #620: uses helper)
         statuses, vectorized_count = _build_status_map(fact_ids, results, include_dimensions, kb_instance)
