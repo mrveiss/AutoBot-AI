@@ -49521,6 +49521,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/goals/tree": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Goal Tree
+         * @description Return the company's full goal hierarchy as nested roots (#12739).
+         *
+         *     ``GET /goals`` returns only top-level goals, and children were reachable
+         *     only by already knowing each parent id — so the tree UI could not render
+         *     anything below the roots. One query, assembled in memory, rather than a
+         *     round-trip per level.
+         */
+        get: operations["get_goal_tree_api_llc_goals_tree_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/goals/{goal_id}": {
         parameters: {
             query?: never;
@@ -49538,6 +49563,26 @@ export interface paths {
         head?: never;
         /** Update Goal */
         patch: operations["update_goal_api_llc_goals__goal_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/goals/{goal_id}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Children
+         * @description Direct children of *goal_id* (#12739). Complements the upward /ancestors.
+         */
+        get: operations["list_goal_children_api_llc_goals__goal_id__children_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/goals/{goal_id}/ancestors": {
@@ -74522,6 +74567,50 @@ export interface components {
          * @enum {string}
          */
         GoalStatus: "draft" | "active" | "achieved" | "cancelled" | "on_hold";
+        /**
+         * GoalTreeNode
+         * @description A goal plus its descendants, for the tree read path (#12739).
+         */
+        GoalTreeNode: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Company Id */
+            company_id: string;
+            /** Parent Goal Id */
+            parent_goal_id: string | null;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Level */
+            level: string;
+            /** Status */
+            status: string;
+            /** Owner Agent Id */
+            owner_agent_id: string | null;
+            /** Due Date */
+            due_date: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["GoalTreeNode"][];
+        } & {
+            [key: string]: unknown;
+        };
         /** GoalUpdate */
         GoalUpdate: {
             /** Title */
@@ -167395,6 +167484,38 @@ export interface operations {
             };
         };
     };
+    get_goal_tree_api_llc_goals_tree_get: {
+        parameters: {
+            query: {
+                /** @description Company ID to build the goal tree for */
+                company_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoalTreeNode"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_goal_api_llc_goals__goal_id__get: {
         parameters: {
             query?: never;
@@ -167477,6 +167598,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["llc__api__goals__GoalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_goal_children_api_llc_goals__goal_id__children_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["llc__api__goals__GoalResponse"][];
                 };
             };
             /** @description Validation Error */
