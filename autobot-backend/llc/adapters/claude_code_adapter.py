@@ -157,7 +157,14 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         return args
 
     @staticmethod
-    def _build_command(cli: str, resume_session_id: Optional[str], cfg: dict, prompt: str) -> list[str]:
+    def _build_command(
+        cli: str,
+        resume_session_id: Optional[str],
+        cfg: dict,
+        prompt: str,
+        *,
+        session_id: str,
+    ) -> list[str]:
         """Build the claude CLI argv (GH#11186). Pure and unit-testable.
 
         Tool-permission flags (``--allowedTools``/``--disallowedTools``) apply on
@@ -166,6 +173,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         ``--model``/``--max-turns`` are session-establishment options (fresh only).
         The prompt is passed positionally after ``--`` so a prompt starting with
         ``-`` can never be parsed as an option (matches the execution backend).
+
+        ``session_id`` is keyword-only and required so a caller cannot silently
+        omit it and reintroduce #12848 — a fresh run that does not claim an id
+        stores one the CLI never saw, and every later resume fails.
         """
         # #12683: Claude Code rejects `--print --output-format stream-json`
         # unless --verbose is also present ("Error: When using --print,
@@ -176,6 +187,13 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         if resume_session_id:
             cmd += ["--resume", resume_session_id]
         else:
+            # #12848: claim the id we generated instead of letting the CLI mint
+            # its own. Without this the id stored for a later --resume is one the
+            # CLI has never heard of, so EVERY resume fails with "No conversation
+            # found with session ID" and agents never carry context between runs.
+            # Verified against Claude Code 2.1.220: --session-id is adopted
+            # verbatim and --resume with that id replays the conversation.
+            cmd += ["--session-id", session_id]
             model = cfg.get("model")
             if model:
                 cmd += ["--model", str(model)]
@@ -210,7 +228,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             session_id = resume_session_id
             logger.info("ClaudeCodeAdapter: resuming session %s for agent %s", session_id, agent_id)
 
-        cmd = self._build_command(cli, resume_session_id, cfg, prompt)
+        cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
 
         workspace_dir: str | None = context.get("workspace_dir")
         env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
