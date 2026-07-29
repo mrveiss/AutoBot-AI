@@ -97,7 +97,6 @@ def parse_non_hex_tokens(css: str) -> Dict[str, str]:
     return skipped
 
 
-
 _OKLCH_DECL = re.compile(r"oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)\s*\)", re.IGNORECASE)
 
 
@@ -141,6 +140,7 @@ def oklch_to_hex(value: str) -> str | None:
         c = 1.055 * (c ** (1 / 2.4)) - 0.055 if c > 0.0031308 else 12.92 * c
         channels.append(round(max(0.0, min(1.0, c)) * 255))
     return "#%02x%02x%02x" % tuple(channels)
+
 
 def _to_rgb(hex_value: str) -> Tuple[int, int, int]:
     """Parse #rgb / #rrggbb / #rrggbbaa into an (r, g, b) triple."""
