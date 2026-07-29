@@ -65,7 +65,7 @@ from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
 from user_management.services import TenantContext
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 

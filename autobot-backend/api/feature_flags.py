@@ -42,7 +42,7 @@ from .schemas_system import (
     FeatureFlagEnforcementModeResponse,
     FeatureFlagStatusResponse,
 )
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 

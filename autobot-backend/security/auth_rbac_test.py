@@ -282,19 +282,19 @@ class TestIsAdminRole:
     """
 
     def test_accepts_both_administrative_roles(self):
-        from auth_rbac import is_admin_role
+        from autobot_shared.auth.permissions import is_admin_role
 
         assert is_admin_role("admin") is True
         assert is_admin_role("superadmin") is True
 
     def test_rejects_every_non_administrative_role(self):
-        from auth_rbac import is_admin_role
+        from autobot_shared.auth.permissions import is_admin_role
 
         for role in ("user", "readonly", "operator", "analyst", "editor"):
             assert is_admin_role(role) is False, role
 
     def test_handles_missing_role_without_raising(self):
-        from auth_rbac import is_admin_role
+        from autobot_shared.auth.permissions import is_admin_role
 
         assert is_admin_role(None) is False
         assert is_admin_role("") is False
@@ -302,7 +302,7 @@ class TestIsAdminRole:
     def test_is_case_insensitive_to_match_require_role(self):
         """require_role lowercases both the user role and the allowed set, so a
         mixed-case token must not pass one gate and fail the other."""
-        from auth_rbac import is_admin_role
+        from autobot_shared.auth.permissions import is_admin_role
 
         assert is_admin_role("SuperAdmin") is True
         assert is_admin_role("ADMIN") is True

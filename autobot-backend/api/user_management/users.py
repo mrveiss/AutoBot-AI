@@ -47,7 +47,7 @@ from user_management.services.user_service import (
     InvalidCredentialsError,
     UserNotFoundError,
 )
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 router = APIRouter(prefix="/users", tags=["Users"])
 logger = get_logger(__name__)

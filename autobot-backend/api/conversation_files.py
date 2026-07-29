@@ -46,7 +46,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 
 from autobot_shared.redis_client import redis_delete, redis_get, redis_set
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 logger = logging.getLogger(__name__)
 

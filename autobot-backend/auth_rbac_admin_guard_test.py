@@ -109,7 +109,7 @@ def test_no_hand_rolled_admin_role_comparisons():
     assert not offenders, (
         "Hand-rolled admin-role comparison(s) found — a superadmin is admitted by "
         "require_role() but would be rejected here (#12704, #12717, #12786).\n"
-        "Use `from auth_rbac import is_admin_role` and `is_admin_role(role)`:\n  "
+        "Use `from autobot_shared.auth.permissions import is_admin_role` and `is_admin_role(role)`:\n  "
         + "\n  ".join(sorted(offenders))
     )
 

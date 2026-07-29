@@ -30,7 +30,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 

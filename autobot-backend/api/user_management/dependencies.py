@@ -23,7 +23,7 @@ from user_management.services import (
     TenantContext,
     UserService,
 )
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 logger = logging.getLogger(__name__)
 

@@ -22,7 +22,8 @@ from api.voice_bundle_constants import (
 )
 from api.voice_bundle_helpers import _count_tools_for_bundle
 from auth_middleware import get_current_user
-from auth_rbac import is_admin_role, require_role
+from auth_rbac import require_role
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.audit import AuditCategory, AuditEvent, emit

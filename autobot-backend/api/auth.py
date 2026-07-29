@@ -45,7 +45,7 @@ from services.audit.audit import EventType  # GH#8290 Phase 2
 from services.audit.audit import emit as _emit_event  # GH#8290 Phase 2
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 router = APIRouter()
 logger = get_logger(__name__)

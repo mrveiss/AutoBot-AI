@@ -39,9 +39,11 @@ from fastapi import Request
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
+    ADMIN_ROLES,
     ROLE_PERMISSIONS,
     Permission,
     Role,
+    is_admin_role,
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -52,32 +54,12 @@ logger = get_logger(__name__)
 
 _get_security_layer = lazy_singleton(SecurityLayer)
 
-# #12717: the roles that count as administrative.
-#
-# "superadmin" is passed as a raw string to require_role() at 17 call sites but
-# is NOT a member of the canonical Role enum (autobot_shared.auth.permissions),
-# which only defines admin/operator/analyst/editor/user/readonly. require_role
-# tolerates that because it accepts ``Role | str``. The consequence is that any
-# hand-rolled ``role == "admin"`` check silently locks superadmins out of read
-# paths whose write paths already allow them (#12704, #12717).
-#
-# This set is the single place that answers "is this role administrative?" for
-# such checks. Adding superadmin to the shared Role enum would be the deeper
-# fix, but that enum drives ROLE_PERMISSIONS for BOTH backends — tracked
-# separately rather than changed as a drive-by.
-ADMIN_ROLES: frozenset[str] = frozenset({"admin", "superadmin"})
-
-
-def is_admin_role(role: str | None) -> bool:
-    """Return True when *role* is administrative (admin or superadmin).
-
-    Use this instead of ``role == "admin"`` for imperative checks that cannot
-    use the require_role() dependency — e.g. helpers that must also permit
-    self-access, or that pass an ``is_admin`` flag further down.
-
-    Case-insensitive, matching require_role(), which lowercases both sides.
-    """
-    return str(role or "").lower() in ADMIN_ROLES
+# #12717/#12786: ADMIN_ROLES and is_admin_role() now live in
+# autobot_shared.auth.permissions, beside the Role enum whose gap they cover.
+# They moved because auth_middleware needs the same answer, and importing them
+# from here would close a cycle -- this module already imports auth_middleware.
+# Both are re-exported above so existing ``from auth_rbac import is_admin_role``
+# callers keep working.
 
 
 def _get_user_permissions(user_role: str) -> List[str]:

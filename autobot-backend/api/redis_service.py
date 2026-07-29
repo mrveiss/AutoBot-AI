@@ -38,7 +38,7 @@ _service_manager_started: bool = False
 
 # Thread-safe lock for singleton
 import asyncio as _asyncio_lock
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 _service_manager_lock = _asyncio_lock.Lock()
 

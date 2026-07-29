@@ -40,7 +40,7 @@ from utils.catalog_http_exceptions import (
     raise_server_error,
     raise_validation_error,
 )
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = get_logger(__name__)

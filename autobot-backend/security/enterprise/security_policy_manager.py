@@ -23,7 +23,7 @@ import yaml
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 
