@@ -346,9 +346,7 @@ class ConnectionTester:
                 "current_model": current_model,
                 "model_available": model_available,
                 "provider": provider,
-                "message": (
-                    f"Embedding model '{current_model}' " f"{'available' if model_available else 'not found'}"
-                ),
+                "message": (f"Embedding model '{current_model}' " f"{'available' if model_available else 'not found'}"),
             }
 
     @staticmethod
