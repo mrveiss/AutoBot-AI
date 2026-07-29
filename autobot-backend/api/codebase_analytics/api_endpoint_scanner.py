@@ -120,6 +120,44 @@ _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
 # =============================================================================
 
 
+#: Directory names that have held the FastAPI backend across layouts. Ordered
+#: most-specific-first so a repo containing both is resolved deterministically.
+_BACKEND_DIR_CANDIDATES = ("autobot-backend", "backend", ".")
+
+#: What makes a directory *the* backend rather than any directory holding an
+#: ``api`` folder — the router registry lives beside the routes it mounts.
+_ROUTER_REGISTRY_RELPATH = Path("initialization") / "router_registry"
+
+
+def find_backend_dir(project_root: Path) -> Path:
+    """Locate the FastAPI backend package inside *project_root* (#12853).
+
+    Callers pass the root of the tree being analysed — a source clone, or
+    AutoBot's own checkout — and the backend sits at different depths in each.
+    Assuming ``project_root / "api"`` silently produced an empty scan for every
+    layout that nests it (this repo's ``autobot-backend/``), which reads as
+    "this backend has no routes" rather than as a failure to look in the right
+    place.
+
+    Prefers a candidate that also carries the router registry, so a directory
+    that merely happens to contain ``api/`` does not win over the real backend.
+    Falls back to *project_root* unchanged when nothing matches, preserving the
+    previous behaviour for callers that already point straight at the backend.
+    """
+    with_registry: Path | None = None
+    with_api: Path | None = None
+
+    for name in _BACKEND_DIR_CANDIDATES:
+        candidate = project_root if name == "." else project_root / name
+        if not (candidate / "api").is_dir():
+            continue
+        if (candidate / _ROUTER_REGISTRY_RELPATH).is_dir():
+            with_registry = with_registry or candidate
+        with_api = with_api or candidate
+
+    return with_registry or with_api or project_root
+
+
 class BackendEndpointScanner:
     """Scans backend Python files for FastAPI route definitions."""
 
@@ -132,7 +170,13 @@ class BackendEndpointScanner:
         # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
         # standalone rsync layout).
         self.project_root = project_root or Path(resolve_project_root())
-        self.backend_path = self.project_root / "api"
+        # Issue #12853: the backend is not always directly under the scan root.
+        # This repo keeps it in autobot-backend/, so `project_root / "api"` found
+        # nothing and the scan reported 0 endpoints against a ~2000-route backend
+        # -- which then made every frontend call look like it targeted a missing
+        # endpoint. Locate the backend package instead of assuming its depth.
+        self.backend_dir = find_backend_dir(self.project_root)
+        self.backend_path = self.backend_dir / "api"
         self._router_prefixes: Dict[str, str] = {}
         # Map module name to router prefix (e.g., "chat" -> "", "system" -> "/system")
         self._module_prefix_map: Dict[str, str] = {}
@@ -181,7 +225,11 @@ class BackendEndpointScanner:
         - backend/initialization/router_registry/terminal_routers.py (config tuples)
         - backend/initialization/router_registry/mcp_routers.py (config tuples)
         """
-        router_registry_path = self.project_root / "backend" / "initialization" / "router_registry"
+        # Issue #12853: this was `project_root / "backend" / ...`, a path that
+        # exists in no current layout -- so no prefix was ever parsed and every
+        # endpoint was recorded without its router prefix. The registry lives
+        # beside the routes, under the resolved backend directory.
+        router_registry_path = self.backend_dir / _ROUTER_REGISTRY_RELPATH
 
         # Parse core_routers.py for module -> prefix mapping (uses tuple format)
         core_routers_file = router_registry_path / "core_routers.py"
@@ -190,13 +238,12 @@ class BackendEndpointScanner:
 
         # Issue #552: Parse all *_routers.py files that use config tuple format
         # These files use ROUTER_CONFIGS pattern: ("module_path", "router", "/prefix", [...], "name")
-        config_tuple_files = [
-            "analytics_routers.py",
-            "monitoring_routers.py",
-            "feature_routers.py",
-            "terminal_routers.py",
-            "mcp_routers.py",
-        ]
+        # Issue #12853: integration_routers.py was missing from this list, so
+        # its routers carried no prefix. Parse every *_routers.py present
+        # instead of a hand-maintained list that drifts as registries are added.
+        config_tuple_files = sorted(
+            p.name for p in router_registry_path.glob("*_routers.py") if p.name != "core_routers.py"
+        )
 
         for config_file in config_tuple_files:
             file_path = router_registry_path / config_file
