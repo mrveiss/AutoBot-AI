@@ -1188,6 +1188,7 @@ class EndpointMatcher:
         self,
         used_endpoints: List[EndpointUsageItem],
         missing_endpoints: List[EndpointMismatchItem],
+        low_confidence_endpoints: List[EndpointMismatchItem],
     ) -> Set[int]:
         """
         Match API calls to backend endpoints.
@@ -1229,14 +1230,27 @@ class EndpointMatcher:
                     break
 
             if not matched and not call.is_dynamic and self._is_reportable_call(call.path):
-                missing_endpoints.append(
+                # #12745: method=="UNKNOWN" marks a finding from the standalone-
+                # path fallback -- the line held an "/api/..." string but matched
+                # no structured call pattern, so this may be a comment, constant
+                # or cache-key map rather than a call. Measured 89% false against
+                # app.openapi() versus 25% for pattern-matched calls, so these are
+                # reported separately instead of drowning the actionable ones.
+                # Separated, never dropped: suppression is how #12894 hid 29 real
+                # findings behind a label.
+                low_confidence = call.method == "UNKNOWN"
+                (low_confidence_endpoints if low_confidence else missing_endpoints).append(
                     EndpointMismatchItem(
-                        type="missing",
+                        type="low_confidence" if low_confidence else "missing",
                         method=call.method,
                         path=call.path,
                         file_path=call.file_path,
                         line_number=call.line_number,
-                        details="Called but no backend endpoint found",
+                        details=(
+                            "Path literal with no recognised call pattern — verify before acting"
+                            if low_confidence
+                            else "Called but no backend endpoint found"
+                        ),
                     )
                 )
 
@@ -1316,6 +1330,7 @@ class EndpointMatcher:
         """
         used_endpoints: List[EndpointUsageItem] = []
         missing_endpoints: List[EndpointMismatchItem] = []
+        low_confidence_endpoints: List[EndpointMismatchItem] = []
 
         # #12745: with an empty endpoint map every call matches nothing, so the
         # report claimed 2400 missing endpoints of which 97.4% actually existed.
@@ -1325,7 +1340,9 @@ class EndpointMatcher:
             return self._empty_scan_analysis()
 
         # Match calls to endpoints (Issue #665: uses helper)
-        used_endpoint_ids = self._match_calls_to_endpoints(used_endpoints, missing_endpoints)
+        used_endpoint_ids = self._match_calls_to_endpoints(
+            used_endpoints, missing_endpoints, low_confidence_endpoints
+        )
 
         # Find orphaned endpoints (Issue #665: uses helper)
         orphaned_endpoints = self._find_orphaned_endpoints(used_endpoint_ids)
@@ -1346,6 +1363,8 @@ class EndpointMatcher:
             api_calls=self.calls,
             orphaned=orphaned_endpoints,
             missing=missing_endpoints,
+            low_confidence=low_confidence_endpoints,
+            low_confidence_endpoints=len(low_confidence_endpoints),
             used=used_endpoints,
             scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
         )
