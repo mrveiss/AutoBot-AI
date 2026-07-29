@@ -219,7 +219,9 @@ class TestRegistryRoutersOutsideApi:
         backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
         pkg = self._make_package(
             backend,
-            'router = APIRouter(prefix="/llc")\nrouter.include_router(costs_router)\n',
+            'router = APIRouter(prefix="/llc")\n'
+            'from .costs import router as costs_router\n'
+            'router.include_router(costs_router)\n',
             {"costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/by-agent")\ndef c(): ...\n'},
         )
 
@@ -232,7 +234,9 @@ class TestRegistryRoutersOutsideApi:
         backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
         self._make_package(
             backend,
-            'router = APIRouter(prefix="/llc")\nrouter.include_router(costs_router)\n',
+            'router = APIRouter(prefix="/llc")\n'
+            'from .costs import router as costs_router\n'
+            'router.include_router(costs_router)\n',
             {"costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/by-agent")\ndef c(): ...\n'},
         )
 
@@ -245,7 +249,9 @@ class TestRegistryRoutersOutsideApi:
         backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
         pkg = self._make_package(
             backend,
-            'router = APIRouter(prefix="/llc")\nrouter.include_router(costs_router)\n',
+            'router = APIRouter(prefix="/llc")\n'
+            'from .costs import router as costs_router\n'
+            'router.include_router(costs_router)\n',
             {
                 "costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/x")\ndef c(): ...\n',
                 "helpers.py": "def compute(): return 1\n",
@@ -378,3 +384,85 @@ class TestRouterAliasResolvesToItsModule:
         scanner._collect_router_prefixes()
 
         assert scanner._module_prefix_map.get("terminal") == "/api/terminal"
+
+
+class TestNestedRouterSubpackages:
+    """#12956: nested subpackages must resolve under their OWN prefix.
+
+    `rglob` walked the whole tree while the ``__``-prefix filter removed the
+    nested ``__init__.py`` carrying that subpackage's prefix, so its modules
+    were emitted under the PARENT's prefix — inventing endpoints, the exact
+    failure #12945 set out to prevent.
+    """
+
+    @staticmethod
+    def _pkg(root, rel, prefix, mounts, modules):
+        """Create a router package: its own prefix, what it mounts, its modules."""
+        pkg = root / rel
+        pkg.mkdir(parents=True, exist_ok=True)
+        imports = "".join(f"from .{m} import router as {m}_router\n" for m in mounts)
+        includes = "".join(f"router.include_router({m}_router)\n" for m in mounts)
+        (pkg / "__init__.py").write_text(
+            f'router = APIRouter(prefix="{prefix}")\n{imports}{includes}', encoding="utf-8"
+        )
+        for name, body in modules.items():
+            (pkg / f"{name}.py").write_text(body, encoding="utf-8")
+        return pkg
+
+    def _scanner(self, tmp_path, entries):
+        backend = tmp_path / "autobot-backend"
+        (backend / "api").mkdir(parents=True, exist_ok=True)
+        registry = backend / "initialization" / "router_registry"
+        registry.mkdir(parents=True, exist_ok=True)
+        lines = [f'    ("{m}", "{p}", ["t"], "x"),' for m, p in entries]
+        (registry / "feature_routers.py").write_text(
+            "ROUTER_CONFIGS = [\n" + "\n".join(lines) + "\n]\n", encoding="utf-8"
+        )
+        scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
+        scanner._collect_router_prefixes()
+        return scanner, backend
+
+    def test_nested_subpackage_uses_its_own_prefix(self, tmp_path):
+        scanner, backend = self._scanner(tmp_path, [("llc.api", "")])
+        pkg = self._pkg(
+            backend, "llc/api", "/llc", ["sub"],
+            {"sub": ""},  # placeholder, replaced by the subpackage below
+        )
+        (pkg / "sub.py").unlink()
+        self._pkg(
+            backend, "llc/api/sub", "/sub", ["b"],
+            {"b": 'router = APIRouter(prefix="/b")\n@router.get("/x")\ndef f(): ...\n'},
+        )
+
+        found = scanner._registry_router_files()
+
+        assert found == {pkg / "sub" / "b.py": "/api/llc/sub"}, found
+
+    def test_nested_module_route_gets_the_full_path(self, tmp_path):
+        _, backend = self._scanner(tmp_path, [("llc.api", "")])
+        pkg = self._pkg(backend, "llc/api", "/llc", ["sub"], {"sub": ""})
+        (pkg / "sub.py").unlink()
+        self._pkg(
+            backend, "llc/api/sub", "/sub", ["b"],
+            {"b": 'router = APIRouter(prefix="/b")\n@router.get("/x")\ndef f(): ...\n'},
+        )
+
+        paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
+
+        assert "/api/llc/sub/b/x" in paths, paths
+
+    def test_declared_but_unmounted_router_is_excluded(self, tmp_path):
+        """#12956: the docstring claimed this; the code did not enforce it."""
+        scanner, backend = self._scanner(tmp_path, [("llc.api", "")])
+        pkg = self._pkg(
+            backend, "llc/api", "/llc", ["mounted"],
+            {
+                "mounted": 'router = APIRouter(prefix="/m")\n@router.get("/x")\ndef f(): ...\n',
+                "orphan": 'router = APIRouter(prefix="/o")\n@router.get("/y")\ndef g(): ...\n',
+            },
+        )
+
+        found = scanner._registry_router_files()
+
+        assert pkg / "orphan.py" not in found
+        assert pkg / "mounted.py" in found
