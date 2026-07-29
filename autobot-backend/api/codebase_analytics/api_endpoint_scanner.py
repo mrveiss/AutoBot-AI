@@ -560,9 +560,7 @@ class BackendEndpointScanner:
         """
         try:
             content = file_path.read_text(encoding="utf-8")
-            alias_modules = dict(
-                (alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content)
-            )
+            alias_modules = dict((alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content))
 
             # Pattern to match: (router_name, "/prefix", [...], "name")
             # Matches tuples like: (chat_router, "", ["chat"], "chat")
@@ -631,9 +629,7 @@ class BackendEndpointScanner:
         import when it is present; fall back to the guess when it is not, since
         some registries build routers without importing them by alias.
         """
-        alias_modules = dict(
-            (alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content)
-        )
+        alias_modules = dict((alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content))
 
         for match in dynamic_router_pattern.finditer(content):
             router_var = match.group(1)  # e.g., "terminal_router"

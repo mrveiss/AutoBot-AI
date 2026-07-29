@@ -342,8 +342,7 @@ class TestRouterAliasResolvesToItsModule:
     def test_alias_not_mirroring_its_module_resolves_via_the_import(self, tmp_path):
         self._registry(
             tmp_path,
-            'from api.vnc_manager import router as vnc_router\n'
-            '(vnc_router, "/vnc", ["vnc"], "vnc"),\n',
+            "from api.vnc_manager import router as vnc_router\n" '(vnc_router, "/vnc", ["vnc"], "vnc"),\n',
         )
         scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
         scanner._collect_router_prefixes()
@@ -354,8 +353,7 @@ class TestRouterAliasResolvesToItsModule:
         """``api.vnc`` exists separately -- it must not inherit vnc_manager's prefix."""
         self._registry(
             tmp_path,
-            'from api.vnc_manager import router as vnc_router\n'
-            '(vnc_router, "/vnc", ["vnc"], "vnc"),\n',
+            "from api.vnc_manager import router as vnc_router\n" '(vnc_router, "/vnc", ["vnc"], "vnc"),\n',
         )
         scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
         scanner._collect_router_prefixes()
@@ -366,8 +364,7 @@ class TestRouterAliasResolvesToItsModule:
         """The common case must be unaffected."""
         self._registry(
             tmp_path,
-            'from api.chat import router as chat_router\n'
-            '(chat_router, "/chat", ["chat"], "chat"),\n',
+            "from api.chat import router as chat_router\n" '(chat_router, "/chat", ["chat"], "chat"),\n',
         )
         scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
         scanner._collect_router_prefixes()
