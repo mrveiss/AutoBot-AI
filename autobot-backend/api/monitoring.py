@@ -15,8 +15,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import aiohttp
-
-from autobot_shared.time_utils import to_rfc3339
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -64,6 +62,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
+from autobot_shared.time_utils import to_rfc3339
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration

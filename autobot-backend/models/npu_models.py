@@ -9,15 +9,13 @@ Data validation models for NPU worker management and load balancing.
 """
 
 from datetime import datetime
-
-from autobot_shared.time_utils import to_rfc3339
 from enum import Enum
 from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from autobot_shared.ssot_config import config as _ssot_config
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import now_utc, to_rfc3339
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import CategoryDefaults
 
