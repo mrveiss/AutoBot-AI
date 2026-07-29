@@ -20,7 +20,10 @@ name: API Wiring Audit
 on:
   push:
     branches: [ main, Dev_new_gui ]
-    paths: &paths
+    # No YAML anchor here: #12934 removed the pull_request.paths filter that
+    # used to alias it, so naming the anchor now fails actionlint's
+    # syntax-check as "defined but not used".
+    paths:
       - 'autobot-backend/**/*.py'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot-frontend/src/**'
