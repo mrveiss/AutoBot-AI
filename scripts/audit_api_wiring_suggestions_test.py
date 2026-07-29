@@ -68,17 +68,21 @@ class TestSuggestRoutes:
 class TestAuditBaseline:
     """`audit_baseline` — stop the baseline from absorbing removals."""
 
-    BACKEND = {"/api/devices/paired", "/api/chat/sessions"}
+    BACKEND = {"/api/devices/paired", "/api/devices/v2/pairing", "/api/chat/sessions"}
 
     def test_removed_endpoint_in_baseline_is_surfaced_for_rematch(self):
-        """Gap 2: a baselined call whose endpoint was renamed must not stay hidden."""
+        """Gap 2: a baselined call whose endpoint was renamed must not stay hidden.
+
+        Only the route that still serves the ``pairing`` resource counts as the
+        rename; the similarly-named ``/api/devices/paired`` neighbour is not it.
+        """
         baseline = {"/api/devices/pairing"}
         unwired_all = {"/api/devices/pairing": {"src/x.ts"}}
         frontend = {"/api/devices/pairing": {"src/x.ts"}}
 
         health = audit.audit_baseline(baseline, unwired_all, frontend, self.BACKEND)
 
-        assert health["rematch"] == [("/api/devices/pairing", ["/api/devices/paired"])]
+        assert health["rematch"] == [("/api/devices/pairing", ["/api/devices/v2/pairing"])]
         assert health["resolved"] == []
 
     def test_baselined_call_that_now_has_a_route_is_prunable(self):
@@ -104,7 +108,64 @@ class TestAuditBaseline:
 
         health = audit.audit_baseline(baseline, unwired_all, frontend, self.BACKEND)
 
-        assert health == {"rematch": [], "resolved": [], "absent": []}
+        assert health == {
+            "rematch": [],
+            "namespace_only": [],
+            "resolved": [],
+            "absent": [],
+        }
+
+    def _health_for(self, path, backend):
+        """Classify a single still-unwired baselined *path* against *backend*."""
+        return audit.audit_baseline({path}, {path: {"src/x.ts"}}, {path: {"src/x.ts"}}, backend)
+
+    def test_surviving_sibling_is_not_reported_as_a_rename(self):
+        """#12894: an unimplemented endpoint beside implemented siblings is not drift.
+
+        ``_similarity`` weights leading-segment agreement, so every sibling in a
+        live namespace clears the suggestion floor. Treating that as a rename
+        turned a baseline of never-built endpoints into "29 renamed endpoints".
+        """
+        health = self._health_for("/api/system/restart", {"/api/system/health"})
+
+        assert health["rematch"] == []
+        assert health["namespace_only"] == [("/api/system/restart", ["/api/system/health"])]
+
+    def test_same_resource_in_another_namespace_is_not_a_rename(self):
+        """``/api/browser/execute`` is not served by ``/api/workflow/execute``."""
+        health = self._health_for("/api/browser/execute", {"/api/workflow/execute"})
+
+        assert health["rematch"] == []
+        assert [p for p, _ in health["namespace_only"]] == ["/api/browser/execute"]
+
+    def test_pluralised_resource_is_a_rename(self):
+        """``category`` -> ``categories`` is the real drift #12894 found."""
+        health = self._health_for(
+            "/api/knowledge_base/category/{p}", {"/api/knowledge_base/categories/{p}"}
+        )
+
+        assert health["rematch"] == [
+            ("/api/knowledge_base/category/{p}", ["/api/knowledge_base/categories/{p}"])
+        ]
+
+    @pytest.mark.parametrize(
+        "call,route",
+        [
+            ("/api/monitor/services", "/api/monitor/v2/service"),
+            ("/api/monitor/service", "/api/monitor/v2/services"),
+        ],
+    )
+    def test_plurality_matches_in_both_directions(self, call, route):
+        """``services``/``service`` must match however the pair is ordered."""
+        health = self._health_for(call, {route})
+
+        assert health["rematch"] == [(call, [route])]
+
+    def test_relocated_resource_is_a_rename(self):
+        """Same namespace, same resource, deeper path — the classic rename."""
+        health = self._health_for("/api/browser/click", {"/api/browser/mcp/click"})
+
+        assert health["rematch"] == [("/api/browser/click", ["/api/browser/mcp/click"])]
 
 
 @pytest.mark.parametrize("path", ["/api/devices/pairing", "/api/knowledge/searches"])
