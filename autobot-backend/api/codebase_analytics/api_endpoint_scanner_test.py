@@ -138,3 +138,85 @@ class TestBackendDirResolution:
             "integration_routers.py",
             "brand_new_routers.py",
         }
+
+
+class TestRegistryRoutersOutsideApi:
+    """Issue #12945: registries mount routers from packages other than api/.
+
+    Those routes were never scanned, so every frontend call to one was reported
+    as targeting a missing endpoint.
+    """
+
+    @staticmethod
+    def _backend_with_registry(root, entries):
+        """Build a backend whose registry mounts *entries* (module -> prefix)."""
+        backend = root / "autobot-backend"
+        (backend / "api").mkdir(parents=True)
+        registry = backend / "initialization" / "router_registry"
+        registry.mkdir(parents=True)
+        lines = [f'    ("{mod}", "{prefix}", ["t"], "{mod.split(".")[-1]}"),' for mod, prefix in entries]
+        (registry / "feature_routers.py").write_text(
+            "ROUTER_CONFIGS = [\n" + "\n".join(lines) + "\n]\n", encoding="utf-8"
+        )
+        return backend
+
+    def _scanner_for(self, root, entries):
+        scanner = scanner_mod.BackendEndpointScanner(project_root=root)
+        scanner._collect_router_prefixes()
+        return scanner
+
+    def test_module_outside_api_is_scanned_with_its_registered_prefix(self, tmp_path):
+        backend = self._backend_with_registry(tmp_path, [("services.advanced_workflow.routes", "/advanced-workflow")])
+        target = backend / "services" / "advanced_workflow"
+        target.mkdir(parents=True)
+        (target / "routes.py").write_text('@router.get("/templates")\nasync def templates(): ...\n', encoding="utf-8")
+
+        scanner = self._scanner_for(tmp_path, None)
+        found = scanner._registry_router_files()
+
+        assert found == {target / "routes.py": "/api/advanced-workflow"}
+
+    def test_registered_prefix_reaches_the_scanned_endpoint_path(self, tmp_path):
+        """The stem of routes.py matches nothing, so the prefix must be carried."""
+        backend = self._backend_with_registry(tmp_path, [("services.advanced_workflow.routes", "/advanced-workflow")])
+        target = backend / "services" / "advanced_workflow"
+        target.mkdir(parents=True)
+        (target / "routes.py").write_text('@router.get("/templates")\nasync def templates(): ...\n', encoding="utf-8")
+
+        scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
+        paths = [e.path for e in scanner.scan_all_endpoints()]
+
+        assert "/api/advanced-workflow/templates" in paths
+
+    def test_api_modules_are_not_duplicated_by_the_external_walk(self, tmp_path):
+        """api.* entries are already covered by the api/ walk."""
+        self._backend_with_registry(tmp_path, [("api.chat", "/chat")])
+
+        scanner = self._scanner_for(tmp_path, None)
+
+        assert scanner._registry_router_files() == {}
+
+    def test_package_entries_are_skipped(self, tmp_path):
+        """#12945: a package's prefix does not apply to the modules inside it.
+
+        LLC registers as ``("llc.api", "", …)`` and its real ``/api/llc/*``
+        paths come from include_router calls in the package's own __init__.py.
+        Applying the empty package prefix per-submodule invented 182 endpoints
+        of which 4 were real -- worse than missing them.
+        """
+        backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
+        pkg = backend / "llc" / "api"
+        pkg.mkdir(parents=True)
+        (pkg / "costs.py").write_text('@router.get("/by-agent")\ndef c(): ...\n', encoding="utf-8")
+
+        scanner = self._scanner_for(tmp_path, None)
+
+        assert scanner._registry_router_files() == {}
+
+    def test_missing_module_file_is_ignored(self, tmp_path):
+        """A registry entry whose module is absent must not break the scan."""
+        self._backend_with_registry(tmp_path, [("services.gone.routes", "/gone")])
+
+        scanner = self._scanner_for(tmp_path, None)
+
+        assert scanner._registry_router_files() == {}
