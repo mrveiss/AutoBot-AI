@@ -628,6 +628,71 @@ def partition_baseline(
     return tracked, new
 
 
+def _resource(path: str) -> str:
+    """The last concrete (non-parameter) segment — what the route acts on.
+
+    ``/api/kb/documents/{id}/similar`` -> ``similar``; ``/api/kb/fact/{id}`` -> ``fact``.
+    """
+    concrete = [s for s in path.strip("/").split("/") if s and not s.startswith("{")]
+    return concrete[-1].lower() if concrete else ""
+
+
+def _namespace(path: str) -> str:
+    """The top-level namespace segment, ignoring a leading ``/api``.
+
+    Static and authoritative mode disagree about the ``/api`` prefix, so it is
+    stripped before comparing — the same reason ``matches()`` tries both forms.
+    """
+    segs = [s for s in path.strip("/").split("/") if s]
+    if segs and segs[0] == "api":
+        segs = segs[1:]
+    return segs[0].lower() if segs else ""
+
+
+def _same_resource(a: str, b: str) -> bool:
+    """Whether two resource segments name the same thing, modulo plurality.
+
+    ``category``/``categories`` is a rename; ``restart``/``health`` is not.
+
+    Each word expands to every singular form it could reduce to, and a shared
+    form means a match. Reducing each word to one canonical form is not enough:
+    ``services`` reduces to ``servic`` via ``-es`` while ``service`` is already
+    singular, so the pair would miss.
+    """
+
+    def forms(word: str) -> set[str]:
+        out = {word}
+        for suffix, base in (("ies", "y"), ("es", ""), ("s", "")):
+            if word.endswith(suffix) and len(word) > len(suffix):
+                out.add(word[: -len(suffix)] + base)
+        return out
+
+    return bool(forms(a) & forms(b))
+
+
+def rename_candidates(path: str, suggestions: list[str]) -> list[str]:
+    """Suggestions that actually look like *path* renamed, not merely nearby.
+
+    ``suggest_routes`` ranks by similarity, which is the right tool for "here
+    are the closest surviving routes" but a poor test for "this endpoint was
+    renamed": every sibling in a surviving namespace clears the floor, because
+    ``_similarity`` weights leading-segment agreement heavily. That made
+    ``/api/system/restart -> /api/system/health`` indistinguishable from a real
+    rename, and a baseline of genuinely-unimplemented endpoints (#12378) read
+    as 29 renamed ones.
+
+    A rename keeps the resource and moves the path around it, so require both:
+    the same top-level namespace (ruling out ``/api/browser/execute`` matching
+    ``/api/workflow/execute``) and the same resource segment (ruling out
+    ``restart`` matching ``health``).
+    """
+    return [
+        s
+        for s in suggestions
+        if _namespace(s) == _namespace(path) and _same_resource(_resource(s), _resource(path))
+    ]
+
+
 def audit_baseline(
     baseline: set[str],
     unwired_all: dict[str, set[str]],
@@ -642,12 +707,17 @@ def audit_baseline(
     was baselined: the gate stays green while the button is dead. Nothing
     distinguished the two cases.
 
-    Returns three buckets:
+    Returns four buckets:
 
     ``rematch``
-        Baselined calls with a close surviving route — almost always a rename.
-        These want rewiring, not suppression, so they are reported with their
-        suggestions instead of being swallowed by the baseline.
+        Baselined calls whose resource survives under a new path in the same
+        namespace — a rename. These want rewiring, not suppression, so they are
+        reported with the matching routes instead of being swallowed.
+    ``namespace_only``
+        The namespace is alive but nothing in it preserves the resource. This
+        is *not* evidence of a rename (#12894): it is the expected shape of an
+        unimplemented endpoint sitting beside implemented siblings, so it stays
+        informational and the nearest routes are shown only as context.
     ``resolved``
         Baselined calls that now match a real route. The entry is stale and
         should be pruned, otherwise the baseline only ever grows.
@@ -658,6 +728,7 @@ def audit_baseline(
     resolved: list[tuple[str, list[str]]] = []
     absent: list[tuple[str, list[str]]] = []
     rematch: list[tuple[str, list[str]]] = []
+    namespace_only: list[tuple[str, list[str]]] = []
 
     for path in sorted(baseline):
         if path not in frontend:
@@ -666,10 +737,20 @@ def audit_baseline(
             resolved.append((path, []))
         else:
             suggestions = suggest_routes(path, backend)
-            if suggestions:
-                rematch.append((path, suggestions))
+            if not suggestions:
+                continue
+            renames = rename_candidates(path, suggestions)
+            if renames:
+                rematch.append((path, renames))
+            else:
+                namespace_only.append((path, suggestions))
 
-    return {"rematch": rematch, "resolved": resolved, "absent": absent}
+    return {
+        "rematch": rematch,
+        "namespace_only": namespace_only,
+        "resolved": resolved,
+        "absent": absent,
+    }
 
 
 def main() -> int:
@@ -748,14 +829,20 @@ def main() -> int:
     if baseline:
         health = audit_baseline(baseline, unwired_all, fe, backend)
         rematch, resolved, absent = health["rematch"], health["resolved"], health["absent"]
+        namespace_only = health["namespace_only"]
         print(
-            f"\n== BASELINE HEALTH: {len(rematch)} rematch, "
+            f"\n== BASELINE HEALTH: {len(rematch)} renamed, "
+            f"{len(namespace_only)} namespace-only, "
             f"{len(resolved)} resolved, {len(absent)} no-longer-called =="
         )
         for path, suggestions in rematch:
-            print(f"  REMOVED-ENDPOINT DRIFT  {path}")
+            print(f"  RENAMED ENDPOINT (rewire the caller)  {path}")
             for suggestion in suggestions:
-                print(f"      ?  did you mean {suggestion}")
+                print(f"      ->  now served by {suggestion}")
+        for path, suggestions in namespace_only:
+            print(f"  NAMESPACE ALIVE, NO MATCHING ROUTE  {path}")
+            for suggestion in suggestions:
+                print(f"      ~  nearest, NOT a rename: {suggestion}")
         for path, _ in resolved:
             print(f"  RESOLVED (prune from baseline)  {path}")
         for path, _ in absent:
