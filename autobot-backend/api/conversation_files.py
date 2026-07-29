@@ -42,11 +42,11 @@ from api.schemas_knowledge import (
     MCPToolCallRequest,
 )
 from auth_middleware import check_admin_permission, get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
-from autobot_shared.auth.permissions import is_admin_role
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],

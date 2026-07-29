@@ -23,6 +23,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
@@ -30,7 +31,6 @@ from autobot_shared.time_utils import parse_utc_iso
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 

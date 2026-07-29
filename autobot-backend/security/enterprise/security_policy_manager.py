@@ -20,10 +20,10 @@ from uuid import uuid4
 
 import yaml
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 
@@ -772,11 +772,7 @@ class SecurityPolicyManager:
 
         for rule in policy.rules:
             if rule["name"] == "admin_access_approval":
-                if (
-                    rule["value"]
-                    and is_admin_role(user_role)
-                    and not context.get("manager_approved", False)
-                ):
+                if rule["value"] and is_admin_role(user_role) and not context.get("manager_approved", False):
                     result["compliant"] = False
                     result["violation_type"] = "admin_access_not_approved"
                     result["severity"] = "high"
