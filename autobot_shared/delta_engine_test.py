@@ -10,8 +10,8 @@ test is imported — the same pattern used by ``alert_cooldown_test.py`` — so 
 live Redis connection is never required.
 """
 
-import json
 import importlib
+import json
 import sys
 import types
 from unittest.mock import MagicMock
