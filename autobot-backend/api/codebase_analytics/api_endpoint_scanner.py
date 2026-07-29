@@ -109,6 +109,12 @@ _FOUR_ELEMENT_TUPLE_RE = re.compile(
     re.MULTILINE,
 )
 # Issue #552: Dynamic router loading pattern
+# #12956: names actually passed to include_router(), and the relative imports
+# that bind them to a submodule -- `from .costs import router as costs_router`.
+_INCLUDE_ROUTER_NAME_RE = re.compile(r"include_router\(\s*(\w+)")
+_RELATIVE_ROUTER_IMPORT_RE = re.compile(r"^from\s+\.(\w+)\s+import\s+router\s+as\s+(\w+)", re.MULTILINE)
+
+
 _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
     r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],' r'\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
     re.MULTILINE,
@@ -741,9 +747,15 @@ class BackendEndpointScanner:
         the submodule's own prefix separately -- so only the package-level part
         belongs here.
 
-        Submodules are included only when the package actually mounts them via
-        ``include_router``: a helper module that defines no router contributes
-        no routes, and guessing otherwise is how phantom endpoints appear.
+        A submodule is included only when the package imports its router under
+        an alias AND mounts that exact alias via ``include_router``. #12956: the
+        previous check only confirmed the package mounted *something*, then
+        included every router-declaring module -- so a declared-but-unmounted
+        router still contributed routes, which the docstring already claimed it
+        would not.
+
+        Nested router subpackages recurse, so their modules resolve under their
+        own prefix rather than the parent's.
         """
         init_file = package / "__init__.py"
         init_content = init_file.read_text(encoding="utf-8", errors="ignore")
@@ -752,12 +764,28 @@ class BackendEndpointScanner:
             return {}
 
         served_prefix = f"{registry_prefix}{package_prefix}"
-        return {
-            py_file: served_prefix
-            for py_file in sorted(package.rglob("*.py"))
-            if not py_file.name.startswith("__")
-            and _APIROUTER_PREFIX_RE.search(py_file.read_text(encoding="utf-8", errors="ignore"))
-        }
+        mounted = set(_INCLUDE_ROUTER_NAME_RE.findall(init_content))
+        if not mounted:
+            return {}
+
+        files: Dict[Path, str] = {}
+        # #12956: walk one level and recurse, rather than rglob'ing the tree.
+        # rglob descended into nested router subpackages while the "__" filter
+        # removed the very __init__.py carrying their own prefix, so their
+        # modules were emitted under the PARENT's prefix -- inventing endpoints,
+        # the failure this whole change set exists to avoid.
+        for module_name, alias in _RELATIVE_ROUTER_IMPORT_RE.findall(init_content):
+            if alias not in mounted:
+                # Declared but never mounted: it serves nothing.
+                continue
+            module_file = (package / module_name).with_suffix(".py")
+            if module_file.is_file():
+                files[module_file] = served_prefix
+                continue
+            subpackage = package / module_name
+            if (subpackage / "__init__.py").is_file():
+                files.update(self._package_router_files(subpackage, served_prefix))
+        return files
 
     def _get_module_prefix(self, file_path: Path) -> str:
         """Get the API prefix for a given file based on router registry."""
