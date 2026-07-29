@@ -32,6 +32,7 @@ import aiohttp
 import defusedxml.ElementTree as ET
 
 from autobot_shared.auth import BasicAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector, RetryableError
@@ -118,15 +119,16 @@ class NextcloudConnector(AbstractConnector):
     async def test_connection(self) -> bool:
         """Test WebDAV connection with OPTIONS request."""
         try:
-            async with aiohttp.ClientSession() as session:
-                auth = aiohttp.BasicAuth(self._username, self._password)
-                timeout = aiohttp.ClientTimeout(total=30.0)
-                async with session.options(self._webdav_base, auth=auth, timeout=timeout) as resp:
-                    if resp.status in (200, 204):
-                        self.logger.info("Nextcloud connection test successful: %s", self._webdav_base)
-                        return True
-                    self.logger.warning("Nextcloud test_connection failed: HTTP %d", resp.status)
-                    return False
+            auth = aiohttp.BasicAuth(self._username, self._password)
+            timeout = aiohttp.ClientTimeout(total=30.0)
+            async with get_http_client().tracked_request(
+                "OPTIONS", self._webdav_base, auth=auth, timeout=timeout, suppress_error_log=True
+            ) as resp:
+                if resp.status in (200, 204):
+                    self.logger.info("Nextcloud connection test successful: %s", self._webdav_base)
+                    return True
+                self.logger.warning("Nextcloud test_connection failed: HTTP %d", resp.status)
+                return False
         except Exception as exc:
             self.logger.error("Nextcloud test_connection error: %s", exc)
             return False
@@ -158,38 +160,37 @@ class NextcloudConnector(AbstractConnector):
         file_url = urljoin(self._webdav_base, encoded_path)
 
         try:
-            async with aiohttp.ClientSession() as session:
-                auth = aiohttp.BasicAuth(self._username, self._password)
-                timeout = aiohttp.ClientTimeout(total=300.0)
-                async with session.get(file_url, auth=auth, timeout=timeout) as resp:
-                    if resp.status == 200:
-                        content_bytes = await resp.read()
-                        content_type = resp.headers.get("Content-Type", "application/octet-stream")
+            auth = aiohttp.BasicAuth(self._username, self._password)
+            timeout = aiohttp.ClientTimeout(total=300.0)
+            async with get_http_client().tracked_request("GET", file_url, auth=auth, timeout=timeout) as resp:
+                if resp.status == 200:
+                    content_bytes = await resp.read()
+                    content_type = resp.headers.get("Content-Type", "application/octet-stream")
 
-                        # Decode text content
-                        try:
-                            content = content_bytes.decode("utf-8")
-                        except UnicodeDecodeError:
-                            # For binary files (PDF, DOCX), return as base64 or skip
-                            self.logger.warning("Binary content for %s - may need extraction", source_id)
-                            content = content_bytes.decode("utf-8", errors="replace")
+                    # Decode text content
+                    try:
+                        content = content_bytes.decode("utf-8")
+                    except UnicodeDecodeError:
+                        # For binary files (PDF, DOCX), return as base64 or skip
+                        self.logger.warning("Binary content for %s - may need extraction", source_id)
+                        content = content_bytes.decode("utf-8", errors="replace")
 
-                        await self._store_ts(
-                            source_id,
-                            resp.headers.get("Last-Modified", ""),
-                        )
+                    await self._store_ts(
+                        source_id,
+                        resp.headers.get("Last-Modified", ""),
+                    )
 
-                        return ContentResult(
-                            source_id=source_id,
-                            content=content,
-                            content_type=content_type,
-                            metadata={"url": file_url},
-                        )
-                    elif resp.status == 404:
-                        self.logger.warning("File not found: %s", file_url)
-                        return None
-                    else:
-                        raise RetryableError(f"WebDAV GET failed: HTTP {resp.status}", resp.status)
+                    return ContentResult(
+                        source_id=source_id,
+                        content=content,
+                        content_type=content_type,
+                        metadata={"url": file_url},
+                    )
+                elif resp.status == 404:
+                    self.logger.warning("File not found: %s", file_url)
+                    return None
+                else:
+                    raise RetryableError(f"WebDAV GET failed: HTTP {resp.status}", resp.status)
         except aiohttp.ClientError as exc:
             self.logger.error("WebDAV GET error for %s: %s", source_id, exc)
             raise RetryableError(str(exc))
@@ -252,32 +253,32 @@ class NextcloudConnector(AbstractConnector):
         sources: List[SourceInfo] = []
 
         try:
-            async with aiohttp.ClientSession() as session:
-                auth = aiohttp.BasicAuth(self._username, self._password)
-                timeout = aiohttp.ClientTimeout(total=60.0)
-                headers = {
-                    "Content-Type": "application/xml",
-                    "Depth": "infinity",  # Recursive listing
-                }
+            auth = aiohttp.BasicAuth(self._username, self._password)
+            timeout = aiohttp.ClientTimeout(total=60.0)
+            headers = {
+                "Content-Type": "application/xml",
+                "Depth": "infinity",  # Recursive listing
+            }
 
-                async with session.request(
-                    "PROPFIND",
-                    folder_url,
-                    auth=auth,
-                    headers=headers,
-                    data=propfind_body,
-                    timeout=timeout,
-                ) as resp:
-                    if resp.status != 207:  # Multi-Status
-                        self.logger.warning(
-                            "WebDAV PROPFIND failed for %s: HTTP %d",
-                            folder_path,
-                            resp.status,
-                        )
-                        return sources
+            async with get_http_client().tracked_request(
+                "PROPFIND",
+                folder_url,
+                auth=auth,
+                headers=headers,
+                data=propfind_body,
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as resp:
+                if resp.status != 207:  # Multi-Status
+                    self.logger.warning(
+                        "WebDAV PROPFIND failed for %s: HTTP %d",
+                        folder_path,
+                        resp.status,
+                    )
+                    return sources
 
-                    xml_data = await resp.text()
-                    sources = self._parse_propfind_response(xml_data)
+                xml_data = await resp.text()
+                sources = self._parse_propfind_response(xml_data)
 
         except Exception as exc:
             self.logger.error("WebDAV PROPFIND error for %s: %s", folder_path, exc)
