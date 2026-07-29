@@ -48,6 +48,4 @@ def test_watched_module_is_importable(module_name):
 @pytest.mark.parametrize("module_name", _watchlist())
 def test_watched_module_has_no_stale_layout_prefix(module_name):
     """The backend root was once `src/`; entries must not carry that prefix."""
-    assert not module_name.startswith("src."), (
-        f"'{module_name}' uses the retired src/ layout prefix"
-    )
+    assert not module_name.startswith("src."), f"'{module_name}' uses the retired src/ layout prefix"
