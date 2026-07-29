@@ -180,6 +180,8 @@ class BackendEndpointScanner:
         self._router_prefixes: Dict[str, str] = {}
         # Map module name to router prefix (e.g., "chat" -> "", "system" -> "/system")
         self._module_prefix_map: Dict[str, str] = {}
+        # #12945: resolved file -> prefix for registry-mounted routers outside api/
+        self._external_router_prefixes: Dict[Path, str] = {}
 
     def scan_all_endpoints(self) -> List[APIEndpointItem]:
         """
@@ -197,8 +199,13 @@ class BackendEndpointScanner:
         # First pass: collect router prefixes from registry files
         self._collect_router_prefixes()
 
+        # #12945: routers the registries mount from outside api/ are scanned too,
+        # otherwise their routes look missing to every frontend call that uses them.
+        self._external_router_prefixes = self._registry_router_files()
+
         # Second pass: scan all Python files
-        for py_file in self.backend_path.rglob("*.py"):
+        scan_targets = list(self.backend_path.rglob("*.py")) + list(self._external_router_prefixes)
+        for py_file in scan_targets:
             if py_file.name.startswith("__"):
                 continue
             if "archive" in str(py_file).lower():
@@ -210,7 +217,11 @@ class BackendEndpointScanner:
             except Exception as e:
                 logger.debug("Error scanning %s: %s", py_file, e)
 
-        logger.info("Found %d backend endpoints", len(endpoints))
+        logger.info(
+            "Found %d backend endpoints (%d files outside api/)",
+            len(endpoints),
+            len(self._external_router_prefixes),
+        )
         return endpoints
 
     def _collect_router_prefixes(self) -> None:
@@ -631,9 +642,57 @@ class BackendEndpointScanner:
 
         logger.debug("Registered prefix: %s -> %s", module_name, full_prefix)
 
+    def _registry_router_files(self) -> Dict[Path, str]:
+        """Map files to prefixes for registry-mounted routers outside ``api/`` (#12945).
+
+        The scan walks ``api/`` only, but the registries also mount routers from
+        sibling packages -- ``services.advanced_workflow.routes``, ``llc.api``,
+        ``routers.*``. Those routes were never discovered, so every frontend call
+        to one was reported as targeting a missing endpoint: 419 real routes,
+        95.4% of all findings.
+
+        Resolves each registry module path against the backend directory and
+        carries the registered prefix, so the routes land under the path they
+        are actually served on.
+
+        Deliberately limited to module *files*. A registry entry naming a
+        package cannot have its prefix applied to the modules inside it: the
+        LLC router registers as ``("llc.api", "", …)`` -- an empty prefix --
+        and its real ``/api/llc/*`` paths come from ``include_router`` calls in
+        the package's own ``__init__.py``. Applying the package's prefix to
+        each submodule produced ``/api/costs/…`` instead of ``/api/llc/costs/…``:
+        182 endpoints of which 4 were real. Inventing endpoints is worse than
+        missing them, since they resurface as phantom "orphaned" findings.
+        Packages need the include_router walk and are left to that follow-up.
+        """
+        files: Dict[Path, str] = {}
+        for module_path, prefix in self._module_prefix_map.items():
+            # Registry entries are dotted module paths; the map also holds bare
+            # module names and "api/x.py"-style keys, which are not those.
+            if "." not in module_path or "/" in module_path or module_path.endswith(".py"):
+                continue
+            if module_path.startswith("api."):
+                continue  # already covered by the api/ walk
+
+            module_file = self.backend_dir.joinpath(*module_path.split(".")).with_suffix(".py")
+            if module_file.is_file():
+                files[module_file] = prefix
+        return files
+
     def _get_module_prefix(self, file_path: Path) -> str:
         """Get the API prefix for a given file based on router registry."""
-        relative_path = str(file_path.relative_to(self.project_root))
+        # #12945: registry-mounted files outside api/ carry their prefix
+        # explicitly -- neither the relative-path nor the stem lookup below can
+        # find them (the stem of services/advanced_workflow/routes.py is
+        # "routes", which matches nothing).
+        override = self._external_router_prefixes.get(file_path)
+        if override is not None:
+            return override
+
+        try:
+            relative_path = str(file_path.relative_to(self.project_root))
+        except ValueError:
+            return self.API_PREFIX
 
         # Try direct file path match
         if relative_path in self._module_prefix_map:
