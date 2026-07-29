@@ -1340,9 +1340,7 @@ class EndpointMatcher:
             return self._empty_scan_analysis()
 
         # Match calls to endpoints (Issue #665: uses helper)
-        used_endpoint_ids = self._match_calls_to_endpoints(
-            used_endpoints, missing_endpoints, low_confidence_endpoints
-        )
+        used_endpoint_ids = self._match_calls_to_endpoints(used_endpoints, missing_endpoints, low_confidence_endpoints)
 
         # Find orphaned endpoints (Issue #665: uses helper)
         orphaned_endpoints = self._find_orphaned_endpoints(used_endpoint_ids)
