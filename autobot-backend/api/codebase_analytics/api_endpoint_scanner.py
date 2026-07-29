@@ -543,9 +543,26 @@ class BackendEndpointScanner:
                 logger.debug("Error scanning include_router in %s: %s", py_file, e)
 
     def _parse_router_registry(self, file_path: Path) -> None:
-        """Parse a router registry file to extract module -> prefix mappings."""
+        """Parse a router registry file to extract module -> prefix mappings.
+
+        #12953: the module was derived by stripping ``_router`` from the router
+        variable. That holds for most entries, but the file states the real
+        mapping in its own imports, and where the two disagree the guess is
+        wrong twice over:
+
+            from api.vnc_manager import router as vnc_router
+            (vnc_router, "/vnc", ["vnc"], "vnc"),
+
+        ``/vnc`` was attributed to ``api.vnc`` -- a different module that also
+        exists -- while ``api.vnc_manager`` got no prefix and emitted its routes
+        unprefixed as ``/api/click``, ``/api/clipboard``. Prefer the import;
+        fall back to the guess when a router is not imported by alias.
+        """
         try:
             content = file_path.read_text(encoding="utf-8")
+            alias_modules = dict(
+                (alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content)
+            )
 
             # Pattern to match: (router_name, "/prefix", [...], "name")
             # Matches tuples like: (chat_router, "", ["chat"], "chat")
@@ -553,8 +570,8 @@ class BackendEndpointScanner:
                 router_var = match.group(1)  # e.g., "chat_router"
                 prefix = match.group(2)  # e.g., "" or "/system"
 
-                # Extract module name from router variable (chat_router -> chat)
-                module_name = router_var.replace("_router", "")
+                # Prefer the imported module; else chat_router -> chat
+                module_name = alias_modules.get(router_var, router_var.replace("_router", ""))
 
                 # Store mapping: module_name -> full API prefix
                 full_prefix = f"{self.API_PREFIX}{prefix}"
@@ -597,16 +614,34 @@ class BackendEndpointScanner:
                 self._register_module_prefix(module_path, prefix)
 
     def _apply_dynamic_router_pattern(self, content: str, dynamic_router_pattern) -> None:
-        """Helper for _parse_config_tuple_registry. Ref: #1088."""
-        # Issue #552: Also check for dynamic router patterns (terminal_routers.py)
-        # These have router variable names instead of module paths
+        """Helper for _parse_config_tuple_registry. Ref: #1088.
+
+        #12953: the module used to be *guessed* by stripping ``_router`` from the
+        variable name. That is right for most entries but wrong whenever the
+        alias does not mirror its module, and the file states the real mapping
+        two lines up:
+
+            from api.vnc_manager import router as vnc_router   # -> api.vnc_manager
+            (vnc_router, "/vnc", ["vnc"], "vnc"),              # guessed api.vnc
+
+        The guess then attributed ``/vnc`` to ``api.vnc`` -- a different module
+        that also exists -- while ``api.vnc_manager`` got no prefix at all and
+        emitted its routes as ``/api/click``, ``/api/clipboard``. So a mismatch
+        costs twice: a wrong attribution and an unprefixed module. Read the
+        import when it is present; fall back to the guess when it is not, since
+        some registries build routers without importing them by alias.
+        """
+        alias_modules = dict(
+            (alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content)
+        )
+
         for match in dynamic_router_pattern.finditer(content):
             router_var = match.group(1)  # e.g., "terminal_router"
             prefix = match.group(2)  # e.g., "/terminal"
-            # group(3) contains name (e.g., "terminal") - unused; module derived from var
+            # group(3) contains name (e.g., "terminal") - unused; module resolved below
 
             # terminal_router -> terminal, agent_terminal_router -> agent_terminal
-            module_name = router_var.replace("_router", "")
+            module_name = alias_modules.get(router_var, router_var.replace("_router", ""))
             module_path = f"api.{module_name}"
             self._register_module_prefix(module_path, prefix)
             logger.debug("Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix)
