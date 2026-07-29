@@ -210,7 +210,8 @@ import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
 import { useLoadingState } from '@/composables/useLoadingState'
-import { useVncControls } from '@/composables/useVncControls'
+import { useVncControls } from '@autobot/vnc'
+import ApiClient from '@/utils/ApiClient'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useDesktopControlLock } from '@/composables/useDesktopControlLock'
 import { createLogger } from '@/utils/debugUtils'
@@ -242,7 +243,15 @@ const errorCheck = ref<Error | null>(null)
 const DESKTOP_CONTROL_SESSION_ID = 'default'
 
 // VNC controls (Issue #74)
-const vncControls = useVncControls(DESKTOP_CONTROL_SESSION_ID)
+// #12931: the shared composable from @autobot/vnc, with this app's ApiClient
+// injected so auth headers, base-URL resolution and error-envelope handling are
+// preserved — the plugin package cannot import ApiClient itself (vue is its only
+// peer dependency), which is why the transport is a parameter.
+const vncControls = useVncControls({
+  sessionId: DESKTOP_CONTROL_SESSION_ID,
+  request: <T,>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> =>
+    method === 'GET' ? ApiClient.get<T>(path) : ApiClient.post<T>(path, body),
+})
 const showContextPanel = ref(false)
 
 // Desktop control-lock (Issue #12002, #11506 T1)
