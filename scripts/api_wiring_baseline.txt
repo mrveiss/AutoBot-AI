@@ -44,10 +44,15 @@
 /api/system/shutdown
 
 # --- #12378: misc aspirational calls, no backend ---
+# Re-verified in #12894 against a route table built from current source: these
+# have no surviving route that serves the same resource, so they remain
+# unimplemented-endpoint entries, NOT renames. `/api/knowledge/verification/
+# approve` in particular is not the same capability as the real
+# `/api/knowledge_base/verification/{fact_id}/approve`: the caller approves a
+# research SOURCE (posts {source_url, title}, no fact_id), not a pending fact.
 /api/multimodal/health
 /api/service-monitor/resources
 /api/knowledge/verification/approve
-/api/knowledge_base/category/{p}
 /api/knowledge_base/documents/{p}
 /api/knowledge_base/documents/{p}/similar
 

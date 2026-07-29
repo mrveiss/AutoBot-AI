@@ -124,10 +124,16 @@ export const fetchCategories = async (): Promise<KnowledgeCategoryItem[]> => {
 }
 
 /**
- * Fetch knowledge by category.
+ * Fetch the facts held in a single category.
+ *
+ * Served by GET /api/knowledge_base/categories/{category_id}/facts (#12894) —
+ * the singular /category/{id} form this used to call no longer exists.
+ * @param categoryId - Category identifier
  */
-export const fetchCategory = (category: string): Promise<CategoryResponse> =>
-  apiClient.get<CategoryResponse>(`${getApiBase()}/knowledge_base/category/${category}`)
+export const fetchCategory = (categoryId: string): Promise<CategoryResponse> =>
+  apiClient.get<CategoryResponse>(
+    `${getApiBase()}/knowledge_base/categories/${encodeURIComponent(categoryId)}/facts`
+  )
 
 /**
  * Fetch facts grouped by category for browsing.
