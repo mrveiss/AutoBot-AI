@@ -196,22 +196,75 @@ class TestRegistryRoutersOutsideApi:
 
         assert scanner._registry_router_files() == {}
 
-    def test_package_entries_are_skipped(self, tmp_path):
-        """#12945: a package's prefix does not apply to the modules inside it.
-
-        LLC registers as ``("llc.api", "", …)`` and its real ``/api/llc/*``
-        paths come from include_router calls in the package's own __init__.py.
-        Applying the empty package prefix per-submodule invented 182 endpoints
-        of which 4 were real -- worse than missing them.
-        """
-        backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
+    @staticmethod
+    def _make_package(backend, init_body, submodules):
+        """Create a registry-mounted package with its own router."""
         pkg = backend / "llc" / "api"
         pkg.mkdir(parents=True)
-        (pkg / "costs.py").write_text('@router.get("/by-agent")\ndef c(): ...\n', encoding="utf-8")
+        (pkg / "__init__.py").write_text(init_body, encoding="utf-8")
+        for name, body in submodules.items():
+            (pkg / name).write_text(body, encoding="utf-8")
+        return pkg
 
-        scanner = self._scanner_for(tmp_path, None)
+    def test_package_prefix_comes_from_its_own_router(self, tmp_path):
+        """#12945: the package router sits between registry and submodule.
 
-        assert scanner._registry_router_files() == {}
+        LLC registers as ``("llc.api", "", …)`` -- an empty prefix -- while its
+        real paths come from ``APIRouter(prefix="/llc")`` in the package's own
+        __init__.py. Using the registry prefix alone yielded ``/api/costs/…``
+        instead of ``/api/llc/costs/…``: 182 endpoints of which 4 were real.
+        """
+        backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
+        pkg = self._make_package(
+            backend,
+            'router = APIRouter(prefix="/llc")\nrouter.include_router(costs_router)\n',
+            {"costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/by-agent")\ndef c(): ...\n'},
+        )
+
+        found = self._scanner_for(tmp_path, None)._registry_router_files()
+
+        assert found == {pkg / "costs.py": "/api/llc"}
+
+    def test_package_submodule_route_gets_the_full_served_path(self, tmp_path):
+        """/api + /llc (package) + /costs (submodule) + route."""
+        backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
+        self._make_package(
+            backend,
+            'router = APIRouter(prefix="/llc")\nrouter.include_router(costs_router)\n',
+            {"costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/by-agent")\ndef c(): ...\n'},
+        )
+
+        paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
+
+        assert "/api/llc/costs/by-agent" in paths
+
+    def test_package_helper_modules_without_a_router_are_skipped(self, tmp_path):
+        """A module that defines no router serves nothing -- guessing invents endpoints."""
+        backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
+        pkg = self._make_package(
+            backend,
+            'router = APIRouter(prefix="/llc")\nrouter.include_router(costs_router)\n',
+            {
+                "costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/x")\ndef c(): ...\n',
+                "helpers.py": 'def compute(): return 1\n',
+            },
+        )
+
+        found = self._scanner_for(tmp_path, None)._registry_router_files()
+
+        assert pkg / "helpers.py" not in found
+        assert pkg / "costs.py" in found
+
+    def test_package_that_mounts_nothing_is_skipped(self, tmp_path):
+        """No include_router means the entry is not a router package."""
+        backend = self._backend_with_registry(tmp_path, [("llc.api", "")])
+        self._make_package(
+            backend,
+            'VERSION = "1"\n',
+            {"costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/x")\ndef c(): ...\n'},
+        )
+
+        assert self._scanner_for(tmp_path, None)._registry_router_files() == {}
 
     def test_missing_module_file_is_ignored(self, tmp_path):
         """A registry entry whose module is absent must not break the scan."""

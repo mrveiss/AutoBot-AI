@@ -655,15 +655,18 @@ class BackendEndpointScanner:
         carries the registered prefix, so the routes land under the path they
         are actually served on.
 
-        Deliberately limited to module *files*. A registry entry naming a
-        package cannot have its prefix applied to the modules inside it: the
-        LLC router registers as ``("llc.api", "", …)`` -- an empty prefix --
-        and its real ``/api/llc/*`` paths come from ``include_router`` calls in
-        the package's own ``__init__.py``. Applying the package's prefix to
-        each submodule produced ``/api/costs/…`` instead of ``/api/llc/costs/…``:
+        A registry entry naming a *package* needs its own ``__init__.py`` read
+        first (#12945). LLC registers as ``("llc.api", "", …)`` -- an empty
+        prefix -- while its real ``/api/llc/*`` paths come from the package
+        router declared there:
+
+            llc/api/__init__.py:  router = APIRouter(prefix="/llc")
+            llc/api/costs.py:     router = APIRouter(prefix="/costs")
+
+        so a submodule serves ``/api`` + ``/llc`` + ``/costs``. Applying the
+        registry prefix alone to each submodule yields ``/api/costs/…`` --
         182 endpoints of which 4 were real. Inventing endpoints is worse than
         missing them, since they resurface as phantom "orphaned" findings.
-        Packages need the include_router walk and are left to that follow-up.
         """
         files: Dict[Path, str] = {}
         for module_path, prefix in self._module_prefix_map.items():
@@ -674,10 +677,39 @@ class BackendEndpointScanner:
             if module_path.startswith("api."):
                 continue  # already covered by the api/ walk
 
-            module_file = self.backend_dir.joinpath(*module_path.split(".")).with_suffix(".py")
+            target = self.backend_dir.joinpath(*module_path.split("."))
+            module_file = target.with_suffix(".py")
             if module_file.is_file():
                 files[module_file] = prefix
+            elif (target / "__init__.py").is_file():
+                files.update(self._package_router_files(target, prefix))
         return files
+
+    def _package_router_files(self, package: Path, registry_prefix: str) -> Dict[Path, str]:
+        """Map a registry-mounted package's submodules to their served prefix.
+
+        The package's own ``APIRouter(prefix=...)`` sits between the registry
+        prefix and each submodule's router prefix, and ``_scan_file`` applies
+        the submodule's own prefix separately -- so only the package-level part
+        belongs here.
+
+        Submodules are included only when the package actually mounts them via
+        ``include_router``: a helper module that defines no router contributes
+        no routes, and guessing otherwise is how phantom endpoints appear.
+        """
+        init_file = package / "__init__.py"
+        init_content = init_file.read_text(encoding="utf-8", errors="ignore")
+        package_prefix = self._get_file_router_prefix(init_content) or ""
+        if not _INCLUDE_ROUTER_RE.search(init_content):
+            return {}
+
+        served_prefix = f"{registry_prefix}{package_prefix}"
+        return {
+            py_file: served_prefix
+            for py_file in sorted(package.rglob("*.py"))
+            if not py_file.name.startswith("__")
+            and _APIROUTER_PREFIX_RE.search(py_file.read_text(encoding="utf-8", errors="ignore"))
+        }
 
     def _get_module_prefix(self, file_path: Path) -> str:
         """Get the API prefix for a given file based on router registry."""
