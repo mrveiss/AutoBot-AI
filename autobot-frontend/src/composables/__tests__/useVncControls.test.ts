@@ -1,57 +1,22 @@
-// Copyright 2025-2026 mrveiss
-// SPDX-License-Identifier: Apache-2.0
-// AutoBot - AI-Powered Automation Platform
-// Author: mrveiss
 /**
- * Unit tests for useVncControls session_id threading (#12002 review fix).
+ * `useVncControls` must exist once (#12653).
  *
- * The backend gates /vnc/click|type|key|scroll|drag on the desktop
- * control-lock by session_id (owner-aware). This composable must actually
- * send session_id in the request body rather than silently relying on the
- * backend schema's own "default" fallback.
+ * It existed three times — here, in autobot-slm-frontend, and in the shared
+ * `@autobot/vnc` plugin. This asserts the local paths now resolve to the SAME
+ * function object as the package, not a same-named twin: two equivalent-but-
+ * distinct implementations is the fork this issue exists to remove.
  */
+import { describe, expect, it } from 'vitest'
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { useVncControls as canonical } from '@autobot/vnc'
+import { useVncControls as local } from '../useVncControls'
 
-const mockPost = vi.fn(async (..._args: unknown[]) => ({ status: 'success', message: 'ok' }))
-
-vi.mock('@/utils/ApiClient', () => ({
-  default: {
-    post: (...args: unknown[]) => mockPost(...args),
-    get: vi.fn(async () => ({ status: 'success', message: 'ok', image_data: '' }))
-  }
-}))
-
-import { useVncControls } from '../useVncControls'
-
-describe('useVncControls session_id threading', () => {
-  beforeEach(() => {
-    mockPost.mockClear()
+describe('useVncControls single implementation', () => {
+  it('re-exports the canonical function, not a copy', () => {
+    expect(local).toBe(canonical)
   })
 
-  it('defaults session_id to "default" when none is provided', async () => {
-    const { mouseClick } = useVncControls()
-    await mouseClick({ x: 1, y: 2 })
-
-    expect(mockPost).toHaveBeenCalledWith('/api/vnc/click', { x: 1, y: 2, session_id: 'default' })
-  })
-
-  it('threads an explicit session_id through mouseClick/keyboardType/specialKey/scroll/drag', async () => {
-    const { mouseClick, keyboardType, specialKey, mouseScroll, mouseDrag } = useVncControls('chat-42')
-
-    await mouseClick({ x: 1, y: 2 })
-    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/click', { x: 1, y: 2, session_id: 'chat-42' })
-
-    await keyboardType('hello')
-    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/type', { text: 'hello', session_id: 'chat-42' })
-
-    await specialKey('Return')
-    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/key', { key: 'Return', session_id: 'chat-42' })
-
-    await mouseScroll({ direction: 'up' })
-    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/scroll', { direction: 'up', session_id: 'chat-42' })
-
-    await mouseDrag({ x1: 0, y1: 0, x2: 5, y2: 5 })
-    expect(mockPost).toHaveBeenLastCalledWith('/api/vnc/drag', { x1: 0, y1: 0, x2: 5, y2: 5, session_id: 'chat-42' })
+  it('exposes a callable composable', () => {
+    expect(typeof local).toBe('function')
   })
 })
