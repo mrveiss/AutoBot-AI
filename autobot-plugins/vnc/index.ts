@@ -9,7 +9,17 @@ import VncToolbar from './src/components/VncToolbar.vue'
 
 export { VncViewer, VncToolbar }
 export { useVncControls } from './src/composables/useVncControls'
-export type { VncActionResponse, MouseClickParams, MouseDragParams, MouseScrollParams } from './src/composables/useVncControls'
+// #12653: VncRequest/UseVncControlsOptions were added by #12931's transport
+// injection but never re-exported here, so consumers could not name the
+// injected transport's type — the package exported the seam without its shape.
+export type {
+  VncActionResponse,
+  MouseClickParams,
+  MouseDragParams,
+  MouseScrollParams,
+  VncRequest,
+  UseVncControlsOptions,
+} from './src/composables/useVncControls'
 export type { VncHost } from './src/types'
 
 export const VncPlugin = {
