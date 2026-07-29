@@ -219,10 +219,18 @@ class HTTPClientManager:
             **kwargs: Additional arguments for aiohttp request
 
         Returns:
-            ClientResponse: The response object
+            ClientResponse: The response object. The active-request slot taken
+                by this call is **caller-owned** on the success path — the
+                caller MUST call ``decrement_active()`` once the response is
+                fully consumed. Failures decrement here, before raising.
 
         Note: For streaming responses, caller should use increment_active()/decrement_active()
         to prevent pool recreation during streaming.
+
+        Issue #12981: prefer ``tracked_request()`` (or the ``*_json()`` helpers
+        built on it) unless you genuinely need to hold a raw response open
+        beyond a single block — it balances the counter for you and therefore
+        cannot be forgotten.
         """
         # Check if pool adjustment needed (non-blocking)
         asyncio.create_task(self._adjust_pool_size())
@@ -335,17 +343,68 @@ class HTTPClientManager:
             logger.info("Applying deferred session recreation " f"(new pool size: {self._current_pool_size})")
             await self._create_session()
 
+    @asynccontextmanager
+    async def tracked_request(self, method: str, url: str, **kwargs) -> AsyncIterator[aiohttp.ClientResponse]:
+        """
+        Issue a request and yield a response whose active-request slot is
+        released automatically when the block exits.
+
+        Issue #12981: ``request()`` increments ``_active_requests`` on every
+        call but only decrements it on the failure path, delegating the
+        success-path decrement to the caller. Repo-wide, essentially no caller
+        honoured that contract, so the counter only ever grew — permanently
+        skewing ``_adjust_pool_size()`` utilisation and making the
+        ``_active_requests == 0`` gate in ``decrement_active()`` (deferred pool
+        recreation) unreachable.
+
+        This helper owns the FULL lifecycle — request, response body, and the
+        counter — so the decrement cannot be forgotten. Use it for any request
+        whose response is consumed within a single block; use ``request()``
+        plus an explicit ``decrement_active()`` only when the response must
+        outlive the block (streaming, #680).
+
+        Usage:
+            async with http_client.tracked_request("GET", url) as response:
+                response.raise_for_status()
+                data = await response.json()
+
+        Exception-safe: the counter is always decremented, even if the caller
+        raises. A failure inside ``request()`` itself decrements there, so the
+        slot is never released twice.
+        """
+        response = await self.request(method, url, **kwargs)
+        try:
+            async with response:
+                yield response
+        finally:
+            await self.decrement_active()
+
     async def get(self, url: str, **kwargs) -> aiohttp.ClientResponse:
-        """Convenience method for GET requests."""
+        """
+        Convenience method for GET requests.
+
+        Returns a raw caller-owned response: call ``decrement_active()`` when
+        it is fully consumed, or prefer ``tracked_request("GET", ...)`` which
+        balances the counter for you (#12981).
+        """
         return await self.request("GET", url, **kwargs)
 
     async def post(self, url: str, **kwargs) -> aiohttp.ClientResponse:
-        """Convenience method for POST requests."""
+        """
+        Convenience method for POST requests.
+
+        Returns a raw caller-owned response: call ``decrement_active()`` when
+        it is fully consumed, or prefer ``tracked_request("POST", ...)`` which
+        balances the counter for you (#12981).
+        """
         return await self.request("POST", url, **kwargs)
 
     async def get_json(self, url: str, **kwargs) -> Dict[str, Any]:
         """
         Make a GET request and return JSON response.
+
+        Owns the full request lifecycle, so the active-request counter is
+        balanced automatically (#12981).
 
         Args:
             url: Target URL
@@ -354,13 +413,16 @@ class HTTPClientManager:
         Returns:
             Dict containing the JSON response
         """
-        async with await self.get(url, **kwargs) as response:
+        async with self.tracked_request("GET", url, **kwargs) as response:
             response.raise_for_status()
             return await response.json()
 
     async def post_json(self, url: str, json_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Make a POST request with JSON data and return JSON response.
+
+        Owns the full request lifecycle, so the active-request counter is
+        balanced automatically (#12981).
 
         Args:
             url: Target URL
@@ -370,7 +432,7 @@ class HTTPClientManager:
         Returns:
             Dict containing the JSON response
         """
-        async with await self.post(url, json=json_data, **kwargs) as response:
+        async with self.tracked_request("POST", url, json=json_data, **kwargs) as response:
             response.raise_for_status()
             return await response.json()
 
@@ -532,14 +594,18 @@ async def example_usage() -> None:
     except aiohttp.ClientError as e:
         logger.error("Request failed: %s", e)
 
-    # Manual request with custom options
+    # Manual request with custom options. The raw-response path is
+    # caller-owned: balance the active-request counter in a finally (#12981),
+    # or use tracked_request() when the response fits in a single block.
     try:
-        async with await http_client.get(
-            "https://api.example.com/stream", timeout=aiohttp.ClientTimeout(total=60)
-        ) as response:
-            async for chunk in response.content.iter_chunked(1024):
-                # Process streaming data
-                pass
+        response = await http_client.get("https://api.example.com/stream", timeout=aiohttp.ClientTimeout(total=60))
+        try:
+            async with response:
+                async for chunk in response.content.iter_chunked(1024):
+                    # Process streaming data
+                    pass
+        finally:
+            await http_client.decrement_active()
     except Exception as e:
         logger.error("Streaming failed: %s", e)
 
