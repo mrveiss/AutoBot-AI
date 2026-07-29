@@ -16,6 +16,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from user_management.database import get_async_session
 from user_management.services import (
     OrganizationService,
@@ -187,7 +188,7 @@ async def get_tenant_context(
 
     # Determine platform-admin status
     is_platform_admin = bool(current_user.get("is_platform_admin", False))
-    if current_user.get("role") == "admin":
+    if is_admin_role(current_user.get("role")):
         is_platform_admin = True
 
     # --- org_id resolution ---

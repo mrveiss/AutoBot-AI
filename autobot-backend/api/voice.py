@@ -26,7 +26,7 @@ from api.schemas_code import (
     VoiceTranscribeResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
-from auth_rbac import is_admin_role
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id

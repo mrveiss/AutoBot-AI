@@ -30,6 +30,7 @@ from api.schemas_system import (
     AuditStatisticsResponse,
 )
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
@@ -59,7 +60,7 @@ def check_admin_permission(request: Request) -> bool:
         user_role = user_data.get("role")
         if not user_role:
             raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-        if user_role != "admin":
+        if not is_admin_role(user_role):
             raise_auth_error("AUTH_0003", "Admin permission required for audit log access")
 
         return True

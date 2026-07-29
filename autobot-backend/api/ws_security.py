@@ -21,6 +21,8 @@ import os
 
 from fastapi import WebSocket
 
+from autobot_shared.auth.permissions import is_admin_role
+
 logger = logging.getLogger(__name__)
 
 
@@ -96,7 +98,7 @@ def authenticate_ws_admin(websocket: WebSocket) -> bool:
         user = get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
         if not user:
             return False
-        return user.get("role") == "admin"
+        return is_admin_role(user.get("role"))
     except Exception:
         logger.warning("WS admin auth error — denying", exc_info=True)
         return False
