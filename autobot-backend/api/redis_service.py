@@ -38,6 +38,7 @@ _service_manager_started: bool = False
 
 # Thread-safe lock for singleton
 import asyncio as _asyncio_lock
+from auth_rbac import is_admin_role
 
 _service_manager_lock = _asyncio_lock.Lock()
 
@@ -85,7 +86,7 @@ def check_admin_permission(request: Request) -> str:
         raise HTTPException(status_code=401, detail="Authentication required")
 
     # Check if user has admin role
-    if user_data.get("role") != "admin":
+    if not is_admin_role(user_data.get("role")):
         raise HTTPException(status_code=403, detail="Admin role required for this operation")
 
     return user_data.get("username", "unknown")

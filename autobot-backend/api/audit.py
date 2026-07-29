@@ -40,6 +40,7 @@ from utils.catalog_http_exceptions import (
     raise_server_error,
     raise_validation_error,
 )
+from auth_rbac import is_admin_role
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 logger = get_logger(__name__)
@@ -59,7 +60,7 @@ def check_admin_permission(request: Request) -> bool:
         user_role = user_data.get("role")
         if not user_role:
             raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-        if user_role != "admin":
+        if not is_admin_role(user_role):
             raise_auth_error("AUTH_0003", "Admin permission required for audit log access")
 
         return True

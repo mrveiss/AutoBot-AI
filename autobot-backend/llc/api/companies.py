@@ -65,6 +65,7 @@ from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
 from user_management.services import TenantContext
+from auth_rbac import is_admin_role
 
 logger = get_logger(__name__)
 
@@ -142,7 +143,7 @@ def _is_platform_admin(current_user: dict) -> bool:
     and derive admin status from the JWT the same way the tenant-context
     dependency does: an explicit ``is_platform_admin`` flag or ``role == "admin"``.
     """
-    return bool(current_user.get("is_platform_admin")) or current_user.get("role") == "admin"
+    return bool(current_user.get("is_platform_admin")) or is_admin_role(current_user.get("role"))
 
 
 def _current_user_id(current_user: dict) -> str:

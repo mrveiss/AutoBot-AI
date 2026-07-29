@@ -29,15 +29,18 @@ from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from services.workflow_permission_service import WorkflowPermissionService
+from auth_rbac import is_admin_role
 
 logger = get_logger(__name__)
 
-_ADMIN_ROLES = {"admin"}
-
 
 def _is_admin(user_data: dict) -> bool:
-    """Return True when the user holds a system-wide admin role."""
-    return user_data.get("role", "").lower() in _ADMIN_ROLES
+    """Return True when the user holds a system-wide admin role.
+
+    #12786: this held its own ``{"admin"}`` set, so a superadmin was refused the
+    admin bypass that every ``require_role("admin", "superadmin")`` guard grants.
+    """
+    return is_admin_role(user_data.get("role"))
 
 
 def require_workflow_permission(action: str) -> Callable:

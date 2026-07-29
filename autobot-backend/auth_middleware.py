@@ -30,6 +30,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from config.manager import get_config_manager
 from security_layer import SecurityLayer
 from utils.catalog_http_exceptions import raise_auth_error
+from auth_rbac import is_admin_role
 
 logger = get_logger(__name__)
 
@@ -966,7 +967,7 @@ def check_admin_permission(request: Request) -> bool:
     user_role = user_data.get("role")
     if not user_role:
         raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-    if user_role != "admin":
+    if not is_admin_role(user_role):
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True

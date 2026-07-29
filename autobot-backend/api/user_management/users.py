@@ -47,6 +47,7 @@ from user_management.services.user_service import (
     InvalidCredentialsError,
     UserNotFoundError,
 )
+from auth_rbac import is_admin_role
 
 router = APIRouter(prefix="/users", tags=["Users"])
 logger = get_logger(__name__)
@@ -217,7 +218,7 @@ async def get_current_user_profile(
         is_active=True,
         is_verified=True,
         mfa_enabled=False,
-        is_platform_admin=current_user.get("role") == "admin" or current_user.get("is_platform_admin", False),
+        is_platform_admin=is_admin_role(current_user.get("role")) or current_user.get("is_platform_admin", False),
         preferences={},
         roles=[],
         created_at=None,

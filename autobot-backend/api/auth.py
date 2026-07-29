@@ -45,6 +45,7 @@ from services.audit.audit import EventType  # GH#8290 Phase 2
 from services.audit.audit import emit as _emit_event  # GH#8290 Phase 2
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
+from auth_rbac import is_admin_role
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -283,7 +284,7 @@ async def revoke_rs256_token(
     _token_uid = _token_claims.get("user_id")
     _caller_sub = current_user.get("sub") or current_user.get("username")
     _caller_uid = current_user.get("user_id")
-    _is_admin = bool(current_user.get("admin")) or current_user.get("role") == "admin"
+    _is_admin = bool(current_user.get("admin")) or is_admin_role(current_user.get("role"))
     _owns = (_token_sub and _token_sub == _caller_sub) or (_token_uid and _token_uid == _caller_uid)
     if not _owns and not _is_admin:
         raise HTTPException(status_code=403, detail="Can only revoke your own tokens")

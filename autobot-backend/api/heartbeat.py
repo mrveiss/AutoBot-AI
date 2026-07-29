@@ -47,6 +47,7 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
+from auth_rbac import is_admin_role
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -349,7 +350,7 @@ async def resume_agent(
     if paused_by.startswith("system:"):
         username = _user.get("username", "") if isinstance(_user, dict) else getattr(_user, "username", "")
         user_role = _user.get("role", "") if isinstance(_user, dict) else getattr(_user, "role", "")
-        if user_role != "admin":
+        if not is_admin_role(user_role):
             approval_id = await _request_skill_approval_for_resume(agent_id, paused_by, username)
             return JSONResponse(
                 status_code=202,

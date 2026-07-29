@@ -42,6 +42,7 @@ from .schemas_system import (
     FeatureFlagEnforcementModeResponse,
     FeatureFlagStatusResponse,
 )
+from auth_rbac import is_admin_role
 
 logger = get_logger(__name__)
 
@@ -69,7 +70,7 @@ async def require_admin(
     """
     # Check if user has admin role
     user_role = current_user.get("role", "").lower()
-    if user_role != "admin":
+    if not is_admin_role(user_role):
         logger.warning(
             f"Non-admin user '{current_user.get('username', 'unknown')}' "
             f"attempted to access feature flags (role: {user_role})"

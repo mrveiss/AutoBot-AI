@@ -23,6 +23,7 @@ from user_management.services import (
     TenantContext,
     UserService,
 )
+from auth_rbac import is_admin_role
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ async def get_tenant_context(
 
     # Determine platform-admin status
     is_platform_admin = bool(current_user.get("is_platform_admin", False))
-    if current_user.get("role") == "admin":
+    if is_admin_role(current_user.get("role")):
         is_platform_admin = True
 
     # --- org_id resolution ---
