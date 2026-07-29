@@ -13,8 +13,13 @@
 # Reviews are billed per run, so the job is deliberately narrow: filtered paths
 # only, no drafts, one run per PR head.
 #
-# Requires an ANTHROPIC_API_KEY repository secret. Until that exists the job
-# skips with a notice rather than failing, so it cannot red every PR.
+# Auth is the Claude Code subscription, NOT a metered API key (#12977). Generate
+# a long-lived token locally with `claude setup-token` and store it as the
+# CLAUDE_CODE_OAUTH_TOKEN repository secret. Do not reintroduce
+# ANTHROPIC_API_KEY here — that bills per token against a separate account.
+#
+# Until the secret exists the job skips with a notice rather than failing, so it
+# cannot red every PR.
 
 name: AI Security Review
 
@@ -57,14 +62,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check for API key
+      - name: Check for subscription token
         id: key
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          if [ -z "${ANTHROPIC_API_KEY}" ]; then
+          if [ -z "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::ANTHROPIC_API_KEY is not configured — skipping AI security review. Add it as a repository secret to enable this job."
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not configured — skipping AI security review. Generate one with 'claude setup-token' and add it as a repository secret to enable this job."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
@@ -101,7 +106,7 @@ jobs:
         id: review
         if: steps.key.outputs.configured == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
