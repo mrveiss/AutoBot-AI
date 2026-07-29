@@ -4,7 +4,13 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Create knowledge base index with correct dimensions using redisvl directly.
+Create the knowledge base index with the dimensions nomic-embed-text emits.
+
+Talks to Redis with raw FT.* commands via the centralized client, the same way
+every other helper in this file does — no redisvl. The schema below is the one
+source of truth for the index; it used to be declared twice (once as a redisvl
+``IndexSchema`` dict, once as the FT.CREATE argv that actually ran), which left
+the two free to drift (#12840).
 """
 
 import logging
@@ -13,6 +19,15 @@ import sys
 from typing import List
 
 logger = logging.getLogger(__name__)
+
+# Index definition — consumed by _build_index_create_command() and the log line
+# that reports what is being created, so both always describe the same index.
+INDEX_NAME = "llama_index"
+INDEX_PREFIX = "llama_index/vector"
+LEGACY_INDEX_NAME = "autobot_kb_768"
+# nomic-embed-text emits 768-dimensional vectors; the index must match exactly
+# or FT.SEARCH rejects every query vector.
+VECTOR_DIM = 768
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,17 +41,12 @@ def _drop_existing_indexes(r) -> None:
 
     Helper for create_index_with_correct_dimensions (Issue #825).
     """
-    try:
-        r.execute_command("FT.DROPINDEX", "llama_index", "DD")
-        logger.info("Dropped existing llama_index")
-    except Exception as e:
-        logger.info(f"No existing llama_index to drop: {e}")
-
-    try:
-        r.execute_command("FT.DROPINDEX", "autobot_kb_768", "DD")
-        logger.info("Dropped existing autobot_kb_768")
-    except Exception as e:
-        logger.info(f"No existing autobot_kb_768 to drop: {e}")
+    for index_name in (INDEX_NAME, LEGACY_INDEX_NAME):
+        try:
+            r.execute_command("FT.DROPINDEX", index_name, "DD")
+            logger.info("Dropped existing %s", index_name)
+        except Exception as e:
+            logger.info("No existing %s to drop: %s", index_name, e)
 
 
 def _build_index_create_command() -> List:
@@ -46,12 +56,12 @@ def _build_index_create_command() -> List:
     """
     return [
         "FT.CREATE",
-        "llama_index",
+        INDEX_NAME,
         "ON",
         "HASH",
         "PREFIX",
         "1",
-        "llama_index/vector",
+        INDEX_PREFIX,
         "SCHEMA",
         "id",
         "TAG",
@@ -66,7 +76,7 @@ def _build_index_create_command() -> List:
         "TYPE",
         "FLOAT32",
         "DIM",
-        "768",
+        str(VECTOR_DIM),
         "DISTANCE_METRIC",
         "COSINE",
     ]
@@ -77,7 +87,7 @@ def _verify_index_creation(r) -> None:
 
     Helper for create_index_with_correct_dimensions (Issue #825).
     """
-    info = r.execute_command("FT.INFO", "llama_index")
+    info = r.execute_command("FT.INFO", INDEX_NAME)
     logger.info("\nIndex created with attributes:")
     for attr in info[info.index(b"attributes") + 1]:
         if b"vector" in attr and b"dim" in attr:
@@ -86,7 +96,7 @@ def _verify_index_creation(r) -> None:
 
 
 def create_index_with_correct_dimensions():
-    """Create Redis index with 768 dimensions for nomic-embed-text."""
+    """Create the Redis index sized for nomic-embed-text (VECTOR_DIM)."""
 
     r = get_redis_client(database="main")
     if r is None:
@@ -95,37 +105,14 @@ def create_index_with_correct_dimensions():
 
     _drop_existing_indexes(r)
 
-    schema_dict = {
-        "index": {
-            "name": "llama_index",
-            "prefix": "llama_index/vector",
-            "storage_type": "hash",
-        },
-        "fields": [
-            {"name": "id", "type": "tag"},
-            {"name": "doc_id", "type": "tag"},
-            {"name": "text", "type": "text"},
-            {
-                "name": "vector",
-                "type": "vector",
-                "attrs": {
-                    "dims": 768,
-                    "algorithm": "flat",
-                    "distance_metric": "cosine",
-                },
-            },
-        ],
-    }
-
-    schema = IndexSchema.from_dict(schema_dict)
+    create_cmd = _build_index_create_command()
 
     logger.info("Creating index with schema:")
-    logger.info(f"  Name: {schema.index.name}")
-    logger.info("  Vector dimensions: 768")
+    logger.info("  Name: %s", INDEX_NAME)
+    logger.info("  Prefix: %s", INDEX_PREFIX)
+    logger.info("  Vector dimensions: %d", VECTOR_DIM)
 
     try:
-        create_cmd = _build_index_create_command()
-
         result = r.execute_command(*create_cmd)
         logger.info(f"Index created successfully: {result}")
 
@@ -141,7 +128,7 @@ def create_index_with_correct_dimensions():
 if __name__ == "__main__":
     success = create_index_with_correct_dimensions()
     if success:
-        logger.info("\nIndex created successfully with 768 dimensions!")
+        logger.info("\nIndex created successfully with %d dimensions!", VECTOR_DIM)
         logger.info("You can now run populate_knowledge_base.py")
     else:
         logger.error("\nFailed to create index")
