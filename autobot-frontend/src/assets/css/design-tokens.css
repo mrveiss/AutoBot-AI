@@ -1174,7 +1174,10 @@
 
     /* Text on colored backgrounds */
     --text-on-primary: oklch(100% 0 0);
-    --text-on-success: oklch(100% 0 0);
+    /* #12922: was oklch(100% 0 0) = white = 2.54:1 on --color-success, the same
+       failure #12915 fixed in the sRGB block. Black matches that fix and the
+       treatment already used for --text-on-warning below. */
+    --text-on-success: oklch(0% 0 0);
     --text-on-warning: oklch(0% 0 0);
     --text-on-error: oklch(100% 0 0);
 

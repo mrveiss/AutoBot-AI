@@ -120,3 +120,69 @@ class TestRealTokens:
         assert not failures, "tokens below WCAG AA: " + ", ".join(
             f"{fg} on {bg} = {ratio:.2f}:1 < {need}" for fg, bg, ratio, need in failures
         )
+
+
+class TestOklchConversion:
+    """oklch -> sRGB, so wide-gamut overrides are measurable (#12922).
+
+    #12915 fixed `--text-on-success` in the hex block, but the wide-gamut block
+    re-declared the same pair in oklch and kept shipping white-on-green at
+    2.54:1 on P3 displays. Those overrides were not merely unchecked — they
+    shadow names already in the hex map, so they never reached the "NOT CHECKED"
+    list either. They were invisible.
+    """
+
+    @pytest.mark.parametrize(
+        "oklch,expected",
+        [
+            ("oklch(100% 0 0)", "#ffffff"),
+            ("oklch(0% 0 0)", "#000000"),
+            ("oklch(69.6% 0.149 162.5)", "#10b981"),
+        ],
+    )
+    def test_known_colours_round_trip_to_their_srgb_hex(self, oklch, expected):
+        """Pinned against the sRGB values the same tokens carry in the hex block."""
+        assert contrast.oklch_to_hex(oklch) == expected
+
+    def test_non_oklch_values_return_none(self):
+        """rgba()/hex must fall through to their own handling, not be misparsed."""
+        assert contrast.oklch_to_hex("#10b981") is None
+        assert contrast.oklch_to_hex("rgba(0, 0, 0, 0.5)") is None
+
+    def test_out_of_gamut_components_are_clamped(self):
+        """A browser clamps when rendering oklch on sRGB; the ratio must match that."""
+        result = contrast.oklch_to_hex("oklch(100% 0.4 120)")
+
+        assert result is not None and len(result) == 7
+
+    def test_wide_gamut_overrides_are_parsed_from_the_stylesheet(self):
+        css = contrast.TOKENS_CSS.read_text(encoding="utf-8")
+
+        overrides = contrast.parse_oklch_tokens(css)
+
+        assert "--text-on-success" in overrides
+        assert "--color-success" in overrides
+
+    def test_parsed_oklch_tokens_are_not_reported_as_unchecked(self):
+        """Otherwise the gate would claim coverage it has, then list it as missing."""
+        css = contrast.TOKENS_CSS.read_text(encoding="utf-8")
+
+        overrides = contrast.parse_oklch_tokens(css)
+        skipped = contrast.parse_non_hex_tokens(css)
+
+        assert not (set(overrides) & set(skipped))
+
+    def test_wide_gamut_pairs_meet_aa(self):
+        """The gate that would have caught #12922 at the time."""
+        css = contrast.TOKENS_CSS.read_text(encoding="utf-8")
+        merged = {**contrast.parse_hex_tokens(css), **contrast.parse_oklch_tokens(css)}
+
+        failures = [
+            (fg, bg, contrast.contrast_ratio(merged[fg], merged[bg]), need)
+            for fg, bg, need in contrast.build_pairs(merged)
+            if contrast.contrast_ratio(merged[fg], merged[bg]) < need
+        ]
+
+        assert not failures, "wide-gamut pairs below AA: " + ", ".join(
+            f"{fg} on {bg} = {r:.2f}:1 < {n}" for fg, bg, r, n in failures
+        )

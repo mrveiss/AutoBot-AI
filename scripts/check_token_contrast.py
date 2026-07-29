@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import sys
 from pathlib import Path
@@ -58,9 +59,9 @@ _ANY_COLOR_DECL = re.compile(
 def parse_hex_tokens(css: str) -> Dict[str, str]:
     """Map token name -> hex value for every hex-valued custom property.
 
-    Only the first definition of a name is kept: later ones are theme overrides
-    (``oklch`` wide-gamut blocks, media queries), which are reported as skipped
-    rather than silently folded in.
+    Only the first definition of a name is kept: later ones are theme overrides,
+    which are checked separately via :func:`parse_oklch_tokens` rather than
+    silently folded in here.
     """
     tokens: Dict[str, str] = {}
     for name, value in _HEX_DECL.findall(css):
@@ -68,14 +69,77 @@ def parse_hex_tokens(css: str) -> Dict[str, str]:
     return tokens
 
 
+def parse_oklch_tokens(css: str) -> Dict[str, str]:
+    """Map token name -> hex equivalent for every ``oklch()`` custom property (#12922).
+
+    These are the wide-gamut overrides. They were previously reported as
+    unchecked, which is how #12915's sRGB fix left the same failing pair
+    shipping on P3 displays. Converted to sRGB so they can be measured on the
+    same footing as the hex block.
+    """
+    tokens: Dict[str, str] = {}
+    for name, value in _ANY_COLOR_DECL.findall(css):
+        if "oklch" not in value.lower():
+            continue
+        converted = oklch_to_hex(value)
+        if converted:
+            tokens.setdefault(name, converted)
+    return tokens
+
+
 def parse_non_hex_tokens(css: str) -> Dict[str, str]:
     """Colour tokens defined in a format this checker cannot evaluate."""
     skipped: Dict[str, str] = {}
-    hex_names = set(parse_hex_tokens(css))
+    covered = set(parse_hex_tokens(css)) | set(parse_oklch_tokens(css))
     for name, value in _ANY_COLOR_DECL.findall(css):
-        if name not in hex_names:
+        if name not in covered:
             skipped.setdefault(name, value.strip())
     return skipped
+
+
+_OKLCH_DECL = re.compile(r"oklch\(\s*([\d.]+)%\s+([\d.]+)\s+([\d.]+)\s*\)", re.IGNORECASE)
+
+
+def oklch_to_hex(value: str) -> str | None:
+    """Convert a CSS ``oklch(L% C H)`` colour to ``#rrggbb`` (#12922).
+
+    The wide-gamut block re-declares the same semantic pairs in oklch, so a
+    hex-only checker reported them as unchecked and #12915's fix covered the
+    sRGB path only — leaving white-on-green still shipping on P3 displays.
+
+    Conversion is the standard oklab pipeline: oklch -> oklab -> linear sRGB ->
+    gamma-encoded sRGB. Out-of-gamut components are clamped, which is what a
+    browser does when rendering an oklch colour on an sRGB display, so the ratio
+    computed here matches what an sRGB viewer actually sees. Returns ``None``
+    when *value* is not an oklch literal.
+    """
+    match = _OKLCH_DECL.search(value)
+    if not match:
+        return None
+
+    lightness = float(match.group(1)) / 100.0
+    chroma = float(match.group(2))
+    hue = math.radians(float(match.group(3)))
+
+    a = chroma * math.cos(hue)
+    b = chroma * math.sin(hue)
+
+    l_ = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    m_ = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    s_ = (lightness - 0.0894841775 * a - 1.2914855480 * b) ** 3
+
+    linear = (
+        4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+        -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+        -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_,
+    )
+
+    channels = []
+    for c in linear:
+        c = max(0.0, min(1.0, c))
+        c = 1.055 * (c ** (1 / 2.4)) - 0.055 if c > 0.0031308 else 12.92 * c
+        channels.append(round(max(0.0, min(1.0, c)) * 255))
+    return "#%02x%02x%02x" % tuple(channels)
 
 
 def _to_rgb(hex_value: str) -> Tuple[int, int, int]:
@@ -136,20 +200,35 @@ def main() -> int:
 
     css = css_path.read_text(encoding="utf-8")
     tokens = parse_hex_tokens(css)
+    oklch_tokens = parse_oklch_tokens(css)
     skipped = parse_non_hex_tokens(css)
-    pairs = build_pairs(tokens)
+
+    # #12922: the wide-gamut block re-declares the same semantic pairs in
+    # oklch. Those overrides shadow names already present in the hex map, so
+    # they were not even reaching the "unchecked" list — they were invisible.
+    # Both themes are now measured, because a P3 display renders the second set.
+    themes = [("sRGB", tokens)]
+    if oklch_tokens:
+        merged = {**tokens, **oklch_tokens}
+        themes.append(("wide-gamut (oklch)", merged))
 
     print(f"[contrast] {css_path.relative_to(REPO_ROOT)}")
-    print(f"[contrast] {len(tokens)} hex tokens, {len(pairs)} derived pairs, {len(skipped)} non-hex tokens skipped")
+    print(
+        f"[contrast] {len(tokens)} hex tokens, {len(oklch_tokens)} oklch overrides, "
+        f"{len(skipped)} tokens still unchecked"
+    )
 
     failures = []
-    for fg, bg, required in pairs:
-        ratio = contrast_ratio(tokens[fg], tokens[bg])
-        ok = ratio >= required
-        marker = "ok  " if ok else "FAIL"
-        print(f"  {marker} {ratio:5.2f}:1 (need {required})  {fg} on {bg}")
-        if not ok:
-            failures.append((fg, bg, ratio, required))
+    for theme_name, theme_tokens in themes:
+        theme_pairs = build_pairs(theme_tokens)
+        print(f"[contrast] -- {theme_name}: {len(theme_pairs)} derived pairs")
+        for fg, bg, required in theme_pairs:
+            ratio = contrast_ratio(theme_tokens[fg], theme_tokens[bg])
+            ok = ratio >= required
+            marker = "ok  " if ok else "FAIL"
+            print(f"  {marker} {ratio:5.2f}:1 (need {required})  {fg} on {bg}")
+            if not ok:
+                failures.append((f"[{theme_name}] {fg}", bg, ratio, required))
 
     if skipped:
         # Never let the gate imply coverage it does not have.
