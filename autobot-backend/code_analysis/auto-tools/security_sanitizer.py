@@ -351,7 +351,7 @@ class SecurityFixAgent(SecurityFixToolBase):
         for vuln in vulnerabilities:
             icon = severity_icon.get(vuln["severity"], "⚪")
             logger.info(f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})")
-            logger.info("     Match: %s", vuln['match'][:100])
+            logger.info("     Match: %s", vuln["match"][:100])
 
     def _apply_fixes_and_write(
         self,
