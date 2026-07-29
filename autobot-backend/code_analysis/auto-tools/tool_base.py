@@ -171,10 +171,15 @@ class ConsoleLogToolBase:
             modified_content, count = self._transform_content(original_content, file_path)
 
             if count > 0:
-                self.create_backup(file_path)
+                # #12678: --dry-run must not touch the tree. Guarded here rather
+                # than at each call site because this is the only writer, so a
+                # future tool cannot bypass it by accident. The count is still
+                # reported, so a dry run says what it *would* change.
+                if not getattr(self, "dry_run", False):
+                    self.create_backup(file_path)
 
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(modified_content)
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(modified_content)
 
                 self.report[self.REPORT_COUNT_KEY] += count
                 return True
@@ -193,6 +198,16 @@ class ConsoleLogToolBase:
     def run_project(self, target_dir: str = None) -> Dict[str, Any]:
         """Hook: invoke this tool's project-wide pass (convert_project/clean_project)."""
         raise NotImplementedError
+
+    def _apply_cli_args(self, args: argparse.Namespace) -> None:
+        """Receive the parsed CLI args (#12678).
+
+        ``--dry-run`` is handled here rather than per-tool because the code that
+        honours it -- :meth:`process_file` -- lives on this base. A subclass that
+        forgot to wire it would otherwise silently write while reporting a dry
+        run. Subclasses adding their own flags should call ``super()`` first.
+        """
+        self.dry_run = bool(getattr(args, "dry_run", False))
 
     @classmethod
     def _extra_cli_args(cls, parser: argparse.ArgumentParser) -> None:
@@ -216,6 +231,9 @@ class ConsoleLogToolBase:
         args = parser.parse_args()
 
         instance = cls(args.project_path, args.backup_dir)
+        # #12678: extra flags declared via _extra_cli_args were parsed and then
+        # discarded here, so a tool could not read its own options.
+        instance._apply_cli_args(args)
 
         if args.target_dir:
             target_path = Path(args.project_path) / args.target_dir

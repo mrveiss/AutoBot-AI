@@ -394,6 +394,25 @@ class ConsoleLogCleaner(ConsoleLogToolBase):
             json.dump(self.report, f, indent=2)
         print(f"📊 JSON report saved to: {json_report_path}")  # noqa: print
 
+    def _apply_cli_args(self, args: argparse.Namespace) -> None:
+        """Receive the flags declared in :meth:`_extra_cli_args` (#12678).
+
+        ``--dry-run`` is honoured by ``ConsoleLogToolBase.process_file``, which
+        reports what would change without writing. ``--dev-mode`` and
+        ``--replace-with-dev-logging`` are still accepted but not implemented --
+        they are recorded here so the gap is visible in one place rather than
+        silently discarded at the parser.
+        """
+        super()._apply_cli_args(args)
+        self.dev_mode = bool(getattr(args, "dev_mode", False))
+        self.replace_with_dev_logging = bool(getattr(args, "replace_with_dev_logging", False))
+        if self.dry_run:
+            print("🔎 Dry run: no files will be modified")  # noqa: print
+        for unimplemented in ("dev_mode", "replace_with_dev_logging"):
+            if getattr(self, unimplemented):
+                flag = unimplemented.replace("_", "-")
+                print(f"⚠️  --{flag} is accepted but not yet implemented (#12678)")  # noqa: print
+
     @classmethod
     def _extra_cli_args(cls, parser: argparse.ArgumentParser) -> None:
         """Hook for ``ConsoleLogToolBase.cli_main``: cleanup-specific flags."""
