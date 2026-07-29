@@ -14,9 +14,9 @@ the analyzable repo -- so the fallback must instead use
 #10730).
 """
 
-import pytest
-
 from unittest.mock import patch
+
+import pytest
 
 from api.codebase_analytics import api_endpoint_scanner as scanner_mod
 
@@ -294,9 +294,7 @@ class TestTestFilesAreNotEndpoints:
         backend = tmp_path / "autobot-backend"
         (backend / "api").mkdir(parents=True)
         (backend / "initialization" / "router_registry").mkdir(parents=True)
-        (backend / "api" / name).write_text(
-            '@router.get("/catalog")\ndef c(): ...\n', encoding="utf-8"
-        )
+        (backend / "api" / name).write_text('@router.get("/catalog")\ndef c(): ...\n', encoding="utf-8")
 
         paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
 
@@ -306,9 +304,7 @@ class TestTestFilesAreNotEndpoints:
         backend = tmp_path / "autobot-backend"
         (backend / "api" / "tests").mkdir(parents=True)
         (backend / "initialization" / "router_registry").mkdir(parents=True)
-        (backend / "api" / "tests" / "helper.py").write_text(
-            '@router.get("/x")\ndef c(): ...\n', encoding="utf-8"
-        )
+        (backend / "api" / "tests" / "helper.py").write_text('@router.get("/x")\ndef c(): ...\n', encoding="utf-8")
 
         paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
 
@@ -319,9 +315,7 @@ class TestTestFilesAreNotEndpoints:
         backend = tmp_path / "autobot-backend"
         (backend / "api").mkdir(parents=True)
         (backend / "initialization" / "router_registry").mkdir(parents=True)
-        (backend / "api" / "latest_results.py").write_text(
-            '@router.get("/results")\ndef c(): ...\n', encoding="utf-8"
-        )
+        (backend / "api" / "latest_results.py").write_text('@router.get("/results")\ndef c(): ...\n', encoding="utf-8")
 
         paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
 

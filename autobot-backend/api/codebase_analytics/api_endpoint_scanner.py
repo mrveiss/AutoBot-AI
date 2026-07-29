@@ -141,11 +141,7 @@ def _is_test_file(path: Path) -> bool:
     Matches the repo's two conventions (``x_test.py`` and ``test_x.py``) plus
     anything under a ``tests`` directory.
     """
-    return (
-        path.name.endswith("_test.py")
-        or path.name.startswith("test_")
-        or "tests" in path.parts
-    )
+    return path.name.endswith("_test.py") or path.name.startswith("test_") or "tests" in path.parts
 
 
 def find_backend_dir(project_root: Path) -> Path:
