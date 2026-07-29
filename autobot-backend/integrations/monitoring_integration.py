@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
@@ -63,26 +64,27 @@ class DatadogIntegration(BaseIntegration):
             IntegrationHealth with connection status and details
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/validate",
-                    headers=self._get_headers(),
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.HEALTHY,
-                            message="Datadog connection successful",
-                            details={"valid": data.get("valid", True)},
-                        )
-                    else:
-                        error_text = await response.text()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.ERROR,
-                            message=f"Datadog API error: {response.status}",
-                            details={"error": error_text},
-                        )
+            # `get()` returns (not yields) a ClientResponse; the `async with` is the
+            # connection-release point back into the shared pool and must be kept.
+            async with await get_http_client().get(
+                f"{self.base_url}/validate",
+                headers=self._get_headers(),
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return IntegrationHealth(
+                        status=IntegrationStatus.HEALTHY,
+                        message="Datadog connection successful",
+                        details={"valid": data.get("valid", True)},
+                    )
+                else:
+                    error_text = await response.text()
+                    return IntegrationHealth(
+                        status=IntegrationStatus.ERROR,
+                        message=f"Datadog API error: {response.status}",
+                        details={"error": error_text},
+                    )
         except aiohttp.ClientError as e:
             logger.error("Datadog connection failed: %s", e)
             return IntegrationHealth(
@@ -172,15 +174,12 @@ class DatadogIntegration(BaseIntegration):
 
     async def _list_monitors(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all Datadog monitors."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/monitor",
-                headers=self._get_headers(),
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                monitors = await response.json()
-                return {"monitors": monitors, "count": len(monitors)}
+        monitors = await get_http_client().get_json(
+            f"{self.base_url}/monitor",
+            headers=self._get_headers(),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        return {"monitors": monitors, "count": len(monitors)}
 
     async def _get_metrics(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query metrics from Datadog."""
@@ -188,46 +187,37 @@ class DatadogIntegration(BaseIntegration):
         to_time = params.get("to_time", int(datetime.now(tz=timezone.utc).timestamp()))
         from_time = params.get("from_time", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp()))
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/query",
-                headers=self._get_headers(),
-                params={"query": query, "from": from_time, "to": to_time},
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
+        return await get_http_client().get_json(
+            f"{self.base_url}/query",
+            headers=self._get_headers(),
+            params={"query": query, "from": from_time, "to": to_time},
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
 
     async def _list_hosts(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all monitored hosts."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/hosts",
-                headers=self._get_headers(),
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                return {
-                    "hosts": data.get("host_list", []),
-                    "total": data.get("total_matching", 0),
-                }
+        data = await get_http_client().get_json(
+            f"{self.base_url}/hosts",
+            headers=self._get_headers(),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        return {
+            "hosts": data.get("host_list", []),
+            "total": data.get("total_matching", 0),
+        }
 
     async def _get_events(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get recent events from Datadog."""
         end = params.get("end", int(datetime.now(tz=timezone.utc).timestamp()))
         start = params.get("start", int((datetime.now(tz=timezone.utc) - timedelta(hours=1)).timestamp()))
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/events",
-                headers=self._get_headers(),
-                params={"start": start, "end": end},
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                return {"events": data.get("events", [])}
+        data = await get_http_client().get_json(
+            f"{self.base_url}/events",
+            headers=self._get_headers(),
+            params={"start": start, "end": end},
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        return {"events": data.get("events", [])}
 
     async def _create_monitor(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new Datadog monitor."""
@@ -238,15 +228,12 @@ class DatadogIntegration(BaseIntegration):
             "message": params.get("message", ""),
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self.base_url}/monitor",
-                headers=self._get_headers(),
-                json=monitor_data,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
+        return await get_http_client().post_json(
+            f"{self.base_url}/monitor",
+            monitor_data,
+            headers=self._get_headers(),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
 
 
 class NewRelicIntegration(BaseIntegration):
@@ -286,26 +273,27 @@ class NewRelicIntegration(BaseIntegration):
             IntegrationHealth with connection status and details
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/applications.json",
-                    headers=self._get_headers(),
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.HEALTHY,
-                            message="New Relic connection successful",
-                            details={"applications": len(data.get("applications", []))},
-                        )
-                    else:
-                        error_text = await response.text()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.ERROR,
-                            message=f"New Relic API error: {response.status}",
-                            details={"error": error_text},
-                        )
+            # `get()` returns (not yields) a ClientResponse; the `async with` is the
+            # connection-release point back into the shared pool and must be kept.
+            async with await get_http_client().get(
+                f"{self.base_url}/applications.json",
+                headers=self._get_headers(),
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return IntegrationHealth(
+                        status=IntegrationStatus.HEALTHY,
+                        message="New Relic connection successful",
+                        details={"applications": len(data.get("applications", []))},
+                    )
+                else:
+                    error_text = await response.text()
+                    return IntegrationHealth(
+                        status=IntegrationStatus.ERROR,
+                        message=f"New Relic API error: {response.status}",
+                        details={"error": error_text},
+                    )
         except aiohttp.ClientError as e:
             logger.error("New Relic connection failed: %s", e)
             return IntegrationHealth(
@@ -380,16 +368,13 @@ class NewRelicIntegration(BaseIntegration):
 
     async def _list_applications(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all monitored applications."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/applications.json",
-                headers=self._get_headers(),
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                apps = data.get("applications", [])
-                return {"applications": apps, "count": len(apps)}
+        data = await get_http_client().get_json(
+            f"{self.base_url}/applications.json",
+            headers=self._get_headers(),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        apps = data.get("applications", [])
+        return {"applications": apps, "count": len(apps)}
 
     async def _get_metrics(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Query metrics using NRQL."""
@@ -415,30 +400,24 @@ class NewRelicIntegration(BaseIntegration):
             },
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                self.graphql_url,
-                headers=self._get_headers(),
-                json=graphql_query,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                results = data.get("data", {}).get("actor", {}).get("account", {}).get("nrql", {}).get("results", [])
-                return {"results": results, "count": len(results)}
+        data = await get_http_client().post_json(
+            self.graphql_url,
+            graphql_query,
+            headers=self._get_headers(),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        results = data.get("data", {}).get("actor", {}).get("account", {}).get("nrql", {}).get("results", [])
+        return {"results": results, "count": len(results)}
 
     async def _list_alerts(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List alert policies and conditions."""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/alerts_policies.json",
-                headers=self._get_headers(),
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                policies = data.get("policies", [])
-                return {"policies": policies, "count": len(policies)}
+        data = await get_http_client().get_json(
+            f"{self.base_url}/alerts_policies.json",
+            headers=self._get_headers(),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        policies = data.get("policies", [])
+        return {"policies": policies, "count": len(policies)}
 
     async def _get_app_health(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get application health status."""
@@ -446,19 +425,16 @@ class NewRelicIntegration(BaseIntegration):
         if not app_id:
             raise ValueError("app_id is required")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/applications/{app_id}.json",
-                headers=self._get_headers(),
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                app = data.get("application", {})
-                return {
-                    "id": app.get("id"),
-                    "name": app.get("name"),
-                    "health_status": app.get("health_status"),
-                    "reporting": app.get("reporting"),
-                    "summary": app.get("application_summary", {}),
-                }
+        data = await get_http_client().get_json(
+            f"{self.base_url}/applications/{app_id}.json",
+            headers=self._get_headers(),
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        app = data.get("application", {})
+        return {
+            "id": app.get("id"),
+            "name": app.get("name"),
+            "health_status": app.get("health_status"),
+            "reporting": app.get("reporting"),
+            "summary": app.get("application_summary", {}),
+        }
