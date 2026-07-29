@@ -780,14 +780,19 @@
       databases:
         - "{{ backend_postgres_db | default('autobot_users') }}"
       postgresql_listen_addresses: "localhost"
-      # #10636: On a collapsed single-box deploy this instance already hosts the
-      # SLM (slm_app) whose creds live in the DEFAULT db-credentials.env. Writing
-      # the backend's AUTOBOT_DB_* creds into that same file would overwrite the
-      # SLM's SLM_DB_* entries — the SLM systemd unit's EnvironmentFile then loads
-      # nothing and the SLM loses DB access. Give the backend its OWN creds file so
-      # both coexist; the SLM's file is never touched. On multi-VM fleets this is
-      # a separate instance/host, so a distinct filename is harmless there too.
-      postgresql_credentials_file: "autobot-db-credentials.env"
+      # #10636 gave the backend its OWN creds file because the postgresql role
+      # then rendered the WHOLE file from a template, so writing AUTOBOT_DB_*
+      # erased the SLM's SLM_DB_* entries on a collapsed single-box deploy.
+      #
+      # #12224 removed that hazard: the role now writes each prefix as its own
+      # marked blockinfile region, so SLM_* and AUTOBOT_* coexist in one file and
+      # neither clobbers the other. The separate file therefore solves a problem
+      # that no longer exists -- and it kept drifting, ending up a month stale
+      # with a password Postgres rejects, which is how #12883 became an outage.
+      #
+      # #12907: the AUTOBOT block now lands in the canonical db-credentials.env
+      # (the role default), and the legacy file is retired once that block is in
+      # place. One store, one authority, no precedence for consumers to know.
       # #10636: The postgresql role's pg_hba render is additive (it discovers every
       # existing login role first — see roles/postgresql/tasks/configure.yml — so
       # slm_app's rules survive), and this second run must ONLY reload, never
