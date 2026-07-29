@@ -56,6 +56,7 @@ Correctness → Speed → Maintainability. No wasted motion. No speculative work
 - **Branch target:** `Dev_new_gui` for all PRs
 - **Commit format:** `<type>(scope): <description> (#issue-number)`
 - **Security reviews are findings-first:** read the diff only, emit a severity/`file:line`/issue/fix table within 3 tool calls, verify *after* — never explore before the table lands (skill: `secreview`)
+- **Long analyses go to a file, not the response:** research/audit/comparison output is written to `docs/research/<topic>.md` (or `docs/audit/`) incrementally as it is produced; the reply is the path plus a short summary — an interrupted or token-capped response must never lose the work
 - **Never `--no-verify`** — PostToolUse hook auto-formats `.py`
 - **Protected branches:** `main`/`master` blocked by pre-commit hook → use `issue-*` or `hotfix-*`
 - **PR template headings:** `Thinking Path` · `What Changed` · `Verification` · `Model Used`

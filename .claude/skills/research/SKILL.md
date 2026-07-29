@@ -196,7 +196,11 @@ If source is too large for single analysis, summarize sections and focus on what
 
 ## Rules
 
-- Output goes to chat only — no file writing unless user asks
+- **Write as you go, don't hold it in the response.** Findings land in
+  `docs/research/<topic>.md` incrementally — Phase 1 is on disk *before* the
+  Phase 2 gate, so an unapproved or interrupted run still leaves the analysis
+  behind. Chat reply is the file path plus a short summary, never the full
+  analysis (#12955)
 - Phase 2 MUST NOT start without explicit user approval after Phase 1
 - Always cite specific files, functions, or sections when making claims
 - When comparing to AutoBot, read actual code — don't assume based on file names
