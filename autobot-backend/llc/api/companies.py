@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, get_session, service_dep
 from llc.kb.collections import KbCollectionManager
@@ -65,7 +66,6 @@ from llc.services.portability import PortabilityService
 from user_management.database import get_async_session
 from user_management.models.organization import Organization
 from user_management.services import TenantContext
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 

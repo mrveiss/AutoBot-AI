@@ -16,6 +16,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from user_management.database import get_async_session
 from user_management.services import (
     OrganizationService,
@@ -23,7 +24,6 @@ from user_management.services import (
     TenantContext,
     UserService,
 )
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = logging.getLogger(__name__)
 

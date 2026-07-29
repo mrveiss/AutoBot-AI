@@ -27,10 +27,10 @@ import time
 
 import aiohttp
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 

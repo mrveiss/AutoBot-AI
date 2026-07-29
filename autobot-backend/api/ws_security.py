@@ -20,6 +20,7 @@ import logging
 import os
 
 from fastapi import WebSocket
+
 from autobot_shared.auth.permissions import is_admin_role
 
 logger = logging.getLogger(__name__)

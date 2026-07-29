@@ -35,6 +35,7 @@ from api.schemas_system import (
 )
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
@@ -47,7 +48,6 @@ from models.heartbeat import (
     WakeupTrigger,
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 router = APIRouter()

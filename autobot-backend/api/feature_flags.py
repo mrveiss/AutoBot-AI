@@ -23,6 +23,7 @@ from typing import Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth_middleware import get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.access_control_metrics import AccessControlMetrics, get_metrics_service
@@ -42,7 +43,6 @@ from .schemas_system import (
     FeatureFlagEnforcementModeResponse,
     FeatureFlagStatusResponse,
 )
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 

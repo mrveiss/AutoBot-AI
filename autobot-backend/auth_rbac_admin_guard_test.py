@@ -58,9 +58,7 @@ def _is_role_operand(node: ast.expr) -> bool:
         key = node.slice
         return isinstance(key, ast.Constant) and str(key.value).lower() == "role"
     if isinstance(node, ast.Call):  # e.g. user_data.get("role")
-        return any(
-            isinstance(a, ast.Constant) and str(a.value).lower() == "role" for a in node.args
-        )
+        return any(isinstance(a, ast.Constant) and str(a.value).lower() == "role" for a in node.args)
     return False
 
 
@@ -134,8 +132,8 @@ class TestGuardDetection:
     @pytest.mark.parametrize(
         "source",
         [
-            'if is_admin_role(role): pass',
-            'if role in ADMIN_ROLES: pass',
+            "if is_admin_role(role): pass",
+            "if role in ADMIN_ROLES: pass",
             'if name == "admin": pass',  # not a role
             'if role == "operator": pass',  # not an admin literal
             '"""A docstring mentioning role == \'admin\' must not match."""',

@@ -36,7 +36,7 @@ from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.password_weakness import check_password_weakness
@@ -45,7 +45,6 @@ from services.audit.audit import EventType  # GH#8290 Phase 2
 from services.audit.audit import emit as _emit_event  # GH#8290 Phase 2
 from user_management.database import db_session_context
 from user_management.services.user_service import UserService
-from autobot_shared.auth.permissions import is_admin_role
 
 router = APIRouter()
 logger = get_logger(__name__)

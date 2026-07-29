@@ -22,11 +22,11 @@ from api.schemas_system import (
     SingleMessageResponse,
 )
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.message_bus import get_message_bus
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
-from autobot_shared.auth.permissions import is_admin_role
 
 logger = get_logger(__name__)
 
