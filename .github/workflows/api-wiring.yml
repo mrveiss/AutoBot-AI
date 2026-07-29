@@ -29,8 +29,16 @@ on:
       - 'requirements*.txt'
       - '.github/workflows/api-wiring.yml'
   pull_request:
+    # NOTE: no pull_request.paths filter (#12934). This workflow ALWAYS runs on
+    # PRs so its required-check context ("api-wiring") always reports a
+    # conclusion. A path-filtered required check simply never triggers, and an
+    # absent required context is treated as unsatisfied, not passed — the PR is
+    # then permanently blocked and can only land with --admin, which trains the
+    # habit of merging past unreported gates. Same fix and reasoning as
+    # frontend-test.yml (#10019, #10527). The real audit is gated on the
+    # `changes` job below; the `api-wiring-skip` shim (same `name:`) reports the
+    # context green when no relevant path was touched.
     branches: [ main, Dev_new_gui ]
-    paths: *paths
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -40,7 +48,30 @@ permissions:
   contents: read
 
 jobs:
+  # Job 0: detect relevant paths — always runs so the required context reports.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      wiring: ${{ steps.filter.outputs.wiring }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
+        id: filter
+        with:
+          filters: |
+            wiring:
+              - 'autobot-backend/**/*.py'
+              - 'autobot-slm-backend/**/*.py'
+              - 'autobot-frontend/src/**'
+              - 'scripts/audit_api_wiring.py'
+              - 'scripts/api_wiring_baseline.txt'
+              - 'requirements*.txt'
+              - '.github/workflows/api-wiring.yml'
+
   api-wiring:
+    needs: changes
+    if: needs.changes.outputs.wiring == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -102,3 +133,20 @@ jobs:
             echo "::warning::App build failed in CI — falling back to static (heuristic) audit."
             python scripts/audit_api_wiring.py
           fi
+
+  # Mutually exclusive with `api-wiring` above, and deliberately sharing its
+  # check-context name so a PR always sees exactly one terminal "api-wiring"
+  # conclusion — the real audit when wiring-relevant paths changed, an explicit
+  # green here when they did not (#12934). Mirrors `unit-tests-skip` in
+  # frontend-test.yml (#10527).
+  api-wiring-skip:
+    name: api-wiring
+    needs: changes
+    if: needs.changes.outputs.wiring != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: No wiring-relevant changes — reporting required context as success
+        run: |
+          echo "No backend/frontend/audit-script paths changed in this PR."
+          echo "The API wiring audit has nothing to check, so the required"
+          echo "'api-wiring' context is reported as success (#12934)."
