@@ -129,6 +129,25 @@ _BACKEND_DIR_CANDIDATES = ("autobot-backend", "backend", ".")
 _ROUTER_REGISTRY_RELPATH = Path("initialization") / "router_registry"
 
 
+def _is_test_file(path: Path) -> bool:
+    """Whether *path* is a test module rather than a served route (#12953).
+
+    A route defined in a test is not an endpoint, and counting one pollutes the
+    report in both directions: it appears as a backend endpoint no frontend
+    calls (a phantom "orphaned" finding telling someone to wire or delete
+    something that does not exist), and as a scanned path absent from
+    ``app.openapi()``.
+
+    Matches the repo's two conventions (``x_test.py`` and ``test_x.py``) plus
+    anything under a ``tests`` directory.
+    """
+    return (
+        path.name.endswith("_test.py")
+        or path.name.startswith("test_")
+        or "tests" in path.parts
+    )
+
+
 def find_backend_dir(project_root: Path) -> Path:
     """Locate the FastAPI backend package inside *project_root* (#12853).
 
@@ -209,6 +228,8 @@ class BackendEndpointScanner:
             if py_file.name.startswith("__"):
                 continue
             if "archive" in str(py_file).lower():
+                continue
+            if _is_test_file(py_file):
                 continue
 
             try:

@@ -14,6 +14,8 @@ the analyzable repo -- so the fallback must instead use
 #10730).
 """
 
+import pytest
+
 from unittest.mock import patch
 
 from api.codebase_analytics import api_endpoint_scanner as scanner_mod
@@ -273,3 +275,54 @@ class TestRegistryRoutersOutsideApi:
         scanner = self._scanner_for(tmp_path, None)
 
         assert scanner._registry_router_files() == {}
+
+
+class TestTestFilesAreNotEndpoints:
+    """#12953: a route defined in a test is not a served endpoint.
+
+    Counting one pollutes the report in both directions -- it becomes a backend
+    endpoint no frontend calls (a phantom "orphaned" finding telling someone to
+    wire or delete something that does not exist) and a scanned path absent
+    from app.openapi().
+    """
+
+    @pytest.mark.parametrize(
+        "name",
+        ["marketplace_422_test.py", "test_tenant_context_resolution.py"],
+    )
+    def test_test_modules_are_excluded(self, tmp_path, name):
+        backend = tmp_path / "autobot-backend"
+        (backend / "api").mkdir(parents=True)
+        (backend / "initialization" / "router_registry").mkdir(parents=True)
+        (backend / "api" / name).write_text(
+            '@router.get("/catalog")\ndef c(): ...\n', encoding="utf-8"
+        )
+
+        paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
+
+        assert paths == []
+
+    def test_tests_directory_is_excluded(self, tmp_path):
+        backend = tmp_path / "autobot-backend"
+        (backend / "api" / "tests").mkdir(parents=True)
+        (backend / "initialization" / "router_registry").mkdir(parents=True)
+        (backend / "api" / "tests" / "helper.py").write_text(
+            '@router.get("/x")\ndef c(): ...\n', encoding="utf-8"
+        )
+
+        paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
+
+        assert paths == []
+
+    def test_real_modules_are_still_scanned(self, tmp_path):
+        """The exclusion must not swallow modules that merely mention tests."""
+        backend = tmp_path / "autobot-backend"
+        (backend / "api").mkdir(parents=True)
+        (backend / "initialization" / "router_registry").mkdir(parents=True)
+        (backend / "api" / "latest_results.py").write_text(
+            '@router.get("/results")\ndef c(): ...\n', encoding="utf-8"
+        )
+
+        paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
+
+        assert "/api/results" in paths
