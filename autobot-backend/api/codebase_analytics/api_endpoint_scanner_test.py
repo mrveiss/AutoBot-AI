@@ -220,8 +220,8 @@ class TestRegistryRoutersOutsideApi:
         pkg = self._make_package(
             backend,
             'router = APIRouter(prefix="/llc")\n'
-            'from .costs import router as costs_router\n'
-            'router.include_router(costs_router)\n',
+            "from .costs import router as costs_router\n"
+            "router.include_router(costs_router)\n",
             {"costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/by-agent")\ndef c(): ...\n'},
         )
 
@@ -235,8 +235,8 @@ class TestRegistryRoutersOutsideApi:
         self._make_package(
             backend,
             'router = APIRouter(prefix="/llc")\n'
-            'from .costs import router as costs_router\n'
-            'router.include_router(costs_router)\n',
+            "from .costs import router as costs_router\n"
+            "router.include_router(costs_router)\n",
             {"costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/by-agent")\ndef c(): ...\n'},
         )
 
@@ -250,8 +250,8 @@ class TestRegistryRoutersOutsideApi:
         pkg = self._make_package(
             backend,
             'router = APIRouter(prefix="/llc")\n'
-            'from .costs import router as costs_router\n'
-            'router.include_router(costs_router)\n',
+            "from .costs import router as costs_router\n"
+            "router.include_router(costs_router)\n",
             {
                 "costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/x")\ndef c(): ...\n',
                 "helpers.py": "def compute(): return 1\n",
@@ -425,12 +425,18 @@ class TestNestedRouterSubpackages:
     def test_nested_subpackage_uses_its_own_prefix(self, tmp_path):
         scanner, backend = self._scanner(tmp_path, [("llc.api", "")])
         pkg = self._pkg(
-            backend, "llc/api", "/llc", ["sub"],
+            backend,
+            "llc/api",
+            "/llc",
+            ["sub"],
             {"sub": ""},  # placeholder, replaced by the subpackage below
         )
         (pkg / "sub.py").unlink()
         self._pkg(
-            backend, "llc/api/sub", "/sub", ["b"],
+            backend,
+            "llc/api/sub",
+            "/sub",
+            ["b"],
             {"b": 'router = APIRouter(prefix="/b")\n@router.get("/x")\ndef f(): ...\n'},
         )
 
@@ -443,7 +449,10 @@ class TestNestedRouterSubpackages:
         pkg = self._pkg(backend, "llc/api", "/llc", ["sub"], {"sub": ""})
         (pkg / "sub.py").unlink()
         self._pkg(
-            backend, "llc/api/sub", "/sub", ["b"],
+            backend,
+            "llc/api/sub",
+            "/sub",
+            ["b"],
             {"b": 'router = APIRouter(prefix="/b")\n@router.get("/x")\ndef f(): ...\n'},
         )
 
@@ -455,7 +464,10 @@ class TestNestedRouterSubpackages:
         """#12956: the docstring claimed this; the code did not enforce it."""
         scanner, backend = self._scanner(tmp_path, [("llc.api", "")])
         pkg = self._pkg(
-            backend, "llc/api", "/llc", ["mounted"],
+            backend,
+            "llc/api",
+            "/llc",
+            ["mounted"],
             {
                 "mounted": 'router = APIRouter(prefix="/m")\n@router.get("/x")\ndef f(): ...\n',
                 "orphan": 'router = APIRouter(prefix="/o")\n@router.get("/y")\ndef g(): ...\n',
