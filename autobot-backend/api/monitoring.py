@@ -62,6 +62,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
+from autobot_shared.time_utils import to_rfc3339
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
@@ -146,8 +147,8 @@ async def _query_prometheus_range(
         http_client = get_http_client()
         params = {
             "query": query,
-            "start": start.isoformat() + "Z",
-            "end": end.isoformat() + "Z",
+            "start": to_rfc3339(start),
+            "end": to_rfc3339(end),
             "step": step,
         }
         async with await http_client.get(
