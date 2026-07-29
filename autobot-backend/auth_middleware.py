@@ -23,6 +23,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
@@ -966,7 +967,7 @@ def check_admin_permission(request: Request) -> bool:
     user_role = user_data.get("role")
     if not user_role:
         raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-    if user_role != "admin":
+    if not is_admin_role(user_role):
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True

@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access, get_session, service_dep
 from llc.kb.collections import KbCollectionManager
@@ -142,7 +143,7 @@ def _is_platform_admin(current_user: dict) -> bool:
     and derive admin status from the JWT the same way the tenant-context
     dependency does: an explicit ``is_platform_admin`` flag or ``role == "admin"``.
     """
-    return bool(current_user.get("is_platform_admin")) or current_user.get("role") == "admin"
+    return bool(current_user.get("is_platform_admin")) or is_admin_role(current_user.get("role"))
 
 
 def _current_user_id(current_user: dict) -> str:

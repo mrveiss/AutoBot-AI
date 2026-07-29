@@ -27,6 +27,7 @@ import time
 
 import aiohttp
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
@@ -154,7 +155,7 @@ class MCPDispatcher:
 
         await self._ensure_cache_fresh()
 
-        if role != "admin" and self._is_admin_only(tool_name):
+        if not is_admin_role(role) and self._is_admin_only(tool_name):
             logger.warning(
                 "MCPDispatcher: role=%s denied access to admin-only tool %s",
                 role,
@@ -284,7 +285,7 @@ class MCPDispatcher:
                 "parameters": tool.get("input_schema", {}),
             }
             for tool in self._tool_cache.values()
-            if role == "admin" or not self._is_admin_only(tool["name"])
+            if is_admin_role(role) or not self._is_admin_only(tool["name"])
         ]
 
 

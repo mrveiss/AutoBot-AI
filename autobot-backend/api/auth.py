@@ -36,7 +36,7 @@ from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
 from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
-from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role
+from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.password_weakness import check_password_weakness
@@ -283,7 +283,7 @@ async def revoke_rs256_token(
     _token_uid = _token_claims.get("user_id")
     _caller_sub = current_user.get("sub") or current_user.get("username")
     _caller_uid = current_user.get("user_id")
-    _is_admin = bool(current_user.get("admin")) or current_user.get("role") == "admin"
+    _is_admin = bool(current_user.get("admin")) or is_admin_role(current_user.get("role"))
     _owns = (_token_sub and _token_sub == _caller_sub) or (_token_uid and _token_uid == _caller_uid)
     if not _owns and not _is_admin:
         raise HTTPException(status_code=403, detail="Can only revoke your own tokens")
