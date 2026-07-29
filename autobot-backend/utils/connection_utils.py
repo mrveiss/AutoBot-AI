@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
@@ -67,10 +68,17 @@ class ConnectionTester:
                 ollama_endpoint = get_ollama_url()
                 ollama_check_url = f"{ollama_endpoint}/api/tags"
                 timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.health_check)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(ollama_check_url) as response:
-                        if response.status == 200:
-                            ollama_status = "connected"
+                # Issue #12979: shared pool instead of a per-probe session.
+                # suppress_error_log because this probe already swallows failure
+                # into a "disconnected" status and logs it at DEBUG below.
+                async with get_http_client().tracked_request(
+                    "GET",
+                    ollama_check_url,
+                    timeout=timeout,
+                    suppress_error_log=True,
+                ) as response:
+                    if response.status == 200:
+                        ollama_status = "connected"
             except Exception as e:
                 logger.debug("Ollama health check failed: %s", e)
 
@@ -168,33 +176,39 @@ class ConnectionTester:
             "stream": False,
         }
         gen_timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.llm)
-        async with aiohttp.ClientSession(timeout=gen_timeout) as session:
-            async with session.post(endpoint, json=test_payload) as resp:
-                if resp.status == 200:
-                    result = await resp.json()
-                    response_text = result.get("response", "No response text")
-                    test_response = (
-                        response_text[:100] + "..."
-                        if response_text and response_text != "No response text"
-                        else "No response"
-                    )
-                    return {
-                        "status": "connected",
-                        "message": f"Successfully connected to Ollama with model '{model}'",
-                        "endpoint": endpoint,
-                        "model": model,
-                        "current_model": model,
-                        "test_response": test_response,
-                    }
-                error_text = await resp.text()
+        # Issue #12979: shared pool. Status is inspected rather than raised on,
+        # so this keeps the explicit response block instead of post_json().
+        async with get_http_client().tracked_request(
+            "POST",
+            endpoint,
+            json=test_payload,
+            timeout=gen_timeout,
+        ) as resp:
+            if resp.status == 200:
+                result = await resp.json()
+                response_text = result.get("response", "No response text")
+                test_response = (
+                    response_text[:100] + "..."
+                    if response_text and response_text != "No response text"
+                    else "No response"
+                )
                 return {
-                    "status": "partial",
-                    "message": f"Connected to Ollama but model '{model}' failed to respond",
+                    "status": "connected",
+                    "message": f"Successfully connected to Ollama with model '{model}'",
                     "endpoint": endpoint,
                     "model": model,
                     "current_model": model,
-                    "error": error_text,
+                    "test_response": test_response,
                 }
+            error_text = await resp.text()
+            return {
+                "status": "partial",
+                "message": f"Connected to Ollama but model '{model}' failed to respond",
+                "endpoint": endpoint,
+                "model": model,
+                "current_model": model,
+                "error": error_text,
+            }
 
     @staticmethod
     async def test_ollama_connection() -> Metadata:
@@ -206,16 +220,19 @@ class ConnectionTester:
             check_url = endpoint.replace(PATH_OLLAMA_GENERATE, PATH_OLLAMA_TAGS)
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
 
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(check_url) as response:
-                    if response.status != 200:
-                        return {
-                            "status": "disconnected",
-                            "message": f"Failed to connect to Ollama at {check_url}",
-                            "endpoint": endpoint,
-                            "status_code": response.status,
-                        }
-                    return await ConnectionTester._test_ollama_model(endpoint, model)
+            # Issue #12979: shared pool. The reachability probe releases its
+            # connection before the generation test runs, so the two requests
+            # do not hold two pooled slots at once.
+            async with get_http_client().tracked_request("GET", check_url, timeout=timeout) as response:
+                if response.status != 200:
+                    return {
+                        "status": "disconnected",
+                        "message": f"Failed to connect to Ollama at {check_url}",
+                        "endpoint": endpoint,
+                        "status_code": response.status,
+                    }
+
+            return await ConnectionTester._test_ollama_model(endpoint, model)
 
         except Exception as e:
             logger.error("Ollama connection test failed: %s", str(e))
@@ -312,27 +329,25 @@ class ConnectionTester:
         tags_url = f"{ollama_host}/api/tags"
         timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.connect)
 
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(tags_url) as response:
-                if response.status != 200:
-                    return {
-                        "connected": False,
-                        "current_model": current_model,
-                        "provider": provider,
-                        "message": f"Cannot connect to Ollama at {ollama_host}",
-                    }
-                data = await response.json()
-                available_models = [model["name"] for model in data.get("models", [])]
-                model_available = current_model in available_models if current_model else False
+        # Issue #12979: shared pool; status is inspected, so the response block stays.
+        async with get_http_client().tracked_request("GET", tags_url, timeout=timeout) as response:
+            if response.status != 200:
                 return {
-                    "connected": True,
+                    "connected": False,
                     "current_model": current_model,
-                    "model_available": model_available,
                     "provider": provider,
-                    "message": (
-                        f"Embedding model '{current_model}' " f"{'available' if model_available else 'not found'}"
-                    ),
+                    "message": f"Cannot connect to Ollama at {ollama_host}",
                 }
+            data = await response.json()
+            available_models = [model["name"] for model in data.get("models", [])]
+            model_available = current_model in available_models if current_model else False
+            return {
+                "connected": True,
+                "current_model": current_model,
+                "model_available": model_available,
+                "provider": provider,
+                "message": (f"Embedding model '{current_model}' " f"{'available' if model_available else 'not found'}"),
+            }
 
     @staticmethod
     async def _get_embedding_status() -> Metadata:
@@ -499,13 +514,20 @@ class ModelManager:
             ollama_url = f"{ollama_host}/api/tags"
 
             timeout = aiohttp.ClientTimeout(total=_ssot_config.timeout.http)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(ollama_url) as response:
-                    if response.status != 200:
-                        return []
-                    ollama_data = await response.json()
-                    raw_models = ollama_data.get("models", [])
-                    return [ModelManager._parse_ollama_model(model) for model in raw_models]
+            # Issue #12979: shared pool. suppress_error_log because this path
+            # already rate-limits its own failure warning below to avoid spam
+            # when Ollama is not running.
+            async with get_http_client().tracked_request(
+                "GET",
+                ollama_url,
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as response:
+                if response.status != 200:
+                    return []
+                ollama_data = await response.json()
+                raw_models = ollama_data.get("models", [])
+                return [ModelManager._parse_ollama_model(model) for model in raw_models]
         except Exception as e:
             ModelManager._log_ollama_warning_if_needed(e)
             return []
