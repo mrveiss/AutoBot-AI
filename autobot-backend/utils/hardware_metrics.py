@@ -23,6 +23,7 @@ import aiohttp
 import psutil
 
 from autobot_shared.async_compat import run_or_schedule
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
 
@@ -370,10 +371,17 @@ class HardwarePerformanceMonitor:
             ssot_config = get_config()
 
             timeout = aiohttp.ClientTimeout(total=5.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"http://{ssot_config.vm.npu_worker}:8081/stats") as response:
-                    if response.status == 200:
-                        return await response.json()
+            # Issue #12979: shared pool. suppress_error_log because the NPU
+            # worker is optional and this collector already swallows failure
+            # into an empty result.
+            async with get_http_client().tracked_request(
+                "GET",
+                f"http://{ssot_config.vm.npu}:8081/stats",
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as response:
+                if response.status == 200:
+                    return await response.json()
 
             return {}
         except Exception:
@@ -591,10 +599,16 @@ class HardwarePerformanceMonitor:
             start_time = time.time()
 
             timeout = aiohttp.ClientTimeout(total=2.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"http://{ssot_config.vm.main}:8001/api/health") as response:
-                    if response.status == 200:
-                        return round((time.time() - start_time) * 1000, 1)  # Convert to ms
+            # Issue #12979: shared pool. suppress_error_log because a failed
+            # probe is reported as the 999.0 sentinel below, not as an error.
+            async with get_http_client().tracked_request(
+                "GET",
+                f"http://{ssot_config.vm.main}:8001/api/health",
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as response:
+                if response.status == 200:
+                    return round((time.time() - start_time) * 1000, 1)  # Convert to ms
 
             return 999.0  # High latency if failed
         except Exception:
@@ -648,13 +662,13 @@ class HardwarePerformanceMonitor:
             {"name": "Redis", "host": ssot_config.vm.redis, "port": 6379, "path": None},
             {
                 "name": "AI Stack",
-                "host": ssot_config.vm.ai_stack,
+                "host": ssot_config.vm.aistack,
                 "port": 8080,
                 "path": "/health",
             },
             {
                 "name": "NPU Worker",
-                "host": ssot_config.vm.npu_worker,
+                "host": ssot_config.vm.npu,
                 "port": 8081,
                 "path": "/health",
             },
@@ -702,14 +716,20 @@ class HardwarePerformanceMonitor:
 
         try:
             timeout = aiohttp.ClientTimeout(total=5.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"http://{host}:{port}{path}") as response:
-                    if response.status == 200:
-                        return "healthy"
-                    elif 200 <= response.status < 400:
-                        return "degraded"
-                    else:
-                        return "critical"
+            # Issue #12979: shared pool. suppress_error_log because an
+            # unreachable service is already reported as "critical" below.
+            async with get_http_client().tracked_request(
+                "GET",
+                f"http://{host}:{port}{path}",
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as response:
+                if response.status == 200:
+                    return "healthy"
+                elif 200 <= response.status < 400:
+                    return "degraded"
+                else:
+                    return "critical"
         except Exception:
             return "critical"
 
