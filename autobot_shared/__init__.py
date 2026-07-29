@@ -83,4 +83,28 @@ def __getattr__(name):
         # Cache on module so __getattr__ isn't called again
         globals()[name] = val
         return val
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    # Submodule fallback (#12903). PEP 562 __getattr__ shadows Python's normal
+    # submodule attribute binding, and several test modules install stubs with
+    # ``sys.modules["autobot_shared.redis_client"] = stub`` — which does NOT set
+    # the attribute on this package. Attribute access then succeeded or failed
+    # purely on import order, so ``patch("autobot_shared.redis_client...")``
+    # passed standalone and raised AttributeError in a full-suite run.
+    #
+    # Resolve a real (or stubbed) submodule on demand so the package behaves the
+    # way a package without __getattr__ would.
+    import sys as _sys
+
+    _full = f"{__name__}.{name}"
+    if _full in _sys.modules:
+        globals()[name] = _sys.modules[_full]
+        return globals()[name]
+
+    import importlib as _importlib
+
+    try:
+        _mod = _importlib.import_module(f".{name}", __name__)
+    except ImportError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    globals()[name] = _mod
+    return _mod
