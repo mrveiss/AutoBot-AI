@@ -339,10 +339,14 @@ def _resolve_env_path(env_path: str | None) -> Path:
     for candidate in [current] + list(current.parents):
         if (candidate / ".env").exists():
             return candidate / ".env"
-    fallback = Path(
-        os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-    )  # ssot-config-exempt: bootstrap before config available / ".env"
-    return fallback
+    # ssot-config-exempt: bootstrap, before config is available.
+    # #12782: the `/ ".env"` join used to sit inside this trailing comment, so
+    # the fallback returned the DIRECTORY. _parse_env_file then failed with
+    # IsADirectoryError, swallowed it into an empty dict, and every SSOT key was
+    # reported missing -- "194 drifted, (194 SSOT keys, 0 .env keys)" on a host
+    # whose .env actually held 93 keys.
+    base = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+    return base / ".env"
 
 
 def _emit_drift_warnings(report: DriftReport) -> None:
