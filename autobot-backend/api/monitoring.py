@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import aiohttp
+
+from autobot_shared.time_utils import to_rfc3339
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -146,8 +148,8 @@ async def _query_prometheus_range(
         http_client = get_http_client()
         params = {
             "query": query,
-            "start": start.isoformat() + "Z",
-            "end": end.isoformat() + "Z",
+            "start": to_rfc3339(start),
+            "end": to_rfc3339(end),
             "step": step,
         }
         async with await http_client.get(

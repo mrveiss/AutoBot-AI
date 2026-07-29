@@ -9,6 +9,8 @@ Data validation models for NPU worker management and load balancing.
 """
 
 from datetime import datetime
+
+from autobot_shared.time_utils import to_rfc3339
 from enum import Enum
 from typing import Any, Dict, List
 
@@ -235,7 +237,9 @@ class NPUWorkerDetails(BaseModel):
             "performance_metrics": self.metrics.model_dump() if self.metrics else {},
             "priority": self.config.priority,
             "weight": self.config.weight,
-            "last_heartbeat": (self.status.last_heartbeat.isoformat() + "Z" if self.status.last_heartbeat else ""),
+            # #12967: last_heartbeat is `datetime | None` with no naive constraint,
+            # so an aware producer would emit a doubled zone (+00:00Z) here.
+            "last_heartbeat": (to_rfc3339(self.status.last_heartbeat) if self.status.last_heartbeat else ""),
             "created_at": "",  # Not tracked in current model
         }
 
