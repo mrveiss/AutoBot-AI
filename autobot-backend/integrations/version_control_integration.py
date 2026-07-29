@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from integrations.base import (
@@ -42,24 +43,25 @@ class GitLabIntegration(BaseIntegration):
             IntegrationHealth with connection status
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/user",
-                    headers=self.headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 200:
-                        user_data = await response.json()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.HEALTHY,
-                            message=f"Connected as {user_data.get('username')}",
-                            last_checked=now_utc(),
-                        )
+            async with get_http_client().tracked_request(
+                "GET",
+                f"{self.base_url}/user",
+                headers=self.headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+                suppress_error_log=True,
+            ) as response:
+                if response.status == 200:
+                    user_data = await response.json()
                     return IntegrationHealth(
-                        status=IntegrationStatus.UNHEALTHY,
-                        message=f"API returned status {response.status}",
+                        status=IntegrationStatus.HEALTHY,
+                        message=f"Connected as {user_data.get('username')}",
                         last_checked=now_utc(),
                     )
+                return IntegrationHealth(
+                    status=IntegrationStatus.UNHEALTHY,
+                    message=f"API returned status {response.status}",
+                    last_checked=now_utc(),
+                )
         except Exception as e:
             logger.error("GitLab connection test failed: %s", str(e))
             return IntegrationHealth(
@@ -143,16 +145,13 @@ class GitLabIntegration(BaseIntegration):
         if "visibility" in params:
             query_params["visibility"] = params["visibility"]
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{self.base_url}/projects",
-                headers=self.headers,
-                params=query_params,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                projects = await response.json()
-                return {"projects": projects, "count": len(projects)}
+        projects = await get_http_client().get_json(
+            f"{self.base_url}/projects",
+            headers=self.headers,
+            params=query_params,
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        return {"projects": projects, "count": len(projects)}
 
     async def _list_merge_requests(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List merge requests for a project.
@@ -169,17 +168,14 @@ class GitLabIntegration(BaseIntegration):
             "scope": params.get("scope", "all"),
         }
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/projects/{project_id}/merge_requests"
-            async with session.get(
-                url,
-                headers=self.headers,
-                params=query_params,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                merge_requests = await response.json()
-                return {"merge_requests": merge_requests, "count": len(merge_requests)}
+        url = f"{self.base_url}/projects/{project_id}/merge_requests"
+        merge_requests = await get_http_client().get_json(
+            url,
+            headers=self.headers,
+            params=query_params,
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        return {"merge_requests": merge_requests, "count": len(merge_requests)}
 
     async def _list_branches(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List branches for a project.
@@ -195,17 +191,14 @@ class GitLabIntegration(BaseIntegration):
         if "search" in params:
             query_params["search"] = params["search"]
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/projects/{project_id}/repository/branches"
-            async with session.get(
-                url,
-                headers=self.headers,
-                params=query_params,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                branches = await response.json()
-                return {"branches": branches, "count": len(branches)}
+        url = f"{self.base_url}/projects/{project_id}/repository/branches"
+        branches = await get_http_client().get_json(
+            url,
+            headers=self.headers,
+            params=query_params,
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        return {"branches": branches, "count": len(branches)}
 
     async def _get_commit_info(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get detailed commit information.
@@ -219,12 +212,9 @@ class GitLabIntegration(BaseIntegration):
         project_id = params["project_id"]
         commit_sha = params["commit_sha"]
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/projects/{project_id}" f"/repository/commits/{commit_sha}"
-            async with session.get(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                response.raise_for_status()
-                commit = await response.json()
-                return {"commit": commit}
+        url = f"{self.base_url}/projects/{project_id}" f"/repository/commits/{commit_sha}"
+        commit = await get_http_client().get_json(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=30))
+        return {"commit": commit}
 
     async def _compare_branches(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Compare two branches.
@@ -238,17 +228,14 @@ class GitLabIntegration(BaseIntegration):
         project_id = params["project_id"]
         query_params = {"from": params["from_branch"], "to": params["to_branch"]}
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/projects/{project_id}/repository/compare"
-            async with session.get(
-                url,
-                headers=self.headers,
-                params=query_params,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-                response.raise_for_status()
-                comparison = await response.json()
-                return {"comparison": comparison}
+        url = f"{self.base_url}/projects/{project_id}/repository/compare"
+        comparison = await get_http_client().get_json(
+            url,
+            headers=self.headers,
+            params=query_params,
+            timeout=aiohttp.ClientTimeout(total=30),
+        )
+        return {"comparison": comparison}
 
 
 class BitbucketIntegration(BaseIntegration):
@@ -281,6 +268,20 @@ class BitbucketIntegration(BaseIntegration):
             self.auth = aiohttp.BasicAuth(username, config.api_key)
             self.headers = {}
 
+    def _request_kwargs(self, timeout: int) -> Dict[str, Any]:
+        """Build the per-request kwargs shared by every Bitbucket call.
+
+        Args:
+            timeout: Total request timeout in seconds
+
+        Returns:
+            Request kwargs including headers, timeout and optional basic auth
+        """
+        kwargs: Dict[str, Any] = {"headers": self.headers, "timeout": timeout}
+        if hasattr(self, "auth"):
+            kwargs["auth"] = self.auth
+        return kwargs
+
     async def test_connection(self) -> IntegrationHealth:
         """Test Bitbucket API connection.
 
@@ -288,24 +289,22 @@ class BitbucketIntegration(BaseIntegration):
             IntegrationHealth with connection status
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                kwargs = {"headers": self.headers, "timeout": 10}
-                if hasattr(self, "auth"):
-                    kwargs["auth"] = self.auth
-
-                async with session.get(f"{self.base_url}/user", **kwargs) as response:
-                    if response.status == 200:
-                        user_data = await response.json()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.HEALTHY,
-                            message=(f"Connected as {user_data.get('username')}"),
-                            last_checked=now_utc(),
-                        )
+            kwargs = self._request_kwargs(timeout=10)
+            async with get_http_client().tracked_request(
+                "GET", f"{self.base_url}/user", suppress_error_log=True, **kwargs
+            ) as response:
+                if response.status == 200:
+                    user_data = await response.json()
                     return IntegrationHealth(
-                        status=IntegrationStatus.UNHEALTHY,
-                        message=f"API returned status {response.status}",
+                        status=IntegrationStatus.HEALTHY,
+                        message=(f"Connected as {user_data.get('username')}"),
                         last_checked=now_utc(),
                     )
+                return IntegrationHealth(
+                    status=IntegrationStatus.UNHEALTHY,
+                    message=f"API returned status {response.status}",
+                    last_checked=now_utc(),
+                )
         except Exception as e:
             logger.error("Bitbucket connection test failed: %s", str(e))
             return IntegrationHealth(
@@ -377,19 +376,12 @@ class BitbucketIntegration(BaseIntegration):
         if not workspace:
             raise ValueError("Workspace is required")
 
-        async with aiohttp.ClientSession() as session:
-            kwargs = {"headers": self.headers, "timeout": 30}
-            if hasattr(self, "auth"):
-                kwargs["auth"] = self.auth
-
-            url = f"{self.base_url}/repositories/{workspace}"
-            async with session.get(url, **kwargs) as response:
-                response.raise_for_status()
-                data = await response.json()
-                return {
-                    "repositories": data.get("values", []),
-                    "count": len(data.get("values", [])),
-                }
+        url = f"{self.base_url}/repositories/{workspace}"
+        data = await get_http_client().get_json(url, **self._request_kwargs(timeout=30))
+        return {
+            "repositories": data.get("values", []),
+            "count": len(data.get("values", [])),
+        }
 
     async def _list_pull_requests(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List pull requests for a repository.
@@ -407,21 +399,15 @@ class BitbucketIntegration(BaseIntegration):
         repo_slug = params["repo_slug"]
         state = params.get("state", "OPEN")
 
-        async with aiohttp.ClientSession() as session:
-            kwargs = {"headers": self.headers, "timeout": 30}
-            if hasattr(self, "auth"):
-                kwargs["auth"] = self.auth
+        url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/pullrequests"
+        kwargs = self._request_kwargs(timeout=30)
+        kwargs["params"] = {"state": state}
 
-            url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/pullrequests"
-            kwargs["params"] = {"state": state}
-
-            async with session.get(url, **kwargs) as response:
-                response.raise_for_status()
-                data = await response.json()
-                return {
-                    "pull_requests": data.get("values", []),
-                    "count": len(data.get("values", [])),
-                }
+        data = await get_http_client().get_json(url, **kwargs)
+        return {
+            "pull_requests": data.get("values", []),
+            "count": len(data.get("values", [])),
+        }
 
     async def _list_branches(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List branches for a repository.
@@ -438,19 +424,12 @@ class BitbucketIntegration(BaseIntegration):
 
         repo_slug = params["repo_slug"]
 
-        async with aiohttp.ClientSession() as session:
-            kwargs = {"headers": self.headers, "timeout": 30}
-            if hasattr(self, "auth"):
-                kwargs["auth"] = self.auth
-
-            url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/refs/branches"
-            async with session.get(url, **kwargs) as response:
-                response.raise_for_status()
-                data = await response.json()
-                return {
-                    "branches": data.get("values", []),
-                    "count": len(data.get("values", [])),
-                }
+        url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/refs/branches"
+        data = await get_http_client().get_json(url, **self._request_kwargs(timeout=30))
+        return {
+            "branches": data.get("values", []),
+            "count": len(data.get("values", [])),
+        }
 
     async def _get_commit_info(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get detailed commit information.
@@ -468,13 +447,6 @@ class BitbucketIntegration(BaseIntegration):
         repo_slug = params["repo_slug"]
         commit_hash = params["commit_hash"]
 
-        async with aiohttp.ClientSession() as session:
-            kwargs = {"headers": self.headers, "timeout": 30}
-            if hasattr(self, "auth"):
-                kwargs["auth"] = self.auth
-
-            url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/commit/{commit_hash}"
-            async with session.get(url, **kwargs) as response:
-                response.raise_for_status()
-                commit = await response.json()
-                return {"commit": commit}
+        url = f"{self.base_url}/repositories/{workspace}/" f"{repo_slug}/commit/{commit_hash}"
+        commit = await get_http_client().get_json(url, **self._request_kwargs(timeout=30))
+        return {"commit": commit}

@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
@@ -41,22 +42,25 @@ class JenkinsIntegration(BaseIntegration):
             IntegrationHealth with status and details
         """
         try:
-            async with aiohttp.ClientSession(auth=self.auth) as session:
-                async with session.get(
-                    f"{self.base_url}/api/json", timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.HEALTHY,
-                            message="Connected to Jenkins successfully",
-                            details={"version": data.get("version")},
-                        )
+            async with get_http_client().tracked_request(
+                "GET",
+                f"{self.base_url}/api/json",
+                auth=self.auth,
+                timeout=aiohttp.ClientTimeout(total=10),
+                suppress_error_log=True,
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
                     return IntegrationHealth(
-                        status=IntegrationStatus.UNHEALTHY,
-                        message=f"Jenkins returned status {response.status}",
-                        details={},
+                        status=IntegrationStatus.HEALTHY,
+                        message="Connected to Jenkins successfully",
+                        details={"version": data.get("version")},
                     )
+                return IntegrationHealth(
+                    status=IntegrationStatus.UNHEALTHY,
+                    message=f"Jenkins returned status {response.status}",
+                    details={},
+                )
         except Exception:
             logger.exception("Jenkins connection test failed")
             return IntegrationHealth(
@@ -114,42 +118,40 @@ class JenkinsIntegration(BaseIntegration):
 
     async def _list_jobs(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List all Jenkins jobs."""
-        async with aiohttp.ClientSession(auth=self.auth) as session:
-            async with session.get(f"{self.base_url}/api/json?tree=jobs[name,url,color]") as response:
-                response.raise_for_status()
-                data = await response.json()
-                return {"jobs": data.get("jobs", [])}
+        data = await get_http_client().get_json(
+            f"{self.base_url}/api/json?tree=jobs[name,url,color]",
+            auth=self.auth,
+        )
+        return {"jobs": data.get("jobs", [])}
 
     async def _get_build_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get Jenkins build status."""
         job_name = params["job_name"]
         build_number = params["build_number"]
         url = f"{self.base_url}/job/{job_name}/{build_number}/api/json"
-        async with aiohttp.ClientSession(auth=self.auth) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                return await response.json()
+        return await get_http_client().get_json(url, auth=self.auth)
 
     async def _trigger_build(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Trigger Jenkins build."""
         job_name = params["job_name"]
         build_params = params.get("parameters", {})
         url = f"{self.base_url}/job/{job_name}/buildWithParameters"
-        async with aiohttp.ClientSession(auth=self.auth) as session:
-            async with session.post(url, json=build_params) as response:
-                response.raise_for_status()
-                return {"status": "triggered", "job_name": job_name}
+        # Not post_json(): Jenkins answers buildWithParameters with an empty
+        # 201 body, so decoding JSON here would raise on the success path.
+        async with get_http_client().tracked_request("POST", url, json=build_params, auth=self.auth) as response:
+            response.raise_for_status()
+            return {"status": "triggered", "job_name": job_name}
 
     async def _get_build_log(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get Jenkins build log."""
         job_name = params["job_name"]
         build_number = params["build_number"]
         url = f"{self.base_url}/job/{job_name}/{build_number}/consoleText"
-        async with aiohttp.ClientSession(auth=self.auth) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                log = await response.text()
-                return {"log": log, "job_name": job_name, "build_number": build_number}
+        # Console output is plain text, so this reads text() rather than json().
+        async with get_http_client().tracked_request("GET", url, auth=self.auth) as response:
+            response.raise_for_status()
+            log = await response.text()
+            return {"log": log, "job_name": job_name, "build_number": build_number}
 
 
 class GitLabCIIntegration(BaseIntegration):
@@ -173,23 +175,25 @@ class GitLabCIIntegration(BaseIntegration):
             IntegrationHealth with status and details
         """
         try:
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.get(
-                    f"{self.base_url}/api/v4/version",
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.HEALTHY,
-                            message="Connected to GitLab successfully",
-                            details={"version": data.get("version")},
-                        )
+            async with get_http_client().tracked_request(
+                "GET",
+                f"{self.base_url}/api/v4/version",
+                headers=self.headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+                suppress_error_log=True,
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
                     return IntegrationHealth(
-                        status=IntegrationStatus.UNHEALTHY,
-                        message=f"GitLab returned status {response.status}",
-                        details={},
+                        status=IntegrationStatus.HEALTHY,
+                        message="Connected to GitLab successfully",
+                        details={"version": data.get("version")},
                     )
+                return IntegrationHealth(
+                    status=IntegrationStatus.UNHEALTHY,
+                    message=f"GitLab returned status {response.status}",
+                    details={},
+                )
         except Exception:
             logger.exception("GitLab connection test failed")
             return IntegrationHealth(
@@ -253,42 +257,30 @@ class GitLabCIIntegration(BaseIntegration):
         """List GitLab pipelines."""
         project_id = params["project_id"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipelines"
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                pipelines = await response.json()
-                return {"pipelines": pipelines}
+        pipelines = await get_http_client().get_json(url, headers=self.headers)
+        return {"pipelines": pipelines}
 
     async def _get_pipeline_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get GitLab pipeline status."""
         project_id = params["project_id"]
         pipeline_id = params["pipeline_id"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipelines/{pipeline_id}"
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                return await response.json()
+        return await get_http_client().get_json(url, headers=self.headers)
 
     async def _trigger_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Trigger GitLab pipeline."""
         project_id = params["project_id"]
         ref = params["ref"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipeline"
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.post(url, json={"ref": ref}) as response:
-                response.raise_for_status()
-                return await response.json()
+        return await get_http_client().post_json(url, {"ref": ref}, headers=self.headers)
 
     async def _list_jobs(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """List GitLab pipeline jobs."""
         project_id = params["project_id"]
         pipeline_id = params["pipeline_id"]
         url = f"{self.base_url}/api/v4/projects/{project_id}/pipelines/{pipeline_id}/jobs"
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                jobs = await response.json()
-                return {"jobs": jobs}
+        jobs = await get_http_client().get_json(url, headers=self.headers)
+        return {"jobs": jobs}
 
 
 class CircleCIIntegration(BaseIntegration):
@@ -312,20 +304,25 @@ class CircleCIIntegration(BaseIntegration):
             IntegrationHealth with status and details
         """
         try:
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.get(f"{self.base_url}/me", timeout=aiohttp.ClientTimeout(total=10)) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return IntegrationHealth(
-                            status=IntegrationStatus.HEALTHY,
-                            message="Connected to CircleCI successfully",
-                            details={"user": data.get("name")},
-                        )
+            async with get_http_client().tracked_request(
+                "GET",
+                f"{self.base_url}/me",
+                headers=self.headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+                suppress_error_log=True,
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
                     return IntegrationHealth(
-                        status=IntegrationStatus.UNHEALTHY,
-                        message=f"CircleCI returned status {response.status}",
-                        details={},
+                        status=IntegrationStatus.HEALTHY,
+                        message="Connected to CircleCI successfully",
+                        details={"user": data.get("name")},
                     )
+                return IntegrationHealth(
+                    status=IntegrationStatus.UNHEALTHY,
+                    message=f"CircleCI returned status {response.status}",
+                    details={},
+                )
         except Exception:
             logger.exception("CircleCI connection test failed")
             return IntegrationHealth(
@@ -383,20 +380,14 @@ class CircleCIIntegration(BaseIntegration):
         """List CircleCI pipelines."""
         project_slug = params["project_slug"]
         url = f"{self.base_url}/project/{project_slug}/pipeline"
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                data = await response.json()
-                return {"pipelines": data.get("items", [])}
+        data = await get_http_client().get_json(url, headers=self.headers)
+        return {"pipelines": data.get("items", [])}
 
     async def _get_workflow_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get CircleCI workflow status."""
         workflow_id = params["workflow_id"]
         url = f"{self.base_url}/workflow/{workflow_id}"
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                return await response.json()
+        return await get_http_client().get_json(url, headers=self.headers)
 
     async def _trigger_pipeline(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Trigger CircleCI pipeline."""
@@ -404,7 +395,4 @@ class CircleCIIntegration(BaseIntegration):
         branch = params.get("branch", "main")
         url = f"{self.base_url}/project/{project_slug}/pipeline"
         payload = {"branch": branch}
-        async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.post(url, json=payload) as response:
-                response.raise_for_status()
-                return await response.json()
+        return await get_http_client().post_json(url, payload, headers=self.headers)
