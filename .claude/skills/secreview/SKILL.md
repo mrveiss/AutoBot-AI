@@ -25,6 +25,7 @@ in step 3 is useful; a perfectly-verified finding that never gets printed is not
 
 | Situation | Use instead |
 |---|---|
+| Unbounded review of the branch, thoroughness over speed | built-in `/security-review` |
 | Deep, recall-biased review of an open PR | `review-fleet` (10 parallel finder + verifier agents) |
 | Whole-codebase security audit | `security-auditor` agent |
 | Syntax, imports, types, lint before merge | `pre-merge-validate` |
