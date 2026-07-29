@@ -166,14 +166,10 @@ class TestRegistryRoutersOutsideApi:
         return scanner
 
     def test_module_outside_api_is_scanned_with_its_registered_prefix(self, tmp_path):
-        backend = self._backend_with_registry(
-            tmp_path, [("services.advanced_workflow.routes", "/advanced-workflow")]
-        )
+        backend = self._backend_with_registry(tmp_path, [("services.advanced_workflow.routes", "/advanced-workflow")])
         target = backend / "services" / "advanced_workflow"
         target.mkdir(parents=True)
-        (target / "routes.py").write_text(
-            '@router.get("/templates")\nasync def templates(): ...\n', encoding="utf-8"
-        )
+        (target / "routes.py").write_text('@router.get("/templates")\nasync def templates(): ...\n', encoding="utf-8")
 
         scanner = self._scanner_for(tmp_path, None)
         found = scanner._registry_router_files()
@@ -182,14 +178,10 @@ class TestRegistryRoutersOutsideApi:
 
     def test_registered_prefix_reaches_the_scanned_endpoint_path(self, tmp_path):
         """The stem of routes.py matches nothing, so the prefix must be carried."""
-        backend = self._backend_with_registry(
-            tmp_path, [("services.advanced_workflow.routes", "/advanced-workflow")]
-        )
+        backend = self._backend_with_registry(tmp_path, [("services.advanced_workflow.routes", "/advanced-workflow")])
         target = backend / "services" / "advanced_workflow"
         target.mkdir(parents=True)
-        (target / "routes.py").write_text(
-            '@router.get("/templates")\nasync def templates(): ...\n', encoding="utf-8"
-        )
+        (target / "routes.py").write_text('@router.get("/templates")\nasync def templates(): ...\n', encoding="utf-8")
 
         scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
         paths = [e.path for e in scanner.scan_all_endpoints()]
