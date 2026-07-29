@@ -478,3 +478,54 @@ class TestNestedRouterSubpackages:
 
         assert pkg / "orphan.py" not in found
         assert pkg / "mounted.py" in found
+
+
+class TestLowConfidenceSplit:
+    """#12745: fallback-derived findings are separated, never dropped.
+
+    A line containing "/api/..." that matches no structured call pattern still
+    produces a finding, with method="UNKNOWN". Measured 89% false against
+    app.openapi() (214/240) versus 25% for pattern-matched calls, because any
+    /api/ string qualifies — a comment, a constant, a cache-key map (#12381).
+    """
+
+    @staticmethod
+    def _match(calls):
+        matcher = scanner_mod.EndpointMatcher([], calls)
+        missing, low = [], []
+        matcher._match_calls_to_endpoints([], missing, low)
+        return missing, low
+
+    @staticmethod
+    def _call(method):
+        return scanner_mod.FrontendAPICallItem(
+            method=method,
+            path="/api/does-not-exist",
+            file_path="src/x.ts",
+            line_number=1,
+            context="ctx",
+            is_dynamic=False,
+        )
+
+    def test_unknown_method_goes_to_low_confidence(self):
+        missing, low = self._match([self._call("UNKNOWN")])
+
+        assert missing == []
+        assert [i.type for i in low] == ["low_confidence"]
+
+    def test_resolved_method_stays_in_missing(self):
+        missing, low = self._match([self._call("GET")])
+
+        assert [i.type for i in missing] == ["missing"]
+        assert low == []
+
+    def test_nothing_is_dropped(self):
+        """Both buckets together must account for every reportable call."""
+        missing, low = self._match([self._call("UNKNOWN"), self._call("POST")])
+
+        assert len(missing) + len(low) == 2
+
+    def test_low_confidence_finding_says_why(self):
+        _, low = self._match([self._call("UNKNOWN")])
+
+        assert "verify" in (low[0].details or "").lower()

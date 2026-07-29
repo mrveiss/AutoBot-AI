@@ -121,6 +121,16 @@ class APIEndpointAnalysis(BaseModel):
     orphaned: List[EndpointMismatchItem]
     missing: List[EndpointMismatchItem]
     used: List[EndpointUsageItem]
+    # #12745: findings derived from the scanner's standalone-path fallback --
+    # a line containing "/api/..." that matched no structured call pattern, so
+    # the HTTP method is UNKNOWN. Measured 89% false (214/240) against
+    # app.openapi(), versus 25% for pattern-matched calls, because any /api/
+    # string qualifies: a comment, a constant, a cache-key map (#12381).
+    # Kept and reported separately rather than dropped -- suppressing findings
+    # is how #12894 hid 29 real ones -- but out of `missing`, which is what
+    # users act on.
+    low_confidence: List[EndpointMismatchItem] = []
+    low_confidence_endpoints: int = 0
     scan_timestamp: str
     # #12745: set when the backend route scan produced nothing. In that state
     # every frontend call looks "missing" (2400 of them on a real source), which
