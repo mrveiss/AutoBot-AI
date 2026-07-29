@@ -10,6 +10,7 @@ test is imported — the same pattern used by ``message_bus_test.py`` — so a
 live Redis connection is never required.
 """
 
+import importlib
 import sys
 import types
 from unittest.mock import MagicMock
@@ -24,6 +25,19 @@ def _install_redis_stub() -> None:
     mod_name = "autobot_shared.redis_client"
     if mod_name in sys.modules:
         return
+
+    # #12903: prefer the real module when it is importable. The stub exists so
+    # this test can run without a live stack — but it was installed
+    # unconditionally, and because it lands in sys.modules it is inherited by
+    # every sibling test in the same session. Siblings needing a symbol this
+    # stub does not define (reset_async_redis_pools, _get_connection_manager)
+    # then failed, in files unrelated to this one, depending on collection order.
+    try:
+        importlib.import_module(mod_name)
+        return
+    except Exception:
+        pass
+
     stub = types.ModuleType(mod_name)
     stub.get_redis_client = MagicMock(name="stub_get_redis_client")
     sys.modules[mod_name] = stub
