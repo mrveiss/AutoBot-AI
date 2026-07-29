@@ -320,3 +320,61 @@ class TestTestFilesAreNotEndpoints:
         paths = [e.path for e in scanner_mod.BackendEndpointScanner(project_root=tmp_path).scan_all_endpoints()]
 
         assert "/api/results" in paths
+
+
+class TestRouterAliasResolvesToItsModule:
+    """#12953: the module was guessed by stripping ``_router`` from the alias.
+
+    Where the alias does not mirror its module the guess is wrong twice: the
+    prefix lands on a different module that also exists, and the real module is
+    left unprefixed, emitting its routes at ``/api/<route>``.
+    """
+
+    @staticmethod
+    def _registry(tmp_path, body):
+        backend = tmp_path / "autobot-backend"
+        (backend / "api").mkdir(parents=True)
+        registry = backend / "initialization" / "router_registry"
+        registry.mkdir(parents=True)
+        (registry / "core_routers.py").write_text(body, encoding="utf-8")
+        return backend
+
+    def test_alias_not_mirroring_its_module_resolves_via_the_import(self, tmp_path):
+        self._registry(
+            tmp_path,
+            "from api.vnc_manager import router as vnc_router\n" '(vnc_router, "/vnc", ["vnc"], "vnc"),\n',
+        )
+        scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
+        scanner._collect_router_prefixes()
+
+        assert scanner._module_prefix_map.get("vnc_manager") == "/api/vnc"
+
+    def test_the_guessed_module_is_not_given_the_prefix(self, tmp_path):
+        """``api.vnc`` exists separately -- it must not inherit vnc_manager's prefix."""
+        self._registry(
+            tmp_path,
+            "from api.vnc_manager import router as vnc_router\n" '(vnc_router, "/vnc", ["vnc"], "vnc"),\n',
+        )
+        scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
+        scanner._collect_router_prefixes()
+
+        assert scanner._module_prefix_map.get("vnc") != "/api/vnc"
+
+    def test_alias_mirroring_its_module_still_works(self, tmp_path):
+        """The common case must be unaffected."""
+        self._registry(
+            tmp_path,
+            "from api.chat import router as chat_router\n" '(chat_router, "/chat", ["chat"], "chat"),\n',
+        )
+        scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
+        scanner._collect_router_prefixes()
+
+        assert scanner._module_prefix_map.get("chat") == "/api/chat"
+
+    def test_router_without_an_import_falls_back_to_the_guess(self, tmp_path):
+        """Some registries build routers without importing them by alias."""
+        self._registry(tmp_path, '(terminal_router, "/terminal", ["terminal"], "terminal"),\n')
+        scanner = scanner_mod.BackendEndpointScanner(project_root=tmp_path)
+        scanner._collect_router_prefixes()
+
+        assert scanner._module_prefix_map.get("terminal") == "/api/terminal"
