@@ -246,7 +246,7 @@ class TestRegistryRoutersOutsideApi:
             'router = APIRouter(prefix="/llc")\nrouter.include_router(costs_router)\n',
             {
                 "costs.py": 'router = APIRouter(prefix="/costs")\n@router.get("/x")\ndef c(): ...\n',
-                "helpers.py": 'def compute(): return 1\n',
+                "helpers.py": "def compute(): return 1\n",
             },
         )
 
