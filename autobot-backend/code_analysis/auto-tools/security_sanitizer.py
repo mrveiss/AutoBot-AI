@@ -351,7 +351,7 @@ class SecurityFixAgent(SecurityFixToolBase):
         for vuln in vulnerabilities:
             icon = severity_icon.get(vuln["severity"], "⚪")
             logger.info(f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})")
-            logger.info("     Match: {vuln['match'][:100]}")
+            logger.info("     Match: %s", vuln["match"][:100])
 
     def _apply_fixes_and_write(
         self,
@@ -371,13 +371,13 @@ class SecurityFixAgent(SecurityFixToolBase):
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(fixed_content)
         fixed_hash = hashlib.sha256(fixed_content.encode()).hexdigest()
-        logger.info("Applied %slen(fixes_applied)  security fixes")
+        logger.info("Applied %s security fixes", len(fixes_applied))
         return fixes_applied, fixed_hash
 
     def fix_file(self, file_path: str) -> Dict[str, Any]:
         """Fix XSS vulnerabilities in a single file."""
         try:
-            logger.info("\n🔍 Analyzing file: {file_path}")
+            logger.info("\n🔍 Analyzing file: %s", file_path)
 
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 original_content = f.read()
@@ -394,7 +394,7 @@ class SecurityFixAgent(SecurityFixToolBase):
                     "fixes_applied": 0,
                 }
 
-            logger.warning("Found %slen(vulnerabilities)  potential XSS vulnerabilities:")
+            logger.warning("Found %s potential XSS vulnerabilities:", len(vulnerabilities))
 
             # Issue #1183: Delegate vuln logging to extracted helper
             self._log_vulnerability_details(vulnerabilities)
@@ -426,8 +426,8 @@ class SecurityFixAgent(SecurityFixToolBase):
                 "fixes": fixes_applied,
             }
 
-        except Exception:
-            logger.error("Error processing file %sfile_path : %se ")
+        except Exception as e:
+            logger.error("Error processing file %s: %s", file_path, e)
             return {
                 "file": file_path,
                 "status": "error",
@@ -445,8 +445,8 @@ class SecurityFixAgent(SecurityFixToolBase):
                         file_path = os.path.join(root, file)
                         html_files.append(file_path)
 
-        except Exception:
-            logger.error("Error scanning directory %sdirectory : %se ")
+        except Exception as e:
+            logger.error("Error scanning directory %s: %s", directory, e)
 
         return html_files
 
@@ -628,17 +628,17 @@ class SecurityFixAgent(SecurityFixToolBase):
         if os.path.isfile(target_path):
             files_to_process = [target_path]
         elif os.path.isdir(target_path):
-            logger.info("📂 Scanning directory: {target_path}")
+            logger.info("📂 Scanning directory: %s", target_path)
             files_to_process = self.scan_directory(target_path)
         else:
-            logger.error("Target path not found: %starget_path ")
+            logger.error("Target path not found: %s", target_path)
             return
 
         if not files_to_process:
             logger.info("❌ No HTML files found to process")
             return
 
-        logger.info("📋 Found {len(files_to_process)} HTML files to analyze")
+        logger.info("📋 Found %s HTML files to analyze", len(files_to_process))
 
         # Process each file
         results = []
@@ -652,22 +652,22 @@ class SecurityFixAgent(SecurityFixToolBase):
         report_path = self.save_report(report_content, os.path.dirname(target_path))
 
         if report_path:
-            logger.info("Security report saved: %sreport_path ")
+            logger.info("Security report saved: %s", report_path)
 
         # Print summary
-        sum(r.get("vulnerabilities_found", 0) for r in results)
+        total_vulnerabilities = sum(r.get("vulnerabilities_found", 0) for r in results)
         total_fixes = sum(r.get("fixes_applied", 0) for r in results)
 
         logger.info("=" * 50)
         logger.info("🎯 SUMMARY")
         logger.info("=" * 50)
-        logger.info("Files processed: {len(results)}")
-        logger.info("Vulnerabilities found: {total_vulnerabilities}")
-        logger.info("Fixes applied: {total_fixes}")
+        logger.info("Files processed: %s", len(results))
+        logger.info("Vulnerabilities found: %s", total_vulnerabilities)
+        logger.info("Fixes applied: %s", total_fixes)
 
         if total_fixes > 0:
             logger.info("Security fixes successfully applied!")
-            logger.info("📁 Backups created in: {self.backup_dir}")
+            logger.info("📁 Backups created in: %s", self.backup_dir)
         else:
             logger.info("✅ No vulnerabilities required fixing")
 

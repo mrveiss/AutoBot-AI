@@ -513,14 +513,14 @@ class SecurityFixAgent(SecurityFixToolBase):
     def fix_file(self, file_path: str) -> Dict[str, Any]:
         """Enhanced file fixing with multiple security layers."""
         try:
-            logger.info("\n🔍 Analyzing file: {file_path}")
+            logger.info("\n🔍 Analyzing file: %s", file_path)
 
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 original_content = f.read()
 
             original_hash = hashlib.sha256(original_content.encode()).hexdigest()
             vulnerabilities = self.scan_for_vulnerabilities(original_content, file_path)
-            logger.warning("Found %slen(vulnerabilities)  potential XSS vulnerabilities")
+            logger.warning("Found %s potential XSS vulnerabilities", len(vulnerabilities))
 
             # Issue #1183: Delegate count display to extracted helper
             library_vulns, direct_vulns = self._display_vuln_counts(vulnerabilities)
@@ -561,8 +561,8 @@ class SecurityFixAgent(SecurityFixToolBase):
                 "enhancements": all_enhancements,
             }
 
-        except Exception:
-            logger.error("Error processing file %sfile_path : %se ")
+        except Exception as e:
+            logger.error("Error processing file %s: %s", file_path, e)
             return {
                 "file": file_path,
                 "status": "error",
@@ -580,8 +580,8 @@ class SecurityFixAgent(SecurityFixToolBase):
                         file_path = os.path.join(root, file)
                         html_files.append(file_path)
 
-        except Exception:
-            logger.error("Error scanning directory %sdirectory : %se ")
+        except Exception as e:
+            logger.error("Error scanning directory %s: %s", directory, e)
 
         return html_files
 
@@ -826,17 +826,17 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
         if os.path.isfile(target_path):
             files_to_process = [target_path]
         elif os.path.isdir(target_path):
-            logger.info("📂 Scanning directory: {target_path}")
+            logger.info("📂 Scanning directory: %s", target_path)
             files_to_process = self.scan_directory(target_path)
         else:
-            logger.error("Target path not found: %starget_path ")
+            logger.error("Target path not found: %s", target_path)
             return
 
         if not files_to_process:
             logger.info("❌ No HTML files found to process")
             return
 
-        logger.info("📋 Found {len(files_to_process)} HTML files to analyze")
+        logger.info("📋 Found %s HTML files to analyze", len(files_to_process))
 
         # Process each file
         results = []
@@ -850,24 +850,24 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
         report_path = self.save_report(report_content, os.path.dirname(target_path))
 
         if report_path:
-            logger.info("Security report saved: %sreport_path ")
+            logger.info("Security report saved: %s", report_path)
 
         # Print summary
-        sum(r.get("vulnerabilities_found", 0) for r in results)
+        total_vulnerabilities = sum(r.get("vulnerabilities_found", 0) for r in results)
         total_fixes = sum(r.get("fixes_applied", 0) for r in results)
         total_enhancements = sum(r.get("security_enhancements", 0) for r in results)
 
         logger.info("=" * 55)
         logger.info("🎯 SECURITY ENHANCEMENT SUMMARY")
         logger.info("=" * 55)
-        logger.info("Files processed: {len(results)}")
-        logger.info("Vulnerabilities found: {total_vulnerabilities}")
-        logger.info("Direct fixes applied: {total_fixes}")
-        logger.info("Security enhancements: {total_enhancements}")
+        logger.info("Files processed: %s", len(results))
+        logger.info("Vulnerabilities found: %s", total_vulnerabilities)
+        logger.info("Direct fixes applied: %s", total_fixes)
+        logger.info("Security enhancements: %s", total_enhancements)
 
         if total_fixes > 0 or total_enhancements > 0:
             logger.info("Security enhancements successfully applied!")
-            logger.info("📁 Backups created in: {self.backup_dir}")
+            logger.info("📁 Backups created in: %s", self.backup_dir)
             logger.info("🛡️  Multi-layer XSS protection now active")
         else:
             logger.info("✅ Files already secure - no enhancements needed")
