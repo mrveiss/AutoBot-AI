@@ -99,3 +99,22 @@ jobs:
             echo "autobot-backend/tests/test_startup_imports.py with issue ref."
             exit 1
           }
+
+      # #13041: this guard has stdlib-only deps (ast/pathlib — no imports of
+      # backend modules) and was never collected by any CI workflow, letting
+      # the raw-ClientSession ceiling silently regress 12->13 unnoticed. This
+      # job already runs pytest against autobot-backend/tests/ with the full
+      # backend dependency set and is a required check, so it is the natural
+      # (smallest-blast-radius) place to add it rather than expanding #10691's
+      # broader "enable all backend tests in CI" scope.
+      - name: Run raw ClientSession ceiling guard
+        run: |
+          python -m pytest autobot-backend/tests/test_raw_client_session_ceiling_12992.py -v --tb=short || {
+            echo ""
+            echo "Raw aiohttp.ClientSession(...) ceiling guard FAILED (#12992/#13041)."
+            echo ""
+            echo "A new raw ClientSession site was added without routing it through"
+            echo "autobot_shared.http_client.get_http_client(), or without documenting"
+            echo "it as an intentional carve-out in the test's module docstring."
+            exit 1
+          }
