@@ -354,19 +354,15 @@ async def test_slack_make_request_429_applies_retry_after():
     resp.status = 429
     resp.headers = {"Retry-After": "30"}
     resp.json = AsyncMock(return_value=body)
+    resp.__aenter__ = AsyncMock(return_value=resp)
+    resp.__aexit__ = AsyncMock(return_value=False)
 
-    inner_cm = AsyncMock()
-    inner_cm.__aenter__ = AsyncMock(return_value=resp)
-    inner_cm.__aexit__ = AsyncMock(return_value=False)
+    # #12979: _make_slack_request routes through the shared pool's
+    # tracked_request() rather than constructing its own aiohttp.ClientSession.
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=resp)
 
-    session = MagicMock()
-    session.post = MagicMock(return_value=inner_cm)
-
-    outer_cm = AsyncMock()
-    outer_cm.__aenter__ = AsyncMock(return_value=session)
-    outer_cm.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("aiohttp.ClientSession", return_value=outer_cm):
+    with patch("integrations.communication_integration.get_http_client", return_value=mock_client):
         result = await slack._make_slack_request(
             "POST",
             "https://slack.com/api/chat.postMessage",

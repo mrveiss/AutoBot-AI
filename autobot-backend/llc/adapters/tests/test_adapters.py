@@ -212,6 +212,14 @@ class TestProcessAdapter:
 
 
 def _mock_response(status_code: int, json_data: dict) -> MagicMock:
+    """Build a mock ``ClientResponse`` usable directly as its own async CM.
+
+    ``HTTPClientManager.tracked_request()`` yields the response under its own
+    ``async with``, so the mock returned by a patched ``tracked_request()``
+    call must itself support ``__aenter__``/``__aexit__`` (#12979: HttpAdapter
+    no longer constructs a raw session, so it routes through the shared
+    pool's ``tracked_request()`` instead of ``aiohttp.ClientSession()``).
+    """
     resp = MagicMock()
     resp.status = status_code
     resp.raise_for_status = MagicMock()
@@ -221,15 +229,12 @@ def _mock_response(status_code: int, json_data: dict) -> MagicMock:
     return resp
 
 
-def _mock_session(responses: list) -> MagicMock:
-    """Build a mock aiohttp session that returns each response in sequence."""
-    session = MagicMock()
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock(return_value=False)
-    session.request = MagicMock(side_effect=responses)
-    session.get = MagicMock(side_effect=responses)
-    session.post = MagicMock(side_effect=responses)
-    return session
+def _mock_http_client(responses: list) -> MagicMock:
+    """Build a mock ``HTTPClientManager`` whose ``tracked_request()`` returns
+    each response in sequence (#12979)."""
+    client = MagicMock()
+    client.tracked_request = MagicMock(side_effect=responses)
+    return client
 
 
 @pytest.mark.asyncio
@@ -238,7 +243,7 @@ class TestHttpAdapter:
         adapter = HttpAdapter()
         resp = _mock_response(200, {"run_id": "abc-123"})
 
-        with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=_mock_http_client([resp])):
             run_id = await adapter.invoke({"url": "http://agent.local"}, {"task": "t1"})
 
         assert run_id == "abc-123"
@@ -247,7 +252,7 @@ class TestHttpAdapter:
         adapter = HttpAdapter()
         resp = _mock_response(200, {"run_id": "x"})
 
-        with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=_mock_http_client([resp])):
             run_id = await adapter.invoke(
                 {
                     "url": "http://agent.local",
@@ -262,7 +267,7 @@ class TestHttpAdapter:
         adapter = HttpAdapter()
         resp = _mock_response(200, {"status": "running"})
 
-        with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=_mock_http_client([resp])):
             result = await adapter.status({"url": "http://agent.local"}, "r1")
 
         assert result.status is LLCRunStatus.RUNNING
@@ -271,7 +276,7 @@ class TestHttpAdapter:
         adapter = HttpAdapter()
         resp = _mock_response(200, {"status": "completed", "exit_code": 0})
 
-        with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=_mock_http_client([resp])):
             result = await adapter.status({"url": "http://agent.local"}, "r1")
 
         assert result.status is LLCRunStatus.COMPLETED
@@ -282,7 +287,7 @@ class TestHttpAdapter:
         adapter = HttpAdapter()
         resp = _mock_response(200, {"status": "succeeded", "exit_code": 0})
 
-        with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=_mock_http_client([resp])):
             result = await adapter.status({"url": "http://agent.local"}, "r1")
 
         assert result.status is LLCRunStatus.COMPLETED
@@ -292,7 +297,7 @@ class TestHttpAdapter:
         resp = _mock_response(404, {})
         resp.raise_for_status = MagicMock()
 
-        with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=_mock_http_client([resp])):
             result = await adapter.status({"url": "http://agent.local"}, "gone")
 
         assert result.status is LLCRunStatus.FAILED
@@ -302,7 +307,7 @@ class TestHttpAdapter:
         adapter = HttpAdapter()
         resp = _mock_response(200, {"status": "weird_value"})
 
-        with patch("aiohttp.ClientSession", return_value=_mock_session([resp])):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=_mock_http_client([resp])):
             result = await adapter.status({"url": "http://agent.local"}, "r2")
 
         assert result.status is LLCRunStatus.FAILED
@@ -310,21 +315,15 @@ class TestHttpAdapter:
     async def test_cancel_posts_to_cancel_endpoint(self) -> None:
         adapter = HttpAdapter()
         resp = _mock_response(200, {})
+        client = _mock_http_client([resp])
 
-        session = MagicMock()
-        session.__aenter__ = AsyncMock(return_value=session)
-        session.__aexit__ = AsyncMock(return_value=False)
-        cancel_ctx = MagicMock()
-        cancel_ctx.__aenter__ = AsyncMock(return_value=resp)
-        cancel_ctx.__aexit__ = AsyncMock(return_value=False)
-        session.post = MagicMock(return_value=cancel_ctx)
-
-        with patch("aiohttp.ClientSession", return_value=session):
+        with patch("llc.adapters.http_adapter.get_http_client", return_value=client):
             await adapter.cancel({"url": "http://agent.local"}, "r3")
 
-        session.post.assert_called_once()
-        called_url = session.post.call_args[0][0]
-        assert called_url.endswith("/cancel/r3")
+        client.tracked_request.assert_called_once()
+        call_args = client.tracked_request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1].endswith("/cancel/r3")
 
 
 # ---------------------------------------------------------------------------
