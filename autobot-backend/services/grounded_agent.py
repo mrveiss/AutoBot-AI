@@ -39,6 +39,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import CLAIM_VERIFICATION_ENABLED
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.types import LLMType
 from services.ai_stack_client import get_ai_stack_client
@@ -417,10 +418,17 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
             return VerifiedClaim(claim=claim, kb_status=ClaimStatus.UNKNOWN, confidence=0.0)
 
         try:
+            # Issue #13024: canonical search() has no search_mode kwarg, and
+            # limit=... routes to the "Enhanced" dict-returning path this
+            # method's List-shaped handling below can't consume -- use top_k
+            # to stay on the Basic (List[Dict]) path.
+            # Issue #13009: exclude quarantined research facts (#12622) --
+            # this is a general classification read, not the corroboration
+            # pipeline (services/claim_verifier.py) invoked below on escalation.
             search_results = await self.kb.search(
                 query=claim.claim_text,
-                limit=5,
-                search_mode="semantic",
+                top_k=5,
+                filters=RESEARCH_QUARANTINE_FILTER,
             )
 
             if not search_results:
