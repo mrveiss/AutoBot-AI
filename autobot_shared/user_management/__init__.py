@@ -3,18 +3,42 @@
 """Canonical user_management core shared by both backends (#12647).
 
 `user_management` is forked across `autobot-backend` and `autobot-slm-backend`,
-with 25 shared-but-divergent files. This package is the consolidation target:
-files land here once they are identical in both forks, so each move carries no
-semantic drift to reconcile.
+with 19 shared-but-divergent `.py` source files. This package is the
+consolidation target: files land here once their drift is either non-existent
+or reconciled, so each move carries no semantic loss.
 
-First mover: `base_service`, which was byte-identical in both and imports
-nothing backend-specific. Each fork keeps a re-export shim so existing importers
-are untouched — the fork is removed, not the callers.
+Movers so far:
+- `base_service` (#12972) — byte-identical, no backend-specific imports.
+- `schemas.user` (#12647) — identical apart from Pydantic v1/v2 config style;
+  no SQLAlchemy dependency, so it does not need the declarative-base decision
+  gating the model files.
+
+Each fork keeps a re-export shim so existing importers are untouched — the
+fork is removed, not the callers.
 """
 
 from autobot_shared.user_management.base_service import (  # noqa: F401
     BaseService,
     TenantContext,
 )
+from autobot_shared.user_management.schemas.user import (  # noqa: F401
+    PasswordChange,
+    RoleResponse,
+    UserCreate,
+    UserListResponse,
+    UserLogin,
+    UserResponse,
+    UserUpdate,
+)
 
-__all__ = ["BaseService", "TenantContext"]
+__all__ = [
+    "BaseService",
+    "TenantContext",
+    "RoleResponse",
+    "UserCreate",
+    "UserUpdate",
+    "UserResponse",
+    "UserListResponse",
+    "UserLogin",
+    "PasswordChange",
+]
