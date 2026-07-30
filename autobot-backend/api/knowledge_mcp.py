@@ -28,6 +28,7 @@ from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import ModelConstants
 from dependencies import get_config
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
     KnowledgeSearchRequest,
@@ -59,7 +60,10 @@ from utils.service_registry import get_service_url
 logger = get_logger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
-get_knowledge_base = lazy_singleton(lambda: KnowledgeBase(config_manager=get_config()))
+# Issue #13026: KnowledgeBase.__init__() takes no parameters (config is read
+# internally via SSOT config, same as dependencies.get_knowledge_base()) --
+# the config_manager= kwarg raised TypeError on every call.
+get_knowledge_base = lazy_singleton(KnowledgeBase)
 
 
 def get_vectors_redis_client():
@@ -457,7 +461,13 @@ async def mcp_search_knowledge_base(
         kb = get_knowledge_base()
 
         # Perform the search
-        results = await kb.search(query=request.query, top_k=request.top_k, filters=request.filters)
+        # Issue #13009: exclude quarantined research facts (#12622) when the
+        # caller doesn't request a specific filter of their own.
+        results = await kb.search(
+            query=request.query,
+            top_k=request.top_k,
+            filters=request.filters or RESEARCH_QUARANTINE_FILTER,
+        )
 
         # Format results for MCP
         formatted_results = []
@@ -581,7 +591,8 @@ async def mcp_summarize_knowledge_topic(
         max_length = request.get("max_length", 500)
 
         # Search for relevant documents
-        results = await kb.search(query=topic, top_k=10)
+        # Issue #13009: exclude quarantined research facts (#12622).
+        results = await kb.search(query=topic, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
 
         if not results:
             return {
@@ -646,7 +657,8 @@ async def mcp_vector_similarity_search(
             # Perform vector search using knowledge base
             # Note: kb.search() handles embedding generation internally
             results = []
-            search_results = await kb.search(query, top_k)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            search_results = await kb.search(query, top_k, filters=RESEARCH_QUARANTINE_FILTER)
 
             for result in search_results:
                 if result.get("score", 0) >= threshold:
@@ -690,7 +702,8 @@ async def mcp_langchain_qa_chain(
         context_size = request.get("context_size", 3)
 
         # First get relevant documents
-        search_results = await kb.search(question, context_size)
+        # Issue #13009: exclude quarantined research facts (#12622).
+        search_results = await kb.search(question, context_size, filters=RESEARCH_QUARANTINE_FILTER)
 
         if not search_results:
             return {
@@ -1140,7 +1153,8 @@ async def read_kb_resource(
             # Retrieve document by ID
             # Note: This is a simplified implementation - you'd need to
             # implement document retrieval by ID in the knowledge base
-            results = await kb.search(query=f"id:{identifier}", top_k=1)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            results = await kb.search(query=f"id:{identifier}", top_k=1, filters=RESEARCH_QUARANTINE_FILTER)
             if results:
                 content = results[0].get("content", "")
                 mime_type = "text/plain"
@@ -1151,7 +1165,8 @@ async def read_kb_resource(
             if not identifier:
                 return {"success": False, "error": "Chunk ID required"}
             # Retrieve chunk by ID
-            results = await kb.search(query=f"chunk_id:{identifier}", top_k=1)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            results = await kb.search(query=f"chunk_id:{identifier}", top_k=1, filters=RESEARCH_QUARANTINE_FILTER)
             if results:
                 content = results[0].get("content", "")
                 mime_type = "text/plain"

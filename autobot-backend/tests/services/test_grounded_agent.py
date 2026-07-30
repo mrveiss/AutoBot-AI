@@ -229,6 +229,34 @@ async def test_classify_claim_no_kb(grounded_agent, sample_claim):
     assert verified.confidence == 0.0
 
 
+@pytest.mark.asyncio
+async def test_classify_claim_calls_real_search_signature_and_returns_content(grounded_agent, sample_claim):
+    """#13024: search_mode= isn't a valid kwarg and limit= routes to the
+    Enhanced dict-returning path, which this method can't consume (it does
+    ``search_results[0]``) -- both silently produced UNKNOWN via the broad
+    except. ``create_autospec`` (not a bare AsyncMock) reproduces the real
+    ``KnowledgeBase.search()`` signature so an invalid kwarg would raise
+    ``TypeError`` here exactly as it does in production.
+
+    #13009: also asserts the quarantine filter is applied -- this is a
+    general classification read, not the corroboration pipeline.
+    """
+    from unittest.mock import create_autospec
+
+    from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+    from knowledge_base import KnowledgeBase
+
+    mock_kb = create_autospec(KnowledgeBase, instance=True)
+    mock_kb.search.return_value = [{"fact_id": "f1", "content": "Latency increased", "similarity_score": 0.92}]
+    grounded_agent.kb = mock_kb
+
+    verified = await grounded_agent._classify_and_verify_claim(sample_claim)
+
+    assert verified.kb_status == ClaimStatus.IN_KB
+    assert verified.kb_source == "f1"
+    mock_kb.search.assert_called_once_with(query=sample_claim.claim_text, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
+
+
 # ===== RESPONSE RECONSTRUCTION TESTS =====
 
 

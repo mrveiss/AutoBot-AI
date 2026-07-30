@@ -72,6 +72,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # Import existing components
 from knowledge_base import KnowledgeBase
@@ -453,7 +454,9 @@ class ChatKnowledgeManager:
         results = []
 
         # Search in permanent knowledge base
-        kb_results = await self.knowledge_base.search(query, n_results=10)
+        # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
+        # Issue #13009: exclude quarantined research facts (#12622).
+        kb_results = await self.knowledge_base.search(query, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
 
         for result in kb_results:
             # Filter by chat if specified
