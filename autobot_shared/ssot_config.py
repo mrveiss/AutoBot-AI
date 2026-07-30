@@ -1625,6 +1625,39 @@ class MiscConfig(BaseSettings):
     research_corroboration_classify_timeout_seconds: float = Field(
         default=20.0, alias="AUTOBOT_RESEARCH_CORROBORATION_CLASSIFY_TIMEOUT_SECONDS"
     )
+    # #12624: Planner loop (decompose / skip-known / prune / saturation stop).
+    # Every bound below is enforced by the loop's own control flow, not merely
+    # consulted (design: a mis-scored branch or a garbage LLM response must
+    # never cause unbounded iteration/spend).
+    # Hard round cap — the backstop that terminates the loop even if
+    # plateau detection never fires (e.g. every branch keeps scoring high).
+    research_planner_max_rounds: int = Field(default=5, alias="AUTOBOT_RESEARCH_PLANNER_MAX_ROUNDS")
+    # Branch-count limit: max sub-questions the LLM decomposition may return
+    # per round (also the fallback-safe truncation point for a garbage/over-long
+    # LLM response).
+    research_planner_max_subquestions_per_round: int = Field(
+        default=4, alias="AUTOBOT_RESEARCH_PLANNER_MAX_SUBQUESTIONS_PER_ROUND"
+    )
+    # Expected-value threshold below which a decomposed sub-question is pruned
+    # before spending a search on it (design §4.3).
+    research_planner_prune_threshold: float = Field(default=0.3, alias="AUTOBOT_RESEARCH_PLANNER_PRUNE_THRESHOLD")
+    # Skip-known confidence threshold: a sub-question is skipped only when an
+    # existing KB fact answers it at >= this confidence. Kept as its own
+    # tunable (distinct from the #12623 promotion threshold) because skipping
+    # is a correctness risk in the opposite direction from pruning — too low a
+    # value lets a wrong/stale fact suppress real re-investigation.
+    research_planner_skip_known_confidence_threshold: float = Field(
+        default=0.75, alias="AUTOBOT_RESEARCH_PLANNER_SKIP_KNOWN_CONFIDENCE_THRESHOLD"
+    )
+    # Saturation/plateau: consecutive no-new-fact rounds required to stop early.
+    research_planner_plateau_window: int = Field(default=2, alias="AUTOBOT_RESEARCH_PLANNER_PLATEAU_WINDOW")
+    # Total search/fetch budget for one /research run across ALL rounds — the
+    # hard ceiling that bounds real spend regardless of round/branch counts.
+    research_planner_max_total_sources: int = Field(default=15, alias="AUTOBOT_RESEARCH_PLANNER_MAX_TOTAL_SOURCES")
+    # Timeout for the decomposition LLM call.
+    research_planner_decompose_timeout_seconds: float = Field(
+        default=20.0, alias="AUTOBOT_RESEARCH_PLANNER_DECOMPOSE_TIMEOUT_SECONDS"
+    )
     routing_model: str = Field(default="", alias="AUTOBOT_ROUTING_MODEL")
     run_jwt: str = Field(default="", alias="AUTOBOT_RUN_JWT")
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
