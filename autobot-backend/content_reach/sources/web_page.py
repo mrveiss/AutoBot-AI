@@ -17,6 +17,7 @@ import asyncio
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url, ensure_robots_allowed
 from content_reach.backends.browser import BrowserBackend
@@ -84,6 +85,8 @@ class TrafilaturaBackend(ContentBackend):
             response = await http_get(request.url, client=self._client)
         except httpx.HTTPError as exc:
             raise BackendError(f"TrafilaturaBackend: HTTP error fetching {request.url!r}: {exc}") from exc
+        except SSRFError as exc:
+            raise BackendError(f"TrafilaturaBackend: blocked by SSRF guard at connect time: {exc}") from exc
 
         html = response.text
         text = await asyncio.to_thread(_trafilatura_extract, html)
@@ -139,6 +142,8 @@ class JinaReaderBackend(ContentBackend):
             response = await http_get(url, client=self._client, headers=headers)
         except httpx.HTTPError as exc:
             raise BackendError(f"JinaReaderBackend: HTTP error fetching {request.url!r}: {exc}") from exc
+        except SSRFError as exc:
+            raise BackendError(f"JinaReaderBackend: blocked by SSRF guard at connect time: {exc}") from exc
 
         if response.status_code != 200:
             logger.debug(

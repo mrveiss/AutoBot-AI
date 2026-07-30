@@ -17,6 +17,7 @@ import re
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
@@ -202,6 +203,13 @@ class YtDlpCaptionBackend(ContentBackend):
                 exc,
             )
             raise BackendError(f"YtDlpCaptionBackend: HTTP error fetching captions: {exc}") from exc
+        except SSRFError as exc:
+            logger.warning(
+                "YtDlpCaptionBackend: caption track blocked by SSRF guard at connect time for %r: %s",
+                request.url,
+                exc,
+            )
+            raise BackendError(f"YtDlpCaptionBackend: blocked by SSRF guard at connect time: {exc}") from exc
 
         text = _caption_raw_to_text(response.text, ext)
 
