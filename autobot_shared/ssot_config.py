@@ -1696,6 +1696,11 @@ class MiscConfig(BaseSettings):
     # #13019: bounds redirect-hop count for the pinned-redirect SSRF fetch path
     # shared by web_fetch/fetcher.py and media/link/pipeline.py.
     web_fetch_max_redirects: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_REDIRECTS")
+    # #13021: caps media/link/pipeline.py's BeautifulSoup fallback fetch body
+    # size (streamed/enforced during read, not post-hoc) — distinct from the
+    # generic web_fetch_max_bytes cap above since this pipeline's fallback is
+    # a smaller, dedicated 1 MB HTML-download bound.
+    link_pipeline_max_content_bytes: int = Field(default=1_000_000, alias="AUTOBOT_LINK_PIPELINE_MAX_CONTENT_BYTES")
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
