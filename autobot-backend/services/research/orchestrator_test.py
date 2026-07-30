@@ -42,6 +42,12 @@ def _make_kb(store_fact_status: str = "success") -> AsyncMock:
     kb = AsyncMock()
     kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "doc-1"})
     kb.store_fact = AsyncMock(return_value={"status": store_fact_status, "fact_id": "fact-1"})
+    # #12623: the corroboration step always calls kb.search() for material
+    # facts — default to "no corroborating sources found" so pre-#12623
+    # tests (which don't care about corroboration) stay quarantined/inert.
+    kb.search = AsyncMock(return_value=[])
+    kb.update_fact = AsyncMock(return_value={"status": "success"})
+    kb.create_fact_relation = AsyncMock(return_value={"success": True})
     return kb
 
 
@@ -162,3 +168,117 @@ class TestResearchFailurePaths:
             response = await ResearchOrchestrator(llm_service=AsyncMock()).research("q")
 
         assert response.facts_stored == 1
+
+
+# ---------------------------------------------------------------------------
+# N-source corroboration + promotion gate wiring (#12623)
+# ---------------------------------------------------------------------------
+
+
+def _make_llm_with_agreement(verdict: str) -> AsyncMock:
+    """LLM mock whose .chat() always returns a fixed agreement verdict."""
+    from types import SimpleNamespace
+
+    llm = AsyncMock()
+    llm.chat = AsyncMock(return_value=SimpleNamespace(content=f"AGREEMENT: {verdict}\nRATIONALE: r", error=None))
+    return llm
+
+
+def _corroborating_search_result(fact_id: str, url: str, content: str = "corroborating") -> dict:
+    return {
+        "content": content,
+        "score": 0.85,
+        "metadata": {"fact_id": fact_id, "url": url, "source_type": "web_research"},
+        "node_id": fact_id,
+        "doc_id": fact_id,
+    }
+
+
+class TestResearchCorroborationAndPromotion:
+    """Full pipeline: a cited fact with corroborating/contradicting sources."""
+
+    async def test_corroborated_material_fact_is_promoted(self):
+        """A material fact with >=K independent agreeing sources is promoted out of quarantine."""
+        kb = _make_kb()
+        kb.search = AsyncMock(
+            return_value=[
+                _corroborating_search_result("fact-2", "https://b.example/page"),
+                _corroborating_search_result("fact-3", "https://c.example/page"),
+            ]
+        )
+        claim = ExtractedClaim(content="X is Y.", confidence=0.8, source_url="https://a.example", source_doc_id="doc-1")
+        synthesis = SynthesisResult(answer="X is Y [F1].", citations=[], confidence=0.7)
+        from services.research.models import Citation
+
+        synthesis.citations = [Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")]
+        fetch_result = _FakeFetchResult(success=True, markdown="X is Y because of Z.", title="Page A")
+
+        patches = _patch_common(kb, ["https://a.example"], fetch_result, [claim], synthesis)
+        llm = _make_llm_with_agreement("AGREE")
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            response = await ResearchOrchestrator(llm_service=llm).research("what is X?")
+
+        assert response.contradictions == []
+        kb.update_fact.assert_awaited_once()
+        call_kwargs = kb.update_fact.await_args
+        assert call_kwargs.args[0] == "fact-1"
+        promoted_metadata = call_kwargs.kwargs["metadata"]
+        assert promoted_metadata["collection"] != "research"
+        assert promoted_metadata["verification_status"] == "verified"
+
+        # Acceptance criterion: response confidence/facts[] reflect the
+        # corroboration outcome (evidence-based), not the original
+        # extraction-time confidence the LLM claim extractor guessed.
+        assert len(response.facts) == 1
+        assert response.facts[0].confidence == promoted_metadata["promotion_confidence"]
+        assert response.facts[0].confidence != claim.confidence
+
+    async def test_contradicted_material_fact_stays_quarantined(self):
+        """A material fact with a disagreeing independent source is flagged, never promoted."""
+        kb = _make_kb()
+        kb.search = AsyncMock(
+            return_value=[
+                _corroborating_search_result("fact-2", "https://b.example/page"),
+                _corroborating_search_result("fact-3", "https://c.example/page"),
+            ]
+        )
+        claim = ExtractedClaim(content="X is Y.", confidence=0.8, source_url="https://a.example", source_doc_id="doc-1")
+        synthesis = SynthesisResult(answer="X is Y [F1].", citations=[], confidence=0.7)
+        from services.research.models import Citation
+
+        synthesis.citations = [Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")]
+        fetch_result = _FakeFetchResult(success=True, markdown="X is Y because of Z.", title="Page A")
+
+        patches = _patch_common(kb, ["https://a.example"], fetch_result, [claim], synthesis)
+        llm = _make_llm_with_agreement("CONTRADICT")
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            response = await ResearchOrchestrator(llm_service=llm).research("what is X?")
+
+        assert len(response.contradictions) == 1
+        assert response.contradictions[0]["fact_id"] == "fact-1"
+        kb.create_fact_relation.assert_any_await(
+            "fact-1", "fact-2", "contradicts", metadata={"detected_by": "research_corroborator"}
+        )
+        update_metadata = kb.update_fact.await_args.kwargs["metadata"]
+        assert update_metadata["requires_human_review"] is True
+        # promotion metadata must never be written for a disputed fact
+        assert "collection" not in update_metadata
+
+    async def test_below_threshold_material_fact_stays_quarantined_no_promotion(self):
+        """Fewer than K independent sources -> quarantined, no update_fact/relation calls at all."""
+        kb = _make_kb()
+        kb.search = AsyncMock(return_value=[])  # no corroborating sources found
+        claim = ExtractedClaim(content="X is Y.", confidence=0.8, source_url="https://a.example", source_doc_id="doc-1")
+        synthesis = SynthesisResult(answer="X is Y [F1].", citations=[], confidence=0.7)
+        from services.research.models import Citation
+
+        synthesis.citations = [Citation(fact_id="fact-1", source_url="https://a.example", source_doc_id="doc-1")]
+        fetch_result = _FakeFetchResult(success=True, markdown="X is Y because of Z.", title="Page A")
+
+        patches = _patch_common(kb, ["https://a.example"], fetch_result, [claim], synthesis)
+        with patches[0], patches[1], patches[2], patches[3], patches[4]:
+            response = await ResearchOrchestrator(llm_service=AsyncMock()).research("what is X?")
+
+        assert response.contradictions == []
+        kb.update_fact.assert_not_awaited()
+        kb.create_fact_relation.assert_not_awaited()
