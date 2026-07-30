@@ -23,7 +23,7 @@ import pytest
 import agent_loop.search.registry  # noqa: F401,E402
 import web_fetch  # noqa: F401,E402
 from autobot_shared.ssot_config import config
-from services.research.models import ExtractedClaim, StoredFact
+from services.research.models import ExtractedClaim, ResearchBudget, StoredFact
 from services.research.orchestrator import ResearchOrchestrator
 from services.research.planner import SubQuestion
 from services.research.synthesizer import SynthesisResult
@@ -303,6 +303,44 @@ class TestResearchCorroborationAndPromotion:
         assert response.contradictions == []
         kb.update_fact.assert_not_awaited()
         kb.create_fact_relation.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# ResearchBudget.truncated_sources: content-char truncation is recorded (#13013)
+# ---------------------------------------------------------------------------
+
+
+class TestTruncatedSourcesRecording:
+    """`_land_page` must record a source in ``budget.truncated_sources`` when its
+    fetched content exceeds ``max_content_chars`` (the same bound ``extract_claims``
+    slices to) — the only genuine truncation point ``ResearchBudget`` guards.
+    """
+
+    async def test_oversized_source_is_recorded_as_truncated(self):
+        kb = _make_kb()
+        budget = ResearchBudget(max_sources=1, max_content_chars=10, fetch_timeout_seconds=5.0)
+        fetch_result = _FakeFetchResult(success=True, markdown="x" * 50, title="Big page")
+
+        with (
+            patch("web_fetch.WebFetcher.fetch", AsyncMock(return_value=fetch_result)),
+            patch(f"{_MODULE}.extract_claims", AsyncMock(return_value=[])),
+        ):
+            await ResearchOrchestrator(llm_service=AsyncMock())._land_page(kb, "https://big.example", budget)
+
+        assert budget.truncated_sources == ["https://big.example"]
+
+    async def test_source_within_budget_is_not_recorded(self):
+        kb = _make_kb()
+        budget = ResearchBudget(max_sources=1, max_content_chars=1000, fetch_timeout_seconds=5.0)
+        fetch_result = _FakeFetchResult(success=True, markdown="short content", title="Small page")
+
+        with (
+            patch("web_fetch.WebFetcher.fetch", AsyncMock(return_value=fetch_result)),
+            patch(f"{_MODULE}.extract_claims", AsyncMock(return_value=[])),
+        ):
+            await ResearchOrchestrator(llm_service=AsyncMock())._land_page(kb, "https://small.example", budget)
+
+        assert budget.truncated_sources == []
 
 
 # ---------------------------------------------------------------------------
