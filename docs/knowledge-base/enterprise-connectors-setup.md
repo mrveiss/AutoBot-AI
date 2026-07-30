@@ -9,9 +9,9 @@ that ingest **Slack** channel/thread history, **Confluence** wiki pages and
 `kb.search`.
 
 All connector types, config fields and API endpoints below are cited to the
-exact source lines they are read from. No credentials are invented — where a
-field's handling is ambiguous, that is called out explicitly (see
-[Known limitation: auth-field mismatch](#known-limitation-auth-field-mismatch)).
+exact source lines they are read from. No credentials are invented, and the
+config keys documented here are the ones the connectors actually read — see
+[Auth-field alignment](#auth-field-alignment) for how that is kept true.
 
 ## Important: disabled by default in production
 
@@ -59,38 +59,38 @@ production connector-type listing (`mock.py:24-30`).
 ### Slack
 
 The Slack connector calls the Slack Web API with a bearer bot token
-(`autobot-backend/knowledge/connectors/slack.py:251-257`).
+(`autobot-backend/knowledge/connectors/slack.py:257-263`).
 
 - Create a Slack app and a **bot token** (`xoxb-...`) with the
   `channels:history`, `groups:history` and `channels:read` scopes
   (`slack.py:20-22`).
-- Collect the **channel IDs** you want ingested (`slack.py:23`).
+- Collect the **channel IDs** you want ingested (`slack.py:26`).
 - The token is verified via `auth.test`; history is read via
   `conversations.history` / `conversations.replies`
-  (`slack.py:106-108`, `:220`, `:241`).
+  (`slack.py:114`, `:226`, `:247`).
 
 ### Confluence (Atlassian Cloud)
 
 The Confluence connector uses HTTP Basic auth (account email + API token)
-against the Confluence REST API (`confluence.py:64-67`, `:220-223`).
+against the Confluence REST API (`confluence.py:67-70`, `:223-242`).
 
 - Create an **Atlassian API token** at your Atlassian account security page.
 - Note your Atlassian **account email** (used as the Basic-auth login).
 - Determine the site **base URL including `/wiki`**, e.g.
   `https://your-domain.atlassian.net/wiki` (`confluence.py:18-19`).
-- Collect the **space keys** to sync (`confluence.py:22`).
+- Collect the **space keys** to sync (`confluence.py:27`).
 
 ### Jira (Atlassian Cloud)
 
 The Jira connector uses the same Atlassian API-token + email Basic auth against
-the Jira REST API v3 (`jira.py:66-69`, `:231-234`).
+the Jira REST API v3 (`jira.py:73-76`, `:238-257`).
 
 - Reuse (or create) an **Atlassian API token**.
 - Note your Atlassian **account email**.
 - Determine the site **base URL without `/wiki`**, e.g.
   `https://your-domain.atlassian.net` (`jira.py:18-19`).
-- Collect the **project keys** to sync (`jira.py:22`), or supply an explicit
-  `jql` override (`jira.py:23-24`).
+- Collect the **project keys** to sync (`jira.py:27`), or supply an explicit
+  `jql` override (`jira.py:28-29`).
 
 ## Step 3 — Connector config fields
 
@@ -102,33 +102,43 @@ connector's `__init__` reads**, with defaults, cited to source.
 
 | Key | Required | Default | Source |
 |---|---|---|---|
-| `bot_token` | yes | `""` | `slack.py:95` |
-| `channel_ids` | yes | `[]` | `slack.py:96` |
-| `sync_threads` | no | `True` | `slack.py:97` |
-| `oldest` | no | `"0"` | `slack.py:98` |
-| `page_size` | no | `200` | `slack.py:99` |
-| `slack_api_base` | no (testing) | `https://slack.com/api` | `slack.py:100` |
+| `token` | yes | `""` | `slack.py:101` |
+| `channel_ids` | yes | `[]` | `slack.py:102` |
+| `sync_threads` | no | `True` | `slack.py:103` |
+| `oldest` | no | `"0"` | `slack.py:104` |
+| `page_size` | no | `200` | `slack.py:105` |
+| `slack_api_base` | no (testing) | `https://slack.com/api` | `slack.py:106` |
+
+`token` is the canonical `BearerAuth` field (`connector_auth.py:18-23`) — see
+[Auth-field alignment](#auth-field-alignment).
 
 ### Confluence config keys
 
 | Key | Required | Default | Source |
 |---|---|---|---|
-| `base_url` | yes | `""` | `confluence.py:89` |
-| `email` | yes | `""` | `confluence.py:87` |
-| `api_token` | yes | `""` | `confluence.py:88` |
-| `space_keys` | yes | `[]` | `confluence.py:90` |
-| `page_size` | no | `25` | `confluence.py:91` |
+| `base_url` | yes | `""` | `confluence.py:92` |
+| `username` | yes | `""` | `confluence.py:90` |
+| `password` | yes | `""` | `confluence.py:91` |
+| `space_keys` | yes | `[]` | `confluence.py:93` |
+| `page_size` | no | `25` | `confluence.py:94` |
+
+`username`/`password` are the canonical `BasicAuth` fields
+(`connector_auth.py:37-43`) — `username` holds the Atlassian account email and
+`password` holds the API token.
 
 ### Jira config keys
 
 | Key | Required | Default | Source |
 |---|---|---|---|
-| `base_url` | yes | `""` | `jira.py:93` |
-| `email` | yes | `""` | `jira.py:91` |
-| `api_token` | yes | `""` | `jira.py:92` |
-| `project_keys` | yes | `[]` | `jira.py:94` |
-| `jql` | no (overrides project keys) | `""` | `jira.py:95` |
-| `page_size` | no | `50` | `jira.py:96` |
+| `base_url` | yes | `""` | `jira.py:100` |
+| `username` | yes | `""` | `jira.py:98` |
+| `password` | yes | `""` | `jira.py:99` |
+| `project_keys` | yes | `[]` | `jira.py:101` |
+| `jql` | no (overrides project keys) | `""` | `jira.py:102` |
+| `page_size` | no | `50` | `jira.py:103` |
+
+Same `BasicAuth` mapping as Confluence: `username` = Atlassian account email,
+`password` = API token.
 
 ## Step 4 — Register a connector and run the first sync
 
@@ -157,8 +167,7 @@ only persists on success (`knowledge_connectors.py:395-482`). A failed
 connection test returns **400** and the connector is not saved
 (`knowledge_connectors.py:467-478`).
 
-Slack example (see the auth-field caveat in
-[Known limitation](#known-limitation-auth-field-mismatch) before running):
+Slack example:
 
 ```bash
 curl -s -X POST https://<backend-host>/api/knowledge_base/connectors \
@@ -167,7 +176,7 @@ curl -s -X POST https://<backend-host>/api/knowledge_base/connectors \
         "connector_type": "slack",
         "name": "Engineering Slack",
         "config": {
-          "bot_token": "<SLACK_BOT_TOKEN>",
+          "token": "<SLACK_BOT_TOKEN>",
           "channel_ids": ["C0123456789"]
         }
       }'
@@ -183,8 +192,8 @@ curl -s -X POST https://<backend-host>/api/knowledge_base/connectors \
         "name": "Team Wiki",
         "config": {
           "base_url": "https://your-domain.atlassian.net/wiki",
-          "email": "<ATLASSIAN_EMAIL>",
-          "api_token": "<ATLASSIAN_API_TOKEN>",
+          "username": "<ATLASSIAN_EMAIL>",
+          "password": "<ATLASSIAN_API_TOKEN>",
           "space_keys": ["ENG", "OPS"]
         }
       }'
@@ -200,8 +209,8 @@ curl -s -X POST https://<backend-host>/api/knowledge_base/connectors \
         "name": "Delivery Tracker",
         "config": {
           "base_url": "https://your-domain.atlassian.net",
-          "email": "<ATLASSIAN_EMAIL>",
-          "api_token": "<ATLASSIAN_API_TOKEN>",
+          "username": "<ATLASSIAN_EMAIL>",
+          "password": "<ATLASSIAN_API_TOKEN>",
           "project_keys": ["ABC", "XYZ"]
         }
       }'
@@ -257,53 +266,52 @@ override `sync()` and runs the identical inherited pipeline offline
   curl -s -X GET https://<backend-host>/api/knowledge_base/connectors/health
   ```
 
-Change-detection checkpoints are stored in Redis (knowledge DB): Slack keys
-under `connector:slack:ts:` (`slack.py:50`, `:298-309`), Confluence under
-`connector:confluence:ts:` (`confluence.py:45`, `:264-275`), Jira under
-`connector:jira:ts:` (`jira.py:47`, `:275-286`), each with a 30-day TTL.
+Change-detection checkpoints are stored in Redis (knowledge DB) via the shared
+`_load_ts()` / `_store_ts()` helpers on `AbstractConnector`
+(`base.py:272-291`, `:293-308` — extracted from six byte-identical
+per-connector copies in #12659). The default key prefix is
+`connector:<connector_type>:ts:` (`base.py:268-269`) — i.e.
+`connector:slack:ts:`, `connector:confluence:ts:`, `connector:jira:ts:` — each
+with a 30-day TTL (`base.py:52`).
 
-## Known limitation: auth-field mismatch
+## Auth-field alignment
 
-The credential-handling layer and the connector bodies currently read
-**different config keys**. Operators must understand this before registering a
-production connector:
+The credential-handling layer and the connector bodies read the **same**
+config keys, so the examples above are the correct, currently-working request
+shape:
 
 - The create endpoint validates the request `config` against the connector's
   declared `auth_schema()` and requires those schema fields to be present
   (`knowledge_connectors.py:423`, validation logic
-  `autobot_shared/auth/connector_auth.py:78-84`). It then extracts the
+  `autobot_shared/auth/connector_auth.py:68-84`). It then extracts the
   schema's sensitive fields into the encrypted credential store and strips them
   from the stored config (`credential_store.py:82-84`).
 - Slack declares `BearerAuth`, whose sensitive/required field is `token`
-  (`slack.py:72-75`; `connector_auth.py:18-23`) — but `SlackConnector.__init__`
-  reads `bot_token` (`slack.py:95`).
+  (`slack.py:78-81`; `connector_auth.py:18-23`) — `SlackConnector.__init__`
+  reads the same `token` key (`slack.py:101`).
 - Confluence and Jira declare `BasicAuth`, whose fields are `username` and
-  `password` (`confluence.py:64-67`, `jira.py:66-69`;
-  `connector_auth.py:36-43`) — but their `__init__` methods read `email` and
-  `api_token` (`confluence.py:87-88`, `jira.py:91-92`).
+  `password` (`confluence.py:67-70`, `jira.py:73-76`;
+  `connector_auth.py:37-43`) — their `__init__` methods read the same
+  `username`/`password` keys (`confluence.py:90-91`, `jira.py:98-99`).
 
-Practical consequence: a request that satisfies the connector docstrings
-(`bot_token` / `email` + `api_token`) does **not** satisfy auth-schema
-validation, and vice-versa. The mapping between the declared auth schema and the
-keys the connector actually reads is **not resolved in the current code**. This
-is why these connectors remain disabled by default and Issue #10538 stays open
-for the live-credential wiring. Do not treat the examples above as a guaranteed
-working recipe until this mapping is finalized; validate against your target
-build and coordinate with the credential-wiring work before enabling in
-production.
+This alignment was fixed in #12225 (tracked from #12221), which renamed the
+per-connector reads to match the declared schema; prior to that fix, a request
+that satisfied the connector docstrings (`bot_token` / `email` + `api_token`)
+would not have satisfied auth-schema validation. That mismatch no longer
+exists in the current code.
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
 | `422` on create, type "not registered" | `kb_enterprise_connectors` flag off on that node | `knowledge_connectors.py:81-87`, `:409-414` |
-| `422` "Auth config invalid" | Missing auth-schema field (`token` / `username` + `password`) | `knowledge_connectors.py:423`; `connector_auth.py:78-84` |
-| `400` "Connection test failed" | Bad/expired token, wrong `base_url`, no channel/space/project access | `test_connection` per connector (`slack.py:106-112`, `confluence.py:97-103`, `jira.py:102-108`) |
-| Empty sync (no facts) | Wrong `channel_ids` / `space_keys` / `project_keys`, or `oldest`/`jql` filters out everything | `slack.py:114-121`, `confluence.py:105-112`, `jira.py:110-113` |
-| Sync slows / stalls under load | Upstream `HTTP 429` rate limiting is retried as `RetryableError` | `slack.py:262-263`, `confluence.py:228-229`, `jira.py:239-240` |
-| Upstream `5xx` errors | Retried as `RetryableError`; `4xx` (non-429) are logged and skipped | `slack.py:264-265`, `confluence.py:230-231`, `jira.py:241-242` |
+| `422` "Auth config invalid" | Missing auth-schema field (`token` / `username` + `password`) | `knowledge_connectors.py:423`; `connector_auth.py:68-84` |
+| `400` "Connection test failed" | Bad/expired token, wrong `base_url`, no channel/space/project access | `test_connection` per connector (`slack.py:112-118`, `confluence.py:100-106`, `jira.py:109-115`) |
+| Empty sync (no facts) | Wrong `channel_ids` / `space_keys` / `project_keys`, or `oldest`/`jql` filters out everything | `slack.py:120-127`, `confluence.py:108-115`, `jira.py:117-120` |
+| Sync slows / stalls under load | Upstream `HTTP 429` rate limiting is retried as `RetryableError` | `slack.py:274-275`, `confluence.py:232-233`, `jira.py:247-248` |
+| Upstream `5xx` errors | Retried as `RetryableError`; `4xx` (non-429) are logged and skipped | `slack.py:276-277`, `confluence.py:234-235`, `jira.py:249-250` |
 | Confluence `404`/empty on valid space | `base_url` missing the `/wiki` suffix | `confluence.py:18-19` |
-| Jira returns nothing for known project | `base_url` wrongly includes `/wiki`, or `jql` override shadows `project_keys` | `jira.py:18-19`, `:169-177` |
+| Jira returns nothing for known project | `base_url` wrongly includes `/wiki`, or `jql` override shadows `project_keys` | `jira.py:18-19`, `:176-184` |
 
 ## Reference
 

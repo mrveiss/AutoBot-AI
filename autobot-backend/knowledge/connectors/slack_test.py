@@ -87,6 +87,33 @@ class TestSlackConnectorDiscovery:
         assert sources[0].source_id == "slack:test-slack-1:channel:C123:ts:1000.001"
         assert "hello" in sources[0].name
 
+    @pytest.mark.asyncio
+    async def test_discover_sources_paginates(self, slack_config):
+        """_history() must follow `response_metadata.next_cursor` until exhausted (#10538)."""
+        connector = SlackConnector(slack_config)
+        page1 = {
+            "ok": True,
+            "messages": [{"ts": "1000.001", "user": "U1", "text": "hello"}],
+            "response_metadata": {"next_cursor": "cursor-2"},
+        }
+        page2 = {
+            "ok": True,
+            "messages": [{"ts": "1000.002", "user": "U1", "text": "world"}],
+            "response_metadata": {"next_cursor": ""},
+        }
+        with patch.object(connector, "_slack_post", new_callable=AsyncMock) as mock_post:
+            mock_post.side_effect = [
+                {"status_code": 200, "body": page1},
+                {"status_code": 200, "body": page2},
+            ]
+            sources = await connector.discover_sources()
+
+        assert mock_post.call_count == 2
+        assert {s.source_id for s in sources} == {
+            "slack:test-slack-1:channel:C123:ts:1000.001",
+            "slack:test-slack-1:channel:C123:ts:1000.002",
+        }
+
 
 class TestSlackConnectorFetchContent:
     @pytest.mark.asyncio
