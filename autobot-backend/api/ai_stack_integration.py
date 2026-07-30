@@ -46,6 +46,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from dependencies import get_knowledge_base
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from type_defs.common import Metadata
 
@@ -126,7 +127,10 @@ async def rag_query(
     documents = request.documents
     if not documents and knowledge_base:
         try:
-            kb_results = await knowledge_base.search(query=request.query, top_k=request.max_results)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            kb_results = await knowledge_base.search(
+                query=request.query, top_k=request.max_results, filters=RESEARCH_QUARANTINE_FILTER
+            )
             documents = kb_results if isinstance(kb_results, list) else []
         except Exception as e:
             logger.warning("Knowledge base search failed: %s", e)
@@ -214,7 +218,8 @@ async def chat(
     if request.use_knowledge_base and knowledge_base:
         try:
             # Search knowledge base for relevant context
-            kb_context = await knowledge_base.search(query=request.message, top_k=5)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            kb_context = await knowledge_base.search(query=request.message, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             if kb_context:
                 kb_summary = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_context[:3]])
                 enhanced_context = f"{request.context or ''}\n\nRelevant knowledge:\n{kb_summary}"
@@ -287,7 +292,10 @@ async def knowledge_search(
     # Local knowledge base search
     if knowledge_base:
         try:
-            local_results = await knowledge_base.search(query=query, top_k=max_results)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            local_results = await knowledge_base.search(
+                query=query, top_k=max_results, filters=RESEARCH_QUARANTINE_FILTER
+            )
             results["local_kb"] = local_results
         except Exception as e:
             logger.warning("Local KB search failed: %s", e)
