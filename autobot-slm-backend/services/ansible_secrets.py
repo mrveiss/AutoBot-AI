@@ -58,27 +58,26 @@ async def fetch_deploy_secrets() -> dict[str, str]:
     infrastructure — any deploy path that needs to inject stored secrets as
     Ansible extra_vars should call this function.
 
+    Each key is resolved via ``system_secrets_vault.retrieve_secret``
+    (#10088 Task 6a): legacy ``system_secrets`` first, unified System vault
+    fallback. ``autobot_internal_api_key`` never reaches the vault path —
+    it is the auth-bootstrap credential ``vault_client`` uses to reach the
+    vault in the first place (confused-deputy guard; see
+    ``system_secrets_vault`` module docstring), and its legacy row is never
+    pruned, so the fallback is never exercised for it in practice.
+
     Returns an empty dict and logs a warning if the DB is unavailable — the
     deploy is allowed to proceed rather than being blocked by a secret-fetch
     failure.
     """
-    from sqlalchemy import select
-
-    from models.database import SystemSecret
     from services.database import db_service
-    from services.encryption import decrypt_data
+    from services.system_secrets_vault import retrieve_secret
 
     extra: dict[str, str] = {}
     try:
         async with db_service.session() as session:
-            result = await session.execute(
-                select(SystemSecret).where(SystemSecret.key.in_(list(_SECRET_TO_ANSIBLE_VAR.keys())))
-            )
-            for secret in result.scalars().all():
-                ansible_var = _SECRET_TO_ANSIBLE_VAR.get(secret.key)
-                if not ansible_var:
-                    continue
-                value = decrypt_data(secret.encrypted_value)
+            for key, ansible_var in _SECRET_TO_ANSIBLE_VAR.items():
+                value = await retrieve_secret(session, key)
                 if value:
                     extra[ansible_var] = value
     except Exception:

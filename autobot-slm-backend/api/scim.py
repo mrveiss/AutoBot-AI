@@ -9,9 +9,10 @@ RFC 7644 compliant endpoints for IdP-pushed user/group lifecycle.
 Mounts at /scim/v2 (registered without /api prefix so IdPs can reach it directly).
 
 Bearer-token auth: SCIM clients (Okta/Entra/Google) authenticate with the
-'scim_bearer_token' key from SystemSecret (AES-GCM encrypted at rest).
-The token is seeded once on first startup; admins retrieve it via the
-SLM secrets UI or CLI.
+'scim_bearer_token' key, read via services.system_secrets_vault (legacy
+SystemSecret first, unified System vault fallback — #10088 Task 6a). The
+token is seeded once on first startup; admins retrieve it via the SLM
+secrets UI or CLI.
 
 Group→role: delegates entirely to SSOService._sync_idp_groups_to_roles
 via _resolve_managed_roles + UserService.assign_role / revoke_role so
@@ -28,9 +29,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database import SystemSecret
 from services.database import db_service
-from services.encryption import decrypt_data
+from services.system_secrets_vault import retrieve_secret
 from user_management.database import get_slm_session
 from user_management.models import Role, User, UserRole
 from user_management.services.base_service import TenantContext
@@ -66,16 +66,12 @@ async def _get_slm_db() -> AsyncSession:
 
 
 async def _load_scim_token() -> str | None:
-    """Load the SCIM bearer token from SystemSecret (main SLM DB, AES-GCM encrypted)."""
+    """Load the SCIM bearer token — legacy SystemSecret first, vault fallback (#10088 Task 6a)."""
     try:
         async with db_service.session() as db:
-            result = await db.execute(select(SystemSecret).where(SystemSecret.key == _SCIM_TOKEN_KEY))
-            row = result.scalar_one_or_none()
-            if row is None:
-                return None
-            return decrypt_data(row.encrypted_value)
+            return await retrieve_secret(db, _SCIM_TOKEN_KEY)
     except Exception:
-        logger.warning("Could not load SCIM bearer token from SystemSecret")
+        logger.warning("Could not load SCIM bearer token")
         return None
 
 
