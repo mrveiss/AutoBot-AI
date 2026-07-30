@@ -36,6 +36,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from dependencies import get_knowledge_base
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_factory import get_or_create_knowledge_base
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from utils.response_helpers import (
@@ -337,9 +338,11 @@ async def rag_search(
         documents = request_data.documents
         if not documents and knowledge_base:
             try:
+                # Issue #13009: exclude quarantined research facts (#12622).
                 kb_results = await knowledge_base.search(
                     query=request_data.query,
                     top_k=15,  # Get more documents for RAG context
+                    filters=RESEARCH_QUARANTINE_FILTER,
                 )
                 documents = kb_results if isinstance(kb_results, list) else []
                 logger.info(f"Retrieved {len(documents)} documents from local KB for RAG")

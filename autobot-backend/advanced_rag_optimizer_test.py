@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, SearchResult
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 
 class TestSemanticSearch:
@@ -41,7 +42,8 @@ class TestSemanticSearch:
         results = await optimizer._perform_semantic_search("test query", limit=10)
 
         # Verify kb.search was called (not get_fact)
-        mock_kb.search.assert_called_once_with("test query", top_k=10)
+        # Issue #13009: also verify the quarantine filter is applied (#12622).
+        mock_kb.search.assert_called_once_with("test query", top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
 
         # Verify results are properly formatted
         assert len(results) == 2

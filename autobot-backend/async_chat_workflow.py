@@ -17,22 +17,15 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
-from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANTINE_FILTER
 from knowledge.search import map_kb_result_to_dict
 from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryConfig, RetryStrategy, with_retry
 
 logger = get_logger(__name__)
-
-# #12622: web-research facts are quarantined in a dedicated KB collection until
-# Phase 1's corroboration/promotion gate (#12623) reviews them, so general
-# chat/RAG must never surface them. ``$ne`` also matches facts that predate
-# this field entirely (no "collection" key), verified against the installed
-# ChromaDB via a standalone metadata-filter check.
-_RESEARCH_QUARANTINE_FILTER = {"collection": {"$ne": config.research_quarantine_collection}}
 
 # Performance optimization: O(1) lookup for message classification keywords (Issue #326)
 TERMINAL_KEYWORDS = {"terminal", "command", "bash", "shell", "run"}
