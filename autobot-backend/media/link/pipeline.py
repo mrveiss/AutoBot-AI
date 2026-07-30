@@ -222,12 +222,15 @@ class LinkPipeline(BasePipeline):
         # cert verification for known-safe internal URLs.
         ssl_context = False if metadata.get("allow_self_signed") else None
         try:
-            async with aiohttp.ClientSession(headers=headers, timeout=_DEFAULT_TIMEOUT) as session:
-                async with session.get(url, allow_redirects=True, ssl=ssl_context) as response:
-                    final_url = str(response.url)
-                    content_type = response.headers.get("Content-Type", "")
-                    raw_html = await response.text(encoding="utf-8", errors="replace")
-                    status = response.status
+            from autobot_shared.http_client import get_http_client
+
+            async with get_http_client().tracked_request(
+                "GET", url, headers=headers, timeout=_DEFAULT_TIMEOUT, allow_redirects=True, ssl=ssl_context
+            ) as response:
+                final_url = str(response.url)
+                content_type = response.headers.get("Content-Type", "")
+                raw_html = await response.text(encoding="utf-8", errors="replace")
+                status = response.status
 
             if status >= 400:
                 return self._error_result(

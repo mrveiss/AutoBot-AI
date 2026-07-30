@@ -336,25 +336,20 @@ class TestSendWebhook:
 
     @pytest.mark.asyncio
     async def test_posts_json_payload(self):
+        from autobot_shared.http_client import get_http_client
+
         svc = self._svc()
         mock_resp = AsyncMock()
         mock_resp.status = 200
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
-        mock_session = AsyncMock()
-        mock_session.post = MagicMock(return_value=mock_resp)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
-        with patch(
-            "services.notification_service.aiohttp.ClientSession",
-            return_value=mock_session,
-        ):
+        manager = get_http_client()
+        with patch.object(manager, "tracked_request", return_value=mock_resp) as mock_tracked_request:
             await svc._send_webhook("https://example.com/hook", {"key": "val"})
 
-        mock_session.post.assert_called_once()
-        call_kwargs = mock_session.post.call_args[1]
+        mock_tracked_request.assert_called_once()
+        call_kwargs = mock_tracked_request.call_args.kwargs
         assert call_kwargs["json"] == {"key": "val"}
 
     @pytest.mark.asyncio
@@ -362,6 +357,8 @@ class TestSendWebhook:
         import aiohttp as _aiohttp
         from multidict import CIMultiDict
         from yarl import URL
+
+        from autobot_shared.http_client import get_http_client
 
         svc = self._svc()
         mock_resp = AsyncMock()
@@ -378,15 +375,8 @@ class TestSendWebhook:
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
-        mock_session = AsyncMock()
-        mock_session.post = MagicMock(return_value=mock_resp)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
-        with patch(
-            "services.notification_service.aiohttp.ClientSession",
-            return_value=mock_session,
-        ):
+        manager = get_http_client()
+        with patch.object(manager, "tracked_request", return_value=mock_resp):
             with pytest.raises(_aiohttp.ClientResponseError):
                 await svc._send_webhook("https://example.com/hook", {})
 

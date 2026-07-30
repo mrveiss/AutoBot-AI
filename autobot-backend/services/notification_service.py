@@ -474,18 +474,21 @@ class NotificationService:
         }
         timeout = aiohttp.ClientTimeout(total=10)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, json=payload, headers=headers) as resp:
-                    if resp.status >= 400:
-                        body_text = await resp.text()
-                        logger.error(
-                            "Webhook POST to %s returned HTTP %d: %s",
-                            url,
-                            resp.status,
-                            body_text[:200],
-                        )
-                        resp.raise_for_status()
-                    logger.info("Webhook delivered to %s (status=%d)", url, resp.status)
+            from autobot_shared.http_client import get_http_client
+
+            async with get_http_client().tracked_request(
+                "POST", url, json=payload, headers=headers, timeout=timeout
+            ) as resp:
+                if resp.status >= 400:
+                    body_text = await resp.text()
+                    logger.error(
+                        "Webhook POST to %s returned HTTP %d: %s",
+                        url,
+                        resp.status,
+                        body_text[:200],
+                    )
+                    resp.raise_for_status()
+                logger.info("Webhook delivered to %s (status=%d)", url, resp.status)
         except aiohttp.ClientError as exc:
             logger.error("HTTP client error delivering webhook to %s: %s", url, exc)
             raise

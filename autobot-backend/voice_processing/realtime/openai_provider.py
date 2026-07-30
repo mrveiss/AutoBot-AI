@@ -98,11 +98,14 @@ class OpenAIRealtimeProvider(RealtimeVoiceProvider):
         """POST the offer upstream and map upstream failures to provider errors."""
         timeout = aiohttp.ClientTimeout(connect=30, total=60)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as http:
-                async with http.post(_OPENAI_REALTIME_URL, data=form, headers=headers) as upstream:
-                    body = await upstream.read()
-                    self._raise_for_status(upstream.status, body)
-                    return body
+            from autobot_shared.http_client import get_http_client
+
+            async with get_http_client().tracked_request(
+                "POST", _OPENAI_REALTIME_URL, data=form, headers=headers, timeout=timeout
+            ) as upstream:
+                body = await upstream.read()
+                self._raise_for_status(upstream.status, body)
+                return body
         except RealtimeProviderError:
             raise
         except aiohttp.ClientError as exc:

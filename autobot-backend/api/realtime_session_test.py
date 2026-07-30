@@ -53,7 +53,13 @@ def _form(sdp: str = _SDP_OFFER, session: str = _SESSION_JSON) -> dict:
 
 
 def _mock_upstream(status: int = 200, body: bytes = _SDP_ANSWER):
-    """Return a mock aiohttp response context-manager."""
+    """Return a mock aiohttp response, itself the tracked_request() async CM.
+
+    #12979: OpenAIRealtimeProvider._post() now routes through the shared
+    pool's get_http_client().tracked_request() rather than a private
+    ClientSession, so this is patched directly (see _patch_http_client())
+    instead of patching aiohttp.ClientSession.
+    """
     resp = MagicMock()
     resp.status = status
     resp.read = AsyncMock(return_value=body)
@@ -64,15 +70,11 @@ def _mock_upstream(status: int = 200, body: bytes = _SDP_ANSWER):
     return cm
 
 
-def _mock_session(upstream_cm):
-    """Return a mock aiohttp.ClientSession context-manager."""
-    session = MagicMock()
-    session.post = MagicMock(return_value=upstream_cm)
+def _patch_http_client(upstream_cm):
+    """Patch the shared HTTPClientManager singleton's tracked_request()."""
+    from autobot_shared.http_client import get_http_client
 
-    session_cm = MagicMock()
-    session_cm.__aenter__ = AsyncMock(return_value=session)
-    session_cm.__aexit__ = AsyncMock(return_value=False)
-    return session_cm
+    return patch.object(get_http_client(), "tracked_request", return_value=upstream_cm)
 
 
 # ---------------------------------------------------------------------------
@@ -85,13 +87,13 @@ class TestHappyPath:
 
     def test_returns_200(self, client: TestClient):
         upstream_cm = _mock_upstream(200, _SDP_ANSWER)
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -102,13 +104,13 @@ class TestHappyPath:
 
     def test_returns_sdp_content_type(self, client: TestClient):
         upstream_cm = _mock_upstream(200, _SDP_ANSWER)
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -119,13 +121,13 @@ class TestHappyPath:
 
     def test_returns_upstream_body(self, client: TestClient):
         upstream_cm = _mock_upstream(200, _SDP_ANSWER)
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -136,13 +138,13 @@ class TestHappyPath:
 
     def test_accepts_201_from_upstream(self, client: TestClient):
         upstream_cm = _mock_upstream(201, _SDP_ANSWER)
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -190,13 +192,13 @@ class TestUpstream401:
 
     def test_upstream_401_returns_502(self, client: TestClient):
         upstream_cm = _mock_upstream(401, b'{"error":"unauthorized"}')
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-bad-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -207,13 +209,13 @@ class TestUpstream401:
 
     def test_upstream_401_error_body(self, client: TestClient):
         upstream_cm = _mock_upstream(401, b'{"error":"unauthorized"}')
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-bad-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -235,13 +237,13 @@ class TestUpstream5xx:
     @pytest.mark.parametrize("status", [500, 502, 503, 504])
     def test_upstream_5xx_returns_502(self, client: TestClient, status: int):
         upstream_cm = _mock_upstream(status, b"internal server error")
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -252,13 +254,13 @@ class TestUpstream5xx:
 
     def test_upstream_5xx_error_body(self, client: TestClient):
         upstream_cm = _mock_upstream(500, b"oops")
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
 
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key", return_value="sk-test-key"
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",
@@ -279,13 +281,13 @@ class TestProviderDispatch:
 
     def test_session_header_advertises_provider(self, client: TestClient):
         upstream_cm = _mock_upstream(200, _SDP_ANSWER)
-        session_cm = _mock_session(upstream_cm)
+        http_client_patch = _patch_http_client(upstream_cm)
         with (
             patch(
                 "voice_processing.realtime.openai_provider.OpenAIRealtimeProvider._api_key",
                 return_value="sk-test-key",
             ),
-            patch("aiohttp.ClientSession", return_value=session_cm),
+            http_client_patch,
         ):
             resp = client.post(
                 "/api/voice/realtime/session",

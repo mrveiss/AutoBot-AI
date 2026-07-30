@@ -159,10 +159,17 @@ class TestLinkPipelineErrorHandling:
 
 
 class TestLinkPipelineHttp:
-    """Tests for HTTP fetch path."""
+    """Tests for HTTP fetch path.
 
-    def _make_mock_session(self, url, status=200):
-        """Helper: build a mock aiohttp ClientSession for fetch tests."""
+    #12979: _fetch_and_parse() now routes through the shared pool's
+    get_http_client().tracked_request() instead of a private ClientSession,
+    so these tests patch the singleton manager's tracked_request() (which
+    returns the response object directly, itself the async context manager)
+    rather than aiohttp.ClientSession.
+    """
+
+    def _make_mock_response(self, url, status=200):
+        """Helper: build a mock response for tracked_request() fetch tests."""
         mock_response = AsyncMock()
         mock_response.url = url
         mock_response.headers = {"Content-Type": "text/html"}
@@ -170,74 +177,89 @@ class TestLinkPipelineHttp:
         mock_response.status = status
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        return mock_session
+        return mock_response
 
     @pytest.mark.asyncio
     async def test_fetch_success(self):
+        from autobot_shared.http_client import get_http_client
+        from media.link import pipeline as pl
+
         pipe = LinkPipeline()
-        mock_session = self._make_mock_session("https://example.com")
+        mock_response = self._make_mock_response("https://example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
+        manager = get_http_client()
 
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(manager, "tracked_request", return_value=mock_response) as mock_tracked_request,
             patch.object(pipe, "_parse_html", return_value=_parsed),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             result = await pipe._fetch_and_parse("https://example.com", {})
 
-        assert result["type"] == "link_fetch"
-        assert result["confidence"] > 0
-        # Default path must verify TLS certs (ssl=None, not ssl=False)
-        mock_session.get.assert_called_once_with("https://example.com", allow_redirects=True, ssl=None)
+            assert result["type"] == "link_fetch"
+            assert result["confidence"] > 0
+            # Default path must verify TLS certs (ssl=None, not ssl=False)
+            mock_tracked_request.assert_called_once_with(
+                "GET",
+                "https://example.com",
+                headers={"User-Agent": pl._USER_AGENT},
+                timeout=pl._DEFAULT_TIMEOUT,
+                allow_redirects=True,
+                ssl=None,
+            )
 
     @pytest.mark.asyncio
     async def test_fetch_default_verifies_tls(self):
         """ssl=None (cert verification) is used when allow_self_signed is absent."""
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
-        mock_session = self._make_mock_session("https://example.com")
+        mock_response = self._make_mock_response("https://example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9}
+        manager = get_http_client()
 
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(manager, "tracked_request", return_value=mock_response) as mock_tracked_request,
             patch.object(pipe, "_parse_html", return_value=_parsed),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             await pipe._fetch_and_parse("https://example.com", {})
 
-        _call_kwargs = mock_session.get.call_args.kwargs
-        assert _call_kwargs.get("ssl") is None, "Default fetch must NOT disable cert verification"
+            _call_kwargs = mock_tracked_request.call_args.kwargs
+            assert _call_kwargs.get("ssl") is None, "Default fetch must NOT disable cert verification"
 
     @pytest.mark.asyncio
     async def test_fetch_allow_self_signed_disables_tls(self):
         """ssl=False is used only when metadata allow_self_signed=True is explicitly set."""
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
-        mock_session = self._make_mock_session("https://internal.example.com")
+        mock_response = self._make_mock_response("https://internal.example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9}
+        manager = get_http_client()
 
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(manager, "tracked_request", return_value=mock_response) as mock_tracked_request,
             patch.object(pipe, "_parse_html", return_value=_parsed),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             await pipe._fetch_and_parse("https://internal.example.com", {"allow_self_signed": True})
 
-        _call_kwargs = mock_session.get.call_args.kwargs
-        assert _call_kwargs.get("ssl") is False, "allow_self_signed=True must set ssl=False"
+            _call_kwargs = mock_tracked_request.call_args.kwargs
+            assert _call_kwargs.get("ssl") is False, "allow_self_signed=True must set ssl=False"
 
     @pytest.mark.asyncio
     async def test_fetch_http_error(self):
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
+        manager = get_http_client()
 
         mock_response = AsyncMock()
         mock_response.url = "https://example.com/404"
@@ -247,15 +269,10 @@ class TestLinkPipelineHttp:
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
 
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch.object(manager, "tracked_request", return_value=mock_response),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             result = await pipe._fetch_and_parse("https://example.com/404", {})
@@ -324,6 +341,8 @@ class TestLinkPipelineJina:
     @pytest.mark.asyncio
     async def test_fetch_skips_jina_when_hostname_resolves_to_private_ip(self):
         """SSRF guard: hostname resolving to RFC1918 must skip Jina fast-path."""
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://intranet.attacker/"}
         jina_mock = AsyncMock(return_value="should-not-be-called")
@@ -331,7 +350,7 @@ class TestLinkPipelineJina:
         with (
             patch.object(pipe, "_try_jina", new=jina_mock),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch.object(get_http_client(), "tracked_request", return_value=self._make_mock_bs4_response()),
             _mock_getaddrinfo("10.0.0.5"),
         ):
             result = await pipe._fetch_and_parse("https://intranet.attacker/", {})
@@ -342,6 +361,8 @@ class TestLinkPipelineJina:
     @pytest.mark.asyncio
     async def test_jina_non200_falls_back_to_beautifulsoup(self):
         """Non-200 Jina response triggers BeautifulSoup fallback."""
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
         mock_session = self._make_jina_mock_session(status=429)
 
@@ -357,7 +378,7 @@ class TestLinkPipelineJina:
 
         with (
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch.object(get_http_client(), "tracked_request", return_value=self._make_mock_bs4_response()),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
         ):
             result = await pipe._fetch_and_parse("https://example.com", {})
@@ -370,6 +391,8 @@ class TestLinkPipelineJina:
         """Jina timeout triggers BeautifulSoup fallback."""
         import aiohttp as _aiohttp
 
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
 
@@ -378,7 +401,7 @@ class TestLinkPipelineJina:
 
         with (
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch.object(get_http_client(), "tracked_request", return_value=self._make_mock_bs4_response()),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
         ):
             result = await pipe._fetch_and_parse("https://example.com", {})
@@ -518,8 +541,8 @@ class TestLinkPipelineJina:
         with _mock_getaddrinfo("10.0.0.1"):
             assert not await pipe._is_public_url_async("https://intranet.attacker/")
 
-    def _make_mock_bs4_session(self, status=200):
-        """Helper: mock ClientSession for the BS4 fallback path."""
+    def _make_mock_bs4_response(self, status=200):
+        """Helper: mock response for the BS4-fallback tracked_request() path."""
         mock_response = AsyncMock()
         mock_response.url = "https://example.com"
         mock_response.headers = {"Content-Type": "text/html"}
@@ -527,12 +550,7 @@ class TestLinkPipelineJina:
         mock_response.status = status
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        return mock_session
+        return mock_response
 
 
 # ----------------------------------------------------------------------

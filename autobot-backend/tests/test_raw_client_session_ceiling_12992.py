@@ -57,11 +57,48 @@ confirmed **30** (batch 7's own value held — the first time in this
 programme a pre-rebase ceiling has still matched the true count), and
 batch 8 lands at **22**.
 
+Batch 9 (``llm_shared/mock_providers.py``, ``media/link/pipeline.py``,
+``onboarding/doctor.py``, ``services/command_extraction_service.py``,
+``services/notification_service.py``, ``services/whatsapp_service.py``,
+``tools/description_compressor.py``,
+``voice_processing/providers/cloud/base.py`` +
+``deepgram_provider.py``/``assemblyai_provider.py``,
+``voice_processing/providers/lv/tilde_provider.py``,
+``voice_processing/realtime/openai_provider.py``) converted 10 of the 12
+sites the task listed. The other 2 — ``services/npu_pipeline/dispatcher.py``
+and ``services/npu_pipeline/npu_client.py`` — turned out on inspection to be
+long-lived/returned-session carve-outs (same shape as
+``services/npu_client.py``'s ``_get_session()``, batch 7) and were left RAW
+with in-code reasons instead. Re-measured with the same AST walker against
+``origin/Dev_new_gui`` immediately before push: the pre-batch-9 base held at
+**22** (batch 8's value was still current), and batch 9's 10 conversions land
+the true count at **12** — exactly the 10 documented carve-outs from batches
+4-8 (5 SSRF-pinned + 2 long-lived + 2 custom-TLS = 9 files, 10 sites) plus the
+2 newly-documented ``npu_pipeline/`` long-lived carve-outs found this batch.
+
+At 12, every remaining raw ``aiohttp.ClientSession(...)`` construction in
+``autobot-backend/`` is a **documented, intentional carve-out** — see the
+"Remaining raw sites" list below. This sweep's convertible tail is drained;
+what is left is not unfinished work.
+
 Unlike the ``xfail(strict=True)`` guard in
 ``autobot-slm-backend/tests/test_update_all_applies_roles_12959.py`` — which
 marks a single binary gap — this is a monotonically decreasing budget, because
 the backlog is drained incrementally by #12979's batches rather than in one
 commit.
+
+Remaining raw sites (12, all carve-outs — see #12979 comments for detail):
+
+* SSRF-pinned ``connector=`` (pooling would silently drop the pin —
+  DNS-rebinding regression no test catches): ``api/provider_auth.py`` (2),
+  ``api/marketplace_sources.py``, ``content_reach/_url_guard.py``,
+  ``knowledge/connectors/oauth_flow.py``, ``skills/external_importer.py``.
+* Long-lived (session outlives a single call, reused across sequential or
+  concurrent requests on the same instance): ``services/npu_client.py``,
+  ``services/npu_pipeline/dispatcher.py``, ``services/npu_pipeline/npu_client.py``,
+  ``skills/sync/mcp_transport.py`` (``SSETransport``).
+* Custom non-default TLS/SSL context the pool cannot express per-request:
+  ``services/slm_client.py``, ``orchestration/dag_executor.py``.
 
 Refs #12979, #12981, #12989, #12992.
 """
@@ -104,8 +141,13 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 #:    subtracting. Batch 8 rebased onto ``origin/Dev_new_gui`` after batch 7
 #:    merged and confirmed 30 was STILL current (the first time in this
 #:    programme a pre-rebase ceiling wasn't stale) — its 8 conversions land
-#:    at 22.
-MAX_RAW_CLIENT_SESSIONS = 22
+#:    at 22. Batch 9 confirmed 22 was still current on a fresh
+#:    ``origin/Dev_new_gui`` sync immediately before push, and its 10
+#:    conversions (of 12 candidate sites; 2 turned out to be long-lived
+#:    carve-outs on inspection) land the true count at 12 — every remaining
+#:    site is now a documented carve-out (see the module docstring's
+#:    "Remaining raw sites" list).
+MAX_RAW_CLIENT_SESSIONS = 12
 
 #: Directory names that are never part of the production surface being swept.
 EXCLUDED_DIR_NAMES = {"__pycache__", "tests", "test", ".pytest_cache", "node_modules"}

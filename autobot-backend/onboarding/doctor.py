@@ -63,9 +63,12 @@ async def _probe_http(url: str, timeout: float = 3.0) -> tuple[bool, str]:
     try:
         import aiohttp  # optional dependency — graceful degradation if absent
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(connect=timeout, total=timeout)) as resp:
-                return (resp.status < 500, f"HTTP {resp.status}")
+        from autobot_shared.http_client import get_http_client
+
+        async with get_http_client().tracked_request(
+            "GET", url, timeout=aiohttp.ClientTimeout(connect=timeout, total=timeout), suppress_error_log=True
+        ) as resp:
+            return (resp.status < 500, f"HTTP {resp.status}")
     except ImportError:
         return (False, "aiohttp not installed")
     except Exception as exc:  # noqa: BLE001

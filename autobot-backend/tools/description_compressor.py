@@ -83,13 +83,16 @@ async def _compress_via_ollama(description: str) -> str | None:
     payload = {"model": model, "prompt": prompt, "stream": False}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(connect=5, total=30)) as resp:
-                if resp.status != 200:
-                    logger.warning("Ollama returned HTTP %d for compression request", resp.status)
-                    return None
-                data = await resp.json(content_type=None)
-                return (data.get("response") or "").strip() or None
+        from autobot_shared.http_client import get_http_client
+
+        async with get_http_client().tracked_request(
+            "POST", url, json=payload, timeout=aiohttp.ClientTimeout(connect=5, total=30)
+        ) as resp:
+            if resp.status != 200:
+                logger.warning("Ollama returned HTTP %d for compression request", resp.status)
+                return None
+            data = await resp.json(content_type=None)
+            return (data.get("response") or "").strip() or None
     except Exception as exc:
         logger.warning("Ollama compression call failed: %s", exc)
         return None

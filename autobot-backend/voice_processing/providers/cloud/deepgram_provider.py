@@ -15,7 +15,7 @@ from typing import List, Optional
 
 from autobot_shared.logging_manager import get_logger
 from voice_processing.providers import TranscriptSegment
-from voice_processing.providers.cloud.base import CloudSpeechProvider
+from voice_processing.providers.cloud.base import _DEFAULT_TIMEOUT, CloudSpeechProvider
 
 logger = get_logger(__name__)
 
@@ -52,13 +52,16 @@ class DeepgramProvider(CloudSpeechProvider):
             "Authorization": self._auth_header(),
             "Content-Type": "audio/wav",
         }
-        async with self._make_session() as session:
-            async with session.post(_DEEPGRAM_URL, params=params, headers=headers, data=audio_bytes) as resp:
-                if resp.status != 200:
-                    err = await resp.text()
-                    logger.error("DeepgramProvider: API error %d: %s", resp.status, err[:200])
-                    return []
-                data = await resp.json()
+        from autobot_shared.http_client import get_http_client
+
+        async with get_http_client().tracked_request(
+            "POST", _DEEPGRAM_URL, params=params, headers=headers, data=audio_bytes, timeout=_DEFAULT_TIMEOUT
+        ) as resp:
+            if resp.status != 200:
+                err = await resp.text()
+                logger.error("DeepgramProvider: API error %d: %s", resp.status, err[:200])
+                return []
+            data = await resp.json()
         return self._parse(data, language)
 
     def _parse(self, data: dict, language: Optional[str]) -> List[TranscriptSegment]:

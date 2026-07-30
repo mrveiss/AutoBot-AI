@@ -90,28 +90,27 @@ def test_list_realtime_providers_metadata_no_secrets():
 # ── OpenAI provider dispatch (provider I/O mocked) ─────────────────────────────
 
 
-def _mock_aiohttp_session(status: int, body: bytes):
+def _mock_http_response(status: int, body: bytes):
+    """Return a mock aiohttp response, itself the tracked_request() async CM."""
     resp = MagicMock()
     resp.status = status
     resp.read = AsyncMock(return_value=body)
-    post_cm = MagicMock()
-    post_cm.__aenter__ = AsyncMock(return_value=resp)
-    post_cm.__aexit__ = AsyncMock(return_value=False)
-    session = MagicMock()
-    session.post = MagicMock(return_value=post_cm)
-    session_cm = MagicMock()
-    session_cm.__aenter__ = AsyncMock(return_value=session)
-    session_cm.__aexit__ = AsyncMock(return_value=False)
-    return session_cm
+    resp_cm = MagicMock()
+    resp_cm.__aenter__ = AsyncMock(return_value=resp)
+    resp_cm.__aexit__ = AsyncMock(return_value=False)
+    return resp_cm
 
 
 @pytest.mark.asyncio
 async def test_openai_negotiate_proxies_offer():
+    from autobot_shared.http_client import get_http_client
+
     provider = OpenAIRealtimeProvider()
     answer = b"v=0\r\nsdp-answer\r\n"
+    manager = get_http_client()
     with (
         patch.object(OpenAIRealtimeProvider, "_api_key", return_value="sk-test"),
-        patch("aiohttp.ClientSession", return_value=_mock_aiohttp_session(200, answer)),
+        patch.object(manager, "tracked_request", return_value=_mock_http_response(200, answer)),
     ):
         result = await provider.negotiate(offer="v=0", session_config="{}", session_id="sid")
     assert result.answer == answer
@@ -130,10 +129,13 @@ async def test_openai_negotiate_unconfigured_raises_503():
 
 @pytest.mark.asyncio
 async def test_openai_negotiate_upstream_500_maps_502():
+    from autobot_shared.http_client import get_http_client
+
     provider = OpenAIRealtimeProvider()
+    manager = get_http_client()
     with (
         patch.object(OpenAIRealtimeProvider, "_api_key", return_value="sk-test"),
-        patch("aiohttp.ClientSession", return_value=_mock_aiohttp_session(500, b"boom")),
+        patch.object(manager, "tracked_request", return_value=_mock_http_response(500, b"boom")),
     ):
         with pytest.raises(RealtimeProviderError) as exc:
             await provider.negotiate(offer="v=0", session_config="{}", session_id="sid")

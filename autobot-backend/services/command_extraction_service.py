@@ -23,8 +23,6 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Set, Tuple
 
-import aiohttp
-
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
@@ -270,14 +268,15 @@ async def _slm_exec(
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     payload = {"command": command, "timeout": timeout}
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, headers=headers, ssl=False) as resp:
-                data: Dict[str, Any] = await resp.json()
-                return (
-                    data.get("success", False),
-                    data.get("stdout", ""),
-                    data.get("stderr", ""),
-                )
+        from autobot_shared.http_client import get_http_client
+
+        async with get_http_client().tracked_request("POST", url, json=payload, headers=headers, ssl=False) as resp:
+            data: Dict[str, Any] = await resp.json()
+            return (
+                data.get("success", False),
+                data.get("stdout", ""),
+                data.get("stderr", ""),
+            )
     except Exception as exc:
         logger.error("SLM exec failed for node %s: %s", node_id, exc)
         return False, "", str(exc)
