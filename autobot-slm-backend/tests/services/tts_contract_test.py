@@ -25,15 +25,30 @@ _REPO_ROOT = Path(__file__).parent.parent.parent.parent
 _CLIENT = _REPO_ROOT / "autobot-backend" / "services" / "tts_client.py"
 _TEMPLATE = _REPO_ROOT / "autobot-slm-backend" / "ansible" / "roles" / "tts-worker" / "templates" / "tts-worker.py.j2"
 
-# ``async with session.post(f"{self.base_url}/tts/synthesize", data=data)``
-_CLIENT_CALL = re.compile(r"session\.(get|post|delete|put|patch)\(\s*f?\"\{self\.base_url\}(/[^\"]*)\"")
+# ``async with session.post(f"{self.base_url}/tts/synthesize", data=data)`` — pre-#12979 raw session shape.
+_CLIENT_CALL_RAW_SESSION = re.compile(r"session\.(get|post|delete|put|patch)\(\s*f?\"\{self\.base_url\}(/[^\"]*)\"")
+# ``client.tracked_request("POST", f"{self.base_url}/tts/synthesize", ...)`` — #12979 pooled-client shape.
+# ``\s*`` spans the newline in the multi-line call form the pooled conversion uses.
+_CLIENT_CALL_POOLED = re.compile(
+    r"tracked_request\(\s*\"(GET|POST|DELETE|PUT|PATCH)\"\s*,\s*f\"\{self\.base_url\}(/[^\"]*)\""
+)
 # ``@app.post("/tts/synthesize")``
 _WORKER_ROUTE = re.compile(r"@app\.(get|post|delete|put|patch)\(\"([^\"]+)\"")
 
 
 def _client_calls() -> set[tuple[str, str]]:
-    """(method, path) pairs the backend's TTS client issues against the worker."""
-    return {(m.lower(), p) for m, p in _CLIENT_CALL.findall(_CLIENT.read_text(encoding="utf-8"))}
+    """(method, path) pairs the backend's TTS client issues against the worker.
+
+    Issue #12979 moved ``tts_client.py`` off per-request ``session.<verb>(...)``
+    onto ``get_http_client().tracked_request(method, url, ...)`` — a different
+    source shape carrying the same (method, path) contract. Both regexes are
+    checked so the extraction survives the migration instead of silently
+    reading zero calls (see ``test_sources_are_present``).
+    """
+    text = _CLIENT.read_text(encoding="utf-8")
+    raw = {(m.lower(), p) for m, p in _CLIENT_CALL_RAW_SESSION.findall(text)}
+    pooled = {(m.lower(), p) for m, p in _CLIENT_CALL_POOLED.findall(text)}
+    return raw | pooled
 
 
 def _worker_routes() -> set[tuple[str, str]]:
