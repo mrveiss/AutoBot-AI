@@ -1693,6 +1693,9 @@ class MiscConfig(BaseSettings):
     weak_cache_size: int = Field(default=0, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
     web_fetch_max_bytes: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_BYTES")
+    # #13019: bounds redirect-hop count for the pinned-redirect SSRF fetch path
+    # shared by web_fetch/fetcher.py and media/link/pipeline.py.
+    web_fetch_max_redirects: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_REDIRECTS")
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")

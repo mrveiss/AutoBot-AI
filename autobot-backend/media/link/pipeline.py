@@ -30,6 +30,17 @@ This module retains ownership of:
 
 None of these helpers are removed; they are kept here to preserve all call
 sites intact (see issue #7401 caller audit).
+
+SSRF (#13019): ``_fetch_and_parse``'s BeautifulSoup fallback previously had
+no enforcement of its own — ``_is_public_url_async`` only gated the Jina
+fast-path attempt, so a non-public URL simply skipped Jina and fell through
+to an UNGUARDED direct connect. It now routes through
+``autobot_shared.security.ssrf_guard.pinned_request_with_redirects``, which
+independently resolves + pins every hop (including redirects) before
+connecting, unconditionally — closing both the missing-gate bug and the
+check-then-connect TOCTOU in one fix. ``_try_jina`` is unaffected: its
+connect target is always the fixed, trusted ``r.jina.ai`` host (the caller's
+``url`` is only embedded in the request path), so pinning it is a no-op.
 """
 
 import ipaddress
@@ -40,6 +51,7 @@ from typing import Any, Dict, List
 from urllib.parse import urljoin
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -67,6 +79,15 @@ _JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None
 _MAX_CONTENT_LENGTH = 1_000_000  # 1 MB cap on HTML download
 _USER_AGENT = "AutoBot/1.0 (media-pipeline)"
 _JINA_BASE_URL = "https://r.jina.ai/"
+
+
+def _resolve_max_redirects() -> int:
+    """Return max redirect hops for the pinned fallback fetch from env var (default 5)."""
+    raw = config.misc.web_fetch_max_redirects
+    return raw if raw else 5
+
+
+_MAX_REDIRECTS: int = _resolve_max_redirects()
 
 # SSRF guard constants moved with the implementation to
 # ``autobot_shared.url_safety`` (#7477): _PRIVATE_TLDS, _IPV6_ULA,
@@ -206,7 +227,15 @@ class LinkPipeline(BasePipeline):
         }
 
     async def _fetch_and_parse(self, url: str, metadata: Dict) -> Dict[str, Any]:
-        """Fetch URL — tries Jina Reader fast-path first, falls back to BeautifulSoup."""
+        """Fetch URL — tries Jina Reader fast-path first, falls back to BeautifulSoup.
+
+        The fallback fetch is SSRF-guarded unconditionally (#13019): it no
+        longer relies on the ``_is_public_url_async`` check above (which only
+        ever gated the Jina attempt, not this path) — every real connection
+        is resolved + pinned per hop by ``pinned_request_with_redirects``, so
+        a non-public or DNS-rebound URL is rejected here even when Jina was
+        skipped.
+        """
         # Fast-path: Jina Reader (public URLs only, 5-second timeout).
         # DNS resolution runs in a thread to avoid blocking the event loop.
         if await self._is_public_url_async(url):
@@ -221,11 +250,16 @@ class LinkPipeline(BasePipeline):
         # Callers may pass metadata={"allow_self_signed": True} to opt-in to skipping
         # cert verification for known-safe internal URLs.
         ssl_context = False if metadata.get("allow_self_signed") else None
-        try:
-            from autobot_shared.http_client import get_http_client
+        from autobot_shared.security.ssrf_guard import SSRFError, pinned_request_with_redirects
 
-            async with get_http_client().tracked_request(
-                "GET", url, headers=headers, timeout=_DEFAULT_TIMEOUT, allow_redirects=True, ssl=ssl_context
+        try:
+            async with pinned_request_with_redirects(
+                "GET",
+                url,
+                headers=headers,
+                timeout=_DEFAULT_TIMEOUT,
+                max_redirects=_MAX_REDIRECTS,
+                ssl=ssl_context,
             ) as response:
                 final_url = str(response.url)
                 content_type = response.headers.get("Content-Type", "")
@@ -240,6 +274,9 @@ class LinkPipeline(BasePipeline):
                 )
             return self._parse_html(raw_html, final_url, content_type, metadata)
 
+        except SSRFError as exc:
+            logger.warning("Link pipeline fetch blocked by SSRF guard for %s: %s", url, exc)
+            return self._error_result(url, "blocked by SSRF guard", metadata)
         except aiohttp.ClientConnectorError as exc:
             logger.warning("Link pipeline connection error: %s", exc)
             return self._error_result(url, f"Connection error: {exc}", metadata)

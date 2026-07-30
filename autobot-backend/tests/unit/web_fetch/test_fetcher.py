@@ -5,7 +5,7 @@
 """Tests for web_fetch.fetcher — render mode selection, SPA detection, fallback chain."""
 
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -13,6 +13,7 @@ from web_fetch.fetcher import (
     WebFetcher,
     _circuit_is_open,
     _domain_circuit,
+    _fetch_bs4,
     _record_domain_failure,
     _record_domain_success,
 )
@@ -91,6 +92,133 @@ class TestSSRFGuard:
             result = await WebFetcher.fetch("http://10.0.0.1/page")
         assert result.success is False
         assert result.error_code == ERR_SSRF_BLOCKED
+
+
+class TestFetchBS4SSRFPinning:
+    """Hostile-path tests for ``_fetch_bs4``'s pinned-redirect fetch (#13019).
+
+    Mocks real DNS at ``autobot_shared.url_safety.socket.getaddrinfo`` — never
+    the guard itself — mirroring ``api/tests/test_provider_auth_ssrf.py`` /
+    ``tests/content_reach/test_http_pinned_get.py``. ``_is_public_url`` is
+    NOT mocked in these tests so the real pre-check + real pinned connect
+    both run, proving the fix holds end-to-end.
+    """
+
+    @pytest.mark.asyncio
+    async def test_blocks_private_ip_literal_no_network_call(self) -> None:
+        with patch("aiohttp.ClientSession") as mock_session_cls:
+            html, status = await _fetch_bs4("http://10.0.0.5/secret", timeout=5.0)
+        assert (html, status) == (None, None)
+        mock_session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_blocks_link_local_metadata_no_network_call(self) -> None:
+        with patch("aiohttp.ClientSession") as mock_session_cls:
+            html, status = await _fetch_bs4("http://169.254.169.254/latest/meta-data/", timeout=5.0)
+        assert (html, status) == (None, None)
+        mock_session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_blocks_dns_rebind_public_at_precheck_private_at_connect(self) -> None:
+        """A hostname that is public at the ``_is_public_url`` pre-check but
+        resolves to a private address by the time the pinned connect happens
+        must still be refused — the classic validate-then-forget TOCTOU.
+        """
+        public_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]
+        private_infos = [(2, 1, 6, "", ("10.0.0.9", 0))]
+
+        with (
+            patch(
+                "autobot_shared.url_safety.socket.getaddrinfo",
+                side_effect=[public_infos, private_infos],
+            ),
+            patch("aiohttp.ClientSession") as mock_session_cls,
+        ):
+            html, status = await _fetch_bs4("https://rebind.example.com/page", timeout=5.0)
+
+        assert (html, status) == (None, None)
+        mock_session_cls.assert_not_called()
+
+    @staticmethod
+    def _fake_getaddrinfo_for(public_hosts: dict):
+        """Real DNS pass-through except for hostnames explicitly mapped to a
+        canned answer — so literal-IP redirect targets (e.g. ``10.0.0.5``,
+        which needs NO DNS at all) are resolved for real, not via a blanket
+        mock that would misreport them as public.
+        """
+        import socket as _socket
+
+        real_getaddrinfo = _socket.getaddrinfo
+
+        def _fake(host, *args, **kwargs):
+            if host in public_hosts:
+                return public_hosts[host]
+            return real_getaddrinfo(host, *args, **kwargs)
+
+        return _fake
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_internal_rejected_outright(self) -> None:
+        """A public site that 302s to a private address is rejected, not followed."""
+        fake_dns = self._fake_getaddrinfo_for({"open-redirect.example.com": [(2, 1, 6, "", ("93.184.216.34", 0))]})
+
+        redirect_resp = MagicMock()
+        redirect_resp.status = 302
+        redirect_resp.headers = {"Location": "http://10.0.0.5/internal"}
+        redirect_resp.release = AsyncMock(return_value=None)
+        responses = [redirect_resp]
+
+        class _FakeSession:
+            def __init__(self, *a, **kw):
+                pass
+
+            async def request(self, method, url, **kwargs):
+                return responses.pop(0)
+
+            async def close(self):
+                pass
+
+        with (
+            patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=fake_dns),
+            patch("aiohttp.ClientSession", _FakeSession),
+        ):
+            html, status = await _fetch_bs4("https://open-redirect.example.com/go", timeout=5.0)
+
+        assert (html, status) == (None, None)
+        # Only the first (legitimate) hop connected; hop 2 was blocked pre-connect.
+        assert responses == []
+
+    @pytest.mark.asyncio
+    async def test_genuinely_public_url_succeeds(self) -> None:
+        """A real public host fetches successfully through the pinned path."""
+        fake_dns = self._fake_getaddrinfo_for({"real.example.com": [(2, 1, 6, "", ("93.184.216.34", 0))]})
+
+        ok_resp = MagicMock()
+        ok_resp.status = 200
+
+        async def _iter_chunked(_size):
+            yield b"<html><body>hi</body></html>"
+
+        ok_resp.content.iter_chunked = MagicMock(side_effect=lambda n: _iter_chunked(n))
+
+        class _FakeSession:
+            def __init__(self, *a, **kw):
+                pass
+
+            async def request(self, method, url, **kwargs):
+                return ok_resp
+
+            async def close(self):
+                pass
+
+        with (
+            patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=fake_dns),
+            patch("aiohttp.ClientSession", _FakeSession),
+        ):
+            html, status = await _fetch_bs4("https://real.example.com/page", timeout=5.0)
+
+        assert status == 200
+        assert "hi" in html
 
 
 class TestCircuitBreaker:
