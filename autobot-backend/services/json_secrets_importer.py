@@ -14,6 +14,14 @@ there is no reliable per-user owner to assign, every imported secret is owned by
 **System vault** (admin-only) — this exactly preserves today's real-world access control
 (only an admin can reach these endpoints) instead of fabricating a personal owner.
 
+Deliberately reads the JSON file directly (mirroring ``sqlite_secrets_importer.py``'s own
+``sqlite_path`` + ``fernet`` parameters) rather than importing ``api.secrets``: that module
+pulls in the whole FastAPI app surface (auth middleware, memory graph, plugin SDK — which
+transitively imports ``jsonschema``), which the migration-gate test environment deliberately
+keeps minimal (see ``.github/workflows/migration-gate.yml``). The caller supplies the already
+-built ``Fernet`` (e.g. the live ``secrets_manager.cipher`` when running in-process, or one
+built from the key file by a future migration-runner CLI — see #13052).
+
 Idempotent via ``extra_data['imported_from_json']``; legacy scope/chat_id/metadata are
 preserved in ``extra_data`` so ``json_secrets_read.py`` can reconstruct the exact response
 shape the legacy ``GET /secrets/{id}`` handler returns. The JSON file is left intact — this
@@ -22,10 +30,13 @@ populates and lets us verify the unified store before dual-read is enabled.
 
 from __future__ import annotations
 
+import base64
+import json
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING
 
-from cryptography.fernet import InvalidToken
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +46,9 @@ from autobot_shared.secrets_vault import VaultKind, VaultRef
 from autobot_shared.time_utils import parse_utc_iso
 from models.secret import Secret
 from models.secret_grant import SecretGrant
+
+if TYPE_CHECKING:  # typing only — avoid a hard cryptography import at module load
+    from cryptography.fernet import Fernet, MultiFernet
 
 _MARKER = "imported_from_json"
 
@@ -52,6 +66,20 @@ class JsonImportReport:
     imported: int = 0
     skipped_existing: int = 0
     failed: list[str] = field(default_factory=list)
+
+
+def _read_rows(secrets_path: str) -> dict:
+    """Read the legacy ``secrets.json`` file (sync, one-shot); ``{}`` when absent."""
+    path = Path(secrets_path)
+    if not path.exists():
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _decrypt(cipher: str, fernet: "Fernet | MultiFernet") -> bytes:
+    """Reverse ``SecretsManager._encrypt_value`` (base64-wrapped Fernet token)."""
+    return fernet.decrypt(base64.b64decode(cipher.encode("utf-8")))
 
 
 async def _existing_markers(session: AsyncSession) -> set[str]:
@@ -98,17 +126,19 @@ def _build_secret_grant(row: dict, plaintext: bytes, root_key: bytes) -> tuple[S
     return secret, grant
 
 
-async def import_json_secrets(session: AsyncSession, *, root_key: bytes) -> JsonImportReport:
+async def import_json_secrets(
+    session: AsyncSession, *, secrets_path: str, fernet: "Fernet | MultiFernet", root_key: bytes
+) -> JsonImportReport:
     """Import every ``secrets.json`` row into the unified store, owned by the System vault.
 
-    Reads + decrypts via the process-wide ``api.secrets.secrets_manager`` singleton (the same
-    file and key it already manages) so no second Fernet key path is introduced. Returns a
+    ``fernet`` is a ``cryptography.fernet.Fernet`` built from the legacy per-file key
+    (``SecretsManager``'s ``secrets.key``); ``root_key`` is the envelope root key. Returns a
     reconciliation report; caller commits.
     """
-    from api.secrets import secrets_manager
+    from cryptography.fernet import InvalidToken
 
     report = JsonImportReport()
-    rows = secrets_manager._load_secrets()
+    rows = _read_rows(secrets_path)
     report.total = len(rows)
     already = await _existing_markers(session)
 
@@ -121,7 +151,7 @@ async def import_json_secrets(session: AsyncSession, *, root_key: bytes) -> Json
             report.failed.append(f"{secret_id}: no encrypted_value")
             continue
         try:
-            plaintext = secrets_manager._decrypt_value(cipher).encode("utf-8")
+            plaintext = _decrypt(cipher, fernet)
         except (InvalidToken, ValueError, TypeError) as exc:
             report.failed.append(f"{secret_id}: decrypt failed ({exc})")
             continue
