@@ -5,6 +5,21 @@
 """
 Research Browser Manager
 Handles Playwright browser automation for research tasks with user interaction support
+
+Issue #13018: Playwright performs its own DNS resolution when ``page.goto()``
+navigates, so an earlier SSRF check by a caller (e.g. content_reach's
+``ensure_public_url``) can be stale by the time Playwright actually connects
+(DNS-rebind TOCTOU). There is no Playwright primitive equivalent to the
+aiohttp/httpx connector-pinning used elsewhere in the codebase (route
+interception rewrites the request URL, which breaks TLS SNI for virtually
+every modern HTTPS origin; Chromium's ``--host-resolver-rules`` is a
+launch-time-only flag and this browser is a long-lived, possibly remote CDP
+session shared across navigations, so it cannot be re-pinned per request).
+Closing the gap fully needs an egress-validating proxy in front of the
+browser -- a deployment decision, not yet made (see #13018 discussion).
+``ResearchBrowserSession.navigate_to`` re-validates the URL immediately
+before ``page.goto`` as a compensating control: this narrows the window to
+this one call, it does NOT close it.
 """
 
 import asyncio
@@ -18,6 +33,7 @@ import aiofiles
 
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.url_safety import is_public_url_async
 from config.manager import get_config_manager
 
 try:
@@ -265,10 +281,42 @@ class ResearchBrowserSession:
             },
         )
 
+    async def _reject_if_dns_rebound(self, url: str) -> Dict[str, Any] | None:
+        """Return a blocked-response dict if url is no longer public, else None.
+
+        Issue #13018: re-checks immediately before page.goto, the closest point
+        we control to Playwright's own DNS resolution. Narrows -- does not
+        close -- the DNS-rebind TOCTOU window (see module docstring). A
+        rejection here is marked ``blocked_by_guard`` so callers (notably
+        ``ResearchBrowserManager.research_url``) can distinguish it from a
+        natural navigation failure and must not blindly retry unguarded.
+        """
+        if await is_public_url_async(url):
+            return None
+        logger.warning(
+            "research_browser_manager: navigation to %s blocked by SSRF guard "
+            "immediately before page.goto (#13018 mitigation -- narrows, does "
+            "not close, the Playwright DNS-rebind TOCTOU)",
+            url,
+        )
+        return {
+            "success": False,
+            "error": "blocked by SSRF guard: non-public address",
+            "blocked_by_guard": True,
+        }
+
     async def navigate_to(self, url: str, wait_for_load: bool = True) -> Dict[str, Any]:
-        """Navigate to a URL and return page information."""
+        """Navigate to a URL and return page information.
+
+        Re-validates url immediately before page.goto (#13018 mitigation) --
+        see _reject_if_dns_rebound.
+        """
         if not self.page:
             return {"success": False, "error": "Browser not initialized"}
+
+        blocked = await self._reject_if_dns_rebound(url)
+        if blocked:
+            return blocked
 
         try:
             self.current_url = url
@@ -543,6 +591,10 @@ class ResearchBrowserManager:
         Research a URL with automatic fallbacks.
 
         Issue #620: Refactored to use extracted helper methods.
+        Issue #13018: a navigate_to() rejection marked ``blocked_by_guard`` is
+        returned as-is -- it must NOT fall through to the MHTML fallback,
+        which does its own unguarded page.goto() and would otherwise silently
+        bypass the SSRF re-check.
         """
         try:
             session = await self._get_or_create_session(conversation_id)
@@ -551,6 +603,8 @@ class ResearchBrowserManager:
 
             nav_result = await session.navigate_to(url)
             if not nav_result["success"]:
+                if nav_result.get("blocked_by_guard"):
+                    return nav_result
                 return await self._try_mhtml_fallback(session, url)
 
             if nav_result.get("interaction_required"):
