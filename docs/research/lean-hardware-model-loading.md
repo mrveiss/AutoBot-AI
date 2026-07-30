@@ -77,9 +77,9 @@ three and still lost end to end.
 
 ## 2. What AutoBot has today
 
-`autobot-backend/llm_shared/optimization/` (~12k LOC, 14 modules; issues #1946, #1952,
-#1964, #3104, #3140) is a layer-streaming inference stack whose stated purpose matches the target architecture
-above:
+`autobot-backend/llm_shared/optimization/` (~12k LOC, 14 modules) is a layer-streaming
+inference stack whose stated purpose matches the target architecture above. It originates
+from issues #1946, #1952, #1964, #3104 and #3140.
 
 > *"During batch/offline inference the entire model need not reside in VRAM simultaneously… Memory
 > requirements are therefore bounded by the largest single layer rather than the full model."*
