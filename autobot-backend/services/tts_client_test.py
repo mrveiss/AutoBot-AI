@@ -4,10 +4,16 @@
 # Author: mrveiss
 """Tests for TTSClient.synthesize_stream (#12501).
 
-Mocks aiohttp.ClientSession so no real network/worker is required — same
-pattern as tests/utils/test_traced_http_client.py. Exercises the client
-side of the worker's length-prefixed streaming wire format:
-``[4-byte big-endian length][WAV bytes]`` repeated back to back.
+Mocks the shared pooled HTTP client so no real network/worker is required.
+Exercises the client side of the worker's length-prefixed streaming wire
+format: ``[4-byte big-endian length][WAV bytes]`` repeated back to back.
+
+Issue #12979 moved TTSClient off per-request ``aiohttp.ClientSession`` onto
+``autobot_shared.http_client``. The seam is now
+``get_http_client().tracked_request(method, url, **kwargs)``, which yields the
+response, so the stub targets that entry point instead of ``aiohttp.ClientSession``
+-- patching the latter would no longer intercept anything and the test would
+dial out for real.
 """
 
 import asyncio
@@ -43,33 +49,37 @@ def _framed(chunks: list) -> bytes:
     return out
 
 
-def _make_mock_session(body: bytes, status: int = 200) -> MagicMock:
-    """Return a MagicMock standing in for aiohttp.ClientSession with one POST response."""
+def _make_mock_http_client(body: bytes, status: int = 200) -> MagicMock:
+    """Return a MagicMock standing in for the shared pooled HTTP client.
+
+    ``get_http_client().tracked_request(...)`` is an ``@asynccontextmanager``
+    call, so the mock's return value must itself be the async context manager
+    (``__aenter__``/``__aexit__``) that yields the response -- ``tracked_request``
+    is not awaited by callers, only entered via ``async with``.
+    """
     mock_resp = MagicMock()
     mock_resp.status = status
     mock_resp.content = _FakeStreamReader(body)
     mock_resp.text = AsyncMock(return_value="error body")
 
-    mock_post_cm = MagicMock()
-    mock_post_cm.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_post_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_request_cm = MagicMock()
+    mock_request_cm.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_request_cm.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session = MagicMock()
-    mock_session.post = MagicMock(return_value=mock_post_cm)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-    return mock_session
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=mock_request_cm)
+    return mock_client
 
 
 @pytest.mark.asyncio
 async def test_synthesize_stream_yields_multiple_chunks():
     """synthesize_stream yields each WAV chunk from the framed HTTP body in order."""
     chunks = [b"RIFF-chunk-one", b"RIFF-chunk-two", b"RIFF-chunk-three"]
-    session = _make_mock_session(_framed(chunks))
+    mock_client = _make_mock_http_client(_framed(chunks))
 
-    with patch("aiohttp.ClientSession", return_value=session):
-        client = TTSClient()
-        received = [c async for c in client.synthesize_stream("hello world", voice_id="alba")]
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
+        received = [c async for c in tts_client.synthesize_stream("hello world", voice_id="alba")]
 
     assert received == chunks
 
@@ -77,12 +87,12 @@ async def test_synthesize_stream_yields_multiple_chunks():
 @pytest.mark.asyncio
 async def test_synthesize_stream_raises_on_non_200():
     """synthesize_stream raises RuntimeError when the worker returns a non-200 status."""
-    session = _make_mock_session(b"", status=500)
+    mock_client = _make_mock_http_client(b"", status=500)
 
-    with patch("aiohttp.ClientSession", return_value=session):
-        client = TTSClient()
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
         with pytest.raises(RuntimeError, match="TTS worker error 500"):
-            async for _ in client.synthesize_stream("hello"):
+            async for _ in tts_client.synthesize_stream("hello"):
                 pass
 
 
@@ -90,22 +100,22 @@ async def test_synthesize_stream_raises_on_non_200():
 async def test_synthesize_stream_raises_on_truncated_chunk():
     """A length prefix promising more bytes than are sent raises, instead of silently truncating audio."""
     body = (100).to_bytes(4, "big") + b"short"
-    session = _make_mock_session(body)
+    mock_client = _make_mock_http_client(body)
 
-    with patch("aiohttp.ClientSession", return_value=session):
-        client = TTSClient()
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
         with pytest.raises(RuntimeError, match="truncated mid-chunk"):
-            async for _ in client.synthesize_stream("hello"):
+            async for _ in tts_client.synthesize_stream("hello"):
                 pass
 
 
 @pytest.mark.asyncio
 async def test_synthesize_stream_empty_body_yields_nothing():
     """An empty response body (zero chunks) yields nothing and does not raise."""
-    session = _make_mock_session(b"")
+    mock_client = _make_mock_http_client(b"")
 
-    with patch("aiohttp.ClientSession", return_value=session):
-        client = TTSClient()
-        received = [c async for c in client.synthesize_stream("hello")]
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
+        received = [c async for c in tts_client.synthesize_stream("hello")]
 
     assert received == []
