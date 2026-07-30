@@ -33,15 +33,20 @@ def _make_response(data: dict, status: int = 200):
     return cm
 
 
-def _make_session(response_cm):
-    """Build a mock aiohttp.ClientSession context manager."""
-    session = MagicMock()
-    session.post = MagicMock(return_value=response_cm)
-    session.get = MagicMock(return_value=response_cm)
-    session_cm = MagicMock()
-    session_cm.__aenter__ = AsyncMock(return_value=session)
-    session_cm.__aexit__ = AsyncMock(return_value=False)
-    return session_cm, session
+def _make_http_client(response_cm=None, side_effect=None):
+    """Build a mock pooled HTTP client whose ``tracked_request()`` returns
+    *response_cm* (or raises *side_effect*).
+
+    #12979: RedisServiceManager now issues requests via
+    ``get_http_client().tracked_request(...)`` instead of a raw
+    ``aiohttp.ClientSession()`` — mock that entry point instead.
+    """
+    client = MagicMock()
+    if side_effect is not None:
+        client.tracked_request = MagicMock(side_effect=side_effect)
+    else:
+        client.tracked_request = MagicMock(return_value=response_cm)
+    return client
 
 
 class TestInit:
@@ -81,41 +86,43 @@ class TestSlmServiceAction:
     @pytest.mark.asyncio
     async def test_start_calls_correct_url(self, manager) -> None:
         resp_cm = _make_response({"success": True, "message": "started"})
-        session_cm, session = _make_session(resp_cm)
+        client = _make_http_client(resp_cm)
         with patch(
-            "services.redis_service_manager.aiohttp.ClientSession",
-            return_value=session_cm,
+            "services.redis_service_manager.get_http_client",
+            return_value=client,
         ):
             ok, msg = await manager._slm_service_action("start")
         assert ok is True
         assert msg == "started"
-        session.post.assert_called_once()
-        called_url = session.post.call_args[0][0]
-        assert "04-Databases/services/redis-stack-server/start" in called_url
+        client.tracked_request.assert_called_once()
+        call_args = client.tracked_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "04-Databases/services/redis-stack-server/start" in call_args[0][1]
+        assert call_args.kwargs["ssl"] is False
 
     @pytest.mark.asyncio
     async def test_stop_calls_correct_url(self, manager) -> None:
         resp_cm = _make_response({"success": True, "message": "stopped"})
-        session_cm, session = _make_session(resp_cm)
+        client = _make_http_client(resp_cm)
         with patch(
-            "services.redis_service_manager.aiohttp.ClientSession",
-            return_value=session_cm,
+            "services.redis_service_manager.get_http_client",
+            return_value=client,
         ):
             ok, _msg = await manager._slm_service_action("stop")
-        called_url = session.post.call_args[0][0]
+        called_url = client.tracked_request.call_args[0][1]
         assert called_url.endswith("/stop")
         assert ok is True
 
     @pytest.mark.asyncio
     async def test_restart_calls_correct_url(self, manager) -> None:
         resp_cm = _make_response({"success": True, "message": "restarted"})
-        session_cm, session = _make_session(resp_cm)
+        client = _make_http_client(resp_cm)
         with patch(
-            "services.redis_service_manager.aiohttp.ClientSession",
-            return_value=session_cm,
+            "services.redis_service_manager.get_http_client",
+            return_value=client,
         ):
             ok, _msg = await manager._slm_service_action("restart")
-        called_url = session.post.call_args[0][0]
+        called_url = client.tracked_request.call_args[0][1]
         assert called_url.endswith("/restart")
         assert ok is True
 
@@ -127,11 +134,10 @@ class TestSlmServiceAction:
 
     @pytest.mark.asyncio
     async def test_raises_on_http_error(self, manager) -> None:
-        session_cm, session = _make_session(None)
-        session.post.side_effect = Exception("connection refused")
+        client = _make_http_client(side_effect=Exception("connection refused"))
         with patch(
-            "services.redis_service_manager.aiohttp.ClientSession",
-            return_value=session_cm,
+            "services.redis_service_manager.get_http_client",
+            return_value=client,
         ):
             with pytest.raises(RedisConnectionError):
                 await manager._slm_service_action("start")
@@ -144,10 +150,10 @@ class TestSlmGetServiceStatus:
     async def test_returns_running_when_service_found(self, manager) -> None:
         data = {"services": [{"service_name": "redis-stack-server", "status": "running"}]}
         resp_cm = _make_response(data)
-        session_cm, _session = _make_session(resp_cm)
+        client = _make_http_client(resp_cm)
         with patch(
-            "services.redis_service_manager.aiohttp.ClientSession",
-            return_value=session_cm,
+            "services.redis_service_manager.get_http_client",
+            return_value=client,
         ):
             status = await manager._slm_get_service_status()
         assert status == "running"
@@ -155,10 +161,10 @@ class TestSlmGetServiceStatus:
     @pytest.mark.asyncio
     async def test_returns_unknown_when_no_services(self, manager) -> None:
         resp_cm = _make_response({"services": []})
-        session_cm, _session = _make_session(resp_cm)
+        client = _make_http_client(resp_cm)
         with patch(
-            "services.redis_service_manager.aiohttp.ClientSession",
-            return_value=session_cm,
+            "services.redis_service_manager.get_http_client",
+            return_value=client,
         ):
             status = await manager._slm_get_service_status()
         assert status == "unknown"
@@ -171,11 +177,10 @@ class TestSlmGetServiceStatus:
 
     @pytest.mark.asyncio
     async def test_returns_unknown_on_http_error(self, manager) -> None:
-        session_cm, session = _make_session(None)
-        session.get.side_effect = Exception("timeout")
+        client = _make_http_client(side_effect=Exception("timeout"))
         with patch(
-            "services.redis_service_manager.aiohttp.ClientSession",
-            return_value=session_cm,
+            "services.redis_service_manager.get_http_client",
+            return_value=client,
         ):
             status = await manager._slm_get_service_status()
         assert status == "unknown"

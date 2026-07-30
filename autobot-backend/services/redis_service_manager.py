@@ -22,8 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Tuple
 
-import aiohttp
-
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
@@ -197,12 +196,11 @@ class RedisServiceManager:
             raise RedisConnectionError("SLM_URL not configured")
         url = f"{self.slm_url}/api/nodes/{self.slm_node_id}" f"/services/{self.service_name}/{action}"
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, ssl=False) as resp:
-                    data = await resp.json()
-                    success = data.get("success", resp.status < 300)
-                    message = data.get("message", "")
-                    return success, message
+            async with get_http_client().tracked_request("POST", url, ssl=False) as resp:
+                data = await resp.json()
+                success = data.get("success", resp.status < 300)
+                message = data.get("message", "")
+                return success, message
         except Exception as exc:
             logger.error("SLM service action '%s' failed: %s", action, exc)
             await self._record_error()
@@ -221,16 +219,15 @@ class RedisServiceManager:
             return "unknown"
         url = f"{self.slm_url}/api/nodes/{self.slm_node_id}/services"
         try:
-            async with aiohttp.ClientSession() as session:
-                params = {"search": self.service_name, "per_page": "1"}
-                async with session.get(url, params=params, ssl=False) as resp:
-                    if resp.status != 200:
-                        return "unknown"
-                    data = await resp.json()
-                    services = data.get("services", [])
-                    if services:
-                        return services[0].get("status", "unknown")
+            params = {"search": self.service_name, "per_page": "1"}
+            async with get_http_client().tracked_request("GET", url, params=params, ssl=False) as resp:
+                if resp.status != 200:
                     return "unknown"
+                data = await resp.json()
+                services = data.get("services", [])
+                if services:
+                    return services[0].get("status", "unknown")
+                return "unknown"
         except Exception as exc:
             logger.warning("SLM service status query failed: %s", exc)
             return "unknown"

@@ -152,7 +152,14 @@ class TestOllamaAttemptReasons:
         assert reason == ""
 
     async def _run_with_response(self, monkeypatch, status, payload):
-        """Drive _try_ollama_embedding against a fake aiohttp response."""
+        """Drive _try_ollama_embedding against a fake pooled-client response.
+
+        #12979: _try_ollama_embedding now issues its request via
+        ``get_http_client().tracked_request(...)`` instead of a raw
+        ``aiohttp.ClientSession()`` — patch the pooled-client accessor rather
+        than ``npu_client.aiohttp.ClientSession``, which the conversion no
+        longer calls.
+        """
 
         class _Resp:
             def __init__(self):
@@ -170,15 +177,9 @@ class TestOllamaAttemptReasons:
             async def text(self):
                 return str(payload)
 
-        class _Session:
-            async def __aenter__(self):
-                return self
-
-            async def __aexit__(self, *_a):
-                return False
-
-            def post(self, *_a, **_k):
+        class _FakeHttpClient:
+            def tracked_request(self, *_a, **_k):
                 return _Resp()
 
-        monkeypatch.setattr(npu_client.aiohttp, "ClientSession", lambda *a, **k: _Session())
+        monkeypatch.setattr(npu_client, "get_http_client", lambda: _FakeHttpClient())
         return await _try_ollama_embedding("hello", "nomic-embed-text", "http://x/api/embeddings")

@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Tuple
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config, get_config
 
@@ -132,7 +133,18 @@ class NPUClient:
         self._lock = asyncio.Lock()
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session"""
+        """Get or create aiohttp session.
+
+        #12979 RAW carve-out (long-lived category): reused across every
+        NPUClient call (``is_available``, ``get_device_info``,
+        ``generate_embeddings``, ``transcribe_audio``, ``get_stats``) for the
+        lifetime of this client instance, and explicitly torn down via
+        ``close()``/``cleanup_npu_client()`` — not a per-request construction.
+        Each call site already passes its own per-request ``timeout=``, so
+        converting to the shared pool would not change behaviour, but doing so
+        is a separate judgment call (dropping this client's private session
+        model) outside this batch's mechanical scope.
+        """
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=EMBEDDING_TIMEOUT))
         return self._session
@@ -365,20 +377,21 @@ async def _try_ollama_embedding(text: str, model_name: str, ollama_url: str) -> 
     200-with-empty-result — previously indistinguishable in the logs.
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                ollama_url,
-                json={"model": model_name, "prompt": text},
-                timeout=aiohttp.ClientTimeout(total=EMBEDDING_TIMEOUT),
-            ) as response:
-                if response.status != 200:
-                    body = (await response.text())[:200]
-                    return None, f"Ollama HTTP {response.status}: {body!r}"
-                data = await response.json()
-                embedding = data.get("embedding")
-                if not embedding:
-                    return None, "Ollama returned HTTP 200 with empty/missing embedding"
-                return embedding, ""
+        async with get_http_client().tracked_request(
+            "POST",
+            ollama_url,
+            json={"model": model_name, "prompt": text},
+            timeout=aiohttp.ClientTimeout(total=EMBEDDING_TIMEOUT),
+            suppress_error_log=True,
+        ) as response:
+            if response.status != 200:
+                body = (await response.text())[:200]
+                return None, f"Ollama HTTP {response.status}: {body!r}"
+            data = await response.json()
+            embedding = data.get("embedding")
+            if not embedding:
+                return None, "Ollama returned HTTP 200 with empty/missing embedding"
+            return embedding, ""
     except Exception as e:
         return None, f"Ollama request error: {e}"
 
