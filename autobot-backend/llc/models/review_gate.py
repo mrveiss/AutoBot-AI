@@ -39,6 +39,11 @@ class LLCReviewGatePolicy(Base):
     )
     requires_human_review: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
     reviewer_role: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # #12618: cross-vendor second-opinion verifier tier. Default off — enabling it
+    # only takes effect when the global AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED
+    # kill-switch is also on (ssot_config), so a company can pre-configure this
+    # without incurring extra LLM spend until the deployment opts in globally.
+    requires_cross_vendor_review: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

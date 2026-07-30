@@ -232,6 +232,19 @@ class LLMConfig(BaseSettings):
     # Above this temperature responses must vary, so they are never cached.
     llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
     llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+
+    # Cross-vendor second-opinion verifier tier (#12618). A second LLM call on a
+    # genuinely distinct provider doubles spend on the verification path, so this
+    # is a preference/threshold pair — the master on/off switch lives in
+    # ``feature.cross_vendor_review_enabled`` (default off).
+    # Comma-separated provider names in preference order (e.g. "anthropic,openai");
+    # empty means "use registry registration order" (no forced preference).
+    cross_vendor_verifier_providers: str = Field(default="", alias="AUTOBOT_LLC_CROSS_VENDOR_VERIFIER_PROVIDERS")
+    # Below this confidence, an agreeing cross-vendor verdict still escalates to
+    # human review rather than auto-resolving (design's "both low-confidence" row).
+    cross_vendor_low_confidence_threshold: float = Field(
+        default=0.5, alias="AUTOBOT_LLC_CROSS_VENDOR_LOW_CONFIDENCE_THRESHOLD"
+    )
     # Prepend the [Source N] citation instruction to the KB context block (#10652,
     # #10736). When True the prompt includes "Answer … cite as [Source N]"; when
     # False the [Source N] labels still render but the instruction is omitted.
@@ -1871,6 +1884,15 @@ class FeatureConfig(BaseSettings):
     # Disabled by default — it makes zero network calls, but the flag keeps a
     # "mock" entry out of the production connector_types listing/UI.
     kb_mock_connector: bool = Field(default=False, alias="AUTOBOT_FEATURE_KB_MOCK_CONNECTOR")
+
+    # Issue #12618: LLC cross-vendor second-opinion verifier tier. Master
+    # kill-switch — off by default because it doubles LLM spend on the findings
+    # verification path (one extra provider call per verified finding). The
+    # per-company/per-item-type ``requires_cross_vendor_review`` policy flag is a
+    # second, independent gate: BOTH must be true for a second provider call to
+    # ever run, so a company enabling the policy on an install where this is off
+    # still costs nothing extra.
+    cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
 
 
 class CostModelConfig(BaseSettings):
