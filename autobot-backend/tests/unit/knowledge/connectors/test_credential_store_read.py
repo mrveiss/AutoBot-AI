@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Routing tests for the ConnectorCredentialStore vault-read flag (#10088 / Task 3c-2).
+"""Routing tests for the ConnectorCredentialStore vault-read flag (#10088 / Task 3c-2, Task 5).
 
 Verifies the expand-phase feature flag: off → SQLite only (byte-identical to before);
 on → vault envelope store first with SQLite fallback. The vault core itself is exercised
-against Postgres in tests/migrations/test_credential_store_unified_read.py.
+against Postgres in tests/migrations/test_credential_store_read.py. get_access_token
+(OAuth-managed connector tokens) follows the same read-first routing as load() (Task 5).
 """
 
 import json
@@ -72,3 +73,62 @@ async def test_load_flag_on_falls_back_when_not_imported(monkeypatch):
     svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"token": "sqlite"})})
     out = await ConnectorCredentialStore(svc).load("sid", {"host": "h"}, object, "u1")
     assert out == {"host": "h", "token": "sqlite"} and svc.get_calls == 1
+
+
+# ---------------------------------------------------------------------------
+# get_access_token — OAuth "connector tokens" follow the same read-first cutover
+# as load() (#10088 Task 5: repoint the bridge so OAuth tokens aren't left behind).
+# ---------------------------------------------------------------------------
+
+
+async def test_get_access_token_flag_off_uses_sqlite_only(monkeypatch):
+    monkeypatch.setattr(cs, "_vault_read_enabled", lambda: False)
+
+    async def _boom(*a, **k):
+        raise AssertionError("vault path must not be consulted when flag is off")
+
+    monkeypatch.setattr(cs, "load_imported_credential", _boom)
+    svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"access_token": "sqlite-token"})})
+    token = await ConnectorCredentialStore(svc).get_access_token("sid", "u1")
+    assert token == "sqlite-token" and svc.get_calls == 1
+
+
+async def test_get_access_token_flag_on_prefers_vault(monkeypatch):
+    monkeypatch.setattr(cs, "_vault_read_enabled", lambda: True)
+
+    async def _vault(secret_id, owner_id):
+        return {"created_by": owner_id, "value": json.dumps({"access_token": "vault-token"})}
+
+    monkeypatch.setattr(cs, "load_imported_credential", _vault)
+    svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"access_token": "sqlite-token"})})
+    token = await ConnectorCredentialStore(svc).get_access_token("sid", "u1")
+    assert token == "vault-token" and svc.get_calls == 0  # SQLite untouched
+
+
+async def test_get_access_token_flag_on_falls_back_when_not_imported(monkeypatch):
+    monkeypatch.setattr(cs, "_vault_read_enabled", lambda: True)
+
+    async def _none(secret_id, owner_id):
+        return None
+
+    monkeypatch.setattr(cs, "load_imported_credential", _none)
+    svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"access_token": "sqlite-token"})})
+    token = await ConnectorCredentialStore(svc).get_access_token("sid", "u1")
+    assert token == "sqlite-token" and svc.get_calls == 1
+
+
+async def test_get_access_token_vault_path_never_logs_secret_value(monkeypatch, caplog):
+    monkeypatch.setattr(cs, "_vault_read_enabled", lambda: True)
+    plaintext = "super-secret-access-value-xyz"
+
+    async def _vault(secret_id, owner_id):
+        return {"created_by": owner_id, "value": json.dumps({"access_token": plaintext})}
+
+    monkeypatch.setattr(cs, "load_imported_credential", _vault)
+    svc = _FakeSvc({"created_by": "u1", "value": json.dumps({"access_token": "unused"})})
+
+    with caplog.at_level("DEBUG"):
+        token = await ConnectorCredentialStore(svc).get_access_token("sid", "u1")
+
+    assert token == plaintext
+    assert plaintext not in caplog.text
