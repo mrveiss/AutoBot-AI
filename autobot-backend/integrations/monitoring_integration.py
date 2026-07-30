@@ -64,12 +64,19 @@ class DatadogIntegration(BaseIntegration):
             IntegrationHealth with connection status and details
         """
         try:
-            # `get()` returns (not yields) a ClientResponse; the `async with` is the
-            # connection-release point back into the shared pool and must be kept.
-            async with await get_http_client().get(
+            # `tracked_request()` owns the connection release AND the
+            # `_active_requests` slot (#12989/#12992); the raw `get()` form used
+            # here previously released the connection but leaked the counter.
+            # This site cannot use `get_json()` — it must inspect
+            # `response.status` and return a structured `IntegrationHealth`
+            # rather than raise. Failure is already logged and encoded below, so
+            # `suppress_error_log=True` avoids a duplicate ERROR from the manager.
+            async with get_http_client().tracked_request(
+                "GET",
                 f"{self.base_url}/validate",
                 headers=self._get_headers(),
                 timeout=aiohttp.ClientTimeout(total=10),
+                suppress_error_log=True,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -273,12 +280,19 @@ class NewRelicIntegration(BaseIntegration):
             IntegrationHealth with connection status and details
         """
         try:
-            # `get()` returns (not yields) a ClientResponse; the `async with` is the
-            # connection-release point back into the shared pool and must be kept.
-            async with await get_http_client().get(
+            # `tracked_request()` owns the connection release AND the
+            # `_active_requests` slot (#12989/#12992); the raw `get()` form used
+            # here previously released the connection but leaked the counter.
+            # This site cannot use `get_json()` — it must inspect
+            # `response.status` and return a structured `IntegrationHealth`
+            # rather than raise. Failure is already logged and encoded below, so
+            # `suppress_error_log=True` avoids a duplicate ERROR from the manager.
+            async with get_http_client().tracked_request(
+                "GET",
                 f"{self.base_url}/applications.json",
                 headers=self._get_headers(),
                 timeout=aiohttp.ClientTimeout(total=10),
+                suppress_error_log=True,
             ) as response:
                 if response.status == 200:
                     data = await response.json()
