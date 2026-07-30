@@ -20,6 +20,7 @@ import json
 import os
 import re
 import threading
+import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Dict, List
@@ -53,6 +54,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 from services.json_secrets_read import load_imported_json_secret
+from services.provider_key_vault import mirror_provider_key_best_effort
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -495,6 +497,22 @@ def audit_log(
     )
 
 
+async def _mirror_llm_provider_key(name: str, value: str, user: Dict | None) -> None:
+    """Best-effort System-vault mirror for an LLM-provider-key capture (#10088 Task 7).
+
+    No-op for any secret name that isn't a known LLM provider key (see
+    ``provider_key_vault.LLM_PROVIDER_KEY_NAMES``). Never raises -- a
+    dev/test environment without a configured vault root key must not turn a
+    successful legacy secret creation into a failed request.
+    """
+    raw_user_id = (user or {}).get("user_id")
+    try:
+        created_by = uuid.UUID(str(raw_user_id))
+    except (TypeError, ValueError):
+        created_by = uuid.UUID("00000000-0000-0000-0000-000000000000")
+    await mirror_provider_key_best_effort(name, value, created_by)
+
+
 async def _get_secret_dual_read(secret_id: str, chat_id: str | None) -> Dict | None:
     """Try the unified envelope store (#10088 Task 3 dual-read), else the legacy JSON file.
 
@@ -550,6 +568,9 @@ async def create_secret(
             session_id=None,
             outcome="success",
         )
+        # #10088 Task 7: mirror LLM-provider-key captures into the System vault
+        # (best-effort -- never turns a successful legacy write into a failure).
+        await _mirror_llm_provider_key(request.name, request.value, _user)
         return JSONResponse(
             status_code=201,
             content={
