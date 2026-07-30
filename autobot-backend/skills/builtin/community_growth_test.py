@@ -6,7 +6,7 @@
 Unit tests for CommunityGrowthSkill.
 
 Issue #1161: Tests cover all 8 tools across success, error, and dry_run paths.
-External APIs (PRAW, aiohttp) are mocked throughout.
+External APIs (PRAW, the shared pooled HTTP client) are mocked throughout.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -290,20 +290,16 @@ async def test_github_get_releases_success(skill: CommunityGrowthSkill):
             }
         ]
     )
+    mock_inner_resp.__aenter__ = AsyncMock(return_value=mock_inner_resp)
+    mock_inner_resp.__aexit__ = AsyncMock(return_value=False)
 
-    request_cm = MagicMock()
-    request_cm.__aenter__ = AsyncMock(return_value=mock_inner_resp)
-    request_cm.__aexit__ = AsyncMock(return_value=False)
+    # #12979: routes through the shared pool's tracked_request() rather than
+    # constructing its own aiohttp.ClientSession, so the response mock is
+    # returned directly by a patched get_http_client().
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=mock_inner_resp)
 
-    mock_session = MagicMock()
-    mock_session.get.return_value = request_cm
-
-    session_cm = MagicMock()
-    session_cm.__aenter__ = AsyncMock(return_value=mock_session)
-    session_cm.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("skills.builtin.community_growth.aiohttp.ClientSession") as mock_cs:
-        mock_cs.return_value = session_cm
+    with patch("skills.builtin.community_growth.get_http_client", return_value=mock_client):
         result = await skill.execute("github_get_releases", {"repo": "mrveiss/AutoBot-AI", "limit": 1})
 
     assert result["success"] is True
@@ -335,20 +331,15 @@ async def test_llm_draft_content_success(skill: CommunityGrowthSkill):
             "eval_count": 42,
         }
     )
+    mock_inner_resp.__aenter__ = AsyncMock(return_value=mock_inner_resp)
+    mock_inner_resp.__aexit__ = AsyncMock(return_value=False)
 
-    request_cm = MagicMock()
-    request_cm.__aenter__ = AsyncMock(return_value=mock_inner_resp)
-    request_cm.__aexit__ = AsyncMock(return_value=False)
+    # #12979: routes through the shared pool's tracked_request() rather than
+    # constructing its own aiohttp.ClientSession.
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=mock_inner_resp)
 
-    mock_session = MagicMock()
-    mock_session.post.return_value = request_cm
-
-    session_cm = MagicMock()
-    session_cm.__aenter__ = AsyncMock(return_value=mock_session)
-    session_cm.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("skills.builtin.community_growth.aiohttp.ClientSession") as mock_cs:
-        mock_cs.return_value = session_cm
+    with patch("skills.builtin.community_growth.get_http_client", return_value=mock_client):
         result = await skill.execute(
             "llm_draft_content",
             {"prompt": "Write about AutoBot", "format": "reddit_post"},

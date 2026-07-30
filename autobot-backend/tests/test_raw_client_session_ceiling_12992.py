@@ -18,7 +18,13 @@ ratchet: it counts the constructions still present and asserts the count never
 newly added raw session turns the suite red at the point it is introduced.
 
 Measured 2026-07-30 (#12992), on ``Dev_new_gui`` at ``352e07cc7``:
-**87** constructions across the walked tree.
+**87** constructions across the walked tree. That measurement was already stale
+by the time it merged — batches #12991/#12994/#12999 had converted sites
+against a moving base — and read **71** by the time batch 6 (communication,
+community_growth, cloud, project_management, http_adapter integrations)
+started. Batch 6 removed 18 sites, landing at **53** (re-measured against
+``origin/Dev_new_gui`` immediately before push, per the note on
+``MAX_RAW_CLIENT_SESSIONS`` below).
 
 Unlike the ``xfail(strict=True)`` guard in
 ``autobot-slm-backend/tests/test_update_all_applies_roles_12959.py`` — which
@@ -55,7 +61,11 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 #:    #12994 was still in flight. That PR merged and removed 25 constructions,
 #:    so the ceiling shipped ~25 too high — most of a conversion batch's worth
 #:    of slack — until it was caught in review. Sync, re-run, then push.
-MAX_RAW_CLIENT_SESSIONS = 87
+#:    Batch 6 hit the SAME trap in the opposite direction: this constant was
+#:    still 87 on ``origin/Dev_new_gui`` (stale from #12996) while the true
+#:    count had already fallen to 71 via #12991/#12994/#12999. Batch 6's own
+#:    conversion of 18 sites brought it to 53.
+MAX_RAW_CLIENT_SESSIONS = 53
 
 #: Directory names that are never part of the production surface being swept.
 EXCLUDED_DIR_NAMES = {"__pycache__", "tests", "test", ".pytest_cache", "node_modules"}
