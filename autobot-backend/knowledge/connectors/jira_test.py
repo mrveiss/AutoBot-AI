@@ -105,6 +105,33 @@ class TestJiraConnectorDiscovery:
         assert sources[0].source_id == "jira:test-jira-1:issue:ABC-1"
         assert sources[0].name == "Fix the bug"
 
+    @pytest.mark.asyncio
+    async def test_discover_sources_paginates(self, jira_config):
+        """_search() must follow startAt batches until total is reached (#10538)."""
+        connector = JiraConnector(jira_config)
+        connector._page_size = 1
+
+        def _issue(key: str, updated: str) -> dict:
+            return {
+                "key": key,
+                "fields": {"summary": key, "project": {"key": "ABC"}, "updated": updated},
+            }
+
+        page1 = {"total": 2, "issues": [_issue("ABC-1", "2026-01-01T00:00:00.000+0000")]}
+        page2 = {"total": 2, "issues": [_issue("ABC-2", "2026-01-02T00:00:00.000+0000")]}
+        with patch.object(connector, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.side_effect = [
+                {"status_code": 200, "body": page1},
+                {"status_code": 200, "body": page2},
+            ]
+            sources = await connector.discover_sources()
+
+        assert mock_post.call_count == 2
+        assert {s.source_id for s in sources} == {
+            "jira:test-jira-1:issue:ABC-1",
+            "jira:test-jira-1:issue:ABC-2",
+        }
+
 
 class TestJiraConnectorFetchContent:
     @pytest.mark.asyncio

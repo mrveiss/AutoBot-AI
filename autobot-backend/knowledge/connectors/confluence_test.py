@@ -89,6 +89,28 @@ class TestConfluenceConnectorDiscovery:
         assert sources[0].source_id == "confluence:test-confluence-1:page:111"
         assert sources[0].name == "Runbook"
 
+    @pytest.mark.asyncio
+    async def test_discover_sources_paginates(self, confluence_config):
+        """_list_pages() must follow multiple `start` batches until a short page (#10538)."""
+        connector = ConfluenceConnector(confluence_config)
+        connector._page_size = 1
+        page1 = {"results": [{"id": "111", "title": "Page One", "version": {"when": "2026-01-01T00:00:00.000Z"}}]}
+        page2 = {"results": [{"id": "222", "title": "Page Two", "version": {"when": "2026-01-02T00:00:00.000Z"}}]}
+        page3 = {"results": []}
+        with patch.object(connector, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = [
+                {"status_code": 200, "body": page1},
+                {"status_code": 200, "body": page2},
+                {"status_code": 200, "body": page3},
+            ]
+            sources = await connector.discover_sources()
+
+        assert mock_get.call_count == 3
+        assert {s.source_id for s in sources} == {
+            "confluence:test-confluence-1:page:111",
+            "confluence:test-confluence-1:page:222",
+        }
+
 
 class TestConfluenceConnectorFetchContent:
     @pytest.mark.asyncio
