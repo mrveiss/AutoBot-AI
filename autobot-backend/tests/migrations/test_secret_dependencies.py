@@ -124,3 +124,69 @@ async def test_coordinator_describe_dependencies_authz(session):
 
     with pytest.raises(SecretNotFoundError):
         await coord.describe_dependencies(session, user_id=_OWNER, permissions=set(), secret_id=uuid.uuid4())
+
+
+async def test_coordinator_register_dependency_idempotent_and_authz(session):
+    from services.envelope_secrets_service import SecretAccessError, SecretNotFoundError
+    from services.secrets_coordinator import SecretsCoordinator
+
+    coord = SecretsCoordinator(service=EnvelopeSecretsService(root_key=_ROOT))
+    owner = VaultRef(VaultKind.USER, str(_OWNER))
+    secret = await coord.create(
+        session, user_id=_OWNER, permissions=set(), owner_vault=owner, name="x", secret_type="password", plaintext=b"v"
+    )
+    await session.commit()
+
+    dep = await coord.register_dependency(
+        session,
+        user_id=_OWNER,
+        permissions=set(),
+        secret_id=secret.id,
+        dependent_kind="agent",
+        dependent_id="researcher",
+    )
+    await session.commit()
+    again = await coord.register_dependency(
+        session,
+        user_id=_OWNER,
+        permissions=set(),
+        secret_id=secret.id,
+        dependent_kind="agent",
+        dependent_id="researcher",
+    )
+    assert again.id == dep.id  # idempotent through the coordinator, not just the service
+
+    deps = await coord.describe_dependencies(session, user_id=_OWNER, permissions=set(), secret_id=secret.id)
+    assert [(d.dependent_kind, d.dependent_id) for d in deps] == [("agent", "researcher")]
+
+    # A stranger (no write authority on the owner vault) may not register a dependency.
+    with pytest.raises(SecretAccessError):
+        await coord.register_dependency(
+            session,
+            user_id=uuid.uuid4(),
+            permissions=set(),
+            secret_id=secret.id,
+            dependent_kind="agent",
+            dependent_id="intruder",
+        )
+
+    with pytest.raises(SecretNotFoundError):
+        await coord.register_dependency(
+            session,
+            user_id=_OWNER,
+            permissions=set(),
+            secret_id=uuid.uuid4(),
+            dependent_kind="agent",
+            dependent_id="x",
+        )
+
+    removed = await coord.unregister_dependency(
+        session,
+        user_id=_OWNER,
+        permissions=set(),
+        secret_id=secret.id,
+        dependent_kind="agent",
+        dependent_id="researcher",
+    )
+    assert removed == 1
+    assert await coord.describe_dependencies(session, user_id=_OWNER, permissions=set(), secret_id=secret.id) == []
