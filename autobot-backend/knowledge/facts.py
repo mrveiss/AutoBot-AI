@@ -1129,6 +1129,29 @@ class FactsMixin:
         await self._mark_vectorization_succeeded(fact_id)
         logger.info("Re-vectorized updated fact %s", fact_id)
 
+    async def _sync_fact_metadata_in_chromadb(self, fact_id: str, metadata: Dict[str, Any]) -> None:
+        """Push a metadata-only change through to the ChromaDB vector store.
+
+        Issue #12623: ``update_fact`` previously only synced ChromaDB when
+        *content* changed (via ``_revectorize_fact``); a metadata-only update
+        (e.g. the promotion gate flipping ``collection``) silently left the
+        stale metadata in the vector store, so a ChromaDB-filtered search
+        (like the chat-RAG quarantine filter, #12622) would never see the
+        change. Uses ``collection.update()`` directly — no re-embedding
+        needed since the text is unchanged, so this is cheap.
+        """
+        if not self.vector_store:
+            return
+        from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
+
+        sanitized = _sanitize(metadata)
+        sanitized["fact_id"] = fact_id
+        try:
+            await asyncio.to_thread(self.vector_store._collection.update, ids=[fact_id], metadatas=[sanitized])
+            logger.debug("Synced metadata-only update to ChromaDB for fact %s", fact_id)
+        except Exception as exc:
+            logger.warning("Could not sync metadata-only update to ChromaDB for fact %s: %s", fact_id, exc)
+
     async def _refresh_content_hash(self, fact_id: str, old_content: str, new_content: str) -> None:
         """Refresh content_hash dedup key when content changes. Issue #1375."""
         if old_content:
@@ -1181,6 +1204,11 @@ class FactsMixin:
 
             if content is not None and self.vector_store:
                 await self._revectorize_fact(fact_id, decoded["content"], current_metadata)
+            elif metadata is not None and self.vector_store:
+                # Issue #12623: content unchanged but metadata changed (e.g. the
+                # promotion gate) — still must propagate to ChromaDB or a
+                # metadata-filtered search never observes the change.
+                await self._sync_fact_metadata_in_chromadb(fact_id, current_metadata)
 
             return {"status": "success", "fact_id": fact_id, "action": "updated"}
 
