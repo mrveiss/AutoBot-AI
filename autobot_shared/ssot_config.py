@@ -1586,6 +1586,14 @@ class MiscConfig(BaseSettings):
     # ("true") with a 300s timeout; False/0 silently disabled HITL checkpoints.
     research_checkpoints_enabled: bool = Field(default=True, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED")
     research_checkpoint_timeout: int = Field(default=300, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT")
+    # #12622: ResearchOrchestrator (/research) budget bounds — hard caps so a
+    # single request can never cascade into an unbounded fetch/LLM-call chain.
+    research_max_sources: int = Field(default=5, alias="AUTOBOT_RESEARCH_MAX_SOURCES")
+    research_max_content_chars: int = Field(default=8000, alias="AUTOBOT_RESEARCH_MAX_CONTENT_CHARS")
+    research_fetch_timeout_seconds: float = Field(default=15.0, alias="AUTOBOT_RESEARCH_FETCH_TIMEOUT_SECONDS")
+    # Quarantine collection name (design doc §5/§9): web-research facts land
+    # here, invisible to general chat/RAG, until Phase 1's promotion gate.
+    research_quarantine_collection: str = Field(default="research", alias="AUTOBOT_RESEARCH_QUARANTINE_COLLECTION")
     routing_model: str = Field(default="", alias="AUTOBOT_ROUTING_MODEL")
     run_jwt: str = Field(default="", alias="AUTOBOT_RUN_JWT")
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
