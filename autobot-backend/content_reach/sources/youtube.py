@@ -178,6 +178,18 @@ class YtDlpCaptionBackend(ContentBackend):
 
         _ytdlp_extract_info owns the yt_dlp import check and raises BackendError
         when yt_dlp is unavailable, so no separate guard is needed here.
+
+        Issue #13018: ensure_public_url below is a genuine SSRF guard, but
+        yt-dlp's extract_info() performs its own DNS resolution when it fetches
+        request.url, so the check is stale by connect time (DNS-rebind TOCTOU).
+        Unlike the browser path (research_browser_manager.navigate_to), there is
+        no intervening network work here to narrow away -- the to_thread call
+        already runs immediately after the check -- and yt-dlp exposes no hook
+        to veto its own connection's resolved address. Closing this needs either
+        an egress-validating proxy (yt-dlp accepts a `proxy` option) or a
+        yt-dlp-networking-internals wrapper; both are deployment/architecture
+        decisions, not made yet (see #13018 discussion). This remains an open,
+        documented gap, not a closed one.
         """
         await ensure_public_url(request.url)
 
