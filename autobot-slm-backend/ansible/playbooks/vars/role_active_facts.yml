@@ -68,10 +68,14 @@ role_redis_active: >-
      (inventory_hostname in (groups.get('redis', []) | default([]))) or
      (inventory_hostname in (groups.get('database', []) | default([]))) }}
 
+# #13060: NO groups['main'] / groups['backend'] fallback. Those clauses pulled the
+# full desktop stack (tigervnc, x11vnc, novnc, websockify, xfce4) onto every backend
+# and main host, including ones that never selected the role. Activation is explicit,
+# matching role_xrdp_active below.
+# Migration: a backend/main host that relied on implicit activation must now list
+# 'vnc' in node_roles (or join vnc_nodes) to keep its desktop provisioned.
 role_vnc_active: >-
   {{ ('vnc' in (node_roles | default([]))) or
-     (inventory_hostname in (groups.get('main', []) | default([]))) or
-     (inventory_hostname in (groups.get('backend', []) | default([]))) or
      (inventory_hostname in (groups.get('vnc_nodes', []) | default([]))) }}
 
 role_xrdp_active: >-

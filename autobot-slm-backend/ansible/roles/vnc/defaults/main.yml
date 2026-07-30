@@ -20,8 +20,28 @@ websockify_enabled: "{{ lookup('env', 'WEBSOCKIFY_ENABLED') | default('true', tr
 novnc_path: /usr/share/novnc
 
 # Security - password auto-generated to /etc/autobot/vnc-secrets.env
-vnc_security_type: "{{ lookup('env', 'VNC_SECURITY_TYPE') | default('VeNCrypt', true) }}"
+#
+# #13060: VncAuth is what this role actually provisions — `vncpasswd -f` (see
+# tasks/main.yml) writes a VncAuth-format password file. TLSVnc and X509Vnc are
+# VeNCrypt sub-types that wrap that same VncAuth challenge for native viewers
+# able to negotiate them.
+#
+# Do NOT set this to bare "VeNCrypt": that names only the wrapper and leaves the
+# sub-type list empty, so NO client completes the handshake — not even a
+# VeNCrypt-capable one. It also locks out noVNC < 1.4.0 (the `novnc` apt package
+# ships 1.0.0 on some releases), which has no VeNCrypt support at all.
+#
+# VncAuth on the raw RFB hop is safe here: websockify terminates TLS for the
+# browser (see vnc-websockify.service.j2) and connects to VNC over loopback.
+vnc_security_type: "{{ lookup('env', 'VNC_SECURITY_TYPE') | default('VncAuth,TLSVnc,X509Vnc', true) }}"
 vnc_always_shared: "{{ lookup('env', 'VNC_ALWAYS_SHARED') | default('0', true) }}"
+
+# #13060: dedicated VNC keypair, read by BOTH the X509Vnc security type (Xvnc,
+# running as vnc_user) and websockify --ssl-only (also vnc_user). The shared node
+# key at /etc/autobot/certs/server-key.pem is root:root 0600 and is consumed by
+# nginx, Redis and PostgreSQL, so it must not be opened up to vnc_user.
+vnc_tls_cert: /etc/autobot/certs/vnc-cert.pem
+vnc_tls_key: /etc/autobot/certs/vnc-key.pem
 
 # Service management
 vnc_service_name: vnc-server
