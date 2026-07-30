@@ -14,9 +14,8 @@ AES-256-GCM field encryption (see autobot_shared.field_encryption).
 
 from typing import Any, Dict, Optional
 
-import aiohttp
-
 from autobot_shared.field_encryption import decrypt_field, encrypt_field
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 
@@ -111,17 +110,16 @@ class TelegramBotService:
         if reply_to_message_id:
             payload["reply_to_message_id"] = reply_to_message_id
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/sendMessage"
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Telegram sendMessage failed: {response.status} - {error_text}")
-                    response.raise_for_status()
+        url = f"{self.base_url}/sendMessage"
+        async with get_http_client().tracked_request("POST", url, json=payload) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"Telegram sendMessage failed: {response.status} - {error_text}")
+                response.raise_for_status()
 
-                result = await response.json()
-                logger.info(f"Sent Telegram message to chat {chat_id}")
-                return result
+            result = await response.json()
+            logger.info(f"Sent Telegram message to chat {chat_id}")
+            return result
 
     async def set_webhook(self, webhook_url: str, secret_token: str) -> Dict[str, Any]:
         """
@@ -141,21 +139,20 @@ class TelegramBotService:
         if not self.bot_token or not self.base_url:
             raise ValueError("Telegram bot token not configured")
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/setWebhook"
-            payload = {
-                "url": webhook_url,
-                "secret_token": secret_token,
-            }
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Telegram setWebhook failed: {response.status} - {error_text}")
-                    response.raise_for_status()
+        url = f"{self.base_url}/setWebhook"
+        payload = {
+            "url": webhook_url,
+            "secret_token": secret_token,
+        }
+        async with get_http_client().tracked_request("POST", url, json=payload) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"Telegram setWebhook failed: {response.status} - {error_text}")
+                response.raise_for_status()
 
-                result = await response.json()
-                logger.info(f"Set Telegram webhook to {webhook_url}")
-                return result
+            result = await response.json()
+            logger.info(f"Set Telegram webhook to {webhook_url}")
+            return result
 
     async def get_webhook_info(self) -> Dict[str, Any]:
         """
@@ -171,16 +168,15 @@ class TelegramBotService:
         if not self.bot_token or not self.base_url:
             raise ValueError("Telegram bot token not configured")
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/getWebhookInfo"
-            async with session.get(url) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Telegram getWebhookInfo failed: {response.status} - {error_text}")
-                    response.raise_for_status()
+        url = f"{self.base_url}/getWebhookInfo"
+        async with get_http_client().tracked_request("GET", url) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"Telegram getWebhookInfo failed: {response.status} - {error_text}")
+                response.raise_for_status()
 
-                result = await response.json()
-                return result
+            result = await response.json()
+            return result
 
     async def get_file(self, file_id: str) -> Dict[str, Any]:
         """
@@ -199,19 +195,18 @@ class TelegramBotService:
         if not self.bot_token or not self.base_url:
             raise ValueError("Telegram bot token not configured")
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/getFile"
-            payload = {"file_id": file_id}
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Telegram getFile failed: {response.status} - {error_text}")
-                    response.raise_for_status()
+        url = f"{self.base_url}/getFile"
+        payload = {"file_id": file_id}
+        async with get_http_client().tracked_request("POST", url, json=payload) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"Telegram getFile failed: {response.status} - {error_text}")
+                response.raise_for_status()
 
-                result = await response.json()
-                if result.get("ok"):
-                    return result.get("result", {})
-                return {}
+            result = await response.json()
+            if result.get("ok"):
+                return result.get("result", {})
+            return {}
 
     async def download_file(self, file_path: str) -> bytes:
         """
@@ -232,16 +227,15 @@ class TelegramBotService:
 
         download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_path}"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(download_url) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"File download failed: {response.status} - {error_text}")
-                    response.raise_for_status()
+        async with get_http_client().tracked_request("GET", download_url) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"File download failed: {response.status} - {error_text}")
+                response.raise_for_status()
 
-                content = await response.read()
-                logger.info(f"Downloaded file from Telegram: {file_path}")
-                return content
+            content = await response.read()
+            logger.info(f"Downloaded file from Telegram: {file_path}")
+            return content
 
     async def send_photo(
         self,
@@ -286,17 +280,16 @@ class TelegramBotService:
         if message_thread_id:
             payload["message_thread_id"] = message_thread_id
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/sendPhoto"
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Telegram sendPhoto failed: {response.status} - {error_text}")
-                    response.raise_for_status()
+        url = f"{self.base_url}/sendPhoto"
+        async with get_http_client().tracked_request("POST", url, json=payload) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"Telegram sendPhoto failed: {response.status} - {error_text}")
+                response.raise_for_status()
 
-                result = await response.json()
-                logger.info(f"Sent photo to Telegram chat {chat_id}")
-                return result
+            result = await response.json()
+            logger.info(f"Sent photo to Telegram chat {chat_id}")
+            return result
 
     async def send_document(
         self,
@@ -341,17 +334,16 @@ class TelegramBotService:
         if message_thread_id:
             payload["message_thread_id"] = message_thread_id
 
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.base_url}/sendDocument"
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"Telegram sendDocument failed: {response.status} - {error_text}")
-                    response.raise_for_status()
+        url = f"{self.base_url}/sendDocument"
+        async with get_http_client().tracked_request("POST", url, json=payload) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"Telegram sendDocument failed: {response.status} - {error_text}")
+                response.raise_for_status()
 
-                result = await response.json()
-                logger.info(f"Sent document to Telegram chat {chat_id}")
-                return result
+            result = await response.json()
+            logger.info(f"Sent document to Telegram chat {chat_id}")
+            return result
 
     async def verify_token(self) -> bool:
         """
@@ -364,15 +356,14 @@ class TelegramBotService:
             return False
 
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.base_url}/getMe"
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        if result.get("ok"):
-                            bot_info = result.get("result", {})
-                            logger.info(f"Telegram bot verified: @{bot_info.get('username')}")
-                            return True
+            url = f"{self.base_url}/getMe"
+            async with get_http_client().tracked_request("GET", url) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    if result.get("ok"):
+                        bot_info = result.get("result", {})
+                        logger.info(f"Telegram bot verified: @{bot_info.get('username')}")
+                        return True
             return False
         except Exception as exc:
             logger.error(f"Failed to verify Telegram bot token: {exc}")
