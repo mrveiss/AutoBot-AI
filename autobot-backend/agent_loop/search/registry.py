@@ -124,10 +124,29 @@ def _populate_default_providers(registry: SearchProviderRegistry) -> None:
     else:
         logger.debug("BRAVE_SEARCH_API_KEY not set — Brave search provider not registered")
 
+    _populate_config_declared_sources(registry)
+
     from agent_loop.search.content_reach_provider import ContentReachSearchProvider
 
     registry.register(ContentReachSearchProvider())
     logger.debug("Registered content_reach as fallback web-search provider")
+
+
+def _populate_config_declared_sources(registry: SearchProviderRegistry) -> None:
+    """Register data-driven sources declared in config/research_sources.yaml (#12625, design §4.7).
+
+    Extends this canonical registry rather than a parallel one: each declared
+    source becomes an ordinary ``WebSearchProvider`` registration, so it
+    shares the exact same credential-gating-free registration path, fallback
+    chain, and ``services.research.router`` topic-preference lookup as every
+    other provider. An empty/missing config file registers nothing (never
+    blocks startup).
+    """
+    from agent_loop.search.config_declared_provider import ConfigDeclaredSearchProvider, load_source_definitions
+
+    for definition in load_source_definitions():
+        registry.register(ConfigDeclaredSearchProvider(definition))
+        logger.debug("Registered config-declared search source %r (category=%s)", definition.name, definition.category)
 
 
 def _warn_if_topic_search_degraded(registry: SearchProviderRegistry) -> None:
