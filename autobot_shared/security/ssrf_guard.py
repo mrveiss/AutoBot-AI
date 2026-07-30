@@ -18,6 +18,10 @@ Public API
   that connects to the pre-resolved IP
 - :func:`fetch_safe_url` — full SSRF-safe HTTP GET: resolve → pin → fetch,
   with allow_redirects=False enforced
+- :func:`pinned_request_with_redirects` — like :func:`pinned_connector` but
+  follows redirects, independently re-resolving + re-pinning EACH hop, for
+  callers (``web_fetch``, ``media/link/pipeline``, #13019) that genuinely
+  need redirect-following and cannot accept ``allow_redirects=False``
 
 Dependencies: stdlib + aiohttp only (no autobot-* imports).
 """
@@ -25,7 +29,9 @@ Dependencies: stdlib + aiohttp only (no autobot-* imports).
 from __future__ import annotations
 
 import socket
-from urllib.parse import urlparse
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
+from urllib.parse import urljoin, urlparse
 
 import aiohttp
 import aiohttp.abc
@@ -123,6 +129,64 @@ async def pinned_connector(url: str) -> aiohttp.TCPConnector:
     return aiohttp.TCPConnector(resolver=resolver, use_dns_cache=False)
 
 
+@asynccontextmanager
+async def pinned_request_with_redirects(
+    method: str,
+    url: str,
+    *,
+    headers: dict | None = None,
+    timeout: aiohttp.ClientTimeout | None = None,
+    max_redirects: int = 5,
+    ssl: Any = None,
+) -> AsyncIterator[aiohttp.ClientResponse]:
+    """SSRF-safe request that follows redirects, re-pinning EACH hop (#13019).
+
+    A single ``pinned_connector(url)`` + ``allow_redirects=True`` would be
+    unsafe: :func:`safe_aiohttp_resolver` returns a resolver that maps ANY
+    hostname to the *first* hop's pinned IP, so a cross-host redirect would
+    either connect to the wrong server or (worse) silently reuse the original
+    IP for a hostname it was never resolved for. This function instead issues
+    each hop with ``allow_redirects=False`` through its OWN fresh
+    :func:`pinned_connector`, so a redirect ``Location`` is independently
+    resolved and safety-checked before it is ever connected to — a redirect
+    to a private/loopback/link-local/rebound address raises
+    :class:`SSRFError` instead of being followed, exactly like the initial
+    URL would be.
+
+    Bounded by *max_redirects*: an exhausted chain raises :class:`SSRFError`
+    (distinguishable from a natural network failure) rather than silently
+    truncating.
+
+    Yields the terminal response with its body still open for the caller to
+    stream; the owning session for that final hop is closed when the
+    ``async with`` block exits (including on error). Intermediate hops close
+    their own sessions immediately after reading the ``Location`` header.
+    """
+    current_url = url
+    for _ in range(max_redirects + 1):
+        connector = await pinned_connector(current_url)
+        session = aiohttp.ClientSession(connector=connector, timeout=timeout)
+        try:
+            resp = await session.request(method, current_url, headers=headers, allow_redirects=False, ssl=ssl)
+        except Exception:
+            await session.close()
+            raise
+
+        location = resp.headers.get("Location") if 300 <= resp.status < 400 else None
+        if location is None:
+            try:
+                yield resp
+            finally:
+                await session.close()
+            return
+
+        await resp.release()
+        await session.close()
+        current_url = urljoin(current_url, location)
+
+    raise SSRFError(f"exceeded max_redirects={max_redirects} while fetching {url!r}")
+
+
 async def fetch_safe_url(
     url: str,
     *,
@@ -197,4 +261,11 @@ async def fetch_safe_url(
     return status, body[:max_bytes], content_type
 
 
-__all__ = ["SSRFError", "resolve_safe_ip", "safe_aiohttp_resolver", "pinned_connector", "fetch_safe_url"]
+__all__ = [
+    "SSRFError",
+    "resolve_safe_ip",
+    "safe_aiohttp_resolver",
+    "pinned_connector",
+    "pinned_request_with_redirects",
+    "fetch_safe_url",
+]
