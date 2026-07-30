@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from autobot_shared.auth import BearerAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
@@ -621,47 +622,48 @@ class GoogleDriveConnector(AbstractConnector):
 
         try:
             timeout = aiohttp.ClientTimeout(total=60.0)  # Longer timeout for file downloads
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method,
-                    url,
-                    headers=headers,
-                    json=json_data,
-                    params=params,
-                ) as resp:
-                    status_code = resp.status
+            async with get_http_client().tracked_request(
+                method,
+                url,
+                headers=headers,
+                json=json_data,
+                params=params,
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as resp:
+                status_code = resp.status
 
-                    # Handle no-content responses
-                    if status_code == 204:
-                        return {"status_code": 204, "body": {}}
+                # Handle no-content responses
+                if status_code == 204:
+                    return {"status_code": 204, "body": {}}
 
-                    if raw_content:
-                        content = await resp.read()
-                        return {
-                            "status_code": status_code,
-                            "content": content,
-                        }
-
-                    try:
-                        body = await resp.json()
-                    except aiohttp.ContentTypeError:
-                        body = {}
-
-                    # Log errors
-                    if status_code >= 400:
-                        error_msg = body.get("error", {}).get("message", "Unknown error")
-                        self.logger.warning(
-                            "Drive API request to %s failed: HTTP %d - %s",
-                            url,
-                            status_code,
-                            error_msg,
-                        )
-
+                if raw_content:
+                    content = await resp.read()
                     return {
                         "status_code": status_code,
-                        "body": body,
-                        "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                        "content": content,
                     }
+
+                try:
+                    body = await resp.json()
+                except aiohttp.ContentTypeError:
+                    body = {}
+
+                # Log errors
+                if status_code >= 400:
+                    error_msg = body.get("error", {}).get("message", "Unknown error")
+                    self.logger.warning(
+                        "Drive API request to %s failed: HTTP %d - %s",
+                        url,
+                        status_code,
+                        error_msg,
+                    )
+
+                return {
+                    "status_code": status_code,
+                    "body": body,
+                    "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                }
 
         except aiohttp.ClientError as exc:
             self.logger.error("Drive API request to %s failed: %s", url, exc)

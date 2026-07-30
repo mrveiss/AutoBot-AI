@@ -23,6 +23,7 @@ import asyncio
 import time
 from urllib.parse import urlparse
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from web_fetch.cache import WEB_FETCH_MAX_BYTES, get_cached_result, set_cached_result
 from web_fetch.extractors import _MIN_CONTENT_CHARS, extract_markdown, is_spa_content
@@ -141,10 +142,15 @@ async def _fetch_jina_impl(url: str, timeout: float) -> str | None:
     jina_url = f"{_JINA_BASE_URL}{url}"
     try:
         aio_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(jina_url, timeout=aio_timeout, allow_redirects=True) as resp:
-                if resp.status == 200:
-                    return await resp.text(encoding="utf-8", errors="replace")
+        async with get_http_client().tracked_request(
+            "GET",
+            jina_url,
+            timeout=aio_timeout,
+            allow_redirects=True,
+            suppress_error_log=True,
+        ) as resp:
+            if resp.status == 200:
+                return await resp.text(encoding="utf-8", errors="replace")
     except Exception as exc:
         logger.debug("Jina fetch failed for %s: %s", url, exc)
     return None
@@ -171,22 +177,24 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
     headers = {"User-Agent": _USER_AGENT}
     try:
         aio_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(
-                url,
-                timeout=aio_timeout,
-                allow_redirects=True,
-                max_redirects=_MAX_REDIRECTS,
-            ) as resp:
-                content = b""
-                async for chunk in resp.content.iter_chunked(65536):
-                    content += chunk
-                    if len(content) > WEB_FETCH_MAX_BYTES:
-                        return None, None  # too large
-                if not content:
-                    return "", resp.status
-                html = content.decode("utf-8", errors="replace")
-                return html, resp.status
+        async with get_http_client().tracked_request(
+            "GET",
+            url,
+            headers=headers,
+            timeout=aio_timeout,
+            allow_redirects=True,
+            max_redirects=_MAX_REDIRECTS,
+            suppress_error_log=True,
+        ) as resp:
+            content = b""
+            async for chunk in resp.content.iter_chunked(65536):
+                content += chunk
+                if len(content) > WEB_FETCH_MAX_BYTES:
+                    return None, None  # too large
+            if not content:
+                return "", resp.status
+            html = content.decode("utf-8", errors="replace")
+            return html, resp.status
     except aiohttp.TooManyRedirects:
         logger.debug("Too many redirects for %s", url)
         return None, None

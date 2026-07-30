@@ -40,6 +40,7 @@ from urllib.parse import quote
 import aiohttp
 
 from autobot_shared.auth import ApiKeyAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector, RetryableError
@@ -406,18 +407,19 @@ class GitLabConnector(AbstractConnector):
         headers = {"PRIVATE-TOKEN": self._token}
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 429:
-                        raise RetryableError("GitLab rate-limited", status_code=429)
-                    if resp.status >= 500:
-                        raise RetryableError("GitLab server error %d" % resp.status, status_code=resp.status)
-                    content_type = resp.content_type or ""
-                    if "json" in content_type:
-                        body = await resp.json(content_type=None)
-                        return {"status_code": resp.status, "body": body}
-                    text = await resp.text(encoding="utf-8")
-                    return {"status_code": resp.status, "body_text": text}
+            async with get_http_client().tracked_request(
+                "GET", url, headers=headers, timeout=timeout, suppress_error_log=True
+            ) as resp:
+                if resp.status == 429:
+                    raise RetryableError("GitLab rate-limited", status_code=429)
+                if resp.status >= 500:
+                    raise RetryableError("GitLab server error %d" % resp.status, status_code=resp.status)
+                content_type = resp.content_type or ""
+                if "json" in content_type:
+                    body = await resp.json(content_type=None)
+                    return {"status_code": resp.status, "body": body}
+                text = await resp.text(encoding="utf-8")
+                return {"status_code": resp.status, "body_text": text}
         except RetryableError:
             raise
         except aiohttp.ClientError as exc:
@@ -766,18 +768,19 @@ class GiteaConnector(AbstractConnector):
         headers = {"Authorization": "token %s" % self._token}
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 429:
-                        raise RetryableError("Gitea rate-limited", status_code=429)
-                    if resp.status >= 500:
-                        raise RetryableError("Gitea server error %d" % resp.status, status_code=resp.status)
-                    content_type = resp.content_type or ""
-                    if "json" in content_type:
-                        body = await resp.json(content_type=None)
-                        return {"status_code": resp.status, "body": body}
-                    text = await resp.text(encoding="utf-8")
-                    return {"status_code": resp.status, "body_text": text}
+            async with get_http_client().tracked_request(
+                "GET", url, headers=headers, timeout=timeout, suppress_error_log=True
+            ) as resp:
+                if resp.status == 429:
+                    raise RetryableError("Gitea rate-limited", status_code=429)
+                if resp.status >= 500:
+                    raise RetryableError("Gitea server error %d" % resp.status, status_code=resp.status)
+                content_type = resp.content_type or ""
+                if "json" in content_type:
+                    body = await resp.json(content_type=None)
+                    return {"status_code": resp.status, "body": body}
+                text = await resp.text(encoding="utf-8")
+                return {"status_code": resp.status, "body_text": text}
         except RetryableError:
             raise
         except aiohttp.ClientError as exc:

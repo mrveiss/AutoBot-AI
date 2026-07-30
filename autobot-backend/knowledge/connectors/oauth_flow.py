@@ -171,6 +171,14 @@ async def _post_token(token_url: str, payload: dict, *, connector: aiohttp.BaseC
     from ``ssrf_guard.pinned_connector``), the session connects to the
     pre-resolved public IP so the token POST cannot be DNS-rebound to a private
     address between validation and connect. The session owns and closes it.
+
+    Issue #12979 — deliberately NOT converted to the shared pooled client.
+    A connector is a *session*-level object: the pooled ``HTTPClientManager``
+    owns one shared ``TCPConnector`` for all callers and ``session.request()``
+    accepts no per-request connector override. Routing this call through the
+    pool would silently drop the caller's pinned connector and reopen the
+    DNS-rebinding hole closed in #12278, so the per-request session here buys
+    a security property that connection reuse cannot replace.
     """
     timeout = aiohttp.ClientTimeout(total=_TOKEN_REQUEST_TIMEOUT)
     session_kwargs: dict = {"timeout": timeout}
