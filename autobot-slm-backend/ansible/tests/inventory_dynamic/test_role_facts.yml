@@ -117,7 +117,8 @@ all:
       ansible_connection: local
       node_roles: []
       expected_role_backend_active: true   # via groups['main']
-      expected_role_vnc_active: true       # via groups['main']
+      # #13060: VNC is NOT implied by groups['main'] — activation is explicit.
+      expected_role_vnc_active: false
       expected_role_frontend_active: false
       expected_role_slm_active: false
 
