@@ -22,6 +22,7 @@ from api.schemas_system import (
     ServiceMonitorVMsResponse,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot
 
@@ -38,13 +39,19 @@ async def _check_http_health(url: str) -> Tuple[str, str]:
 
     Returns ("online", "Healthy") on 2xx, ("offline", reason) otherwise.
     Issue #925: helper for get_service_statuses / get_vm_statuses.
+
+    Issue #12979: routed through the shared pooled client's
+    ``tracked_request()``. ``suppress_error_log=True`` — a service being
+    offline is an expected, already-handled condition here (health polling),
+    not an unexpected outbound-call failure.
     """
     try:
-        async with aiohttp.ClientSession(timeout=_HEALTH_TIMEOUT) as session:
-            async with session.get(url, ssl=False) as resp:
-                if resp.status < 300:
-                    return "online", "Healthy"
-                return "offline", f"HTTP {resp.status}"
+        async with get_http_client().tracked_request(
+            "GET", url, timeout=_HEALTH_TIMEOUT, ssl=False, suppress_error_log=True
+        ) as resp:
+            if resp.status < 300:
+                return "online", "Healthy"
+            return "offline", f"HTTP {resp.status}"
     except asyncio.TimeoutError:
         return "offline", "Timeout"
     except aiohttp.ClientConnectorError:

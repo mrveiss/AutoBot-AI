@@ -61,23 +61,25 @@ def _make_config(**kwargs) -> IntegrationConfig:
 
 
 def _build_response_mock(status: int, body: Any, headers: Dict[str, str] | None = None):
-    """Return a nested async context-manager mock for aiohttp.ClientSession.request."""
+    """Return a mock ``HTTPClientManager`` whose ``tracked_request()`` yields a
+    response mimicking the given status/body/headers.
+
+    Issue #12979: ``_github_request`` routes through the shared pool's
+    ``get_http_client().tracked_request(method, url, **kwargs)`` rather than
+    constructing its own ``aiohttp.ClientSession``.
+    """
     resp = AsyncMock()
     resp.status = status
     resp.headers = headers or {}
     resp.json = AsyncMock(return_value=body)
 
-    inner_cm = AsyncMock()
-    inner_cm.__aenter__ = AsyncMock(return_value=resp)
-    inner_cm.__aexit__ = AsyncMock(return_value=False)
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
 
-    session = MagicMock()
-    session.request = MagicMock(return_value=inner_cm)
-
-    outer_cm = AsyncMock()
-    outer_cm.__aenter__ = AsyncMock(return_value=session)
-    outer_cm.__aexit__ = AsyncMock(return_value=False)
-    return outer_cm
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=cm)
+    return mock_client
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ def _build_response_mock(status: int, body: Any, headers: Dict[str, str] | None 
 async def test_test_connection_success():
     gh = GitHubIntegration(_make_config())
     body = {"login": "testuser", "type": "User"}
-    with patch("aiohttp.ClientSession", return_value=_build_response_mock(200, body)):
+    with patch("integrations.github_integration.get_http_client", return_value=_build_response_mock(200, body)):
         health = await gh.test_connection()
     assert health.status == IntegrationStatus.CONNECTED
     assert "testuser" in health.message
@@ -99,7 +101,7 @@ async def test_test_connection_success():
 async def test_test_connection_unauthorized():
     gh = GitHubIntegration(_make_config())
     body = {"message": "Bad credentials"}
-    with patch("aiohttp.ClientSession", return_value=_build_response_mock(401, body)):
+    with patch("integrations.github_integration.get_http_client", return_value=_build_response_mock(401, body)):
         health = await gh.test_connection()
     assert health.status == IntegrationStatus.UNAUTHORIZED
 
@@ -109,7 +111,7 @@ async def test_test_connection_timeout():
     gh = GitHubIntegration(_make_config())
     # Patch acquire to pass through, then simulate network timeout
     with patch.object(gh._rate_limiter, "acquire", new=AsyncMock()):
-        with patch("aiohttp.ClientSession", side_effect=asyncio.TimeoutError):
+        with patch("integrations.github_integration.get_http_client", side_effect=asyncio.TimeoutError):
             health = await gh.test_connection()
     assert health.status == IntegrationStatus.ERROR
     assert "timed out" in health.message.lower()
@@ -127,7 +129,7 @@ async def test_github_request_429_returns_error_and_sets_retry_after():
     headers = {"Retry-After": "60"}
     with patch("asyncio.sleep", new=AsyncMock()):
         with patch(
-            "aiohttp.ClientSession",
+            "integrations.github_integration.get_http_client",
             return_value=_build_response_mock(429, body, headers),
         ):
             result = await gh._github_request("GET", "/repos/owner/repo")
@@ -149,7 +151,7 @@ async def test_github_request_403_secondary_rate_limit():
     body = {"message": "You have exceeded a secondary rate limit."}
     headers = {"Retry-After": "30"}
     with patch(
-        "aiohttp.ClientSession",
+        "integrations.github_integration.get_http_client",
         return_value=_build_response_mock(403, body, headers),
     ):
         result = await gh._github_request("GET", "/repos/owner/repo")
@@ -174,7 +176,7 @@ async def test_x_ratelimit_remaining_zero_blocks_next_request():
     reset_time = int(time.time()) + 60
     headers = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(reset_time)}
     with patch(
-        "aiohttp.ClientSession",
+        "integrations.github_integration.get_http_client",
         return_value=_build_response_mock(200, body, headers),
     ):
         await gh._github_request("GET", "/user")
@@ -228,7 +230,7 @@ async def test_github_request_connection_error():
     """
     gh = GitHubIntegration(_make_config())
     with patch(
-        "aiohttp.ClientSession",
+        "integrations.github_integration.get_http_client",
         side_effect=aiohttp.ClientConnectionError("refused"),
     ):
         result = await gh._github_request("GET", "/repos/owner/repo")
@@ -250,7 +252,7 @@ async def test_github_request_5xx_returns_after_max_retries(caplog):
 
     with patch("asyncio.sleep", new=AsyncMock()):
         with patch(
-            "aiohttp.ClientSession",
+            "integrations.github_integration.get_http_client",
             return_value=_build_response_mock(503, body),
         ):
             result = await gh._github_request("GET", "/repos/owner/repo")
@@ -269,7 +271,7 @@ async def test_execute_action_get_repository():
     gh = GitHubIntegration(_make_config())
     repo_body = {"id": 1, "full_name": "owner/repo", "private": False}
     with patch(
-        "aiohttp.ClientSession",
+        "integrations.github_integration.get_http_client",
         return_value=_build_response_mock(200, repo_body),
     ):
         result = await gh.execute_action("get_repository", {"owner": "owner", "repo": "repo"})
@@ -313,7 +315,7 @@ async def test_rate_limit_records_after_successful_request():
         new=AsyncMock(return_value=True),
     ) as mock_acquire:
         with patch(
-            "aiohttp.ClientSession",
+            "integrations.github_integration.get_http_client",
             return_value=_build_response_mock(200, body),
         ):
             await gh._github_request("GET", "/user")

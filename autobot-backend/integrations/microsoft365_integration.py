@@ -23,6 +23,7 @@ from urllib.parse import quote
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
@@ -550,7 +551,13 @@ class Microsoft365Integration(BaseIntegration):
         json_data: Dict[str, Any] | None = None,
         params: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """Make an HTTP request to Microsoft Graph API with auth and error handling."""
+        """Make an HTTP request to Microsoft Graph API with auth and error handling.
+
+        Issue #12979: routed through the shared pooled client's
+        ``tracked_request()`` — never raises on HTTP status (handles 204 and
+        empty/non-JSON bodies explicitly), so ``get_json()``/``post_json()``
+        would change this method's error-path contract.
+        """
         merged_headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
@@ -560,41 +567,41 @@ class Microsoft365Integration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method,
-                    url,
-                    headers=merged_headers,
-                    json=json_data,
-                    params=params,
-                ) as resp:
-                    status_code = resp.status
+            async with get_http_client().tracked_request(
+                method,
+                url,
+                headers=merged_headers,
+                json=json_data,
+                params=params,
+                timeout=timeout,
+            ) as resp:
+                status_code = resp.status
 
-                    # Handle no-content responses
-                    if status_code == 204:
-                        return {"status_code": 204, "body": {}}
+                # Handle no-content responses
+                if status_code == 204:
+                    return {"status_code": 204, "body": {}}
 
-                    try:
-                        body = await resp.json()
-                    except aiohttp.ContentTypeError:
-                        # Some endpoints return empty body on success
-                        body = {}
+                try:
+                    body = await resp.json()
+                except aiohttp.ContentTypeError:
+                    # Some endpoints return empty body on success
+                    body = {}
 
-                    # Log errors
-                    if status_code >= 400:
-                        error_msg = body.get("error", {}).get("message", "Unknown error")
-                        self.logger.warning(
-                            "Graph API request to %s failed: HTTP %d - %s",
-                            url,
-                            status_code,
-                            error_msg,
-                        )
+                # Log errors
+                if status_code >= 400:
+                    error_msg = body.get("error", {}).get("message", "Unknown error")
+                    self.logger.warning(
+                        "Graph API request to %s failed: HTTP %d - %s",
+                        url,
+                        status_code,
+                        error_msg,
+                    )
 
-                    return {
-                        "status_code": status_code,
-                        "body": body,
-                        "error": body.get("error", {}).get("message") if status_code >= 400 else None,
-                    }
+                return {
+                    "status_code": status_code,
+                    "body": body,
+                    "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                }
 
         except aiohttp.ClientError as exc:
             self.logger.error("Graph API request to %s failed: %s", url, exc)

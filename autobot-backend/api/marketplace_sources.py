@@ -199,6 +199,16 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
     via `_resolve_safe_ip` (blocks RFC1918/loopback/link-local) and
     ``allow_redirects=False`` (defeats redirect-rebind). Raises
     HTTPException(400) on any fetch/parse/validation failure.
+
+    Issue #12979: deliberately NOT converted to the shared pooled client. The
+    ``_PinnedResolver``/``connector=`` below pin this session to the
+    pre-resolved public IP so the fetch cannot be DNS-rebound to a private
+    address between validation and connect. A connector is session-level —
+    the pooled ``HTTPClientManager`` owns exactly one shared ``TCPConnector``
+    and ``session.request()`` accepts no per-request override — so routing
+    this through the pool would silently drop the pin and reopen the
+    DNS-rebinding hole this function exists to close. Same carve-out category
+    as ``knowledge/connectors/oauth_flow.py::_post_token()``.
     """
     _validate_url_scheme(url)
     parsed = urlparse(url)

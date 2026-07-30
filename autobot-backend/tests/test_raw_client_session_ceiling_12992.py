@@ -38,9 +38,24 @@ two ways — walking the rebased worktree, and archiving
 ``origin/Dev_new_gui`` standalone and subtracting batch 7's 8 conversions —
 both agree: the post-#13001, pre-batch-7 base is **38** (not the 53 recorded
 in #13001's own PR description, which had gone stale by the time it merged),
-and batch 7 lands at **30**. Neither pre-rebase number (48 or 53) is the
-value that shipped — see the "re-measure immediately before push" rule below,
-which applies to every rebase as much as every fresh sync.
+and batch 7 lands at **30**, merged as #13002. Neither pre-rebase number (48
+or 53) is the value that shipped — see the "re-measure immediately before
+push" rule below, which applies to every rebase as much as every fresh sync.
+
+Batch 8 (``integrations/base.py``, ``github_integration.py``,
+``microsoft365_integration.py``, ``notion_integration.py``,
+``api/marketplace_sources.py`` (RAW carve-out, SSRF-pinned connector — not
+converted), ``api/monitoring.py``, ``api/service_monitor.py``,
+``code_analysis/src/env_analyzer.py``) branched before #13002 merged, so its
+own pre-conversion measurement (38) and first ceiling value (30) were taken
+against a base that did not yet include batch 7. Rebasing onto
+``origin/Dev_new_gui`` after #13002 merged put batch 7's 8 conversions
+underneath batch 8's 8 (9 sites converted, 1 — ``marketplace_sources.py`` —
+stays a RAW carve-out and remains counted). Re-measured with the same AST
+walker against the rebased tree: the post-#13002, pre-batch-8 base is
+confirmed **30** (batch 7's own value held — the first time in this
+programme a pre-rebase ceiling has still matched the true count), and
+batch 8 lands at **22**.
 
 Unlike the ``xfail(strict=True)`` guard in
 ``autobot-slm-backend/tests/test_update_all_applies_roles_12959.py`` — which
@@ -86,8 +101,11 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 #:    not yet applied) read **38**, not 53. Batch 7's 8 conversions on top of
 #:    that base land at 30 — independently confirmed both by walking the
 #:    rebased worktree and by archiving ``origin/Dev_new_gui`` standalone and
-#:    subtracting.
-MAX_RAW_CLIENT_SESSIONS = 30
+#:    subtracting. Batch 8 rebased onto ``origin/Dev_new_gui`` after batch 7
+#:    merged and confirmed 30 was STILL current (the first time in this
+#:    programme a pre-rebase ceiling wasn't stale) — its 8 conversions land
+#:    at 22.
+MAX_RAW_CLIENT_SESSIONS = 22
 
 #: Directory names that are never part of the production surface being swept.
 EXCLUDED_DIR_NAMES = {"__pycache__", "tests", "test", ".pytest_cache", "node_modules"}
