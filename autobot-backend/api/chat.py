@@ -62,6 +62,7 @@ from dependencies import get_config, get_knowledge_base
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import get_exceptions_lazy
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.session_ownership import validate_session_ownership
@@ -823,7 +824,9 @@ async def process_chat_message(
     citations: List[Citation] = []
     if message.use_knowledge_base and knowledge_base:
         try:
-            kb_hits = await knowledge_base.search(query=message.content, top_k=5)
+            # Issue #13009: exclude quarantined research facts (#12622) -- this
+            # citation path surfaces raw KB content directly in the response.
+            kb_hits = await knowledge_base.search(query=message.content, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             if kb_hits:
                 citations = _build_citations_from_kb_results(kb_hits)
                 logger.debug("[#10548] Attached %d citations to response in session %s", len(citations), session_id)
@@ -1879,7 +1882,8 @@ async def _enhance_with_knowledge_base(
 
     if message.use_knowledge_base and knowledge_base:
         try:
-            kb_results = await knowledge_base.search(query=message.content, top_k=5)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            kb_results = await knowledge_base.search(query=message.content, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             if kb_results:
                 knowledge_sources = kb_results
                 kb_summary = "\n".join([f"- {item.get('content', '')[:300]}..." for item in kb_results[:3]])

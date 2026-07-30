@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.ttl_constants import TTL_5_MINUTES
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_components.bm25 import BM25Scorer
 from knowledge.search_components.reranking import (
     RerankWeights,
@@ -392,7 +393,9 @@ class AdvancedRAGOptimizer:
             # Use knowledge base's search method for semantic search
             # Issue #429: Fixed - was incorrectly calling get_fact(query=query)
             # get_fact() only accepts fact_id, not query. Use search() instead.
-            facts = await self.kb.search(query, top_k=limit)
+            # Issue #13009: reachable via RAGService -> ChatWorkflowManager on every
+            # chat turn -- must exclude quarantined research facts (#12622).
+            facts = await self.kb.search(query, top_k=limit, filters=RESEARCH_QUARANTINE_FILTER)
 
             semantic_results = []
             for i, fact in enumerate(facts[:limit]):
