@@ -19,6 +19,7 @@ import pytest
 from services.claim_verifier import (
     ClaimVerifier,
     ResearchStatus,
+    SourceAgreement,
     VerificationStatus,
 )
 from services.knowledge_grounding_models import (
@@ -915,3 +916,138 @@ class TestEdgeCases:
 
         # Should use RAG result (0.6 > 0.0)
         assert result.source == "kb_rag"
+
+
+# ---------------------------------------------------------------------------
+# N-source corroboration + promotion gate (#12623)
+# ---------------------------------------------------------------------------
+
+
+def _source(source_id: str, url: str, text: str = "corroborating text") -> KBSource:
+    """Build a minimal KBSource for corroboration tests."""
+    return KBSource(source_id=source_id, source_type="web_research", text=text, confidence=0.8, age_days=0.0, url=url)
+
+
+def _llm_response(content: str, error: str | None = None):
+    """Build a fake LLM chat() response with .content/.error attributes."""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(content=content, error=error)
+
+
+@pytest.fixture
+def mock_llm_service():
+    """Create a mock LLM service returning a chat() response object."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def corroborating_verifier(mock_knowledge_base, mock_llm_service):
+    """ClaimVerifier wired with an explicit LLM service for corroboration tests."""
+    return ClaimVerifier(mock_knowledge_base, llm_service=mock_llm_service)
+
+
+class TestClassifyAgreement:
+    """Unit tests for the adversarial agreement-classification prompt call."""
+
+    @pytest.mark.asyncio
+    async def test_parses_agree_verdict(self, corroborating_verifier, mock_llm_service):
+        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: AGREE\nRATIONALE: matches claim")
+        verdict = await corroborating_verifier.classify_agreement("The sky is blue.", "The sky appears blue.")
+        assert verdict == SourceAgreement.AGREE
+
+    @pytest.mark.asyncio
+    async def test_parses_contradict_verdict(self, corroborating_verifier, mock_llm_service):
+        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: CONTRADICT\nRATIONALE: opposite claim")
+        verdict = await corroborating_verifier.classify_agreement("X is Y.", "X is definitely not Y.")
+        assert verdict == SourceAgreement.CONTRADICT
+
+    @pytest.mark.asyncio
+    async def test_llm_error_fails_conservative_unrelated(self, corroborating_verifier, mock_llm_service):
+        mock_llm_service.chat.return_value = _llm_response("", error="provider unavailable")
+        verdict = await corroborating_verifier.classify_agreement("X is Y.", "some text")
+        assert verdict == SourceAgreement.UNRELATED
+
+    @pytest.mark.asyncio
+    async def test_llm_exception_fails_conservative_unrelated(self, corroborating_verifier, mock_llm_service):
+        mock_llm_service.chat.side_effect = RuntimeError("timeout")
+        verdict = await corroborating_verifier.classify_agreement("X is Y.", "some text")
+        assert verdict == SourceAgreement.UNRELATED
+
+
+class TestCorroborate:
+    """Unit tests for ClaimVerifier.corroborate (N-source corroboration + promotion gate)."""
+
+    @pytest.mark.asyncio
+    async def test_single_source_never_verified(self, corroborating_verifier):
+        """Acceptance criterion: single-source claims are never marked verified."""
+        sources = [_source("f1", "https://a.example/page")]
+        result = await corroborating_verifier.corroborate("X is Y.", sources, claim_url="https://origin.example/x")
+
+        assert result.verified is False
+        assert result.confidence == 0.0
+        assert result.requires_human_review is False
+
+    @pytest.mark.asyncio
+    async def test_no_independent_sources_never_verified(self, corroborating_verifier):
+        """Zero candidate sources -> quarantined, no LLM call made."""
+        result = await corroborating_verifier.corroborate("X is Y.", [], claim_url="https://origin.example/x")
+        assert result.verified is False
+        assert result.independent_agree_count == 0
+
+    @pytest.mark.asyncio
+    async def test_same_domain_sources_not_independent(self, corroborating_verifier, mock_llm_service):
+        """Two sources from the same domain as the claim's own origin count as one/zero."""
+        sources = [
+            _source("f1", "https://origin.example/other-page"),
+            _source("f2", "https://origin.example/yet-another"),
+        ]
+        result = await corroborating_verifier.corroborate("X is Y.", sources, claim_url="https://origin.example/x")
+
+        assert result.verified is False
+        mock_llm_service.chat.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_agreement_promotes_with_confidence(self, corroborating_verifier, mock_llm_service):
+        """K independent agreeing sources -> verified with the configured base confidence."""
+        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: AGREE\nRATIONALE: consistent")
+        sources = [
+            _source("f1", "https://b.example/page"),
+            _source("f2", "https://c.example/page"),
+        ]
+        result = await corroborating_verifier.corroborate("X is Y.", sources, claim_url="https://origin.example/x")
+
+        assert result.verified is True
+        assert result.independent_agree_count == 2
+        assert result.confidence > 0.0
+        assert result.requires_human_review is False
+
+    @pytest.mark.asyncio
+    async def test_extra_sources_increase_confidence(self, corroborating_verifier, mock_llm_service):
+        """More agreeing independent sources beyond K raises confidence further."""
+        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: AGREE\nRATIONALE: consistent")
+        sources = [
+            _source("f1", "https://b.example/page"),
+            _source("f2", "https://c.example/page"),
+            _source("f3", "https://d.example/page"),
+        ]
+        result_2 = await corroborating_verifier.corroborate(
+            "X is Y.", sources[:2], claim_url="https://origin.example/x"
+        )
+        result_3 = await corroborating_verifier.corroborate("X is Y.", sources, claim_url="https://origin.example/x")
+
+        assert result_3.confidence > result_2.confidence
+
+    @pytest.mark.asyncio
+    async def test_contradiction_flags_for_review_and_blocks_promotion(self, corroborating_verifier, mock_llm_service):
+        """A disagreeing independent source -> requires_human_review, never verified."""
+        mock_llm_service.chat.return_value = _llm_response("AGREEMENT: CONTRADICT\nRATIONALE: opposes claim")
+        sources = [
+            _source("f1", "https://b.example/page"),
+            _source("f2", "https://c.example/page"),
+        ]
+        result = await corroborating_verifier.corroborate("X is Y.", sources, claim_url="https://origin.example/x")
+
+        assert result.verified is False
+        assert result.requires_human_review is True
+        assert len(result.contradicting_sources) == 2
