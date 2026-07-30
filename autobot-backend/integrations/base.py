@@ -120,8 +120,16 @@ class BaseIntegration(ABC):
         """Make an HTTP request to the external service.
 
         Helper for test_connection and execute_action.
+
+        Issue #12979: routed through the shared pooled client instead of a
+        per-request ``aiohttp.ClientSession``. Never raises on HTTP status —
+        callers (including ``whatsapp_integration.py``) inspect the returned
+        ``status_code`` themselves — so ``tracked_request()`` is used rather
+        than ``get_json()``/``post_json()``, which would raise on non-2xx.
         """
         import aiohttp
+
+        from autobot_shared.http_client import get_http_client
 
         merged_headers = headers or {}
         if self.config.api_key:
@@ -129,14 +137,15 @@ class BaseIntegration(ABC):
 
         try:
             timeout_obj = aiohttp.ClientTimeout(total=timeout)
-            async with aiohttp.ClientSession(timeout=timeout_obj) as session:
-                async with session.request(method, url, headers=merged_headers, json=json_data) as resp:
-                    body = await resp.json()
-                    return {
-                        "status_code": resp.status,
-                        "body": body,
-                        "headers": dict(resp.headers),
-                    }
+            async with get_http_client().tracked_request(
+                method, url, headers=merged_headers, json=json_data, timeout=timeout_obj
+            ) as resp:
+                body = await resp.json()
+                return {
+                    "status_code": resp.status,
+                    "body": body,
+                    "headers": dict(resp.headers),
+                }
         except aiohttp.ClientError as exc:
             self.logger.warning("Request to %s failed: %s", url, exc)
             return {"status_code": 0, "body": {}, "error": str(exc)}
