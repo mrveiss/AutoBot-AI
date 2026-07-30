@@ -210,10 +210,26 @@ class SecretAccessOut(BaseModel):
         )
 
 
+class RegisterDependencyBody(BaseModel):
+    """(#10088 Task 8.2) A consumer that depends on the secret."""
+
+    dependent_kind: str
+    dependent_id: str
+    company_id: uuid.UUID | None = None
+
+
 class DependentOut(BaseModel):
     dependent_kind: str
     dependent_id: str
     company_id: str | None
+
+    @classmethod
+    def of_one(cls, dep) -> "DependentOut":
+        return cls(
+            dependent_kind=dep.dependent_kind,
+            dependent_id=dep.dependent_id,
+            company_id=str(dep.company_id) if dep.company_id else None,
+        )
 
 
 class SecretDependenciesOut(BaseModel):
@@ -222,17 +238,7 @@ class SecretDependenciesOut(BaseModel):
 
     @classmethod
     def of(cls, secret_id: uuid.UUID, deps) -> "SecretDependenciesOut":
-        return cls(
-            secret_id=str(secret_id),
-            dependents=[
-                DependentOut(
-                    dependent_kind=d.dependent_kind,
-                    dependent_id=d.dependent_id,
-                    company_id=str(d.company_id) if d.company_id else None,
-                )
-                for d in deps
-            ],
-        )
+        return cls(secret_id=str(secret_id), dependents=[DependentOut.of_one(d) for d in deps])
 
 
 @router.post("", response_model=SecretMetadata, status_code=status.HTTP_201_CREATED)
@@ -444,6 +450,64 @@ async def secret_dependencies(
     except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
         raise _mapped(exc)
     return SecretDependenciesOut.of(secret_id, deps)
+
+
+@router.post("/{secret_id}/dependencies", response_model=DependentOut, status_code=status.HTTP_201_CREATED)
+async def register_secret_dependency(
+    secret_id: uuid.UUID,
+    body: RegisterDependencyBody,
+    who: tuple[uuid.UUID, set[str]] = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> DependentOut:
+    """Register that a service/agent/workflow depends on this secret (#10088 Task 8.2).
+
+    Idempotent — registering the same ``(dependent_kind, dependent_id)`` twice returns the
+    existing row rather than erroring. Seeds the rotation/revocation impact list surfaced by
+    ``GET /{secret_id}/dependencies``.
+    """
+    user_id, perms = who
+    try:
+        dep = await coordinator.register_dependency(
+            session,
+            user_id=user_id,
+            permissions=perms,
+            secret_id=secret_id,
+            dependent_kind=body.dependent_kind,
+            dependent_id=body.dependent_id,
+            company_id=body.company_id,
+        )
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError, ValueError) as exc:
+        raise _mapped(exc)
+    return DependentOut.of_one(dep)
+
+
+@router.delete("/{secret_id}/dependencies/{dependent_kind}/{dependent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unregister_secret_dependency(
+    secret_id: uuid.UUID,
+    dependent_kind: str,
+    dependent_id: str,
+    who: tuple[uuid.UUID, set[str]] = Depends(principal),
+    session: AsyncSession = Depends(get_session),
+    coordinator: SecretsCoordinator = Depends(get_coordinator),
+) -> None:
+    """Drop a registered dependency (#10088 Task 8.2). 404 if no such row exists."""
+    user_id, perms = who
+    try:
+        removed = await coordinator.unregister_dependency(
+            session,
+            user_id=user_id,
+            permissions=perms,
+            secret_id=secret_id,
+            dependent_kind=dependent_kind,
+            dependent_id=dependent_id,
+        )
+        await session.commit()
+    except (SecretAccessError, SecretNotFoundError) as exc:
+        raise _mapped(exc)
+    if not removed:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no dependency {dependent_kind}:{dependent_id} on {secret_id}")
 
 
 @router.put("/{secret_id}", response_model=SecretMetadata)

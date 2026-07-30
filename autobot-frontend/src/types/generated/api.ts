@@ -32133,8 +32133,36 @@ export interface paths {
          */
         get: operations["secret_dependencies_api_v2_secrets__secret_id__dependencies_get"];
         put?: never;
-        post?: never;
+        /**
+         * Register Secret Dependency
+         * @description Register that a service/agent/workflow depends on this secret (#10088 Task 8.2).
+         *
+         *     Idempotent — registering the same ``(dependent_kind, dependent_id)`` twice returns the
+         *     existing row rather than erroring. Seeds the rotation/revocation impact list surfaced by
+         *     ``GET /{secret_id}/dependencies``.
+         */
+        post: operations["register_secret_dependency_api_v2_secrets__secret_id__dependencies_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/secrets/{secret_id}/dependencies/{dependent_kind}/{dependent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unregister Secret Dependency
+         * @description Drop a registered dependency (#10088 Task 8.2). 404 if no such row exists.
+         */
+        delete: operations["unregister_secret_dependency_api_v2_secrets__secret_id__dependencies__dependent_kind___dependent_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -88460,6 +88488,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RegisterDependencyBody
+         * @description (#10088 Task 8.2) A consumer that depends on the secret.
+         */
+        RegisterDependencyBody: {
+            /** Dependent Kind */
+            dependent_kind: string;
+            /** Dependent Id */
+            dependent_id: string;
+            /** Company Id */
+            company_id?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * RegisterTargetRequest
          * @description Register an agent as an optimization target at runtime.
          *
@@ -144189,6 +144231,72 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SecretDependenciesOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    register_secret_dependency_api_v2_secrets__secret_id__dependencies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterDependencyBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unregister_secret_dependency_api_v2_secrets__secret_id__dependencies__dependent_kind___dependent_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                secret_id: string;
+                dependent_kind: string;
+                dependent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

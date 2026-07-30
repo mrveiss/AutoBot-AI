@@ -23,6 +23,8 @@ Authorization model
   the DEK via your ``actor_vaults``).
 - **revoke** — ``authorize("revoke", owner_vault)``.
 - **rotate** / **delete** — ``authorize("write", owner_vault)``.
+- **register_dependency** / **unregister_dependency** (#10088 Task 8.2) —
+  ``authorize("write", owner_vault)``: metadata about the secret, not a grant on it.
 
 Every mutation authorizes against the secret's **owner vault** (the authority
 that owns it), not the grantee — sharing with company B is gated by your rights
@@ -131,6 +133,59 @@ class SecretsCoordinator:
         if not authorize(facts, "share", owner):
             raise SecretAccessError(f"not authorized to view dependencies for secret {secret_id}")
         return await SecretDependencyService().what_depends_on(session, secret_id=secret_id)
+
+    async def register_dependency(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        permissions: set[str],
+        secret_id: uuid.UUID,
+        dependent_kind: str,
+        dependent_id: str,
+        company_id: uuid.UUID | None = None,
+    ) -> SecretDependency:
+        """Record that *dependent_kind:dependent_id* consumes *secret_id* (#10088 Task 8.2).
+
+        Gated the same as ``create``/``rotate``/``delete`` — ``write`` authority on the secret's
+        owner vault — because this is metadata about the secret, not a grant on it: the caller
+        needs no ability to *read* the value, only to manage the secret. Idempotent (delegates to
+        :meth:`SecretDependencyService.register`); invalid ``dependent_kind`` raises ``ValueError``.
+        """
+        facts = await self._facts(session, user_id, permissions)
+        owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
+        if not authorize(facts, "write", owner):
+            raise SecretAccessError(f"not authorized to register dependencies for secret {secret_id}")
+        dep = await SecretDependencyService().register(
+            session,
+            secret_id=secret_id,
+            dependent_kind=dependent_kind,
+            dependent_id=dependent_id,
+            company_id=company_id,
+            created_by=user_id,
+        )
+        if dep is None:  # pragma: no cover — concurrent unregister raced the read-back
+            raise SecretNotFoundError(f"dependency {dependent_kind}:{dependent_id} vanished during registration")
+        return dep
+
+    async def unregister_dependency(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: uuid.UUID,
+        permissions: set[str],
+        secret_id: uuid.UUID,
+        dependent_kind: str,
+        dependent_id: str,
+    ) -> int:
+        """Drop a dependency row. Same ``write`` gate as :meth:`register_dependency`."""
+        facts = await self._facts(session, user_id, permissions)
+        owner = await self._owner_vault(session, secret_id)  # raises SecretNotFoundError when absent
+        if not authorize(facts, "write", owner):
+            raise SecretAccessError(f"not authorized to unregister dependencies for secret {secret_id}")
+        return await SecretDependencyService().unregister(
+            session, secret_id=secret_id, dependent_kind=dependent_kind, dependent_id=dependent_id
+        )
 
     async def share(
         self,
