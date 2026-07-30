@@ -77,8 +77,8 @@ three and still lost end to end.
 
 ## 2. What AutoBot has today
 
-`autobot-backend/llm_shared/optimization/` (~12k LOC, 14 modules; issues #1946, #1952, #1964, #3104,
-#3140) is a layer-streaming inference stack whose stated purpose matches the target architecture
+`autobot-backend/llm_shared/optimization/` (~12k LOC, 14 modules; issues #1946, #1952,
+#1964, #3104, #3140) is a layer-streaming inference stack whose stated purpose matches the target architecture
 above:
 
 > *"During batch/offline inference the entire model need not reside in VRAM simultaneously… Memory
@@ -109,7 +109,7 @@ excluded) for `openvino|NPU`, `from_pretrained|safetensors|gguf|snapshot_downloa
 | **D3** | [layer_inference.py:349](../../autobot-backend/llm_shared/optimization/layer_inference.py#L349), [:498](../../autobot-backend/llm_shared/optimization/layer_inference.py#L498), [:616](../../autobot-backend/llm_shared/optimization/layer_inference.py#L616) | `hidden = input_ids.float()` feeds **raw token IDs as hidden states**. `get_layer_names()` ([:215-230](../../autobot-backend/llm_shared/optimization/layer_inference.py#L215-L230)) emits only `model.layers.N` — never `model.embed_tokens` or `lm_head` — and `_greedy_sample` argmaxes over the *hidden* dimension, not vocab. The engine cannot produce correct tokens. |
 | **D4** | [kv_cache.py:254-278](../../autobot-backend/llm_shared/optimization/kv_cache.py#L254-L278) | `trim_to_length()` sets `entry.filled_len = max_len`. Since `update()` appends at `[start:end]` ([:374-376](../../autobot-backend/llm_shared/optimization/kv_cache.py#L374-L376)) and `get()` returns `[:filled_len]` ([:193](../../autobot-backend/llm_shared/optimization/kv_cache.py#L193)), this **retains the oldest `max_len` positions and silently discards the newest** — backwards for the sliding-window use its own docstring names. With the hard `ValueError` on overflow ([:369-373](../../autobot-backend/llm_shared/optimization/kv_cache.py#L369-L373)), long generation either corrupts context or hard-fails. |
 | **D5** | [layer_inference.py:249](../../autobot-backend/llm_shared/optimization/layer_inference.py#L249) | Docstring promises `.pt` **or `.safetensors`**, but `torch.load` cannot read safetensors. `grep safe_open` across the backend → **zero hits**. Safetensors offers lazy per-tensor slicing without full deserialisation — the fix for D1 is available and unused. |
-| **D6** | [lifespan.py:1274-1312](../../autobot-backend/initialization/lifespan.py#L1274-L1312) | `_register_llm_adapters()` registers only Ollama, OpenAI, Anthropic, Groq. `LayerInferenceAdapter` is defined ([layer_inference_adapter.py:32](../../autobot-backend/llm_shared/adapters/layer_inference_adapter.py#L32)) and exported ([adapters/__init__.py:23](../../autobot-backend/llm_shared/adapters/__init__.py#L23)) but **never registered** → unreachable from `GET /api/adapters`. The stack is dead on arrival in production. |
+| **D6** | [lifespan.py:1274-1312](../../autobot-backend/initialization/lifespan.py#L1274-L1312) | `_register_llm_adapters()` registers only Ollama, OpenAI, Anthropic, Groq. `LayerInferenceAdapter` is defined ([layer_inference_adapter.py:32](../../autobot-backend/llm_shared/adapters/layer_inference_adapter.py#L32)) and exported ([`adapters/__init__.py`:23](../../autobot-backend/llm_shared/adapters/__init__.py#L23)) but **never registered** → unreachable from `GET /api/adapters`. The stack is dead on arrival in production. |
 | **D7** | [meta_eviction.py](../../autobot-backend/llm_shared/optimization/meta_eviction.py) | Zero production callers (only `meta_eviction_test.py`), while [layer_inference.py:578](../../autobot-backend/llm_shared/optimization/layer_inference.py#L578) carries a private `_move_to_meta` duplicate. Two implementations of one concept — canonical-source violation. |
 
 **No revision pinning or weight integrity verification (cross-cutting).**
@@ -193,6 +193,13 @@ Umbrella **#13030**, with children:
 | #13034 | P1 | No model revision pinning or weight integrity verification; 18 suppressed findings |
 | #13035 | P2 | Adapter never registered + duplicate meta-eviction implementation (D6, D7) |
 | #13036 | P3 | No end-to-end memory/correctness baseline for the optimization package |
+
+Discovered during the audit and filed separately, since neither is on the umbrella's path:
+
+| Issue | Scope |
+| --- | --- |
+| #13048 | Pipeline-parallel model loader has no production `get_layers()` — only test doubles (see §4) |
+| #13049 | Consolidate architecture-family, dtype and compression taxonomies + duplicated `accelerate` loader |
 
 Ordering: #13032 gates #13031 (memory work is unverifiable without correct output). #13035 lands last
 (registering a broken engine turns dormant defects into live ones). #13034 is independent and can run
