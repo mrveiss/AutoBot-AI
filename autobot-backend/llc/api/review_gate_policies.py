@@ -74,11 +74,15 @@ class ReviewGatePolicyCreate(BaseModel):
     item_type: WorkItemType
     requires_human_review: bool = False
     reviewer_role: Optional[str] = None
+    # #12618: cross-vendor second-opinion verifier tier; off by default. Also
+    # requires the global AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED switch.
+    requires_cross_vendor_review: bool = False
 
 
 class ReviewGatePolicyUpdate(BaseModel):
     requires_human_review: Optional[bool] = None
     reviewer_role: Optional[str] = None
+    requires_cross_vendor_review: Optional[bool] = None
 
 
 class ReviewGatePolicyRead(BaseModel):
@@ -89,6 +93,7 @@ class ReviewGatePolicyRead(BaseModel):
     item_type: WorkItemType
     requires_human_review: bool
     reviewer_role: Optional[str]
+    requires_cross_vendor_review: bool
     created_at: datetime
     updated_at: datetime
 
@@ -135,6 +140,7 @@ async def create_review_gate_policy(
             body.item_type,
             requires_human_review=body.requires_human_review,
             reviewer_role=body.reviewer_role,
+            requires_cross_vendor_review=body.requires_cross_vendor_review,
         )
         await session.commit()
     except ReviewGatePolicyConflictError:
@@ -162,6 +168,7 @@ async def update_review_gate_policy(
             str(policy_id),
             requires_human_review=body.requires_human_review,
             reviewer_role=body.reviewer_role,
+            requires_cross_vendor_review=body.requires_cross_vendor_review,
         )
         await session.commit()
     except ReviewGatePolicyNotFoundError:
