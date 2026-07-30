@@ -159,6 +159,23 @@ class TestLinkPipelineErrorHandling:
         assert result["processing_status"] == "error"
 
 
+def _mock_content(body: bytes, chunk_size: int = 65536) -> MagicMock:
+    """Build a mock ``response.content`` whose ``iter_chunked`` streams *body*.
+
+    #13021: ``_fetch_and_parse``'s fallback fetch now reads via
+    ``response.content.iter_chunked()`` (bounded streaming read) instead of
+    ``response.text()``, so response mocks must supply this async iterator.
+    """
+
+    async def _chunks():
+        for i in range(0, len(body), chunk_size):
+            yield body[i : i + chunk_size]
+
+    content = MagicMock()
+    content.iter_chunked = MagicMock(return_value=_chunks())
+    return content
+
+
 def _make_fake_pinned_request(mock_response):
     """Build a fake ``pinned_request_with_redirects`` async-CM factory + a calls log.
 
@@ -189,6 +206,7 @@ class TestLinkPipelineHttp:
         mock_response.url = url
         mock_response.headers = {"Content-Type": "text/html"}
         mock_response.text = AsyncMock(return_value=SAMPLE_HTML)
+        mock_response.content = _mock_content(SAMPLE_HTML.encode("utf-8"))
         mock_response.status = status
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
@@ -271,6 +289,7 @@ class TestLinkPipelineHttp:
         mock_response.url = "https://example.com/404"
         mock_response.headers = {"Content-Type": "text/html"}
         mock_response.text = AsyncMock(return_value="")
+        mock_response.content = _mock_content(b"")
         mock_response.status = 404
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
@@ -286,6 +305,108 @@ class TestLinkPipelineHttp:
 
         assert result["processing_status"] == "error"
         assert "404" in result["error"]
+
+
+class TestLinkPipelineContentLengthCap:
+    """Fallback fetch enforces `_MAX_CONTENT_LENGTH` during the streamed read (#13021).
+
+    Previously the constant was declared but never read anywhere else in the
+    module, and ``_fetch_and_parse`` did an unbounded ``response.text()``.
+    """
+
+    def _oversized_mock_response(self, url, body: bytes):
+        mock_response = AsyncMock()
+        mock_response.url = url
+        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.content = _mock_content(body, chunk_size=64)
+        mock_response.status = 200
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        return mock_response
+
+    @pytest.mark.asyncio
+    async def test_oversized_body_is_rejected_not_read_fully(self, caplog):
+        """A body over the cap is refused mid-stream: reading stops, it is never parsed."""
+        import logging
+
+        pipe = LinkPipeline()
+        oversized_body = b"x" * (10 * 65536)  # far larger than the 1 MB default cap
+        mock_response = self._oversized_mock_response("https://big.example.com", oversized_body)
+        fake_pinned, _calls = _make_fake_pinned_request(mock_response)
+
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline._MAX_CONTENT_LENGTH", 1000),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch.object(pipe, "_parse_html") as parse_mock,
+            caplog.at_level(logging.WARNING, logger="media.link.pipeline"),
+        ):
+            result = await pipe._fetch_and_parse("https://big.example.com", {})
+
+        assert result["processing_status"] == "error"
+        assert "max content length" in result["error"]
+        parse_mock.assert_not_called()  # the oversized body must never reach HTML parsing
+        rejections = [r for r in caplog.records if "REJECTED" in r.getMessage()]
+        assert len(rejections) == 1
+
+    @pytest.mark.asyncio
+    async def test_oversized_body_stops_consuming_chunks_once_cap_crossed(self):
+        """The chunk stream is abandoned as soon as the cap is crossed — bytes read stay bounded."""
+        pipe = LinkPipeline()
+        chunks_yielded = []
+
+        async def _tracking_chunks():
+            for _ in range(1000):  # would be 64000 bytes if fully drained
+                chunks_yielded.append(1)
+                yield b"x" * 64
+
+        mock_response = AsyncMock()
+        mock_response.url = "https://big.example.com"
+        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.content = MagicMock()
+        mock_response.content.iter_chunked = MagicMock(return_value=_tracking_chunks())
+        mock_response.status = 200
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        fake_pinned, _calls = _make_fake_pinned_request(mock_response)
+
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline._MAX_CONTENT_LENGTH", 200),  # crossed after ~4 chunks
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+        ):
+            result = await pipe._fetch_and_parse("https://big.example.com", {})
+
+        assert result["processing_status"] == "error"
+        # Far fewer than the full 1000 chunks were ever requested — the read
+        # was cut off, not drained then discarded.
+        assert 0 < len(chunks_yielded) < 20
+
+    @pytest.mark.asyncio
+    async def test_body_within_cap_is_parsed_normally(self):
+        """A body under the cap is unaffected — same happy path as before #13021."""
+        pipe = LinkPipeline()
+        small_body = SAMPLE_HTML.encode("utf-8")
+        mock_response = self._oversized_mock_response("https://small.example.com", small_body)
+        _parsed = {"type": "link_fetch", "confidence": 0.9}
+        fake_pinned, _calls = _make_fake_pinned_request(mock_response)
+
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch.object(pipe, "_parse_html", return_value=_parsed) as parse_mock,
+        ):
+            result = await pipe._fetch_and_parse("https://small.example.com", {})
+
+        assert result["type"] == "link_fetch"
+        parse_mock.assert_called_once()
+        assert parse_mock.call_args.args[0] == small_body.decode("utf-8")
 
 
 class TestLinkPipelineFetchSSRFPinning:
@@ -629,6 +750,7 @@ class TestLinkPipelineJina:
         mock_response.url = "https://example.com"
         mock_response.headers = {"Content-Type": "text/html"}
         mock_response.text = AsyncMock(return_value=SAMPLE_HTML)
+        mock_response.content = _mock_content(SAMPLE_HTML.encode("utf-8"))
         mock_response.status = status
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)

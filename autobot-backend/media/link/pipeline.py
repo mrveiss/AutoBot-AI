@@ -76,7 +76,12 @@ logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15) if _AIOHTTP_AVAILABLE else None
 _JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None
-_MAX_CONTENT_LENGTH = 1_000_000  # 1 MB cap on HTML download
+# #13021: 1 MB cap (env-overridable) on the fallback fetch's HTML download,
+# now actually enforced by ``_read_bounded_content`` during the streamed
+# read — previously declared but never applied, so an oversized/slow-drip
+# response could be read unbounded into memory.
+_MAX_CONTENT_LENGTH = config.link_pipeline_max_content_bytes
+_READ_CHUNK_SIZE = 65536
 _USER_AGENT = "AutoBot/1.0 (media-pipeline)"
 _JINA_BASE_URL = "https://r.jina.ai/"
 
@@ -104,6 +109,30 @@ _jina_failures_in_window: List[float] = []
 
 # Jina Reader requests go through the shared HTTPClientManager session
 # (#11641) — no private session fork; see _get_jina_session().
+
+
+async def _read_bounded_content(response: Any, url: str) -> bytes | None:
+    """Stream *response*'s body in chunks, refusing it once it exceeds
+    ``_MAX_CONTENT_LENGTH`` instead of reading it fully into memory (#13021).
+
+    Mirrors ``web_fetch/fetcher.py._fetch_bs4``'s chunked-read guard. Returns
+    ``None`` (never partial bytes) the moment the cap is crossed — the
+    remaining chunks are never requested from the transport, so an oversized
+    or slow-drip response is cut off mid-stream rather than read to
+    completion and discarded after the fact.
+    """
+    content = b""
+    async for chunk in response.content.iter_chunked(_READ_CHUNK_SIZE):
+        content += chunk
+        if len(content) > _MAX_CONTENT_LENGTH:
+            logger.warning(
+                "Link pipeline fallback fetch REJECTED %s: body exceeded max_content_length=%d bytes "
+                "(distinct from a fetch/connection failure)",
+                url,
+                _MAX_CONTENT_LENGTH,
+            )
+            return None
+    return content
 
 
 class LinkPipeline(BasePipeline):
@@ -263,8 +292,8 @@ class LinkPipeline(BasePipeline):
             ) as response:
                 final_url = str(response.url)
                 content_type = response.headers.get("Content-Type", "")
-                raw_html = await response.text(encoding="utf-8", errors="replace")
                 status = response.status
+                raw_bytes = await _read_bounded_content(response, url)
 
             if status >= 400:
                 return self._error_result(
@@ -272,6 +301,9 @@ class LinkPipeline(BasePipeline):
                     f"HTTP {status} for {url}",
                     metadata,
                 )
+            if raw_bytes is None:
+                return self._error_result(url, "response body exceeded max content length", metadata)
+            raw_html = raw_bytes.decode("utf-8", errors="replace")
             return self._parse_html(raw_html, final_url, content_type, metadata)
 
         except SSRFError as exc:
