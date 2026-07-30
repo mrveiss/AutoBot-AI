@@ -77,7 +77,7 @@ the true count at **12** — exactly the 10 documented carve-outs from batches
 2 newly-documented ``npu_pipeline/`` long-lived carve-outs found this batch.
 
 At 12, every remaining raw ``aiohttp.ClientSession(...)`` construction in
-``autobot-backend/`` is a **documented, intentional carve-out** — see the
+``autobot-backend/`` was a **documented, intentional carve-out** — see the
 "Remaining raw sites" list below. This sweep's convertible tail is drained;
 what is left is not unfinished work.
 
@@ -85,14 +85,36 @@ Unlike the ``xfail(strict=True)`` guard in
 ``autobot-slm-backend/tests/test_update_all_applies_roles_12959.py`` — which
 marks a single binary gap — this is a monotonically decreasing budget, because
 the backlog is drained incrementally by #12979's batches rather than in one
-commit.
+commit. It can still rise by exactly one when a *new* carve-out is added
+deliberately elsewhere in the codebase (see #13041 below) — the ratchet only
+forbids *undocumented, unreviewed* growth.
 
-Remaining raw sites (12, all carve-outs — see #12979 comments for detail):
+#13041 (2026-07-30): #12625's PR #13016 added
+``agent_loop/search/config_declared_provider.py``, a 13th raw site, without
+updating this ceiling or this inventory — exactly the "backlog refill" failure
+mode warned about above, except the new site is itself a legitimate carve-out
+rather than a reversion. Re-measured with the same AST walker against
+``origin/Dev_new_gui`` at ``a2f788889``: **13**, confirmed by an independent
+manual read of every offender. Investigating #13041's own claim that
+``orchestration/dag_executor.py`` and ``services/slm_client.py`` were *also*
+new/undocumented: both were already present in the custom-TLS bullet below
+(and in ``MAX_RAW_CLIENT_SESSIONS``'s history above) since batch 8 (#13006) —
+that part of #13041's premise was incorrect; only
+``config_declared_provider.py`` is new. Its raw session pins a
+``TCPConnector`` via ``autobot_shared.security.ssrf_guard.pinned_connector()``
+fresh on every call (agent_loop/search/config_declared_provider.py:183-187,
+235) — same DNS-rebind-safety shape as ``knowledge/connectors/oauth_flow.py``
+and ``skills/external_importer.py``. Pooling it would silently discard the
+pinned connector and reopen the #12278 DNS-rebinding hole, so it stays raw and
+the ceiling rises to 13 to record it as a carve-out rather than a violation.
+
+Remaining raw sites (13, all carve-outs — see #12979 comments for detail):
 
 * SSRF-pinned ``connector=`` (pooling would silently drop the pin —
   DNS-rebinding regression no test catches): ``api/provider_auth.py`` (2),
   ``api/marketplace_sources.py``, ``content_reach/_url_guard.py``,
-  ``knowledge/connectors/oauth_flow.py``, ``skills/external_importer.py``.
+  ``knowledge/connectors/oauth_flow.py``, ``skills/external_importer.py``,
+  ``agent_loop/search/config_declared_provider.py`` (#12625/#13016, #13041).
 * Long-lived (session outlives a single call, reused across sequential or
   concurrent requests on the same instance): ``services/npu_client.py``,
   ``services/npu_pipeline/dispatcher.py``, ``services/npu_pipeline/npu_client.py``,
@@ -100,7 +122,7 @@ Remaining raw sites (12, all carve-outs — see #12979 comments for detail):
 * Custom non-default TLS/SSL context the pool cannot express per-request:
   ``services/slm_client.py``, ``orchestration/dag_executor.py``.
 
-Refs #12979, #12981, #12989, #12992.
+Refs #12979, #12981, #12989, #12992, #13041.
 """
 
 import ast
@@ -147,7 +169,16 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 #:    carve-outs on inspection) land the true count at 12 — every remaining
 #:    site is now a documented carve-out (see the module docstring's
 #:    "Remaining raw sites" list).
-MAX_RAW_CLIENT_SESSIONS = 12
+#:    #13041 (2026-07-30): #12625's PR #13016 added a 13th raw site
+#:    (``agent_loop/search/config_declared_provider.py``) without touching this
+#:    constant or the inventory below. Re-measured against ``origin/Dev_new_gui``
+#:    at ``a2f788889``: still 13, confirmed by AST walker and manual read of the
+#:    new site — it is a genuine SSRF-pinned-connector carve-out (#12278), not a
+#:    reversion, so the ceiling rises by exactly one rather than the site being
+#:    converted. See the module docstring's #13041 note for the full
+#:    investigation, including which of #13041's claimed offenders were already
+#:    documented.
+MAX_RAW_CLIENT_SESSIONS = 13
 
 #: Directory names that are never part of the production surface being swept.
 EXCLUDED_DIR_NAMES = {"__pycache__", "tests", "test", ".pytest_cache", "node_modules"}
