@@ -69,6 +69,19 @@ def test_create_transport_https():
 # ---------------------------------------------------------------------------
 
 
+def _fake_http_client(response):
+    """Build a mock pooled HTTP client whose ``tracked_request()`` returns *response*.
+
+    #12979: HTTPTransport.send() now issues its request via
+    ``get_http_client().tracked_request(...)`` instead of a raw
+    ``aiohttp.ClientSession()`` — patch the pooled-client accessor rather
+    than ``aiohttp.ClientSession``, which the conversion no longer calls.
+    """
+    client = MagicMock()
+    client.tracked_request = MagicMock(return_value=response)
+    return client
+
+
 @pytest.mark.anyio
 async def test_http_transport_send_receive():
     """HTTPTransport POSTs to /rpc and returns buffered JSON response."""
@@ -80,12 +93,9 @@ async def test_http_transport_send_receive():
     mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
     mock_resp.__aexit__ = AsyncMock(return_value=None)
 
-    mock_session = MagicMock()
-    mock_session.post = MagicMock(return_value=mock_resp)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    client = _fake_http_client(mock_resp)
 
-    with patch("aiohttp.ClientSession", return_value=mock_session):
+    with patch("skills.sync.mcp_transport.get_http_client", return_value=client):
         transport = HTTPTransport("http://mcp.example.com")
         await transport.connect()
         await transport.send({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
@@ -114,12 +124,9 @@ async def test_http_transport_non_200_raises():
     mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
     mock_resp.__aexit__ = AsyncMock(return_value=None)
 
-    mock_session = MagicMock()
-    mock_session.post = MagicMock(return_value=mock_resp)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    client = _fake_http_client(mock_resp)
 
-    with patch("aiohttp.ClientSession", return_value=mock_session):
+    with patch("skills.sync.mcp_transport.get_http_client", return_value=client):
         transport = HTTPTransport("http://mcp.example.com")
         with pytest.raises(aiohttp.ClientResponseError):
             await transport.send({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})

@@ -358,24 +358,29 @@ class AIStackClient:
             }
         if self._ollama_url:
             try:
-                async with aiohttp.ClientSession() as _sess:
-                    async with _sess.get(
-                        f"{self._ollama_url}/api/tags",
-                        timeout=aiohttp.ClientTimeout(total=10),
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            models = [m["name"] for m in data.get("models", [])]
-                            if self.connection_status != ConnectionStatus.CONNECTED:
-                                logger.info("Ollama backing connected at %s", self._ollama_url)
-                            self.connection_status = ConnectionStatus.CONNECTED
-                            return {
-                                "status": "healthy",
-                                "models": models,
-                                "model_count": len(models),
-                                "backend": "ollama",
-                                "timestamp": utc_timestamp(),
-                            }
+                # #12979: pooled + suppress_error_log — Ollama is an optional
+                # backing service and an unreachable probe is an expected,
+                # routine condition (falls through to the AI Stack fallback
+                # below), not a genuine outbound-call failure.
+                async with get_http_client().tracked_request(
+                    "GET",
+                    f"{self._ollama_url}/api/tags",
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    suppress_error_log=True,
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        models = [m["name"] for m in data.get("models", [])]
+                        if self.connection_status != ConnectionStatus.CONNECTED:
+                            logger.info("Ollama backing connected at %s", self._ollama_url)
+                        self.connection_status = ConnectionStatus.CONNECTED
+                        return {
+                            "status": "healthy",
+                            "models": models,
+                            "model_count": len(models),
+                            "backend": "ollama",
+                            "timestamp": utc_timestamp(),
+                        }
             except Exception as exc:
                 logger.debug("Ollama health probe failed: %s", exc)
 
@@ -412,24 +417,28 @@ class AIStackClient:
         """List available agents — from Ollama models when configured (#6228), else AI Stack."""
         if self._ollama_url:
             try:
-                async with aiohttp.ClientSession() as _sess:
-                    async with _sess.get(
-                        f"{self._ollama_url}/api/tags",
-                        timeout=aiohttp.ClientTimeout(total=10),
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            agents = [
-                                {
-                                    "type": m["name"].replace(":", "_").replace(".", "_"),
-                                    "name": m["name"],
-                                    "status": "ready",
-                                    "provider": "ollama",
-                                    "parameters": m.get("details", {}).get("parameter_size", ""),
-                                }
-                                for m in data.get("models", [])
-                            ]
-                            return {"agents": agents, "total": len(agents), "source": "ollama"}
+                # #12979: pooled + suppress_error_log — same rationale as
+                # health_check(): an unreachable Ollama backing is expected
+                # and falls through to the AI Stack fallback below.
+                async with get_http_client().tracked_request(
+                    "GET",
+                    f"{self._ollama_url}/api/tags",
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    suppress_error_log=True,
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        agents = [
+                            {
+                                "type": m["name"].replace(":", "_").replace(".", "_"),
+                                "name": m["name"],
+                                "status": "ready",
+                                "provider": "ollama",
+                                "parameters": m.get("details", {}).get("parameter_size", ""),
+                            }
+                            for m in data.get("models", [])
+                        ]
+                        return {"agents": agents, "total": len(agents), "source": "ollama"}
             except Exception as exc:
                 logger.debug("Ollama agent list failed: %s", exc)
 
