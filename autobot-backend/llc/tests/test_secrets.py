@@ -265,6 +265,94 @@ async def test_set_raises_on_missing_master_key() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Dual-read wiring (#10088 / Task 4): get() consults the unified envelope
+# store only when the flag is on, and only for a row _fetch_active already
+# proved active — so a revoked/absent secret can never stale-resurrect
+# through it. These are mock-based (no Postgres) because they exercise
+# llc.services.secret directly; the standalone dual-read helper itself is
+# proven against real Postgres in tests/migrations/test_llc_secrets_read.py.
+# ---------------------------------------------------------------------------
+
+_ENV_UNIFIED_READ = "AUTOBOT_SECRETS_LLC_UNIFIED_READ"
+
+
+@pytest.mark.asyncio
+async def test_get_returns_unified_value_when_dual_read_enabled() -> None:
+    row = _make_secret_row(plaintext="legacy-plaintext")
+    session = _make_session(row=row)
+
+    with (
+        patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY, _ENV_UNIFIED_READ: "true"}),
+        patch("autobot_shared.secrets_envelope.load_root_key", return_value=b"0" * 32),
+        patch(
+            "llc.services.secret.read_imported_llc_secret_in_session",
+            new=AsyncMock(return_value="unified-plaintext"),
+        ) as unified,
+    ):
+        svc = SecretService()
+        result = await svc.get(session, _COMPANY_A, "db_password")
+
+    assert result == "unified-plaintext"
+    unified.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_falls_back_to_legacy_when_unified_read_misses() -> None:
+    plaintext = "legacy-only-value"
+    row = _make_secret_row(plaintext=plaintext)
+    session = _make_session(row=row)
+
+    with (
+        patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY, _ENV_UNIFIED_READ: "true"}),
+        patch("autobot_shared.secrets_envelope.load_root_key", return_value=b"0" * 32),
+        patch(
+            "llc.services.secret.read_imported_llc_secret_in_session",
+            new=AsyncMock(return_value=None),  # not yet imported
+        ),
+    ):
+        svc = SecretService()
+        result = await svc.get(session, _COMPANY_A, "db_password")
+
+    assert result == plaintext
+
+
+@pytest.mark.asyncio
+async def test_get_never_consults_unified_store_when_flag_disabled() -> None:
+    plaintext = "legacy-only-value"
+    row = _make_secret_row(plaintext=plaintext)
+    session = _make_session(row=row)
+
+    env = {k: v for k, v in os.environ.items() if k != _ENV_UNIFIED_READ}
+    env[_ENV_KEY] = _MASTER_KEY
+    with (
+        patch.dict(os.environ, env, clear=True),
+        patch("llc.services.secret.read_imported_llc_secret_in_session", new=AsyncMock()) as unified,
+    ):
+        svc = SecretService()
+        result = await svc.get(session, _COMPANY_A, "db_password")
+
+    assert result == plaintext
+    unified.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_revoked_secret_never_reaches_unified_store() -> None:
+    """The hard data-safety invariant: _fetch_active raises before dual-read is ever attempted,
+    so a revoked/absent legacy secret can never stale-resurrect through the unified copy."""
+    session = _make_session(row=None)  # simulates the SQL filter excluding the revoked row
+
+    with (
+        patch.dict(os.environ, {_ENV_KEY: _MASTER_KEY, _ENV_UNIFIED_READ: "true"}),
+        patch("llc.services.secret.read_imported_llc_secret_in_session", new=AsyncMock()) as unified,
+    ):
+        svc = SecretService()
+        with pytest.raises(SecretNotFound):
+            await svc.get(session, _COMPANY_A, "revoked-key")
+
+    unified.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # Module-level constant (keep in sync with services/secret.py)
 # ---------------------------------------------------------------------------
 

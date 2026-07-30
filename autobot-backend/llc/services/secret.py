@@ -17,26 +17,32 @@ argument. API routes must verify that the calling agent's company_id matches
 the requested company_id before invoking service methods.
 """
 
-import base64
 import logging
 import os
 import uuid
-from typing import List
+from typing import List, Optional
 
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.legacy_secret_keys import derive_llc_company_fernet
 from autobot_shared.time_utils import now_utc
 from llc.models.secret import LLCSecret
+from services.llc_secrets_read import llc_unified_read_enabled, read_imported_llc_secret_in_session
 
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
 _ENV_MASTER_KEY = "LLC_SECRET_MASTER_KEY"
+
+# Backward-compatible alias: the per-company HKDF+Fernet derivation now lives in
+# autobot_shared.legacy_secret_keys (#10088 / Task 1.3 + Task 4) so migration
+# importers can reuse it without pulling in llc/services/__init__.py's eager
+# import of every concrete LLC service. Existing tests import this name
+# directly from this module, so it stays a re-export rather than moving away.
+_derive_fernet_key = derive_llc_company_fernet
 
 
 class SecretNotFound(Exception):
@@ -53,25 +59,6 @@ class SecretAccessDenied(Exception):
 
     def __init__(self, agent_company_id: str, secret_company_id: str) -> None:
         super().__init__(f"Agent company {agent_company_id} cannot access secrets of {secret_company_id}")
-
-
-def _derive_fernet_key(master_key_bytes: bytes, company_id: str) -> Fernet:
-    """Derive a Fernet instance whose key is company-specific.
-
-    Uses HKDF-SHA256 to stretch master_key_bytes into 32 bytes, keyed to
-    company_id so that each company has a distinct encryption key.
-    The 32 output bytes are URL-safe-base64-encoded to satisfy Fernet's
-    requirement of a 44-character key string.
-    """
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=company_id.encode("utf-8"),
-    )
-    derived = hkdf.derive(master_key_bytes)
-    fernet_key = base64.urlsafe_b64encode(derived)
-    return Fernet(fernet_key)
 
 
 class SecretService(LLCServiceBase):
@@ -169,9 +156,32 @@ class SecretService(LLCServiceBase):
         """Return the decrypted plaintext for the named secret.
 
         Raises SecretNotFound if the secret does not exist or is revoked.
+
+        Dual-read (#10088 / Task 4): when ``AUTOBOT_SECRETS_LLC_UNIFIED_READ`` is
+        enabled, tries the unified envelope store first (see
+        ``services.llc_secrets_read``) — only for the row ``_fetch_active`` just
+        proved exists and is not revoked, so a revoked/absent secret can never
+        stale-resurrect through the unified copy. Falls back to the legacy
+        per-company Fernet decrypt on any miss, disabled flag, or unusable root key.
         """
         secret = await self._fetch_active(session, company_id, name)
+        if llc_unified_read_enabled():
+            unified = await self._unified_get(session, secret, company_id)
+            if unified is not None:
+                return unified
         return self._fernet(company_id).decrypt(secret.value).decode("utf-8")
+
+    async def _unified_get(self, session: AsyncSession, secret: LLCSecret, company_id: str) -> Optional[str]:
+        """Best-effort unified-store read for an already-resolved active secret row."""
+        from autobot_shared.secrets_envelope import load_root_key
+
+        try:
+            root_key = load_root_key()
+        except RuntimeError:
+            return None
+        return await read_imported_llc_secret_in_session(
+            session, source_id=str(secret.id), company_id=company_id, root_key=root_key
+        )
 
     async def revoke(
         self,
