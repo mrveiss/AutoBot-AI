@@ -135,34 +135,29 @@ class _FakeAsyncResponse:
         return False
 
 
-class _FakeAiohttpSession:
-    """Replaces aiohttp.ClientSession — records auth material, never dials out."""
+class _FakeHttpClient:
+    """Replaces the shared pooled client — records auth material, never dials out.
+
+    Issue #12979 moved these connectors off per-request ``aiohttp.ClientSession``
+    onto ``autobot_shared.http_client``. The seam is now
+    ``get_http_client().tracked_request(method, url, **kwargs)``, which yields the
+    response, so the stub only needs that one entry point instead of the previous
+    per-verb ``get``/``post``/``request`` trio.
+    """
 
     def __init__(self, capture: dict, body: dict, status: int = 200) -> None:
         self._capture = capture
         self._body = body
         self._status = status
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc_info):
-        return False
-
-    def post(self, url, headers=None, json=None, **kwargs):
+    def tracked_request(self, method, url, headers=None, auth=None, **kwargs):
+        self._capture["method"] = method
         self._capture["headers"] = headers
-        return _FakeAsyncResponse(self._status, self._body)
-
-    def get(self, url, auth=None, **kwargs):
-        self._capture["auth"] = auth
-        return _FakeAsyncResponse(self._status, self._body)
-
-    def request(self, method, url, auth=None, json=None, **kwargs):
         self._capture["auth"] = auth
         return _FakeAsyncResponse(self._status, self._body)
 
 
-async def _create_via_api(request: CreateConnectorRequest, aiohttp_patch_target: str, fake_session):
+async def _create_via_api(request: CreateConnectorRequest, http_client_patch_target: str, fake_client):
     """Drive the real create_connector() handler with a stubbed secrets backend."""
     store = ConnectorCredentialStore(_FakeSecretsService())
     saved = {}
@@ -173,7 +168,7 @@ async def _create_via_api(request: CreateConnectorRequest, aiohttp_patch_target:
     with (
         patch.object(mod, "get_credential_store", return_value=store),
         patch.object(mod, "_save_connector", _fake_save),
-        patch(aiohttp_patch_target, return_value=fake_session),
+        patch(http_client_patch_target, return_value=fake_client),
     ):
         result = await mod.create_connector(request)
     return result, saved["cfg"]
@@ -183,14 +178,14 @@ async def _create_via_api(request: CreateConnectorRequest, aiohttp_patch_target:
 async def test_create_slack_schema_valid_credentials_authenticate():
     """A #12221-compliant Slack request round-trips the token through auth.test."""
     capture: dict = {}
-    fake_session = _FakeAiohttpSession(capture, {"ok": True}, 200)
+    fake_client = _FakeHttpClient(capture, {"ok": True}, 200)
     req = CreateConnectorRequest(
         connector_type="slack",
         name="Guard Slack",
         config={"token": _FAKE_BOT_CREDENTIAL, "channel_ids": ["C1"]},
     )
     try:
-        result, cfg = await _create_via_api(req, "knowledge.connectors.slack.aiohttp.ClientSession", fake_session)
+        result, cfg = await _create_via_api(req, "knowledge.connectors.slack.get_http_client", fake_client)
         assert result["connector_id"] == cfg.connector_id
         assert capture["headers"]["Authorization"] == "Bearer %s" % _FAKE_BOT_CREDENTIAL
         # The credential is encrypted at rest — never echoed in the public config.
@@ -203,7 +198,7 @@ async def test_create_slack_schema_valid_credentials_authenticate():
 async def test_create_confluence_schema_valid_credentials_authenticate():
     """A #12221-compliant Confluence request authenticates via BasicAuth(username, password)."""
     capture: dict = {}
-    fake_session = _FakeAiohttpSession(capture, {"results": []}, 200)
+    fake_client = _FakeHttpClient(capture, {"results": []}, 200)
     req = CreateConnectorRequest(
         connector_type="confluence",
         name="Guard Confluence",
@@ -215,7 +210,7 @@ async def test_create_confluence_schema_valid_credentials_authenticate():
         },
     )
     try:
-        result, cfg = await _create_via_api(req, "knowledge.connectors.confluence.aiohttp.ClientSession", fake_session)
+        result, cfg = await _create_via_api(req, "knowledge.connectors.confluence.get_http_client", fake_client)
         assert result["connector_id"] == cfg.connector_id
         assert capture["auth"].login == _FAKE_USERNAME
         assert capture["auth"].password == _FAKE_API_CREDENTIAL
@@ -228,7 +223,7 @@ async def test_create_confluence_schema_valid_credentials_authenticate():
 async def test_create_jira_schema_valid_credentials_authenticate():
     """A #12221-compliant Jira request authenticates via BasicAuth(username, password)."""
     capture: dict = {}
-    fake_session = _FakeAiohttpSession(capture, {"accountId": "u1"}, 200)
+    fake_client = _FakeHttpClient(capture, {"accountId": "u1"}, 200)
     req = CreateConnectorRequest(
         connector_type="jira",
         name="Guard Jira",
@@ -240,7 +235,7 @@ async def test_create_jira_schema_valid_credentials_authenticate():
         },
     )
     try:
-        result, cfg = await _create_via_api(req, "knowledge.connectors.jira.aiohttp.ClientSession", fake_session)
+        result, cfg = await _create_via_api(req, "knowledge.connectors.jira.get_http_client", fake_client)
         assert result["connector_id"] == cfg.connector_id
         assert capture["auth"].login == _FAKE_USERNAME
         assert capture["auth"].password == _FAKE_API_CREDENTIAL

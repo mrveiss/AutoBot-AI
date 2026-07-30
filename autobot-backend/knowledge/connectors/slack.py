@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from autobot_shared.auth import BearerAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector, RetryableError
@@ -262,14 +263,20 @@ class SlackConnector(AbstractConnector):
         }
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, headers=headers, json=json_data or {}) as resp:
-                    if resp.status == 429:
-                        raise RetryableError("Slack rate-limited", status_code=429)
-                    if resp.status >= 500:
-                        raise RetryableError("Slack server error %d" % resp.status, status_code=resp.status)
-                    body = await resp.json(content_type=None)
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(
+                "POST",
+                url,
+                headers=headers,
+                json=json_data or {},
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as resp:
+                if resp.status == 429:
+                    raise RetryableError("Slack rate-limited", status_code=429)
+                if resp.status >= 500:
+                    raise RetryableError("Slack server error %d" % resp.status, status_code=resp.status)
+                body = await resp.json(content_type=None)
+                return {"status_code": resp.status, "body": body}
         except RetryableError:
             raise
         except aiohttp.ClientError as exc:

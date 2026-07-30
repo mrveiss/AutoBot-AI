@@ -36,6 +36,7 @@ from urllib.parse import quote
 import aiohttp
 
 from autobot_shared.auth import BearerAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
@@ -560,59 +561,63 @@ class OneDriveConnector(AbstractConnector):
 
         try:
             timeout = aiohttp.ClientTimeout(total=60.0)  # Longer timeout for file downloads
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method,
-                    url,
-                    headers=headers,
-                    json=json_data,
-                    params=params,
-                ) as resp:
-                    status_code = resp.status
+            client = get_http_client()
+            async with client.tracked_request(
+                method,
+                url,
+                headers=headers,
+                json=json_data,
+                params=params,
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as resp:
+                status_code = resp.status
 
-                    # Handle redirects for download URLs
-                    if status_code in (301, 302, 303, 307, 308):
-                        location = resp.headers.get("Location")
-                        if location and raw_content:
-                            # Follow redirect for file download
-                            async with session.get(location) as redirect_resp:
-                                content = await redirect_resp.read()
-                                return {
-                                    "status_code": redirect_resp.status,
-                                    "content": content,
-                                }
+                # Handle redirects for download URLs
+                if status_code in (301, 302, 303, 307, 308):
+                    location = resp.headers.get("Location")
+                    if location and raw_content:
+                        # Follow redirect for file download
+                        async with client.tracked_request(
+                            "GET", location, timeout=timeout, suppress_error_log=True
+                        ) as redirect_resp:
+                            content = await redirect_resp.read()
+                            return {
+                                "status_code": redirect_resp.status,
+                                "content": content,
+                            }
 
-                    # Handle no-content responses
-                    if status_code == 204:
-                        return {"status_code": 204, "body": {}}
+                # Handle no-content responses
+                if status_code == 204:
+                    return {"status_code": 204, "body": {}}
 
-                    if raw_content:
-                        content = await resp.read()
-                        return {
-                            "status_code": status_code,
-                            "content": content,
-                        }
-
-                    try:
-                        body = await resp.json()
-                    except aiohttp.ContentTypeError:
-                        body = {}
-
-                    # Log errors
-                    if status_code >= 400:
-                        error_msg = body.get("error", {}).get("message", "Unknown error")
-                        self.logger.warning(
-                            "Graph API request to %s failed: HTTP %d - %s",
-                            url,
-                            status_code,
-                            error_msg,
-                        )
-
+                if raw_content:
+                    content = await resp.read()
                     return {
                         "status_code": status_code,
-                        "body": body,
-                        "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                        "content": content,
                     }
+
+                try:
+                    body = await resp.json()
+                except aiohttp.ContentTypeError:
+                    body = {}
+
+                # Log errors
+                if status_code >= 400:
+                    error_msg = body.get("error", {}).get("message", "Unknown error")
+                    self.logger.warning(
+                        "Graph API request to %s failed: HTTP %d - %s",
+                        url,
+                        status_code,
+                        error_msg,
+                    )
+
+                return {
+                    "status_code": status_code,
+                    "body": body,
+                    "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                }
 
         except aiohttp.ClientError as exc:
             self.logger.error("Graph API request to %s failed: %s", url, exc)
