@@ -48,6 +48,7 @@ import httpx
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.ttl_constants import TTL_7_DAYS, TTL_24_HOURS
+from services.plateau_detector import plateau_reached
 
 from .config import AutoResearchConfig
 from .models import Experiment, ExperimentResult, HyperParams
@@ -961,6 +962,9 @@ class AutoResearchAgent(AsyncRedisClientMixin):
 
         Stops early when the last *plateau_window* iterations all failed to
         improve over baseline — indicating the search space is exhausted.
+        Delegates the actual plateau detection to the shared
+        ``services.plateau_detector.plateau_reached`` helper (#12624 — also
+        reused by the research Planner's saturation stop; not duplicated).
 
         Args:
             session: Current session with results so far.
@@ -969,11 +973,8 @@ class AutoResearchAgent(AsyncRedisClientMixin):
         Returns:
             True if more iterations should run, False if plateau detected.
         """
-        results = session.results
-        if len(results) < plateau_window:
-            return True
-        recent = results[-plateau_window:]
-        if all(not m.improved for m in recent):
+        improved_flags = [m.improved for m in session.results]
+        if plateau_reached(improved_flags, plateau_window):
             logger.info(
                 "_should_continue: plateau detected — last %d iterations showed no improvement",
                 plateau_window,
