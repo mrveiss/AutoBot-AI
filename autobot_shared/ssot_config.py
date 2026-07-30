@@ -1594,6 +1594,37 @@ class MiscConfig(BaseSettings):
     # Quarantine collection name (design doc §5/§9): web-research facts land
     # here, invisible to general chat/RAG, until Phase 1's promotion gate.
     research_quarantine_collection: str = Field(default="research", alias="AUTOBOT_RESEARCH_QUARANTINE_COLLECTION")
+    # #12623: N-source corroboration + promotion gate. Every tunable number is
+    # a config field (never a literal in services/claim_verifier.py or
+    # services/research/orchestrator.py). K = minimum independent agreeing
+    # sources before a claim can ever be marked verified — single-source
+    # claims are never promoted regardless of confidence (design §9 Phase 1).
+    research_corroboration_min_sources: int = Field(default=2, alias="AUTOBOT_RESEARCH_CORROBORATION_MIN_SOURCES")
+    # Confidence assigned when exactly K independent sources agree.
+    research_corroboration_confidence_base: float = Field(
+        default=0.75, alias="AUTOBOT_RESEARCH_CORROBORATION_CONFIDENCE_BASE"
+    )
+    # Confidence increment per additional agreeing independent source beyond K.
+    research_corroboration_confidence_per_source: float = Field(
+        default=0.05, alias="AUTOBOT_RESEARCH_CORROBORATION_CONFIDENCE_PER_SOURCE"
+    )
+    # Hard cap so confidence never reaches false certainty (1.0).
+    research_corroboration_confidence_cap: float = Field(
+        default=0.95, alias="AUTOBOT_RESEARCH_CORROBORATION_CONFIDENCE_CAP"
+    )
+    # Minimum corroboration confidence required to promote a fact out of quarantine.
+    research_promotion_confidence_threshold: float = Field(
+        default=0.75, alias="AUTOBOT_RESEARCH_PROMOTION_CONFIDENCE_THRESHOLD"
+    )
+    # Collection metadata value written on promoted facts (must differ from
+    # ``research_quarantine_collection`` so the chat-RAG ``$ne`` filter admits it).
+    research_promoted_collection: str = Field(default="general", alias="AUTOBOT_RESEARCH_PROMOTED_COLLECTION")
+    # How many candidate corroborating facts to retrieve per material claim.
+    research_corroboration_search_top_k: int = Field(default=5, alias="AUTOBOT_RESEARCH_CORROBORATION_SEARCH_TOP_K")
+    # Timeout for the adversarial agreement-classification LLM call.
+    research_corroboration_classify_timeout_seconds: float = Field(
+        default=20.0, alias="AUTOBOT_RESEARCH_CORROBORATION_CLASSIFY_TIMEOUT_SECONDS"
+    )
     routing_model: str = Field(default="", alias="AUTOBOT_ROUTING_MODEL")
     run_jwt: str = Field(default="", alias="AUTOBOT_RUN_JWT")
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
