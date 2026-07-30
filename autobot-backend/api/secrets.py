@@ -52,6 +52,7 @@ from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.json_secrets_read import load_imported_json_secret
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -494,6 +495,22 @@ def audit_log(
     )
 
 
+async def _get_secret_dual_read(secret_id: str, chat_id: str | None) -> Dict | None:
+    """Try the unified envelope store (#10088 Task 3 dual-read), else the legacy JSON file.
+
+    Chat-scope access control is enforced identically on both paths so a secret imported
+    into the unified store is never *less* protected than it was in the legacy file.
+    """
+    secret = await load_imported_json_secret(secret_id)
+    if secret is not None:
+        if secret.get("scope") == ChatSecretScope.CHAT.value:
+            if not chat_id or secret.get("chat_id") != chat_id:
+                raise PermissionError("Access denied: Chat-scoped secret from different chat")
+        return secret
+    # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+    return await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
+
+
 # API Endpoints
 
 
@@ -696,8 +713,7 @@ async def get_secret(
     """Get a specific secret with its value (Issue #744: requires admin authentication)"""
     await check_rate_limit(http_request)
     try:
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        secret = await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
+        secret = await _get_secret_dual_read(secret_id, chat_id)
         if not secret:
             audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
