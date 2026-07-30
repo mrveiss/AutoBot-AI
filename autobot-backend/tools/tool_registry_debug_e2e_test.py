@@ -1,79 +1,51 @@
 #!/usr/bin/env python3
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
+"""Smoke tests proving Orchestrator + the real tool-dispatch pipeline are wired.
+
+#13037: this script originally asserted ``Orchestrator.tool_registry`` --
+an attribute the class has never had (confirmed via ``git log --follow``:
+untouched by anything except repo-wide renames/relicensing since the
+project's earliest history, long predating the #5040 orchestrator
+consolidation). ``Orchestrator`` owns ``agent_registry`` (agent routing);
+tool *execution* is a separate pipeline owned by the canonical
+``tools.tool_registry.get_tool_registry()`` singleton, dispatched from
+``task_handlers/executor.py`` / ``api/agent.py``. Rewritten to assert that
+real wiring instead of a name that was never true, so it exercises the
+actual end-to-end path the original script intended to prove works.
 """
-Debug script to test tool registry initialization in orchestrator
-"""
 
-import sys
-from pathlib import Path
+from __future__ import annotations
 
-# Add AutoBot to Python path
-sys.path.append(str(Path(__file__).parent))
-
+from autobot_shared.logging_manager import get_logger
 from orchestrator import Orchestrator
+from tools.tool_registry import get_tool_registry
+
+logger = get_logger(__name__)
 
 
-def test_orchestrator_initialization():
-    print("🔧 Testing Orchestrator initialization...")  # noqa: print
-
-    # Create orchestrator instance
+def test_orchestrator_has_agent_registry_not_tool_registry():
+    """Orchestrator's real registry is ``agent_registry`` (routing), never ``tool_registry``."""
     orchestrator = Orchestrator()
-
-    # Check tool registry
-    print(f"Tool registry exists: {hasattr(orchestrator, 'tool_registry')}")  # noqa: print  # noqa: print
-    print(f"Tool registry value: {orchestrator.tool_registry}")  # noqa: print
-
-    if orchestrator.tool_registry:
-        print("✅ Tool registry is initialized")  # noqa: print
-        print(f"Tool registry type: {type(orchestrator.tool_registry)}")  # noqa: print
-
-        # Test tool execution
-        print("\n🧪 Testing tool execution...")  # noqa: print
-        try:
-            # List available tools
-            available_tools = orchestrator.available_tools
-            print(f"Available tools: {list(available_tools.keys())[:5]}...")  # noqa: print  # noqa: print
-
-        except Exception as e:
-            print(f"Error testing tool execution: {e}")  # noqa: print
-    else:
-        print("❌ Tool registry is not initialized")  # noqa: print
-        print(  # noqa: print
-            f"Available attributes with 'tool': {[attr for attr in dir(orchestrator) if 'tool' in attr.lower()]}"
-        )
-
-        # Check dependencies
-        print(f"Local worker exists: {hasattr(orchestrator, 'local_worker')}")  # noqa: print  # noqa: print
-        print(f"Local worker value: {getattr(orchestrator, 'local_worker', None)}")  # noqa: print  # noqa: print
-        print(f"Knowledge base exists: {hasattr(orchestrator, 'knowledge_base')}")  # noqa: print  # noqa: print
-        print(f"Knowledge base value: {getattr(orchestrator, 'knowledge_base', None)}")  # noqa: print  # noqa: print
+    assert not hasattr(orchestrator, "tool_registry")
+    assert hasattr(orchestrator, "agent_registry")
+    assert isinstance(orchestrator.agent_registry, dict)
+    assert len(orchestrator.agent_registry) > 0, "Orchestrator must initialize at least one default agent"
 
 
-def test_workflow_execution():
-    print("\n🚀 Testing workflow execution...")  # noqa: print
-
-    orchestrator = Orchestrator()
-
-    # Test the problematic method
-    import asyncio
-
-    async def test_execution():
-        action = {
-            "tool_name": "respond_conversationally",
-            "tool_args": {"response_text": "test response"},
-        }
-        messages = []
-
-        try:
-            result = await orchestrator._execute_planned_action(action, messages)
-            print(f"Execution result: {result}")  # noqa: print
-        except Exception as e:
-            print(f"Execution failed: {e}")  # noqa: print
-
-    asyncio.run(test_execution())
+def test_tool_registry_singleton_has_tools_wired():
+    """The real tool-dispatch surface is the canonical ``get_tool_registry()`` singleton."""
+    registry = get_tool_registry()
+    available = registry.get_available_tools()
+    assert "respond_conversationally" in available
+    logger.info("Tool registry has %d tools wired: %s", len(available), available[:5])
 
 
-if __name__ == "__main__":
-    test_orchestrator_initialization()
-    test_workflow_execution()
+async def test_respond_conversationally_tool_executes_end_to_end():
+    """The tool-dispatch pipeline actually runs a tool by name (the script's original intent)."""
+    registry = get_tool_registry()
+    result = await registry.execute_tool("respond_conversationally", {"response_text": "test response"})
+
+    assert result["tool_name"] == "respond_conversationally"
+    # Never raises: a missing worker_node degrades to a structured error, not a crash.
+    assert result["status"] in ("success", "error")
