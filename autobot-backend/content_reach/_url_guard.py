@@ -12,6 +12,12 @@ Public API
   Fail-open on robots-fetch errors (log warning + allow).
 
 Both functions must be awaited BEFORE any httpx/browser/caption call.
+
+The robots.txt fetch itself is SSRF-guarded (#13017): it connects through
+``autobot_shared.security.ssrf_guard.pinned_connector`` (never a bare
+``aiohttp.ClientSession()``) with redirects disabled, so a public domain
+cannot answer with a 3xx to an internal address and have it followed. A guard
+rejection is logged distinctly from a natural network failure.
 """
 
 from __future__ import annotations
@@ -52,16 +58,36 @@ def _extract_domain(url: str) -> str:
 
 
 async def _fetch_robots_text(domain: str) -> str:
-    """Fetch robots.txt for domain; return empty string on any error (fail-open)."""
+    """Fetch robots.txt for domain via a pinned connector; fail-open on network errors.
+
+    A blocked-by-guard fetch (private/rebound address, or a redirect to one) is
+    logged distinctly from a natural network failure so it can never hide
+    behind an indistinguishable "fetch failed" warning (#13017).
+    """
     import aiohttp
+
+    from autobot_shared.security.ssrf_guard import SSRFError, pinned_connector
 
     robots_url = f"{domain}/robots.txt"
     try:
-        timeout = aiohttp.ClientTimeout(total=_ROBOTS_FETCH_TIMEOUT)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(robots_url, timeout=timeout, allow_redirects=True) as resp:
+        connector = await pinned_connector(robots_url)
+    except SSRFError as exc:
+        logger.warning("content_reach robots.txt fetch blocked by SSRF guard for %s: %s", domain, exc)
+        return ""
+
+    timeout = aiohttp.ClientTimeout(total=_ROBOTS_FETCH_TIMEOUT)
+    try:
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.get(robots_url, allow_redirects=False) as resp:
                 if resp.status == 200:
                     return await resp.text(encoding="utf-8", errors="replace")
+                if 300 <= resp.status < 400:
+                    logger.warning(
+                        "content_reach robots.txt fetch for %s got redirect (HTTP %s); "
+                        "rejected outright by SSRF guard",
+                        domain,
+                        resp.status,
+                    )
         return ""
     except Exception as exc:
         logger.warning("content_reach robots.txt fetch failed for %s: %s", domain, exc)

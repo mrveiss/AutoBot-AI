@@ -19,6 +19,8 @@ Structure:
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -594,18 +596,23 @@ async def test_robots_cache_under_max_not_cleared(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_robots_fetch_error_logs_at_warning(monkeypatch, caplog):
-    """_fetch_robots_text logs at WARNING (not DEBUG) on fetch failure."""
+    """_fetch_robots_text logs at WARNING (not DEBUG) on a natural network failure.
+
+    Real DNS is mocked (not the guard) per the ``config_declared_provider_test.py``
+    pattern: the domain resolves to a public IP so ``pinned_connector`` succeeds,
+    then the aiohttp session itself raises — this is a benign network failure,
+    distinct from a guard rejection (see test_robots_fetch_blocked_by_ssrf_guard_*).
+    """
     import logging
+
+    import aiohttp
 
     import content_reach._url_guard as guard_mod
 
-    async def _boom(domain: str) -> str:
-        raise RuntimeError("firewall blocked robots.txt")
-
-    # We need to trigger the real except path, so monkeypatch aiohttp to raise.
-    import aiohttp
-
     class _FailSession:
+        def __init__(self, *a, **kw):
+            pass
+
         async def __aenter__(self):
             return self
 
@@ -622,10 +629,153 @@ async def test_robots_fetch_error_logs_at_warning(monkeypatch, caplog):
         async def __aexit__(self, *a):
             pass
 
-    monkeypatch.setattr(aiohttp, "ClientSession", lambda: _FailSession())
+    fake_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]
+    monkeypatch.setattr(aiohttp, "ClientSession", _FailSession)
 
-    with caplog.at_level(logging.WARNING, logger="content_reach._url_guard"):
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos),
+        caplog.at_level(logging.WARNING, logger="content_reach._url_guard"),
+    ):
         text = await guard_mod._fetch_robots_text("http://example.com")
 
     assert text == ""
     assert any("robots.txt fetch failed" in r.message for r in caplog.records if r.levelno == logging.WARNING)
+
+
+# ---------------------------------------------------------------------------
+# 13. robots.txt fetch is SSRF-guarded (#13017) — hostile cases, real DNS mocked
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_robots_fetch_blocked_by_ssrf_guard_dns_rebind(caplog):
+    """A domain that resolves to a private address must be blocked, and logged distinctly."""
+    import logging
+
+    import content_reach._url_guard as guard_mod
+
+    fake_infos = [(2, 1, 6, "", ("10.0.0.9", 0))]
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos),
+        caplog.at_level(logging.WARNING, logger="content_reach._url_guard"),
+    ):
+        text = await guard_mod._fetch_robots_text("http://rebind.example.com")
+
+    assert text == ""
+    assert any(
+        "blocked by SSRF guard" in r.message for r in caplog.records if r.levelno == logging.WARNING
+    ), "a guard rejection must be logged distinctly from a natural fetch failure"
+
+
+@pytest.mark.asyncio
+async def test_robots_fetch_blocked_by_ssrf_guard_loopback():
+    """A domain resolving to loopback must be blocked."""
+    import content_reach._url_guard as guard_mod
+
+    fake_infos = [(2, 1, 6, "", ("127.0.0.1", 0))]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        text = await guard_mod._fetch_robots_text("http://sneaky.example.com")
+    assert text == ""
+
+
+@pytest.mark.asyncio
+async def test_robots_fetch_blocked_by_ssrf_guard_metadata():
+    """A domain resolving to the cloud metadata address must be blocked."""
+    import content_reach._url_guard as guard_mod
+
+    fake_infos = [(2, 1, 6, "", ("169.254.169.254", 0))]
+    with patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos):
+        text = await guard_mod._fetch_robots_text("http://sneaky2.example.com")
+    assert text == ""
+
+
+@pytest.mark.asyncio
+async def test_robots_fetch_rejects_redirect_to_internal_address(monkeypatch, caplog):
+    """A public domain answering robots.txt with a 302 to an internal address must NOT be followed.
+
+    This is the exact vector in defect 1 of #13017: allow_redirects must be
+    False, and any 3xx must be rejected outright rather than followed.
+    """
+    import logging
+
+    import aiohttp
+
+    import content_reach._url_guard as guard_mod
+
+    class _RedirectResp:
+        status = 302
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+    class _RedirectSession:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def get(self, url, *, allow_redirects, **kw):
+            assert allow_redirects is False, "robots.txt fetch must never follow redirects"
+            return _RedirectResp()
+
+    fake_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]
+    monkeypatch.setattr(aiohttp, "ClientSession", _RedirectSession)
+
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos),
+        caplog.at_level(logging.WARNING, logger="content_reach._url_guard"),
+    ):
+        text = await guard_mod._fetch_robots_text("http://public-domain.example.com")
+
+    assert text == ""
+    assert any(
+        "redirect" in r.message and "rejected" in r.message for r in caplog.records if r.levelno == logging.WARNING
+    )
+
+
+@pytest.mark.asyncio
+async def test_robots_fetch_pins_connector_for_public_domain():
+    """A genuinely public domain resolves, is pinned, and its robots.txt is returned on 200."""
+    import content_reach._url_guard as guard_mod
+
+    class _OkResp:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def text(self, encoding="utf-8", errors="replace"):
+            return "User-agent: *\nDisallow: /admin"
+
+    class _OkSession:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        def get(self, url, *, allow_redirects, **kw):
+            assert allow_redirects is False
+            return _OkResp()
+
+    fake_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]
+    with (
+        patch("autobot_shared.url_safety.socket.getaddrinfo", return_value=fake_infos),
+        patch("aiohttp.ClientSession", _OkSession),
+    ):
+        text = await guard_mod._fetch_robots_text("https://real.example.com")
+
+    assert "Disallow: /admin" in text

@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.backends.browser import BrowserBackend
@@ -74,6 +75,9 @@ class RedditJsonBackend(ContentBackend):
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for %r: %s", url, exc)
                 raise BackendError(str(exc)) from exc
+            except SSRFError as exc:
+                logger.warning("RedditJsonBackend: blocked by SSRF guard at connect time for %r: %s", url, exc)
+                raise BackendError(str(exc)) from exc
         else:
             try:
                 response = await http_get(
@@ -84,6 +88,9 @@ class RedditJsonBackend(ContentBackend):
                 )
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for query %r: %s", request.query, exc)
+                raise BackendError(str(exc)) from exc
+            except SSRFError as exc:
+                logger.warning("RedditJsonBackend: blocked by SSRF guard at connect time: %s", exc)
                 raise BackendError(str(exc)) from exc
 
         if response.status_code != 200:
@@ -154,6 +161,9 @@ class HnAlgoliaBackend(ContentBackend):
             )
         except httpx.HTTPError as exc:
             logger.debug("HnAlgoliaBackend: HTTP error for query %r: %s", request.query, exc)
+            raise BackendError(str(exc)) from exc
+        except SSRFError as exc:
+            logger.warning("HnAlgoliaBackend: blocked by SSRF guard at connect time: %s", exc)
             raise BackendError(str(exc)) from exc
 
         if response.status_code != 200:
