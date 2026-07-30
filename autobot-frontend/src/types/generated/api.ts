@@ -89366,6 +89366,11 @@ export interface components {
             requires_human_review: boolean;
             /** Reviewer Role */
             reviewer_role?: string | null;
+            /**
+             * Requires Cross Vendor Review
+             * @default false
+             */
+            requires_cross_vendor_review: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -89386,6 +89391,8 @@ export interface components {
             requires_human_review: boolean;
             /** Reviewer Role */
             reviewer_role: string | null;
+            /** Requires Cross Vendor Review */
+            requires_cross_vendor_review: boolean;
             /**
              * Created At
              * Format: date-time
@@ -89405,6 +89412,8 @@ export interface components {
             requires_human_review?: boolean | null;
             /** Reviewer Role */
             reviewer_role?: string | null;
+            /** Requires Cross Vendor Review */
+            requires_cross_vendor_review?: boolean | null;
         } & {
             [key: string]: unknown;
         };
