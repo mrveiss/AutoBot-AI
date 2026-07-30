@@ -573,20 +573,6 @@ class OneDriveConnector(AbstractConnector):
             ) as resp:
                 status_code = resp.status
 
-                # Handle redirects for download URLs
-                if status_code in (301, 302, 303, 307, 308):
-                    location = resp.headers.get("Location")
-                    if location and raw_content:
-                        # Follow redirect for file download
-                        async with client.tracked_request(
-                            "GET", location, timeout=timeout, suppress_error_log=True
-                        ) as redirect_resp:
-                            content = await redirect_resp.read()
-                            return {
-                                "status_code": redirect_resp.status,
-                                "content": content,
-                            }
-
                 # Handle no-content responses
                 if status_code == 204:
                     return {"status_code": 204, "body": {}}
