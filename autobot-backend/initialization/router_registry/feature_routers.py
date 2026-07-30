@@ -599,6 +599,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["autoresearch"],
         "autoresearch",
     ),
+    # Issue #12622: Research agent P0 — findings -> KB facts + grounded /research synthesis
+    (
+        "services.research.routes",
+        "/research",
+        ["research"],
+        "research",
+    ),
     # Issue #2165: Workflow export/import/sharing
     (
         "api.workflow_export",
