@@ -562,6 +562,7 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     from llm_shared.providers.openrouter import OpenRouterProvider
     from llm_shared.providers.vertexai import VertexAIProvider
     from llm_shared.providers.vllm_base import VLLMBaseProvider
+    from services.provider_key_vault import resolve_provider_key
 
     fallback: List[str] = []
 
@@ -577,8 +578,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     except Exception as exc:
         logger.debug("Ollama provider not registered: %s", exc)
 
-    # OpenAI — registered when API key is present
-    openai_key = config.openai_api_key
+    # OpenAI — registered when API key is present (env wins; else System vault, #10088 Task 7)
+    openai_key = resolve_provider_key("OPENAI_API_KEY", config.openai_api_key)
     if openai_key:
         openai_provider = OpenAIProvider(settings={"api_key": openai_key})
         registry.register(openai_provider)
@@ -586,8 +587,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("OPENAI_API_KEY not set — OpenAI provider not registered")
 
-    # Anthropic — registered when API key is present
-    anthropic_key = config.anthropic_api_key
+    # Anthropic — registered when API key is present (env wins; else System vault, #10088 Task 7)
+    anthropic_key = resolve_provider_key("ANTHROPIC_API_KEY", config.anthropic_api_key)
     if anthropic_key:
         anthropic_provider = AnthropicProvider(settings={"api_key": anthropic_key})
         registry.register(anthropic_provider)
@@ -595,8 +596,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("ANTHROPIC_API_KEY not set — Anthropic provider not registered")
 
-    # Groq — registered when API key is present
-    groq_key = config.groq_api_key
+    # Groq — registered when API key is present (env wins; else System vault, #10088 Task 7)
+    groq_key = resolve_provider_key("GROQ_API_KEY", config.groq_api_key)
     if groq_key:
         groq_provider = GroqProvider(settings={"api_key": groq_key})
         registry.register(groq_provider)
@@ -604,8 +605,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("GROQ_API_KEY not set — Groq provider not registered")
 
-    # Mistral — registered when API key is present (Issue #10549)
-    mistral_key = config.mistral_api_key
+    # Mistral — registered when API key is present (Issue #10549; env wins else vault, #10088 Task 7)
+    mistral_key = resolve_provider_key("MISTRAL_API_KEY", config.mistral_api_key)
     if mistral_key:
         mistral_provider = MistralProvider(
             settings={
@@ -634,7 +635,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
         custom_provider = CustomOpenAIProvider(
             settings={
                 "base_url": custom_url,
-                "api_key": config.custom_openai_api_key,
+                # env wins; else System vault (#10088 Task 7)
+                "api_key": resolve_provider_key("CUSTOM_OPENAI_API_KEY", config.custom_openai_api_key),
                 "default_model": config.custom_openai_default_model,
             }
         )
@@ -643,8 +645,8 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("CUSTOM_OPENAI_BASE_URL not set — custom OpenAI provider not registered")
 
-    # OpenRouter — registered when API key is present (Issue #4341)
-    openrouter_key = config.openrouter_api_key
+    # OpenRouter — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7)
+    openrouter_key = resolve_provider_key("OPENROUTER_API_KEY", config.openrouter_api_key)
     if openrouter_key:
         try:
             openrouter_provider = OpenRouterProvider(
@@ -660,8 +662,10 @@ def _populate_default_providers(registry: ProviderRegistry) -> None:
     else:
         logger.debug("OPENROUTER_API_KEY not set — OpenRouter provider not registered")
 
-    # Nous Portal — registered when API key is present (Issue #4341)
-    nous_key = config.nous_api_key or config.hf_token or config.huggingface_api_token
+    # Nous Portal — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7)
+    nous_key = (
+        resolve_provider_key("NOUS_API_KEY", config.nous_api_key) or config.hf_token or config.huggingface_api_token
+    )
     if nous_key:
         try:
             nous_provider = NousPortalProvider(
