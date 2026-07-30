@@ -9,18 +9,24 @@ Composes existing modules (never recreates them, design §6):
   * ``web_fetch.WebFetcher`` — fast-HTTP page fetch
   * ``knowledge_base_factory.get_knowledge_base`` — the canonical KB facade
   * ``services.research.extractor`` / ``synthesizer`` — the two new LLM steps
+  * ``services.research.planner`` — sub-question decomposition, pruning,
+    skip-known filtering (#12624)
+  * ``services.plateau_detector`` — saturation stop, shared with
+    ``AutoResearchAgent`` (#12624)
   * ``services.claim_verifier.ClaimVerifier.corroborate`` — N-source
     corroboration + promotion gate (#12623)
 
-Phase 0 scope: a single bounded fetch round, no Planner sub-question loop
-(#12624 — later phase). #12623 adds the corroboration/promotion step below.
+The round loop (``_plan_and_fetch``) is bounded by three independent, always
+-enforced guards so a mis-scored branch or a garbage LLM response can never
+cause unbounded iteration/spend (#12624): a hard round cap, a total-source
+budget, and plateau/saturation detection.
 """
 
 from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
@@ -28,9 +34,11 @@ from knowledge_base_factory import get_knowledge_base
 from services.claim_verifier import ClaimVerifier, CorroborationResult
 from services.knowledge_grounding_models import KBSource
 from services.llm_service import get_llm_service
+from services.plateau_detector import plateau_reached
 
 from .extractor import extract_claims
 from .models import ExtractedClaim, ResearchBudget, ResearchFactOut, ResearchResponse, StoredFact
+from .planner import decompose_question, filter_skip_known, prune_low_value
 from .synthesizer import synthesize_answer
 
 logger = get_logger(__name__)
@@ -210,6 +218,61 @@ class ResearchOrchestrator:
         stored = [await _store_claim(kb, claim) for claim in claims]
         return [fact for fact in stored if fact is not None]
 
+    async def _run_one_round(
+        self, kb: Any, llm: Any, question: str, budget: ResearchBudget, remaining_sources: int
+    ) -> Tuple[List[StoredFact], int]:
+        """One planner round: decompose -> prune -> skip-known -> fetch (design §4.3).
+
+        Bounded by *remaining_sources* (the caller's total-source budget) in
+        addition to the per-discovery-call ``budget.max_sources``.
+        """
+        sub_questions = await decompose_question(llm, question)
+        kept, _pruned = prune_low_value(sub_questions)
+        to_search, _skipped = await filter_skip_known(kb, kept)
+        landed: List[StoredFact] = []
+        used = 0
+        for sub in to_search:
+            if used >= remaining_sources:
+                break
+            count = min(budget.max_sources, remaining_sources - used)
+            urls = await _discover_sources(sub.text, count)
+            for url in urls:
+                if used >= remaining_sources:
+                    break
+                landed.extend(await self._land_page(kb, url, budget))
+                used += 1
+        return landed, used
+
+    async def _plan_and_fetch(
+        self, kb: Any, llm: Any, question: str, budget: ResearchBudget
+    ) -> Tuple[List[StoredFact], int]:
+        """Run the bounded round loop until saturation, the round cap, or the
+        total-source budget stops it — whichever comes first (#12624; never
+        unbounded, design §8 D5).
+        """
+        all_facts: List[StoredFact] = []
+        round_progress: List[bool] = []
+        sources_used = 0
+        max_total = config.research_planner_max_total_sources
+        max_rounds = config.research_planner_max_rounds
+        for round_num in range(1, max_rounds + 1):
+            remaining = max_total - sources_used
+            if remaining <= 0:
+                logger.info(
+                    "ResearchOrchestrator: total-source budget (%d) exhausted before round %d", max_total, round_num
+                )
+                break
+            landed, used = await self._run_one_round(kb, llm, question, budget, remaining)
+            all_facts.extend(landed)
+            sources_used += used
+            round_progress.append(any(f.is_new for f in landed))
+            if plateau_reached(round_progress, config.research_planner_plateau_window):
+                logger.info("ResearchOrchestrator: saturation reached at round %d/%d", round_num, max_rounds)
+                break
+        else:
+            logger.info("ResearchOrchestrator: round cap (%d) reached", max_rounds)
+        return all_facts, sources_used
+
     async def _corroborate_material_facts(
         self, kb: Any, material_facts: List[StoredFact]
     ) -> tuple[List[dict], Dict[str, float]]:
@@ -235,18 +298,15 @@ class ResearchOrchestrator:
         return contradictions, confidence_overrides
 
     async def research(self, question: str, options: dict | None = None) -> ResearchResponse:
-        """Run the bounded Phase-0 pipeline and return the full #12622 contract."""
+        """Run the bounded planner-driven pipeline and return the full #12622 contract."""
         budget = _resolve_budget(options or {})
         kb = await get_knowledge_base()
         if kb is None:
             return ResearchResponse(answer="Knowledge base unavailable; cannot perform research.", confidence=0.0)
 
-        urls = await _discover_sources(question, budget.max_sources)
-        all_facts: List[StoredFact] = []
-        for url in urls:
-            all_facts.extend(await self._land_page(kb, url, budget))
-
         llm = await self._llm()
+        all_facts, sources_fetched = await self._plan_and_fetch(kb, llm, question, budget)
+
         synthesis = await synthesize_answer(llm, question, all_facts)
         cited_ids = {c.fact_id for c in synthesis.citations}
         material_facts = [f for f in all_facts if f.fact_id in cited_ids]
@@ -266,6 +326,6 @@ class ResearchOrchestrator:
             facts=facts_out,
             contradictions=contradictions,
             confidence=synthesis.confidence,
-            sources_fetched=len(urls),
+            sources_fetched=sources_fetched,
             facts_stored=len(all_facts),
         )
