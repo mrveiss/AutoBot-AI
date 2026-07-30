@@ -38,6 +38,7 @@ def _make_policy(company_id: str) -> MagicMock:
     policy.item_type = "task"
     policy.requires_human_review = True
     policy.reviewer_role = None
+    policy.requires_cross_vendor_review = False
     policy.created_at = now
     policy.updated_at = now
     return policy
