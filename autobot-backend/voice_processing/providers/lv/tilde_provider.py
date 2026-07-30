@@ -99,19 +99,18 @@ class TildeProvider(SpeechProvider):
 
             timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
 
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    self.api_url,
-                    data=form,
-                    headers=headers,
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(f"Tilde API error {response.status}: {error_text}")
-                        return []
+            from autobot_shared.http_client import get_http_client
 
-                    result = await response.json()
-                    return self._parse_tilde_response(result)
+            async with get_http_client().tracked_request(
+                "POST", self.api_url, data=form, headers=headers, timeout=timeout
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"Tilde API error {response.status}: {error_text}")
+                    return []
+
+                result = await response.json()
+                return self._parse_tilde_response(result)
 
         except asyncio.TimeoutError:
             logger.error("Tilde API request timed out after 5 minutes")

@@ -8,7 +8,9 @@ Cloud Speech Provider base class (Issue #10147).
 All cloud ASR adapters extend CloudSpeechProvider which:
 - Reads an API key from an env var (fail-soft when absent)
 - Sets diarizes=True so the orchestrator can skip local Pyannote
-- Provides shared aiohttp session helpers
+- Exposes _DEFAULT_TIMEOUT, the long (600s) per-request timeout subclasses
+  pass to autobot_shared.http_client.get_http_client().tracked_request()
+  for audio upload/poll calls (#12979) — no private per-provider session.
 """
 
 import os
@@ -67,10 +69,6 @@ class CloudSpeechProvider(SpeechProvider):
         """BCP-47 language codes this provider supports."""
 
     # ── shared helpers ────────────────────────────────────────────────────────
-
-    def _make_session(self, timeout: Optional[aiohttp.ClientTimeout] = None) -> aiohttp.ClientSession:
-        """Return a new aiohttp session with sensible defaults."""
-        return aiohttp.ClientSession(timeout=timeout or _DEFAULT_TIMEOUT)
 
     def _auth_header(self) -> str:
         """Return 'Bearer <key>' auth header value."""

@@ -165,6 +165,8 @@ async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optio
     """
     import aiohttp
 
+    from autobot_shared.http_client import get_http_client
+
     access_token = await _get(WHATSAPP_ACCESS_TOKEN_KEY)
     if not access_token:
         logger.warning("Cannot download WhatsApp media — access token not configured")
@@ -172,41 +174,43 @@ async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optio
 
     base_url = (await _get(WHATSAPP_BASE_URL_KEY)) or "https://graph.facebook.com/v18.0"
     headers = {"Authorization": f"Bearer {access_token}"}
+    timeout = aiohttp.ClientTimeout(total=30)
+    http_client = get_http_client()
 
     try:
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            # Step 1: resolve the temporary download URL
-            async with session.get(f"{base_url}/{media_id}", headers=headers) as resp:
-                if resp.status != 200:
-                    logger.warning(
-                        "WhatsApp media metadata fetch failed (media_id=%s, status=%s)",
-                        media_id,
-                        resp.status,
-                    )
-                    return None, None
-                meta = await resp.json()
-
-            download_url = meta.get("url")
-            mime_type: Optional[str] = meta.get("mime_type")
-            if not download_url:
-                logger.warning("WhatsApp media metadata missing 'url' field (media_id=%s)", media_id)
+        # Step 1: resolve the temporary download URL
+        async with http_client.tracked_request(
+            "GET", f"{base_url}/{media_id}", headers=headers, timeout=timeout
+        ) as resp:
+            if resp.status != 200:
+                logger.warning(
+                    "WhatsApp media metadata fetch failed (media_id=%s, status=%s)",
+                    media_id,
+                    resp.status,
+                )
                 return None, None
+            meta = await resp.json()
 
-            # Step 2: fetch the raw bytes
-            async with session.get(download_url, headers=headers) as resp:
-                if resp.status != 200:
-                    logger.warning(
-                        "WhatsApp media download failed (media_id=%s, status=%s)",
-                        media_id,
-                        resp.status,
-                    )
-                    return None, None
-                raw_bytes = await resp.read()
-                # Prefer Content-Type from the download response if metadata lacked it
-                if not mime_type:
-                    mime_type = resp.headers.get("Content-Type")
-                return raw_bytes, mime_type
+        download_url = meta.get("url")
+        mime_type: Optional[str] = meta.get("mime_type")
+        if not download_url:
+            logger.warning("WhatsApp media metadata missing 'url' field (media_id=%s)", media_id)
+            return None, None
+
+        # Step 2: fetch the raw bytes
+        async with http_client.tracked_request("GET", download_url, headers=headers, timeout=timeout) as resp:
+            if resp.status != 200:
+                logger.warning(
+                    "WhatsApp media download failed (media_id=%s, status=%s)",
+                    media_id,
+                    resp.status,
+                )
+                return None, None
+            raw_bytes = await resp.read()
+            # Prefer Content-Type from the download response if metadata lacked it
+            if not mime_type:
+                mime_type = resp.headers.get("Content-Type")
+            return raw_bytes, mime_type
 
     except Exception as exc:
         logger.error("Exception downloading WhatsApp media (media_id=%s): %s", media_id, exc)

@@ -50,6 +50,15 @@ class NPUClient:
         self._owns_session = session is None
 
     async def __aenter__(self) -> "NPUClient":
+        # RAW carve-out (#12979, long-lived + returned-session): the
+        # constructor also accepts an externally-owned `session=`, and
+        # batch_partial_forward() below fires multiple partial_forward()
+        # calls over the SAME instance session concurrently via
+        # asyncio.gather — the same "client owns/accepts a session across
+        # multiple calls" shape as services/npu_client.py's _get_session()
+        # (batch 7) and services/npu_pipeline/dispatcher.py above. Pooling
+        # would not change per-call behaviour but removing this client's
+        # own session model is a judgment call, not a per-site conversion.
         if self._owns_session:
             self._session = aiohttp.ClientSession(timeout=self._timeout)
         return self

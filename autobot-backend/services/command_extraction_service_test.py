@@ -31,27 +31,22 @@ class TestSlmExec:
 
     @pytest.mark.asyncio
     async def test_calls_correct_endpoint(self) -> None:
+        from autobot_shared.http_client import get_http_client
+
         resp = MagicMock()
         resp.status = 200
         resp.json = AsyncMock(return_value={"success": True, "stdout": "output", "stderr": ""})
         resp_cm = MagicMock()
         resp_cm.__aenter__ = AsyncMock(return_value=resp)
         resp_cm.__aexit__ = AsyncMock(return_value=False)
-        session = MagicMock()
-        session.post = MagicMock(return_value=resp_cm)
-        session_cm = MagicMock()
-        session_cm.__aenter__ = AsyncMock(return_value=session)
-        session_cm.__aexit__ = AsyncMock(return_value=False)
+        manager = get_http_client()
 
-        with patch(
-            "services.command_extraction_service.aiohttp.ClientSession",
-            return_value=session_cm,
-        ):
+        with patch.object(manager, "tracked_request", return_value=resp_cm) as mock_tracked_request:
             ok, stdout, stderr = await _slm_exec("04-Databases", "ls -la", slm_url="https://slm.test")
 
         assert ok is True
         assert stdout == "output"
-        called_url = session.post.call_args[0][0]
+        called_url = mock_tracked_request.call_args[0][1]
         assert "04-Databases/exec" in called_url
 
     @pytest.mark.asyncio
@@ -62,15 +57,10 @@ class TestSlmExec:
 
     @pytest.mark.asyncio
     async def test_returns_false_on_exception(self) -> None:
-        session = MagicMock()
-        session.post.side_effect = Exception("network error")
-        session_cm = MagicMock()
-        session_cm.__aenter__ = AsyncMock(return_value=session)
-        session_cm.__aexit__ = AsyncMock(return_value=False)
-        with patch(
-            "services.command_extraction_service.aiohttp.ClientSession",
-            return_value=session_cm,
-        ):
+        from autobot_shared.http_client import get_http_client
+
+        manager = get_http_client()
+        with patch.object(manager, "tracked_request", side_effect=Exception("network error")):
             ok, stdout, stderr = await _slm_exec("node1", "cmd", slm_url="https://slm.test")
         assert ok is False
         assert "network error" in stderr
