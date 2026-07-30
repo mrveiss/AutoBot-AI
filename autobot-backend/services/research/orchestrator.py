@@ -5,7 +5,8 @@
 """ResearchOrchestrator (#12622, design §4.1) — the one new coordinator.
 
 Composes existing modules (never recreates them, design §6):
-  * ``agent_loop.search.registry`` — source discovery
+  * ``services.research.router`` — topic-based source routing over the
+    shared ``agent_loop.search.registry`` (#12625)
   * ``web_fetch.WebFetcher`` — fast-HTTP page fetch
   * ``knowledge_base_factory.get_knowledge_base`` — the canonical KB facade
   * ``services.research.extractor`` / ``synthesizer`` — the two new LLM steps
@@ -55,10 +56,15 @@ def _resolve_budget(options: dict) -> ResearchBudget:
 
 
 async def _discover_sources(question: str, max_sources: int) -> List[str]:
-    """Find candidate URLs for *question* via the shared search-provider registry."""
-    from agent_loop.search.registry import search as registry_search  # noqa: PLC0415
+    """Find candidate URLs for *question* via topic-routed search (#12625).
 
-    results = await registry_search(question, count=max_sources)
+    Delegates to ``services.research.router.route_search``, which prefers a
+    specialized provider for the question's inferred topic and otherwise
+    preserves the registry's unchanged default fallback order.
+    """
+    from services.research.router import route_search  # noqa: PLC0415
+
+    results = await route_search(question, count=max_sources)
     return [r.url for r in results if r.url]
 
 

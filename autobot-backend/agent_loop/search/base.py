@@ -58,6 +58,15 @@ class WebSearchProvider(ABC):
 
     provider_name: str = "base"
 
+    # Topics (one of the CATEGORY_* constants above) this provider specializes
+    # in, for ``services.research.router`` to prefer it over the general
+    # fallback chain (#12625, design §4.4). Empty means "no specialization" —
+    # the provider is only ever tried in its normal fallback-chain position.
+    # Existing providers (SearXNG/Brave/content_reach) declare none: `category`
+    # only ever shaped their *query* (design §4.4 is new provider-*selection*,
+    # not the pre-existing query-category hint).
+    supported_categories: tuple[str, ...] = ()
+
     def __init__(self, settings: Optional[Dict[str, Any]] = None) -> None:
         """Store provider settings (credentials, instance URL, options)."""
         self.settings: Dict[str, Any] = settings or {}
