@@ -211,6 +211,25 @@ class ResearchOrchestrator:
             self._llm_service = get_llm_service()
         return self._llm_service
 
+    @staticmethod
+    def _record_truncation_if_needed(url: str, markdown: str, budget: ResearchBudget) -> None:
+        """Record *url* in ``budget.truncated_sources`` if its content exceeded the
+        content-char budget that ``extract_claims`` enforces (design §8 D5).
+
+        This is the one place ``ResearchBudget.max_content_chars`` is actually
+        applied against a source (``extract_claims`` slices to it, #12622) —
+        recording here keeps that single truncation point auditable via the
+        budget itself, not just a log line.
+        """
+        if len(markdown) > budget.max_content_chars:
+            budget.truncated_sources.append(url)
+            logger.info(
+                "ResearchOrchestrator: truncated %s to max_content_chars=%d (source was %d chars)",
+                url,
+                budget.max_content_chars,
+                len(markdown),
+            )
+
     async def _land_page(self, kb: Any, url: str, budget: ResearchBudget) -> List[StoredFact]:
         """Fetch one URL, extract claims, and land them as quarantined facts."""
         fetch_result = await _fetch_source(url, budget.fetch_timeout_seconds)
@@ -219,6 +238,7 @@ class ResearchOrchestrator:
         doc_id = await _store_source_document(kb, url, fetch_result.title, fetch_result.markdown)
         if doc_id is None:
             return []
+        self._record_truncation_if_needed(url, fetch_result.markdown, budget)
         llm = await self._llm()
         claims = await extract_claims(llm, fetch_result.markdown, url, doc_id, budget.max_content_chars)
         stored = [await _store_claim(kb, claim) for claim in claims]
