@@ -47392,6 +47392,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Research
+         * @description Run a bounded research pass and return a grounded, cited answer.
+         *
+         *     Findings land as quarantined KB facts (dedicated ``research`` collection,
+         *     not visible to general chat/RAG) while the response also carries a
+         *     directly-usable synthesized answer with inline citations.
+         */
+        post: operations["run_research_api_research_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflow-export/export/{workflow_id}": {
         parameters: {
             query?: never;
@@ -60844,7 +60868,7 @@ export interface components {
              * Citations
              * @description Structured source citations from RAG retrieval. Non-empty only when grounding.grounded=True.
              */
-            citations?: components["schemas"]["Citation"][];
+            citations?: components["schemas"]["api__schemas_chat__Citation"][];
             /** @description Grounding transparency marker. grounded=False signals a model-only claim. */
             grounding?: components["schemas"]["GroundingStatus"] | null;
         } & {
@@ -61149,42 +61173,6 @@ export interface components {
          * @description Response for GET /circuit-breakers — opaque shape from manager.get_status().
          */
         CircuitBreakerStatusResponse: {
-            [key: string]: unknown;
-        };
-        /**
-         * Citation
-         * @description Structured source citation attached to a RAG-grounded response (#10548).
-         *
-         *     Propagated from retrieval (kb_results / RAGMetrics) through the response
-         *     builder to the API payload and rendered by CitationsDisplay.vue as chips.
-         */
-        Citation: {
-            /**
-             * Id
-             * @description Unique citation identifier (chunk/doc/graph-node id)
-             */
-            id: string;
-            /**
-             * Source Type
-             * @description Origin of this citation: 'doc' | 'chunk' | 'graph'
-             */
-            source_type: string;
-            /**
-             * Title
-             * @description Human-readable title or file name
-             */
-            title: string;
-            /**
-             * Uri
-             * @description Relative path or URI for deep-linking
-             */
-            uri?: string | null;
-            /**
-             * Score
-             * @description Retrieval relevance score (0–1)
-             */
-            score: number;
-        } & {
             [key: string]: unknown;
         };
         /**
@@ -88837,22 +88825,58 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** ResearchRequest */
-        ResearchRequest: {
-            /** Query */
-            query: string;
+        /**
+         * ResearchFactOut
+         * @description A KB fact produced or reused by this research run.
+         */
+        ResearchFactOut: {
+            /** Fact Id */
+            fact_id: string;
+            /** Content */
+            content: string;
             /**
-             * Research Depth
-             * @default comprehensive
+             * Source Url
+             * @default
              */
-            research_depth: string;
-            /** Sources */
-            sources?: string[] | null;
+            source_url: string;
             /**
-             * Include Web
-             * @default true
+             * Confidence
+             * @default 0
              */
-            include_web: boolean;
+            confidence: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ResearchResponse
+         * @description ``POST /research`` response body — the full contract from #12622.
+         */
+        ResearchResponse: {
+            /** Answer */
+            answer: string;
+            /** Citations */
+            citations?: components["schemas"]["services__research__models__Citation"][];
+            /** Facts */
+            facts?: components["schemas"]["ResearchFactOut"][];
+            /** Contradictions */
+            contradictions?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /**
+             * Sources Fetched
+             * @default 0
+             */
+            sources_fetched: number;
+            /**
+             * Facts Stored
+             * @default 0
+             */
+            facts_stored: number;
         } & {
             [key: string]: unknown;
         };
@@ -101173,6 +101197,42 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * Citation
+         * @description Structured source citation attached to a RAG-grounded response (#10548).
+         *
+         *     Propagated from retrieval (kb_results / RAGMetrics) through the response
+         *     builder to the API payload and rendered by CitationsDisplay.vue as chips.
+         */
+        api__schemas_chat__Citation: {
+            /**
+             * Id
+             * @description Unique citation identifier (chunk/doc/graph-node id)
+             */
+            id: string;
+            /**
+             * Source Type
+             * @description Origin of this citation: 'doc' | 'chunk' | 'graph'
+             */
+            source_type: string;
+            /**
+             * Title
+             * @description Human-readable title or file name
+             */
+            title: string;
+            /**
+             * Uri
+             * @description Relative path or URI for deep-linking
+             */
+            uri?: string | null;
+            /**
+             * Score
+             * @description Retrieval relevance score (0–1)
+             */
+            score: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * TemplateSearchResponse
          * @description Response for GET /templates/search.
          */
@@ -101212,6 +101272,25 @@ export interface components {
              * @default false
              */
             include_embeddings: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ResearchRequest */
+        api__schemas_knowledge__ResearchRequest: {
+            /** Query */
+            query: string;
+            /**
+             * Research Depth
+             * @default comprehensive
+             */
+            research_depth: string;
+            /** Sources */
+            sources?: string[] | null;
+            /**
+             * Include Web
+             * @default true
+             */
+            include_web: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -101809,6 +101888,40 @@ export interface components {
             message: string;
             /** Training Started */
             training_started: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * Citation
+         * @description One source citation backing a synthesized statement.
+         */
+        services__research__models__Citation: {
+            /** Fact Id */
+            fact_id: string;
+            /**
+             * Source Url
+             * @default
+             */
+            source_url: string;
+            /**
+             * Source Doc Id
+             * @default
+             */
+            source_doc_id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ResearchRequest
+         * @description ``POST /research`` request body.
+         */
+        services__research__models__ResearchRequest: {
+            /** Question */
+            question: string;
+            /** Options */
+            options?: {
+                [key: string]: unknown;
+            };
         } & {
             [key: string]: unknown;
         };
@@ -160594,7 +160707,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResearchRequest"];
+                "application/json": components["schemas"]["api__schemas_knowledge__ResearchRequest"];
             };
         };
         responses: {
@@ -164064,6 +164177,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_research_api_research_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["services__research__models__ResearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResearchResponse"];
                 };
             };
             /** @description Validation Error */
