@@ -13454,7 +13454,7 @@ class TestBatch83CodebaseAnalyticsMigrations(unittest.TestCase):
 
     def test_codebase_analytics_import_present(self):
         """Test codebase_analytics.py has error_boundaries import"""
-        with open("backend/api/codebase_analytics.py", "r") as f:
+        with open("backend/api/codebase_analytics.py", "r", encoding="utf-8") as f:
             content = f.read()
         self.assertIn(
             "from utils.error_boundaries import ErrorCategory, with_error_handling",

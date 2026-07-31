@@ -419,7 +419,7 @@ class CICDIntegrationTester:
 
         for result_file in result_files:
             try:
-                with open(result_file, "r") as f:
+                with open(result_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
 
                 # Extract test statistics
@@ -496,7 +496,7 @@ class CICDIntegrationTester:
 
         # Save notification to file (for CI/CD system pickup)
         notification_file = self.results_dir / f"pipeline_notification_{self.pipeline_id}.json"
-        with open(notification_file, "w") as f:
+        with open(notification_file, "w", encoding="utf-8") as f:
             json.dump(notification, f, indent=2)
 
         # Console notification
@@ -522,7 +522,7 @@ class CICDIntegrationTester:
         try:
             # Set GitHub Actions outputs
             if os.getenv("GITHUB_OUTPUT"):
-                with open(os.getenv("GITHUB_OUTPUT"), "a") as f:
+                with open(os.getenv("GITHUB_OUTPUT"), "a", encoding="utf-8") as f:
                     f.write(f"pipeline_status={notification['status']}\n")
                     f.write(f"pipeline_duration={notification['duration']:.2f}\n")
                     f.write(f"quality_gates_passed={notification['quality_gates_passed']}\n")
@@ -531,7 +531,7 @@ class CICDIntegrationTester:
             # Create step summary
             if os.getenv("GITHUB_STEP_SUMMARY"):
                 summary = self._generate_github_summary(notification)
-                with open(os.getenv("GITHUB_STEP_SUMMARY"), "w") as f:
+                with open(os.getenv("GITHUB_STEP_SUMMARY"), "w", encoding="utf-8") as f:
                     f.write(summary)
 
         except Exception as e:
@@ -581,7 +581,7 @@ class CICDIntegrationTester:
         try:
             # Create Jenkins properties file
             jenkins_props = self.results_dir / "jenkins.properties"
-            with open(jenkins_props, "w") as f:
+            with open(jenkins_props, "w", encoding="utf-8") as f:
                 f.write(f"PIPELINE_STATUS={notification['status']}\n")
                 f.write(f"PIPELINE_DURATION={notification['duration']:.2f}\n")
                 f.write(f"STAGES_PASSED={notification['stages_passed']}\n")
@@ -721,12 +721,12 @@ class CICDIntegrationTester:
 
         # Save report
         report_file = self.results_dir / f"cicd_pipeline_report_{self.pipeline_id}.json"
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         # Create human-readable summary
         summary_file = self.results_dir / f"cicd_pipeline_summary_{self.pipeline_id}.txt"
-        with open(summary_file, "w") as f:
+        with open(summary_file, "w", encoding="utf-8") as f:
             f.write("AutoBot Phase 9 CI/CD Pipeline Report\n")
             f.write("=" * 40 + "\n\n")
             f.write(f"Pipeline ID: {self.pipeline_id}\n")

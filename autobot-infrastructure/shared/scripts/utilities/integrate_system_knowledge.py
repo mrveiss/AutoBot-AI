@@ -71,7 +71,7 @@ async def integrate_cached_man_pages(kb_v2):
 
     for man_file in man_files:
         try:
-            with open(man_file, "r") as f:
+            with open(man_file, "r", encoding="utf-8") as f:
                 man_data = json.load(f)
 
             command = man_data.get("command", man_file.stem.split("_")[0])

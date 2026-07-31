@@ -351,12 +351,12 @@ class MemoryOptimizationApplier:
         import json
 
         json_file = reports_dir / f"memory_optimizations_applied_{timestamp}.json"
-        with open(json_file, "w") as f:
+        with open(json_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         # Save markdown summary
         md_file = reports_dir / f"memory_optimizations_summary_{timestamp}.md"
-        with open(md_file, "w") as f:
+        with open(md_file, "w", encoding="utf-8") as f:
             f.write(self._generate_markdown_report(report))
 
         logger.info("📄 Optimization reports saved:")

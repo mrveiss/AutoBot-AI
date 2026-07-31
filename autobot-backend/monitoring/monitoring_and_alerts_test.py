@@ -672,7 +672,7 @@ class MonitoringAndAlertingTester:
                     log_file = Path(log_source["path"])
                     if log_file.exists():
                         # Read last 100 lines
-                        with open(log_file, "r") as f:
+                        with open(log_file, "r", encoding="utf-8") as f:
                             lines = f.readlines()
                             recent_lines = lines[-100:] if len(lines) > 100 else lines
 
@@ -1016,12 +1016,12 @@ class MonitoringAndAlertingTester:
 
         # Save report
         report_file = self.results_dir / f"monitoring_alerting_report_{self.timestamp}.json"
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         # Create human-readable summary
         summary_file = self.results_dir / f"monitoring_alerting_summary_{self.timestamp}.txt"
-        with open(summary_file, "w") as f:
+        with open(summary_file, "w", encoding="utf-8") as f:
             f.write("AutoBot Phase 9 Monitoring and Alerting Report\n")
             f.write("=" * 50 + "\n\n")
             f.write(f"Execution: {self.timestamp}\n")

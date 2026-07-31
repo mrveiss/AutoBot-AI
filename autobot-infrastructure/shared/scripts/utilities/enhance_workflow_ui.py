@@ -769,6 +769,7 @@ def main():
     with open(
         "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowNotifications.vue",
         "w",
+        encoding="utf-8",
     ) as f:
         f.write(notification_component)
 
@@ -784,6 +785,7 @@ def main():
     with open(
         "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowProgressWidget.vue",
         "w",
+        encoding="utf-8",
     ) as f:
         f.write(progress_widget)
 

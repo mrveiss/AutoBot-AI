@@ -74,7 +74,7 @@ async def _test_sample_document(kb):
     logger.info("\n3. Testing with sample document...")
 
     test_file = "/tmp/test_kb_doc.md"
-    with open(test_file, "w") as f:
+    with open(test_file, "w", encoding="utf-8") as f:
         f.write("""
 # AutoBot Documentation Test
 

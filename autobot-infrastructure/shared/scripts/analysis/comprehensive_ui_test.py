@@ -537,7 +537,7 @@ class ComprehensiveUITester:
 
         # Save report to file
         report_file = Path("ui_test_report.json")
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         # Print summary to console

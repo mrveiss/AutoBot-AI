@@ -88,7 +88,7 @@ class ChatEncryptionMigrator:
             True if file appears to be encrypted
         """
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read().strip()
 
             # Try to parse as JSON first
@@ -123,7 +123,7 @@ class ChatEncryptionMigrator:
                 return True
 
             # Load unencrypted data
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 chat_data = json.load(f)
 
             if self.dry_run:
@@ -140,7 +140,7 @@ class ChatEncryptionMigrator:
             chat_manager = ChatHistoryManager()
             encrypted_data = chat_manager._encrypt_data(chat_data)
 
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(encrypted_data)
 
             logger.info("Successfully encrypted %s", file_path)

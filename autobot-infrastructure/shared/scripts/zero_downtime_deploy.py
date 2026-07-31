@@ -227,7 +227,7 @@ class ZeroDowntimeDeployer:
 
         if config_file.exists():
             try:
-                with open(config_file, "r") as f:
+                with open(config_file, "r", encoding="utf-8") as f:
                     file_config = yaml.safe_load(f) or {}
                 # Deep merge configuration
                 default_config.update(file_config)
@@ -908,7 +908,7 @@ server {{
         """Save deployment record to file."""
         record_file = self.deployment_dir / f"deployment_{deployment_record['deployment_id']}.json"
 
-        with open(record_file, "w") as f:
+        with open(record_file, "w", encoding="utf-8") as f:
             json.dump(deployment_record, f, indent=2)
 
     async def _rollback_deployment(self, deployment_record: Dict[str, Any]) -> bool:
@@ -930,7 +930,7 @@ server {{
                 break
 
             try:
-                with open(deployment_file, "r") as f:
+                with open(deployment_file, "r", encoding="utf-8") as f:
                     deployment = json.load(f)
                 deployments.append(deployment)
             except Exception:
@@ -1032,7 +1032,7 @@ async def _handle_rollback_action(deployer: ZeroDowntimeDeployer, args) -> int:
         logger.error(f"❌ Deployment {args.deployment_id} not found")
         return 1
 
-    with open(deployment_file, "r") as f:
+    with open(deployment_file, "r", encoding="utf-8") as f:
         deployment_record = json.load(f)
 
     success = await deployer._rollback_deployment(deployment_record)

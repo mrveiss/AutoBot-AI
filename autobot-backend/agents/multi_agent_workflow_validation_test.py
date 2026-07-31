@@ -545,7 +545,7 @@ class MultiAgentWorkflowValidator:
             "validation_type": "multi_agent_workflow",
         }
 
-        with open(results_file, "w") as f:
+        with open(results_file, "w", encoding="utf-8") as f:
             json.dump(full_report, f, indent=2)
 
         print(f"\n💾 Multi-agent validation results saved to: {results_file}")  # noqa: print  # noqa: print

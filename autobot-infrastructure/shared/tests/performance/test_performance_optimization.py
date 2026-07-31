@@ -987,12 +987,12 @@ class PerformanceOptimizationTester:
 
         # Save report
         report_file = self.results_dir / f"performance_optimization_report_{self.timestamp}.json"
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         # Create human-readable summary
         summary_file = self.results_dir / f"performance_summary_{self.timestamp}.txt"
-        with open(summary_file, "w") as f:
+        with open(summary_file, "w", encoding="utf-8") as f:
             f.write("AutoBot Phase 9 Performance Optimization Report\n")
             f.write("=" * 50 + "\n\n")
             f.write(f"Execution: {self.timestamp}\n")
