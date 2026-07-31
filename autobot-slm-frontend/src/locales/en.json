@@ -1115,6 +1115,7 @@
       "alertsRecommendations": "Alerts & Recommendations",
       "allSeverities": "All Severities",
       "clearAllValue0": "Clear All ({value0})",
+      "clearFailed": "Failed to clear alerts: {message}",
       "critical": "Critical",
       "expectedImprovement": "Expected improvement:",
       "filterBySeverity": "Filter by severity:",

@@ -16,6 +16,8 @@ import { ref, onUnmounted } from 'vue'
 import type { SLMWebSocketMessage, NodeHealth } from '@/types/slm'
 import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { slmApiClient } from '@/utils/ApiClient'
+import { HEALTH_PROBE_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 const logger = createLogger('SlmWebSocket')
 
@@ -185,8 +187,21 @@ function doDisconnect(): void {
 
 async function checkBackendHealth(): Promise<boolean> {
   try {
-    const resp = await fetch(`${config.apiBaseUrl}/api/health`, {
-      signal: AbortSignal.timeout(3000),
+    // This was the fourth way this app spelled the SLM API base:
+    // `${config.apiBaseUrl}/api/health`, hand-built here instead of taken from
+    // `getSlmApiBase()` (which is exactly `config.apiBaseUrl + '/api'`). The
+    // two agree today, so this is convergence rather than a fix — but it
+    // removes the copy that would have to be found again the next time the
+    // co-located prefix moves (#13140, #2829).
+    //
+    // `rawRequest`, NOT `get()`: this is a liveness pre-flight that gates the
+    // reconnect backoff below. It must stay single-shot (`get()` retries a 5xx
+    // three times, holding the reconnect timer open for seconds) and it must
+    // keep its own short budget rather than the client's 30s default — hence
+    // the explicit `HEALTH_PROBE_TIMEOUT_MS`, which also replaces the
+    // hard-coded 3000 this call carried.
+    const resp = await slmApiClient.rawRequest('/health', {
+      timeout: HEALTH_PROBE_TIMEOUT_MS,
     })
     return resp.ok
   } catch {
