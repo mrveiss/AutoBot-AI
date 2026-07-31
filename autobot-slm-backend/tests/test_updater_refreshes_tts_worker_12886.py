@@ -94,17 +94,15 @@ def test_main_includes_code_only_rather_than_duplicating_it() -> None:
     """
     main = yaml.safe_load(_MAIN.read_text(encoding="utf-8"))
 
-    included = [
-        t.get("ansible.builtin.include_tasks") or t.get("include_tasks") for t in _iter_mappings(main)
-    ]
-    assert "code_only.yml" in [i for i in included if isinstance(i, str)], (
-        "roles/tts-worker/tasks/main.yml must include code_only.yml, not repeat its tasks"
-    )
+    included = [t.get("ansible.builtin.include_tasks") or t.get("include_tasks") for t in _iter_mappings(main)]
+    assert "code_only.yml" in [
+        i for i in included if isinstance(i, str)
+    ], "roles/tts-worker/tasks/main.yml must include code_only.yml, not repeat its tasks"
 
     main_text = _MAIN.read_text(encoding="utf-8")
-    assert "tts-worker.py.j2" not in main_text, (
-        "main.yml still renders tts-worker.py itself — that is a second definition"
-    )
+    assert (
+        "tts-worker.py.j2" not in main_text
+    ), "main.yml still renders tts-worker.py itself — that is a second definition"
 
 
 def test_streaming_route_is_actually_in_the_template() -> None:
