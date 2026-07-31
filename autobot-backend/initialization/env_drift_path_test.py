@@ -45,8 +45,7 @@ def _drift_calls() -> list[ast.Call]:
     return [
         n
         for n in ast.walk(_check_env_drift_node())
-        if isinstance(n, ast.Call)
-        and getattr(n.func, "id", getattr(n.func, "attr", None)) == "check_env_drift"
+        if isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", None)) == "check_env_drift"
     ]
 
 
@@ -73,8 +72,7 @@ def test_env_path_is_derived_from_this_module_not_hardcoded() -> None:
     src = _check_env_drift_source()
 
     assert "parents[1]" in src, (
-        "derive the backend root from __file__ — this module is always "
-        "<backend-root>/initialization/lifespan.py"
+        "derive the backend root from __file__ — this module is always " "<backend-root>/initialization/lifespan.py"
     )
     assert "/opt/autobot" not in src, "must not hardcode a deployment path"
 
@@ -85,6 +83,6 @@ def test_parents1_names_the_backend_env_in_this_checkout() -> None:
 
     assert resolved.parent == _LIFESPAN.parents[1]
     assert resolved.name == ".env"
-    assert resolved.parent.name == "autobot-backend", (
-        f"expected the backend root, got {resolved.parent} — the parents[] index is wrong"
-    )
+    assert (
+        resolved.parent.name == "autobot-backend"
+    ), f"expected the backend root, got {resolved.parent} — the parents[] index is wrong"
