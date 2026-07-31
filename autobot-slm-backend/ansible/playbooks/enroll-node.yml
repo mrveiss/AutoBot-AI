@@ -68,7 +68,9 @@
         ports: [3000, 5900]
       vnc:
         services: ['vnc-server', 'vnc-websockify']
-        packages: ['tigervnc-standalone-server', 'x11vnc', 'websockify', 'novnc', 'xfce4', 'xfce4-terminal', 'dbus-x11']
+        # #13069: 'novnc' deliberately absent — the distro package is 1.0.0 (2018)
+        # and predates VeNCrypt. roles/vnc installs a pinned upstream release.
+        packages: ['tigervnc-standalone-server', 'x11vnc', 'websockify', 'xfce4', 'xfce4-terminal', 'dbus-x11']
         ports: [5900, 6080]
       slm-agent:
         services: ['slm-agent']
