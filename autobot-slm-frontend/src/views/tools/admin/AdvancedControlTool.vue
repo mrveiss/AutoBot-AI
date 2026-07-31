@@ -9,65 +9,57 @@
  * Control-plane tool for #11506 desktop-session takeover. Wires the live
  * autobot-backend `/api/advanced-control/*` routes (reached from the SLM
  * frontend via nginx `/autobot-api/` -> getBackendUrl()). See #12102.
+ *
+ * The endpoints and their payload shapes live in `useAutobotApi` — the SLM
+ * app's single client for the autobot backend — rather than being re-declared
+ * here on top of a private `fetch` (#12653). That fork carried only
+ * `authStore.token`, so it 401'd in the one case every other admin tool
+ * survives: an autobot-issued token in `autobot_access_token` with no SLM
+ * token. It also had no request timeout and no 401 cleanup.
  */
 
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import {
+  useAutobotApi,
+  ADVANCED_CONTROL_TRIGGERS,
+  ADVANCED_CONTROL_PRIORITIES,
+  type AdvancedControlCapabilities,
+  type AdvancedControlStreamingSession,
+  type AdvancedControlPendingRequest,
+  type AdvancedControlActiveSession,
+  type AdvancedControlTakeoverStatus,
+  type AdvancedControlSessionAction,
+} from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const { t } = useI18n()
-const authStore = useAuthStore()
 const logger = createLogger('AdvancedControlTool')
 
-interface StreamingCapabilities {
-  vnc_available?: boolean
-  novnc_available?: boolean
-  max_sessions?: number
-  supported_resolutions?: string[]
-  supported_depths?: number[]
-  [k: string]: unknown
-}
-interface StreamingSession {
-  session_id: string
-  user_id?: string
-  display?: string
-  vnc_port?: number
-  status?: string
-  created_at?: string
-  [k: string]: unknown
-}
-interface PendingRequest {
-  request_id: string
-  trigger?: string
-  reason?: string
-  priority?: string
-  created_at?: string
-  [k: string]: unknown
-}
-interface ActiveSession {
-  session_id: string
-  human_operator?: string
-  status?: string
-  [k: string]: unknown
-}
-type TakeoverStatus = Record<string, unknown>
+const {
+  getAdvancedControlCapabilities,
+  listAdvancedControlSessions,
+  createAdvancedControlSession,
+  terminateAdvancedControlSession,
+  getAdvancedControlTakeoverStatus,
+  getPendingTakeovers,
+  getActiveTakeovers,
+  requestTakeover,
+  approveTakeover,
+  takeoverSessionAction,
+} = useAutobotApi()
 
-const TRIGGERS = [
-  'MANUAL_REQUEST', 'CRITICAL_ERROR', 'SECURITY_CONCERN',
-  'USER_INTERVENTION_REQUIRED', 'SYSTEM_OVERLOAD', 'APPROVAL_REQUIRED', 'TIMEOUT_EXCEEDED',
-] as const
-const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
+const TRIGGERS = ADVANCED_CONTROL_TRIGGERS
+const PRIORITIES = ADVANCED_CONTROL_PRIORITIES
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-const capabilities = ref<StreamingCapabilities | null>(null)
-const sessions = ref<StreamingSession[]>([])
-const takeoverStatus = ref<TakeoverStatus | null>(null)
-const pending = ref<PendingRequest[]>([])
-const active = ref<ActiveSession[]>([])
+const capabilities = ref<AdvancedControlCapabilities | null>(null)
+const sessions = ref<AdvancedControlStreamingSession[]>([])
+const takeoverStatus = ref<AdvancedControlTakeoverStatus | null>(null)
+const pending = ref<AdvancedControlPendingRequest[]>([])
+const active = ref<AdvancedControlActiveSession[]>([])
 
 const createForm = reactive<{ user_id: string; resolution: string; depth: number | null }>({
   user_id: '', resolution: '', depth: null,
@@ -82,42 +74,39 @@ const busy = reactive<{
   terminate: string | null; approve: string | null; session: string | null
 }>({ create: false, request: false, terminate: null, approve: null, session: null })
 
-/** Call an /advanced-control endpoint with SLM bearer auth; throw on non-2xx. */
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${getBackendUrl()}/advanced-control${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authStore.token}`,
-      ...(init?.headers),
-    },
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json() as Promise<T>
-}
-
 async function loadAll(): Promise<void> {
   loading.value = true
   error.value = null
   try {
     const [caps, sess, status, pend, act] = await Promise.all([
-      request<StreamingCapabilities>('/streaming/capabilities'),
-      request<{ sessions: StreamingSession[]; count: number }>('/streaming/sessions'),
-      request<TakeoverStatus>('/takeover/status'),
-      request<{ pending_requests: PendingRequest[]; count: number }>('/takeover/pending'),
-      request<{ active_sessions: ActiveSession[]; count: number }>('/takeover/active'),
+      getAdvancedControlCapabilities(),
+      listAdvancedControlSessions(),
+      getAdvancedControlTakeoverStatus(),
+      getPendingTakeovers(),
+      getActiveTakeovers(),
     ])
     capabilities.value = caps
-    sessions.value = sess.sessions
+    sessions.value = sess
     takeoverStatus.value = status
-    pending.value = pend.pending_requests
-    active.value = act.active_sessions
+    pending.value = pend
+    active.value = act
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('tools.admin.advancedControlTool.genericError')
+    error.value = describeError(e)
     logger.warn('Advanced-control load failed:', e)
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * Render an axios/network failure the way the previous raw-fetch transport did
+ * (`HTTP <status>`), so the banner text and its test assertion are unchanged.
+ */
+function describeError(e: unknown): string {
+  const status = (e as { response?: { status?: number } })?.response?.status
+  if (typeof status === 'number') return `HTTP ${status}`
+  if (e instanceof Error && e.message) return e.message
+  return t('tools.admin.advancedControlTool.genericError')
 }
 
 /** Run an action, surface errors to the banner, and reload the given loaders. */
@@ -127,7 +116,7 @@ async function run(fn: () => Promise<unknown>): Promise<boolean> {
     await fn()
     return true
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('tools.admin.advancedControlTool.genericError')
+    error.value = describeError(e)
     logger.warn('Advanced-control action failed:', e)
     return false
   }
@@ -136,13 +125,10 @@ async function run(fn: () => Promise<unknown>): Promise<boolean> {
 async function onCreateSession(): Promise<void> {
   if (!createForm.user_id) return
   busy.create = true
-  const ok = await run(() => request('/streaming/create', {
-    method: 'POST',
-    body: JSON.stringify({
-      user_id: createForm.user_id,
-      resolution: createForm.resolution || '1024x768',
-      depth: createForm.depth ?? 24,
-    }),
+  const ok = await run(() => createAdvancedControlSession({
+    user_id: createForm.user_id,
+    resolution: createForm.resolution || '1024x768',
+    depth: createForm.depth ?? 24,
   }))
   busy.create = false
   if (ok) { createForm.user_id = ''; await loadAll() }
@@ -150,7 +136,7 @@ async function onCreateSession(): Promise<void> {
 
 async function onTerminate(sessionId: string): Promise<void> {
   busy.terminate = sessionId
-  const ok = await run(() => request(`/streaming/${sessionId}`, { method: 'DELETE' }))
+  const ok = await run(() => terminateAdvancedControlSession(sessionId))
   busy.terminate = null
   if (ok) await loadAll()
 }
@@ -158,14 +144,11 @@ async function onTerminate(sessionId: string): Promise<void> {
 async function onRequestTakeover(): Promise<void> {
   if (!requestForm.reason) return
   busy.request = true
-  const ok = await run(() => request('/takeover/request', {
-    method: 'POST',
-    body: JSON.stringify({
-      trigger: requestForm.trigger,
-      reason: requestForm.reason,
-      priority: requestForm.priority,
-      requesting_agent: requestForm.requesting_agent || null,
-    }),
+  const ok = await run(() => requestTakeover({
+    trigger: requestForm.trigger,
+    reason: requestForm.reason,
+    priority: requestForm.priority,
+    requesting_agent: requestForm.requesting_agent || null,
   }))
   busy.request = false
   if (ok) { requestForm.reason = ''; requestForm.requesting_agent = ''; await loadAll() }
@@ -175,20 +158,17 @@ async function onApprove(requestId: string): Promise<void> {
   const operator = operatorInputs[requestId]
   if (!operator) return
   busy.approve = requestId
-  const ok = await run(() => request(`/takeover/${requestId}/approve`, {
-    method: 'POST',
-    body: JSON.stringify({ human_operator: operator }),
-  }))
+  const ok = await run(() => approveTakeover(requestId, operator))
   busy.approve = null
   if (ok) await loadAll()
 }
 
-async function onSessionAction(sessionId: string, action: 'pause' | 'resume' | 'complete'): Promise<void> {
+async function onSessionAction(sessionId: string, action: AdvancedControlSessionAction): Promise<void> {
   busy.session = sessionId
   const body = action === 'complete'
-    ? JSON.stringify({ resolution: t('tools.admin.advancedControlTool.completedResolution') })
+    ? { resolution: t('tools.admin.advancedControlTool.completedResolution') }
     : undefined
-  const ok = await run(() => request(`/takeover/sessions/${sessionId}/${action}`, { method: 'POST', body }))
+  const ok = await run(() => takeoverSessionAction(sessionId, action, body))
   busy.session = null
   if (ok) await loadAll()
 }
