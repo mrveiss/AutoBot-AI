@@ -12,9 +12,8 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import Uuid
 
 from user_management.models.base import Base
 
@@ -30,14 +29,14 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # Organization context (nullable for platform-level events)
     org_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
@@ -45,7 +44,7 @@ class AuditLog(Base):
 
     # Actor (who performed the action)
     user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
@@ -67,7 +66,7 @@ class AuditLog(Base):
 
     # Resource ID affected
     resource_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         nullable=True,
     )
 

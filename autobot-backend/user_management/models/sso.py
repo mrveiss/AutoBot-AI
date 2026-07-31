@@ -16,9 +16,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import Uuid
 
 from autobot_shared.ssot_constants import CategoryDefaults
 from autobot_shared.time_utils import now_utc
@@ -35,6 +34,7 @@ class SSOProviderType(str, Enum):
     # Enterprise SSO
     LDAP = "ldap"
     ACTIVE_DIRECTORY = "active_directory"
+    OKTA = "okta"
     SAML = "saml"
     MICROSOFT_ENTRA = "microsoft_entra"
     GOOGLE_WORKSPACE = "google_workspace"
@@ -56,14 +56,14 @@ class SSOProvider(Base):
     __tablename__ = "sso_providers"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # Organization (nullable for global/social providers)
     org_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
@@ -152,6 +152,7 @@ class SSOProvider(Base):
         return self.provider_type in (
             SSOProviderType.LDAP.value,
             SSOProviderType.ACTIVE_DIRECTORY.value,
+            SSOProviderType.OKTA.value,
             SSOProviderType.SAML.value,
             SSOProviderType.MICROSOFT_ENTRA.value,
             SSOProviderType.GOOGLE_WORKSPACE.value,
@@ -173,20 +174,20 @@ class UserSSOLink(Base):
     __tablename__ = "user_sso_links"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
     provider_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("sso_providers.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

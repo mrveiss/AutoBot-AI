@@ -12,8 +12,8 @@ import uuid
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import Uuid
 
 from autobot_shared.auth.permissions import SYSTEM_PERMISSIONS, SYSTEM_ROLES
 from user_management.models.base import Base
@@ -40,7 +40,7 @@ class Permission(Base):
     __tablename__ = "permissions"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
@@ -97,14 +97,14 @@ class Role(Base):
     __tablename__ = "roles"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     # Nullable org_id means system role
     org_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
@@ -179,13 +179,13 @@ class RolePermission(Base):
     __tablename__ = "role_permissions"
 
     role_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("roles.id", ondelete="CASCADE"),
         primary_key=True,
     )
 
     permission_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("permissions.id", ondelete="CASCADE"),
         primary_key=True,
     )
@@ -215,20 +215,20 @@ class UserRole(Base):
     __tablename__ = "user_roles"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
 
     role_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("roles.id", ondelete="CASCADE"),
         primary_key=True,
     )
 
     # Who assigned this role
     assigned_by: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
