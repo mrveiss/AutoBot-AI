@@ -127,7 +127,7 @@ def check_env_file(env_path: str = "/opt/autobot/autobot-backend/.env") -> Check
                 message=f"Env file not found: {env_path}",
                 fixable=False,
             )
-        with open(env_path) as f:
+        with open(env_path, encoding="utf-8") as f:
             content = f.read()
         defined = {
             line.split("=")[0].strip() for line in content.splitlines() if "=" in line and not line.startswith("#")

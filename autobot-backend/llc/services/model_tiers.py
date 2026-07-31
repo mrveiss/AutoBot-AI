@@ -56,7 +56,7 @@ def _load_platform_defaults() -> Dict[str, Dict[str, str]]:
     try:
         import yaml  # PyYAML — available in autobot-backend
 
-        with open(_TIERS_YAML_PATH) as fh:
+        with open(_TIERS_YAML_PATH, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
         # Keep only entries that have both senior and assistant keys.
         tiers = {}

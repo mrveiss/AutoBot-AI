@@ -207,6 +207,20 @@ repos:
         stages: [pre-commit]
         description: "Use TTL_* named constants from autobot_shared.ssot_constants instead of literal ints in setex/expire/pexpire/Cache.set(ttl=)"
 
+  # AutoBot custom: regression-prevention for the CLAUDE.md encoding rule (#3391
+  # / #13151). Text-mode open() without encoding= falls back to the platform
+  # locale and silently corrupts non-ASCII content. #3391 fixed an enumerated
+  # file list but added no guard, so the pattern drifted back.
+  - repo: local
+    hooks:
+      - id: no-open-without-encoding
+        name: Require encoding= on text-mode open() (#3391 / #13151)
+        entry: pipeline-scripts/check_open_encoding.py
+        language: python
+        files: \.py$
+        stages: [pre-commit]
+        description: "Add encoding='utf-8' to text-mode open()/io.open()/aiofiles.open(); binary modes are exempt"
+
   # AutoBot custom: regression-prevention for #6976 AC3 i18n plural-form bug.
   # vue-i18n requires a 3rd positional count arg for plural-form keys
   # (keys whose en.json value contains the `|` separator). Omitting it causes
