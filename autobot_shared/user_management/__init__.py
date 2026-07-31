@@ -12,6 +12,11 @@ Movers so far:
 - `schemas.user` (#12647) — identical apart from Pydantic v1/v2 config style;
   no SQLAlchemy dependency, so it does not need the declarative-base decision
   gating the model files.
+- `models.base` (#12647) — the declarative base itself, resolving the
+  backend/SLM design fork per the owner's 2026-07-31 decision: a new
+  canonical base preserving both sides' properties (AsyncAttrs +
+  eager_defaults from backend; postgresql.UUID typing from SLM), not an
+  adoption of either fork.
 
 Each fork keeps a re-export shim so existing importers are untouched — the
 fork is removed, not the callers.
@@ -20,6 +25,12 @@ fork is removed, not the callers.
 from autobot_shared.user_management.base_service import (  # noqa: F401
     BaseService,
     TenantContext,
+)
+from autobot_shared.user_management.models.base import (  # noqa: F401
+    Base,
+    SoftDeleteMixin,
+    TenantMixin,
+    TimestampMixin,
 )
 from autobot_shared.user_management.schemas.user import (  # noqa: F401
     PasswordChange,
@@ -34,6 +45,10 @@ from autobot_shared.user_management.schemas.user import (  # noqa: F401
 __all__ = [
     "BaseService",
     "TenantContext",
+    "Base",
+    "TimestampMixin",
+    "TenantMixin",
+    "SoftDeleteMixin",
     "RoleResponse",
     "UserCreate",
     "UserUpdate",
