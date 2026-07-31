@@ -19,52 +19,26 @@ import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
+import type {
+  PermissionMode,
+  PermissionAction,
+  PermissionRule,
+  ApprovalRecord,
+  PermissionStatus,
+} from '@/config/ssot-config'
 
 const logger = createLogger('usePermissionStore')
 
-// Permission modes matching backend PermissionMode enum
-export type PermissionMode =
-  | 'default'
-  | 'acceptEdits'
-  | 'plan'
-  | 'dontAsk'
-  | 'bypassPermissions'
-
-// Permission actions matching backend PermissionAction enum
-export type PermissionAction = 'allow' | 'ask' | 'deny'
-
-// Permission rule interface
-export interface PermissionRule {
-  tool: string
-  pattern: string
-  action: PermissionAction
-  description: string
-}
-
-// Approval record interface
-export interface ApprovalRecord {
-  pattern: string
-  tool: string
-  risk_level: string
-  user_id: string
-  created_at: number
-  original_command: string
-  comment?: string
-}
-
-// Permission status interface
-export interface PermissionStatus {
-  enabled: boolean
-  mode: PermissionMode
-  approval_memory_enabled: boolean
-  approval_memory_ttl_days: number
-  rules_file: string
-  rules_count: {
-    allow: number
-    ask: number
-    deny: number
-    total: number
-  }
+// Permission vocabulary is defined once, in `@/config/ssot-config` (the mirror
+// of `autobot_shared/ssot_config.py`).  These were previously re-declared here
+// verbatim, giving the same app two copies of one union (#13073); they are now
+// re-exported so every existing `usePermissionStore` type import keeps working.
+export type {
+  PermissionMode,
+  PermissionAction,
+  PermissionRule,
+  ApprovalRecord,
+  PermissionStatus,
 }
 
 // API response types
