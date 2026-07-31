@@ -23,6 +23,8 @@ role's provisioning half would still not land. This closes the code half only.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -116,23 +118,53 @@ def test_streaming_route_is_actually_in_the_template() -> None:
 
 
 def test_tts_include_escalates_privilege() -> None:
-    """The include must run with become (#12886).
+    """The include must escalate, via ``apply`` (#12886).
 
     This play sets no play-level ``become`` — unlike deploy-full.yml, which the
     role is normally applied under — and /opt/autobot/autobot-tts-worker is owned
     by the autobot-tts service account, not the user ansible connects as. Without
-    it the first task dies with "Destination ... not writable" and the worker is
-    still never refreshed. Caught on a live run, not in review.
+    escalation the first task dies "Destination ... not writable".
+
+    It must be ``apply: {become: true}``, NOT a bare ``become:`` task keyword:
+    ``become`` is not valid on include_role, and ansible rejects the ENTIRE
+    playbook with "'become' is not a valid attribute for a IncludeRole" — which
+    breaks every self-update, not just this task. Both mistakes were made on a
+    live host before this test existed.
     """
     playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
 
     for task in _iter_mappings(playbook):
         inc = task.get("ansible.builtin.include_role") or task.get("include_role")
         if isinstance(inc, dict) and inc.get("name") == "tts-worker":
-            assert task.get("become") is True, (
-                "the tts-worker include must set become: true — the deployed tree "
-                "is owned by a different service account"
+            assert task.get("become") is None, (
+                "bare `become:` on include_role makes ansible reject the whole " "playbook — use apply: {become: true}"
+            )
+            assert (inc.get("apply") or {}).get("become") is True, (
+                "the tts-worker include must escalate via apply: {become: true} — "
+                "the deployed tree is owned by a different service account"
             )
             return
 
     raise AssertionError("no tts-worker include_role task found")
+
+
+def test_playbook_passes_ansible_syntax_check() -> None:
+    """Validate with ansible itself, not just a YAML parse (#12886).
+
+    A YAML-valid playbook can still be semantically invalid — a bare `become:`
+    on include_role parses fine and then breaks every self-update at run time.
+    Only ansible's own parser catches that class, so gate on it here.
+    """
+    ansible = shutil.which("ansible-playbook")
+    if ansible is None:
+        pytest.skip("ansible-playbook not installed")
+
+    result = subprocess.run(
+        [ansible, "--syntax-check", "-i", "localhost,", str(_PLAYBOOK)],
+        capture_output=True,
+        text=True,
+        cwd=_ANSIBLE,
+        timeout=180,
+    )
+
+    assert result.returncode == 0, f"ansible rejected the playbook:\n{result.stderr[-1200:]}"

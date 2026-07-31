@@ -1015,7 +1015,12 @@
       ansible.builtin.include_role:
         name: tts-worker
         tasks_from: code_only
-      become: true
+        # `become` is NOT a valid task keyword on include_role (a dynamic
+        # include) — ansible rejects the whole playbook with "'become' is not a
+        # valid attribute for a IncludeRole", which breaks every self-update.
+        # `apply` is how privilege is handed to the included tasks.
+        apply:
+          become: true
       when: "'npu' in group_names"
       tags: [tts, tts-worker, deploy]
 
