@@ -12,7 +12,11 @@
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { getBackendUrl } from '@/config/ssot-config'
+import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 
+// `authStore.getApiUrl()` is retained for DISPLAY only (the "API endpoint"
+// field and the summary row): it reports the SLM host origin the operator is
+// pointed at. Every transport call goes through the canonical client (#13140).
 const authStore = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
@@ -37,25 +41,22 @@ async function fetchSettings(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch(`${authStore.getApiUrl()}/api/settings`, {
-      headers: authStore.getAuthHeaders(),
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      data.forEach((s: { key: string; value: string | null }) => {
-        if (s.value !== null && s.key in settings.value) {
-          const key = s.key as keyof typeof settings.value
-          if (typeof settings.value[key] === 'boolean') {
-            (settings.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
-          } else if (typeof settings.value[key] === 'number') {
-            (settings.value as Record<string, string | number | boolean>)[key] = parseInt(s.value)
-          } else {
-            (settings.value as Record<string, string | number | boolean>)[key] = s.value
-          }
+    // #13140: canonical SLM client. A rejected session now surfaces as an
+    // error (and clears the session) instead of being swallowed and leaving
+    // the panel showing its hard-coded defaults.
+    const data = await listSettings()
+    data.forEach((s) => {
+      if (s.value !== null && s.value !== undefined && s.key in settings.value) {
+        const key = s.key as keyof typeof settings.value
+        if (typeof settings.value[key] === 'boolean') {
+          (settings.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
+        } else if (typeof settings.value[key] === 'number') {
+          (settings.value as Record<string, string | number | boolean>)[key] = parseInt(s.value)
+        } else {
+          (settings.value as Record<string, string | number | boolean>)[key] = s.value
         }
-      })
-    }
+      }
+    })
 
     // Set API endpoint from auth store if not in settings
     if (!settings.value.api_endpoint) {
@@ -97,16 +98,9 @@ async function saveSetting(key: string, value: string | number | boolean): Promi
   success.value = null
 
   try {
-    const response = await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-      method: 'PUT',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ value: String(value) }),
-    })
+    const ok = await upsertSetting(key, { value: String(value) })
 
-    if (!response.ok) {
+    if (!ok) {
       throw new Error('Failed to save setting')
     }
 
