@@ -168,3 +168,37 @@ def test_playbook_passes_ansible_syntax_check() -> None:
     )
 
     assert result.returncode == 0, f"ansible rejected the playbook:\n{result.stderr[-1200:]}"
+
+
+def test_tts_restart_is_flushed_before_later_tasks_can_fail() -> None:
+    """The TTS restart must not be deferred to end of play (#12886).
+
+    Handlers normally flush at the end of a play, so any later failure swallows
+    them. PLAY 2 has a known terminal failure in the browser tasks (#12912), and
+    on the first successful delivery that is exactly what happened: the worker
+    file was written with the streaming route, the play died at the browser wait,
+    `restart tts-worker` never ran, and the worker kept serving days-old code
+    from memory. Delivery without restart is not delivery.
+    """
+    playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
+
+    for play in playbook:
+        tasks = play.get("tasks") or []
+        tts_idx = flush_idx = None
+        for i, task in enumerate(tasks):
+            inc = task.get("ansible.builtin.include_role") or task.get("include_role")
+            if isinstance(inc, dict) and inc.get("name") == "tts-worker":
+                tts_idx = i
+            meta = task.get("ansible.builtin.meta") or task.get("meta")
+            if meta == "flush_handlers" and tts_idx is not None and flush_idx is None:
+                flush_idx = i
+        if tts_idx is None:
+            continue
+        assert flush_idx is not None, (
+            "no flush_handlers after the tts-worker include — the restart would be "
+            "deferred to end of play and lost to any later failure (#12912)"
+        )
+        assert flush_idx > tts_idx, "flush_handlers must come AFTER the tts include"
+        return
+
+    raise AssertionError("no play contained the tts-worker include")
