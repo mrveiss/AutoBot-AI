@@ -113,3 +113,26 @@ def test_streaming_route_is_actually_in_the_template() -> None:
         "the route the backend calls is missing from the template — "
         "wiring the updater would deliver a worker that still 404s"
     )
+
+
+def test_tts_include_escalates_privilege() -> None:
+    """The include must run with become (#12886).
+
+    This play sets no play-level ``become`` — unlike deploy-full.yml, which the
+    role is normally applied under — and /opt/autobot/autobot-tts-worker is owned
+    by the autobot-tts service account, not the user ansible connects as. Without
+    it the first task dies with "Destination ... not writable" and the worker is
+    still never refreshed. Caught on a live run, not in review.
+    """
+    playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
+
+    for task in _iter_mappings(playbook):
+        inc = task.get("ansible.builtin.include_role") or task.get("include_role")
+        if isinstance(inc, dict) and inc.get("name") == "tts-worker":
+            assert task.get("become") is True, (
+                "the tts-worker include must set become: true — the deployed tree "
+                "is owned by a different service account"
+            )
+            return
+
+    raise AssertionError("no tts-worker include_role task found")
