@@ -107,9 +107,9 @@ def test_path_expression_still_reads_from_the_selector() -> None:
     """Pin the call site, so the fix cannot be bypassed by a literal path."""
     src = _SRC.read_text(encoding="utf-8")
 
-    assert '"/api/ws/events" if _is_direct_uvicorn_url(' in src, (
-        "the ws path must still be chosen by _is_direct_uvicorn_url"
-    )
+    assert (
+        '"/api/ws/events" if _is_direct_uvicorn_url(' in src
+    ), "the ws path must still be chosen by _is_direct_uvicorn_url"
     assert '"/slm/api/ws/events"' in src, "the nginx-prefixed path must remain the fallback"
 
 
