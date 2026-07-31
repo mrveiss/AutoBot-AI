@@ -11,8 +11,10 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { createLogger } from '@/utils/debugUtils'
+import { slmApiClient } from '@/utils/ApiClient'
+
+const logger = createLogger('AlertsMonitor')
 
 const {
   alerts,
@@ -22,8 +24,8 @@ const {
   isLoading,
 } = usePrometheusMetrics({ autoFetch: false })
 
-const authStore = useAuthStore()
 const isClearing = ref(false)
+const clearError = ref<string | null>(null)
 
 // State
 const activeTab = ref<'alerts' | 'recommendations'>('alerts')
@@ -127,11 +129,24 @@ function isAcknowledged(index: number): boolean {
 async function clearAlerts() {
   if (!confirm('Clear all active alerts? This cannot be undone.')) return
   isClearing.value = true
+  clearError.value = null
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (authStore.token) headers.Authorization = `Bearer ${authStore.token}`
-    await fetch(`${getSlmApiBase()}/monitoring/alerts`, { method: 'DELETE', headers })
+    // The bearer was built from `authStore.token`, a ref seeded from storage
+    // once at store construction, so a token that landed later left this
+    // DESTRUCTIVE call with no credential; the client re-reads storage per
+    // request. It also supplies the base URL, a timeout and 401 handling.
+    //
+    // BEHAVIOUR CHANGE, deliberate: the previous `await fetch(...)` discarded
+    // its Response entirely, so a rejected clear (401/403/500) reported
+    // NOTHING — `refresh()` just re-rendered the same alerts and the operator
+    // was left to infer that the destructive action they had confirmed had
+    // silently done nothing. `delete()` rejects, and this catch surfaces it
+    // rather than letting it escape as an unhandled rejection.
+    await slmApiClient.delete('/monitoring/alerts')
     await refresh()
+  } catch (e) {
+    logger.error('Failed to clear alerts:', e)
+    clearError.value = e instanceof Error ? e.message : String(e)
   } finally {
     isClearing.value = false
   }
@@ -185,6 +200,16 @@ onUnmounted(() => {
           {{ $t('monitoring.alertsMonitor.refresh') }}
         </button>
       </div>
+    </div>
+
+    <!-- Clear failure — a discarded DELETE response used to report nothing -->
+    <div
+      v-if="clearError"
+      role="alert"
+      data-testid="clear-alerts-error"
+      class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700"
+    >
+      {{ $t('monitoring.alertsMonitor.clearFailed', { message: clearError }) }}
     </div>
 
     <!-- Summary Cards -->
