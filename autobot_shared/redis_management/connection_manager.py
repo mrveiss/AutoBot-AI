@@ -196,21 +196,43 @@ class RedisConnectionManager:
         - Comprehensive statistics
 
         Refactored for Issue #620.
+
+        #12647: ``_init_configurations`` resolves the Redis host via
+        ``NetworkConstants.REDIS_VM_IP``, which — when no config-manager or env
+        value is set — goes through ``ConfigRegistry.get()``'s Redis-backed
+        cache tier, which constructs a Redis client, which constructs *this
+        same singleton* to look up its own host. ``__new__`` correctly returns
+        the same (not-yet-initialized) instance, but Python still calls
+        ``__init__`` again on it — and the OLD ``_initialized`` guard is set
+        only at the very end, so the re-entrant call saw no guard and reran
+        every init step from scratch, recursing without bound (confirmed via a
+        captured traceback: RedisConnectionManager() -> _load_redis_config ->
+        NetworkConstants.REDIS_VM_IP -> ConfigRegistry.get -> _get_redis ->
+        get_redis_client -> RedisConnectionManager() again). Marking
+        "initializing" BEFORE running any init step lets the re-entrant call
+        return immediately instead; its caller (ConfigRegistry._get_redis,
+        already wrapped in a broad except) then degrades to the env/registry-
+        defaults tier exactly as the "graceful fallback chain" docstring
+        promises, rather than blowing the stack.
         """
-        if hasattr(self, "_initialized"):
+        if hasattr(self, "_initialized") or getattr(self, "_initializing", False):
             return
+        self._initializing = True
 
-        # Initialize all subsystems using helper methods. Issue #620.
-        self._init_pool_and_client_storage()
-        self._init_circuit_breaker_state()
-        self._init_tcp_keepalive_options()
-        self._init_connection_tracking()
-        self._init_configurations()
-        self._init_statistics_tracking()
-        self._init_cleanup_configuration()
+        try:
+            # Initialize all subsystems using helper methods. Issue #620.
+            self._init_pool_and_client_storage()
+            self._init_circuit_breaker_state()
+            self._init_tcp_keepalive_options()
+            self._init_connection_tracking()
+            self._init_configurations()
+            self._init_statistics_tracking()
+            self._init_cleanup_configuration()
 
-        self._initialized = True
-        logger.info("Enhanced Redis Connection Manager initialized with consolidated features")
+            self._initialized = True
+            logger.info("Enhanced Redis Connection Manager initialized with consolidated features")
+        finally:
+            self._initializing = False
 
     def _init_pool_and_client_storage(self) -> None:
         """
