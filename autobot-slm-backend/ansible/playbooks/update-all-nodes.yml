@@ -1037,13 +1037,18 @@
     #      the restart stays stale forever, with nothing left to trigger it.
     #
     # An unconditional restart is idempotent in effect and cannot be swallowed.
+    # Deliberately NOT `failed_when: false`, unlike the NPU/Browser restarts
+    # above. This whole issue exists because a worker kept serving stale code
+    # while the update reported success — swallowing a failed restart here would
+    # reintroduce exactly that: the file lands, the process never reloads, and
+    # nothing says so. A restart that cannot complete is a real failure and
+    # should be visible.
     - name: "[PLAY 2] TTS | Restart service"
       systemd:
         name: autobot-tts-worker
         state: restarted
       become: true
       when: "'npu' in group_names"
-      failed_when: false
       tags: [tts, tts-worker, restart]
 
     # ----- Browser Worker -----

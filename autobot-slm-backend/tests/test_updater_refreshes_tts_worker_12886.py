@@ -211,3 +211,27 @@ def test_tts_service_is_restarted_explicitly() -> None:
         return
 
     raise AssertionError("no play contained the tts-worker include")
+
+
+def test_tts_restart_does_not_fail_open() -> None:
+    """A failed TTS restart must surface, not be swallowed (#12886).
+
+    Flagged by security review as fail-open state drift. `failed_when: false`
+    would mean the file lands, the process never reloads, the play reports
+    success and nothing says otherwise — the precise silent-non-delivery failure
+    this issue is about. The NPU/Browser restarts above do swallow errors; that
+    convention is not appropriate for the task whose entire purpose is proving
+    the worker actually reloaded.
+    """
+    playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
+
+    for task in _iter_mappings(playbook):
+        svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
+        if isinstance(svc, dict) and svc.get("name") == "autobot-tts-worker":
+            assert task.get("failed_when") is not False, (
+                "the TTS restart must not fail open — a swallowed restart failure "
+                "leaves the worker serving stale code with the update green"
+            )
+            return
+
+    raise AssertionError("no autobot-tts-worker restart task found")
