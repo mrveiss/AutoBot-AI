@@ -5128,6 +5128,9 @@ export interface paths {
         /**
          * Delete Secret
          * @description Delete a system secret (admin only).
+         *
+         *     Also deletes any imported vault copy (#10088 Task 6a) so a deleted
+         *     secret can never resurrect through the vault-fallback read path.
          */
         delete: operations["delete_secret_api_secrets__key__delete"];
         options?: never;
@@ -5145,6 +5148,10 @@ export interface paths {
         /**
          * Get Secret Value
          * @description Get a decrypted secret value (admin only, for fleet provisioning).
+         *
+         *     Legacy ``system_secrets`` first, unified System vault fallback (#10088
+         *     Task 6a) — a key imported by the vault migration and later pruned from
+         *     ``system_secrets`` stays reachable here.
          */
         get: operations["get_secret_value_api_secrets__key__value_get"];
         put?: never;
@@ -8100,6 +8107,13 @@ export interface components {
              * @default 0
              */
             outdated_nodes: number;
+            /** Self Update Detail */
+            self_update_detail?: string | null;
+            /**
+             * Self Update Incomplete
+             * @default false
+             */
+            self_update_incomplete: boolean;
             /**
              * Stale Components
              * @default []
@@ -12102,7 +12116,11 @@ export interface components {
         };
         /**
          * ServiceActionRequest
-         * @description Request for a service action.
+         * @description Request for a service action (start/stop/restart via orchestration).
+         *
+         *     Issue #12755: canonicalized from the duplicate defined in
+         *     api/orchestration.py — action is carried in the URL path, this body
+         *     only carries optional targeting/behavior flags.
          */
         ServiceActionRequest: {
             /**
@@ -13411,7 +13429,7 @@ export interface components {
             /** Total */
             total: number;
             /** Users */
-            users: components["schemas"]["user_management__schemas__user__UserResponse"][];
+            users: components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"][];
         } & {
             [key: string]: unknown;
         };
@@ -13783,6 +13801,130 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * RoleResponse
+         * @description Role information in responses.
+         */
+        autobot_shared__user_management__schemas__user__RoleResponse: {
+            /** Description */
+            description?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Is System
+             * @default false
+             */
+            is_system: boolean;
+            /** Name */
+            name: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UserCreate
+         * @description Request model for creating a user.
+         */
+        autobot_shared__user_management__schemas__user__UserCreate: {
+            /**
+             * Display Name
+             * @description Display name
+             */
+            display_name?: string | null;
+            /**
+             * Email
+             * Format: email
+             * @description User email address
+             */
+            email: string;
+            /**
+             * Org Id
+             * @description Organization ID (uses current context if not provided)
+             */
+            org_id?: string | null;
+            /**
+             * Password
+             * @description Password (8-128 characters, optional for SSO users)
+             */
+            password?: string | null;
+            /**
+             * Role Ids
+             * @description List of role IDs to assign
+             */
+            role_ids?: string[] | null;
+            /**
+             * Username
+             * @description Username (3-100 characters, alphanumeric and underscores)
+             */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * UserResponse
+         * @description Response model for a single user.
+         */
+        autobot_shared__user_management__schemas__user__UserResponse: {
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /** Bio */
+            bio?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Display Name */
+            display_name?: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /**
+             * Is Platform Admin
+             * @default false
+             */
+            is_platform_admin: boolean;
+            /**
+             * Is Verified
+             * @default false
+             */
+            is_verified: boolean;
+            /** Last Login At */
+            last_login_at?: string | null;
+            /**
+             * Mfa Enabled
+             * @default false
+             */
+            mfa_enabled: boolean;
+            /** Org Id */
+            org_id?: string | null;
+            /** Preferences */
+            preferences?: {
+                [key: string]: unknown;
+            };
+            /** Roles */
+            roles?: components["schemas"]["autobot_shared__user_management__schemas__user__RoleResponse"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Username */
+            username: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * FleetServiceStatus
          * @description Service status across the fleet.
          */
@@ -13879,130 +14021,6 @@ export interface components {
             is_admin: boolean;
             /** Last Login */
             last_login?: string | null;
-            /** Username */
-            username: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * RoleResponse
-         * @description Role information in responses.
-         */
-        user_management__schemas__user__RoleResponse: {
-            /** Description */
-            description?: string | null;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Is System
-             * @default false
-             */
-            is_system: boolean;
-            /** Name */
-            name: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * UserCreate
-         * @description Request model for creating a user.
-         */
-        user_management__schemas__user__UserCreate: {
-            /**
-             * Display Name
-             * @description Display name
-             */
-            display_name?: string | null;
-            /**
-             * Email
-             * Format: email
-             * @description User email address
-             */
-            email: string;
-            /**
-             * Org Id
-             * @description Organization ID (uses current context if not provided)
-             */
-            org_id?: string | null;
-            /**
-             * Password
-             * @description Password (8-128 characters, optional for SSO users)
-             */
-            password?: string | null;
-            /**
-             * Role Ids
-             * @description List of role IDs to assign
-             */
-            role_ids?: string[] | null;
-            /**
-             * Username
-             * @description Username (3-100 characters, alphanumeric and underscores)
-             */
-            username: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /**
-         * UserResponse
-         * @description Response model for a single user.
-         */
-        user_management__schemas__user__UserResponse: {
-            /** Avatar Url */
-            avatar_url?: string | null;
-            /** Bio */
-            bio?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Display Name */
-            display_name?: string | null;
-            /** Email */
-            email: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Is Active
-             * @default true
-             */
-            is_active: boolean;
-            /**
-             * Is Platform Admin
-             * @default false
-             */
-            is_platform_admin: boolean;
-            /**
-             * Is Verified
-             * @default false
-             */
-            is_verified: boolean;
-            /** Last Login At */
-            last_login_at?: string | null;
-            /**
-             * Mfa Enabled
-             * @default false
-             */
-            mfa_enabled: boolean;
-            /** Org Id */
-            org_id?: string | null;
-            /** Preferences */
-            preferences?: {
-                [key: string]: unknown;
-            };
-            /** Roles */
-            roles?: components["schemas"]["user_management__schemas__user__RoleResponse"][];
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
             /** Username */
             username: string;
         } & {
@@ -15043,7 +15061,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["user_management__schemas__user__UserCreate"];
+                "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserCreate"];
             };
         };
         responses: {
@@ -15053,7 +15071,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15084,7 +15102,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15148,7 +15166,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -23940,7 +23958,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["user_management__schemas__user__UserCreate"];
+                "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserCreate"];
             };
         };
         responses: {
@@ -23950,7 +23968,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -23981,7 +23999,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -24045,7 +24063,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["user_management__schemas__user__UserResponse"];
+                    "application/json": components["schemas"]["autobot_shared__user_management__schemas__user__UserResponse"];
                 };
             };
             /** @description Validation Error */

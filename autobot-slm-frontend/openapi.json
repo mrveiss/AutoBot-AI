@@ -2862,6 +2862,22 @@
             "title": "Outdated Nodes",
             "type": "integer"
           },
+          "self_update_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Self Update Detail"
+          },
+          "self_update_incomplete": {
+            "default": false,
+            "title": "Self Update Incomplete",
+            "type": "boolean"
+          },
           "stale_components": {
             "default": [],
             "items": {
@@ -10937,7 +10953,7 @@
         "type": "object"
       },
       "ServiceActionRequest": {
-        "description": "Request for a service action.",
+        "description": "Request for a service action (start/stop/restart via orchestration).\n\nIssue #12755: canonicalized from the duplicate defined in\napi/orchestration.py — action is carried in the URL path, this body\nonly carries optional targeting/behavior flags.",
         "properties": {
           "force": {
             "default": false,
@@ -13445,7 +13461,7 @@
           },
           "users": {
             "items": {
-              "$ref": "#/components/schemas/user_management__schemas__user__UserResponse"
+              "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
             },
             "title": "Users",
             "type": "array"
@@ -14347,6 +14363,248 @@
         "title": "RoleResponse",
         "type": "object"
       },
+      "autobot_shared__user_management__schemas__user__RoleResponse": {
+        "description": "Role information in responses.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_system": {
+            "default": false,
+            "title": "Is System",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "RoleResponse",
+        "type": "object"
+      },
+      "autobot_shared__user_management__schemas__user__UserCreate": {
+        "description": "Request model for creating a user.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Display name",
+            "title": "Display Name"
+          },
+          "email": {
+            "description": "User email address",
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Organization ID (uses current context if not provided)",
+            "title": "Org Id"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Password (8-128 characters, optional for SSO users)",
+            "title": "Password"
+          },
+          "role_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "List of role IDs to assign",
+            "title": "Role Ids"
+          },
+          "username": {
+            "description": "Username (3-100 characters, alphanumeric and underscores)",
+            "maxLength": 100,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "username"
+        ],
+        "title": "UserCreate",
+        "type": "object"
+      },
+      "autobot_shared__user_management__schemas__user__UserResponse": {
+        "description": "Response model for a single user.",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_platform_admin": {
+            "default": false,
+            "title": "Is Platform Admin",
+            "type": "boolean"
+          },
+          "is_verified": {
+            "default": false,
+            "title": "Is Verified",
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "mfa_enabled": {
+            "default": false,
+            "title": "Mfa Enabled",
+            "type": "boolean"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "preferences": {
+            "additionalProperties": true,
+            "title": "Preferences",
+            "type": "object"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__RoleResponse"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "username",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserResponse",
+        "type": "object"
+      },
       "models__schemas__FleetServiceStatus": {
         "description": "Service status across the fleet.",
         "properties": {
@@ -14531,248 +14789,6 @@
           "username",
           "is_active",
           "created_at"
-        ],
-        "title": "UserResponse",
-        "type": "object"
-      },
-      "user_management__schemas__user__RoleResponse": {
-        "description": "Role information in responses.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "is_system": {
-            "default": false,
-            "title": "Is System",
-            "type": "boolean"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "RoleResponse",
-        "type": "object"
-      },
-      "user_management__schemas__user__UserCreate": {
-        "description": "Request model for creating a user.",
-        "properties": {
-          "display_name": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Display name",
-            "title": "Display Name"
-          },
-          "email": {
-            "description": "User email address",
-            "format": "email",
-            "title": "Email",
-            "type": "string"
-          },
-          "org_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Organization ID (uses current context if not provided)",
-            "title": "Org Id"
-          },
-          "password": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 8,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Password (8-128 characters, optional for SSO users)",
-            "title": "Password"
-          },
-          "role_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "List of role IDs to assign",
-            "title": "Role Ids"
-          },
-          "username": {
-            "description": "Username (3-100 characters, alphanumeric and underscores)",
-            "maxLength": 100,
-            "minLength": 3,
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email",
-          "username"
-        ],
-        "title": "UserCreate",
-        "type": "object"
-      },
-      "user_management__schemas__user__UserResponse": {
-        "description": "Response model for a single user.",
-        "properties": {
-          "avatar_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avatar Url"
-          },
-          "bio": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bio"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "email": {
-            "title": "Email",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "is_active": {
-            "default": true,
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "is_platform_admin": {
-            "default": false,
-            "title": "Is Platform Admin",
-            "type": "boolean"
-          },
-          "is_verified": {
-            "default": false,
-            "title": "Is Verified",
-            "type": "boolean"
-          },
-          "last_login_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Login At"
-          },
-          "mfa_enabled": {
-            "default": false,
-            "title": "Mfa Enabled",
-            "type": "boolean"
-          },
-          "org_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Org Id"
-          },
-          "preferences": {
-            "additionalProperties": true,
-            "title": "Preferences",
-            "type": "object"
-          },
-          "roles": {
-            "items": {
-              "$ref": "#/components/schemas/user_management__schemas__user__RoleResponse"
-            },
-            "title": "Roles",
-            "type": "array"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "email",
-          "username",
-          "created_at",
-          "updated_at"
         ],
         "title": "UserResponse",
         "type": "object"
@@ -16394,7 +16410,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/user_management__schemas__user__UserCreate"
+                "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserCreate"
               }
             }
           },
@@ -16405,7 +16421,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
                 }
               }
             },
@@ -16494,7 +16510,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
                 }
               }
             },
@@ -16551,7 +16567,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
                 }
               }
             },
@@ -29662,7 +29678,7 @@
     },
     "/api/secrets/{key}": {
       "delete": {
-        "description": "Delete a system secret (admin only).",
+        "description": "Delete a system secret (admin only).\n\nAlso deletes any imported vault copy (#10088 Task 6a) so a deleted\nsecret can never resurrect through the vault-fallback read path.",
         "operationId": "delete_secret_api_secrets__key__delete",
         "parameters": [
           {
@@ -29805,7 +29821,7 @@
     },
     "/api/secrets/{key}/value": {
       "get": {
-        "description": "Get a decrypted secret value (admin only, for fleet provisioning).",
+        "description": "Get a decrypted secret value (admin only, for fleet provisioning).\n\nLegacy ``system_secrets`` first, unified System vault fallback (#10088\nTask 6a) — a key imported by the vault migration and later pruned from\n``system_secrets`` stays reachable here.",
         "operationId": "get_secret_value_api_secrets__key__value_get",
         "parameters": [
           {
@@ -31972,7 +31988,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/user_management__schemas__user__UserCreate"
+                "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserCreate"
               }
             }
           },
@@ -31983,7 +31999,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
                 }
               }
             },
@@ -32072,7 +32088,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
                 }
               }
             },
@@ -32129,7 +32145,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
                 }
               }
             },

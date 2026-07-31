@@ -7,7 +7,18 @@
  * SLM Type Definitions
  */
 
-export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline' | 'maintenance' | 'online' | 'error' | 'decommissioned'
+import type { components } from './generated/api'
+
+/**
+ * Node status — derived from the generated OpenAPI type (#12662), which is
+ * itself generated from the backend's canonical `NodeStatus` enum
+ * (autobot-slm-backend/models/database.py). Do not hand-declare this union;
+ * it drifted to 11 hand-invented values ('registered', 'healthy',
+ * 'unhealthy') that the backend has never emitted before #12662 fixed it.
+ * Re-run `npm run gen:types:openapi && npm run gen:types` after a backend
+ * enum change — `verify-generated-types-slm` (CI) fails if this drifts.
+ */
+export type NodeStatus = components['schemas']['NodeStatus']
 
 export type NodeRole =
   | 'slm-backend'

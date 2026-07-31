@@ -48,18 +48,14 @@ describe('NodeCard enroll/recovery action (#12477)', () => {
     expect(btn.text()).toContain(en.fleet.nodeCard.enrollNode)
   })
 
-  it('shows the Enroll action for registered nodes', async () => {
-    expect((await mountCard('registered')).find('[data-test="enroll-action"]').exists()).toBe(true)
-  })
-
   it('exposes the recovery action labelled "Recover Connection" for degraded nodes', async () => {
     const btn = (await mountCard('degraded')).find('[data-test="enroll-action"]')
     expect(btn.exists()).toBe(true)
     expect(btn.text()).toContain(en.fleet.nodeCard.recoverConnection)
   })
 
-  it('exposes the recovery action for offline, unhealthy and error nodes', async () => {
-    for (const status of ['offline', 'unhealthy', 'error'] as NodeStatus[]) {
+  it('exposes the recovery action for offline and error nodes', async () => {
+    for (const status of ['offline', 'error'] as NodeStatus[]) {
       const btn = (await mountCard(status)).find('[data-test="enroll-action"]')
       expect(btn.exists()).toBe(true)
       expect(btn.text()).toContain(en.fleet.nodeCard.recoverConnection)
@@ -74,7 +70,7 @@ describe('NodeCard enroll/recovery action (#12477)', () => {
     expect(events![0]).toEqual(['enroll', 'node-1'])
   })
 
-  it('does not show the enroll/recovery action for healthy nodes', async () => {
-    expect((await mountCard('healthy')).find('[data-test="enroll-action"]').exists()).toBe(false)
+  it('does not show the enroll/recovery action for online nodes', async () => {
+    expect((await mountCard('online')).find('[data-test="enroll-action"]').exists()).toBe(false)
   })
 })

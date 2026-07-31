@@ -41,13 +41,13 @@ export function useFleetHealth() {
 
     for (const node of nodes.value.values()) {
       switch (node.status) {
-        case 'healthy':
+        case 'online':
           healthy++
           break
         case 'degraded':
           degraded++
           break
-        case 'unhealthy':
+        case 'error':
           unhealthy++
           break
         case 'offline':
@@ -93,9 +93,9 @@ export function useFleetHealth() {
     const node = nodes.value.get(nodeId)
     if (node) {
       node.health = health
-      node.status = health.status === 'healthy' ? 'healthy' :
+      node.status = health.status === 'healthy' ? 'online' :
                     health.status === 'degraded' ? 'degraded' :
-                    health.status === 'unhealthy' ? 'unhealthy' : 'offline'
+                    health.status === 'unhealthy' ? 'error' : 'offline'
       nodes.value.set(nodeId, { ...node })
     }
   }

@@ -30,14 +30,11 @@ const showMenu = ref(false)
 const statusClass = computed(() => {
   switch (props.node.status) {
     case 'online': return 'bg-green-500'
-    case 'healthy': return 'bg-green-500'
     case 'degraded': return 'bg-yellow-500'
-    case 'unhealthy': return 'bg-red-500'
     case 'offline': return 'bg-gray-400'
     case 'error': return 'bg-red-500'
     case 'enrolling': return 'bg-blue-500 animate-pulse'
     case 'pending': return 'bg-gray-400'
-    case 'registered': return 'bg-gray-400'
     case 'decommissioned': return 'bg-gray-300'
     default: return 'bg-gray-400'
   }
@@ -63,19 +60,18 @@ const lastSeen = computed(() => {
 })
 
 const canEnroll = computed(() => {
-  return props.node.status === 'registered' || props.node.status === 'pending'
+  return props.node.status === 'pending'
 })
 
-// #12477: A degraded/offline/unhealthy/error node has a broken connection the
-// operator must be able to re-establish. The POST /nodes/{id}/enroll endpoint
-// has no status guard and re-runs the enrollment flow (reinstalls the key via
-// an SSH password), so recovery reuses the same 'enroll' action. This is
+// #12477: A degraded/offline/error node has a broken connection the operator
+// must be able to re-establish. The POST /nodes/{id}/enroll endpoint has no
+// status guard and re-runs the enrollment flow (reinstalls the key via an
+// SSH password), so recovery reuses the same 'enroll' action. This is
 // distinct from the decommissioned-only 'reenroll' endpoint, which rejects any
 // non-decommissioned node.
 const canRecover = computed(() => {
   return (
     props.node.status === 'degraded' ||
-    props.node.status === 'unhealthy' ||
     props.node.status === 'offline' ||
     props.node.status === 'error'
   )
