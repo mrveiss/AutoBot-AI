@@ -57,10 +57,7 @@ class TestAuditVocabulary:
         Since #12647 both backends re-export one shared module, so this pins
         object *identity* — same-named twins are not interchangeable (#12913).
         """
-        slm = (
-            Path(__file__).resolve().parents[3]
-            / "autobot-slm-backend/user_management/models/audit.py"
-        )
+        slm = Path(__file__).resolve().parents[3] / "autobot-slm-backend/user_management/models/audit.py"
         if not slm.exists():
             pytest.skip("autobot-slm-backend not present in this checkout")
 
