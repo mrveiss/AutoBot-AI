@@ -83,6 +83,32 @@ export interface PortConfig {
 }
 
 /**
+ * Literal fallback port values, used when no `VITE_*_PORT` env var is set.
+ *
+ * These are hand-mirrored from `PortConfig` in `autobot_shared/ssot_config.py`
+ * and there is no schema to generate them from (ports never appear in any
+ * OpenAPI response), so `src/config/__tests__/ssot-parity.spec.ts` parses the
+ * Python source and asserts this table still matches it (#13074).
+ *
+ * Exported as a runtime value (not inlined into the `getEnvNumber` calls) so
+ * that parity test has something env-independent to compare against.
+ */
+export const PORT_DEFAULTS = {
+  backend: 8001,
+  frontend: 5173,
+  redis: 6379,
+  ollama: 11434,
+  vnc: 6080,
+  browser: 9001,
+  aistack: 8080,
+  npu: 8081,
+  prometheus: 9090,
+  grafana: 3000,
+  slm: 8000,
+  slmAdmin: 5174,
+} as const satisfies PortConfig;
+
+/**
  * LLM model configuration.
  */
 export interface LLMConfig {
@@ -147,17 +173,25 @@ export interface FeatureConfig {
 /**
  * Permission modes matching backend PermissionMode enum.
  */
-export type PermissionMode =
-  | 'default'
-  | 'acceptEdits'
-  | 'plan'
-  | 'dontAsk'
-  | 'bypassPermissions';
+export const PERMISSION_MODES = [
+  'default',
+  'acceptEdits',
+  'plan',
+  'dontAsk',
+  'bypassPermissions',
+] as const;
+
+export type PermissionMode = (typeof PERMISSION_MODES)[number];
 
 /**
  * Permission actions matching backend PermissionAction enum.
+ *
+ * Order-significant: both tables are asserted against the Python enums by
+ * `src/config/__tests__/ssot-parity.spec.ts` (#13073).
  */
-export type PermissionAction = 'allow' | 'ask' | 'deny';
+export const PERMISSION_ACTIONS = ['allow', 'ask', 'deny'] as const;
+
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
 
 /**
  * Permission rule interface.
@@ -378,18 +412,18 @@ function buildConfig(): AutoBotConfig {
 
   // Service ports
   const port: PortConfig = {
-    backend: getEnvNumber('VITE_BACKEND_PORT', 8001),
-    frontend: getEnvNumber('VITE_FRONTEND_PORT', 5173),
-    redis: getEnvNumber('VITE_REDIS_PORT', 6379),
-    ollama: getEnvNumber('VITE_OLLAMA_PORT', 11434),
-    vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
-    browser: getEnvNumber('VITE_BROWSER_PORT', 9001),
-    aistack: getEnvNumber('VITE_AI_STACK_PORT', 8080),
-    npu: getEnvNumber('VITE_NPU_WORKER_PORT', 8081),
-    prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', 9090),
-    grafana: getEnvNumber('VITE_GRAFANA_PORT', 3000),
-    slm: getEnvNumber('VITE_SLM_PORT', 8000),
-    slmAdmin: getEnvNumber('VITE_SLM_ADMIN_PORT', 5174),
+    backend: getEnvNumber('VITE_BACKEND_PORT', PORT_DEFAULTS.backend),
+    frontend: getEnvNumber('VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend),
+    redis: getEnvNumber('VITE_REDIS_PORT', PORT_DEFAULTS.redis),
+    ollama: getEnvNumber('VITE_OLLAMA_PORT', PORT_DEFAULTS.ollama),
+    vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
+    browser: getEnvNumber('VITE_BROWSER_PORT', PORT_DEFAULTS.browser),
+    aistack: getEnvNumber('VITE_AI_STACK_PORT', PORT_DEFAULTS.aistack),
+    npu: getEnvNumber('VITE_NPU_WORKER_PORT', PORT_DEFAULTS.npu),
+    prometheus: getEnvNumber('VITE_PROMETHEUS_PORT', PORT_DEFAULTS.prometheus),
+    grafana: getEnvNumber('VITE_GRAFANA_PORT', PORT_DEFAULTS.grafana),
+    slm: getEnvNumber('VITE_SLM_PORT', PORT_DEFAULTS.slm),
+    slmAdmin: getEnvNumber('VITE_SLM_ADMIN_PORT', PORT_DEFAULTS.slmAdmin),
   };
 
   // LLM configuration
