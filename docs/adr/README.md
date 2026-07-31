@@ -34,6 +34,9 @@ Each ADR follows a consistent template (see [template.md](template.md)):
 | [ADR-003](003-npu-integration-strategy.md) | NPU Hardware Acceleration Integration | Accepted | 2025-01-01 |
 | [ADR-004](004-chat-workflow-architecture.md) | Chat Workflow and Message Processing | Accepted | 2025-01-01 |
 | [ADR-005](005-single-frontend-mandate.md) | Single Frontend Server Mandate | Accepted | 2025-01-01 |
+| [ADR-006](006-skill-bound-planning.md) | Skill-Bound Planning | Accepted | 2026-05-16 |
+| [ADR-007](007-connector-oauth-token-storage.md) | Connector OAuth Token and Credential Storage | Accepted | 2026-05-30 |
+| [ADR-008](008-frontend-shared-code-boundary.md) | Frontend Shared-Code Boundary Between the Two SPAs | Accepted | 2026-07-31 |
 
 ## Creating a New ADR
 
