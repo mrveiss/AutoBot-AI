@@ -26,6 +26,7 @@ import { ref, computed, readonly, toRef } from 'vue'
 import { useRoles, type Role, type SyncResult } from './useRoles'
 import { formatCommitHash } from '@/utils/commitHashUtils'
 import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
 // =============================================================================
 // Type Definitions
@@ -45,19 +46,13 @@ export interface CodeSyncStatus {
   total_nodes: number
 }
 
-export interface PendingNode {
-  node_id: string
-  hostname: string
-  ip_address: string
-  current_version: string | null
-  code_status: string
-}
+// GET /api/code-sync/pending (autobot-slm-backend/models/schemas.py:1715).
+// The wire name is `PendingNodeResponse`; the local `PendingNode` alias is kept
+// so existing importers do not churn.
+export type PendingNode = components['schemas']['PendingNodeResponse']
 
-export interface PendingNodesResponse {
-  nodes: PendingNode[]
-  total: number
-  latest_version: string | null
-}
+// GET /api/code-sync/pending (autobot-slm-backend/models/schemas.py:1725)
+export type PendingNodesResponse = components['schemas']['PendingNodesResponse']
 
 export interface SyncResponse {
   success: boolean
@@ -66,33 +61,35 @@ export interface SyncResponse {
   job_id?: string
 }
 
-export interface FleetSyncResponse {
-  success: boolean
-  message: string
-  job_id: string
-  nodes_queued: number
+// POST /api/code-sync/fleet/sync (autobot-slm-backend/models/schemas.py:1766)
+export type FleetSyncResponse = components['schemas']['FleetSyncResponse']
+
+// Issue #741 Phase 8: Fleet sync job tracking types.
+//
+// Both `status` fields are plain `str` in the contract
+// (`autobot-slm-backend/models/schemas.py:1780`, `:1790` — the value sets live
+// only in a trailing comment), so the generated schema widens them to `string`.
+// The narrowings below restate the enumerable assignment sites in
+// `autobot-slm-backend/api/code_sync.py`: node states at `:3156`/`:3180`
+// (syncing), `:3225`/`:3320` (success), `:3325` (failed) plus the `pending`
+// initial value; job states at `:3239` (running), `:3268` (completed/failed),
+// `:3272` (failed).
+export type FleetSyncNodeState = 'pending' | 'syncing' | 'success' | 'failed'
+export type FleetSyncJobState = 'pending' | 'running' | 'completed' | 'failed'
+
+// GET /api/code-sync/fleet/jobs/{job_id} -> nodes[]
+// (autobot-slm-backend/models/schemas.py:1775)
+export type FleetSyncNodeStatus = components['schemas']['FleetSyncNodeStatus'] & {
+  status: FleetSyncNodeState
 }
 
-// Issue #741 Phase 8: Fleet sync job tracking types
-export interface FleetSyncNodeStatus {
-  node_id: string
-  hostname: string
-  status: 'pending' | 'syncing' | 'success' | 'failed'
-  message: string | null
-  started_at: string | null
-  completed_at: string | null
-}
-
-export interface FleetSyncJobStatus {
-  job_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  strategy: string
-  total_nodes: number
-  completed_nodes: number
-  failed_nodes: number
+// GET /api/code-sync/fleet/jobs/{job_id}
+// (autobot-slm-backend/models/schemas.py:1786). Derived: the hand-written copy
+// omitted `failure_reason`, which the backend populates on every job failure
+// (`autobot-slm-backend/api/code_sync.py:386,401-402`).
+export type FleetSyncJobStatus = components['schemas']['FleetSyncJobStatus'] & {
+  status: FleetSyncJobState
   nodes: FleetSyncNodeStatus[]
-  created_at: string
-  completed_at: string | null
 }
 
 export interface RefreshResponse {
@@ -154,85 +151,98 @@ export interface ScheduleUpdateRequest {
   restart_after_sync?: boolean
 }
 
-export interface ScheduleRunResponse {
-  success: boolean
-  message: string
-  schedule_id: number
-  job_id: string | null
-}
+// POST /api/code-sync/schedules/{id}/run
+// (autobot-slm-backend/models/schemas.py:1880)
+export type ScheduleRunResponse = components['schemas']['ScheduleRunResponse']
 
-// Issue #2834: Drift detection types
-export interface DriftedFile {
-  path: string
-  source_checksum: string | null
-  deployed_checksum: string | null
-  status: 'modified' | 'source_only' | 'deployed_only'
-}
+// Issue #2834: Drift detection types.
+// GET /api/code-sync/drift (autobot-slm-backend/models/schemas.py:1655, :1664).
+// `status` is a real `Literal` server-side, so the contract already carries the
+// union and no narrowing is needed.
+export type DriftedFile = components['schemas']['DriftedFile']
+export type FileDriftReport = components['schemas']['FileDriftReport']
 
-export interface FileDriftReport {
-  source_dir: string
-  deployed_dir: string
-  drifted_files: DriftedFile[]
-  total_compared: number
-  drift_detected: boolean
-  checked_at: string
-}
+// Issue #7149: Drift resolution types.
+// POST /api/code-sync/drift/resolve (autobot-slm-backend/models/schemas.py:1681).
+// Derived: the hand-written copy omitted `deps_changed` and `post_steps`
+// (`schemas.py:1689-1690`), so the caller could not tell whether the resync
+// changed dependencies or what post-steps ran.
+export type DriftResolveResponse = components['schemas']['DriftResolveResponse']
 
-// Issue #7149: Drift resolution types
-export interface DriftResolveResponse {
-  success: boolean
-  component: string
-  message: string
-  source_dir: string
-  deployed_dir: string
-}
+// Issue #11303: Async per-component drift/resolve job types.
+// POST /api/code-sync/drift/resolve-async
+// (autobot-slm-backend/models/schemas.py:1693)
+export type DriftResolveJobResponse = components['schemas']['DriftResolveJobResponse']
 
-// Issue #11303: Async per-component drift/resolve job types
-export interface DriftResolveJobResponse {
-  job_id: string
-  component: string
-  status: string
-}
+/**
+ * The four states a component-resolve job row can hold.
+ *
+ * `ComponentSyncJobStatus.status` is `str` in the contract
+ * (`autobot-slm-backend/models/schemas.py:1706`); the assignment sites are
+ * enumerable — `code_sync.py:945` (running), `:191` (queued, the #11437
+ * requeue path), `:298` (completed/failed) and `:182`/`:230`/`:265`/`:280`
+ * (failed). `CodeSyncView.vue:566,605` branches on these literals.
+ */
+export type ComponentSyncJobState = 'queued' | 'running' | 'completed' | 'failed'
 
-export interface ComponentSyncJobStatus {
-  job_id: string
-  component: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
-  success: boolean | null
-  deps_changed: boolean
-  message: string | null
-  post_steps: string[]
-  created_at: string | null
-  completed_at: string | null
+// GET /api/code-sync/drift/resolve/status/{job_id}
+// (autobot-slm-backend/models/schemas.py:1701)
+export type ComponentSyncJobStatus = components['schemas']['ComponentSyncJobStatus'] & {
+  status: ComponentSyncJobState
 }
 
 // Re-export role types for consumers (Issue #779)
 export type { Role, SyncResult }
 
-// Issue #9971: One-click update-all types
-export type StageStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
+// Issue #9971: One-click update-all types.
 
-export interface UpdateAllStage {
-  name: string
+/**
+ * Pipeline stage status — mirrors `_StageStatus`
+ * (`autobot-slm-backend/api/code_sync.py:4239-4245`).
+ *
+ * `'current'` ("already at target commit", C4) was missing from the previous
+ * hand-written union even though `CodeSyncView.vue:127` and `:145` already map
+ * it, so the type contradicted the view's own rendering.
+ */
+export type StageStatus =
+  | 'pending'
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'skipped'
+  | 'current'
+
+/**
+ * Update-all job status — mirrors every `job.status = …` site in
+ * `autobot-slm-backend/api/code_sync.py`: `:5053` (running), `:5033`
+ * (already_current), `:5036`/`:5176` (completed), `:4940`
+ * (partial | completed), `:5144`/`:5184`/`:5294` (failed), plus the `pending`
+ * default at `:4266`.
+ *
+ * `'partial'` was missing from the previous hand-written union. The backend has
+ * emitted it since #11511, whenever a non-operational fleet node is skipped.
+ */
+export type UpdateAllJobStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'partial'
+  | 'failed'
+  | 'already_current'
+
+// GET /api/code-sync/update-all/status -> stages[]
+// (autobot-slm-backend/api/code_sync.py:4248)
+export type UpdateAllStage = components['schemas']['UpdateAllStage'] & {
   status: StageStatus
-  message: string | null
-  sha: string | null
-  deps_changed: boolean
-  log_lines: string[]
-  started_at: string | null
-  completed_at: string | null
 }
 
-export interface UpdateAllJob {
-  job_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'already_current'
+// POST /api/code-sync/update-all, GET /api/code-sync/update-all/status
+// (autobot-slm-backend/api/code_sync.py:4261). Derived: the hand-written copy
+// omitted `skipped_fleet_nodes` (`code_sync.py:4270`), the #11511 counter for
+// nodes skipped as non-operational.
+export type UpdateAllJob = components['schemas']['UpdateAllJob'] & {
+  status: UpdateAllJobStatus
   stages: UpdateAllStage[]
-  total_fleet_nodes: number
-  completed_fleet_nodes: number
-  failed_fleet_nodes: number
-  created_at: string
-  completed_at: string | null
-  failure_reason: string | null
 }
 
 // =============================================================================

@@ -106,6 +106,7 @@ function makeJob(runningStage: string): UpdateAllJob {
     total_fleet_nodes: 2,
     completed_fleet_nodes: 0,
     failed_fleet_nodes: 0,
+    skipped_fleet_nodes: 0,
     created_at: '2026-01-01T00:00:00Z',
     completed_at: null,
     failure_reason: null,
@@ -163,5 +164,68 @@ describe('CodeSyncView reconnecting affordance (#12593)', () => {
     expect(text).not.toContain('attempt 1')
     // The stage-3-specific "reconnecting..." stage label must not appear.
     expect(text).not.toContain(en.codeSyncView.pipelineStageReconnecting)
+  })
+})
+
+/**
+ * #13138 — `UpdateAllJob.status` omitted `'partial'`, the terminal status the
+ * backend sets whenever the fleet stage skips a non-operational node
+ * (`autobot-slm-backend/api/code_sync.py:4940`, introduced by #11511).
+ *
+ * The failure banner matches only `'failed'` and the success banner only
+ * `'completed' | 'already_current'`, so a partial run finished with NO outcome
+ * shown at all. These tests pin the amber partial banner and its skipped count,
+ * and prove the success/failure branches still do not claim it.
+ */
+describe('CodeSyncView update-all terminal outcome (#13138)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function mountWithTerminalJob(job: UpdateAllJob) {
+    getUpdateAllStatusImpl = () => Promise.resolve(job)
+    const wrapper = mount(CodeSyncView, {
+      global: { plugins: [i18n], stubs: { ScheduleModal: true, CodeSourceModal: true } },
+    })
+    await flushPromises() // onMounted -> _checkExistingUpdateAllJob
+    return wrapper
+  }
+
+  function terminalJob(status: UpdateAllJob['status'], skipped: number): UpdateAllJob {
+    return {
+      ...makeJob('fleet_nodes'),
+      status,
+      stages: [makeStage('fleet_nodes', 'success')],
+      total_fleet_nodes: 3,
+      completed_fleet_nodes: 2,
+      skipped_fleet_nodes: skipped,
+      completed_at: '2026-01-01T00:05:00Z',
+    }
+  }
+
+  it('renders the partial banner with the skipped node count', async () => {
+    const wrapper = await mountWithTerminalJob(terminalJob('partial', 1))
+    const text = wrapper.text()
+    expect(text).toContain('1 node(s) skipped')
+    // Must not be mistaken for a clean success.
+    expect(text).not.toContain(en.codeSyncView.alreadyCurrent)
+  })
+
+  it('interpolates a skipped count greater than one', async () => {
+    const wrapper = await mountWithTerminalJob(terminalJob('partial', 2))
+    expect(wrapper.text()).toContain('2 node(s) skipped')
+  })
+
+  it('does not render the partial banner for a fully completed job', async () => {
+    const wrapper = await mountWithTerminalJob(terminalJob('completed', 0))
+    expect(wrapper.text()).not.toContain('node(s) skipped')
+  })
+
+  it('does not render the partial banner for a failed job', async () => {
+    const wrapper = await mountWithTerminalJob(terminalJob('failed', 0))
+    expect(wrapper.text()).not.toContain('node(s) skipped')
   })
 })

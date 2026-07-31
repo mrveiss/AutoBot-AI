@@ -142,7 +142,7 @@ function stageStatusI18nKey(stage: UpdateAllStage): string {
     success: 'codeSyncView.pipelineStageSuccess',
     failed: 'codeSyncView.pipelineStageFailed',
     skipped: 'codeSyncView.pipelineStageSkipped',
-    current: 'codeSyncView.pipelineStageSuccess',
+    current: 'codeSyncView.pipelineStageCurrent',
   }
   return keyMap[stage.status] ?? stage.status
 }
@@ -245,7 +245,10 @@ function toggleNode(nodeId: string): void {
   }
 }
 
-function formatVersion(version: string | null): string {
+// `current_version` / `stage.sha` are optional *and* nullable in the contract
+// (`autobot-slm-backend/models/schemas.py:1721`), so `undefined` is reachable.
+// `getCommitHashDisplay` already accepts it; only this wrapper narrowed it out.
+function formatVersion(version: string | null | undefined): string {
   // Use 12-character format for consistency (Issue #866)
   return getCommitHashDisplay(version).display
 }
@@ -914,6 +917,20 @@ onUnmounted(() => {
           class="mt-3 bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700"
         >
           {{ updateAllJob.failure_reason }}
+        </div>
+
+        <!-- Partial: fleet stage skipped one or more non-operational nodes
+             (#11511). The backend reports this as its own terminal status, so
+             without this branch the run ended with no outcome at all — neither
+             the failure banner above nor the success banner below matched. -->
+        <div
+          v-if="updateAllJob.status === 'partial'"
+          class="mt-3 flex items-center gap-2 text-sm text-amber-700"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" />
+          </svg>
+          {{ $t('codeSyncView.pipelinePartial', { count: updateAllJob.skipped_fleet_nodes }) }}
         </div>
 
         <!-- Completed success: F2 use i18n for both terminal labels -->
