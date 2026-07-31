@@ -1581,15 +1581,18 @@ def test_resolve_pg_db_url_prefers_autobot_database_url() -> None:
     assert result == "postgresql://u:p@host/db"
 
 
-def test_resolve_pg_db_url_falls_back_to_database_url() -> None:
+def test_resolve_pg_db_url_falls_back_to_database_url(monkeypatch) -> None:
     """DATABASE_URL is used when AUTOBOT_DATABASE_URL is absent (#11431)."""
+    monkeypatch.delenv("AUTOBOT_DATABASE_URL", raising=False)
     env_vars = {"DATABASE_URL": "postgresql://u:p@host/db"}
     result = _resolve_pg_db_url(env_vars)
     assert result == "postgresql://u:p@host/db"
 
 
-def test_resolve_pg_db_url_assembles_from_component_vars() -> None:
+def test_resolve_pg_db_url_assembles_from_component_vars(monkeypatch) -> None:
     """AUTOBOT_POSTGRES_* vars are assembled into a URL when no full URL exists (#11431)."""
+    monkeypatch.delenv("AUTOBOT_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     env_vars = {
         "AUTOBOT_POSTGRES_HOST": "db.internal",
         "AUTOBOT_POSTGRES_PORT": "5432",
@@ -1890,20 +1893,23 @@ def test_resolve_pg_db_url_byte_identical_autobot_database_url_in_os_environ() -
     assert result == "postgresql://env_u:env_p@envhost/envdb"
 
 
-def test_resolve_pg_db_url_byte_identical_database_url_fallback() -> None:
+def test_resolve_pg_db_url_byte_identical_database_url_fallback(monkeypatch) -> None:
     """DATABASE_URL in env_vars → returned as-is (unchanged)."""
+    monkeypatch.delenv("AUTOBOT_DATABASE_URL", raising=False)
     env_vars = {"DATABASE_URL": "postgresql://u2:p2@host2/db2"}
     result = _resolve_pg_db_url(env_vars)
     assert result == "postgresql://u2:p2@host2/db2"
 
 
-def test_resolve_pg_db_url_byte_identical_component_vars_no_password() -> None:
+def test_resolve_pg_db_url_byte_identical_component_vars_no_password(monkeypatch) -> None:
     """AUTOBOT_POSTGRES_* without password → 'user@host:port/db' (no colon before @).
 
     Before (#11466 inline code):
         auth = f"{user}@"  # pw is falsy
         return f"postgresql://{auth}{host}:{port}/{db}"
     """
+    monkeypatch.delenv("AUTOBOT_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     env_vars = {
         "AUTOBOT_POSTGRES_HOST": "pg-host",
         "AUTOBOT_POSTGRES_PORT": "5432",
@@ -1914,13 +1920,15 @@ def test_resolve_pg_db_url_byte_identical_component_vars_no_password() -> None:
     assert result == "postgresql://autobot_app@pg-host:5432/autobot_users"
 
 
-def test_resolve_pg_db_url_byte_identical_component_vars_with_password() -> None:
+def test_resolve_pg_db_url_byte_identical_component_vars_with_password(monkeypatch) -> None:
     """AUTOBOT_POSTGRES_* with password → 'user:pw@host:port/db'.
 
     Before (#11466 inline code):
         auth = f"{user}:{pw}@"  # pw is truthy
         return f"postgresql://{auth}{host}:{port}/{db}"
     """
+    monkeypatch.delenv("AUTOBOT_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     env_vars = {
         "AUTOBOT_POSTGRES_HOST": "pg-host",
         "AUTOBOT_POSTGRES_PORT": "5433",
@@ -1941,6 +1949,8 @@ def test_resolve_pg_db_url_byte_identical_component_vars_defaults() -> None:
         port = ... os.environ.get("AUTOBOT_POSTGRES_PORT", "5432")
     """
     clear_keys = {
+        "AUTOBOT_DATABASE_URL",
+        "DATABASE_URL",
         "AUTOBOT_POSTGRES_PORT",
         "AUTOBOT_POSTGRES_USER",
         "AUTOBOT_POSTGRES_PASSWORD",
@@ -1977,8 +1987,10 @@ def test_resolve_pg_db_url_byte_identical_nothing_set_returns_empty() -> None:
     assert result == ""
 
 
-def test_resolve_pg_db_url_env_vars_takes_precedence_over_os_environ() -> None:
+def test_resolve_pg_db_url_env_vars_takes_precedence_over_os_environ(monkeypatch) -> None:
     """env_vars takes precedence over os.environ for AUTOBOT_POSTGRES_* keys."""
+    monkeypatch.delenv("AUTOBOT_DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     os.environ["AUTOBOT_POSTGRES_HOST"] = "os-environ-host"
     try:
         result = _resolve_pg_db_url({"AUTOBOT_POSTGRES_HOST": "env-vars-host"})
