@@ -7,15 +7,21 @@
  * ToolsView — remote-exec transport behaviour (#13140).
  *
  * ToolsView is the representative of the group that built its headers from
- * `authStore.getAuthHeaders()`, which returns `{}` for an unhydrated `token`
- * ref, so the request went out ANONYMOUS while a live session sat in storage.
+ * `authStore.getAuthHeaders()`, which returns `{}` when the store's `token`
+ * ref is null. That ref is seeded from storage exactly once, at store
+ * construction (`stores/auth.ts:66`), so any token that lands afterwards — a
+ * login in another tab, a refresh through a different store instance — is
+ * invisible to it and the SSH command was dispatched to a fleet node with no
+ * credential at all.
+ *
  * It is also the group with a genuine timeout hazard: every tool here runs a
  * command over SSH against a fleet node, so it must NOT inherit the client's
  * 30s default — a long ansible run that completes fine today would abort.
  *
  * Asserted end to end at the component boundary:
  *
- *   * the bearer is attached from storage without the store ref being hydrated;
+ *   * the bearer is attached for a token that reached storage after the store
+ *     was constructed;
  *   * the request carries an abort signal (there was no timeout at all before);
  *   * the SSH-backed endpoints get the long remote-exec budget, not the default;
  *   * the endpoint path, method and JSON payload are unchanged;
@@ -28,6 +34,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import ToolsView from './ToolsView.vue'
 import { useFleetStore } from '@/stores/fleet'
+import { useAuthStore } from '@/stores/auth'
 import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import en from '@/locales/en.json'
 
@@ -111,9 +118,12 @@ describe('ToolsView remote-exec transport', () => {
     })
   })
 
-  it('attaches the stored bearer to an exec although the store ref is unhydrated', async () => {
+  it('attaches a bearer that reached storage after the auth store was constructed', async () => {
+    // Construct the store with NO session, then write the token — a login in
+    // another tab, or a refresh through a different store instance.
     // `authStore.getAuthHeaders()` returned `{}` in exactly this state, so the
     // command was dispatched to the fleet with no credential at all.
+    useAuthStore()
     sessionStorage.setItem(TOKEN_KEY, 'tools-token')
     const wrapper = await mountTools()
 

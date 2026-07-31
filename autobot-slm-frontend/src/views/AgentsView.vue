@@ -104,8 +104,10 @@ async function fetchAgents() {
     // `Bearer null` — a malformed credential rather than an absent one. The
     // client omits the header when there is no token, which also lets its 401
     // handler tell "session rejected" (clear + redirect to /login) apart from
-    // "never had one" (log only); it reads the token from storage per request
-    // rather than from a ref hydrated once at store construction (#13140).
+    // "never had one" (log only); and it reads the token from storage per
+    // request rather than from a ref seeded there once, at store construction
+    // (`stores/auth.ts:66`), which goes stale the moment a token lands in
+    // storage through any other path (#13140).
     const data = await slmApiClient.get<{ agents?: Agent[] }>('/agents')
     agents.value = data.agents || []
   } catch (err) {

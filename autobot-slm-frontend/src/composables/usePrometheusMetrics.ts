@@ -23,11 +23,14 @@ const logger = createLogger('usePrometheusMetrics')
  * `getSlmApiBase()` origin, the bearer token, the request timeout and the 401
  * handler. Three things changed at this seam and were decided, not inherited:
  *
- *  1. The bearer used to be built from `authStore.token`, a reactive ref
- *     hydrated once at store construction; when it was null the header was
- *     silently omitted and the request went out anonymous. The client reads
- *     sessionStorage (localStorage fallback) per request instead, so a session
- *     restored or refreshed elsewhere is picked up.
+ *  1. The bearer used to be built from `authStore.token`. That ref is seeded
+ *     from storage ONCE, at store construction (`stores/auth.ts:66`), so it is
+ *     correct for a page that loaded with a session already in place and stale
+ *     for every token that lands afterwards — a login in another tab, or a
+ *     refresh performed through a different store instance. When it was null
+ *     `getHeaders()` omitted the header silently and the poll went out
+ *     anonymous. The client re-reads sessionStorage (localStorage fallback) on
+ *     every request, so there is no window in which the two disagree.
  *  2. `get()` retries a 5xx three times with exponential backoff (~3s). These
  *     are POLLED reads on a 30s tick, so every one passes
  *     `POLLED_READ_MAX_RETRIES` — a failed tick is retried by the NEXT tick

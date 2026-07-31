@@ -131,9 +131,10 @@ async function clearAlerts() {
   isClearing.value = true
   clearError.value = null
   try {
-    // The bearer was built from `authStore.token`, a ref hydrated once at
-    // store construction; the client reads it from storage per request. It
-    // also supplies the base URL, a timeout and 401 handling (#13140).
+    // The bearer was built from `authStore.token`, a ref seeded from storage
+    // once at store construction, so a token that landed later left this
+    // DESTRUCTIVE call with no credential; the client re-reads storage per
+    // request. It also supplies the base URL, a timeout and 401 handling.
     //
     // BEHAVIOUR CHANGE, deliberate: the previous `await fetch(...)` discarded
     // its Response entirely, so a rejected clear (401/403/500) reported

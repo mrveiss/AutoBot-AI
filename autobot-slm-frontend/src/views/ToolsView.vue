@@ -115,13 +115,19 @@ async function runNetworkTest(): Promise<void> {
 
   try {
     // `rawRequest` (not `post`) keeps the `err.detail` error body this panel
-    // renders. The client contributes the base URL, the bearer read from
-    // storage — replacing `authStore.getAuthHeaders()`, which returned `{}` and
-    // sent the request ANONYMOUS whenever the store's reactive `token` ref was
-    // unhydrated — the 401 handler, and, new here, a timeout. Every tool on
-    // this view opens an SSH session to a fleet node, so they take the long
-    // remote-exec budget rather than the client's 30s default, which would
-    // abort a command that completes fine today (#13140).
+    // renders. The client contributes the base URL, the bearer, the 401
+    // handler, and — new here — a timeout.
+    //
+    // On the bearer: `authStore.getAuthHeaders()` returns `{}` when the store's
+    // `token` ref is null, and that ref is seeded from storage ONCE, at store
+    // construction (`stores/auth.ts:66`). A token that lands afterwards — a
+    // login in another tab, a refresh through a different store instance — is
+    // invisible to it, and the command was then dispatched to a fleet node with
+    // no credential at all. The client re-reads storage per request.
+    //
+    // On the timeout: every tool here opens an SSH session to a fleet node, so
+    // they take the long remote-exec budget rather than the client's 30s
+    // default, which would abort a command that completes fine today (#13140).
     const response = await slmApiClient.rawRequest('/nodes/test-connection', {
       method: 'POST',
       timeout: REMOTE_EXEC_TIMEOUT_MS,

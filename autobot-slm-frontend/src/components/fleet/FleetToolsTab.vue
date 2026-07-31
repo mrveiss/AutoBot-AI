@@ -127,10 +127,12 @@ async function runRedisCommand(): Promise<void> {
 
     // Execute via SSH
     // `rawRequest` keeps the `err.detail` body this panel renders; the client
-    // adds the base URL, the storage-backed bearer (`getAuthHeaders()` returned
-    // `{}` for an unhydrated token ref and sent the request anonymous), the 401
-    // handler and a timeout. `/exec` runs a command over SSH, so it takes the
-    // long remote-exec budget rather than the client's 30s default (#13140).
+    // adds the base URL, the bearer, the 401 handler and a timeout.
+    // `getAuthHeaders()` returned `{}` whenever the store's `token` ref was
+    // null, and that ref is seeded from storage once at store construction —
+    // so a token that landed later (another tab, another store instance) left
+    // the command dispatched with no credential. `/exec` runs over SSH, so it
+    // takes the long remote-exec budget, not the 30s default (#13140).
     const response = await slmApiClient.rawRequest(`/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
       timeout: REMOTE_EXEC_TIMEOUT_MS,

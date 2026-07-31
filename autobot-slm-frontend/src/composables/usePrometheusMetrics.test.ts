@@ -11,9 +11,12 @@
  * in it is issued from a 30s polling loop. What is asserted here is what the
  * raw `fetch` sites did NOT do:
  *
- *   * the request carried NO `Authorization` header whenever the auth store's
- *     reactive `token` ref was unhydrated, because `getHeaders()` read
- *     `authStore.token` — even with a live session sitting in storage;
+ *   * the request carried NO `Authorization` header for any token that landed
+ *     in storage AFTER the auth store was constructed. `getHeaders()` read
+ *     `authStore.token`, and that ref is seeded from storage exactly once
+ *     (`stores/auth.ts:66`) — so a login in another tab, or a refresh done
+ *     through a different store instance, left the poll going out anonymous
+ *     against a session that was demonstrably present;
  *   * no request had a timeout, so a hung SLM backend pinned a poll tick open
  *     indefinitely;
  *
@@ -29,6 +32,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePrometheusMetrics } from './usePrometheusMetrics'
+import { useAuthStore } from '@/stores/auth'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
@@ -86,11 +90,14 @@ describe('usePrometheusMetrics transport', () => {
     })
   })
 
-  it('sends the stored bearer even though the auth store ref was never hydrated', async () => {
-    // The session exists in storage but no `useAuthStore()` has read it into
-    // its reactive `token` ref — exactly the state a fresh page load is in
-    // while the store is still constructing. `getHeaders()` returned no
-    // Authorization header here and the poll went out anonymous.
+  it('sends a bearer that reached storage after the auth store was constructed', async () => {
+    // Construct the store with NO session, then write the token — the shape of
+    // a login in another tab, or of a refresh performed through a different
+    // store instance. `authStore.token` is seeded from storage once, at
+    // construction, so it is still null here and `getHeaders()` produced no
+    // Authorization header at all: the poll went out anonymous against a
+    // session that plainly exists. The client re-reads storage per request.
+    useAuthStore()
     sessionStorage.setItem(TOKEN_KEY, 'poll-token')
     fetchMock.mockResolvedValue(jsonResponse({ fleet_metrics: {}, health_summary: {} }))
 
