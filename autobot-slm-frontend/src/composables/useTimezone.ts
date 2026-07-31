@@ -12,7 +12,7 @@
  */
 
 import { ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { getTimeConfig } from '@/utils/slmSettingsApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useTimezone')
@@ -22,14 +22,13 @@ const cachedTimezone = ref<string | null>(null)
 let fetchPromise: Promise<void> | null = null
 
 async function loadTimezone(): Promise<void> {
-  const authStore = useAuthStore()
   try {
-    const res = await fetch(
-      `${authStore.getApiUrl()}/api/settings/time/config`,
-      { headers: authStore.getAuthHeaders() },
-    )
-    if (res.ok) {
-      const data: { timezone: string } = await res.json()
+    // #13140: routed through the canonical SLM client (base URL, token
+    // fallback, timeout, 401 handling) instead of a hand-built fetch. The
+    // "unavailable -> keep the browser locale" contract is preserved: a
+    // non-OK response yields null rather than throwing.
+    const data = await getTimeConfig()
+    if (data) {
       cachedTimezone.value = data.timezone || 'UTC'
       logger.info('Loaded timezone:', cachedTimezone.value)
     }
