@@ -24,12 +24,51 @@
       - tigervnc-tools
       - x11vnc
       - websockify
-      - novnc
       - xfce4
       - xfce4-terminal
       - dbus-x11
     state: present
   become: true
+
+# --- Pinned noVNC from upstream (#13069) ---
+# The distro `novnc` package is 1.0.0 (2018) on Ubuntu 22.04 — it predates
+# VeNCrypt support and caused the unreachable-server failure in #13060. Removed
+# so the packaged copy and the pinned copy cannot diverge.
+- name: Remove distro noVNC package (superseded by pinned upstream; #13069)
+  ansible.builtin.apt:
+    name: novnc
+    state: absent
+  become: true
+
+# Upstream publishes no release assets, so the tag archive is the distribution.
+# If GitHub ever re-compresses it the checksum fails loudly, which is the safe
+# failure mode — a mismatched archive is never installed.
+- name: Download noVNC {{ novnc_version }} tarball (#13069)
+  ansible.builtin.get_url:
+    url: "https://github.com/novnc/noVNC/archive/refs/tags/v{{ novnc_version }}.tar.gz"
+    dest: "/tmp/noVNC-{{ novnc_version }}.tar.gz"
+    checksum: "sha256:{{ novnc_archive_sha256 }}"
+    mode: "0644"
+  become: true
+
+- name: Unpack noVNC {{ novnc_version }} to versioned root (#13069)
+  ansible.builtin.unarchive:
+    src: "/tmp/noVNC-{{ novnc_version }}.tar.gz"
+    dest: /opt
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ novnc_install_root }}/vnc.html"
+  become: true
+
+- name: Point {{ novnc_path }} at noVNC {{ novnc_version }} (#13069)
+  ansible.builtin.file:
+    src: "{{ novnc_install_root }}"
+    dest: "{{ novnc_path }}"
+    state: link
+    force: true
+  become: true
+  notify: restart websockify
 
 - name: Create VNC user if not exists
   ansible.builtin.user:
