@@ -22,7 +22,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 _SRC = Path(__file__).resolve().parent / "rbac_middleware.py"
-_MODELS = Path(__file__).resolve().parents[1] / "models" / "audit.py"
 
 
 def _source() -> str:
@@ -30,32 +29,55 @@ def _source() -> str:
 
 
 class TestAuditVocabulary:
-    """The action/resource strings must match the SLM's, or the trail splits."""
+    """The action/resource strings must match the SLM's, or the trail splits.
+
+    These asserted on the *source text* of ``user_management/models/audit.py``
+    until #12647 relocated that module to ``autobot_shared`` and left a
+    re-export shim behind — at which point they were greping a shim for enum
+    literals that had moved, and failed on the base branch. Rewritten to
+    assert the values themselves, which is both stronger and immune to where
+    the module physically lives.
+    """
 
     def test_permission_denied_action_exists(self):
-        models = _MODELS.read_text(encoding="utf-8")
+        from autobot_shared.user_management.models.audit import AuditAction
 
-        assert 'PERMISSION_DENIED = "permission_denied"' in models
+        assert AuditAction.PERMISSION_DENIED == "permission_denied"
 
     def test_endpoint_resource_type_exists(self):
-        models = _MODELS.read_text(encoding="utf-8")
+        from autobot_shared.user_management.models.audit import AuditResourceType
 
-        assert 'ENDPOINT = "endpoint"' in models
+        assert AuditResourceType.ENDPOINT == "endpoint"
 
     def test_values_match_the_slm_backend(self):
         """Both backends must write the same strings into a shared vocabulary.
 
         A mismatch would silently split the audit trail in two, which is worse
         than the gap this closes: queries would look complete and be partial.
+        Since #12647 both backends re-export one shared module, so this pins
+        object *identity* — same-named twins are not interchangeable (#12913).
         """
-        slm = Path(__file__).resolve().parents[3] / "autobot-slm-backend" / "user_management" / "models" / "audit.py"
+        slm = (
+            Path(__file__).resolve().parents[3]
+            / "autobot-slm-backend/user_management/models/audit.py"
+        )
         if not slm.exists():
             pytest.skip("autobot-slm-backend not present in this checkout")
 
-        slm_src = slm.read_text(encoding="utf-8")
-        models = _MODELS.read_text(encoding="utf-8")
-        for line in ('PERMISSION_DENIED = "permission_denied"', 'ENDPOINT = "endpoint"'):
-            assert line in slm_src and line in models
+        import importlib.util
+        import sys
+
+        from autobot_shared.user_management.models import audit as shared_audit
+
+        spec = importlib.util.spec_from_file_location("slm_audit_shim", slm)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["slm_audit_shim"] = module
+        spec.loader.exec_module(module)
+
+        assert module.AuditAction is shared_audit.AuditAction
+        assert module.AuditResourceType is shared_audit.AuditResourceType
+        assert shared_audit.AuditAction.PERMISSION_DENIED == "permission_denied"
+        assert shared_audit.AuditResourceType.ENDPOINT == "endpoint"
 
 
 class TestEveryDenialIsAudited:
