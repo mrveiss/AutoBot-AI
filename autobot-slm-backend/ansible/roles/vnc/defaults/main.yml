@@ -17,7 +17,23 @@ websockify_port: "{{ lookup('env', 'WEBSOCKIFY_PORT') | default('6080', true) }}
 websockify_enabled: "{{ lookup('env', 'WEBSOCKIFY_ENABLED') | default('true', true) }}"
 
 # noVNC installation
-novnc_path: /usr/share/novnc
+#
+# #13069: pinned to an explicit upstream release, NOT the distro package. Ubuntu
+# 22.04 ships `novnc 1:1.0.0-5` — upstream 1.0.0 is from 2018 and predates
+# VeNCrypt support (added in 1.4.0), which is what broke the deploy in #13060.
+# Bump novnc_version and novnc_archive_sha256 together to upgrade.
+#
+# The archive is the GitHub tag tarball: upstream publishes no release assets, so
+# the tag archive IS the distribution. It is self-contained — .gitmodules is empty
+# and vendor/pako is fully populated.
+novnc_version: "1.7.0"
+novnc_archive_sha256: b1003a11b6e6e8d8f7f5e5586daae7f8ca651d8aee0aa155ff9ac841c48f52c6
+
+# Versioned install root + stable symlink, so a rollback is a symlink flip.
+# novnc_path deliberately does NOT point at /usr/share/novnc: that directory is
+# dpkg-owned by the distro package, and replacing it with a symlink collides.
+novnc_install_root: "/opt/noVNC-{{ novnc_version }}"
+novnc_path: /opt/novnc
 
 # Security - password auto-generated to /etc/autobot/vnc-secrets.env
 #
