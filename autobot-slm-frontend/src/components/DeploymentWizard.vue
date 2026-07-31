@@ -6,7 +6,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
 import type { SLMNode, NodeRole, RoleInfo, RoleListResponse } from '@/types/slm'
 
 /**
@@ -104,22 +104,24 @@ async function loadData(): Promise<void> {
 async function fetchRoles(): Promise<void> {
   isLoadingRoles.value = true
   try {
-    const response = await fetch(`${getSlmApiBase()}/deployments/roles`, {
-      headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
-      },
-    })
-    if (response.ok) {
-      const data = (await response.json()) as RoleListResponse
-      // #13138: `dependencies` is `default_factory=list` server-side and so
-      // optional in the contract — normalise it, the template reads `.length`.
-      roles.value = data.roles.map((role) => ({
-        name: role.name,
-        description: role.description,
-        category: role.category,
-        dependencies: role.dependencies ?? [],
-      }))
-    }
+    // Was `Bearer ${sessionStorage.getItem(...)}` built unconditionally — the
+    // literal `Bearer null` with no session; the client omits the header when
+    // there is no token and adds the base URL, a timeout and 401 handling.
+    //
+    // BEHAVIOUR CHANGE, deliberate: a non-OK response used to be dropped by
+    // `if (response.ok)` with no else, leaving `roles` EMPTY and the wizard's
+    // role picker blank — the NODE_ROLE_METADATA fallback below only ran when
+    // `fetch` itself threw. `get()` rejects on a non-OK too, so the fallback
+    // that was written for exactly this case now actually runs (#13140).
+    const data = await slmApiClient.get<RoleListResponse>('/deployments/roles')
+    // #13138: `dependencies` is `default_factory=list` server-side and so
+    // optional in the contract — normalise it, the template reads `.length`.
+    roles.value = data.roles.map((role) => ({
+      name: role.name,
+      description: role.description,
+      category: role.category,
+      dependencies: role.dependencies ?? [],
+    }))
   } catch (e) {
     // Use default roles from node-roles constants if API fails
     const { NODE_ROLE_METADATA } = await import('@/constants/node-roles')

@@ -12,7 +12,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
 import type { PlaybookInfo } from '@/types/slm'
 
 const logger = createLogger('InfrastructureView')
@@ -42,15 +42,15 @@ onMounted(() => {
 async function loadPlaybooks(): Promise<void> {
   isLoading.value = true
   try {
-    const response = await fetch(`${getSlmApiBase()}/infrastructure/playbooks`, {
-      headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
-      },
-    })
-    if (response.ok) {
-      const data = await response.json()
-      playbooks.value = data.playbooks
-    }
+    // Was `Bearer ${sessionStorage.getItem(...)}` built unconditionally — the
+    // literal `Bearer null` with no session. The client omits the header when
+    // there is no token and adds the base URL, a timeout and 401 handling; a
+    // non-OK response, previously dropped by `if (response.ok)` with no else,
+    // now reaches the catch below (#13140).
+    const data = await slmApiClient.get<{ playbooks: PlaybookInfo[] }>(
+      '/infrastructure/playbooks'
+    )
+    playbooks.value = data.playbooks
   } catch (e) {
     logger.error('Error loading playbooks:', e)
   } finally {
