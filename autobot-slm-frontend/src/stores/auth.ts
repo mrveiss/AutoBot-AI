@@ -14,6 +14,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
+import { slmApiClient } from '@/utils/ApiClient'
 import type { components } from '@/types/generated/api'
 
 const logger = createLogger('AuthStore')
@@ -78,6 +79,14 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.isAdmin ?? false)
 
+  /**
+   * Host origin the SLM admin app is pointed at, for DISPLAY only
+   * (`APISettings.vue`, `BackendSettings.vue`). It is deliberately NOT a
+   * transport base: it hard-returns `''` under `import.meta.env.DEV`, so it
+   * ignores `VITE_API_URL` where `getSlmApiBase()` honours it. Every request
+   * in this store now goes through `slmApiClient`, which resolves
+   * `getSlmApiBase()` (#13140).
+   */
   function getApiUrl(): string {
     if (import.meta.env.DEV) {
       return ''
@@ -90,12 +99,14 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const response = await fetch(`${getApiUrl()}/api/auth/login`, {
+      // `rawRequest` (not `post`) so the `detail` error body and the
+      // TokenResponse|MfaChallengeResponse union below are read exactly as
+      // before; the client contributes base-URL resolution, the request
+      // timeout, and its auth-endpoint opt-out from the 401 session handler
+      // (a 401 here is a bad credential, not a rejected session) — #13140.
+      const response = await slmApiClient.rawRequest('/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
+        body: { username, password },
       })
 
       if (!response.ok) {
@@ -135,13 +146,9 @@ export const useAuthStore = defineStore('auth', () => {
       // `parameters.query`. Sending it in the body 422s on the missing
       // required query parameter, blocking MFA login entirely (#12420).
       const query = new URLSearchParams({ temp_token: mfaTempToken.value })
-      const response = await fetch(
-        `${getApiUrl()}/api/mfa/verify-login?${query.toString()}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        }
+      const response = await slmApiClient.rawRequest(
+        `/mfa/verify-login?${query.toString()}`,
+        { method: 'POST', body: { code } }
       )
       if (!response.ok) {
         const data = await response.json()
@@ -172,11 +179,11 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return
 
     try {
-      const response = await fetch(`${getApiUrl()}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token.value}`,
-        },
-      })
+      // The client attaches the bearer itself, reading sessionStorage with a
+      // localStorage fallback — the same pair this store initialises `token`
+      // from (line 65) — so a session restored from localStorage no longer
+      // depends on the ref having been hydrated first.
+      const response = await slmApiClient.rawRequest('/auth/me')
 
       if (!response.ok) {
         throw new Error('Failed to fetch user')
@@ -197,11 +204,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return false
 
     try {
-      const response = await fetch(`${getApiUrl()}/api/auth/refresh`, {
+      const response = await slmApiClient.rawRequest('/auth/refresh', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token.value}`,
-        },
       })
 
       if (!response.ok) {
@@ -231,11 +235,11 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (currentToken) {
       try {
-        const response = await fetch(`${getApiUrl()}/api/auth/logout`, {
+        // Storage still holds `currentToken` at this point (it is cleared
+        // below), so the client attaches the same bearer this call used to
+        // build by hand.
+        const response = await slmApiClient.rawRequest('/auth/logout', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${currentToken}`,
-          },
         })
         if (response.ok) {
           const data: LogoutResponse = await response.json()

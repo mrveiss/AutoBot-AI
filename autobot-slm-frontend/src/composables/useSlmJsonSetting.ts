@@ -13,10 +13,16 @@
  * is the one shared implementation of that fetch/save mechanics; each panel
  * keeps its own field defaults, coercion, and error-message ownership (i18n
  * strings differ per panel).
+ *
+ * The transport itself lives in `utils/slmSettingsApi.ts` on top of the
+ * canonical `slmApiClient` (#13140) — this composable no longer builds its own
+ * URL or auth headers, so it inherits `getSlmApiBase()` origin resolution, the
+ * sessionStorage/localStorage token fallback, the request timeout and the 401
+ * session handler.
  */
 
 import { ref, type Ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { getSetting, upsertSetting } from '@/utils/slmSettingsApi'
 
 export interface SlmJsonSetting<T> {
   saving: Ref<boolean>
@@ -28,18 +34,14 @@ export interface SlmJsonSetting<T> {
 }
 
 export function useSlmJsonSetting<T>(key: string): SlmJsonSetting<T> {
-  const authStore = useAuthStore()
   const saving = ref(false)
   const saved = ref(false)
 
   async function load(): Promise<T | null> {
-    const res = await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-      headers: authStore.getAuthHeaders(),
-    })
-    if (!res.ok) {
+    const setting = await getSetting(key)
+    if (setting === null) {
       return null
     }
-    const setting = await res.json()
     return setting.value ? (JSON.parse(setting.value) as T) : ({} as T)
   }
 
@@ -47,15 +49,12 @@ export function useSlmJsonSetting<T>(key: string): SlmJsonSetting<T> {
     saving.value = true
     saved.value = false
     try {
-      const url = `${authStore.getApiUrl()}/api/settings/${key}`
-      const headers = { ...authStore.getAuthHeaders(), 'Content-Type': 'application/json' }
-      const body = JSON.stringify({ value: JSON.stringify(payload), description })
-      let res = await fetch(url, { method: 'PUT', headers, body })
-      if (res.status === 404) {
-        res = await fetch(url, { method: 'POST', headers, body })
-      }
-      saved.value = res.ok
-      return res.ok
+      const ok = await upsertSetting(key, {
+        value: JSON.stringify(payload),
+        description,
+      })
+      saved.value = ok
+      return ok
     } finally {
       saving.value = false
     }

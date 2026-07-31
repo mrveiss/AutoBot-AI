@@ -10,10 +10,9 @@
  */
 
 import { ref, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import { getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
+import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 
-const authStore = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
@@ -33,18 +32,15 @@ async function fetchSettings(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch(`${authStore.getApiUrl()}/api/settings`, {
-      headers: authStore.getAuthHeaders(),
+    // #13140: canonical SLM client. A rejected session now surfaces as an
+    // error (and clears the session) instead of being swallowed and leaving
+    // the panel showing its hard-coded defaults.
+    const data = await listSettings()
+    data.forEach((s) => {
+      if (s.value !== null && s.value !== undefined && s.key in settings.value) {
+        (settings.value as Record<string, string | number | boolean>)[s.key] = s.value
+      }
     })
-
-    if (response.ok) {
-      const data = await response.json()
-      data.forEach((s: { key: string; value: string | null }) => {
-        if (s.value !== null && s.key in settings.value) {
-          (settings.value as Record<string, string | number | boolean>)[s.key] = s.value
-        }
-      })
-    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load settings'
   } finally {
@@ -58,16 +54,9 @@ async function saveSetting(key: string, value: string): Promise<void> {
   success.value = null
 
   try {
-    const response = await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-      method: 'PUT',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ value }),
-    })
+    const ok = await upsertSetting(key, { value })
 
-    if (!response.ok) {
+    if (!ok) {
       throw new Error('Failed to save setting')
     }
 
