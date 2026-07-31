@@ -1005,10 +1005,17 @@
     # changes — NOT the full role. Provisioning (service account, venv, torch and
     # pocket-tts installs, gated-model pre-download) is slow, needs network, and
     # must not re-run on a box that is already installed correctly.
+    # become is required and not inherited: this play sets no play-level become
+    # (unlike deploy-full.yml, which the role is normally applied under), and
+    # /opt/autobot/autobot-tts-worker is owned by the autobot-tts service
+    # account, not the autobot user ansible connects as. Without it the very
+    # first task fails "Destination /opt/autobot/autobot-tts-worker not
+    # writable" — the same wrong-user ownership class as #12872.
     - name: "[PLAY 2] TTS | Refresh deployed TTS worker service files (#12886)"
       ansible.builtin.include_role:
         name: tts-worker
         tasks_from: code_only
+      become: true
       when: "'npu' in group_names"
       tags: [tts, tts-worker, deploy]
 
