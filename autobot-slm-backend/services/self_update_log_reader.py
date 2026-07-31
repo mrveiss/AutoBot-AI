@@ -48,6 +48,10 @@ class SelfUpdateVerdict:
     failed_hosts: int = 0
     unreachable_hosts: int = 0
     reason: str | None = None
+    #: #12959: set when a role-owned change is verifiably absent from this host.
+    #: Independent of the log — a run can reach its recap cleanly and still
+    #: deliver nothing, because the updater applies almost none of the roles.
+    role_delivery_incomplete: bool = False
 
     @property
     def degraded(self) -> bool:
@@ -55,8 +59,11 @@ class SelfUpdateVerdict:
 
         A missing log is NOT degraded: a box that has never self-updated has
         nothing to report, and flagging that would cry wolf on every fresh
-        install.
+        install. Undelivered role-owned changes ARE degraded regardless of the
+        log, since that is the failure the log cannot see (#12959).
         """
+        if self.role_delivery_incomplete:
+            return True
         if not self.log_present:
             return False
         return not self.complete or self.failed_hosts > 0 or self.unreachable_hosts > 0
