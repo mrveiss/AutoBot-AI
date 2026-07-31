@@ -685,15 +685,47 @@ async def get_sync_status(
 
 
 def _read_last_self_update_verdict():
-    """Verdict for the last self-update run; never fails the status endpoint (#12776)."""
+    """Verdict for the last self-update run; never fails the status endpoint (#12776).
+
+    #12959: the log only says whether the *playbook* finished. A run can reach
+    its recap with zero failures and still deliver nothing role-owned, because
+    the updater applies only ``backend`` via ``tasks_from: env_only``. So the
+    log verdict is combined with a probe of what actually landed on this host —
+    otherwise "complete" keeps meaning "the tasks ran", not "the change arrived".
+    """
     from services.playbook_executor import SELF_UPDATE_LOG_PATH
     from services.self_update_log_reader import SelfUpdateVerdict, read_self_update_verdict
 
     try:
-        return read_self_update_verdict(SELF_UPDATE_LOG_PATH)
+        verdict = read_self_update_verdict(SELF_UPDATE_LOG_PATH)
     except Exception as exc:  # noqa: BLE001 — status must answer even if this cannot
         logger.warning("self-update verdict unavailable: %s", exc)
-        return SelfUpdateVerdict(reason=None)
+        verdict = SelfUpdateVerdict(reason=None)
+
+    return _merge_role_delivery(verdict)
+
+
+def _merge_role_delivery(verdict):
+    """Fold undelivered role-owned changes into *verdict* (#12959).
+
+    Reported through the existing ``self_update_incomplete`` / detail fields
+    rather than new ones: the GUI already surfaces those, and an operator does
+    not need to learn a second place to look for "the update did not land".
+    """
+    from services.role_delivery_probe import probe_role_delivery
+
+    try:
+        delivery = probe_role_delivery()
+    except Exception as exc:  # noqa: BLE001 — a probe must never break status
+        logger.warning("role-delivery probe unavailable: %s", exc)
+        return verdict
+
+    if not delivery.degraded:
+        return verdict
+
+    verdict.role_delivery_incomplete = True
+    verdict.reason = "; ".join(part for part in (verdict.reason, delivery.reason) if part)
+    return verdict
 
 
 @router.get("/drift", response_model=FileDriftReport)
