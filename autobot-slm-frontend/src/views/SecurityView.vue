@@ -412,8 +412,10 @@ async function uploadTlsCertificate() {
   }
 }
 
-function formatExpiryStatus(daysUntil: number | null): { text: string; class: string } {
-  if (daysUntil === null) return { text: 'Unknown', class: 'bg-gray-100 text-gray-700' }
+// `days_until_expiry` is nullable AND optional in the contract
+// (TLSEndpointResponse, tls.py:282) — accept both absent and null.
+function formatExpiryStatus(daysUntil: number | null | undefined): { text: string; class: string } {
+  if (daysUntil == null) return { text: 'Unknown', class: 'bg-gray-100 text-gray-700' }
   if (daysUntil <= 0) return { text: 'Expired', class: 'bg-red-100 text-red-700' }
   if (daysUntil <= 7) return { text: `${daysUntil}d`, class: 'bg-red-100 text-red-700' }
   if (daysUntil <= 30) return { text: `${daysUntil}d`, class: 'bg-yellow-100 text-yellow-700' }
@@ -640,12 +642,12 @@ const scoreColor = computed(() => {
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-lg font-semibold">{{ $t('securityView.recentSecurityEvents') }}</h2>
           </div>
-          <div v-if="overview.recent_events.length === 0" class="p-6 text-center text-gray-500">
+          <div v-if="!overview.recent_events?.length" class="p-6 text-center text-gray-500">
             {{ $t('securityView.noRecentSecurityEvents') }}
           </div>
           <div v-else class="divide-y divide-gray-200">
             <div
-              v-for="event in overview.recent_events"
+              v-for="event in overview.recent_events ?? []"
               :key="event.event_id"
               class="px-6 py-4 flex items-center justify-between"
             >
