@@ -26,6 +26,44 @@ logger = logging.getLogger(__name__)
 # Issue #1726 — keeps keys stable across restarts when env vars are absent.
 _SLM_KEYS_FILE = ".slm_keys"
 
+# Candidate env files, most general first. /etc/autobot/db-credentials.env is
+# written by Ansible as 0600 autobot:autobot, so only the service user and root
+# can read it (#13089).
+_ENV_FILE_CANDIDATES = (".env", "/etc/autobot/db-credentials.env")
+
+
+def _readable_env_files(candidates: tuple[str, ...] = _ENV_FILE_CANDIDATES) -> tuple[str, ...]:
+    """Return only the env files this process can actually read.
+
+    python-dotenv skips a *missing* env_file silently but raises
+    ``PermissionError`` on one that exists and is unreadable. Because
+    ``Settings()`` is instantiated at import time (below), that turns any
+    unprivileged import of this module into a hard crash — which is what made
+    ``scripts/dump_openapi.py`` and ``audit_api_wiring.py --dump-slm-openapi``
+    unrunnable except as root (#13089).
+
+    CI never saw it: the file does not exist on runners, so dotenv skipped it.
+    Filtering to readable paths makes local behaviour match CI without widening
+    access to the credential file.
+
+    A file that exists but cannot be read is logged at WARNING, so a genuine
+    production permission regression stays loud instead of silently falling
+    back to defaults.
+    """
+    usable: list[str] = []
+    for path in candidates:
+        if os.access(path, os.R_OK):
+            usable.append(path)
+        elif os.path.exists(path):
+            logger.warning(
+                "Env file %s exists but is not readable by uid=%s — skipping it. "
+                "Settings that file would supply will fall back to environment "
+                "variables or defaults.",
+                path,
+                os.geteuid(),
+            )
+    return tuple(usable)
+
 
 def _get_local_ip() -> str:
     """Return the machine's primary outbound IP address.
@@ -356,7 +394,8 @@ class Settings(BaseSettings):
 
     model_config = ConfigDict(
         env_prefix="SLM_",
-        env_file=(".env", "/etc/autobot/db-credentials.env"),
+        # #13089: readable files only — an unreadable one raises at import time.
+        env_file=_readable_env_files(),
         extra="ignore",
     )
 
