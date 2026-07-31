@@ -52,10 +52,12 @@ import type {
   RestartAllServicesResponse,
   VNCCredentialCreate,
   VNCCredentialResponse,
+  VNCCredentialListResponse,
   VNCEndpointsResponse,
   VNCConnectionInfo,
   TLSCredentialCreate,
   TLSCredentialResponse,
+  TLSCredentialListResponse,
   TLSEndpointsResponse,
   TLSRenewResponse,
   TLSRotateResponse,
@@ -544,8 +546,8 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function getNodeVncCredentials(nodeId: string): Promise<{ credentials: VNCCredentialResponse[]; total: number }> {
-    const response = await client.get<{ credentials: VNCCredentialResponse[]; total: number }>(
+  async function getNodeVncCredentials(nodeId: string): Promise<VNCCredentialListResponse> {
+    const response = await client.get<VNCCredentialListResponse>(
       `/nodes/${nodeId}/vnc-credentials`
     )
     return response.data
@@ -593,9 +595,9 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function getNodeTlsCredentials(nodeId: string, includeInactive = false): Promise<{ credentials: TLSCredentialResponse[]; total: number }> {
+  async function getNodeTlsCredentials(nodeId: string, includeInactive = false): Promise<TLSCredentialListResponse> {
     const params = includeInactive ? '?include_inactive=true' : ''
-    const response = await client.get<{ credentials: TLSCredentialResponse[]; total: number }>(
+    const response = await client.get<TLSCredentialListResponse>(
       `/nodes/${nodeId}/tls-credentials${params}`
     )
     return response.data
