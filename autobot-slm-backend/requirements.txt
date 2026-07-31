@@ -39,8 +39,16 @@ websockets>=16.1.1,<17       # Issue #3098: relaxed from >=16.0 (#10386): slm_cl
 # Ansible integration
 ansible-runner>=2.4.3
 
-# HTTP client (for health checks)
-httpx>=0.28.1
+# HTTP clients
+httpx>=0.28.1  # health checks, general async HTTP calls
+# Async HTTP client — genuine runtime dependency, not an optional extra:
+# user_management/services/vault_client.py (SSO/system-secrets vault HTTP
+# calls), services/a2a_card_fetcher.py, services/reconciler.py's node health
+# check, and autobot_shared/retry_mechanism.py's network-retry helper all
+# import it (lazily, at call time) — a fresh install was already broken the
+# first time any of those code paths ran; this was just never surfaced
+# until CI started building the app to verify generated types (#13118).
+aiohttp>=3.14.3  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
 
 # System metrics
 psutil>=7.2.2
