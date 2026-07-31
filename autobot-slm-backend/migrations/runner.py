@@ -69,6 +69,11 @@ MIGRATIONS = [
     # Issue #11303: per-component async drift/resolve job tracking table so job
     # status survives the SLM backend restarting itself during a self-resolve.
     "add_component_sync_jobs_table",
+    # Issue #12647: the new canonical user_management declarative base bakes
+    # created_at/updated_at into Base unconditionally (matching the backend's
+    # already-migrated design). role_permissions and audit_logs never opted
+    # into TimestampMixin, so they need the columns added — mirrors #10636.
+    "add_role_permission_audit_log_timestamps",
 ]
 
 

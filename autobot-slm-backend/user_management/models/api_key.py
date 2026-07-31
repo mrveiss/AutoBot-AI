@@ -9,21 +9,22 @@ Long-lived API keys for programmatic access.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from user_management.models.base import Base, TimestampMixin
+from autobot_shared.time_utils import now_utc
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.team import Team
     from user_management.models.user import User
 
 
-class APIKey(Base, TimestampMixin):
+class APIKey(Base):
     """
     API Key model.
 
@@ -153,7 +154,7 @@ class APIKey(Base, TimestampMixin):
         """Check if the key has expired."""
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+        return now_utc() > self.expires_at
 
     @property
     def is_revoked(self) -> bool:
@@ -167,13 +168,13 @@ class APIKey(Base, TimestampMixin):
 
     def record_usage(self) -> None:
         """Record a usage of this API key."""
-        self.last_used_at = datetime.now(timezone.utc)
+        self.last_used_at = now_utc()
         self.usage_count += 1
 
     def revoke(self, revoked_by_user_id: uuid.UUID | None = None) -> None:
         """Revoke the API key."""
         self.is_active = False
-        self.revoked_at = datetime.now(timezone.utc)
+        self.revoked_at = now_utc()
         self.revoked_by = revoked_by_user_id
 
     def has_scope(self, scope: str) -> bool:

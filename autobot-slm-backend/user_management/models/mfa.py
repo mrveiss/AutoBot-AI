@@ -9,7 +9,7 @@ Supports TOTP-based 2FA with backup codes.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -17,7 +17,8 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from user_management.models.base import Base, TimestampMixin
+from autobot_shared.time_utils import now_utc
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.user import User
@@ -31,7 +32,7 @@ class MFAMethod(str, Enum):
     SMS = "sms"  # Future support
 
 
-class UserMFA(Base, TimestampMixin):
+class UserMFA(Base):
     """
     User MFA configuration.
 
@@ -110,9 +111,9 @@ class UserMFA(Base, TimestampMixin):
 
     def record_verification(self) -> None:
         """Record a successful MFA verification."""
-        self.last_verified_at = datetime.now(timezone.utc)
+        self.last_verified_at = now_utc()
 
     def use_backup_code(self) -> None:
         """Record usage of a backup code."""
         self.backup_codes_remaining = max(0, self.backup_codes_remaining - 1)
-        self.last_verified_at = datetime.now(timezone.utc)
+        self.last_verified_at = now_utc()

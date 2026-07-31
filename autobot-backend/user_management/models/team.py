@@ -14,9 +14,8 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import Uuid
 
 from autobot_shared.time_utils import now_utc
 from user_management.models.base import Base, TenantMixin
@@ -51,7 +50,7 @@ class Team(Base, TenantMixin):
     __tablename__ = "teams"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
@@ -149,20 +148,20 @@ class TeamMembership(Base):
     __tablename__ = "team_memberships"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
     )
 
     team_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("teams.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,

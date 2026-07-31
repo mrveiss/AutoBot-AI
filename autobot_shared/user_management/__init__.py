@@ -12,33 +12,60 @@ Movers so far:
 - `schemas.user` (#12647) — identical apart from Pydantic v1/v2 config style;
   no SQLAlchemy dependency, so it does not need the declarative-base decision
   gating the model files.
+- `models.base` (#12647) — the declarative base itself, resolving the
+  backend/SLM design fork per the owner's 2026-07-31 decision: a new
+  canonical base preserving both sides' properties (AsyncAttrs +
+  eager_defaults from backend; postgresql.UUID typing from SLM), not an
+  adoption of either fork.
 
 Each fork keeps a re-export shim so existing importers are untouched — the
 fork is removed, not the callers.
+
+#12647 (follow-up): the re-exports below are lazy (PEP 562 module
+``__getattr__``, mirroring ``autobot_shared/__init__.py``'s own pattern) —
+NOT for style, but because eager imports here previously coupled every
+submodule of this package together. Merely importing
+``autobot_shared.user_management.models.base`` (SQLAlchemy + time_utils only)
+forced Python to first execute this package's ``__init__.py`` in full,
+which eagerly imported ``schemas.user`` — whose ``EmailStr`` fields need
+``email_validator`` at class-definition time. That pulled ``email_validator``
+into `import models`'s chain (via the models/base.py shim) for the first
+time, breaking ``migration-gate``'s deliberately thin dependency set (the
+same defect class as the ``jsonschema`` coupling PR #13053 fixed). Lazy
+attribute resolution keeps each submodule's dependency footprint scoped to
+callers that actually touch it.
 """
 
-from autobot_shared.user_management.base_service import (  # noqa: F401
-    BaseService,
-    TenantContext,
-)
-from autobot_shared.user_management.schemas.user import (  # noqa: F401
-    PasswordChange,
-    RoleResponse,
-    UserCreate,
-    UserListResponse,
-    UserLogin,
-    UserResponse,
-    UserUpdate,
-)
+_LAZY_IMPORTS = {
+    "BaseService": (".base_service", "BaseService"),
+    "TenantContext": (".base_service", "TenantContext"),
+    "Base": (".models.base", "Base"),
+    "TimestampMixin": (".models.base", "TimestampMixin"),
+    "TenantMixin": (".models.base", "TenantMixin"),
+    "SoftDeleteMixin": (".models.base", "SoftDeleteMixin"),
+    "RoleResponse": (".schemas.user", "RoleResponse"),
+    "UserCreate": (".schemas.user", "UserCreate"),
+    "UserUpdate": (".schemas.user", "UserUpdate"),
+    "UserResponse": (".schemas.user", "UserResponse"),
+    "UserListResponse": (".schemas.user", "UserListResponse"),
+    "UserLogin": (".schemas.user", "UserLogin"),
+    "PasswordChange": (".schemas.user", "PasswordChange"),
+}
 
-__all__ = [
-    "BaseService",
-    "TenantContext",
-    "RoleResponse",
-    "UserCreate",
-    "UserUpdate",
-    "UserResponse",
-    "UserListResponse",
-    "UserLogin",
-    "PasswordChange",
-]
+__all__ = list(_LAZY_IMPORTS)
+
+
+def __getattr__(name: str):
+    if name in _LAZY_IMPORTS:
+        import importlib
+
+        module_path, attr_name = _LAZY_IMPORTS[name]
+        mod = importlib.import_module(module_path, __name__)
+        val = getattr(mod, attr_name)
+        globals()[name] = val
+        return val
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(globals()) | set(_LAZY_IMPORTS))
