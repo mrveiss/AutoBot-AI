@@ -247,12 +247,24 @@ def _is_direct_uvicorn_url(url: str) -> bool:
         scheme = p.scheme.lower()
         port = p.port  # None means the scheme's default port (80 for http, 443 for https)
 
-        # Loopback address always means direct uvicorn
+        # #12781: an nginx PORT wins over any host heuristic, including
+        # loopback. On a co-located single-box install nginx terminates TLS on
+        # 127.0.0.1:443 and proxies /slm/api/ -> the SLM on :8000, while
+        # /api/ws/ goes to the USER backend. Treating loopback as "direct
+        # uvicorn" therefore chose /api/ws/events, nginx routed it to the user
+        # backend, and that rejected the handshake with 403 on every reconnect.
+        #
+        # This check must come FIRST. It used to sit after the loopback branch,
+        # which made loopback+443 unreachable.
+        if port in _NGINX_HTTP_PORTS or (port is None and scheme in ("http", "https")):
+            return False
+
+        # Loopback on a non-nginx port means direct uvicorn.
         if host in _LOOPBACK_HOSTS:
             return True
 
-        # Plain HTTP on a non-standard port means direct uvicorn;
-        # nginx terminates TLS on 443 or serves plain HTTP on 80.
+        # Plain HTTP on a non-standard port means direct uvicorn — the Docker
+        # Compose case (AUTOBOT_SLM_HOST=autobot-slm, port 8000) from #10459.
         if scheme == "http" and port is not None and port not in _NGINX_HTTP_PORTS:
             return True
 
