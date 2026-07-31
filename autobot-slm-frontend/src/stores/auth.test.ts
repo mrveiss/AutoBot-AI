@@ -87,3 +87,73 @@ describe('authStore.completeMFALogin — verify-login transport contract (#12420
     expect(store.mfaPending).toBe(false)
   })
 })
+
+/**
+ * `POST /api/auth/login` declares the union `TokenResponse | MfaChallengeResponse`
+ * (`autobot-slm-backend/api/auth.py:81`). The store used to flatten both members
+ * into one all-optional hand-written interface, which made `access_token`
+ * optional everywhere and forced two `!` assertions on the live login path.
+ *
+ * Both contract members carry an `additionalProperties` catch-all, so the branch
+ * is chosen by a structural check on the discriminator rather than `in`. These
+ * tests pin that discrimination (#13138).
+ */
+describe('authStore.login — /api/auth/login response union (#13138)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    sessionStorage.clear()
+    localStorage.clear()
+    mockFetch.mockReset()
+    vi.stubGlobal('fetch', mockFetch)
+  })
+
+  it('takes the token branch and authenticates when no MFA challenge is returned', async () => {
+    const store = useAuthStore()
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ access_token: 'plain-token', token: 'plain-token', token_type: 'bearer', expires_in: 3600 })
+    )
+    mockFetch.mockResolvedValueOnce(jsonResponse({ username: 'admin', is_admin: true }))
+
+    expect(await store.login('admin', 'pw')).toBe(true)
+    expect(store.token).toBe('plain-token')
+    expect(store.mfaPending).toBe(false)
+  })
+
+  it('takes the challenge branch without storing a token', async () => {
+    const store = useAuthStore()
+    mockFetch.mockResolvedValueOnce(jsonResponse({ requires_mfa: true, temp_token: 'temp-xyz' }))
+
+    expect(await store.login('admin', 'pw')).toBe(false)
+    expect(store.mfaPending).toBe(true)
+    expect(store.token).toBeNull()
+    expect(sessionStorage.getItem('slm_access_token')).toBeNull()
+    // Only the login call — no follow-up /api/auth/me while MFA is pending.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads access_token, not the mirrored token field', async () => {
+    // The SLM mirrors the JWT under `token` for clients written against the core
+    // backend (`autobot-slm-backend/models/schemas.py:31-48`). A divergent pair
+    // must resolve to `access_token`.
+    const store = useAuthStore()
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ access_token: 'canonical', token: 'mirror', token_type: 'bearer', expires_in: 3600 })
+    )
+    mockFetch.mockResolvedValueOnce(jsonResponse({ username: 'admin', is_admin: true }))
+
+    await store.login('admin', 'pw')
+    expect(store.token).toBe('canonical')
+  })
+
+  it('does not mistake requires_mfa:false for a challenge', async () => {
+    const store = useAuthStore()
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ requires_mfa: false, access_token: 'not-a-challenge', token_type: 'bearer', expires_in: 3600 })
+    )
+    mockFetch.mockResolvedValueOnce(jsonResponse({ username: 'admin', is_admin: true }))
+
+    expect(await store.login('admin', 'pw')).toBe(true)
+    expect(store.mfaPending).toBe(false)
+    expect(store.token).toBe('not-a-challenge')
+  })
+})
