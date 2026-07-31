@@ -51,15 +51,19 @@ function utilizationTextColor(pct: number): string {
   return 'text-green-600'
 }
 
-function temperatureColor(temp: number | null): string {
-  if (temp === null) return 'text-gray-400'
+// #13138: `temperature_celsius` is optional AND nullable in the contract
+// (`temperature_celsius?: float | None`), so an absent reading arrives as
+// `undefined`, not `null` — a `=== null` test alone let it fall through to the
+// "cool" branch and render `undefined°C`.
+function temperatureColor(temp: number | null | undefined): string {
+  if (temp === null || temp === undefined) return 'text-gray-400'
   if (temp > 75) return 'text-red-600'
   if (temp >= 60) return 'text-yellow-600'
   return 'text-green-600'
 }
 
-function temperatureDisplay(temp: number | null): string {
-  if (temp === null) return 'N/A'
+function temperatureDisplay(temp: number | null | undefined): string {
+  if (temp === null || temp === undefined) return 'N/A'
   return `${temp.toFixed(1)}\u00B0C`
 }
 

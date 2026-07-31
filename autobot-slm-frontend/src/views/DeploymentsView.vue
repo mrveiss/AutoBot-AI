@@ -16,7 +16,7 @@ import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
-import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, NodeRole } from '@/types/slm'
+import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
 
 const logger = createLogger('DeploymentsView')
 const api = useSlmApi()
@@ -196,10 +196,24 @@ const roleCategories = computed(() => {
   return categories
 })
 
+/** Blue-green statuses that mean "still running" (types/slm.ts BlueGreenStatus). */
+const IN_FLIGHT_BG_STATUSES: BlueGreenStatus[] = [
+  'borrowing',
+  'deploying',
+  'verifying',
+  'switching',
+  'active',
+  'monitoring',
+]
+
 // Blue-green stats
 const bgStats = computed(() => ({
   total: bgDeployments.value.length,
-  active: bgDeployments.value.filter(d => ['borrowing', 'deploying', 'verifying', 'switching', 'active'].includes(d.status)).length,
+  // #13138: 'monitoring' is the post-deploy health-watch state
+  // (services/blue_green.py:780, up to `post_deploy_monitor_duration` seconds).
+  // It was in none of these buckets, so a deployment sitting in it vanished
+  // from every tile.
+  active: bgDeployments.value.filter(d => IN_FLIGHT_BG_STATUSES.includes(d.status)).length,
   completed: bgDeployments.value.filter(d => d.status === 'completed').length,
   failed: bgDeployments.value.filter(d => d.status === 'failed').length,
   rolledBack: bgDeployments.value.filter(d => d.status === 'rolled_back').length,
@@ -332,7 +346,7 @@ async function fetchBgDeployments(): Promise<void> {
   isLoadingBg.value = true
   try {
     const response = await api.getBlueGreenDeployments()
-    bgDeployments.value = response.deployments as BlueGreenDeployment[]
+    bgDeployments.value = response.deployments
   } catch (err) {
     logger.error('Failed to fetch blue-green deployments:', err)
   } finally {
@@ -551,6 +565,7 @@ function getStatusClass(status: string): string {
     case 'borrowing':
     case 'deploying':
     case 'verifying':
+    case 'monitoring':
     case 'switching': return 'bg-blue-100 text-blue-800'
     case 'pending': return 'bg-yellow-100 text-yellow-800'
     case 'failed': return 'bg-red-100 text-red-800'
@@ -572,7 +587,9 @@ function getStatusIcon(status: string): string {
   }
 }
 
-function formatDateTime(isoString: string | null): string {
+// #13138: the blue-green timestamps are optional AND nullable in the contract,
+// so an absent value arrives as `undefined`.
+function formatDateTime(isoString: string | null | undefined): string {
   if (!isoString) return '-'
   return formatDateTimeTz(isoString)
 }

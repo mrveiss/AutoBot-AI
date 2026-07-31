@@ -23,7 +23,18 @@ const API_BASE = getSlmApiBase()
 
 // ===== Type Definitions =====
 
-export interface SystemMetrics {
+/**
+ * Host-level metrics as this composable presents them — a client-side
+ * VIEW-MODEL, not a wire shape.
+ *
+ * Renamed from `SystemMetrics` in #13138: it collided with the generated
+ * `components['schemas']['SystemMetrics']` (the `/health/metrics` response,
+ * autobot-slm-backend/api/health.py:59) while sharing almost nothing with it —
+ * `fetchDashboard` below synthesises every field from `/monitoring/dashboard`'s
+ * `fleet_metrics` averages, and `timestamp` here is `Date.now()`, not an ISO
+ * string. Deriving it would have been actively harmful.
+ */
+export interface SystemMetricsViewModel {
   cpu_percent: number
   memory_percent: number
   disk_percent: number
@@ -94,8 +105,17 @@ export interface OptimizationRecommendation {
   expected_improvement: string
 }
 
-export interface DashboardOverview {
-  system_metrics?: SystemMetrics
+/**
+ * Dashboard shape this composable exposes — a client-side VIEW-MODEL.
+ *
+ * Renamed from `DashboardOverview` in #13138: it collided with the generated
+ * `components['schemas']['DashboardOverview']` (api/monitoring.py:118), which
+ * `fetchDashboard` deliberately REMAPS into this shape (see the mapping right
+ * below). The real wire model is derived, under its own name, in
+ * `types/api-responses.ts`.
+ */
+export interface DashboardViewModel {
+  system_metrics?: SystemMetricsViewModel
   gpu_metrics?: GPUMetrics
   npu_metrics?: NPUMetrics
   hardware_acceleration?: Record<string, boolean>
@@ -183,7 +203,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   }
 
   // State
-  const dashboard = ref<DashboardOverview | null>(null)
+  const dashboard = ref<DashboardViewModel | null>(null)
   const services = ref<ServicesSummary | null>(null)
   const alerts = ref<AlertsSummary | null>(null)
   const recommendations = ref<OptimizationRecommendation[]>([])

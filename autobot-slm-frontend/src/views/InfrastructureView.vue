@@ -13,21 +13,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
+import type { PlaybookInfo } from '@/types/slm'
 
 const logger = createLogger('InfrastructureView')
 import InfrastructureWizard from '@/components/InfrastructureWizard.vue'
 
-interface PlaybookInfo {
-  id: string
-  name: string
-  description: string
-  category: string
-  playbook_file: string
-  target_hosts: string[]
-  variables: Record<string, unknown>
-  estimated_duration: string
-  requires_confirmation: boolean
-}
 
 
 const showWizard = ref(false)
