@@ -2677,7 +2677,7 @@
       "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node."
     },
     "notificationsSettings": {
-      "adminExampleCom": "admin@example.com",
+      "adminExampleCom": "admin{'@'}example.com",
       "alertTypes": "Alert Types",
       "alertsForPerformanceDegradation": "Alerts for performance degradation",
       "backupCompletionAlerts": "Backup Completion Alerts",
