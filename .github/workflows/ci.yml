@@ -149,12 +149,37 @@ jobs:
         # -n auto --dist loadscope parallelizes across workers (#10398); pytest-cov
         # auto-combines per-worker coverage, and loadscope keeps same-module tests
         # on one worker so shared-fixture/ordering behaviour matches serial.
+        #
+        # #13084: two SEPARATE pytest invocations, not one combined session.
+        # autobot-backend/ and autobot-slm-backend/ each define top-level
+        # packages with identical names (api, services, user_management,
+        # middleware, migrations). Collecting both in one interpreter session
+        # makes whichever backend's file collects first bind that dotted name
+        # in sys.modules for the rest of the session, breaking the other
+        # backend's own tests (~95% of a full single-session run's collection
+        # errors — see #13084). A fresh interpreter per invocation eliminates
+        # the collision entirely; --cov-append merges coverage across both so
+        # the combined --cov-fail-under=70 gate still reflects the whole
+        # suite. This does NOT add a second CI job (the singleton self-hosted
+        # runner concern from #10691) — both invocations run sequentially in
+        # this same job/step, so total wall-clock is the sum of the parts,
+        # same as today's single combined run.
         python -m pytest \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests \
           -n auto --dist loadscope \
           -m "not integration and not slow and not distributed and not performance" \
           --cov=autobot-backend \
-          --cov=autobot-slm-backend \
           --cov=autobot_shared \
+          --cov-report= \
+          --tb=short \
+          -q
+
+        python -m pytest \
+          autobot-slm-backend \
+          -n auto --dist loadscope \
+          -m "not integration and not slow and not distributed and not performance" \
+          --cov=autobot-slm-backend \
+          --cov-append \
           --cov-report=xml:coverage.xml \
           --cov-report=term-missing \
           --cov-fail-under=70 \
