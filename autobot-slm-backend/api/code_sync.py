@@ -507,6 +507,10 @@ async def _list_jobs_from_db(limit: int = 10) -> List[FleetSyncJobStatus]:
                     total_nodes=db_job.total_nodes,
                     completed_nodes=db_job.completed_nodes,
                     failed_nodes=db_job.failed_nodes,
+                    # #13157: the list endpoint dropped failure_reason while the
+                    # single-job endpoint (:470) carried it, so every job in the
+                    # recent-jobs list reported no reason for its failure.
+                    failure_reason=db_job.failure_reason,
                     nodes=[
                         FleetSyncNodeStatus(
                             node_id=ns.node_id,

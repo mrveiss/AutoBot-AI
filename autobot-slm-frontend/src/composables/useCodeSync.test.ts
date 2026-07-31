@@ -321,6 +321,40 @@ describe('useCodeSync — slmApiClient convenience migration (#12420 batch 6)', 
     expect(result).toEqual([])
   })
 
+  // #13157: getJobStatus is now the poller behind the code-sync page's fleet
+  // job panel, so its request shape and its failure contract are pinned.
+  it('getJobStatus GETs the job path as a single-shot poll and returns the job', async () => {
+    const job = {
+      job_id: 'job-1',
+      status: 'failed',
+      strategy: 'rolling',
+      total_nodes: 2,
+      completed_nodes: 1,
+      failed_nodes: 1,
+      failure_reason: 'Fleet node n2 playbook failed',
+      nodes: [],
+      created_at: '2026-01-01T00:00:00Z',
+      completed_at: '2026-01-01T00:02:00Z',
+    }
+    mockGet.mockResolvedValue(job)
+
+    const codeSync = useCodeSync()
+    const result = await codeSync.getJobStatus('job-1')
+
+    expect(mockGet).toHaveBeenCalledWith('/code-sync/fleet/jobs/job-1', { maxRetries: 1 })
+    expect(result?.failure_reason).toBe('Fleet node n2 playbook failed')
+  })
+
+  it('getJobStatus returns null and sets error.value on failure', async () => {
+    mockGet.mockRejectedValue(new Error('HTTP 503'))
+
+    const codeSync = useCodeSync()
+    const result = await codeSync.getJobStatus('job-1')
+
+    expect(result).toBeNull()
+    expect(codeSync.error.value).toBe('HTTP 503')
+  })
+
   it('syncNode treats the SLM self-restart 502 as success when the node is an SLM server', async () => {
     mockRawRequest.mockResolvedValue(mockResponse(502, { detail: 'bad gateway' }))
     mockGetNodeRoles.mockResolvedValue({ detected_roles: ['slm-backend'] })
