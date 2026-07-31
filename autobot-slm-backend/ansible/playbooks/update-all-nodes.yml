@@ -834,6 +834,16 @@
             migration_become: true
             migration_name_prefix: "[PLAY 2] Backend | "
 
+    # #12777/#12959: the unit template is role-owned and this play never rendered
+    # it, so the faulthandler fix stayed in the repo and never reached a host.
+    # Must precede the restart below so the new unit is what gets started.
+    - name: "[PLAY 2] Backend | Render systemd unit so role changes land (#12777)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: unit_only
+      when: "'backend' in group_names"
+      tags: [backend, systemd, unit]
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend
@@ -1172,10 +1182,18 @@
       failed_when: false
       tags: [browser, browser-worker, restart]
 
+    # #12912: waited on 3000, which nothing serves — autobot-playwright binds
+    # PLAYWRIGHT_PORT (9001, roles/browser/defaults/main.yml). On a live host
+    # 3000 is Grafana, bound to loopback only, so this timed out for 61s and
+    # failed PLAY 2 every single run — the terminal blocker that also swallowed
+    # other components' handlers.
+    #
+    # `| default(9001)` because role defaults are NOT in scope in a playbook
+    # task (the #12871 trap); this mirrors setup-browser-worker.yml.
     - name: "[PLAY 2] Browser | Wait for service to be ready"
       wait_for:
         host: "{{ ansible_host }}"
-        port: 3000
+        port: "{{ playwright_port | default(9001) }}"
         timeout: 60
         delay: 5
       delegate_to: localhost
