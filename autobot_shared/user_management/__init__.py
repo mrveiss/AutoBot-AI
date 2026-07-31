@@ -17,6 +17,17 @@ Movers so far:
   canonical base preserving both sides' properties (AsyncAttrs +
   eager_defaults from backend; postgresql.UUID typing from SLM), not an
   adoption of either fork.
+- `models.team` / `models.mfa` (#12647) — byte-identical between backends,
+  no reconciliation needed.
+- `models.role` / `models.sso` / `models.api_key` / `models.audit` (#12647)
+  — only cosmetic diffs (unused `Optional` import, `Mapped[Optional[...]]`
+  vs `Mapped["... | None"]` style, comment wording, and one redundant
+  `from __future__ import annotations`); no schema or behavior changed. See
+  each module's docstring for the specific diff it resolved.
+
+Still forked and out of scope for this package: `models.user` and
+`models.organization` carry genuine per-backend features (backend-only
+activity relationships and LLC/PM-sync columns) and cannot fully merge.
 
 Each fork keeps a re-export shim so existing importers are untouched — the
 fork is removed, not the callers.
