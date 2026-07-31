@@ -142,7 +142,9 @@ function getStatusClasses(status: ServiceStatus): { bg: string; text: string; do
   return classes[status] || classes.unknown
 }
 
-function formatBytes(bytes: number | null): string {
+// #13138: `memory_bytes` is optional AND nullable in the contract; the body
+// already handled `undefined`, only the signature disagreed.
+function formatBytes(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined) return '-'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`

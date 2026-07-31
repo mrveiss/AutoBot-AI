@@ -572,7 +572,9 @@ function getStatusIcon(status: string): string {
   }
 }
 
-function formatDateTime(isoString: string | null): string {
+// #13138: the blue-green timestamps are optional AND nullable in the contract,
+// so an absent value arrives as `undefined`.
+function formatDateTime(isoString: string | null | undefined): string {
   if (!isoString) return '-'
   return formatDateTimeTz(isoString)
 }
