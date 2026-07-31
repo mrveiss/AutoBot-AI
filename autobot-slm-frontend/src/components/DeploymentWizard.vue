@@ -7,12 +7,21 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { getSlmApiBase } from '@/config/ssot-config'
-import type { SLMNode, NodeRole } from '@/types/slm'
+import type { SLMNode, NodeRole, RoleInfo, RoleListResponse } from '@/types/slm'
 
-interface RoleInfo {
-  name: string
-  description: string
-  category: string
+/**
+ * The subset of `RoleInfo` this wizard renders.
+ *
+ * Replaces the hand-written `RoleInfo` copy removed in #13138. It stays a
+ * projection rather than the full derived `RoleInfo` because the offline
+ * fallback below is built from `NODE_ROLE_METADATA`, which cannot supply
+ * `ansible_role` or `required` — a full `RoleInfo` there would be a lie. The
+ * member types are derived, so a contract rename still breaks the build.
+ */
+type WizardRoleChoice = {
+  name: RoleInfo['name']
+  description: RoleInfo['description']
+  category: RoleInfo['category']
   dependencies: string[]
 }
 
@@ -33,7 +42,7 @@ const selectedNodeId = ref<string>('')
 const selectedRoles = ref<string[]>([])
 const isDeploying = ref(false)
 const deployError = ref<string | null>(null)
-const roles = ref<RoleInfo[]>([])
+const roles = ref<WizardRoleChoice[]>([])
 const isLoadingRoles = ref(false)
 
 // For manual IP input when no nodes exist
@@ -57,7 +66,7 @@ const canProceedStep2 = computed(() => selectedRoles.value.length > 0)
 
 // Group roles by category
 const rolesByCategory = computed(() => {
-  const groups: Record<string, RoleInfo[]> = {}
+  const groups: Record<string, WizardRoleChoice[]> = {}
   for (const role of roles.value) {
     if (!groups[role.category]) {
       groups[role.category] = []
@@ -101,8 +110,15 @@ async function fetchRoles(): Promise<void> {
       },
     })
     if (response.ok) {
-      const data = await response.json()
-      roles.value = data.roles
+      const data = (await response.json()) as RoleListResponse
+      // #13138: `dependencies` is `default_factory=list` server-side and so
+      // optional in the contract — normalise it, the template reads `.length`.
+      roles.value = data.roles.map((role) => ({
+        name: role.name,
+        description: role.description,
+        category: role.category,
+        dependencies: role.dependencies ?? [],
+      }))
     }
   } catch (e) {
     // Use default roles from node-roles constants if API fails

@@ -171,6 +171,16 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     category: 'remote-access',
     tools: ['tigervnc-standalone-server', 'websockify', 'novnc', 'x11vnc'],
   },
+  // #13138: present in role_registry.py `_INFRA_ROLES` (:372) and therefore
+  // returned by GET /deployments/roles, but missing from this mirror — so the
+  // role rendered with no label and no description wherever it appeared.
+  'docker': {
+    name: 'docker',
+    displayName: 'Docker',
+    description: 'Container runtime for hybrid Docker deployments',
+    category: 'infrastructure',
+    tools: ['docker', 'docker-compose'],
+  },
 }
 
 /**

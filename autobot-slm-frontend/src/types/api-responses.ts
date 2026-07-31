@@ -37,13 +37,38 @@ export interface SyncVerifyResponse {
 
 // =============================================================================
 // Services — Restart All (Issue #725)
+//
+// Derived from the generated OpenAPI contract (#13138) — request/response
+// models of POST `/nodes/{node_id}/services/restart-all`
+// (autobot-slm-backend/api/services.py:932).
 // =============================================================================
 
-export interface RestartAllServicesRequest {
-  category?: 'autobot' | 'system' | 'all'
-  exclude_services?: string[]
+/**
+ * Request body of POST `/nodes/{node_id}/services/restart-all`
+ * (models/schemas.py:897).
+ *
+ * `Partial<>` because both fields carry a server-side default (`category=None`,
+ * `exclude_services=[]`) and openapi-typescript emits defaulted fields as
+ * REQUIRED — correct for a response, backwards for a request body.
+ *
+ * The intersected `category` keeps the literal union: the contract widens it to
+ * `string` because OpenAPI cannot express `pattern="^(autobot|system|all)$"`
+ * (models/schemas.py:900), but sending anything else is a guaranteed 422.
+ */
+export type RestartAllServicesRequest = Partial<
+  components['schemas']['RestartAllServicesRequest']
+> & {
+  category?: 'autobot' | 'system' | 'all' | null
 }
 
+/**
+ * Element of `RestartAllServicesResponse.results`.
+ *
+ * Hand-written on purpose: the response model types `results` as a bare
+ * `List[Dict]` (models/schemas.py:920), so the contract can only say
+ * `{ [key: string]: unknown }[]`. The real keys are built at
+ * api/services.py:892-897 and always include `is_slm_agent`.
+ */
 export interface RestartServiceResult {
   service_name: string
   success: boolean
@@ -51,16 +76,15 @@ export interface RestartServiceResult {
   is_slm_agent: boolean
 }
 
-export interface RestartAllServicesResponse {
-  node_id: string
-  success: boolean
-  message: string
-  total_services: number
-  successful_restarts: number
-  failed_restarts: number
-  results: RestartServiceResult[]
-  slm_agent_restarted: boolean
-}
+/**
+ * Response model of POST `/nodes/{node_id}/services/restart-all`
+ * (models/schemas.py:911), with `results` pinned to the shape the endpoint
+ * actually builds.
+ */
+export type RestartAllServicesResponse =
+  components['schemas']['RestartAllServicesResponse'] & {
+    results?: RestartServiceResult[]
+  }
 
 // =============================================================================
 // VNC Credentials (Issue #725)
@@ -175,155 +199,73 @@ export interface TLSEnableResponse {
 
 // =============================================================================
 // Monitoring (Issue #729)
+//
+// Derived from the generated OpenAPI contract (#13138) — response models of
+// autobot-slm-backend/api/monitoring.py. The local names are kept as aliases
+// of the differently-named schemas so existing importers stay untouched.
+//
+// NOTE for future passes: the same three names — `DashboardOverview`,
+// `SystemMetrics` and `LogEntry` — are ALSO declared in
+// `composables/usePrometheusMetrics.ts`, `views/monitoring/LogViewer.vue` and
+// `components/DeploymentLogViewer.vue`. Those are client-side VIEW-MODELS that
+// deliberately remap these endpoints; they must never be derived. They were
+// renamed in #13138 so the collision cannot come back.
 // =============================================================================
 
-export interface FleetMetricsNode {
-  node_id: string
-  hostname: string
-  ip_address: string
-  status: string
-  cpu_percent: number
-  memory_percent: number
-  disk_percent: number
-  last_heartbeat: string | null
-  services_running: number
-  services_failed: number
-}
+/** Entry of `FleetMetricsResponse.nodes` — `NodeMetrics` (monitoring.py:53). */
+export type FleetMetricsNode = components['schemas']['NodeMetrics']
 
-export interface FleetMetrics {
-  total_nodes: number
-  online_nodes: number
-  degraded_nodes: number
-  offline_nodes: number
-  avg_cpu_percent: number
-  avg_memory_percent: number
-  avg_disk_percent: number
-  total_services: number
-  running_services: number
-  failed_services: number
-  nodes: FleetMetricsNode[]
-  timestamp: string
-}
+/**
+ * Response model of GET `/monitoring/metrics/fleet` — `FleetMetricsResponse`
+ * (monitoring.py:68). `timestamp` is `default_factory`, hence optional here.
+ */
+export type FleetMetrics = components['schemas']['FleetMetricsResponse']
 
-export interface AlertItem {
-  alert_id: string
-  severity: string
-  category: string
-  message: string
-  node_id: string | null
-  hostname: string | null
-  timestamp: string
-  acknowledged: boolean
-}
+/** Entry of `AlertsResponse.alerts` (monitoring.py:85). */
+export type AlertItem = components['schemas']['AlertItem']
 
-export interface AlertsResponse {
-  total_count: number
-  critical_count: number
-  warning_count: number
-  info_count: number
-  alerts: AlertItem[]
-}
+/** Response model of GET `/monitoring/alerts` (monitoring.py:98). */
+export type AlertsResponse = components['schemas']['AlertsResponse']
 
-export interface MonitoringSystemHealth {
-  overall_status: string
-  health_score: number
-  components: Record<string, string>
-  issues: string[]
-  last_check: string
-}
+/**
+ * Response model of GET `/monitoring/health` — `SystemHealthResponse`
+ * (monitoring.py:108). `last_check` is `default_factory`, hence optional.
+ */
+export type MonitoringSystemHealth = components['schemas']['SystemHealthResponse']
 
-export interface DashboardOverview {
-  fleet_metrics: FleetMetrics
-  recent_alerts: AlertItem[]
-  recent_deployments: number
-  active_maintenance: number
-  health_summary: MonitoringSystemHealth
-}
+/** Response model of GET `/monitoring/dashboard` (monitoring.py:118). */
+export type DashboardOverview = components['schemas']['DashboardOverview']
 
-export interface LogEntry {
-  event_id: string
-  node_id: string
-  hostname: string
-  event_type: string
-  severity: string
-  message: string
-  timestamp: string
-}
+/** Entry of `LogsResponse.logs` (monitoring.py:128). */
+export type LogEntry = components['schemas']['LogEntry']
 
-export interface LogsResponse {
-  logs: LogEntry[]
-  total: number
-  page: number
-  per_page: number
-}
+/** Response model of GET `/monitoring/logs` (monitoring.py:140). */
+export type LogsResponse = components['schemas']['LogsResponse']
 
 // Application-log viewer (Issue #11302) — tails allowlisted on-node log files
 // (backend-error.log, celery-error.log, etc.) via GET /monitoring/app-logs.
-export interface AppLogEntry {
-  line_number: number
-  timestamp: string | null
-  severity: string | null
-  message: string
-}
 
-export interface AppLogsResponse {
-  entries: AppLogEntry[]
-  total: number
-  page: number
-  per_page: number
-  node_id: string
-  service: string
-}
+/** Entry of `AppLogsResponse.entries` (monitoring.py:149). */
+export type AppLogEntry = components['schemas']['AppLogEntry']
+
+/** Response model of GET `/monitoring/app-logs` (monitoring.py:158). */
+export type AppLogsResponse = components['schemas']['AppLogsResponse']
 
 // =============================================================================
 // Blue-Green Deployments (Issue #726 Phase 3)
+//
+// Single-sourced from `types/slm.ts` (#13138): these three shapes were declared
+// here AND there for the same wire models, and `DeploymentsView.vue` bridged
+// the two copies with an `as BlueGreenDeployment[]` cast — so a divergence
+// would have been silently cast away. `types/slm.ts` now derives them from the
+// generated contract; these are aliases so existing importers keep working.
 // =============================================================================
 
-export interface BlueGreenDeploymentApi {
-  id: number
-  bg_deployment_id: string
-  blue_node_id: string
-  blue_roles: string[]
-  green_node_id: string
-  green_original_roles: string[]
-  borrowed_roles: string[]
-  purge_on_complete: boolean
-  deployment_type: string
-  health_check_url: string | null
-  health_check_interval: number
-  health_check_timeout: number
-  auto_rollback: boolean
-  status: string
-  progress_percent: number
-  current_step: string | null
-  error: string | null
-  started_at: string | null
-  switched_at: string | null
-  completed_at: string | null
-  rollback_at: string | null
-  triggered_by: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface BlueGreenCreate {
-  blue_node_id: string
-  green_node_id: string
-  roles: string[]
-  deployment_type?: string
-  health_check_url?: string
-  health_check_interval?: number
-  health_check_timeout?: number
-  auto_rollback?: boolean
-  purge_on_complete?: boolean
-}
-
-export interface BlueGreenListResponse {
-  deployments: BlueGreenDeploymentApi[]
-  total: number
-  page: number
-  per_page: number
-}
+export type {
+  BlueGreenDeployment as BlueGreenDeploymentApi,
+  BlueGreenDeploymentCreate as BlueGreenCreate,
+  BlueGreenListResponse,
+} from './slm'
 
 // =============================================================================
 // NPU Management (Issue #255)
@@ -341,143 +283,93 @@ export interface NPURoleResponse {
   detection_triggered?: boolean
 }
 
-export interface NPUDetectionResponse {
-  success: boolean
-  message: string
-  node_id: string
-  capabilities: import('./slm').NPUNodeStatus['capabilities'] | null
-}
+/**
+ * Response model of POST `/npu/nodes/{node_id}/detect` (api/npu.py).
+ * `capabilities` is the derived `NPUCapabilities` (types/slm.ts), narrowed
+ * there to the `NPUDeviceType` union the detector actually emits.
+ */
+export type NPUDetectionResponse =
+  components['schemas']['NPUDetectionResponse'] & {
+    capabilities?: import('./slm').NPUCapabilities | null
+  }
 
 // =============================================================================
 // Error Monitoring (Issue #563)
 // =============================================================================
 
-export interface ErrorStatistics {
-  total_errors: number
-  errors_24h: number
-  errors_7d: number
-  errors_30d: number
-  resolved_count: number
-  unresolved_count: number
-  error_rate_per_hour: number
+/**
+ * Response model of GET `/errors/statistics` (api/errors.py:37).
+ *
+ * `trend` is a bare `str` in the contract, but `_calculate_error_trend`
+ * (api/errors.py:245-273) returns exactly one of three literals on every path,
+ * so the union is a real guarantee and is kept by intersection.
+ */
+export type ErrorStatistics = components['schemas']['ErrorStatistics'] & {
   trend: 'increasing' | 'decreasing' | 'stable'
 }
 
-export interface RecentError {
-  event_id: string
-  node_id: string
-  hostname: string
-  event_type: string
-  severity: string
-  message: string
-  timestamp: string
-  resolved: boolean
-  resolved_at: string | null
-  resolved_by: string | null
-}
+/** Entry of `RecentErrorsResponse.errors` (api/errors.py:50). */
+export type RecentError = components['schemas']['RecentError']
 
-export interface RecentErrorsResponse {
-  errors: RecentError[]
-  total: number
-  page: number
-  per_page: number
-}
+/** Response model of GET `/errors/recent` (api/errors.py:65). */
+export type RecentErrorsResponse = components['schemas']['RecentErrorsResponse']
 
-export interface CategoryBreakdown {
-  category: string
-  count: number
-  percentage: number
-}
+/** Entry of `CategoriesResponse.categories` (api/errors.py:74). */
+export type CategoryBreakdown = components['schemas']['CategoryBreakdown']
 
-export interface CategoriesResponse {
-  categories: CategoryBreakdown[]
-  total: number
-}
+/** Response model of GET `/errors/categories` (api/errors.py:82). */
+export type CategoriesResponse = components['schemas']['CategoriesResponse']
 
-export interface ComponentBreakdown {
-  node_id: string
-  hostname: string
-  count: number
-  percentage: number
-}
+/** Entry of `ComponentsResponse.components` (api/errors.py:89). */
+export type ComponentBreakdown = components['schemas']['ComponentBreakdown']
 
-export interface ComponentsResponse {
-  components: ComponentBreakdown[]
-  total: number
-}
+/** Response model of GET `/errors/components` (api/errors.py:98). */
+export type ComponentsResponse = components['schemas']['ComponentsResponse']
 
-export interface ErrorHealthResponse {
+/**
+ * Response model of GET `/errors/health` (api/errors.py:105).
+ *
+ * `status` is a bare `str` in the contract; `get_error_health`
+ * (api/errors.py:509-518) assigns exactly one of three literals on every
+ * branch, so the union is kept by intersection.
+ */
+export type ErrorHealthResponse = components['schemas']['ErrorHealthResponse'] & {
   status: 'healthy' | 'warning' | 'critical'
-  error_rate_current: number
-  error_rate_threshold_warning: number
-  error_rate_threshold_critical: number
-  recent_critical_count: number
-  message: string
 }
 
-export interface MetricsSummary {
-  total_errors: number
-  unresolved_errors: number
-  critical_errors: number
-  error_rate_per_hour: number
-  mean_time_to_resolve_hours: number | null
-  top_error_type: string | null
-  most_affected_node: string | null
-}
+/** Response model of GET `/errors/metrics/summary` (api/errors.py:116). */
+export type MetricsSummary = components['schemas']['MetricsSummary']
 
-export interface TimelinePoint {
-  timestamp: string
-  count: number
-  critical: number
-  error: number
-}
+/** Entry of `TimelineResponse.timeline` (api/errors.py:128). */
+export type TimelinePoint = components['schemas']['TimelinePoint']
 
-export interface TimelineResponse {
-  timeline: TimelinePoint[]
-  interval: string
-  start: string
-  end: string
-}
+/** Response model of GET `/errors/metrics/timeline` (api/errors.py:137). */
+export type TimelineResponse = components['schemas']['TimelineResponse']
 
-export interface TopError {
-  event_type: string
-  message: string
-  count: number
-  last_occurred: string
-  affected_nodes: string[]
-}
+/** Entry of `TopErrorsResponse.errors` (api/errors.py:146). */
+export type TopError = components['schemas']['TopError']
 
-export interface TopErrorsResponse {
-  errors: TopError[]
-}
+/** Response model of GET `/errors/metrics/top-errors` (api/errors.py:156). */
+export type TopErrorsResponse = components['schemas']['TopErrorsResponse']
 
-export interface AlertThresholdConfig {
-  warning_threshold: number
-  critical_threshold: number
-  retention_days: number
-}
+/**
+ * Request body of POST `/errors/metrics/alert-threshold` (api/errors.py:162).
+ * All three fields are genuinely required — they carry `ge`/`le` bounds but no
+ * default — so a plain alias is correct here, not `Partial`.
+ */
+export type AlertThresholdConfig = components['schemas']['AlertThresholdConfig']
 
-export interface AlertThresholdResponse extends AlertThresholdConfig {
-  updated: boolean
-}
+/** Response model of POST `/errors/metrics/alert-threshold` (api/errors.py:170). */
+export type AlertThresholdResponse = components['schemas']['AlertThresholdResponse']
 
-export interface CleanupResponse {
-  deleted_count: number
-  retention_days: number
-  message: string
-}
+/** Response model of POST `/errors/metrics/cleanup` (api/errors.py:179). */
+export type CleanupResponse = components['schemas']['CleanupResponse']
 
-export interface ClearResponse {
-  deleted_count: number
-  message: string
-}
+/** Response model of POST `/errors/clear` (api/errors.py:187). */
+export type ClearResponse = components['schemas']['ClearResponse']
 
-export interface ResolveResponse {
-  event_id: string
-  resolved: boolean
-  resolved_at: string
-  resolved_by: string
-}
+/** Response model of POST `/errors/metrics/resolve/{event_id}` (api/errors.py:201). */
+export type ResolveResponse = components['schemas']['ResolveResponse']
 
 // =============================================================================
 // Security (Issue #813)
@@ -541,9 +433,8 @@ export interface WizardStatusResponse {
 // Generic action response (used across multiple endpoints)
 // =============================================================================
 
-export interface ActionResponse {
-  action: string
-  success: boolean
-  message: string
-  resource_id?: string
-}
+/**
+ * Shared action envelope (`ActionResponse`, models/schemas.py). `resource_id`
+ * is optional AND nullable in the contract.
+ */
+export type ActionResponse = components['schemas']['ActionResponse']
