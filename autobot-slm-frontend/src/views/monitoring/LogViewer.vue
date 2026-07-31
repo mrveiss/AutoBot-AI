@@ -20,7 +20,16 @@ import type { AppLogEntry } from '@/types/api-responses'
 const logger = createLogger('LogViewer')
 const { t } = useI18n()
 
-interface LogEntry {
+/**
+ * Row rendered by this viewer — a client-side VIEW-MODEL, not a wire shape.
+ *
+ * Renamed from `LogEntry` in #13138: it collided with the generated
+ * `components['schemas']['LogEntry']` (api/monitoring.py:128) while
+ * deliberately remapping it — `severityToLevel` below turns `severity` into
+ * `level` and `hostname`/`event_type` into `source`. Deriving it would have
+ * replaced a working local shape with an unrelated wire shape.
+ */
+interface LogRow {
   timestamp: string
   level: 'debug' | 'info' | 'warning' | 'error' | 'critical'
   source: string
@@ -37,7 +46,7 @@ type LogSubTab = 'fleetEvents' | 'appLogs'
 const activeSubTab = ref<LogSubTab>('fleetEvents')
 
 // State
-const logs = ref<LogEntry[]>([])
+const logs = ref<LogRow[]>([])
 const isLoading = ref(false)
 const isAutoRefresh = ref(true)
 const searchQuery = ref('')
@@ -110,7 +119,7 @@ function formatDate(ts: string): string {
   })
 }
 
-const severityToLevel: Record<string, LogEntry['level']> = {
+const severityToLevel: Record<string, LogRow['level']> = {
   debug: 'debug',
   info: 'info',
   warning: 'warning',

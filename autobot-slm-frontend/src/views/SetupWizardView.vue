@@ -591,7 +591,17 @@ const allNodesEnrolled = computed(() =>
 
 // ── Role assignment ───────────────────────────────────────────────────────
 
-interface RoleInfo {
+/**
+ * A role checkbox in the wizard — a client-side VIEW-MODEL, not a wire shape.
+ *
+ * Renamed from `RoleInfo` in #13138: it collided with the generated
+ * `components['schemas']['RoleInfo']` (models/schemas.py:421) while declaring a
+ * `display_name` the contract does not have — `loadRoles` below builds it from
+ * `description` (the backend already folds the registry's `display_name` into
+ * `description` at api/deployments.py:157-160). Deriving it would have swapped
+ * a working local shape for an unrelated wire shape.
+ */
+interface WizardRoleOption {
   name: string
   display_name: string
   required: boolean
@@ -601,7 +611,7 @@ interface RoleInfo {
 const INFRA_ROLES = ['autobot_shared', 'slm-agent']
 const SLM_ROLES = ['slm-backend', 'slm-frontend', 'slm-database', 'slm-monitoring']
 
-const availableRoles = ref<RoleInfo[]>([])
+const availableRoles = ref<WizardRoleOption[]>([])
 const nodeRoles = ref<Record<string, string[]>>({})
 const savingRoles = ref(false)
 
@@ -609,7 +619,7 @@ const requiredRoles = computed(() => availableRoles.value.filter(r => r.required
 const optionalRoles = computed(() => availableRoles.value.filter(r => !r.required))
 
 /** Roles visible for a given node: unassigned or assigned to this node (#1455). */
-function rolesForNode(nodeId: string, roles: RoleInfo[]): RoleInfo[] {
+function rolesForNode(nodeId: string, roles: WizardRoleOption[]): WizardRoleOption[] {
   return roles.filter(r => {
     const assignedTo = nodes.value.find(
       n => n.node_id !== nodeId && (nodeRoles.value[n.node_id] || []).includes(r.name)
@@ -679,11 +689,11 @@ const DEPLOYMENT_GROUPS: DeploymentGroup[] = [
  */
 function groupedRolesForNode(
   nodeId: string,
-  roles: RoleInfo[],
-): Array<{ label: string; description: string; roles: RoleInfo[] }> {
+  roles: WizardRoleOption[],
+): Array<{ label: string; description: string; roles: WizardRoleOption[] }> {
   const visible = rolesForNode(nodeId, roles)
   const placed = new Set<string>()
-  const result: Array<{ label: string; description: string; roles: RoleInfo[] }> = []
+  const result: Array<{ label: string; description: string; roles: WizardRoleOption[] }> = []
 
   for (const group of DEPLOYMENT_GROUPS) {
     const matched = visible.filter(r => group.roles.includes(r.name))
