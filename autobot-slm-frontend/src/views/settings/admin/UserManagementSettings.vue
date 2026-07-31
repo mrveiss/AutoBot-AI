@@ -451,6 +451,9 @@ async function createSsoProvider(): Promise<void> {
       is_active: newProviderForm.is_active,
       allow_user_creation: newProviderForm.allow_user_creation,
       default_role: newProviderForm.default_role,
+      // This form does not collect `is_social`; the contract requires it, so
+      // state the backend default explicitly rather than relying on omission.
+      is_social: false,
     }
 
     await ssoApi.createProvider(payload)

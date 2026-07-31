@@ -113,11 +113,21 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch(`${getApiUrl()}/api/mfa/verify-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, temp_token: mfaTempToken.value }),
-      })
+      // `temp_token` is a QUERY parameter, not a body field: the backend
+      // declares it as a bare `str` argument beside the Pydantic body model
+      // (autobot-slm-backend/api/mfa.py:96-99), which FastAPI binds from the
+      // query string. The generated contract confirms it under
+      // `parameters.query`. Sending it in the body 422s on the missing
+      // required query parameter, blocking MFA login entirely (#12420).
+      const query = new URLSearchParams({ temp_token: mfaTempToken.value })
+      const response = await fetch(
+        `${getApiUrl()}/api/mfa/verify-login?${query.toString()}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        }
+      )
       if (!response.ok) {
         const data = await response.json()
         throw new Error(data.detail || 'MFA verification failed')

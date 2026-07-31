@@ -63,7 +63,15 @@ describe('useSsoApi — migrated onto slmApiClient (#12420 Phase 2)', () => {
   })
 
   it('createProvider POSTs the payload to /sso-providers', async () => {
-    const payload = { provider_type: 'oauth2', name: 'g', config: {} }
+    const payload = {
+      provider_type: 'oauth2',
+      name: 'g',
+      config: {},
+      is_active: true,
+      is_social: false,
+      allow_user_creation: true,
+      default_role: 'user',
+    }
     mockPost.mockResolvedValue({ id: '1' })
 
     await useSsoApi().createProvider(payload)

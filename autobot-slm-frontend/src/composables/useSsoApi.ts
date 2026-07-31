@@ -20,65 +20,37 @@
  * 401 there is a credential failure, not a rejected session), so the SSO login
  * flow methods that hit `/auth/sso/**` wrap their call in `withAuthGuard` to
  * preserve the historic "logout on 401" behavior explicitly.
+ *
+ * Contract types (#12420 Phase 3): the request/response shapes below are DERIVED
+ * from the generated OpenAPI schema (`@/types/generated/api`), which is produced
+ * from the SLM backend's own Pydantic models and CI-guarded by
+ * `verify-generated-types-slm`. Do not hand-declare them — a backend schema
+ * change must surface here as a type error, not as a silent runtime mismatch.
  */
 
 import slmApiClient from '@/utils/ApiClient'
 import { useAuthStore } from '@/stores/auth'
 import { createAuthGuard } from '@/utils/slmAuthGuard'
+import type { components } from '@/types/generated/api'
 
 // =============================================================================
-// Type Definitions
+// Type Definitions — derived from the generated OpenAPI contract
 // =============================================================================
 
-export interface SSOProviderResponse {
-  id: string
-  org_id: string | null
-  provider_type: string
-  name: string
-  is_active: boolean
-  is_social: boolean
-  allow_user_creation: boolean
-  default_role: string | null
-  group_mapping: Record<string, string>
-  last_sync_at: string | null
-  created_at: string
-  updated_at: string
-}
+export type SSOProviderResponse = components['schemas']['SSOProviderResponse']
+export type SSOProviderListResponse = components['schemas']['SSOProviderListResponse']
+export type SSOProviderCreate = components['schemas']['SSOProviderCreate']
+export type SSOProviderUpdate = components['schemas']['SSOProviderUpdate']
+export type SSOLoginInitResponse = components['schemas']['SSOLoginInitResponse']
+export type SSOTestResponse = components['schemas']['SSOTestResponse']
+export type SSOProviderHealthResponse = components['schemas']['SSOProviderHealthResponse']
+export type LDAPLoginRequest = components['schemas']['LDAPLoginRequest']
 
-export interface SSOProviderListResponse {
-  providers: SSOProviderResponse[]
-  total: number
-}
-
-export interface SSOProviderCreate {
-  provider_type: string
-  name: string
-  config: Record<string, unknown>
-  org_id?: string
-  is_active?: boolean
-  is_social?: boolean
-  allow_user_creation?: boolean
-  default_role?: string
-  group_mapping?: Record<string, string>
-}
-
-export interface SSOProviderUpdate {
-  name?: string
-  config?: Record<string, unknown>
-  is_active?: boolean
-  allow_user_creation?: boolean
-  default_role?: string
-  group_mapping?: Record<string, string>
-}
-
-export interface SSOLoginInitResponse {
-  provider_id: string
-  provider_type: string
-  provider_name: string
-  redirect_url: string
-  state: string | null
-}
-
+/**
+ * `GET /auth/sso/providers` and `POST /auth/sso/ldap/login` declare no
+ * response_model on the backend, so there is no generated schema to derive from
+ * — these two shapes stay hand-declared until the backend types the endpoints.
+ */
 export interface ActiveProvider {
   id: string
   name: string
@@ -86,25 +58,10 @@ export interface ActiveProvider {
   is_social: boolean
 }
 
-export interface SSOTestResponse {
-  success: boolean
-  message: string
-  details?: Record<string, unknown>
-}
-
 interface LDAPLoginResponse {
   access_token: string
   token_type: string
   expires_in: number
-}
-
-export interface SSOProviderHealthResponse {
-  provider_id: string
-  name: string
-  success_count: number
-  failure_count: number
-  last_success_at: string | null
-  health_status: 'healthy' | 'warning' | 'error' | 'unknown'
 }
 
 // =============================================================================
@@ -193,12 +150,13 @@ export function useSsoApi() {
     username: string,
     password: string
   ): Promise<LDAPLoginResponse> {
+    const body: LDAPLoginRequest = {
+      provider_id: providerId,
+      username,
+      password,
+    }
     return withAuthGuard(() =>
-      slmApiClient.post<LDAPLoginResponse>('/auth/sso/ldap/login', {
-        provider_id: providerId,
-        username,
-        password,
-      })
+      slmApiClient.post<LDAPLoginResponse>('/auth/sso/ldap/login', body)
     )
   }
 

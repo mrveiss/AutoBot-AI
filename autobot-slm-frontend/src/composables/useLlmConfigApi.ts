@@ -16,59 +16,24 @@
  * `/login` — matching the previous per-composable axios interceptor that called
  * `authStore.logout()`. Call sites therefore pass endpoints relative to the API
  * base and receive parsed JSON directly (no axios `.data`).
+ *
+ * Contract types (#12420 Phase 3): the request/response shapes below are DERIVED
+ * from the generated OpenAPI schema (`@/types/generated/api`), which is produced
+ * from the SLM backend's own Pydantic models and CI-guarded by
+ * `verify-generated-types-slm`. Do not hand-declare them — a backend schema
+ * change must surface here as a type error, not as a silent runtime mismatch.
  */
 
 import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
-export interface LLMProviderConfig {
-  name: string
-  enabled: boolean
-  api_key: string
-  endpoint: string
-  model: string
-  temperature: number
-  max_tokens: number
-}
-
-export interface LLMConfig {
-  active_provider: string
-  providers: LLMProviderConfig[]
-  ollama_host: string
-  ollama_port: number
-  gpu_models: string[]
-  cpu_models: string[]
-  max_loaded_models: number
-  num_parallel: number
-  keep_alive: string
-  flash_attention: boolean
-  kv_cache_type: string
-}
-
-export interface LLMConfigResponse {
-  config: LLMConfig
-  message: string
-}
-
-export interface LLMTestRequest {
-  provider: string
-  endpoint?: string
-  api_key?: string
-  model?: string
-}
-
-export interface LLMTestResponse {
-  success: boolean
-  message: string
-  provider: string
-  latency_ms: number | null
-}
-
-export interface LLMApplyResponse {
-  success: boolean
-  message: string
-  node_count: number
-  output: string | null
-}
+export type LLMProviderConfig = components['schemas']['LLMProviderConfig']
+export type LLMConfig = components['schemas']['LLMConfig']
+export type LLMConfigResponse = components['schemas']['LLMConfigResponse']
+export type LLMTestRequest = components['schemas']['LLMTestRequest']
+export type LLMTestResponse = components['schemas']['LLMTestResponse']
+export type LLMApplyRequest = components['schemas']['LLMApplyRequest']
+export type LLMApplyResponse = components['schemas']['LLMApplyResponse']
 
 export function useLlmConfigApi() {
   async function getConfig(): Promise<LLMConfigResponse> {
@@ -86,9 +51,8 @@ export function useLlmConfigApi() {
   }
 
   async function applyToFleet(nodeIds?: string[]): Promise<LLMApplyResponse> {
-    return slmApiClient.post<LLMApplyResponse>('/settings/admin/llm/apply', {
-      node_ids: nodeIds || null,
-    })
+    const body: LLMApplyRequest = { node_ids: nodeIds || null }
+    return slmApiClient.post<LLMApplyResponse>('/settings/admin/llm/apply', body)
   }
 
   return {

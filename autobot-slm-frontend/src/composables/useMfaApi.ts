@@ -14,25 +14,31 @@
  * resolves the base URL via `getSlmApiBase()` and injects the SLM bearer token
  * (same `slm_access_token` storage the auth store reads), so call sites pass
  * endpoints relative to the API base and receive parsed JSON directly.
+ *
+ * Contract types (#12420 Phase 3): the request/response shapes below are DERIVED
+ * from the generated OpenAPI schema (`@/types/generated/api`), which is produced
+ * from the SLM backend's own Pydantic models and CI-guarded by
+ * `verify-generated-types-slm`. Do not hand-declare them — a backend schema
+ * change must surface here as a type error, not as a silent runtime mismatch.
  */
 
 import slmApiClient from '@/utils/ApiClient'
 import { useAuthStore } from '@/stores/auth'
 import { createAuthGuard } from '@/utils/slmAuthGuard'
+import type { components } from '@/types/generated/api'
 
-export interface MFASetupResponse {
-  secret: string
-  otpauth_uri: string
-  backup_codes: string[]
-}
+export type MFASetupResponse = components['schemas']['MFASetupResponse']
+export type MFAStatusResponse = components['schemas']['MFAStatusResponse']
+export type MFAVerifyRequest = components['schemas']['MFAVerifyRequest']
+export type MFADisableRequest = components['schemas']['MFADisableRequest']
+export type BackupCodesResponse = components['schemas']['BackupCodesResponse']
 
-export interface MFAStatusResponse {
-  enabled: boolean
-  method: string
-  backup_codes_remaining: number
-  last_verified_at: string | null
-}
-
+/**
+ * `POST /mfa/verify-login` and `/mfa/verify-setup` declare no response_model on
+ * the backend, so the generated response type is an untyped object and there is
+ * no schema to derive from — these two shapes stay hand-declared until the
+ * backend types the endpoints.
+ */
 export interface MFAVerifyResponse {
   success: boolean
   message: string
@@ -56,28 +62,43 @@ export function useMfaApi() {
   async function verifySetup(
     code: string
   ): Promise<{ success: boolean; message: string }> {
+    const body: MFAVerifyRequest = { code }
     return withAuthGuard(() =>
       slmApiClient.post<{ success: boolean; message: string }>(
         '/mfa/verify-setup',
-        { code }
+        body
       )
     )
   }
 
+  /**
+   * Verify the MFA code during login.
+   *
+   * `temp_token` is a QUERY parameter, not a body field: the backend declares it
+   * as a bare `str` argument alongside the Pydantic body model
+   * (`autobot-slm-backend/api/mfa.py:96-99`), which FastAPI binds from the query
+   * string — the generated contract confirms it
+   * (`operations.verify_mfa_login_api_mfa_verify_login_post.parameters.query`).
+   * It used to be sent in the JSON body, which the backend rejects with a 422
+   * for the missing required query parameter.
+   */
   async function verifyLogin(
     code: string,
     tempToken: string
   ): Promise<MFAVerifyResponse> {
+    const body: MFAVerifyRequest = { code }
+    const query = new URLSearchParams({ temp_token: tempToken })
     return withAuthGuard(() =>
-      slmApiClient.post<MFAVerifyResponse>('/mfa/verify-login', {
-        code,
-        temp_token: tempToken,
-      })
+      slmApiClient.post<MFAVerifyResponse>(
+        `/mfa/verify-login?${query.toString()}`,
+        body
+      )
     )
   }
 
   async function disableMFA(password: string): Promise<void> {
-    await withAuthGuard(() => slmApiClient.post('/mfa/disable', { password }))
+    const body: MFADisableRequest = { password }
+    await withAuthGuard(() => slmApiClient.post('/mfa/disable', body))
   }
 
   async function getMFAStatus(): Promise<MFAStatusResponse> {
@@ -88,11 +109,10 @@ export function useMfaApi() {
 
   async function regenerateBackupCodes(
     password: string
-  ): Promise<{ backup_codes: string[] }> {
+  ): Promise<BackupCodesResponse> {
+    const body: MFADisableRequest = { password }
     return withAuthGuard(() =>
-      slmApiClient.post<{ backup_codes: string[] }>('/mfa/backup-codes', {
-        password,
-      })
+      slmApiClient.post<BackupCodesResponse>('/mfa/backup-codes', body)
     )
   }
 
