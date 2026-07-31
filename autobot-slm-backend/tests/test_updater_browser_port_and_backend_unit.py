@@ -64,9 +64,7 @@ def test_browser_wait_targets_the_port_the_worker_binds() -> None:
         "the browser wait still targets 3000 — nothing serves it; on a live host "
         "that is Grafana on loopback, and the wait fails PLAY 2 every run"
     )
-    assert "playwright_port" in port, (
-        "the wait should follow playwright_port rather than hardcode a number"
-    )
+    assert "playwright_port" in port, "the wait should follow playwright_port rather than hardcode a number"
     assert "9001" in port, "keep a literal fallback: role defaults are not in scope here"
 
 
@@ -76,8 +74,7 @@ def test_browser_wait_fallback_matches_the_role_default() -> None:
     declared = str(defaults["playwright_port"])
 
     assert declared in str(_browser_wait_task()["wait_for"]["port"]), (
-        f"role default playwright_port={declared} but the playbook falls back to "
-        "a different value — they must agree"
+        f"role default playwright_port={declared} but the playbook falls back to " "a different value — they must agree"
     )
 
 
