@@ -4,6 +4,31 @@
 
 # Script to run the AutoBot application with backend and frontend components
 
+# Refuse to run as root. Everything below writes __pycache__, logs and build
+# artifacts into the project tree; under sudo those become root-owned and can no
+# longer be removed by the owning user — which also breaks `git worktree remove`
+# and leaves a half-deleted worktree behind (#13092). The handful of operations
+# that genuinely need elevation call sudo explicitly themselves.
+if [ "$(id -u)" -eq 0 ]; then
+    echo "❌ Do not run this script as root (or through sudo)."
+    echo "   It writes build artifacts into the project tree; as root they become"
+    echo "   root-owned and undeletable by your user."
+    echo "   The steps that need elevation invoke sudo on their own."
+    exit 1
+fi
+
+# Resolve the project root from THIS script's location rather than a hard-coded
+# install path. An explicit AUTOBOT_PROJECT_ROOT still wins. A deployed install
+# resolves to its own directory automatically, so behaviour there is unchanged;
+# previously, running from a checkout or worktree operated on the live install
+# instead — including `rm -rf` of its frontend node_modules (#13092).
+PROJECT_ROOT="${AUTOBOT_PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+if [ ! -d "$PROJECT_ROOT" ]; then
+    echo "❌ Project root does not exist: $PROJECT_ROOT"
+    exit 1
+fi
+echo "📁 Project root: $PROJECT_ROOT"
+
 # Parse command line arguments
 TEST_MODE=false
 START_ALL_CONTAINERS=false
@@ -203,11 +228,11 @@ fi
 echo "Starting Playwright Service Docker container..."
 
 # Ensure playwright-server.js exists and is a file
-if [ ! -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/playwright-server.js" ]; then
+if [ ! -f "$PROJECT_ROOT/playwright-server.js" ]; then
     echo "⚠️  playwright-server.js not found in project root. Checking for it..."
-    if [ -f "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/playwright-server.js" ]; then
+    if [ -f "$PROJECT_ROOT/tests/playwright-server.js" ]; then
         echo "📋 Copying playwright-server.js from tests directory..."
-        cp "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/playwright-server.js" "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/playwright-server.js"
+        cp "$PROJECT_ROOT/tests/playwright-server.js" "$PROJECT_ROOT/playwright-server.js"
     else
         echo "❌ playwright-server.js not found. Playwright container cannot start."
         echo "   Please ensure playwright-server.js exists in the project root."
@@ -304,10 +329,10 @@ echo "Existing Vite server terminated."
 # Start frontend (Vite with Vue)
 echo "Starting Vite frontend server..."
 echo "Cleaning frontend build artifacts and cache..."
-rm -rf ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/node_modules ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend/.vite
-cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-slm-frontend && npm install --force && npm run build && npm run dev &
+rm -rf "$PROJECT_ROOT/autobot-slm-frontend/node_modules" "$PROJECT_ROOT/autobot-slm-frontend/.vite"
+cd "$PROJECT_ROOT/autobot-slm-frontend" && npm install --force && npm run build && npm run dev &
 FRONTEND_PID=$!
-cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
+cd "$PROJECT_ROOT" || exit 1
 
 # Check if frontend started successfully
 sleep 5
