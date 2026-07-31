@@ -512,7 +512,7 @@ async function refreshActiveTab(): Promise<void> {
   else await loadTeams()
 }
 
-function formatDate(dateStr: string | null): string {
+function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return 'Never'
   return formatDateTime(dateStr)
 }
