@@ -12,32 +12,32 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import { useDarkMode } from '@/composables/useAccessibility'
-// #13138: derived from the generated contract — the response model of
-// GET/PUT `/settings/time` (autobot-slm-backend/api/settings.py:37).
-import type { components } from '@/types/generated/api'
-
-type TimeConfig = components['schemas']['TimeConfig']
+// #13140: settings/setup endpoints live beside the canonical SLM client
+// (ADR-008 rule 3). `TimeConfig`/`TimeSyncResult`/`WizardStatus` are the
+// generated contract types re-exported from there (#13138).
+import {
+  listSettings,
+  upsertSetting,
+  getTimeConfig,
+  putTimeConfig,
+  syncTimeToNodes as syncTimeToNodesApi,
+  getWizardStatus,
+  resetWizard as resetWizardApi,
+  type TimeConfig,
+  type TimeSyncResult,
+  type WizardStatus,
+} from '@/utils/slmSettingsApi'
 
 const darkMode = useDarkMode()
 
-interface Setting {
-  key: string
-  value: string | null
-  value_type: string
-  description: string | null
-}
-
-
 const router = useRouter()
-const authStore = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
-const syncResult = ref<{ success: boolean; message: string; node_count: number; output?: string } | null>(null)
+const syncResult = ref<TimeSyncResult | null>(null)
 
 const settings = ref({
   system_name: 'AutoBot Production',
@@ -168,26 +168,19 @@ async function fetchSettings(): Promise<void> {
   error.value = null
 
   try {
-    const [settingsRes, timeRes] = await Promise.all([
-      fetch(`${authStore.getApiUrl()}/api/settings`, {
-        headers: authStore.getAuthHeaders(),
-      }),
-      fetch(`${authStore.getApiUrl()}/api/settings/time/config`, {
-        headers: authStore.getAuthHeaders(),
-      }),
-    ])
+    // #13140: canonical SLM client. A rejected session now surfaces as an
+    // error (and clears the session) instead of being swallowed and leaving
+    // the panel showing its hard-coded defaults — which "Save all" would then
+    // have written back over the real stored settings.
+    const [data, tc] = await Promise.all([listSettings(), getTimeConfig()])
 
-    if (settingsRes.ok) {
-      const data: Setting[] = await settingsRes.json()
-      data.forEach((s) => {
-        if (s.value !== null && s.key in settings.value) {
-          (settings.value as Record<string, string | number | boolean>)[s.key] = s.value
-        }
-      })
-    }
+    data.forEach((s) => {
+      if (s.value !== null && s.value !== undefined && s.key in settings.value) {
+        (settings.value as Record<string, string | number | boolean>)[s.key] = s.value
+      }
+    })
 
-    if (timeRes.ok) {
-      const tc: TimeConfig = await timeRes.json()
+    if (tc) {
       timeConfig.value = tc
       settings.value.default_timezone = tc.timezone
     }
@@ -204,42 +197,22 @@ async function saveAllSettings(): Promise<void> {
   success.value = null
 
   try {
-    // Save general settings (upsert: PUT if exists, POST if not)
+    // Save general settings (upsert: PUT if exists, POST if not).
+    // #13140: the previous copy discarded both responses, so a rejected write
+    // still reported "Settings saved successfully".
+    const failed: string[] = []
     for (const [key, value] of Object.entries(settings.value)) {
-      const putRes = await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-        method: 'PUT',
-        headers: {
-          ...authStore.getAuthHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value: String(value) }),
-      })
-      if (putRes.status === 404) {
-        await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-          method: 'POST',
-          headers: {
-            ...authStore.getAuthHeaders(),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ value: String(value) }),
-        })
+      if (!(await upsertSetting(key, { value: String(value) }))) {
+        failed.push(key)
       }
+    }
+    if (failed.length > 0) {
+      throw new Error(`Failed to save setting(s): ${failed.join(', ')}`)
     }
 
     // Save time config (timezone + NTP)
     timeConfig.value.timezone = settings.value.default_timezone
-    const timeRes = await fetch(`${authStore.getApiUrl()}/api/settings/time/config`, {
-      method: 'PUT',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(timeConfig.value),
-    })
-
-    if (!timeRes.ok) {
-      throw new Error('Failed to save time configuration')
-    }
+    await putTimeConfig(timeConfig.value)
 
     success.value = 'Settings saved successfully'
     setTimeout(() => {
@@ -258,21 +231,10 @@ async function syncTimeToNodes(): Promise<void> {
   error.value = null
 
   try {
-    const res = await fetch(`${authStore.getApiUrl()}/api/settings/time/sync`, {
-      method: 'POST',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ node_ids: null }),
-    })
-
-    if (!res.ok) {
-      const detail = await res.text()
-      throw new Error(detail || 'Time sync request failed')
-    }
-
-    syncResult.value = await res.json()
+    // `node_ids: null` = every fleet node. The client raises
+    // `HTTP <status>: <detail>` on a non-OK response, which replaces the
+    // previous raw `res.text()` body (a JSON blob) as the surfaced message.
+    syncResult.value = await syncTimeToNodesApi(null)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Time sync failed'
   } finally {
@@ -281,19 +243,15 @@ async function syncTimeToNodes(): Promise<void> {
 }
 
 // Setup Wizard on-demand access
-const wizardStatus = ref<{ completed: boolean; current_step: string } | null>(null)
+const wizardStatus = ref<WizardStatus | null>(null)
 const wizardLoading = ref(false)
 const wizardResetting = ref(false)
 
 async function fetchWizardStatus(): Promise<void> {
   wizardLoading.value = true
   try {
-    const res = await fetch(`${authStore.getApiUrl()}/api/setup/status`, {
-      headers: authStore.getAuthHeaders(),
-    })
-    if (res.ok) {
-      wizardStatus.value = await res.json()
-    }
+    // Non-critical: an unavailable status leaves the card without a badge.
+    wizardStatus.value = await getWizardStatus()
   } catch {
     // Non-critical — wizard card just won't show status
   } finally {
@@ -308,11 +266,7 @@ function launchWizard(): void {
 async function resetWizard(): Promise<void> {
   wizardResetting.value = true
   try {
-    const res = await fetch(`${authStore.getApiUrl()}/api/setup/reset`, {
-      method: 'POST',
-      headers: authStore.getAuthHeaders(),
-    })
-    if (res.ok) {
+    if (await resetWizardApi()) {
       await fetchWizardStatus()
       success.value = 'Setup wizard has been reset'
       setTimeout(() => { success.value = null }, 3000)
