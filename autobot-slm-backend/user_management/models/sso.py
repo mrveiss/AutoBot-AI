@@ -11,7 +11,7 @@ Supports multiple SSO providers:
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -19,7 +19,9 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from user_management.models.base import Base, TimestampMixin
+from autobot_shared.ssot_constants import CategoryDefaults
+from autobot_shared.time_utils import now_utc
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.organization import Organization
@@ -43,7 +45,7 @@ class SSOProviderType(str, Enum):
     GITHUB = "github"
 
 
-class SSOProvider(Base, TimestampMixin):
+class SSOProvider(Base):
     """
     SSO Provider configuration.
 
@@ -114,7 +116,7 @@ class SSOProvider(Base, TimestampMixin):
     default_role: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
-        default="user",
+        default=CategoryDefaults.ROLE_USER,
     )
 
     # Group/team mapping configuration
@@ -152,6 +154,7 @@ class SSOProvider(Base, TimestampMixin):
         return self.provider_type in (
             SSOProviderType.LDAP.value,
             SSOProviderType.ACTIVE_DIRECTORY.value,
+            SSOProviderType.OKTA.value,
             SSOProviderType.SAML.value,
             SSOProviderType.MICROSOFT_ENTRA.value,
             SSOProviderType.GOOGLE_WORKSPACE.value,
@@ -162,7 +165,7 @@ class SSOProvider(Base, TimestampMixin):
         return self.config.get(key, default)
 
 
-class UserSSOLink(Base, TimestampMixin):
+class UserSSOLink(Base):
     """
     Link between a user and an SSO provider.
 
@@ -239,4 +242,4 @@ class UserSSOLink(Base, TimestampMixin):
 
     def record_login(self) -> None:
         """Record a login via this SSO link."""
-        self.last_login_at = datetime.now(timezone.utc)
+        self.last_login_at = now_utc()

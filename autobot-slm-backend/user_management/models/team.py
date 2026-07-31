@@ -9,7 +9,7 @@ Teams belong to organizations and contain users with specific roles.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -17,7 +17,8 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstr
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from user_management.models.base import Base, TenantMixin, TimestampMixin
+from autobot_shared.time_utils import now_utc
+from user_management.models.base import Base, TenantMixin
 
 if TYPE_CHECKING:
     from user_management.models.api_key import APIKey
@@ -33,7 +34,7 @@ class TeamRole(str, Enum):
     MEMBER = "member"
 
 
-class Team(Base, TenantMixin, TimestampMixin):
+class Team(Base, TenantMixin):
     """
     Team model.
 
@@ -115,7 +116,7 @@ class Team(Base, TenantMixin, TimestampMixin):
 
     def soft_delete(self) -> None:
         """Soft delete the team."""
-        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_at = now_utc()
 
     @property
     def member_count(self) -> int:
@@ -137,7 +138,7 @@ class Team(Base, TenantMixin, TimestampMixin):
         return self.get_members_by_role(TeamRole.ADMIN)
 
 
-class TeamMembership(Base, TimestampMixin):
+class TeamMembership(Base):
     """
     Team membership model.
 
@@ -175,7 +176,7 @@ class TeamMembership(Base, TimestampMixin):
     # When the user joined the team
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
+        default=now_utc,
         nullable=False,
     )
 
