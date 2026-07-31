@@ -20,3 +20,4 @@ aliases:
 | [005-single-frontend-mandate](005-single-frontend-mandate.md) | Single frontend mandate |
 | [006-skill-bound-planning](006-skill-bound-planning.md) | Skill-bound planning via skill_router at plan time |
 | [007-connector-oauth-token-storage](007-connector-oauth-token-storage.md) | Connector credentials must use SecretsService, not raw Redis |
+| [008-frontend-shared-code-boundary](008-frontend-shared-code-boundary.md) | Shared FE code is drawn at backend knowledge; one client per (app, backend) |
