@@ -993,6 +993,25 @@
         - npu_status.rc | default(0) != 0
       tags: [npu, npu-worker, restart]
 
+    # ----- TTS Worker -----
+    # #12886: the TTS worker had NO update path at all — it is excluded from
+    # per-component drift resolve (its deployed file is a rendered template, not
+    # a 1:1 sync) and this playbook never mentioned it. So every backend update
+    # advanced the caller while the worker stayed behind, and the streaming route
+    # the backend calls simply 404'd. That is the #12959 pattern: the fix existed
+    # in the role and had no route to the host.
+    #
+    # Applies the role's code_only task file — the service files that carry code
+    # changes — NOT the full role. Provisioning (service account, venv, torch and
+    # pocket-tts installs, gated-model pre-download) is slow, needs network, and
+    # must not re-run on a box that is already installed correctly.
+    - name: "[PLAY 2] TTS | Refresh deployed TTS worker service files (#12886)"
+      ansible.builtin.include_role:
+        name: tts-worker
+        tasks_from: code_only
+      when: "'npu' in group_names"
+      tags: [tts, tts-worker, deploy]
+
     # ----- Browser Worker -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
       unarchive:
