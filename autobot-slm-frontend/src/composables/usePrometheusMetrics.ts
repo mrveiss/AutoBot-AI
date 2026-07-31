@@ -13,13 +13,33 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
+import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
 
 const logger = createLogger('usePrometheusMetrics')
 
-// SLM Admin uses the local SLM backend API
-const API_BASE = getSlmApiBase()
+/**
+ * Every read below goes through `slmApiClient` (#13140), which owns the
+ * `getSlmApiBase()` origin, the bearer token, the request timeout and the 401
+ * handler. Three things changed at this seam and were decided, not inherited:
+ *
+ *  1. The bearer used to be built from `authStore.token`, a reactive ref
+ *     hydrated once at store construction; when it was null the header was
+ *     silently omitted and the request went out anonymous. The client reads
+ *     sessionStorage (localStorage fallback) per request instead, so a session
+ *     restored or refreshed elsewhere is picked up.
+ *  2. `get()` retries a 5xx three times with exponential backoff (~3s). These
+ *     are POLLED reads on a 30s tick, so every one passes
+ *     `POLLED_READ_MAX_RETRIES` — a failed tick is retried by the NEXT tick
+ *     rather than by holding the current one open.
+ *  3. A non-OK response used to be dropped by `if (response.ok)` with no else
+ *     in `fetchServices`/`fetchAlerts`/`fetchNPUDetails`. `get()` throws, so the
+ *     surrounding catch now runs: the same rendered outcome (state left stale),
+ *     but the failure is logged instead of vanishing.
+ */
+
+/** Polled read options — single-shot, see note 2 above. */
+const POLL_OPTS = { maxRetries: POLLED_READ_MAX_RETRIES } as const
 
 // ===== Type Definitions =====
 
@@ -184,23 +204,47 @@ export interface UsePrometheusMetricsOptions {
   useWebSocket?: boolean
 }
 
+/**
+ * Transport-local wire shapes for the four endpoints whose responses this
+ * composable REMAPS rather than assigns. They exist only to type the
+ * `slmApiClient.get<T>()` calls that replace an untyped `response.json()`;
+ * deriving and naming them from the generated contract is #13138's scope and is
+ * deliberately not widened here.
+ */
+interface DashboardWire {
+  fleet_metrics?: {
+    avg_cpu_percent?: number
+    avg_memory_percent?: number
+    avg_disk_percent?: number
+    total_services?: number
+  }
+  health_summary?: {
+    overall_status?: string
+    health_score?: number
+    issues?: string[]
+  }
+}
+
+interface MonitoringHealthWire {
+  overall_status?: string
+  health_score?: number
+}
+
+interface MonitoringAlertsWire {
+  total_count?: number
+  critical_count?: number
+  warning_count?: number
+  alerts?: Record<string, unknown>[]
+}
+
+interface NpuNodesWire {
+  nodes?: Record<string, unknown>[]
+}
+
 // ===== Composable Implementation =====
 
 export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) {
   const { autoFetch = true, pollInterval = 30000 } = options
-
-  const authStore = useAuthStore()
-
-  // Helper to get auth headers
-  function getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    if (authStore.token) {
-      headers.Authorization = `Bearer ${authStore.token}`
-    }
-    return headers
-  }
 
   // State
   const dashboard = ref<DashboardViewModel | null>(null)
@@ -243,40 +287,33 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchDashboard(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/monitoring/dashboard`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        const data = await response.json()
-        // Map SLM dashboard response to expected format
-        dashboard.value = {
-          system_metrics: {
-            cpu_percent: data.fleet_metrics?.avg_cpu_percent ?? 0,
-            memory_percent: data.fleet_metrics?.avg_memory_percent ?? 0,
-            disk_percent: data.fleet_metrics?.avg_disk_percent ?? 0,
-            network_bytes_sent: 0,
-            network_bytes_recv: 0,
-            process_count: data.fleet_metrics?.total_services ?? 0,
-            timestamp: Date.now(),
-          },
-          analysis: {
-            overall_health: data.health_summary?.overall_status ?? 'unknown',
-            performance_score: data.health_summary?.health_score ?? 0,
-            bottlenecks: data.health_summary?.issues ?? [],
-            resource_utilization: {
-              cpu: data.fleet_metrics?.avg_cpu_percent ?? 0,
-              memory: data.fleet_metrics?.avg_memory_percent ?? 0,
-              disk: data.fleet_metrics?.avg_disk_percent ?? 0,
-            },
-          },
+      const data = await slmApiClient.get<DashboardWire>('/monitoring/dashboard', POLL_OPTS)
+      // Map SLM dashboard response to expected format
+      dashboard.value = {
+        system_metrics: {
+          cpu_percent: data.fleet_metrics?.avg_cpu_percent ?? 0,
+          memory_percent: data.fleet_metrics?.avg_memory_percent ?? 0,
+          disk_percent: data.fleet_metrics?.avg_disk_percent ?? 0,
+          network_bytes_sent: 0,
+          network_bytes_recv: 0,
+          process_count: data.fleet_metrics?.total_services ?? 0,
           timestamp: Date.now(),
-        }
-        lastUpdate.value = new Date()
-        error.value = null
-        isConnected.value = true
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        },
+        analysis: {
+          overall_health: data.health_summary?.overall_status ?? 'unknown',
+          performance_score: data.health_summary?.health_score ?? 0,
+          bottlenecks: data.health_summary?.issues ?? [],
+          resource_utilization: {
+            cpu: data.fleet_metrics?.avg_cpu_percent ?? 0,
+            memory: data.fleet_metrics?.avg_memory_percent ?? 0,
+            disk: data.fleet_metrics?.avg_disk_percent ?? 0,
+          },
+        },
+        timestamp: Date.now(),
       }
+      lastUpdate.value = new Date()
+      error.value = null
+      isConnected.value = true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch dashboard'
       logger.error('Failed to fetch dashboard:', err)
@@ -287,24 +324,19 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchServices(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/monitoring/health`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        const data = await response.json()
-        // Map SLM health response to services format
-        services.value = {
-          total_services: 0,
-          healthy_services: 0,
-          degraded_services: 0,
-          critical_services: 0,
-          overall_status: data.overall_status === 'healthy' ? 'healthy' :
-                          data.overall_status === 'degraded' ? 'degraded' : 'critical',
-          health_percentage: data.health_score,
-          services: [],
-        }
-        error.value = null
+      const data = await slmApiClient.get<MonitoringHealthWire>('/monitoring/health', POLL_OPTS)
+      // Map SLM health response to services format
+      services.value = {
+        total_services: 0,
+        healthy_services: 0,
+        degraded_services: 0,
+        critical_services: 0,
+        overall_status: data.overall_status === 'healthy' ? 'healthy' :
+                        data.overall_status === 'degraded' ? 'degraded' : 'critical',
+        health_percentage: data.health_score ?? 0,
+        services: [],
       }
+      error.value = null
     } catch (err) {
       logger.error('Failed to fetch services:', err)
     }
@@ -312,31 +344,26 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchAlerts(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/monitoring/alerts`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        const data = await response.json()
-        alerts.value = {
-          total_count: data.total_count ?? 0,
-          critical_count: data.critical_count ?? 0,
-          warning_count: data.warning_count ?? 0,
-          alerts: (data.alerts ?? []).map((a: Record<string, unknown>) => {
-            // Normalize backend 'error' severity → 'high' so it matches
-            // the frontend severity breakdown (critical/high/warning/info). (#995)
-            const rawSeverity = String(a.severity ?? 'info')
-            const severity = rawSeverity === 'error' ? 'high' : rawSeverity
-            return {
-              category: String(a.category ?? ''),
-              severity,
-              message: String(a.message ?? ''),
-              recommendation: '',
-              timestamp: new Date(String(a.timestamp ?? '')).getTime(),
-            }
-          }),
-        }
-        error.value = null
+      const data = await slmApiClient.get<MonitoringAlertsWire>('/monitoring/alerts', POLL_OPTS)
+      alerts.value = {
+        total_count: data.total_count ?? 0,
+        critical_count: data.critical_count ?? 0,
+        warning_count: data.warning_count ?? 0,
+        alerts: (data.alerts ?? []).map((a: Record<string, unknown>) => {
+          // Normalize backend 'error' severity → 'high' so it matches
+          // the frontend severity breakdown (critical/high/warning/info). (#995)
+          const rawSeverity = String(a.severity ?? 'info')
+          const severity = rawSeverity === 'error' ? 'high' : rawSeverity
+          return {
+            category: String(a.category ?? ''),
+            severity,
+            message: String(a.message ?? ''),
+            recommendation: '',
+            timestamp: new Date(String(a.timestamp ?? '')).getTime(),
+          }
+        }) as PerformanceAlert[],
       }
+      error.value = null
     } catch (err) {
       logger.error('Failed to fetch alerts:', err)
     }
@@ -362,24 +389,19 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   async function fetchNPUDetails(): Promise<void> {
     // Issue #835 - query actual NPU node status from SLM backend
     try {
-      const response = await fetch(`${API_BASE}/npu/nodes`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        const data = await response.json()
-        const nodes = data.nodes || []
-        if (nodes.length > 0) {
-          const activeNodes = nodes.filter(
-            (n: Record<string, unknown>) => n.status === 'online'
-          )
-          npuDetails.value = {
-            available: activeNodes.length > 0,
-            utilization_percent: 0,
-            acceleration_ratio: 0,
-            inference_count: activeNodes.length,
-          }
-          return
+      const data = await slmApiClient.get<NpuNodesWire>('/npu/nodes', POLL_OPTS)
+      const nodes = data.nodes || []
+      if (nodes.length > 0) {
+        const activeNodes = nodes.filter(
+          (n: Record<string, unknown>) => n.status === 'online'
+        )
+        npuDetails.value = {
+          available: activeNodes.length > 0,
+          utilization_percent: 0,
+          acceleration_ratio: 0,
+          inference_count: activeNodes.length,
         }
+        return
       }
     } catch (err) {
       logger.error('Failed to fetch NPU details:', err)
@@ -417,15 +439,11 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchFleetMetrics(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/monitoring/metrics/fleet`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        fleetMetrics.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      fleetMetrics.value = await slmApiClient.get<FleetMetricsDetailed>(
+        '/monitoring/metrics/fleet',
+        POLL_OPTS
+      )
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch fleet metrics'
       logger.error('Failed to fetch fleet metrics:', err)
@@ -435,16 +453,12 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchNodeMetricsDetailed(nodeId: string): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/monitoring/metrics/node/${nodeId}`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        const data = await response.json()
-        nodeMetrics.value.set(nodeId, data)
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      const data = await slmApiClient.get<NodeMetricsDetailed>(
+        `/monitoring/metrics/node/${nodeId}`,
+        POLL_OPTS
+      )
+      nodeMetrics.value.set(nodeId, data)
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch node metrics'
       logger.error(`Failed to fetch node metrics for ${nodeId}:`, err)
@@ -454,15 +468,11 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchPerformanceOverview(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/performance/overview`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        performanceOverview.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      performanceOverview.value = await slmApiClient.get<PerformanceOverview>(
+        '/performance/overview',
+        POLL_OPTS
+      )
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch performance overview'
       logger.error('Failed to fetch performance overview:', err)
@@ -472,15 +482,11 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchNPUFleetMetrics(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/npu/metrics`, {
-        headers: getHeaders(),
-      })
-      if (response.ok) {
-        npuFleetMetrics.value = await response.json()
-        error.value = null
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
+      npuFleetMetrics.value = await slmApiClient.get<NPUFleetMetrics>(
+        '/npu/metrics',
+        POLL_OPTS
+      )
+      error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch NPU fleet metrics'
       logger.error('Failed to fetch NPU fleet metrics:', err)
@@ -490,9 +496,12 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   async function fetchPrometheusExport(): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE}/performance/metrics/prometheus`, {
-        headers: getHeaders(),
-      })
+      // `rawRequest`, NOT `get()`: this endpoint returns the Prometheus text
+      // exposition format, and `get()` parses the body as JSON. This is the one
+      // read in this composable with a genuine transport reason to keep the
+      // Response object — it still takes the base URL, bearer, timeout and 401
+      // handling from the client (#13140).
+      const response = await slmApiClient.rawRequest('/performance/metrics/prometheus')
       if (response.ok) {
         prometheusExport.value = await response.text()
         error.value = null

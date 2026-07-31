@@ -16,12 +16,11 @@
 
 import { ref, computed } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
+import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 import { useNodeServices } from '@/composables/useNodeServices'
 
 const fleetStore = useFleetStore()
-const authStore = useAuthStore()
 
 // Tool definitions - reduced to 3 unique tools per Issue #737
 // Removed: network-test (use NodeCard "Test"), health-check (use NodeLifecyclePanel),
@@ -127,15 +126,15 @@ async function runRedisCommand(): Promise<void> {
     }
 
     // Execute via SSH
-    const response = await fetch(`${getSlmApiBase()}/nodes/${targetNode.node_id}/exec`, {
+    // `rawRequest` keeps the `err.detail` body this panel renders; the client
+    // adds the base URL, the storage-backed bearer (`getAuthHeaders()` returned
+    // `{}` for an unhydrated token ref and sent the request anonymous), the 401
+    // handler and a timeout. `/exec` runs a command over SSH, so it takes the
+    // long remote-exec budget rather than the client's 30s default (#13140).
+    const response = await slmApiClient.rawRequest(`/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        command: `redis-cli ${redisCommand.value}`,
-      }),
+      timeout: REMOTE_EXEC_TIMEOUT_MS,
+      body: { command: `redis-cli ${redisCommand.value}` },
     })
 
     if (!response.ok) {
@@ -163,15 +162,10 @@ async function runShellCommand(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/exec`, {
+    const response = await slmApiClient.rawRequest(`/nodes/${selectedNode.value}/exec`, {
       method: 'POST',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        command: shellCommand.value,
-      }),
+      timeout: REMOTE_EXEC_TIMEOUT_MS,
+      body: { command: shellCommand.value },
     })
 
     if (!response.ok) {

@@ -12,8 +12,8 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import config, { getSlmApiBase } from '@/config/ssot-config'
+import config from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -45,7 +45,6 @@ const CUSTOM_VALUE = '__custom__'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 
 // Active tab — route-based (#1404, #1405, #1406: added admin tabs)
 type AgentTab = 'local-agents' | 'external-agents' | 'org-chart' | 'config-history' | 'processes'
@@ -100,11 +99,14 @@ async function fetchAgents() {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch(`${getSlmApiBase()}/agents`, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    if (!response.ok) throw new Error(`Failed to fetch agents: ${response.status}`)
-    const data = await response.json()
+    // The three calls in this view built `Bearer ${authStore.token}`
+    // UNCONDITIONALLY, so with no session they sent the literal string
+    // `Bearer null` — a malformed credential rather than an absent one. The
+    // client omits the header when there is no token, which also lets its 401
+    // handler tell "session rejected" (clear + redirect to /login) apart from
+    // "never had one" (log only); it reads the token from storage per request
+    // rather than from a ref hydrated once at store construction (#13140).
+    const data = await slmApiClient.get<{ agents?: Agent[] }>('/agents')
     agents.value = data.agents || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to fetch agents'
@@ -115,12 +117,11 @@ async function fetchAgents() {
 
 async function fetchNodes() {
   try {
-    const response = await fetch(`${getSlmApiBase()}/nodes`, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    if (!response.ok) return
-    const data = await response.json()
-    nodes.value = (data.nodes || data || []).filter(
+    // A non-OK response used to `return` silently; `get()` rejects, so it now
+    // lands in the catch below — the same outcome (fall back to Custom mode)
+    // reached by one code path instead of two.
+    const data = await slmApiClient.get<{ nodes?: FleetNode[] }>('/nodes')
+    nodes.value = (data.nodes || []).filter(
       (n: FleetNode) => n.status === 'online',
     )
   } catch {
@@ -174,15 +175,7 @@ async function saveAgent() {
       llm_temperature: editForm.value.llm_temperature,
       is_active: editForm.value.is_active,
     }
-    const response = await fetch(`${getSlmApiBase()}/agents/${selectedAgent.value.agent_id}`, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${authStore.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-    if (!response.ok) throw new Error(`Failed to update agent: ${response.status}`)
+    await slmApiClient.put(`/agents/${selectedAgent.value.agent_id}`, payload)
     await fetchAgents()
     const updated = agents.value.find(
       (a) => a.agent_id === selectedAgent.value?.agent_id,
