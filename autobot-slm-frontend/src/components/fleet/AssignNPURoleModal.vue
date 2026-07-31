@@ -38,7 +38,7 @@ const selectedNode = computed(() => {
 const eligibleNodes = computed(() => {
   // Filter to nodes that are online and don't already have npu-worker role
   return props.availableNodes.filter(n =>
-    (n.status === 'online' || n.status === 'healthy') &&
+    n.status === 'online' &&
     !n.roles.includes('npu-worker')
   )
 })
