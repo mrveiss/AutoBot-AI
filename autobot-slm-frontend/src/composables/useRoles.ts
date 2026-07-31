@@ -11,6 +11,7 @@
 
 import { ref, reactive } from 'vue'
 import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
+import type { components } from '@/types/generated/api'
 
 export interface Role {
   name: string
@@ -38,11 +39,11 @@ export interface NodeRoleItem {
   last_error: string | null
 }
 
-export interface PortInfo {
-  port: number
-  process: string | null
-  pid: number | null
-}
+// GET /api/nodes/{node_id}/detected-roles -> NodeRolesInfo.listening_ports
+// (autobot-slm-backend/models/schemas.py:97). Derived: the hand-written copy
+// omitted `address`, the bind interface added by GH#11224 and consumed by the
+// security-posture audit, so the UI could never reach it.
+export type PortInfo = components['schemas']['PortInfo']
 
 export interface NodeRolesInfo {
   node_id: string
@@ -82,17 +83,27 @@ export interface PlaybookMigrateResult {
 }
 
 // Post-sync action types (Issue #1243)
-export interface PostSyncAction {
-  role_name: string
-  display_name: string
-  category: 'build' | 'restart' | 'schema' | 'install'
-  label: string
-  command: string | null
-  systemd_service: string | null
+
+/**
+ * The four categories the backend actually emits.
+ *
+ * `PostSyncAction.category` is declared `str` in the contract
+ * (`autobot-slm-backend/api/roles.py:115`) with no pattern or enum, so the
+ * generated schema widens it to `string`. Every construction site is
+ * enumerable and exhaustive — `roles.py:506` (schema), `:517` (build),
+ * `:528` (install), `:539` (restart) — so the narrowing below is a checked
+ * fact about the server, not an assumption. `OrchestrationView.vue:439`
+ * branches on the literal `'restart'` and relies on it.
+ */
+export type PostSyncActionCategory = 'build' | 'restart' | 'schema' | 'install'
+
+// GET /api/roles/node-actions/{node_id} (autobot-slm-backend/api/roles.py:110)
+export type PostSyncAction = components['schemas']['PostSyncAction'] & {
+  category: PostSyncActionCategory
 }
 
-export interface NodeActionsResponse {
-  node_id: string
+// GET /api/roles/node-actions/{node_id} (autobot-slm-backend/api/roles.py:121)
+export type NodeActionsResponse = components['schemas']['NodeActionsResponse'] & {
   actions: PostSyncAction[]
 }
 
@@ -105,11 +116,9 @@ export interface ExecuteActionResult {
 }
 
 // Decommission types (Issue #1369)
-export interface DecommissionRoleInfo {
-  role_name: string
-  display_name: string
-  reason: string
-}
+// GET /api/nodes/{node_id}/decommission/preflight
+// (autobot-slm-backend/models/schemas.py:2272)
+export type DecommissionRoleInfo = components['schemas']['DecommissionRoleInfo']
 
 export interface DecommissionPreflight {
   can_proceed: boolean
