@@ -11,6 +11,8 @@
  * definitions locally.  Issue #3196.
  */
 
+import type { components } from './generated/api'
+
 // =============================================================================
 // Replication
 // =============================================================================
@@ -62,107 +64,53 @@ export interface RestartAllServicesResponse {
 
 // =============================================================================
 // VNC Credentials (Issue #725)
+//
+// Derived from the generated OpenAPI contract (#13138) — response models of
+// autobot-slm-backend/api/vnc.py.
 // =============================================================================
 
-export interface VNCCredentialCreate {
-  vnc_type?: 'desktop' | 'browser' | 'custom'
-  name?: string
-  password: string
-  port?: number
-  display_number?: number
-  vnc_port?: number
-  websockify_enabled?: boolean
-}
+/** Request body of POST `/nodes/{node_id}/vnc/credentials` (vnc.py:48). */
+export type VNCCredentialCreate = components['schemas']['VNCCredentialCreate']
 
-export interface VNCCredentialResponse {
-  id: number
-  credential_id: string
-  node_id: string
-  vnc_type: string | null
-  name: string | null
-  port: number | null
-  display_number: number | null
-  vnc_port: number | null
-  websockify_enabled: boolean
-  is_active: boolean
-  last_used: string | null
-  created_at: string
-  updated_at: string
-  websocket_url: string | null
-}
+/** Response model of the VNC credential endpoints (vnc.py:48, :115, :139). */
+export type VNCCredentialResponse = components['schemas']['VNCCredentialResponse']
 
-export interface VNCEndpointResponse {
-  credential_id: string
-  node_id: string
-  hostname: string
-  ip_address: string
-  vnc_type: string
-  name: string | null
-  port: number
-  websocket_url: string
-  is_active: boolean
-}
+/** Response model of GET `/nodes/{node_id}/vnc/credentials` (vnc.py:82). */
+export type VNCCredentialListResponse = components['schemas']['VNCCredentialListResponse']
 
-export interface VNCEndpointsResponse {
-  endpoints: VNCEndpointResponse[]
-  total: number
-}
+/** Entry of the fleet-wide VNC endpoint list (vnc.py:227). */
+export type VNCEndpointResponse = components['schemas']['VNCEndpointResponse']
 
-export interface VNCConnectionInfo {
-  credential_id: string
-  node_id: string
-  vnc_type: string
-  host: string
-  port: number
-  display_number: number
-  websocket_url: string
-  connection_token: string | null
-  token_expires_at: string | null
-}
+/** Response model of GET `/vnc/endpoints` (vnc.py:227). */
+export type VNCEndpointsResponse = components['schemas']['VNCEndpointsResponse']
+
+/** Response model of POST `/vnc/credentials/{credential_id}/connect` (vnc.py:187). */
+export type VNCConnectionInfo = components['schemas']['VNCConnectionInfo']
 
 // =============================================================================
 // TLS Credentials (Issue #725)
+//
+// Derived from the generated OpenAPI contract (#13138) — response models of
+// autobot-slm-backend/api/tls.py. `TLSCredentialResponse` carries `ca_cert`
+// and `server_cert` (public certificate data; the private key is never
+// returned — models/schemas.py:1352-1368), both of which the hand-written
+// declaration omitted.
 // =============================================================================
 
-export interface TLSCredentialCreate {
-  name?: string
-  ca_cert: string
-  server_cert: string
-  server_key: string
-  common_name?: string
-  expires_at?: string
-}
+/** Request body of POST `/nodes/{node_id}/tls/credentials` (tls.py:68). */
+export type TLSCredentialCreate = components['schemas']['TLSCredentialCreate']
 
-export interface TLSCredentialResponse {
-  id: number
-  credential_id: string
-  node_id: string
-  name: string | null
-  common_name: string | null
-  expires_at: string | null
-  fingerprint: string | null
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+/** Response model of the TLS credential endpoints (tls.py:68, :138, :160). */
+export type TLSCredentialResponse = components['schemas']['TLSCredentialResponse']
 
-export interface TLSEndpointResponse {
-  credential_id: string
-  node_id: string
-  hostname: string
-  ip_address: string
-  name: string | null
-  common_name: string | null
-  expires_at: string | null
-  is_active: boolean
-  days_until_expiry: number | null
-}
+/** Response model of GET `/nodes/{node_id}/tls/credentials` (tls.py:101). */
+export type TLSCredentialListResponse = components['schemas']['TLSCredentialListResponse']
 
-export interface TLSEndpointsResponse {
-  endpoints: TLSEndpointResponse[]
-  total: number
-  expiring_soon: number
-}
+/** Entry of the fleet-wide TLS endpoint list (tls.py:282). */
+export type TLSEndpointResponse = components['schemas']['TLSEndpointResponse']
+
+/** Response model of GET `/tls/endpoints` and `/tls/expiring` (tls.py:282, :305). */
+export type TLSEndpointsResponse = components['schemas']['TLSEndpointsResponse']
 
 export interface TLSRenewResponse {
   success: boolean
@@ -533,124 +481,23 @@ export interface ResolveResponse {
 
 // =============================================================================
 // Security (Issue #813)
+//
+// Single-sourced from `types/slm.ts` (#13138): these eight shapes were
+// hand-declared identically here and there, so one backend change had two
+// places to drift from. `types/slm.ts` now derives them from the generated
+// OpenAPI contract; this module re-exports so existing importers keep working.
 // =============================================================================
 
-export interface SecurityEventResponse {
-  id: number
-  event_id: string
-  timestamp: string
-  event_type: string
-  severity: string
-  category: string | null
-  source_ip: string | null
-  source_user: string | null
-  source_node_id: string | null
-  target_resource: string | null
-  target_node_id: string | null
-  title: string
-  description: string | null
-  threat_indicator: string | null
-  threat_score: number | null
-  mitre_technique: string | null
-  is_acknowledged: boolean
-  acknowledged_by: string | null
-  acknowledged_at: string | null
-  is_resolved: boolean
-  resolved_by: string | null
-  resolved_at: string | null
-  resolution_notes: string | null
-  created_at: string
-}
-
-export interface SecurityOverviewResponse {
-  security_score: number
-  active_threats: number
-  failed_logins_24h: number
-  policy_violations: number
-  total_events_24h: number
-  critical_events: number
-  certificates_expiring: number
-  recent_events: SecurityEventResponse[]
-}
-
-export interface AuditLogResponse {
-  id: number
-  log_id: string
-  timestamp: string
-  user_id: string | null
-  username: string | null
-  ip_address: string | null
-  category: string
-  action: string
-  resource_type: string | null
-  resource_id: string | null
-  description: string | null
-  request_method: string | null
-  request_path: string | null
-  response_status: number | null
-  success: boolean
-  error_message: string | null
-  created_at: string
-}
-
-export interface AuditLogListResponse {
-  logs: AuditLogResponse[]
-  total: number
-  page: number
-  per_page: number
-}
-
-export interface SecurityEventListResponse {
-  events: SecurityEventResponse[]
-  total: number
-  page: number
-  per_page: number
-  unacknowledged_count: number
-  critical_count: number
-}
-
-export interface ThreatSummary {
-  total_threats: number
-  critical: number
-  high: number
-  medium: number
-  low: number
-  acknowledged: number
-  resolved: number
-  by_type: Record<string, number>
-  by_source_ip: Record<string, number>
-  trend_24h: Array<Record<string, unknown>>
-}
-
-export interface SecurityPolicyResponse {
-  id: number
-  policy_id: string
-  name: string
-  description: string | null
-  category: string
-  policy_type: string
-  rules: unknown[]
-  parameters: Record<string, unknown>
-  applies_to_nodes: unknown[]
-  applies_to_roles: unknown[]
-  status: string
-  is_enforced: boolean
-  last_evaluated: string | null
-  compliance_score: number | null
-  violations_count: number
-  version: number
-  created_by: string | null
-  updated_by: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface SecurityPolicyListResponse {
-  policies: SecurityPolicyResponse[]
-  total: number
-  page: number
-  per_page: number
-}
+export type {
+  SecurityEventResponse,
+  SecurityOverviewResponse,
+  AuditLogResponse,
+  AuditLogListResponse,
+  SecurityEventListResponse,
+  ThreatSummary,
+  SecurityPolicyResponse,
+  SecurityPolicyListResponse,
+} from './slm'
 
 // =============================================================================
 // Fleet Certificates (Issue #926 Phase 7)

@@ -7,7 +7,18 @@
  * SLM Type Definitions
  */
 
-export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline' | 'maintenance' | 'online' | 'error' | 'decommissioned'
+import type { components } from './generated/api'
+
+/**
+ * Node status — derived from the generated OpenAPI type (#12662), which is
+ * itself generated from the backend's canonical `NodeStatus` enum
+ * (autobot-slm-backend/models/database.py). Do not hand-declare this union;
+ * it drifted to 11 hand-invented values ('registered', 'healthy',
+ * 'unhealthy') that the backend has never emitted before #12662 fixed it.
+ * Re-run `npm run gen:types:openapi && npm run gen:types` after a backend
+ * enum change — `verify-generated-types-slm` (CI) fails if this drifts.
+ */
+export type NodeStatus = components['schemas']['NodeStatus']
 
 export type NodeRole =
   | 'slm-backend'
@@ -690,121 +701,33 @@ export interface ExternalAgentCard {
 
 // =============================================================================
 // Security API Response Types (Issue #3184)
+//
+// Derived from the generated OpenAPI contract (#13138). Every shape below is
+// the response model of a `/security/*` endpoint in
+// autobot-slm-backend/api/security.py, so `vue-tsc` now fails when the backend
+// schema moves instead of the drift reaching a security dashboard unnoticed.
 // =============================================================================
 
-export interface SecurityEventResponse {
-  id: number
-  event_id: string
-  timestamp: string
-  event_type: string
-  severity: string
-  category: string | null
-  source_ip: string | null
-  source_user: string | null
-  source_node_id: string | null
-  target_resource: string | null
-  target_node_id: string | null
-  title: string
-  description: string | null
-  threat_indicator: string | null
-  threat_score: number | null
-  mitre_technique: string | null
-  is_acknowledged: boolean
-  acknowledged_by: string | null
-  acknowledged_at: string | null
-  is_resolved: boolean
-  resolved_by: string | null
-  resolved_at: string | null
-  resolution_notes: string | null
-  created_at: string
-}
+/** Response model of GET/POST `/security/events*` (security.py:530, :549, :577). */
+export type SecurityEventResponse = components['schemas']['SecurityEventResponse']
 
-export interface SecurityOverviewResponse {
-  security_score: number
-  active_threats: number
-  failed_logins_24h: number
-  policy_violations: number
-  total_events_24h: number
-  critical_events: number
-  certificates_expiring: number
-  recent_events: SecurityEventResponse[]
-}
+/** Response model of GET `/security/overview` (security.py:191). */
+export type SecurityOverviewResponse = components['schemas']['SecurityOverviewResponse']
 
-export interface AuditLogResponse {
-  id: number
-  log_id: string
-  timestamp: string
-  user_id: string | null
-  username: string | null
-  ip_address: string | null
-  category: string
-  action: string
-  resource_type: string | null
-  resource_id: string | null
-  description: string | null
-  request_method: string | null
-  request_path: string | null
-  response_status: number | null
-  success: boolean
-  error_message: string | null
-  created_at: string
-}
+/** Response model of GET `/security/audit-logs/{log_id}` (security.py:292). */
+export type AuditLogResponse = components['schemas']['AuditLogResponse']
 
-export interface AuditLogListResponse {
-  logs: AuditLogResponse[]
-  total: number
-  page: number
-  per_page: number
-}
+/** Response model of GET `/security/audit-logs` (security.py:231). */
+export type AuditLogListResponse = components['schemas']['AuditLogListResponse']
 
-export interface SecurityEventListResponse {
-  events: SecurityEventResponse[]
-  total: number
-  page: number
-  per_page: number
-  unacknowledged_count: number
-  critical_count: number
-}
+/** Response model of GET `/security/events` (security.py:376). */
+export type SecurityEventListResponse = components['schemas']['SecurityEventListResponse']
 
-export interface ThreatSummary {
-  total_threats: number
-  critical: number
-  high: number
-  medium: number
-  low: number
-  acknowledged: number
-  resolved: number
-  by_type: Record<string, number>
-  by_source_ip: Record<string, number>
-  trend_24h: Array<Record<string, unknown>>
-}
+/** Response model of GET `/security/events/summary` (security.py:456). */
+export type ThreatSummary = components['schemas']['ThreatSummary']
 
-export interface SecurityPolicyResponse {
-  id: number
-  policy_id: string
-  name: string
-  description: string | null
-  category: string
-  policy_type: string
-  rules: unknown[]
-  parameters: Record<string, unknown>
-  applies_to_nodes: unknown[]
-  applies_to_roles: unknown[]
-  status: string
-  is_enforced: boolean
-  last_evaluated: string | null
-  compliance_score: number | null
-  violations_count: number
-  version: number
-  created_by: string | null
-  updated_by: string | null
-  created_at: string
-  updated_at: string
-}
+/** Response model of GET/PATCH `/security/policies/{policy_id}` (security.py:696, :715). */
+export type SecurityPolicyResponse = components['schemas']['SecurityPolicyResponse']
 
-export interface SecurityPolicyListResponse {
-  policies: SecurityPolicyResponse[]
-  total: number
-  page: number
-  per_page: number
-}
+/** Response model of GET `/security/policies` (security.py:617). */
+export type SecurityPolicyListResponse = components['schemas']['SecurityPolicyListResponse']

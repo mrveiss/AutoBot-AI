@@ -81,12 +81,24 @@ describe('useApiKeyApi — migrated onto slmApiClient (#12420 Phase 2)', () => {
     expect(mockDelete).toHaveBeenCalledWith('/api-keys/abc')
   })
 
-  it('getScopes GETs /api-keys/scopes', async () => {
-    mockGet.mockResolvedValue({ read: 'Read access' })
+  // The endpoint returns APIScopesResponse — `{ scopes: { ... } }` — not the
+  // bare map (autobot-slm-backend/api/api_keys.py:118-121). The composable used
+  // to type the response as the bare map and hand the envelope straight to the
+  // scope picker, which then rendered one bogus entry keyed `scopes`.
+  it('getScopes unwraps the APIScopesResponse envelope into a bare scope map', async () => {
+    mockGet.mockResolvedValue({
+      scopes: { 'chat:use': 'Send and receive chat messages' },
+    })
 
     const result = await useApiKeyApi().getScopes()
 
     expect(mockGet).toHaveBeenCalledWith('/api-keys/scopes')
-    expect(result).toEqual({ read: 'Read access' })
+    expect(result).toEqual({ 'chat:use': 'Send and receive chat messages' })
+  })
+
+  it('getScopes yields an empty map when the envelope carries no scopes', async () => {
+    mockGet.mockResolvedValue({})
+
+    expect(await useApiKeyApi().getScopes()).toEqual({})
   })
 })

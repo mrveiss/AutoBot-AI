@@ -30,6 +30,7 @@ import type {
   BulkActionRequest,
   BulkActionResponse,
 } from '@/composables/useOrchestration'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useOrchestrationManagement')
 const API_BASE = getSlmApiBase()
@@ -38,13 +39,9 @@ const API_BASE = getSlmApiBase()
 // Additional Type Definitions (Fleet Services)
 // =============================================================================
 
-export interface FleetServiceNodeStatus {
-  node_id: string
-  hostname: string
-  status: string
-  ip_address?: string | null
-  port?: number | null
-}
+// GET /api/orchestration/fleet/services -> FleetServiceStatus.nodes
+// (autobot-slm-backend/api/orchestration.py:102)
+export type FleetServiceNodeStatus = components['schemas']['FleetServiceNodeStatus']
 
 export interface FleetServiceStatus {
   service_name: string
@@ -61,7 +58,18 @@ export interface FleetServicesResponse {
   total_services: number
 }
 
-export interface ServiceCategoryUpdate {
+/**
+ * PATCH /api/orchestration/services/{name}/category
+ * (autobot-slm-backend/api/orchestration.py:131).
+ *
+ * The server constrains the value with `pattern="^(autobot|system)$"`
+ * (`orchestration.py:134`), but a Pydantic `pattern` is emitted as a JSON
+ * Schema `pattern` and openapi-typescript can only render that as `string`.
+ * The narrowing therefore restates a real server-side constraint that the
+ * generated type is structurally unable to carry — sending anything else is a
+ * guaranteed 422 — so it is kept rather than widened.
+ */
+export type ServiceCategoryUpdate = components['schemas']['ServiceCategoryUpdate'] & {
   category: 'autobot' | 'system'
 }
 

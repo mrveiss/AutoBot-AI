@@ -10,14 +10,15 @@ In multi_company and provider modes, each organization is isolated.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from user_management.models.base import Base, TimestampMixin
+from autobot_shared.time_utils import now_utc
+from user_management.models.base import Base
 
 if TYPE_CHECKING:
     from user_management.models.role import Role
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     from user_management.models.user import User
 
 
-class Organization(Base, TimestampMixin):
+class Organization(Base):
     """
     Organization/Tenant model.
 
@@ -133,7 +134,7 @@ class Organization(Base, TimestampMixin):
 
     def soft_delete(self) -> None:
         """Soft delete the organization."""
-        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_at = now_utc()
         self.is_active = False
 
     def get_setting(self, key: str, default=None):

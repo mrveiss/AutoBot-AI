@@ -12,8 +12,10 @@ On sprint close:
   5. Archive the sprint collection via KbCollectionManager.
 """
 
+from __future__ import annotations
+
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,14 @@ from llm_shared.types import LLMType
 
 from ..kb.collections import KbCollectionManager
 from ..models.sprint import LLCSprint
+
+if TYPE_CHECKING:
+    # Deferred to avoid a circular import: llc.services.__init__ imports
+    # sprint_autoclose, which imports this module — a module-level import
+    # here of anything under ``llc.services`` would try to re-enter this
+    # partially-initialized module. Actual runtime use is via lazy imports
+    # inside the functions below (GH#12619).
+    from ..services.agent_scorecard import AgentScore, SprintScorecard
 
 logger = get_logger(__name__)
 
@@ -126,11 +136,52 @@ class SprintKbSummarizer:
         finally:
             await self._km.archive_collection(KbCollectionManager.SPRINT_PREFIX, sprint_id)
 
-        if summary_text and session is not None and sprint is not None:
-            sprint.kb_summary = summary_text  # type: ignore[attr-defined]
+        scorecard_section = await self._build_agent_scorecard_section(sprint_id, session)
+        final_summary = self._combine_summary(summary_text, scorecard_section)
+
+        if final_summary and session is not None and sprint is not None:
+            sprint.kb_summary = final_summary  # type: ignore[attr-defined]
             await session.flush()
 
         return summary_text
+
+    # ------------------------------------------------------------------
+    # Agent scorecard (GH#12619)
+    # ------------------------------------------------------------------
+
+    async def _build_agent_scorecard_section(
+        self,
+        sprint_id: uuid.UUID,
+        session: Optional[AsyncSession],
+    ) -> Optional[str]:
+        """Build the rendered per-agent scorecard section, or None if unavailable.
+
+        Best-effort: a scorecard aggregation failure must never block sprint
+        close / KB merge, so any error is logged and swallowed here.
+        """
+        if session is None:
+            return None
+        # Lazy import — see the module-level TYPE_CHECKING note above.
+        from ..services.agent_scorecard import AgentScorecardService
+        from ..services.sprint_planning import SprintNotFound
+
+        try:
+            scorecard = await AgentScorecardService().build(session, sprint_id)
+        except SprintNotFound:
+            logger.warning("Sprint %s vanished before scorecard aggregation; skipping", sprint_id)
+            return None
+        except Exception:
+            logger.error("Agent scorecard aggregation failed for sprint %s", sprint_id, exc_info=True)
+            return None
+        if not scorecard.scores:
+            return None
+        return render_agent_scorecard(scorecard)
+
+    def _combine_summary(self, summary_text: Optional[str], scorecard_section: Optional[str]) -> Optional[str]:
+        """Merge the Learnings summary and the scorecard section; either may be absent."""
+        if summary_text and scorecard_section:
+            return f"{summary_text}\n\n{scorecard_section}"
+        return summary_text or scorecard_section
 
     # ------------------------------------------------------------------
     # Helpers
@@ -302,4 +353,45 @@ class SprintKbSummarizer:
         return summary_text
 
 
-__all__ = ["SprintKbSummarizer"]
+def render_agent_scorecard(scorecard: SprintScorecard) -> str:
+    """Render a ``SprintScorecard`` as a markdown section for the retro summary.
+
+    Component signals (raw run/work-item counts) are shown alongside the
+    composite ``reliability_score`` so the derivation stays inspectable
+    rather than presenting a single opaque number.
+    """
+    header = [
+        "## Agent Scorecard",
+        "",
+        "| Agent | Runs (terminal) | Success rate | Reliability (low-n aware) | Work items done | Spend (lifetime) |",
+        "|---|---|---|---|---|---|",
+    ]
+    rows = [_render_scorecard_row(score) for score in scorecard.scores]
+    return "\n".join(header + rows + ["", _render_scorecard_footnote(scorecard)])
+
+
+def _render_scorecard_row(score: AgentScore) -> str:
+    """Render one ``AgentScore`` as a markdown table row."""
+    success = f"{score.success_rate:.1%}" if score.success_rate is not None else "n/a"
+    reliability = f"{score.reliability_score:.2f}" if score.reliability_score is not None else "n/a"
+    runs = str(score.runs_terminal) if score.runs_terminal is not None else "n/a"
+    if score.low_sample:
+        runs = f"{runs} (low-n)"
+    spend = f"${score.spend_lifetime_usd:.2f}" if score.spend_lifetime_usd is not None else "n/a"
+    name = score.agent_id or score.agent_name
+    return f"| {name} | {runs} | {success} | {reliability} | {score.work_items_done} | {spend} |"
+
+
+def _render_scorecard_footnote(scorecard: SprintScorecard) -> str:
+    """Explain the run-window / spend-window caveats so the derivation is inspectable."""
+    if scorecard.run_window_available:
+        window = (
+            f"Run window (approximate — time-windowed, not FK-linked; GH#12619): "
+            f"{scorecard.run_window_start} to {scorecard.run_window_end}."
+        )
+    else:
+        window = "Run-based metrics unavailable — sprint has no start_date."
+    return f"{window} Spend is a lifetime total (not sprint-windowed) — see GH#13067."
+
+
+__all__ = ["SprintKbSummarizer", "render_agent_scorecard"]

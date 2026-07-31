@@ -216,7 +216,7 @@ function copyToClipboard(text: string): void {
   setTimeout(() => (success.value = null), 3000)
 }
 
-function formatDate(dateStr: string | null): string {
+function formatDate(dateStr: string | null | undefined): string {
   return formatDateTime(dateStr)
 }
 

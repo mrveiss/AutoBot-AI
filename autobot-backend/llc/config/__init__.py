@@ -53,9 +53,24 @@ DEFAULT_STREAMING_WATCHDOG_TIMEOUT = int(os.environ.get("LLC_STREAMING_WATCHDOG_
 # can never drift (GH#9777).
 AGENT_API_KEY_PLACEHOLDER = "<injected-at-runtime>"
 
+# Agent scorecard aggregation (GH#12619).
+# Minimum terminal (non-queued/running) heartbeat runs an agent must have in a
+# sprint window before its reliability score is treated as statistically
+# meaningful. Below this, the score is still returned but flagged
+# ``low_sample=True`` so callers don't rank a 2-run agent above a 200-run one
+# on a raw ratio alone.
+SCORECARD_MIN_RUNS_FOR_CONFIDENT_RANKING = int(os.environ.get("LLC_SCORECARD_MIN_RUNS_FOR_CONFIDENT_RANKING", "5"))
+
+# Z-score for the Wilson score interval lower bound used as the low-n-aware
+# "reliability_score" (1.96 = 95% confidence). Higher = more conservative
+# (shrinks harder toward 0 for small sample sizes).
+SCORECARD_WILSON_Z_SCORE = float(os.environ.get("LLC_SCORECARD_WILSON_Z_SCORE", "1.96"))
+
 __all__ = [
     "AGENT_API_BASE_URL",
     "AGENT_API_KEY_PLACEHOLDER",
     "DEFAULT_BUDGET_LIMIT",
     "DEFAULT_STREAMING_WATCHDOG_TIMEOUT",
+    "SCORECARD_MIN_RUNS_FOR_CONFIDENT_RANKING",
+    "SCORECARD_WILSON_Z_SCORE",
 ]

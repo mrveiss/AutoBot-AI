@@ -28,6 +28,47 @@ from unittest.mock import AsyncMock, MagicMock, patch  # noqa: F401 — used in 
 import pytest  # noqa: F401 — used for @pytest.fixture decorator below
 from httpx import ASGITransport, AsyncClient  # noqa: F401 — used in fixtures below
 
+# #13084: real-load the in-memory adapter classes BEFORE ``knowledge`` is
+# stubbed below. They are dependency-light (no chromadb import at module
+# level — verified: only ``get_default_client``/``get_async_default_client``
+# lazily import the chromadb chain), so importing them here is safe and lets
+# the ``knowledge.backends`` stub re-export the REAL classes instead of
+# omitting them, which previously shadowed the real
+# ``knowledge.backends.InMemoryClient`` for any test collected afterward in
+# the same session (see _make_knowledge_submodule_stubs).
+from knowledge.backends.async_memory_adapter import (  # noqa: E402
+    AsyncInMemoryClient,
+    AsyncInMemoryCollection,
+)
+from knowledge.backends.memory_adapter import (  # noqa: E402
+    InMemoryClient,
+    InMemoryCollection,
+)
+
+_SESSION_STUB_KEYS = (
+    "knowledge",
+    "knowledge.embedding_cache",
+    "knowledge.utils",
+    "agents",
+    "agents.base_agent",
+)
+
+
+def _snapshot_session_stub_keys() -> dict:
+    """Capture the pre-stub sys.modules state for every key this file stubs.
+
+    Issue #13084: these stubs were previously installed unconditionally at
+    module import time with no restore, so once ``llc/tests/`` was collected
+    in a full-suite run they permanently shadowed the REAL ``knowledge``/
+    ``services``/``agents`` packages for the rest of the session — breaking
+    genuine consumers collected later (e.g.
+    ``services/research/quarantine_boundary_test.py``'s
+    ``from knowledge.backends import InMemoryClient``, which fails only in a
+    full run, never in isolation). ``None`` means the key was absent before
+    this file ran.
+    """
+    return {key: sys.modules.get(key) for key in _SESSION_STUB_KEYS}
+
 
 def _make_knowledge_stub() -> types.ModuleType:
     """Return a thin module stub for the ``knowledge`` package."""
@@ -55,11 +96,33 @@ def _make_knowledge_submodule_stubs() -> None:
     # backends stub, the bare ``knowledge`` stub above shadows the real package and
     # any cross-suite run (llc tests collected before analytics tests) fails to
     # collect them with ModuleNotFoundError: No module named 'knowledge.backends' (#11256).
+    #
+    # #13084: only ``get_default_client``/``get_async_default_client`` need
+    # mocking (they lazily import the heavy chromadb chain). The in-memory
+    # adapter classes (real-loaded at module top, before ``knowledge`` is
+    # stubbed) are a REAL, separate consumer's public API — a previous
+    # version of this stub omitted them, which silently shadowed the real
+    # ``knowledge.backends.InMemoryClient`` for any test collected afterward
+    # in the same session (reproduced via
+    # ``services/research/quarantine_boundary_test.py``, which fails only in
+    # a full-suite run, never in isolation, because collection-time imports
+    # happen before any fixture teardown could restore this stub). Re-exporting
+    # the real classes here means no restore is even needed for this key.
     kb = types.ModuleType("knowledge.backends")
     kb.get_default_client = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
     kb.get_async_default_client = AsyncMock(return_value=MagicMock())  # type: ignore[attr-defined]
+    kb.InMemoryClient = InMemoryClient  # type: ignore[attr-defined]
+    kb.InMemoryCollection = InMemoryCollection  # type: ignore[attr-defined]
+    kb.AsyncInMemoryClient = AsyncInMemoryClient  # type: ignore[attr-defined]
+    kb.AsyncInMemoryCollection = AsyncInMemoryCollection  # type: ignore[attr-defined]
     sys.modules["knowledge.backends"] = kb
 
+
+# #13084: snapshot BEFORE stubbing so the package-scoped fixture below can
+# restore these exact keys once every test under llc/tests/ has run — the
+# stub is required for this package's own collection/tests but must not
+# outlive it (see _snapshot_session_stub_keys docstring).
+_PRE_STUB_MODULES = _snapshot_session_stub_keys()
 
 # The ``knowledge`` module imports lazily but fails when attributes are accessed
 # because chromadb → opentelemetry has a broken dependency in the dev venv.
@@ -398,6 +461,30 @@ def _build_llc_app(
     _patch_kb.start()
 
     return app, _patch_kb
+
+
+@pytest.fixture(scope="package", autouse=True)
+def _restore_session_stubs_after_package():
+    """Restore the module-level ``knowledge``/``agents`` stubs after this
+    package finishes (#13084).
+
+    The stubs installed above at import time are required for llc/tests/
+    itself to collect (chromadb/opentelemetry are unavailable in dev/CI), but
+    were previously left in ``sys.modules`` for the rest of the pytest
+    session with no restore — shadowing the REAL ``knowledge.backends``
+    package for any test collected afterward in the same worker (reproduced:
+    ``services/research/quarantine_boundary_test.py``'s
+    ``from knowledge.backends import InMemoryClient`` fails only in a
+    full-suite run, never in isolation). Restoring here — rather than a
+    session-scoped hook — ties the fix to exactly the lifetime that needs
+    the stub.
+    """
+    yield
+    for key, prior in _PRE_STUB_MODULES.items():
+        if prior is None:
+            sys.modules.pop(key, None)
+        else:
+            sys.modules[key] = prior
 
 
 @pytest.fixture

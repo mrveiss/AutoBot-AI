@@ -50289,6 +50289,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llc/sprints/{sprint_id}/agent-scorecard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sprint Agent Scorecard
+         * @description Return the per-agent success-rate/throughput/spend scorecard for a sprint (GH#12619).
+         *
+         *     Success rate is time-windowed against the sprint's dates (heartbeat runs
+         *     have no sprint FK — see ``AgentScorecardService`` docstring) and spend is
+         *     a lifetime total, not sprint-scoped (GH#13067) — both are labeled
+         *     explicitly in the response rather than implied to be exact.
+         */
+        get: operations["get_sprint_agent_scorecard_api_llc_sprints__sprint_id__agent_scorecard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llc/work-items": {
         parameters: {
             query?: never;
@@ -54641,6 +54666,41 @@ export interface components {
          * @description Request body for POST /heartbeat/{agent_id}/resume (GH#6476).
          */
         AgentResumeRequest: Record<string, never>;
+        /** AgentScoreResponse */
+        AgentScoreResponse: {
+            /** Org Node Id */
+            org_node_id: string;
+            /** Agent Id */
+            agent_id: string | null;
+            /** Agent Name */
+            agent_name: string;
+            /** Work Items Total */
+            work_items_total: number;
+            /** Work Items Done */
+            work_items_done: number;
+            /** Throughput */
+            throughput: number;
+            /** Runs Total */
+            runs_total: number | null;
+            /** Runs Terminal */
+            runs_terminal: number | null;
+            /** Runs Completed */
+            runs_completed: number | null;
+            /** Success Rate */
+            success_rate: number | null;
+            /** Reliability Score */
+            reliability_score: number | null;
+            /** Low Sample */
+            low_sample: boolean | null;
+            /** Spend Lifetime Usd */
+            spend_lifetime_usd: number | null;
+            /** Tokens Spent Lifetime */
+            tokens_spent_lifetime: number | null;
+            /** Spend Window */
+            spend_window: string;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * AgentStatusData
          * @description data payload for GET /agent/agents/status.
@@ -93821,6 +93881,23 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** SprintScorecardResponse */
+        SprintScorecardResponse: {
+            /** Sprint Id */
+            sprint_id: string;
+            /** Sprint Name */
+            sprint_name: string;
+            /** Run Window Available */
+            run_window_available: boolean;
+            /** Run Window Start */
+            run_window_start: string | null;
+            /** Run Window End */
+            run_window_end: string | null;
+            /** Scores */
+            scores: components["schemas"]["AgentScoreResponse"][];
         } & {
             [key: string]: unknown;
         };
@@ -169440,6 +169517,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SprintSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sprint_agent_scorecard_api_llc_sprints__sprint_id__agent_scorecard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sprint_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprintScorecardResponse"];
                 };
             };
             /** @description Validation Error */

@@ -33,7 +33,22 @@ sys.path.insert(0, str(_ROOT))
 # ---------------------------------------------------------------------------
 # Pre-populate sys.modules stubs BEFORE loading the real service modules via
 # spec_from_file_location so their top-level imports resolve cleanly.
+#
+# #13084: snapshot sys.modules (and the ``services`` module's own
+# ``token_denylist`` attribute) BEFORE the stub-heavy bootstrap so everything
+# can be rolled back afterward. Previously ``sys.modules["config"] = MagicMock()``
+# and the stub loop below ran unconditionally with no restore — in a
+# whole-backend sweep this silently shadowed the REAL ``config`` module for
+# every test collected afterward in the same session, including
+# ``autobot-backend/utils/thread_safety_test.py::test_concurrent_config_saves``,
+# whose own config-file redirect then resolved against this throwaway stub
+# instead of the real ``ConfigService`` singleton and wrote unpatched to the
+# developer's real ``config/config.yaml`` (#13083, the severity bar for this
+# issue).
 # ---------------------------------------------------------------------------
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+_PRE_BOOTSTRAP_SERVICES_HAD_DENYLIST = "services" in sys.modules and hasattr(sys.modules["services"], "token_denylist")
+
 _SECRET_KEY = "test-secret-key-for-jti-tests-32chars"
 _EXPIRE_MINUTES = 30
 
@@ -95,6 +110,24 @@ _auth_mod = importlib.util.module_from_spec(_auth_spec)  # type: ignore[arg-type
 _auth_spec.loader.exec_module(_auth_mod)  # type: ignore[union-attr]
 
 AuthService = _auth_mod.AuthService
+
+# ---------------------------------------------------------------------------
+# #13084: restore the pre-bootstrap sys.modules state (see snapshot above).
+# Tests only use the module/attribute references captured above (_dl_mod,
+# _auth_mod, revoke_jti, is_jti_revoked, _denylist_key, AuthService), so none
+# of the forced stubs — including ``config`` — may outlive this module's
+# import.
+# ---------------------------------------------------------------------------
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
+
+if not _PRE_BOOTSTRAP_SERVICES_HAD_DENYLIST and "services" in sys.modules:
+    if hasattr(sys.modules["services"], "token_denylist"):
+        delattr(sys.modules["services"], "token_denylist")
 
 
 # ---------------------------------------------------------------------------

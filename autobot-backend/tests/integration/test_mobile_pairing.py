@@ -38,6 +38,28 @@ from user_management.models.base import Base
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
+@pytest.fixture(autouse=True)
+def _test_encryption_service(monkeypatch):
+    """Provide a REAL EncryptionService with an injected test master key (#11687).
+
+    ``MobileDevice.device_token`` encrypts/decrypts through the module-level
+    ``get_encryption_service()`` singleton, which requires
+    ``AUTOBOT_ENCRYPTION_KEY`` — absent in the hermetic test env (ssot config
+    reads env once at import, so setting the variable here would be too late).
+    Injecting the key keeps the real AES-GCM round-trip under test (same
+    pattern already used by the sibling test_mobile_push.py).
+    """
+    import encryption_service as enc_mod
+
+    svc = enc_mod.EncryptionService(master_key="integration-test-master-key-0123456789abcdef")
+    monkeypatch.setattr(enc_mod, "get_encryption_service", lambda: svc)
+    # device_jwt.py's _secret() reads DEVICE_JWT_SECRET fresh from os.environ
+    # on every call (no import-time caching, unlike the encryption key above),
+    # so a plain monkeypatch.setenv is sufficient — same convention already
+    # used by services/device_jwt_test.py.
+    monkeypatch.setenv("DEVICE_JWT_SECRET", "test-secret-32-chars-minimum-len")
+
+
 @pytest.fixture
 async def test_db_engine():
     """Create an in-memory test database engine."""
@@ -49,7 +71,11 @@ async def test_db_engine():
     )
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        # #11834: scope create_all to the tables under test — whole-metadata
+        # create_all breaks under whole-dir order when earlier tests import
+        # llc models whose Postgres '::jsonb' server_defaults sqlite rejects
+        # (same fix already applied in the sibling test_mobile_push.py).
+        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=[MobileDevice.__table__]))
 
     yield engine
 
@@ -155,7 +181,9 @@ async def test_generate_qr_challenge_token(test_client, redis_client, test_user)
     key = _redis_challenge_key(data["challenge_token"])
     stored_user_id = redis_client.get(key)
     assert stored_user_id is not None
-    assert stored_user_id.decode() == test_user["id"]
+    # get_redis_client() is configured with decode_responses=True (see
+    # autobot_shared/redis_management/config.py), so values are already str.
+    assert stored_user_id == test_user["id"]
 
     # Verify TTL is set correctly
     ttl = redis_client.ttl(key)

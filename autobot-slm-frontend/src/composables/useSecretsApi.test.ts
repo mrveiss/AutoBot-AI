@@ -46,7 +46,7 @@ describe('useSecretsApi — migrated onto slmApiClient (#12420 Phase 2)', () => 
   })
 
   it('createSecret POSTs the payload to /secrets', async () => {
-    const payload = { key: 'HF_TOKEN', value: 'x' }
+    const payload = { key: 'HF_TOKEN', value: 'x', category: 'system' }
     mockPost.mockResolvedValue({ id: 1 })
 
     await useSecretsApi().createSecret(payload)

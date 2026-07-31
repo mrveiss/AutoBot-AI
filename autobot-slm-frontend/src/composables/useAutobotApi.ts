@@ -182,6 +182,83 @@ export interface BudgetPoliciesList {
   count: number
 }
 
+// =============================================================================
+// Advanced Control (#12653) — desktop streaming + human takeover.
+//
+// The endpoint paths and payload shapes below used to be re-declared inline in
+// AdvancedControlTool.vue, which also re-implemented this composable's
+// transport with a raw `fetch` (no autobot_access_token fallback, no 401
+// handling, no timeout). Declaring them here keeps the SLM app's knowledge of
+// the autobot backend in exactly one place, next to every other tool.
+// =============================================================================
+
+export interface AdvancedControlCapabilities {
+  vnc_available?: boolean
+  novnc_available?: boolean
+  max_sessions?: number
+  supported_resolutions?: string[]
+  supported_depths?: number[]
+  [k: string]: unknown
+}
+
+export interface AdvancedControlStreamingSession {
+  session_id: string
+  user_id?: string
+  display?: string
+  vnc_port?: number
+  status?: string
+  created_at?: string
+  [k: string]: unknown
+}
+
+export interface AdvancedControlPendingRequest {
+  request_id: string
+  trigger?: string
+  reason?: string
+  priority?: string
+  created_at?: string
+  [k: string]: unknown
+}
+
+export interface AdvancedControlActiveSession {
+  session_id: string
+  human_operator?: string
+  status?: string
+  [k: string]: unknown
+}
+
+export type AdvancedControlTakeoverStatus = Record<string, unknown>
+
+/** Triggers accepted by POST /advanced-control/takeover/request. */
+export const ADVANCED_CONTROL_TRIGGERS = [
+  'MANUAL_REQUEST',
+  'CRITICAL_ERROR',
+  'SECURITY_CONCERN',
+  'USER_INTERVENTION_REQUIRED',
+  'SYSTEM_OVERLOAD',
+  'APPROVAL_REQUIRED',
+  'TIMEOUT_EXCEEDED',
+] as const
+
+/** Priorities accepted by POST /advanced-control/takeover/request. */
+export const ADVANCED_CONTROL_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
+
+export interface AdvancedControlSessionRequest {
+  user_id: string
+  resolution?: string
+  depth?: number
+}
+
+export interface AdvancedControlTakeoverRequest {
+  trigger: string
+  reason: string
+  priority?: string
+  requesting_agent?: string | null
+}
+
+/** Lifecycle transitions on an approved takeover session. */
+export type AdvancedControlSessionAction = 'pause' | 'resume' | 'complete'
+
 export function useAutobotApi() {
   const authStore = useAuthStore()
 
@@ -1031,6 +1108,84 @@ export function useAutobotApi() {
     return response.data
   }
 
+  // =============================================================================
+  // Advanced Control API (#12653 - desktop streaming + human takeover)
+  // =============================================================================
+
+  const AC = '/advanced-control'
+
+  async function getAdvancedControlCapabilities(): Promise<AdvancedControlCapabilities> {
+    const response = await client.get<AdvancedControlCapabilities>(`${AC}/streaming/capabilities`)
+    return response.data
+  }
+
+  async function listAdvancedControlSessions(): Promise<AdvancedControlStreamingSession[]> {
+    const response = await client.get<{ sessions: AdvancedControlStreamingSession[]; count: number }>(
+      `${AC}/streaming/sessions`
+    )
+    return response.data.sessions ?? []
+  }
+
+  async function createAdvancedControlSession(
+    request: AdvancedControlSessionRequest
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`${AC}/streaming/create`, request)
+    return response.data
+  }
+
+  async function terminateAdvancedControlSession(sessionId: string): Promise<Record<string, unknown>> {
+    const response = await client.delete(`${AC}/streaming/${encodeURIComponent(sessionId)}`)
+    return response.data
+  }
+
+  async function getAdvancedControlTakeoverStatus(): Promise<AdvancedControlTakeoverStatus> {
+    const response = await client.get<AdvancedControlTakeoverStatus>(`${AC}/takeover/status`)
+    return response.data
+  }
+
+  async function getPendingTakeovers(): Promise<AdvancedControlPendingRequest[]> {
+    const response = await client.get<{ pending_requests: AdvancedControlPendingRequest[]; count: number }>(
+      `${AC}/takeover/pending`
+    )
+    return response.data.pending_requests ?? []
+  }
+
+  async function getActiveTakeovers(): Promise<AdvancedControlActiveSession[]> {
+    const response = await client.get<{ active_sessions: AdvancedControlActiveSession[]; count: number }>(
+      `${AC}/takeover/active`
+    )
+    return response.data.active_sessions ?? []
+  }
+
+  async function requestTakeover(
+    request: AdvancedControlTakeoverRequest
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`${AC}/takeover/request`, request)
+    return response.data
+  }
+
+  async function approveTakeover(
+    requestId: string,
+    humanOperator: string
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`${AC}/takeover/${encodeURIComponent(requestId)}/approve`, {
+      human_operator: humanOperator,
+    })
+    return response.data
+  }
+
+  async function takeoverSessionAction(
+    sessionId: string,
+    action: AdvancedControlSessionAction,
+    body?: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `${AC}/takeover/sessions/${encodeURIComponent(sessionId)}/${action}`,
+      body
+    )
+    return response.data
+  }
+
   return {
     // Settings
     getSettings,
@@ -1151,6 +1306,17 @@ export function useAutobotApi() {
     getBatchStatus,
     // Terminal (Issue #729)
     executeTerminalCommand,
+    // Advanced Control (#12653)
+    getAdvancedControlCapabilities,
+    listAdvancedControlSessions,
+    createAdvancedControlSession,
+    terminateAdvancedControlSession,
+    getAdvancedControlTakeoverStatus,
+    getPendingTakeovers,
+    getActiveTakeovers,
+    requestTakeover,
+    approveTakeover,
+    takeoverSessionAction,
     // Log Forwarding Control (Issue #729)
     getLogForwardingStatus,
     startLogForwarding,

@@ -14,6 +14,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('AuthStore')
 
@@ -22,22 +23,36 @@ interface User {
   isAdmin: boolean
 }
 
-interface TokenResponse {
-  access_token: string
-  token_type: string
-  expires_in: number
-}
+/**
+ * Token payload of `POST /api/auth/login`, `/api/auth/refresh` and
+ * `/api/mfa/verify-login`, derived from the generated OpenAPI contract
+ * (#13138). The hand-written copy omitted `token` — the SLM mirrors the JWT
+ * under both `access_token` and `token` so a client written against the core
+ * backend reads it too (autobot-slm-backend/models/schemas.py:31-48).
+ */
+type TokenResponse = components['schemas']['TokenResponse']
 
-interface MFALoginResponse {
-  requires_mfa?: boolean
-  temp_token?: string
-  access_token?: string
-  token_type?: string
-  expires_in?: number
-}
+/**
+ * MFA challenge branch of `POST /api/auth/login`, whose response model is the
+ * union `TokenResponse | MfaChallengeResponse` (autobot-slm-backend/api/auth.py:81).
+ * Modelled as the union rather than one flattened all-optional shape so the
+ * `requires_mfa` branch is the only place `temp_token` is readable.
+ */
+type MfaChallengeResponse = components['schemas']['MfaChallengeResponse']
+
+type LoginResponse = TokenResponse | MfaChallengeResponse
 
 interface LogoutResponse {
   logout_url?: string | null
+}
+
+/**
+ * Narrow the `/api/auth/login` union. Both members carry an
+ * `additionalProperties` catch-all in the contract, so a structural check on
+ * the discriminator is required rather than a bare `in` test.
+ */
+function isMfaChallenge(data: LoginResponse): data is MfaChallengeResponse {
+  return data.requires_mfa === true && typeof data.temp_token === 'string'
 }
 
 const TOKEN_KEY = 'slm_access_token'
@@ -88,16 +103,16 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error(data.detail || 'Login failed')
       }
 
-      const data: MFALoginResponse = await response.json()
+      const data: LoginResponse = await response.json()
 
-      if (data.requires_mfa && data.temp_token) {
+      if (isMfaChallenge(data)) {
         mfaPending.value = true
         mfaTempToken.value = data.temp_token
         return false
       }
 
-      token.value = data.access_token!
-      sessionStorage.setItem(TOKEN_KEY, data.access_token!)
+      token.value = data.access_token
+      sessionStorage.setItem(TOKEN_KEY, data.access_token)
 
       await fetchCurrentUser()
       return true
@@ -113,11 +128,21 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch(`${getApiUrl()}/api/mfa/verify-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, temp_token: mfaTempToken.value }),
-      })
+      // `temp_token` is a QUERY parameter, not a body field: the backend
+      // declares it as a bare `str` argument beside the Pydantic body model
+      // (autobot-slm-backend/api/mfa.py:96-99), which FastAPI binds from the
+      // query string. The generated contract confirms it under
+      // `parameters.query`. Sending it in the body 422s on the missing
+      // required query parameter, blocking MFA login entirely (#12420).
+      const query = new URLSearchParams({ temp_token: mfaTempToken.value })
+      const response = await fetch(
+        `${getApiUrl()}/api/mfa/verify-login?${query.toString()}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        }
+      )
       if (!response.ok) {
         const data = await response.json()
         throw new Error(data.detail || 'MFA verification failed')

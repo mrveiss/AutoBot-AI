@@ -184,54 +184,87 @@ class TestConfigServiceFileLocking:
         assert ConfigService._config_write_lock is not None
 
     @pytest.mark.asyncio
-    async def test_concurrent_config_saves(self):
-        """Test that concurrent config saves don't corrupt file"""
-        import tempfile
-        from pathlib import Path
+    async def test_concurrent_config_saves(self, monkeypatch, tmp_path):
+        """Test that concurrent config saves don't corrupt the real config.yaml.
 
-        from config import unified_config_manager
+        Issue #13083: the previous version patched ``base_config_file`` on the
+        object returned by ``from config import unified_config_manager``. That
+        works in isolation, but ``ConfigService._save_config_to_file`` reads a
+        module-global name (``services.config_service.unified_config_manager``)
+        bound once, at import time, to whatever ``config.__getattr__`` returned
+        *then*. If anything ever replaces ``sys.modules["config"]`` later in the
+        same process — confirmed here: ``autobot-slm-backend``'s own, unrelated
+        ``config`` concept is stubbed unconditionally via
+        ``sys.modules["config"] = MagicMock()`` by
+        ``autobot-slm-backend/tests/api/test_auth_logout.py`` and
+        ``autobot-slm-backend/tests/services/test_token_denylist.py`` with no
+        guard and no restore (the cross-backend namespace-collision class
+        tracked by #13084) — then a *later* ``from config import
+        unified_config_manager`` resolves to a throwaway MagicMock instead of
+        the real singleton ``ConfigService`` actually uses. Patching that
+        MagicMock's ``base_config_file`` is then silently inert: the redirect
+        never takes effect and every concurrent save lands on the developer's
+        real, unpatched ``config/config.yaml`` (reproduced 3/3 by the #10691
+        baseline audit).
+
+        Fix: patch the attribute directly on ``services.config_service`` (the
+        actual consumer), bypassing the ``config`` package/its ``__getattr__``
+        entirely, and assert identity immediately after patching so any future
+        regression of this seam fails the test loudly instead of writing to
+        the real file.
+        """
+        import services.config_service as config_service_module
         from services.config_service import ConfigService
+
+        class _FakeConfigManager:
+            """Minimal test double exposing only what `_save_config_to_file` reads."""
+
+            def __init__(self, base_config_file):
+                self.base_config_file = base_config_file
+
+        test_file = tmp_path / "test_config.yaml"
+        fake_manager = _FakeConfigManager(test_file)
+
+        # Patch the real consumer, not a name reachable only via `config`'s
+        # module-level __getattr__ (which is exactly what a same-named module
+        # elsewhere in the process can silently hijack — see #13084).
+        monkeypatch.setattr(config_service_module, "unified_config_manager", fake_manager)
+
+        # Fail loudly, before any write, if this seam is ever broken.
+        assert config_service_module.unified_config_manager is fake_manager
+        assert config_service_module.unified_config_manager.base_config_file == test_file
 
         errors = []
         save_count = {"count": 0}
 
-        # Create temp directory for test
-        with tempfile.TemporaryDirectory() as tmpdir:
-            test_file = Path(tmpdir) / "test_config.yaml"
-
-            # Patch the config file path
-            original_path = unified_config_manager.base_config_file
-
+        def save_config(i):
             try:
-                unified_config_manager.base_config_file = test_file
+                config = {"test_key": f"value_{i}", "iteration": i}
+                ConfigService._save_config_to_file(config)
+                save_count["count"] += 1
+            except Exception as e:
+                errors.append(e)
 
-                def save_config(i):
-                    try:
-                        config = {"test_key": f"value_{i}", "iteration": i}
-                        ConfigService._save_config_to_file(config)
-                        save_count["count"] += 1
-                    except Exception as e:
-                        errors.append(e)
+        # Run 10 concurrent saves
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(save_config, i) for i in range(10)]
+            for f in futures:
+                f.result()
 
-                # Run 10 concurrent saves
-                with ThreadPoolExecutor(max_workers=10) as executor:
-                    futures = [executor.submit(save_config, i) for i in range(10)]
-                    for f in futures:
-                        f.result()
+        assert len(errors) == 0, f"Errors during concurrent saves: {errors}"
+        assert save_count["count"] == 10
 
-                assert len(errors) == 0, f"Errors during concurrent saves: {errors}"
-                assert save_count["count"] == 10
+        # Verify the redirect actually took effect (would previously raise
+        # FileNotFoundError here because the writes went to the real file).
+        assert test_file.exists(), "concurrent saves did not land in the redirected temp file"
 
-                # Verify file is valid YAML (not corrupted)
-                import yaml
+        # Verify file is valid YAML (not corrupted)
+        import yaml
 
-                with open(test_file, "r") as f:
-                    data = yaml.safe_load(f)
-                    assert "test_key" in data
-                    assert "iteration" in data
-
-            finally:
-                unified_config_manager.base_config_file = original_path
+        with open(test_file, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+            assert "test_key" in data
+            assert "iteration" in data
 
 
 class TestExistingLockVerification:

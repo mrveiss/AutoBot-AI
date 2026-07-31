@@ -311,6 +311,8 @@
     "outdatedNodes": "Outdated Nodes",
     "pendingUpdates": "Pending Updates",
     "pipelineReconnectingAttempt": "Control plane restarting — reconnecting… (attempt {attempt})",
+    "pipelinePartial": "Update finished — {count} node(s) skipped because they are not operational.",
+    "pipelineStageCurrent": "already current",
     "pipelineStageFailed": "failed",
     "pipelineStagePending": "pending",
     "pipelineStageReconnecting": "reconnecting...",

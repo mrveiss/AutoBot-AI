@@ -834,6 +834,16 @@
             migration_become: true
             migration_name_prefix: "[PLAY 2] Backend | "
 
+    # #12777/#12959: the unit template is role-owned and this play never rendered
+    # it, so the faulthandler fix stayed in the repo and never reached a host.
+    # Must precede the restart below so the new unit is what gets started.
+    - name: "[PLAY 2] Backend | Render systemd unit so role changes land (#12777)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: unit_only
+      when: "'backend' in group_names"
+      tags: [backend, systemd, unit]
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend
@@ -993,6 +1003,64 @@
         - npu_status.rc | default(0) != 0
       tags: [npu, npu-worker, restart]
 
+    # ----- TTS Worker -----
+    # #12886: the TTS worker had NO update path at all — it is excluded from
+    # per-component drift resolve (its deployed file is a rendered template, not
+    # a 1:1 sync) and this playbook never mentioned it. So every backend update
+    # advanced the caller while the worker stayed behind, and the streaming route
+    # the backend calls simply 404'd. That is the #12959 pattern: the fix existed
+    # in the role and had no route to the host.
+    #
+    # Applies the role's code_only task file — the service files that carry code
+    # changes — NOT the full role. Provisioning (service account, venv, torch and
+    # pocket-tts installs, gated-model pre-download) is slow, needs network, and
+    # must not re-run on a box that is already installed correctly.
+    # become is required and not inherited: this play sets no play-level become
+    # (unlike deploy-full.yml, which the role is normally applied under), and
+    # /opt/autobot/autobot-tts-worker is owned by the autobot-tts service
+    # account, not the autobot user ansible connects as. Without it the very
+    # first task fails "Destination /opt/autobot/autobot-tts-worker not
+    # writable" — the same wrong-user ownership class as #12872.
+    - name: "[PLAY 2] TTS | Refresh deployed TTS worker service files (#12886)"
+      ansible.builtin.include_role:
+        name: tts-worker
+        tasks_from: code_only
+        # `become` is NOT a valid task keyword on include_role (a dynamic
+        # include) — ansible rejects the whole playbook with "'become' is not a
+        # valid attribute for a IncludeRole", which breaks every self-update.
+        # `apply` is how privilege is handed to the included tasks.
+        apply:
+          become: true
+      when: "'npu' in group_names"
+      tags: [tts, tts-worker, deploy]
+
+    # Restart explicitly rather than via the role's notify handler, matching how
+    # every other component in this play is restarted (NPU, Browser, backend).
+    #
+    # Handlers are wrong here for two compounding reasons, both observed on a
+    # live host (#12886):
+    #   1. they flush at END of play, and PLAY 2 has a known terminal failure in
+    #      the browser tasks below (#12912) — so the queued restart was discarded
+    #      and the worker kept serving 4-day-old code;
+    #   2. once the file is already current, the template task reports `ok` and
+    #      never notifies at all — so a host that received the file but missed
+    #      the restart stays stale forever, with nothing left to trigger it.
+    #
+    # An unconditional restart is idempotent in effect and cannot be swallowed.
+    # Deliberately NOT `failed_when: false`, unlike the NPU/Browser restarts
+    # above. This whole issue exists because a worker kept serving stale code
+    # while the update reported success — swallowing a failed restart here would
+    # reintroduce exactly that: the file lands, the process never reloads, and
+    # nothing says so. A restart that cannot complete is a real failure and
+    # should be visible.
+    - name: "[PLAY 2] TTS | Restart service"
+      systemd:
+        name: autobot-tts-worker
+        state: restarted
+      become: true
+      when: "'npu' in group_names"
+      tags: [tts, tts-worker, restart]
+
     # ----- Browser Worker -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
       unarchive:
@@ -1114,10 +1182,18 @@
       failed_when: false
       tags: [browser, browser-worker, restart]
 
+    # #12912: waited on 3000, which nothing serves — autobot-playwright binds
+    # PLAYWRIGHT_PORT (9001, roles/browser/defaults/main.yml). On a live host
+    # 3000 is Grafana, bound to loopback only, so this timed out for 61s and
+    # failed PLAY 2 every single run — the terminal blocker that also swallowed
+    # other components' handlers.
+    #
+    # `| default(9001)` because role defaults are NOT in scope in a playbook
+    # task (the #12871 trap); this mirrors setup-browser-worker.yml.
     - name: "[PLAY 2] Browser | Wait for service to be ready"
       wait_for:
         host: "{{ ansible_host }}"
-        port: 3000
+        port: "{{ playwright_port | default(9001) }}"
         timeout: 60
         delay: 5
       delegate_to: localhost

@@ -55,7 +55,12 @@ describe('useLlmConfigApi — migrated onto slmApiClient (#12420 Phase 2)', () =
   })
 
   it('testConnection POSTs the request to /settings/admin/llm/test', async () => {
-    const request = { provider: 'openai', api_key: 'k' }
+    const request = {
+      provider: 'openai',
+      api_key: 'k',
+      endpoint: 'https://api.openai.test',
+      model: 'gpt-4',
+    }
     mockPost.mockResolvedValue({ success: true })
 
     await useLlmConfigApi().testConnection(request)

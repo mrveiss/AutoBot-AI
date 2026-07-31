@@ -37,12 +37,26 @@ class _SkillsEngineManager:
         return self._engine
 
     def get_session_factory(self) -> async_sessionmaker[AsyncSession]:
-        """Return the singleton session factory, constructing it on first call."""
+        """Return the singleton session factory, constructing it on first call.
+
+        Issue #13082: ``self.get()`` performs its own complete, thread-safe
+        double-checked-locking construction using this same ``self._lock``.
+        Calling it *while already holding* ``self._lock`` (as this method
+        previously did, passing it as the ``bind=`` argument from inside the
+        ``with self._lock:`` block) re-enters a non-reentrant
+        ``threading.Lock`` on the same thread — an unconditional self-deadlock
+        the very first time this is called before the engine has been warmed
+        up (no other invariant requires the two constructions to be atomic
+        with each other; each is already independently safe). Fetching the
+        engine *before* acquiring the lock removes the nested acquisition
+        entirely instead of papering over it with a reentrant lock.
+        """
         if self._session_factory is None:
+            engine = self.get()
             with self._lock:
                 if self._session_factory is None:
                     self._session_factory = async_sessionmaker(
-                        bind=self.get(),
+                        bind=engine,
                         class_=AsyncSession,
                         expire_on_commit=False,
                         autocommit=False,
