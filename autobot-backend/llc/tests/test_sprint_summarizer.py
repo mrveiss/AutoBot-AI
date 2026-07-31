@@ -167,7 +167,7 @@ async def test_llm_failure_falls_back_to_direct_merge(summarizer, km_mock):
     with (
         patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(None, project_id))),
         patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=docs)),
-        patch.object(summarizer, "_direct_merge", new=AsyncMock()) as dm,
+        patch.object(summarizer, "_direct_merge", new=AsyncMock()),
         patch.object(summarizer, "_llm_summarize_and_index", new=AsyncMock(return_value=_SENTINEL)) as lsi,
     ):
         result = await summarizer.summarize_and_merge(sprint_id, session=MagicMock())
@@ -426,3 +426,153 @@ async def test_llm_index_uses_upsert_for_idempotency(summarizer, km_mock):
     dst_col.upsert.assert_called_once()
     call_kwargs = dst_col.upsert.call_args.kwargs
     assert call_kwargs["ids"] == [f"sprint_summary:{sprint_id}"]
+
+
+# ---------------------------------------------------------------------------
+# Agent scorecard integration (GH#12619) — proves the retro surface actually
+# receives the data: SprintAutoCloseService.execute_close ->
+# SprintKbSummarizer.summarize_and_merge -> sprint.kb_summary, read by
+# GET /sprints/{id}/summary and GET /sprints/{id}/agent-scorecard.
+# ---------------------------------------------------------------------------
+
+
+def _make_agent_score(**kwargs):
+    from llc.services.agent_scorecard import AgentScore
+
+    defaults = {
+        "org_node_id": str(uuid.uuid4()),
+        "agent_id": "agent-a",
+        "agent_name": "Agent Alpha",
+        "work_items_total": 3,
+        "work_items_done": 2,
+        "throughput": 2,
+        "runs_total": 10,
+        "runs_terminal": 10,
+        "runs_completed": 9,
+        "success_rate": 0.9,
+        "reliability_score": 0.7,
+        "low_sample": False,
+        "spend_lifetime_usd": 4.20,
+        "tokens_spent_lifetime": 12_000,
+    }
+    defaults.update(kwargs)
+    return AgentScore(**defaults)
+
+
+def _make_scorecard(scores):
+    from llc.services.agent_scorecard import SprintScorecard
+
+    return SprintScorecard(
+        sprint_id=str(uuid.uuid4()),
+        sprint_name="Sprint 1",
+        run_window_available=True,
+        run_window_start="2026-06-01T00:00:00+00:00",
+        run_window_end="2026-06-14T23:59:59.999999+00:00",
+        scores=scores,
+    )
+
+
+def test_render_agent_scorecard_includes_component_signals_and_caveats():
+    """The composite reliability_score must appear alongside raw component counts."""
+    from llc.kb.sprint_summarizer import render_agent_scorecard
+
+    scorecard = _make_scorecard([_make_agent_score()])
+    rendered = render_agent_scorecard(scorecard)
+
+    assert "## Agent Scorecard" in rendered
+    assert "agent-a" in rendered
+    assert "90.0%" in rendered  # raw success rate
+    assert "0.70" in rendered  # composite reliability score, shown alongside
+    assert "GH#12619" in rendered  # run-window caveat
+    assert "GH#13067" in rendered  # spend-window caveat
+
+
+def test_render_agent_scorecard_zero_run_agent_shows_na_not_zero():
+    from llc.kb.sprint_summarizer import render_agent_scorecard
+
+    zero_run = _make_agent_score(
+        runs_total=0, runs_terminal=0, runs_completed=0, success_rate=None, reliability_score=None, low_sample=None
+    )
+    rendered = render_agent_scorecard(_make_scorecard([zero_run]))
+    assert "n/a" in rendered
+
+
+@pytest.mark.asyncio
+async def test_summarize_and_merge_writes_scorecard_section_even_with_no_docs(summarizer, km_mock):
+    """A sprint with an empty KB collection must still get its scorecard persisted."""
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    sprint_mock = MagicMock()
+    sprint_mock.kb_summary = None
+    session_mock = MagicMock()
+    session_mock.flush = AsyncMock()
+
+    scorecard = _make_scorecard([_make_agent_score()])
+    fake_svc = MagicMock()
+    fake_svc.build = AsyncMock(return_value=scorecard)
+
+    with (
+        patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(sprint_mock, project_id))),
+        patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=[])),
+        patch("llc.services.agent_scorecard.AgentScorecardService", return_value=fake_svc),
+    ):
+        result = await summarizer.summarize_and_merge(sprint_id, session=session_mock)
+
+    assert result is None  # Learnings text unchanged — no docs to summarize
+    assert sprint_mock.kb_summary is not None
+    assert "Agent Scorecard" in sprint_mock.kb_summary
+    fake_svc.build.assert_awaited_once_with(session_mock, sprint_id)
+
+
+@pytest.mark.asyncio
+async def test_summarize_and_merge_combines_learnings_and_scorecard(summarizer, km_mock):
+    """Both sections must appear when there is Learnings text AND scorecard data."""
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(5)
+    sprint_mock = MagicMock()
+    session_mock = MagicMock()
+    session_mock.flush = AsyncMock()
+
+    scorecard = _make_scorecard([_make_agent_score()])
+    fake_svc = MagicMock()
+    fake_svc.build = AsyncMock(return_value=scorecard)
+
+    with (
+        patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(sprint_mock, project_id))),
+        patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=docs)),
+        patch.object(summarizer, "_direct_merge", new=AsyncMock()),
+        patch("llc.services.agent_scorecard.AgentScorecardService", return_value=fake_svc),
+    ):
+        result = await summarizer.summarize_and_merge(sprint_id, session=session_mock)
+
+    assert result == "[direct-merged: 5 docs]"
+    assert "[direct-merged: 5 docs]" in sprint_mock.kb_summary
+    assert "Agent Scorecard" in sprint_mock.kb_summary
+
+
+@pytest.mark.asyncio
+async def test_scorecard_section_degrades_gracefully_on_sprint_not_found(summarizer, km_mock):
+    """A sprint-close race (sprint vanishes) must not crash the KB merge."""
+    from llc.services.sprint_planning import SprintNotFound
+
+    sprint_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    docs = _make_docs(5)
+    sprint_mock = MagicMock()
+    session_mock = MagicMock()
+    session_mock.flush = AsyncMock()
+
+    fake_svc = MagicMock()
+    fake_svc.build = AsyncMock(side_effect=SprintNotFound("gone"))
+
+    with (
+        patch.object(summarizer, "_load_sprint_context", new=AsyncMock(return_value=(sprint_mock, project_id))),
+        patch.object(summarizer, "_fetch_documents", new=AsyncMock(return_value=docs)),
+        patch.object(summarizer, "_direct_merge", new=AsyncMock()),
+        patch("llc.services.agent_scorecard.AgentScorecardService", return_value=fake_svc),
+    ):
+        result = await summarizer.summarize_and_merge(sprint_id, session=session_mock)
+
+    assert result == "[direct-merged: 5 docs]"
+    assert sprint_mock.kb_summary == "[direct-merged: 5 docs]"  # Learnings persisted; scorecard silently omitted
