@@ -25,6 +25,7 @@ import {
   type UpdateAllJob,
   type UpdateAllStage,
   type ComponentSyncJobStatus,
+  type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -91,6 +92,23 @@ watch(selectedDriftComponent, () => {
   driftReport.value = null
   showDriftDetails.value = false
 })
+
+// =============================================================================
+// Fleet sync job tracking (#13157)
+// =============================================================================
+// `syncFleet` returns a `job_id` for an asynchronous, per-node rollout, but the
+// view used to throw it away: the "queued" toast was the last thing an operator
+// ever saw, so a job that failed minutes later reported nothing and the
+// backend's `failure_reason` (`autobot-slm-backend/api/code_sync.py:402`) had no
+// route to the screen at all. These poll `getJobStatus` for the job just
+// started and list the last few jobs via `getRecentJobs`.
+const fleetSyncJob = ref<FleetSyncJobStatus | null>(null)
+const fleetSyncPolling = ref(false)
+const recentFleetJobs = ref<FleetSyncJobStatus[]>([])
+const recentFleetJobsLoading = ref(false)
+const FLEET_JOB_POLL_INTERVAL_MS = 2000
+const RECENT_FLEET_JOBS_LIMIT = 5
+let fleetSyncPollTimer: ReturnType<typeof setTimeout> | null = null
 
 // =============================================================================
 // One-click update-all state (#9971)
@@ -319,6 +337,9 @@ async function handleSyncSelected(): Promise<void> {
   })
 
   if (result.success) {
+    // #13157: the rollout is asynchronous — follow the returned job so a later
+    // per-node failure and its `failure_reason` still reach the operator.
+    trackFleetSyncJob(result.job_id)
     const count = nodeIds.length
     successMessage.value = `Successfully synced ${count} node${count > 1 ? 's' : ''}`
 
@@ -346,6 +367,8 @@ async function handleSyncAll(): Promise<void> {
   })
 
   if (result.success) {
+    // #13157: same asynchronous rollout as handleSyncSelected.
+    trackFleetSyncJob(result.job_id)
     const count = result.nodes_queued || codeSync.pendingNodes.value.length
     successMessage.value = `Successfully queued sync for ${count} node${count > 1 ? 's' : ''}`
 
@@ -634,6 +657,91 @@ async function handleResolveDrift(): Promise<void> {
 }
 
 // =============================================================================
+// Fleet sync job methods (#13157)
+// =============================================================================
+
+function _stopFleetJobPoll(): void {
+  if (fleetSyncPollTimer) {
+    clearTimeout(fleetSyncPollTimer)
+    fleetSyncPollTimer = null
+  }
+  fleetSyncPolling.value = false
+}
+
+/** Load the last few fleet sync jobs so past failures stay inspectable. */
+async function loadRecentFleetJobs(): Promise<void> {
+  recentFleetJobsLoading.value = true
+  try {
+    recentFleetJobs.value = await codeSync.getRecentJobs(RECENT_FLEET_JOBS_LIMIT)
+  } finally {
+    recentFleetJobsLoading.value = false
+  }
+}
+
+/**
+ * Poll one fleet sync job to completion.
+ *
+ * `getJobStatus` is a single-shot call that already reports its own failures
+ * through `codeSync.error` and returns `null`, so `null` ends the loop rather
+ * than being retried here.
+ */
+function _scheduleFleetJobPoll(jobId: string): void {
+  if (fleetSyncPolling.value) return
+  fleetSyncPolling.value = true
+
+  const poll = async () => {
+    const result = await codeSync.getJobStatus(jobId)
+    if (result === null) {
+      _stopFleetJobPoll()
+      return
+    }
+    fleetSyncJob.value = result
+    if (result.status === 'pending' || result.status === 'running') {
+      fleetSyncPollTimer = setTimeout(poll, FLEET_JOB_POLL_INTERVAL_MS)
+      return
+    }
+    _stopFleetJobPoll()
+    await loadRecentFleetJobs()
+  }
+
+  fleetSyncPollTimer = setTimeout(poll, FLEET_JOB_POLL_INTERVAL_MS)
+}
+
+/** Begin tracking the job a just-queued fleet sync returned (#13157). */
+function trackFleetSyncJob(jobId: string | undefined): void {
+  if (!jobId) return
+  _stopFleetJobPoll()
+  fleetSyncJob.value = null
+  _scheduleFleetJobPoll(jobId)
+}
+
+function fleetJobStatusClass(jobStatus: string): string {
+  const map: Record<string, string> = {
+    pending: 'bg-gray-100 text-gray-500',
+    running: 'bg-blue-100 text-blue-700',
+    completed: 'bg-green-100 text-green-700',
+    failed: 'bg-red-100 text-red-700',
+  }
+  return map[jobStatus] ?? 'bg-gray-100 text-gray-500'
+}
+
+function fleetJobStatusI18nKey(jobStatus: string): string {
+  const map: Record<string, string> = {
+    pending: 'codeSyncView.pipelineStagePending',
+    running: 'codeSyncView.pipelineStageRunning',
+    completed: 'codeSyncView.pipelineStageSuccess',
+    failed: 'codeSyncView.pipelineStageFailed',
+  }
+  return map[jobStatus] ?? jobStatus
+}
+
+// Refresh the recent-jobs list whenever the Advanced section is opened, so the
+// list an operator reads is never a stale snapshot from an earlier visit.
+watch(showAdvanced, (open) => {
+  if (open) void loadRecentFleetJobs()
+})
+
+// =============================================================================
 // One-click update-all methods (#9971)
 // =============================================================================
 
@@ -750,6 +858,7 @@ onUnmounted(() => {
   if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
   _stopUpdateAllPoll()
   _stopResolveDriftPoll()
+  _stopFleetJobPoll()
 })
 </script>
 
@@ -866,6 +975,18 @@ onUnmounted(() => {
                 <!-- F2: terminal/pending status via i18n -->
                 <div v-else class="text-xs">{{ $t(stageStatusI18nKey(stage)) }}</div>
               </div>
+              <!-- #13156: the backend's own per-stage explanation. Rendered for
+                   EVERY stage that carries one, not just failed/skipped ones:
+                   the fleet stage of a `partial` run ends `success` with
+                   `message = "Updated N/M nodes (K skipped - not operational)"`
+                   (code_sync.py:4937-4941), so a non-terminal-only filter would
+                   hide exactly the reason #13156 was filed about. -->
+              <div
+                v-if="stage.message"
+                class="mt-1 text-xs text-gray-600 text-center leading-4 break-words w-full"
+                :title="stage.message"
+                data-testid="stage-message"
+              >{{ stage.message }}</div>
               <!-- SHA badge -->
               <div v-if="stage.sha" class="mt-1 text-xs text-gray-400">
                 <a
@@ -1430,6 +1551,102 @@ onUnmounted(() => {
             <span class="text-sm text-gray-700">{{ $t('codeSyncView.restartServiceAfterSync') }}</span>
           </label>
         </div>
+      </div>
+    </div>
+
+    <!-- Fleet sync jobs (#13157) — the asynchronous per-node rollout that
+         "Sync Selected" / "Sync All" queue. Without this panel the job_id
+         returned by syncFleet was discarded, so `failure_reason` and the
+         per-node ansible error never reached the operator. -->
+    <div class="card p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.fleetSyncJobs') }}</h2>
+          <p class="text-sm text-gray-500">{{ $t('codeSyncView.fleetSyncJobsDesc') }}</p>
+        </div>
+        <button
+          @click="loadRecentFleetJobs"
+          :disabled="recentFleetJobsLoading"
+          class="btn btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {{ recentFleetJobsLoading ? $t('codeSyncView.refreshing') : $t('codeSyncView.refresh') }}
+        </button>
+      </div>
+
+      <!-- The job started from this page, polled to completion -->
+      <div
+        v-if="fleetSyncJob"
+        data-testid="fleet-sync-job"
+        class="border border-gray-200 rounded-md p-3 mb-4"
+      >
+        <div class="flex items-center gap-2 flex-wrap">
+          <span
+            :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(fleetSyncJob.status)]"
+          >{{ $t(fleetJobStatusI18nKey(fleetSyncJob.status)) }}</span>
+          <span class="font-mono text-xs text-gray-500">{{ fleetSyncJob.job_id }}</span>
+          <span class="text-sm text-gray-700">{{
+            $t('codeSyncView.fleetJobProgress', {
+              completed: fleetSyncJob.completed_nodes,
+              total: fleetSyncJob.total_nodes,
+            })
+          }}</span>
+          <span v-if="fleetSyncJob.failed_nodes > 0" class="text-sm text-red-700">{{
+            $t('codeSyncView.fleetJobFailedNodes', { count: fleetSyncJob.failed_nodes })
+          }}</span>
+        </div>
+        <!-- #13157: the reason the backend recorded (code_sync.py:402) -->
+        <div
+          v-if="fleetSyncJob.failure_reason"
+          data-testid="fleet-job-failure-reason"
+          class="mt-2 bg-red-50 border border-red-200 rounded-md p-2 text-sm text-red-700"
+        >
+          <span class="font-medium">{{ $t('codeSyncView.fleetJobFailureReason') }}</span>
+          {{ fleetSyncJob.failure_reason }}
+        </div>
+        <!-- Per-node outcome; `message` carries the ansible fatal on failure -->
+        <ul v-if="fleetSyncJob.nodes.length > 0" class="mt-2 space-y-1">
+          <li
+            v-for="node in fleetSyncJob.nodes"
+            :key="node.node_id"
+            class="text-xs text-gray-600 flex gap-2"
+          >
+            <span class="font-medium shrink-0">{{ node.hostname || node.node_id }}</span>
+            <span class="shrink-0">{{ node.status }}</span>
+            <span v-if="node.message" class="text-gray-500 break-words">{{ node.message }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Recent jobs, so a rollout that failed while the page was closed is
+           still inspectable -->
+      <h3 class="text-sm font-medium text-gray-700 mb-2">{{ $t('codeSyncView.recentFleetJobs') }}</h3>
+      <div v-if="recentFleetJobs.length > 0" class="space-y-2">
+        <div
+          v-for="job in recentFleetJobs"
+          :key="job.job_id"
+          data-testid="recent-fleet-job"
+          class="border border-gray-200 rounded-md p-2"
+        >
+          <div class="flex items-center gap-2 flex-wrap">
+            <span
+              :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(job.status)]"
+            >{{ $t(fleetJobStatusI18nKey(job.status)) }}</span>
+            <span class="font-mono text-xs text-gray-500">{{ job.job_id }}</span>
+            <span class="text-xs text-gray-500">{{ formatDateTime(job.created_at) }}</span>
+            <span class="text-xs text-gray-700">{{
+              $t('codeSyncView.fleetJobProgress', {
+                completed: job.completed_nodes,
+                total: job.total_nodes,
+              })
+            }}</span>
+          </div>
+          <div v-if="job.failure_reason" class="mt-1 text-xs text-red-700 break-words">
+            {{ job.failure_reason }}
+          </div>
+        </div>
+      </div>
+      <div v-else-if="!recentFleetJobsLoading" class="text-sm text-gray-500">
+        {{ $t('codeSyncView.noRecentFleetJobs') }}
       </div>
     </div>
 
