@@ -50,7 +50,7 @@ class ProfileSuggestion:
 def _load_tiers() -> List[Dict[str, Any]]:
     """Load VRAM tiers from npu_model_recommendations.yaml, sorted ascending by min_vram_gb."""
     try:
-        with open(_RECOMMENDATIONS_YAML, "r") as fh:
+        with open(_RECOMMENDATIONS_YAML, "r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh)
         data = data or {}
         tiers = [t for t in data.get("tiers", []) if "min_vram_gb" in t]
