@@ -55,8 +55,12 @@ export function ensureTimezone(): Promise<void> {
 /**
  * Format an ISO date string using the fleet-configured timezone.
  * Falls back to browser locale if timezone is not yet loaded.
+ *
+ * Accepts `undefined` as well as `null`: the generated OpenAPI contract models
+ * nullable backend timestamps as optional (`expires_at?: string | null`), so
+ * call sites forward possibly-absent values here (#12420).
  */
-export function formatDateTime(dateStr: string | null): string {
+export function formatDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return 'Never'
   const date = new Date(dateStr)
   if (isNaN(date.getTime())) return dateStr
