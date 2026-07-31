@@ -139,3 +139,52 @@
 - **Redis as Backend for LlamaIndex and Memory:** LlamaIndex will be configured to use a `RedisVectorStore` and Redis for its document store. The `ChatHistoryManager` will continue to use Redis for conversational memory, and all logs will be directed to Redis.
 - **Existing Functionalities as LangChain Tools:** Current functionalities like OS command execution (`SystemIntegration`) and LLM interactions (`LLMInterface`) will be exposed as custom LangChain `Tools` for the agent to utilize.
 - **LangChain-Compatible LLMs:** The `LLMInterface` will be updated to provide LLM instances (e.g., `ChatOllama`, `OllamaLLM`) that are directly compatible with LangChain and LlamaIndex.
+
+## 2026-07-31 - Memory-Graph "Two Engines" Finding: Already Reconciled, Cleanup Completed (#12650)
+
+**Decision:** No new architectural decision needed — `autobot_memory_graph/` and
+`knowledge/memory_graph/` are **not** two live engines. This is the "code
+already exists" outcome of umbrella #12645: issue #3612 (closed) already
+reconciled them in favor of `autobot_memory_graph/` as the single canonical
+engine. This entry documents the finding and completes the cleanup #3612 left
+unfinished; it is not a new fork.
+
+**Investigation (#12650 caller audit):**
+
+- `autobot_memory_graph/` is a single package that already contains **both**
+  layers implied by the filenames: a storage/graph layer (`core.py`,
+  `entities.py`, `relations.py`, `property_graph.py`) and a query/scoring
+  layer built on top of it (`semantic_search.py` — `MemoryGraphQueryProcessor`,
+  `HybridScorer`, `QueryIntent`, `SearchResult`, `ensure_indexes`). It has real
+  production callers: `chat_history/base.py`, `knowledge/relations.py`,
+  `api/memory.py`, `api/chat_sessions.py`, `api/secrets.py`,
+  `initialization/lifespan.py`, `mcp/autobot_server.py`, `tasks/memory_tasks.py`,
+  `agents/graph_entity_extractor.py`, `services/graph_rag_service.py`,
+  `services/security_memory_integration.py`, `services/memory/postgres_provider.py`,
+  `knowledge/pipeline/loaders/redis_graph_loader.py`, plus `tests/memory_graph/`.
+- `knowledge/memory_graph/__init__.py` is a compatibility shim (added by
+  #3612) that redirects every symbol to `autobot_memory_graph`. It correctly
+  states the intent, but the concrete duplicate module bodies
+  (`hybrid_scorer.py`, `query_processor.py`, their `AsyncRedisClientMixin`
+  scorer against a different Redis key prefix `mg:entity_embed:*`) were never
+  actually repointed — they were only ever imported by their own test file.
+  Zero production callers were found anywhere in the repo.
+- `graph_store.py` and `schema.py`, the other two files #3612 flagged, were
+  already removed in a prior cleanup; only the query/scorer pair was left.
+
+**Resolution:** Converged, not merged — `hybrid_scorer.py` and
+`query_processor.py` are now thin re-export shims onto
+`autobot_memory_graph.semantic_search` (mirroring what `__init__.py` already
+did at the package level), and `query_processor_test.py` now asserts shim
+identity instead of re-testing implementation details already covered by
+`autobot_memory_graph/semantic_search_test.py`. Per project policy the files
+were **not deleted** — the duplicate *implementation* was retired, not the
+files. See PR closing #12650 for the caller-map evidence and verification.
+
+**Shared boundary (for future reference):** the memory graph is one
+canonical package, `autobot_memory_graph/`, layered as storage
+(`core`/`entities`/`relations`/`property_graph`) → query/scoring
+(`semantic_search`). New query or scoring capability belongs in
+`semantic_search.py`; new storage/graph capability belongs in the
+storage-layer modules. `knowledge/memory_graph/` is a deprecated import
+path only — new code must import `autobot_memory_graph` directly.
