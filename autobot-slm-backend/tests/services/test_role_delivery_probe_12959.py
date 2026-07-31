@@ -37,9 +37,7 @@ def _load(module_name: str, alias: str):
     saved = sys.modules.get("autobot_shared.logging_manager")
     sys.modules["autobot_shared.logging_manager"] = MagicMock()
     try:
-        spec = importlib.util.spec_from_file_location(
-            alias, _BACKEND_ROOT / "services" / f"{module_name}.py"
-        )
+        spec = importlib.util.spec_from_file_location(alias, _BACKEND_ROOT / "services" / f"{module_name}.py")
         mod = importlib.util.module_from_spec(spec)
         sys.modules[alias] = mod
         spec.loader.exec_module(mod)
@@ -108,9 +106,7 @@ def test_missing_artifact_is_skipped_not_failed(tmp_path: Path) -> None:
 def test_duplicate_key_is_undelivered_but_single_key_is_not(tmp_path: Path) -> None:
     """The #12907 case: an append-only store keeps a stale first copy."""
     store = tmp_path / "db-credentials.env"
-    store.write_text(
-        f"{_PW_KEY}=stale\nAUTOBOT_DB_USER=app\n{_PW_KEY}=current\n", encoding="utf-8"
-    )
+    store.write_text(f"{_PW_KEY}=stale\nAUTOBOT_DB_USER=app\n{_PW_KEY}=current\n", encoding="utf-8")
     dup = probe_role_delivery([_inv(store, UNIQUE_KEY, _PW_KEY)])
     assert dup.degraded, "duplicate keys must be reported"
 
