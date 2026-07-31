@@ -14,6 +14,11 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDarkMode } from '@/composables/useAccessibility'
+// #13138: derived from the generated contract — the response model of
+// GET/PUT `/settings/time` (autobot-slm-backend/api/settings.py:37).
+import type { components } from '@/types/generated/api'
+
+type TimeConfig = components['schemas']['TimeConfig']
 
 const darkMode = useDarkMode()
 
@@ -24,10 +29,6 @@ interface Setting {
   description: string | null
 }
 
-interface TimeConfig {
-  timezone: string
-  ntp_servers: string[]
-}
 
 const router = useRouter()
 const authStore = useAuthStore()

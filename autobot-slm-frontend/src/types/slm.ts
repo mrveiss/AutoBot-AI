@@ -741,6 +741,37 @@ export interface ExternalAgentCard {
 }
 
 // =============================================================================
+// Infrastructure Playbooks (Issue #1177)
+//
+// Derived from the generated OpenAPI contract (#13138) — response models of
+// autobot-slm-backend/api/infrastructure.py. `PlaybookInfo` was declared
+// identically in `components/InfrastructureWizard.vue` and
+// `views/InfrastructureView.vue`, so one backend change had two places to
+// drift from; both now import this single definition.
+// =============================================================================
+
+/**
+ * Response element of GET `/infrastructure/playbooks`
+ * (api/infrastructure.py:54).
+ *
+ * Both hand-written copies omitted `tags`, and typed `category` as a bare
+ * `string` where the contract has the `PlaybookCategory` enum.
+ */
+export type PlaybookInfo = components['schemas']['PlaybookInfo']
+
+/** Playbook category enum (api/infrastructure.py:33). */
+export type PlaybookCategory = components['schemas']['PlaybookCategory']
+
+/**
+ * Playbook run state (api/infrastructure.py:69). `output` is
+ * `default_factory=list` and therefore optional in the contract.
+ */
+export type PlaybookExecution = components['schemas']['PlaybookExecution']
+
+/** Playbook execution status enum (api/infrastructure.py:44). */
+export type PlaybookStatus = components['schemas']['PlaybookStatus']
+
+// =============================================================================
 // Security API Response Types (Issue #3184)
 //
 // Derived from the generated OpenAPI contract (#13138). Every shape below is

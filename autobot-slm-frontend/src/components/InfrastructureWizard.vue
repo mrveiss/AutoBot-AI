@@ -13,31 +13,10 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
+import type { PlaybookInfo, PlaybookExecution } from '@/types/slm'
 
 const logger = createLogger('InfrastructureWizard')
 
-interface PlaybookInfo {
-  id: string
-  name: string
-  description: string
-  category: string
-  playbook_file: string
-  target_hosts: string[]
-  variables: Record<string, unknown>
-  estimated_duration: string
-  requires_confirmation: boolean
-}
-
-interface PlaybookExecution {
-  execution_id: string
-  playbook_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  started_at: string | null
-  completed_at: string | null
-  output: string[]
-  error: string | null
-  triggered_by: string
-}
 
 const props = defineProps<{
   visible: boolean
