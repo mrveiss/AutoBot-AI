@@ -306,6 +306,9 @@ async function saveProvider(): Promise<void> {
         is_active: formData.is_active,
         allow_user_creation: formData.allow_user_creation,
         default_role: formData.default_role,
+        // Neither form collects `is_social`; the contract requires it, so state
+        // the backend default explicitly rather than relying on omission.
+        is_social: false,
         config,
       }
       await api.createProvider(createData)

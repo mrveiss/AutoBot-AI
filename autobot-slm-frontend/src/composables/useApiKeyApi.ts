@@ -17,49 +17,24 @@
  * `/login` — matching the previous per-composable axios interceptor that called
  * `authStore.logout()`. Call sites therefore pass endpoints relative to the API
  * base and receive parsed JSON directly (no axios `.data`).
+ *
+ * Contract types (#12420 Phase 3): every request/response shape below is
+ * DERIVED from the generated OpenAPI schema (`@/types/generated/api`), which is
+ * produced from the SLM backend's own Pydantic models and CI-guarded by
+ * `verify-generated-types-slm`. Do not hand-declare these — a backend schema
+ * change must surface here as a type error, not as a silent runtime mismatch.
+ * Re-run `npm run gen:types:openapi && npm run gen:types` after a backend change.
  */
 
 import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
-export interface APIKeyCreate {
-  name: string
-  description?: string
-  scopes: string[]
-  expires_days?: number
-}
-
-export interface APIKeyCreateResponse {
-  id: string
-  key: string
-  key_prefix: string
-  name: string
-  scopes: string[]
-  expires_at: string | null
-  created_at: string
-}
-
-export interface APIKeyResponse {
-  id: string
-  key_prefix: string
-  name: string
-  description: string | null
-  scopes: string[]
-  is_active: boolean
-  expires_at: string | null
-  last_used_at: string | null
-  usage_count: number
-  created_at: string
-}
-
-export interface APIKeyListResponse {
-  keys: APIKeyResponse[]
-  total: number
-}
-
-export interface APIKeyUpdate {
-  name?: string
-  description?: string
-}
+export type APIKeyCreate = components['schemas']['APIKeyCreate']
+export type APIKeyCreateResponse = components['schemas']['APIKeyCreateResponse']
+export type APIKeyResponse = components['schemas']['APIKeyResponse']
+export type APIKeyListResponse = components['schemas']['APIKeyListResponse']
+export type APIKeyUpdate = components['schemas']['APIKeyUpdate']
+export type APIScopesResponse = components['schemas']['APIScopesResponse']
 
 export function useApiKeyApi() {
   async function createKey(data: APIKeyCreate): Promise<APIKeyCreateResponse> {
@@ -85,8 +60,27 @@ export function useApiKeyApi() {
     await slmApiClient.delete(`/api-keys/${keyId}`)
   }
 
+  /**
+   * Available API-key scopes as a `{ scope: description }` map.
+   *
+   * The endpoint returns an ENVELOPE — `APIScopesResponse { scopes: dict }`
+   * (`autobot-slm-backend/api/api_keys.py:118-121`) — not the bare map. This
+   * composable previously typed the response as `Record<string, string>` and
+   * returned it unwrapped, so the scope picker in SecuritySettings.vue iterated
+   * the envelope and rendered a single bogus entry keyed `scopes`. Wiring the
+   * generated contract exposed that; unwrap here so callers keep the bare map.
+   *
+   * The backend declares `scopes` as an untyped `dict`, so the generated value
+   * type is `unknown`; the values are scope descriptions, normalised to string.
+   */
   async function getScopes(): Promise<Record<string, string>> {
-    return slmApiClient.get<Record<string, string>>('/api-keys/scopes')
+    const response = await slmApiClient.get<APIScopesResponse>('/api-keys/scopes')
+    return Object.fromEntries(
+      Object.entries(response.scopes ?? {}).map(([scope, description]) => [
+        scope,
+        String(description),
+      ])
+    )
   }
 
   return {

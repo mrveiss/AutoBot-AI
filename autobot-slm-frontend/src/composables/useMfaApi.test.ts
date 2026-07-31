@@ -73,14 +73,17 @@ describe('useMfaApi — migrated onto slmApiClient (#12420 Phase 2)', () => {
     expect(result).toEqual({ success: true, message: 'ok' })
   })
 
-  it('verifyLogin POSTs code + temp_token to /mfa/verify-login', async () => {
+  // The backend binds `temp_token` from the QUERY string (a bare `str` argument
+  // beside the Pydantic body model, autobot-slm-backend/api/mfa.py:96-99) — the
+  // generated contract lists it under `parameters.query`. Sending it in the body
+  // (the previous behaviour) makes the backend 422 on the missing query param.
+  it('verifyLogin sends temp_token as a query parameter and only `code` in the body', async () => {
     mockPost.mockResolvedValue({ success: true, message: 'ok', access_token: 't' })
 
     const result = await useMfaApi().verifyLogin('123456', 'temp-abc')
 
-    expect(mockPost).toHaveBeenCalledWith('/mfa/verify-login', {
+    expect(mockPost).toHaveBeenCalledWith('/mfa/verify-login?temp_token=temp-abc', {
       code: '123456',
-      temp_token: 'temp-abc',
     })
     expect(result.access_token).toBe('t')
   })

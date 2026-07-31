@@ -17,76 +17,36 @@
  * `authStore.logout()`. Query parameters (skip/limit) are serialised onto the
  * endpoint since the canonical client takes a relative path, not an axios
  * `params` object; call sites receive parsed JSON directly.
+ *
+ * Contract types (#12420 Phase 3): the request/response shapes below are DERIVED
+ * from the generated OpenAPI schema (`@/types/generated/api`), which is produced
+ * from the SLM backend's own Pydantic models and CI-guarded by
+ * `verify-generated-types-slm`. Do not hand-declare them — a backend schema
+ * change must surface here as a type error, not as a silent runtime mismatch.
  */
 
 import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
 // =============================================================================
-// Type Definitions
+// Type Definitions — derived from the generated OpenAPI contract
 // =============================================================================
 
-export interface RoleResponse {
-  id: string
-  name: string
-  description: string | null
-  is_system: boolean
-}
+// Both /slm-users and /autobot-users serve the `autobot_shared` user schemas
+// (the generated names are FastAPI's disambiguation of two same-named models).
+export type RoleResponse =
+  components['schemas']['autobot_shared__user_management__schemas__user__RoleResponse']
+export type SlmUserResponse =
+  components['schemas']['autobot_shared__user_management__schemas__user__UserResponse']
+export type SlmUserListResponse = components['schemas']['UserListResponse']
+export type CreateUserPayload =
+  components['schemas']['autobot_shared__user_management__schemas__user__UserCreate']
+export type PasswordChange = components['schemas']['PasswordChange']
 
-export interface SlmUserResponse {
-  id: string
-  email: string
-  username: string
-  display_name: string | null
-  bio: string | null
-  avatar_url: string | null
-  org_id: string | null
-  is_active: boolean
-  is_verified: boolean
-  mfa_enabled: boolean
-  is_platform_admin: boolean
-  preferences: Record<string, unknown>
-  roles: RoleResponse[]
-  last_login_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface SlmUserListResponse {
-  users: SlmUserResponse[]
-  total: number
-  limit: number
-  offset: number
-}
-
-export interface TeamResponse {
-  id: string
-  name: string
-  description: string | null
-  organization_id: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface TeamListResponse {
-  teams: TeamResponse[]
-  total: number
-  limit: number
-  offset: number
-}
-
-export interface CreateUserPayload {
-  email: string
-  username: string
-  password: string
-  display_name?: string
-  role_ids?: string[]
-}
-
-export interface CreateTeamPayload {
-  name: string
-  description?: string
-  organization_id?: string
-}
+export type TeamResponse = components['schemas']['TeamResponse']
+export type TeamListResponse = components['schemas']['TeamListResponse']
+export type CreateTeamPayload = components['schemas']['TeamCreate']
+export type TeamMemberAdd = components['schemas']['TeamMemberAdd']
 
 // Serialise pagination params onto the endpoint (the canonical client takes a
 // relative path, not an axios `params` object).
@@ -116,7 +76,8 @@ export function useSlmUserApi() {
   }
 
   async function changeSlmUserPassword(userId: string, newPassword: string): Promise<void> {
-    await slmApiClient.post(`/slm-users/${userId}/change-password`, { new_password: newPassword })
+    const body: PasswordChange = { new_password: newPassword }
+    await slmApiClient.post(`/slm-users/${userId}/change-password`, body)
   }
 
   // ===========================================================================
@@ -136,7 +97,8 @@ export function useSlmUserApi() {
   }
 
   async function changeAutobotUserPassword(userId: string, newPassword: string): Promise<void> {
-    await slmApiClient.post(`/autobot-users/${userId}/change-password`, { new_password: newPassword })
+    const body: PasswordChange = { new_password: newPassword }
+    await slmApiClient.post(`/autobot-users/${userId}/change-password`, body)
   }
 
   // ===========================================================================
@@ -160,10 +122,8 @@ export function useSlmUserApi() {
     userId: string,
     role = 'member'
   ): Promise<void> {
-    await slmApiClient.post(`/autobot-teams/${teamId}/members`, {
-      user_id: userId,
-      role,
-    })
+    const body: TeamMemberAdd = { user_id: userId, role }
+    await slmApiClient.post(`/autobot-teams/${teamId}/members`, body)
   }
 
   async function removeTeamMember(teamId: string, userId: string): Promise<void> {
