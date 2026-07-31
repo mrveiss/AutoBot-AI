@@ -137,8 +137,7 @@ def test_tts_include_escalates_privilege() -> None:
         inc = task.get("ansible.builtin.include_role") or task.get("include_role")
         if isinstance(inc, dict) and inc.get("name") == "tts-worker":
             assert task.get("become") is None, (
-                "bare `become:` on include_role makes ansible reject the whole "
-                "playbook — use apply: {become: true}"
+                "bare `become:` on include_role makes ansible reject the whole " "playbook — use apply: {become: true}"
             )
             assert (inc.get("apply") or {}).get("become") is True, (
                 "the tts-worker include must escalate via apply: {become: true} — "
@@ -168,6 +167,4 @@ def test_playbook_passes_ansible_syntax_check() -> None:
         timeout=180,
     )
 
-    assert result.returncode == 0, (
-        f"ansible rejected the playbook:\n{result.stderr[-1200:]}"
-    )
+    assert result.returncode == 0, f"ansible rejected the playbook:\n{result.stderr[-1200:]}"
