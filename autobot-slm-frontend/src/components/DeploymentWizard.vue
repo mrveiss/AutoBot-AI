@@ -327,7 +327,7 @@ function getCategoryIcon(category: string): string {
                   <span
                     :class="[
                       'px-2 py-1 text-xs font-medium rounded-full',
-                      node.status === 'healthy'
+                      node.status === 'online'
                         ? 'bg-green-100 text-green-800'
                         : node.status === 'offline'
                           ? 'bg-gray-100 text-gray-800'
