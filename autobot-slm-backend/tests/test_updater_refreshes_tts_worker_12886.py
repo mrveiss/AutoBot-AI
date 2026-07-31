@@ -170,35 +170,68 @@ def test_playbook_passes_ansible_syntax_check() -> None:
     assert result.returncode == 0, f"ansible rejected the playbook:\n{result.stderr[-1200:]}"
 
 
-def test_tts_restart_is_flushed_before_later_tasks_can_fail() -> None:
-    """The TTS restart must not be deferred to end of play (#12886).
+def test_tts_service_is_restarted_explicitly() -> None:
+    """The worker must be restarted by a task, not a notify handler (#12886).
 
-    Handlers normally flush at the end of a play, so any later failure swallows
-    them. PLAY 2 has a known terminal failure in the browser tasks (#12912), and
-    on the first successful delivery that is exactly what happened: the worker
-    file was written with the streaming route, the play died at the browser wait,
-    `restart tts-worker` never ran, and the worker kept serving days-old code
-    from memory. Delivery without restart is not delivery.
+    Two failures made handler-driven restart unusable here, both seen on a live
+    host. Handlers flush at END of play, and PLAY 2 dies at the browser tasks
+    (#12912), so the queued restart was discarded and the worker served 4-day-old
+    code. Then, once the file was already current, the template reported `ok` and
+    never notified at all — leaving a host that had the file but not the restart
+    permanently stale, with nothing left to trigger it.
+
+    Delivering a file without restarting the process is not delivery.
     """
     playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
 
     for play in playbook:
         tasks = play.get("tasks") or []
-        tts_idx = flush_idx = None
+        tts_idx = restart_idx = None
         for i, task in enumerate(tasks):
             inc = task.get("ansible.builtin.include_role") or task.get("include_role")
             if isinstance(inc, dict) and inc.get("name") == "tts-worker":
                 tts_idx = i
-            meta = task.get("ansible.builtin.meta") or task.get("meta")
-            if meta == "flush_handlers" and tts_idx is not None and flush_idx is None:
-                flush_idx = i
+            svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
+            if (
+                isinstance(svc, dict)
+                and svc.get("name") == "autobot-tts-worker"
+                and svc.get("state") == "restarted"
+                and tts_idx is not None
+                and restart_idx is None
+            ):
+                restart_idx = i
         if tts_idx is None:
             continue
-        assert flush_idx is not None, (
-            "no flush_handlers after the tts-worker include — the restart would be "
-            "deferred to end of play and lost to any later failure (#12912)"
+        assert restart_idx is not None, (
+            "no explicit autobot-tts-worker restart after the include — a notify "
+            "handler is lost to end-of-play failures and never fires when the "
+            "file is already current"
         )
-        assert flush_idx > tts_idx, "flush_handlers must come AFTER the tts include"
+        assert restart_idx > tts_idx, "the restart must come AFTER the include"
         return
 
     raise AssertionError("no play contained the tts-worker include")
+
+
+def test_tts_restart_does_not_fail_open() -> None:
+    """A failed TTS restart must surface, not be swallowed (#12886).
+
+    Flagged by security review as fail-open state drift. `failed_when: false`
+    would mean the file lands, the process never reloads, the play reports
+    success and nothing says otherwise — the precise silent-non-delivery failure
+    this issue is about. The NPU/Browser restarts above do swallow errors; that
+    convention is not appropriate for the task whose entire purpose is proving
+    the worker actually reloaded.
+    """
+    playbook = yaml.safe_load(_PLAYBOOK.read_text(encoding="utf-8"))
+
+    for task in _iter_mappings(playbook):
+        svc = task.get("systemd") or task.get("ansible.builtin.systemd") or {}
+        if isinstance(svc, dict) and svc.get("name") == "autobot-tts-worker":
+            assert task.get("failed_when") is not False, (
+                "the TTS restart must not fail open — a swallowed restart failure "
+                "leaves the worker serving stale code with the update green"
+            )
+            return
+
+    raise AssertionError("no autobot-tts-worker restart task found")

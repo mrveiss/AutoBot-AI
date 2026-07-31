@@ -1024,17 +1024,32 @@
       when: "'npu' in group_names"
       tags: [tts, tts-worker, deploy]
 
-    # Handlers normally flush at END of play, so ANY later task failure silently
-    # swallows the restart — and PLAY 2 has a known terminal failure in the
-    # browser tasks below (#12912). That is exactly what happened on the first
-    # successful delivery: tts-worker.py was written with the streaming route,
-    # the play then died at the browser wait, `restart tts-worker` never ran, and
-    # the worker kept serving 4-day-old code from memory. Flushing here makes TTS
-    # delivery independent of unrelated failures further down the play.
-    - name: "[PLAY 2] TTS | Apply pending TTS restart now, not at end of play (#12886)"
-      ansible.builtin.meta: flush_handlers
+    # Restart explicitly rather than via the role's notify handler, matching how
+    # every other component in this play is restarted (NPU, Browser, backend).
+    #
+    # Handlers are wrong here for two compounding reasons, both observed on a
+    # live host (#12886):
+    #   1. they flush at END of play, and PLAY 2 has a known terminal failure in
+    #      the browser tasks below (#12912) — so the queued restart was discarded
+    #      and the worker kept serving 4-day-old code;
+    #   2. once the file is already current, the template task reports `ok` and
+    #      never notifies at all — so a host that received the file but missed
+    #      the restart stays stale forever, with nothing left to trigger it.
+    #
+    # An unconditional restart is idempotent in effect and cannot be swallowed.
+    # Deliberately NOT `failed_when: false`, unlike the NPU/Browser restarts
+    # above. This whole issue exists because a worker kept serving stale code
+    # while the update reported success — swallowing a failed restart here would
+    # reintroduce exactly that: the file lands, the process never reloads, and
+    # nothing says so. A restart that cannot complete is a real failure and
+    # should be visible.
+    - name: "[PLAY 2] TTS | Restart service"
+      systemd:
+        name: autobot-tts-worker
+        state: restarted
+      become: true
       when: "'npu' in group_names"
-      tags: [tts, tts-worker, deploy]
+      tags: [tts, tts-worker, restart]
 
     # ----- Browser Worker -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
