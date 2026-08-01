@@ -20,6 +20,7 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import (
@@ -1432,9 +1433,9 @@ class ReconcilerService:
                 ssl_ctx.check_hostname = False
                 ssl_ctx.verify_mode = ssl.CERT_NONE
             timeout = aiohttp.ClientTimeout(total=10)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, ssl=ssl_ctx) as resp:
-                    return "healthy" if resp.status < 400 else "unhealthy"
+            # #13134: pooled client instead of a per-call ClientSession.
+            async with get_http_client().tracked_request("GET", url, ssl=ssl_ctx, timeout=timeout) as resp:
+                return "healthy" if resp.status < 400 else "unhealthy"
         except Exception as exc:
             logger.debug("Health check failed for %s: %s", url, exc)
             return "unhealthy"

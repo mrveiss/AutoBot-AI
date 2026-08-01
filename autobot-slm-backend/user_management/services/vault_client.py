@@ -37,7 +37,7 @@ from typing import Any
 
 import aiohttp
 
-from autobot_shared.http_client import sign_request
+from autobot_shared.http_client import get_http_client, sign_request
 
 logger = logging.getLogger(__name__)
 
@@ -105,21 +105,27 @@ def _auth_headers(method: str, path: str) -> dict[str, str]:
 
 
 async def _request(method: str, path: str, **kwargs: Any) -> Any:
-    """Issue one authenticated HTTP request; map status codes to exceptions."""
+    """Issue one authenticated HTTP request; map status codes to exceptions.
+
+    Routed through the shared pooled client (#13134) so vault calls share the
+    same connection pool / resource-exhaustion guard as the rest of the SLM
+    backend, instead of opening a new TCP connection per call. Auth headers
+    (X-Internal-API-Key / HMAC X-Service-*) are unchanged — forwarded as a
+    per-request kwarg exactly as before.
+    """
     _check_configured()
     url = f"{_BACKEND_BASE_URL}{path}"
     headers = _auth_headers(method, path)
     timeout = aiohttp.ClientTimeout(total=_REQUEST_TIMEOUT_SECONDS)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.request(method, url, headers=headers, **kwargs) as resp:
-            if resp.status == 404:
-                raise VaultSecretNotFound(f"secret not found at {path}")
-            if resp.status == 204:
-                return None
-            if not resp.ok:
-                body = await resp.text()
-                raise VaultClientError(f"vault API {method} {path} returned {resp.status}: {body[:200]}")
-            return await resp.json()
+    async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout, **kwargs) as resp:
+        if resp.status == 404:
+            raise VaultSecretNotFound(f"secret not found at {path}")
+        if resp.status == 204:
+            return None
+        if not resp.ok:
+            body = await resp.text()
+            raise VaultClientError(f"vault API {method} {path} returned {resp.status}: {body[:200]}")
+        return await resp.json()
 
 
 async def vault_create(name: str, secret_type: str, value: str) -> dict[str, Any]:
