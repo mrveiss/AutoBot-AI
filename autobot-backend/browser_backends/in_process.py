@@ -44,6 +44,7 @@ class InProcessBrowserBackend:
             Capability.MHTML,
             Capability.HUMAN_HANDOFF,
             Capability.PERSISTENT_SESSION,
+            Capability.IN_PROCESS,
         }
     )
 
@@ -67,7 +68,11 @@ class InProcessBrowserBackend:
         """Navigate via ``research_url``, preserving its interaction handoff."""
         manager = self._manager()
         conversation_id = request.session_id or "canonical-browser"
-        raw = await manager.research_url(conversation_id, request.url, extract_content=False)
+        raw = await manager.research_url(
+            conversation_id,
+            request.url,
+            extract_content=request.extract,
+        )
         return self._to_result(raw, requested_url=request.url)
 
     async def extract(self, request: ExtractRequest) -> BrowserResult:
@@ -93,6 +98,7 @@ class InProcessBrowserBackend:
             url=raw.get("url"),
             title=raw.get("title"),
             content=content,
+            structured=raw.get("structured_data") or {},
             error=raw.get("error"),
             details={k: v for k, v in raw.items() if k not in {"success", "url", "title", "text_content", "error"}},
         )
@@ -138,6 +144,7 @@ class InProcessBrowserBackend:
             url=navigation.get("url") or content.get("url") or requested_url,
             title=navigation.get("title") or content.get("title"),
             content=content.get("text_content"),
+            structured=content.get("structured_data") or {},
             session=SessionHandle(session_id=session_id, backend=BACKEND_NAME) if session_id else None,
             interaction_required=raw.get("status") == "interaction_required",
             error=raw.get("error"),
