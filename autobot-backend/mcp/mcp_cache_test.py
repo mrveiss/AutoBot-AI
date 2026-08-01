@@ -24,12 +24,18 @@ class TestMCPToolCache:
     """Test MCPToolCache class functionality"""
 
     @pytest.fixture
-    def cache(self):
-        """Create fresh cache instance for each test"""
+    def cache(self, monkeypatch):
+        """Create fresh cache instance for each test with caching explicitly enabled."""
         # Import here to avoid module-level import issues
-        from api.mcp_registry import MCPToolCache
+        from api import mcp_registry
 
-        return MCPToolCache(ttl_seconds=2)  # Short TTL for testing
+        # Pin the module flag so these class-level tests exercise MCPToolCache
+        # itself rather than whatever MCP_REGISTRY_CACHE_ENABLED happens to be
+        # in the ambient environment. Disabled behaviour is covered separately
+        # by TestMCPCacheDisabled.
+        monkeypatch.setattr(mcp_registry, "CACHE_ENABLED", True)
+
+        return mcp_registry.MCPToolCache(ttl_seconds=2)  # Short TTL for testing
 
     @pytest.fixture
     def sample_tools_data(self):
@@ -279,18 +285,15 @@ class TestMCPCacheIntegration:
     """Integration tests for cache with actual endpoints"""
 
     @pytest.fixture
-    def mock_cache_enabled(self, monkeypatch):
-        """Ensure cache is enabled for tests"""
-        monkeypatch.setenv("MCP_REGISTRY_CACHE_ENABLED", "true")
-        monkeypatch.setenv("MCP_REGISTRY_CACHE_TTL", "60")
-
     def test_environment_variable_loading(self):
         """Test that environment variables are loaded correctly"""
         from api import mcp_registry
 
-        # Check default values are reasonable
+        # Issue #50 shipped the registry cache on by default with a 60s TTL.
+        # These two assertions are the guard against that default silently
+        # regressing again (see #13261).
         assert mcp_registry.CACHE_TTL_SECONDS == 60  # Default
-        assert isinstance(mcp_registry.CACHE_ENABLED, bool)
+        assert mcp_registry.CACHE_ENABLED is True  # Default
 
     def test_global_cache_instance_exists(self):
         """Test that global cache instance is created"""
@@ -306,11 +309,13 @@ class TestMCPCacheEdgeCases:
     """Edge case tests for cache behavior"""
 
     @pytest.fixture
-    def cache(self):
-        """Create fresh cache instance"""
-        from api.mcp_registry import MCPToolCache
+    def cache(self, monkeypatch):
+        """Create fresh cache instance with caching explicitly enabled."""
+        from api import mcp_registry
 
-        return MCPToolCache(ttl_seconds=5)
+        monkeypatch.setattr(mcp_registry, "CACHE_ENABLED", True)
+
+        return mcp_registry.MCPToolCache(ttl_seconds=5)
 
     def test_zero_hit_rate_when_no_requests(self, cache):
         """Test hit rate is 0 when no requests made"""

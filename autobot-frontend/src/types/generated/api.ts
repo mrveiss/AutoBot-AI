@@ -13656,6 +13656,12 @@ export interface paths {
         /**
          * Enable Mcp Bridge
          * @description Enable a registered MCP bridge (Issue #4462).
+         *
+         *     #13261: the registry cache is a per-process global, so ``invalidate_all()``
+         *     clears only the worker that handled this request. With multiple uvicorn
+         *     workers the others keep serving the previous ``enabled`` flag until their
+         *     own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+         *     same worker-locality caveat.
          */
         post: operations["enable_mcp_bridge_api_mcp_bridges__name__enable_post"];
         delete?: never;
@@ -13676,6 +13682,12 @@ export interface paths {
         /**
          * Disable Mcp Bridge
          * @description Disable a registered MCP bridge (Issue #4462).
+         *
+         *     #13261: the registry cache is a per-process global, so ``invalidate_all()``
+         *     clears only the worker that handled this request. With multiple uvicorn
+         *     workers the others keep serving the previous ``enabled`` flag until their
+         *     own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+         *     same worker-locality caveat.
          */
         post: operations["disable_mcp_bridge_api_mcp_bridges__name__disable_post"];
         delete?: never;
