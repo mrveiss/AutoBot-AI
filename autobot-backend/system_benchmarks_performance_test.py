@@ -81,7 +81,9 @@ class TestSystemPerformanceBenchmarks:
         assert bulk_time < 50.0, f"Bulk config access too slow: {bulk_time}ms"
 
         # Test section retrieval performance
-        _, section_time = self.measure_execution_time(config_manager.get_section, "multimodal")
+        # #13199: the section reader on ConfigManager is get_config_section()
+        # (dot-path traversal via get_nested); get_section() belongs to ConfigRegistry.
+        _, section_time = self.measure_execution_time(config_manager.get_config_section, "multimodal")
         assert section_time < 2.0, f"Section retrieval too slow: {section_time}ms"
 
     def test_config_service_caching_performance(self):
@@ -429,19 +431,22 @@ class TestScalabilityBenchmarks:
         gc.collect()
         initial_memory = process.memory_info().rss / 1024 / 1024
 
-        # Perform many operations
+        # Perform many operations.
+        # #13199: use the nested writer/readers consistently — get_config_section()
+        # traverses dot paths, so keys written with the flat set()/get() pair were
+        # invisible to it and the section loop would have measured empty dicts.
         for iteration in range(10):
             # Add many configs
             for i in range(100):
-                config_manager.set(f"memory_test.iter_{iteration}.key_{i}", f"data_{i}")
+                config_manager.set_nested(f"memory_test.iter_{iteration}.key_{i}", f"data_{i}")
 
             # Get many configs
             for i in range(100):
-                config_manager.get(f"memory_test.iter_{iteration}.key_{i}")
+                config_manager.get_nested(f"memory_test.iter_{iteration}.key_{i}")
 
             # Get sections
             for i in range(10):
-                config_manager.get_section(f"memory_test.iter_{iteration}")
+                config_manager.get_config_section(f"memory_test.iter_{iteration}")
 
         # Check final memory
         gc.collect()
