@@ -16,6 +16,12 @@ from llc.scheduler.base import PollLoopScheduler
 # ---------------------------------------------------------------------------
 
 
+# #13113: these sync tests drive coroutines with asyncio.run(). The legacy
+# asyncio.get_event_loop().run_until_complete() raised "There is no current event
+# loop" whenever the test ran before any async test on its xdist worker, because
+# pytest-asyncio's auto mode owns the loop lifecycle and leaves none set.
+
+
 class _CountingScheduler(PollLoopScheduler):
     """Minimal subclass that counts tick invocations."""
 
@@ -60,7 +66,7 @@ def test_start_creates_task_and_sets_running() -> None:
         assert not sched._task.done()
         sched.stop()
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    asyncio.run(_run())
 
 
 def test_start_idempotent() -> None:
@@ -74,7 +80,7 @@ def test_start_idempotent() -> None:
         assert sched._task is task_first
         sched.stop()
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    asyncio.run(_run())
 
 
 def test_stop_clears_running_flag_and_cancels() -> None:
@@ -89,7 +95,7 @@ def test_stop_clears_running_flag_and_cancels() -> None:
         # Give the event loop a chance to deliver the cancellation
         await asyncio.sleep(0)
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    asyncio.run(_run())
 
 
 def test_stop_before_start_is_safe() -> None:
@@ -108,7 +114,7 @@ def test_is_running_false_after_stop() -> None:
         # _running=False → is_running must be False regardless of task state
         assert not sched.is_running
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +132,7 @@ def test_task_name_uses_class_variable() -> None:
         assert sched._task.get_name() == "test-counting-scheduler"
         sched.stop()
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    asyncio.run(_run())
 
 
 def test_task_name_falls_back_to_class_name_when_empty() -> None:
@@ -145,7 +151,7 @@ def test_task_name_falls_back_to_class_name_when_empty() -> None:
         assert sched._task.get_name() == "_Unnamed"
         sched.stop()
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    asyncio.run(_run())
 
 
 # ---------------------------------------------------------------------------

@@ -220,7 +220,9 @@ class TestRecordDeltaComputation:
             with patch.object(self.mod, "_persist_delta", new=AsyncMock()):
                 return await self.loop.record_delta(before, after)
 
-        return asyncio.get_event_loop().run_until_complete(_go())
+        # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+        # running before any async test on its worker had no current loop for get_event_loop().
+        return asyncio.run(_go())
 
     def test_positive_health_delta(self):
         before = {"health_score": 60.0, "total_findings": 20}

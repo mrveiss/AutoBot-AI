@@ -186,7 +186,9 @@ class TestContentFirewallHardBlock:
     """ContentFirewall.inspect() must return a BLOCK verdict when a hard-block fires."""
 
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+        # running before any async test on its worker had no current loop for get_event_loop().
+        return asyncio.run(coro)
 
     def test_firewall_returns_block_verdict_on_hard_block(self):
         firewall = ContentFirewall()
