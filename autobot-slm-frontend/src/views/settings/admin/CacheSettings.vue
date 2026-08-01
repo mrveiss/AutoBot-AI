@@ -12,11 +12,13 @@
 
 import { ref, reactive, computed, onMounted } from 'vue'
 import { formatBytes } from '@/utils/formatHelpers'
-import { useAuthStore } from '@/stores/auth'
-import { useAutobotApi, type CacheConfig, type CacheStats } from '@/composables/useAutobotApi'
-import { getBackendUrl } from '@/config/ssot-config'
+import {
+  useAutobotApi,
+  autobotApiErrorMessage,
+  type CacheConfig,
+  type CacheStats,
+} from '@/composables/useAutobotApi'
 
-const authStore = useAuthStore()
 const api = useAutobotApi()
 
 // State
@@ -138,17 +140,15 @@ async function clearRedisCache(database: string): Promise<void> {
   error.value = null
 
   try {
-    await fetch(`${getBackendUrl()}/cache/redis/clear/${database}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${authStore.token}`,
-      },
-    })
+    // #13079: the raw `fetch` this replaced never inspected `response.ok`, so
+    // a rejected or failed clear still reported success. The client rejects on
+    // a non-2xx, so the operator now sees the real outcome.
+    await api.clearRedisDatabase(database)
     success.value = `Redis ${database} database cleared successfully`
     await fetchCacheStats()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to clear Redis database'
+    error.value = autobotApiErrorMessage(e, 'Failed to clear Redis database')
   } finally {
     clearing.value = false
   }
