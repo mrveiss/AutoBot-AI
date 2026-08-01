@@ -434,10 +434,14 @@ class TestGetDefaultDeployedDir:
         assert result == str(Path(custom_root) / "autobot-slm-backend")
 
     def test_component_appended(self, tmp_path):
-        """The component name is appended as a sub-directory of the root."""
+        """The component name is appended as a sub-directory of the root,
+        except for the #12450 nonstandard-path components which are
+        deliberately excluded from this generic convention — see
+        _NONSTANDARD_COMPONENT_PATHS and
+        TestNonstandardComponentPathMap.test_allowed_components_with_overrides_are_the_two_verified_exceptions."""
         root = str(tmp_path)
         with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": root}):
-            for component in ALLOWED_COMPONENTS:
+            for component in ALLOWED_COMPONENTS - set(_NONSTANDARD_COMPONENT_PATHS):
                 result = get_default_deployed_dir(component)
                 assert result == str(Path(root) / component)
 
@@ -488,6 +492,13 @@ class TestAllowedComponents:
             "autobot-frontend",
             # #10248: the shared library is its own syncable component.
             "autobot_shared",
+            # #12450 phase 2: promoted from EXTRA_VISIBILITY_COMPONENTS once
+            # each had a verified post-sync definition in api/code_sync.py
+            # (_WORKER_COMPONENTS / _WORKER_COMPONENT_PIP / _COMPONENT_SERVICES).
+            "autobot-ai-stack",
+            "autobot-npu-worker",
+            "autobot-browser-worker",
+            "autobot-slm-agent",
         }
         assert expected == set(ALLOWED_COMPONENTS)
 
@@ -830,16 +841,18 @@ class TestComputeDriftPerComponent:
 
 class TestExtraVisibilityComponents:
     """VISIBILITY_COMPONENTS extends drift REPORTING to components with no
-    resolve/restart wiring — ai-stack, npu-worker, browser-worker, slm-agent,
-    plugins. Must never be merged into ALLOWED_COMPONENTS (the resolve gate)."""
+    resolve/restart wiring. #12450 phase 2 promoted ai-stack, npu-worker,
+    browser-worker, and slm-agent out of this set into ALLOWED_COMPONENTS
+    once each had a verified post-sync definition — only `plugins` (no
+    single canonical deployed target, see drift_checker.py:116-119) and
+    `autobot-tts-worker` (templated deploy, not a 1:1 sync, see
+    drift_checker.py:106-112) remain here. Must never be merged into
+    ALLOWED_COMPONENTS (the resolve gate)."""
 
-    def test_extra_components_are_exactly_the_expected_five(self):
+    def test_extra_components_are_exactly_the_expected_two(self):
         assert set(EXTRA_VISIBILITY_COMPONENTS) == {
-            "autobot-ai-stack",
-            "autobot-npu-worker",
-            "autobot-browser-worker",
-            "autobot-slm-agent",
             "plugins",
+            "autobot-tts-worker",
         }
 
     def test_extra_components_disjoint_from_resolve_allowlist(self):
@@ -921,11 +934,19 @@ class TestNonstandardComponentPathMap:
             assert get_default_deployed_dir("autobot-npu-worker") == str(tmp_path / "autobot-npu-worker")
             assert get_default_deployed_dir("autobot-browser-worker") == str(tmp_path / "autobot-browser-worker")
 
-    def test_allowed_components_are_unaffected_by_the_override_map(self):
-        """The original 5 resolve-capable components must have no entry in
-        the override map — their existing standard-path behavior (relied on
-        by /drift/resolve) must not change."""
-        assert _NONSTANDARD_COMPONENT_PATHS.keys().isdisjoint(ALLOWED_COMPONENTS)
+    def test_allowed_components_with_overrides_are_the_two_verified_exceptions(self):
+        """#12450 phase 2 intentionally violates the original "no allowed
+        component needs a path override" invariant for exactly two
+        components — autobot-ai-stack and autobot-slm-agent, both promoted
+        into ALLOWED_COMPONENTS *and* path-overridden (see the
+        test_ai_stack_*/test_slm_agent_* cases above for the verified
+        ansible task references each override traces to). Asserting the
+        overlap is EXACTLY those two still catches an unverified third
+        override silently added to both sets."""
+        assert set(_NONSTANDARD_COMPONENT_PATHS) & ALLOWED_COMPONENTS == {
+            "autobot-ai-stack",
+            "autobot-slm-agent",
+        }
 
     def test_compute_drift_reports_drift_for_ai_stack_style_deployed_path(self, tmp_path):
         """End-to-end: a mocked ai-stack-shaped deployed dir (flat, post
