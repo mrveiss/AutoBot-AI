@@ -15,6 +15,7 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 
@@ -218,7 +219,19 @@ async def _check_env_drift() -> None:
     try:
         from autobot_shared.env_drift_detector import check_env_drift
 
-        report = check_env_drift()
+        # #12782: pass this backend's OWN .env rather than letting the detector
+        # guess. Its generic resolver walks up from autobot_shared/ looking for
+        # a sibling .env, which works in the repo but not in the deployed
+        # layout: autobot_shared lives at <root>/autobot_shared while the env
+        # lives at <root>/autobot-backend/.env. The walk found nothing, fell
+        # back to <root>/.env (absent), and reported every SSOT key as drifted —
+        # "194 drifted, (194 SSOT keys, 0 .env keys)" against a file that in
+        # fact held 93 keys. The `0 .env keys` was the tell.
+        #
+        # parents[1] is the backend root in BOTH layouts, since this module is
+        # always <backend-root>/initialization/lifespan.py.
+        backend_env = Path(__file__).resolve().parents[1] / ".env"
+        report = check_env_drift(str(backend_env))
         if report.error:
             logger.warning("env drift check skipped: %s", report.error)
         elif report.has_drift:
