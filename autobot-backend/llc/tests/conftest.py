@@ -70,11 +70,40 @@ def _snapshot_session_stub_keys() -> dict:
     return {key: sys.modules.get(key) for key in _SESSION_STUB_KEYS}
 
 
+# #13107: __file__ = .../autobot-backend/llc/tests/conftest.py → parents[2]
+# = .../autobot-backend, matching the same on-disk-path derivation already
+# used by _shield_codebase_analytics_package below.
+_KNOWLEDGE_DIR = str(Path(__file__).parents[2] / "knowledge")
+
+
 def _make_knowledge_stub() -> types.ModuleType:
-    """Return a thin module stub for the ``knowledge`` package."""
+    """Return a thin module stub for the ``knowledge`` package.
+
+    #13107: ``__path__`` points at the REAL on-disk ``knowledge/`` directory
+    instead of ``[]`` — the "hollow package" pattern already used for
+    ``api`` in ``autobot-slm-backend/conftest.py`` and for
+    ``api.codebase_analytics`` later in this same file. Python's import
+    machinery uses ``__path__`` only to locate a submodule NOT already
+    present in ``sys.modules``, so submodules this file explicitly stubs
+    (``knowledge.embedding_cache``, ``knowledge.utils``,
+    ``knowledge.backends`` — see ``_make_knowledge_submodule_stubs``) are
+    unaffected: their ``sys.modules`` entry is found first and wins.
+
+    An empty ``__path__`` previously blocked EVERY other real
+    ``knowledge.X`` submodule too, not just the ones this file omits —
+    e.g. ``knowledge.facts`` — breaking any test collected afterward in the
+    same session that needs one (reproduced via
+    ``services/research/quarantine_boundary_test.py``). ``knowledge/*``
+    mixin modules (``facts.py``, ``documents.py``, etc.) do not import
+    chromadb/llama_index at module level — only ``knowledge/_composed.py``
+    does, and it is reached exclusively via ``knowledge/__init__.py``'s
+    PEP 562 ``__getattr__``, which this stub module never defines, so
+    resolving a real submodule here can never trigger the heavy chain.
+    """
     mod = types.ModuleType("knowledge")
-    mod.__path__ = []  # type: ignore[attr-defined]
+    mod.__path__ = [_KNOWLEDGE_DIR]  # type: ignore[attr-defined]
     mod.__package__ = "knowledge"
+    mod.__spec__ = None  # type: ignore[attr-defined]
     mod.get_knowledge_base = AsyncMock(return_value=MagicMock())
     mod.KnowledgeBase = MagicMock  # type: ignore[attr-defined]
     return mod
