@@ -28,7 +28,7 @@ untouched — the fork is removed, not the callers.
 """
 
 import uuid
-from typing import List
+from typing import Any, List
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -254,7 +254,9 @@ class TeamService(BaseService):
 
         return teams, total
 
-    async def _apply_team_name_update(self, team: Team, name: str, team_id: uuid.UUID, changes: dict) -> None:
+    async def _apply_team_name_update(
+        self, team: Team, name: str | None, team_id: uuid.UUID, changes: dict[str, dict[str, Any]]
+    ) -> None:
         """
         Apply name update to team if name has changed.
 
@@ -303,7 +305,7 @@ class TeamService(BaseService):
         if not team:
             raise TeamNotFoundError(f"Team {team_id} not found")
 
-        changes = {}
+        changes: dict[str, dict[str, Any]] = {}
         await self._apply_team_name_update(team, name, team_id, changes)
 
         if description is not None:
