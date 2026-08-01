@@ -37,7 +37,17 @@ class ContainerBrowserBackend:
     """``PlaywrightService`` behind the canonical contract."""
 
     name = BACKEND_NAME
-    capabilities = frozenset({Capability.SCREENSHOT})
+    capabilities = frozenset(
+        {
+            Capability.SCREENSHOT,
+            # #13236: the container also exposes a `render` endpoint, which
+            # `web_fetch/fetcher.py::_fetch_playwright` already uses for its
+            # JS-render fallback. Phase 2 wrapped only `capture_screenshot`
+            # and under-declared this stack.
+            Capability.EXTRACT,
+            Capability.OUT_OF_PROCESS,
+        }
+    )
 
     @staticmethod
     async def _service():
@@ -64,11 +74,33 @@ class ContainerBrowserBackend:
         )
 
     async def extract(self, request: ExtractRequest) -> BrowserResult:
-        """Not supported — the container is stateless, with no current page."""
+        """Render *url* and return its HTML.
+
+        Stateless: the URL is required because this backend holds no current
+        page. The registry has already validated it (#13236).
+        """
+        if not request.url:
+            return BrowserResult(
+                success=False,
+                backend=BACKEND_NAME,
+                error="container backend needs an explicit url (it holds no session)",
+            )
+
+        service = await self._service()
+        raw = await service._post_and_parse(
+            "render",
+            {"url": request.url, "wait": "networkidle"},
+        )
+        html = raw.get("html") or raw.get("content")
+        if request.max_chars is not None and html:
+            html = html[: request.max_chars]
+
         return BrowserResult(
-            success=False,
+            success=bool(html),
             backend=BACKEND_NAME,
-            error="container backend does not support extract",
+            url=request.url,
+            content=html,
+            error=None if html else raw.get("error", "render returned no content"),
         )
 
     async def screenshot(self, request: ScreenshotRequest) -> BrowserResult:
