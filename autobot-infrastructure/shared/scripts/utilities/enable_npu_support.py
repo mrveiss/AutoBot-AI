@@ -72,7 +72,7 @@ def install_intel_npu_drivers():
 
     # Check if running on WSL (NPU may not work in WSL)
     try:
-        with open("/proc/version", "r") as f:
+        with open("/proc/version", "r", encoding="utf-8") as f:
             kernel_info = f.read()
             if "WSL" in kernel_info or "Microsoft" in kernel_info:
                 logger.warning("⚠️ Running on WSL - NPU drivers may not be available")
@@ -137,7 +137,7 @@ def configure_ollama_npu():
             config_updates.append(f'export {key}="{value}"')
 
         config_file = Path(__file__).parent / "npu_env_config.sh"
-        with open(config_file, "w") as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             f.write("#!/bin/bash\n")
             f.write("# NPU Environment Configuration for AutoBot\n\n")
             f.write("\n".join(config_updates))

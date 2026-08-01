@@ -200,7 +200,7 @@ class SettingsLoadingFixer:
                 self.issues_found.append("settings.json file missing")
                 return False
 
-            with open(self.settings_file, "r") as f:
+            with open(self.settings_file, "r", encoding="utf-8") as f:
                 settings = json.load(f)
 
             # Check for required sections

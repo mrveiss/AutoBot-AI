@@ -343,7 +343,7 @@ class TestSecurityEdgeCases:
             )
 
         # Simulate log file tampering
-        with open(self.temp_audit_file.name, "a") as f:
+        with open(self.temp_audit_file.name, "a", encoding="utf-8") as f:
             f.write("TAMPERED_DATA\n")
             f.write("{invalid_json\n")
             f.write("}")

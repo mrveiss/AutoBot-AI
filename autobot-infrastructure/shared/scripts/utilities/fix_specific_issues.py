@@ -17,7 +17,7 @@ def fix_syntax_errors():
     file_path = Path("src/agents/advanced_web_research.py")
     if file_path.exists():
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Fix the problematic line with incorrect quotes
@@ -26,7 +26,7 @@ def fix_syntax_errors():
                 "\"document.getElementById('g-recaptcha-response')\"",
             )
 
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             print(f"Fixed syntax error in {file_path}")
@@ -37,7 +37,7 @@ def fix_syntax_errors():
     file_path = Path("src/tools/tool_registry.py")
     if file_path.exists():
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Fix logger definition at module level
@@ -55,7 +55,7 @@ def fix_syntax_errors():
 
             content = "\n".join(fixed_lines)
 
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             print(f"Fixed syntax error in {file_path}")
@@ -66,13 +66,13 @@ def fix_syntax_errors():
     file_path = Path("src/intelligence/streaming_executor.py")
     if file_path.exists():
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Fix the problematic string with quotes
             content = content.replace('""SKIP" to avoid spam."', '"SKIP to avoid spam."')
 
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             print(f"Fixed syntax error in {file_path}")
@@ -87,7 +87,7 @@ def fix_undefined_names():
     file_path = Path("backend/api/chat.py")
     if file_path.exists():
         try:
-            with open(file_path, "r") as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Add Optional import if missing
@@ -104,7 +104,7 @@ def fix_undefined_names():
                 lines.insert(import_index, "from typing import Optional")
                 content = "\n".join(lines)
 
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             print(f"Fixed undefined Optional in {file_path}")
@@ -126,7 +126,7 @@ def remove_unused_variables():
         file_path = Path(file_path_str)
         if file_path.exists():
             try:
-                with open(file_path, "r") as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
                 # Remove specific unused variables
@@ -156,7 +156,7 @@ def remove_unused_variables():
                 for pattern, replacement in patterns_to_fix:
                     content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
 
-                with open(file_path, "w") as f:
+                with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content)
 
                 print(f"Removed unused variables in {file_path}")
@@ -176,7 +176,7 @@ def fix_import_duplicates():
         file_path = Path(file_path_str)
         if file_path.exists():
             try:
-                with open(file_path, "r") as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
 
                 # Track imports and remove duplicates
@@ -192,7 +192,7 @@ def fix_import_duplicates():
                     else:
                         fixed_lines.append(line)
 
-                with open(file_path, "w") as f:
+                with open(file_path, "w", encoding="utf-8") as f:
                     f.writelines(fixed_lines)
 
                 print(f"Fixed duplicate imports in {file_path}")

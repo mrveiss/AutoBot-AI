@@ -148,10 +148,10 @@ def test_lifecycle_guard_blocks_active_and_closed_in_source() -> None:
     import os
 
     src_path = os.path.join(os.path.dirname(__file__), "..", "api", "sprints.py")
-    with open(src_path) as f:
+    with open(src_path, encoding="utf-8") as f:
         ast.parse(f.read())
 
-    source = open(src_path).read()
+    source = open(src_path, encoding="utf-8").read()
     assert "_LIFECYCLE_STATUSES" in source, "lifecycle guard constant missing"
     assert "with_for_update" in source, "SELECT FOR UPDATE missing from sprints.py"
     assert "SprintStatus.ACTIVE" in source, "ACTIVE not in lifecycle set"
@@ -168,7 +168,7 @@ def test_sprint_model_has_analytics_columns() -> None:
     import os
 
     src_path = os.path.join(os.path.dirname(__file__), "..", "models", "sprint.py")
-    with open(src_path) as f:
+    with open(src_path, encoding="utf-8") as f:
         source = f.read()
 
     assert "velocity_actual" in source, "velocity_actual missing from LLCSprint model"
@@ -186,7 +186,7 @@ def test_sprint_migration_has_analytics_columns() -> None:
     files = glob.glob(pattern)
     assert files, "No sprint analytics migration file found"
 
-    with open(files[0]) as f:
+    with open(files[0], encoding="utf-8") as f:
         source = f.read()
     assert "velocity_actual" in source
     assert "capacity_points" in source

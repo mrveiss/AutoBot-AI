@@ -186,7 +186,7 @@ async def verify_exports():
             continue
 
         # Read exported key
-        with open(env_file, "r") as f:
+        with open(env_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
             exported_key = None
             for line in lines:

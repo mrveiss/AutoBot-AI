@@ -143,7 +143,7 @@ class SeqLogForwarder:
         if current_size <= last_position:
             return
 
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             f.seek(last_position)
             new_content = f.read()
 
@@ -229,7 +229,7 @@ class SeqLogForwarder:
 
         # Backend logs
         backend_log = self.logs_dir / "backend.log"
-        with open(backend_log, "w") as f:
+        with open(backend_log, "w", encoding="utf-8") as f:
             f.write(
                 f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "message": "Backend service started", "module": "main"}}\n'
             )
@@ -242,7 +242,7 @@ class SeqLogForwarder:
 
         # Frontend logs
         frontend_log = self.logs_dir / "frontend.log"
-        with open(frontend_log, "w") as f:
+        with open(frontend_log, "w", encoding="utf-8") as f:
             f.write(
                 f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} [Frontend] INFO: Vite development server started\n'
             )
@@ -253,7 +253,7 @@ class SeqLogForwarder:
 
         # System logs
         system_log = self.logs_dir / "system.log"
-        with open(system_log, "w") as f:
+        with open(system_log, "w", encoding="utf-8") as f:
             f.write(
                 f'{{"timestamp": "{datetime.now().isoformat()}", "level": "INFO", "service": "system", "message": "AutoBot system initialized"}}\n'
             )
