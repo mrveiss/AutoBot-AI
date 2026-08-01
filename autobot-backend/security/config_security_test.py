@@ -7,11 +7,13 @@ Tests security aspects of configuration loading, environment variables, and sens
 
 import os
 import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from autobot_shared.logging_manager import get_logger
+from config.loader import load_yaml_config
 from config.manager import ConfigManager as ConfigManager
 
 
@@ -20,7 +22,17 @@ class TestConfigurationSecurity:
 
     def test_config_file_path_traversal_protection(self):
         """Test protection against path traversal attacks in config files"""
-        # Test various path traversal attempts
+        # #13087: ConfigManager no longer accepts config_file=<path> — its
+        # constructor only takes config_dir (config/manager.py:72-76) and
+        # always loads the fixed filename "config.yaml" from it, so an
+        # attacker-controlled *file* path can no longer even reach the
+        # constructor. The layer that actually handles arbitrary/malicious
+        # file paths safely today is config.loader.load_yaml_config(): it
+        # never executes anything and falls back to defaults for a
+        # missing/unreadable/invalid path (loader.py:75-95). No production
+        # caller ever passes a variable config_dir either (git grep confirms
+        # only the "config" default is used) so this is the real
+        # attack-relevant unit to exercise.
         malicious_paths = [
             "../../../etc/passwd",
             "..\\..\\..\\windows\\system32\\config\\sam",
@@ -31,11 +43,13 @@ class TestConfigurationSecurity:
 
         for malicious_path in malicious_paths:
             # Should handle malicious paths gracefully
-            config_manager = ConfigManager(config_file=malicious_path)
+            result = load_yaml_config(Path(malicious_path))
 
-            # Should fall back to default config if file doesn't exist or is invalid
-            default_llm = config_manager.get("llm.orchestrator_llm")
-            assert default_llm == "ollama"  # Should use default, not load malicious file
+            # Should fall back to default config, not load/execute the
+            # malicious path. LLM defaults live under backend.llm.local
+            # since the #763 SSOT migration (config/defaults.py:36-48) —
+            # there is no top-level "llm" key.
+            assert result["backend"]["llm"]["local"]["provider"] == "ollama"
 
     def test_environment_variable_injection_protection(self):
         """Test protection against environment variable injection"""
@@ -89,13 +103,16 @@ args: [["echo", "exploit"]]
                 malicious_file = f.name
 
             try:
-                # Should handle malicious YAML safely
-                config_manager = ConfigManager(config_file=malicious_file)
+                # #13087: exercise the actual safety layer directly.
+                # ConfigManager no longer accepts config_file=<path> nor
+                # exposes get_all_config(); config.loader.load_yaml_config()
+                # uses yaml.safe_load() (refuses !!python/object tags) and
+                # catches every exception, falling back to defaults.
+                result = load_yaml_config(Path(malicious_file))
 
                 # Should fall back to defaults, not execute malicious code
-                default_config = config_manager.get_all_config()
-                assert "llm" in default_config  # Should have default config
-                assert default_config["llm"]["orchestrator_llm"] == "ollama"
+                assert "backend" in result  # Should have default config
+                assert result["backend"]["llm"]["local"]["provider"] == "ollama"
 
             finally:
                 os.unlink(malicious_file)
@@ -152,25 +169,31 @@ args: [["echo", "exploit"]]
         """Test handling of config files with various permissions"""
         import stat
 
-        # Create a config file with restricted permissions
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        # #13087: ConfigManager only takes config_dir + a fixed "config.yaml"
+        # filename (config/manager.py:72-76); write the file under that
+        # exact name inside an isolated temp directory. LLM defaults live
+        # under backend.llm.local since the #763 SSOT migration.
+        tmp_dir = tempfile.mkdtemp()
+        restricted_file = os.path.join(tmp_dir, "config.yaml")
+        with open(restricted_file, "w", encoding="utf-8") as f:
             f.write("""
-llm:
-  orchestrator_llm: "test_model"
+backend:
+  llm:
+    local:
+      provider: "test_provider"
 """)
-            restricted_file = f.name
 
         try:
             # Make file readable only by owner
             os.chmod(restricted_file, stat.S_IRUSR)
 
             # Should handle restricted permissions gracefully
-            config_manager = ConfigManager(config_file=restricted_file)
+            config_manager = ConfigManager(config_dir=tmp_dir)
 
             # Should either load the file or fall back to defaults
-            orchestrator_llm = config_manager.get("llm.orchestrator_llm")
-            assert orchestrator_llm in [
-                "test_model",
+            provider = config_manager.get_nested("backend.llm.local.provider")
+            assert provider in [
+                "test_provider",
                 "ollama",
             ]  # Either loaded or default
 
@@ -178,6 +201,7 @@ llm:
             # Clean up - need to restore permissions to delete
             os.chmod(restricted_file, stat.S_IRUSR | stat.S_IWUSR)
             os.unlink(restricted_file)
+            os.rmdir(tmp_dir)
 
     def test_environment_variable_name_sanitization(self):
         """Test that environment variable names are properly sanitized"""
@@ -210,20 +234,22 @@ defaults: &defaults
 production:
   <<: *defaults
   safe_setting: "production_value"
-
-llm:
-  orchestrator_llm: *defaults
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        # #13087: ConfigManager only takes config_dir + fixed "config.yaml".
+        tmp_dir = tempfile.mkdtemp()
+        anchor_file = os.path.join(tmp_dir, "config.yaml")
+        with open(anchor_file, "w", encoding="utf-8") as f:
             f.write(yaml_with_anchors)
-            anchor_file = f.name
 
         try:
-            config_manager = ConfigManager(config_file=anchor_file)
+            config_manager = ConfigManager(config_dir=tmp_dir)
 
-            # Should handle YAML anchors without security issues
-            production_config = config_manager.get_section("production")
+            # Should handle YAML anchors without security issues.
+            # get_config_section() (config/service_config.py:189, a plain
+            # get_nested(section, {}) delegate) is the current equivalent of
+            # the removed get_section().
+            production_config = config_manager.get_config_section("production")
 
             # Values should be loaded but not cause security issues
             if production_config:
@@ -235,6 +261,7 @@ llm:
 
         finally:
             os.unlink(anchor_file)
+            os.rmdir(tmp_dir)
 
     def test_config_size_limits(self):
         """Test handling of excessively large configuration files"""
@@ -243,20 +270,24 @@ llm:
         for i in range(10000):
             large_config += f"  key_{i}: 'value_{i}'\n"
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        # #13087: ConfigManager only takes config_dir + fixed "config.yaml".
+        tmp_dir = tempfile.mkdtemp()
+        large_file = os.path.join(tmp_dir, "config.yaml")
+        with open(large_file, "w", encoding="utf-8") as f:
             f.write(large_config)
-            large_file = f.name
 
         try:
             # Should handle large files without crashing
-            config_manager = ConfigManager(config_file=large_file)
+            config_manager = ConfigManager(config_dir=tmp_dir)
 
-            # Should load successfully or fall back to defaults
-            orchestrator_llm = config_manager.get("llm.orchestrator_llm")
-            assert isinstance(orchestrator_llm, str)
+            # Should load successfully or fall back to defaults. LLM
+            # defaults live under backend.llm.local (#763 SSOT migration).
+            provider = config_manager.get_nested("backend.llm.local.provider")
+            assert isinstance(provider, str)
 
         finally:
             os.unlink(large_file)
+            os.rmdir(tmp_dir)
 
     def test_config_circular_reference_protection(self):
         """Test protection against circular references in config"""
@@ -270,22 +301,29 @@ section_b:
     circular_ref: *ref_a
 """
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        # #13087: ConfigManager only takes config_dir + fixed "config.yaml".
+        # This YAML is actually invalid (an alias referencing an anchor not
+        # yet defined at that point), so yaml.safe_load() raises inside
+        # load_yaml_config(), which catches it and falls back to defaults
+        # rather than propagating or recursing.
+        tmp_dir = tempfile.mkdtemp()
+        circular_file = os.path.join(tmp_dir, "config.yaml")
+        with open(circular_file, "w", encoding="utf-8") as f:
             f.write(circular_yaml)
-            circular_file = f.name
 
         try:
-            # Should handle circular references gracefully
-            config_manager = ConfigManager(config_file=circular_file)
+            # Should handle circular/forward-referencing anchors gracefully
+            config_manager = ConfigManager(config_dir=tmp_dir)
 
             # Should not cause infinite recursion
-            config_manager.get_section("section_a")
+            config_manager.get_config_section("section_a")
 
-            # Should either load with limited depth or fall back to defaults
-            assert isinstance(config_manager.get_all_config(), dict)
+            # Should fall back to sane defaults, not get stuck/corrupted
+            assert config_manager.get_nested("backend.llm.local.provider") == "ollama"
 
         finally:
             os.unlink(circular_file)
+            os.rmdir(tmp_dir)
 
     def test_environment_variable_type_confusion(self):
         """Test protection against type confusion in environment variables"""
@@ -318,40 +356,40 @@ section_b:
 
     def test_config_backup_and_recovery_security(self):
         """Test security of config backup and recovery operations"""
-        config_manager = ConfigManager()
-
-        # Set some sensitive configuration
-        config_manager.set("sensitive.api_key", "very_secret_key")
-        config_manager.set("sensitive.database_password", "super_secret_db_pass")
-
-        # Test saving config
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            backup_file = f.name
+        # #13087: ConfigManager exposes no save(path)/get_section(); the
+        # current persistence primitive is save_settings(), which always
+        # writes <config_dir>/settings.json (config/sync_ops.py:77-92).
+        # Round-trip through an isolated config_dir instead of an arbitrary
+        # backup file path.
+        tmp_dir = tempfile.mkdtemp()
+        settings_file = os.path.join(tmp_dir, "settings.json")
 
         try:
-            # Save config
-            config_manager.save(backup_file)
+            config_manager = ConfigManager(config_dir=tmp_dir)
+
+            # Set some sensitive configuration
+            config_manager.set("sensitive.api_key", "very_secret_key")
+            config_manager.set("sensitive.database_password", "super_secret_db_pass")
+
+            # Persist it
+            config_manager.save_settings()
 
             # Verify file was created
-            assert os.path.exists(backup_file)
+            assert os.path.exists(settings_file)
+            assert os.path.isfile(settings_file)
 
-            # Check file permissions (should not be world-readable for sensitive data)
-            file_stat = os.stat(backup_file)
-            file_stat.st_mode & 0o777
-
-            # File should exist and be readable
-            assert os.path.isfile(backup_file)
-
-            # Create new config manager from backup
-            backup_config_manager = ConfigManager(config_file=backup_file)
+            # Create a fresh config manager reading the same directory —
+            # simulates "recovery" from the persisted state
+            backup_config_manager = ConfigManager(config_dir=tmp_dir)
 
             # Verify sensitive data was preserved
             assert backup_config_manager.get("sensitive.api_key") == "very_secret_key"
             assert backup_config_manager.get("sensitive.database_password") == "super_secret_db_pass"
 
         finally:
-            if os.path.exists(backup_file):
-                os.unlink(backup_file)
+            if os.path.exists(settings_file):
+                os.unlink(settings_file)
+            os.rmdir(tmp_dir)
 
 
 class TestSecretsHandlingInConfig:
