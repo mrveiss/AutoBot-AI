@@ -147,6 +147,26 @@ def test_encode_jwt_now_stamps_iat():
     assert "iat" in claims
 
 
+def test_encoded_iat_is_an_integer_timestamp():
+    """PyJWT >= 2.10 rejects a non-integer ``iat`` on decode.
+
+    ``encode_jwt`` hands PyJWT a ``datetime`` and relies on it normalising to a
+    Unix timestamp. This repo has already been bitten by a non-integer ``iat``
+    once — it silently 401'd every authenticated request and produced a login
+    redirect loop (see the comment on ``create_jwt_token`` in
+    ``autobot-backend/auth_middleware.py``). Pinned so a PyJWT change or a
+    refactor of the encoder cannot reintroduce it quietly.
+    """
+    import jwt as pyjwt
+
+    from autobot_shared.auth.jwt_core import encode_jwt
+
+    token = encode_jwt({"sub": "alice"}, secret="s" * 32, expiry_hours=1)
+    claims = pyjwt.decode(token, "s" * 32, algorithms=["HS256"])
+
+    assert isinstance(claims["iat"], int), f"iat must be an int, got {type(claims['iat']).__name__}"
+
+
 def test_encode_jwt_does_not_override_a_caller_supplied_iat():
     import jwt as pyjwt
 
