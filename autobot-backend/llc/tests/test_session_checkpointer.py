@@ -196,4 +196,6 @@ def test_checkpointer_start_stop() -> None:
             checkpointer.stop()
             assert not checkpointer._running
 
-    asyncio.get_event_loop().run_until_complete(_run())
+    # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+    # running before any async test on its worker had no current loop for get_event_loop().
+    asyncio.run(_run())

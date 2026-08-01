@@ -37,6 +37,12 @@ from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
 # ---------------------------------------------------------------------------
 
 
+# #13113: these sync tests drive coroutines with asyncio.run(). The legacy
+# asyncio.get_event_loop().run_until_complete() raised "There is no current event
+# loop" whenever the test ran before any async test on its xdist worker, because
+# pytest-asyncio's auto mode owns the loop lifecycle and leaves none set.
+
+
 def _make_request(auth_header: str | None = None) -> MagicMock:
     """Minimal request mock."""
     request = MagicMock()
@@ -247,7 +253,7 @@ class TestValidateRequiresServiceAuth:
         req = _make_request()
 
         with patch("api.auth.get_auth_middleware", return_value=mw):
-            result = asyncio.get_event_loop().run_until_complete(validate_token(request=req, body=body, _=True))
+            result = asyncio.run(validate_token(request=req, body=body, _=True))
         assert result.valid is True
 
     def test_validate_endpoint_blocked_when_dependency_raises(self):
@@ -267,7 +273,7 @@ class TestValidateRequiresServiceAuth:
 
         with patch("api.auth.get_auth_middleware", return_value=mw):
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.get_event_loop().run_until_complete(_call())
+                asyncio.run(_call())
         assert exc_info.value.status_code == 403
 
 

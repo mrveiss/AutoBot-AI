@@ -28,6 +28,11 @@ from services.tool_output_filter import (
     short_circuit_git,
 )
 
+# #13113: these sync tests drive coroutines with asyncio.run(). The legacy
+# asyncio.get_event_loop().run_until_complete() raised "There is no current event
+# loop" whenever the test ran before any async test on its xdist worker, because
+# pytest-asyncio's auto mode owns the loop lifecycle and leaves none set.
+
 
 def _make_filter(rules: dict) -> ToolOutputFilter:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as fh:
@@ -726,7 +731,7 @@ def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
     async def _run():
         return f2.filter("cmd", big_output)
 
-    result = asyncio.get_event_loop().run_until_complete(_run())
+    result = asyncio.run(_run())
 
     assert "[full output saved:" in result  # tee hint fired
     expected_pre_hint = _tail_lines(big_output, 1)
@@ -759,7 +764,7 @@ def test_filter_savings_includes_hard_cap_delta_on_matched_rule(tmp_path, monkey
     async def _run():
         return filt.filter("huge", output)
 
-    result = asyncio.get_event_loop().run_until_complete(_run())
+    result = asyncio.run(_run())
 
     assert "chars omitted" in result  # hard cap fired
     assert saved == [len(output) - len(result)]
@@ -791,7 +796,7 @@ def test_filter_savings_combines_soft_and_hard_reductions(tmp_path, monkeypatch)
     async def _run():
         return filt.filter("huge", output)
 
-    result = asyncio.get_event_loop().run_until_complete(_run())
+    result = asyncio.run(_run())
 
     assert "lines omitted" in result  # soft filter (max_lines) trimmed content
     assert "chars omitted" in result  # hard cap trimmed further
@@ -819,7 +824,7 @@ def test_filter_savings_recorded_for_unmatched_hard_cap(tmp_path, monkeypatch):
     async def _run():
         return filt.filter("no-such-command", output)
 
-    result = asyncio.get_event_loop().run_until_complete(_run())
+    result = asyncio.run(_run())
 
     assert saved == [len(output) - len(result)]
     assert saved[0] > 0
