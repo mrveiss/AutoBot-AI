@@ -13,15 +13,21 @@
  */
 
 import { ref, computed, readonly } from 'vue'
-import axios, { type AxiosInstance } from 'axios'
+import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
 import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useOrchestration')
 
-// SLM Admin uses the local SLM backend API
-const API_BASE = getSlmApiBase()
+// SLM backend transport: the canonical `slmApiClient` behind the axios-shaped
+// facade (#13079/#13140). This composable used to hold its own
+// `axios.create({ baseURL: getSlmApiBase() })` with a `sessionStorage`-only
+// bearer interceptor, NO timeout and no 401 handling. `slmApiClient` supplies
+// the sessionStorage->localStorage token fallback (ApiClient.ts:113), the
+// `VITE_SLM_API_TIMEOUT_MS` budget (:44-48) and the 401 session teardown
+// (:128-151). Endpoints below stay relative to the API base, which the client
+// resolves via `getSlmApiBase()` (:104).
+const client = makeAxiosCompatClient()
 
 // =============================================================================
 // Type Definitions
@@ -111,21 +117,6 @@ export type BulkActionResponse = components['schemas']['BulkActionResponse'] & {
 // =============================================================================
 
 export function useOrchestration() {
-  // Create axios client
-  const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   // ===========================================================================
   // Reactive State
   // ===========================================================================
@@ -159,8 +150,13 @@ export function useOrchestration() {
     e: unknown,
     fallback: string
   ): string {
-    if (axios.isAxiosError(e) && e.response?.data?.detail) {
-      return e.response.data.detail
+    // `slmApiCompat` rejects with an axios-SHAPED error (`err.response.status`
+    // / `.data`) but not an axios instance, so `axios.isAxiosError` would miss
+    // it and every backend `detail` would degrade to `HTTP <n>`. Read the shape
+    // directly instead.
+    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+    if (typeof detail === 'string' && detail.length > 0) {
+      return detail
     }
     return e instanceof Error ? e.message : fallback
   }
