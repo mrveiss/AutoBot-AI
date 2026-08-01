@@ -86,7 +86,7 @@ class ClaudeCodeSubscriptionAdapter(ClaudeCodeAdapter):
         # GH#11186: reuse the parent's governed command builder so this adapter
         # inherits --disallowedTools (fresh + resume), input sanitization, and the
         # `--` prompt terminator instead of the old inline build that lacked them.
-        cmd = self._build_command(cli, resume_session_id, cfg, prompt)
+        cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
 
         workspace_dir: str | None = context.get("workspace_dir")
 

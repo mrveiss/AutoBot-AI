@@ -12,6 +12,7 @@ import base64
 import aiohttp
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
+from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID
 from api.schemas_code import (
     AiProposeRegionsResponse,
     FrontendTestRequest,
@@ -24,6 +25,7 @@ from api.schemas_code import (
     PlaywrightReloadRequest,
     PlaywrightScreenshotRequest,
     PlaywrightSearchRequest,
+    PlaywrightSessionRequest,
     PlaywrightStatusResponse,
     PlaywrightWorkerStatusResponse,
     SnapshotWithRegionsRequest,
@@ -83,11 +85,14 @@ async def get_playwright_status():
 async def probe_playwright(
     request: Request | None = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for playwright module.
+    """Issue #3333 / #12459: probe registration for playwright module.
 
     Lightweight check: inspect the module-level singleton without forcing
     creation (which would require env-var resolution and a network probe).
-    ``ok`` if already initialized; ``degraded`` if not yet initialized.
+    ``ok`` if already initialized; ``idle`` if not yet initialized — the
+    browser-automation worker is opt-in (used only when a research/browser
+    task runs) so a fresh boot with no such task yet is expected, not a
+    failure.
     """
     try:
         from services import playwright_service as _ps_mod
@@ -95,8 +100,8 @@ async def probe_playwright(
         if getattr(_ps_mod, "_playwright_service", None) is None:
             return ComponentHealth(
                 name="playwright",
-                status="degraded",
-                detail="service not yet initialized",
+                status="idle",
+                detail="service not yet initialized (lazy singleton, not yet used)",
             )
         return ComponentHealth(name="playwright", status="ok")
     except Exception as exc:
@@ -312,6 +317,8 @@ async def navigate_to_url(request: PlaywrightNavigateRequest):
                 "url": request.url,
                 "wait_until": request.wait_until,
                 "timeout": request.timeout,
+                # #11539: route to this conversation's isolated browser context.
+                "session_id": request.session_id or DEFAULT_BROWSER_SESSION_ID,
             },
             timeout=aiohttp.ClientTimeout(total=request.timeout / 1000 + 5),
         ) as response:
@@ -353,7 +360,10 @@ async def reload_page(request: PlaywrightReloadRequest):
         http_client = get_http_client()
         async with await http_client.post(
             f"{BROWSER_VM_URL}/reload",
-            json={"wait_until": request.wait_until},
+            json={
+                "wait_until": request.wait_until,
+                "session_id": request.session_id or DEFAULT_BROWSER_SESSION_ID,
+            },
             timeout=aiohttp.ClientTimeout(total=35),
         ) as response:
             result = await response.json()
@@ -382,20 +392,22 @@ async def reload_page(request: PlaywrightReloadRequest):
     operation="go_back",
     error_code_prefix="PLAYWRIGHT",
 )
-async def go_back():
+async def go_back(request: PlaywrightSessionRequest | None = None):
     """
     Navigate back in browser history using Playwright on Browser VM
 
     Forwards back navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+    Issue #11539: threads session_id so this routes to the caller's isolated context.
     """
     try:
         logger.info("Back navigation request")
+        session_id = (request.session_id if request else None) or DEFAULT_BROWSER_SESSION_ID
 
         http_client = get_http_client()
         async with await http_client.post(
             f"{BROWSER_VM_URL}/back",
-            json={},
+            json={"session_id": session_id},
             timeout=aiohttp.ClientTimeout(total=35),
         ) as response:
             result = await response.json()
@@ -424,20 +436,22 @@ async def go_back():
     operation="go_forward",
     error_code_prefix="PLAYWRIGHT",
 )
-async def go_forward():
+async def go_forward(request: PlaywrightSessionRequest | None = None):
     """
     Navigate forward in browser history using Playwright on Browser VM
 
     Forwards forward navigation request to Browser VM (NetworkConstants.BROWSER_VM_IP)
     Issue #552: Added missing endpoint for frontend PopoutChromiumBrowser.vue
+    Issue #11539: threads session_id so this routes to the caller's isolated context.
     """
     try:
         logger.info("Forward navigation request")
+        session_id = (request.session_id if request else None) or DEFAULT_BROWSER_SESSION_ID
 
         http_client = get_http_client()
         async with await http_client.post(
             f"{BROWSER_VM_URL}/forward",
-            json={},
+            json={"session_id": session_id},
             timeout=aiohttp.ClientTimeout(total=35),
         ) as response:
             result = await response.json()
@@ -466,16 +480,19 @@ async def go_forward():
     operation="get_worker_status",
     error_code_prefix="PLAYWRIGHT",
 )
-async def get_worker_status():
+async def get_worker_status(session_id: str | None = None):
     """
     Get browser worker connectivity status from Browser VM (#1130)
 
-    Proxies to Browser VM /status endpoint which checks the persistent navPage.
+    Proxies to Browser VM /status endpoint which checks the persistent navPage
+    for this caller's session (#11539 — session_id selects which isolated
+    context's navPage is inspected; omitted = shared default session).
     """
     try:
         http_client = get_http_client()
         async with await http_client.get(
             f"{BROWSER_VM_URL}/status",
+            params={"session_id": session_id or DEFAULT_BROWSER_SESSION_ID},
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             data = await response.json()
@@ -507,18 +524,20 @@ async def get_worker_status():
     operation="take_worker_screenshot",
     error_code_prefix="PLAYWRIGHT",
 )
-async def take_worker_screenshot():
+async def take_worker_screenshot(request: PlaywrightSessionRequest | None = None):
     """
     Take screenshot of the persistent navigation page on Browser VM (#1130)
 
     Unlike /screenshot which takes a fresh-page screenshot for a given URL,
-    this returns a screenshot of the current state of the persistent navPage.
+    this returns a screenshot of the current state of the persistent navPage
+    for this caller's session (#11539).
     """
     try:
+        session_id = (request.session_id if request else None) or DEFAULT_BROWSER_SESSION_ID
         http_client = get_http_client()
         async with await http_client.post(
             f"{BROWSER_VM_URL}/screenshot",
-            json={},
+            json={"session_id": session_id},
             timeout=aiohttp.ClientTimeout(total=30),
         ) as response:
             result = await response.json()
@@ -565,6 +584,9 @@ async def interact_with_page(request: PlaywrightInteractRequest):
             if not request.text:
                 raise HTTPException(status_code=400, detail="text required")
             payload = {"text": request.text}
+
+        # #11539: route to this conversation's isolated browser context.
+        payload["session_id"] = request.session_id or DEFAULT_BROWSER_SESSION_ID
 
         http_client = get_http_client()
         async with await http_client.post(

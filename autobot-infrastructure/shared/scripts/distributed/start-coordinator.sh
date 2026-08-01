@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Start AutoBot Backend Coordinator for Distributed 6-VM Architecture
 # This script runs on the main WSL machine (${AUTOBOT_BACKEND_HOST}) as the coordinator
 

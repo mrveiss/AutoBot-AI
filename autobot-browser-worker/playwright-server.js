@@ -4,6 +4,8 @@
 // Author: mrveiss
 const { chromium } = require('playwright');
 const express = require('express');
+const { SessionStore } = require('./session-store');
+const { collectIndexedElements, resolveElementByIndex } = require('./element-index');
 const app = express();
 
 app.use(express.json({ limit: '50mb' }));
@@ -21,7 +23,87 @@ const logger = {
 };
 
 let browser = null;
-let navPage = null; // Persistent navigation page for visual browser (#1130)
+
+// --- Per-session browser contexts (#11539) ---
+//
+// One Chromium process, N isolated BrowserContexts — one per conversation
+// session_id. Each context has its own cookie jar / localStorage / auth
+// state so logging in to a site in conversation A never leaks into
+// conversation B. A request without a session_id maps to
+// SessionStore.DEFAULT_SESSION_ID, preserving today's single-session
+// behavior for a lone caller.
+//
+// Idle contexts are garbage-collected — see SESSION_IDLE_TIMEOUT_MS /
+// SESSION_GC_INTERVAL_MS below (env-var-driven, mirrors the idle-GC pattern
+// in services/docker_task_workspace.py).
+const SESSION_IDLE_TIMEOUT_MS = parseInt(process.env.BROWSER_SESSION_IDLE_TIMEOUT_MS || String(30 * 60 * 1000), 10);
+const SESSION_GC_INTERVAL_MS = parseInt(process.env.BROWSER_SESSION_GC_INTERVAL_MS || String(5 * 60 * 1000), 10);
+
+const sessionStore = new SessionStore({ idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS });
+
+function sessionIdFromRequest(req) {
+  const raw = (req.body && req.body.session_id) || (req.query && req.query.session_id);
+  return SessionStore.resolveSessionId(raw);
+}
+
+async function getSessionEntry(sessionId) {
+  const b = await initBrowser();
+  const entry = await sessionStore.getOrCreate(sessionId, async () => {
+    const context = await b.newContext();
+    logger.info('Created new browser context for session %s', sessionId);
+    return { context, navPage: null, mcpPage: null };
+  });
+  return entry;
+}
+
+async function closeSessionEntry(entry, sessionId) {
+  if (entry.navPage && !entry.navPage.isClosed()) {
+    try {
+      await entry.navPage.close();
+    } catch (e) {
+      logger.warn('Session cleanup: navPage close failed for %s: %s', sessionId, e.message);
+    }
+  }
+  if (entry.mcpPage && !entry.mcpPage.isClosed()) {
+    try {
+      await entry.mcpPage.close();
+    } catch (e) {
+      logger.warn('Session cleanup: mcpPage close failed for %s: %s', sessionId, e.message);
+    }
+  }
+  await entry.context.close();
+}
+
+async function gcIdleSessions() {
+  const evicted = await sessionStore.gcIdle(closeSessionEntry, (sessionId, err) => {
+    logger.error('Session GC: failed to close context for %s: %s', sessionId, err.message);
+  });
+  if (evicted.length) {
+    logger.info('Session GC: evicted %d idle browser context(s): %s', evicted.length, evicted.join(', '));
+  }
+  return evicted;
+}
+
+async function closeAllSessions() {
+  for (const sessionId of sessionStore.ids()) {
+    const entry = sessionStore.peek(sessionId);
+    sessionStore.delete(sessionId);
+    if (entry) {
+      try {
+        await closeSessionEntry(entry, sessionId);
+      } catch (e) {
+        logger.warn('Shutdown: failed to close session %s: %s', sessionId, e.message);
+      }
+    }
+  }
+}
+
+const sessionGcTimer = setInterval(() => {
+  gcIdleSessions().catch((e) => logger.error('Session GC error:', e.message));
+}, SESSION_GC_INTERVAL_MS);
+if (typeof sessionGcTimer.unref === 'function') sessionGcTimer.unref();
+
+// --- End per-session browser contexts (#11539) ---
 
 async function initBrowser() {
   try {
@@ -80,22 +162,23 @@ app.get('/health', (req, res) => {
   });
 });
 
-// --- Persistent navigation page helpers (#1130) ---
+// --- Persistent navigation page helpers (#1130, per-session since #11539) ---
 
-async function ensureNavPage() {
-  const b = await initBrowser();
-  if (!navPage || navPage.isClosed()) {
-    navPage = await b.newPage();
-    await navPage.setExtraHTTPHeaders({
+async function ensureNavPage(sessionId) {
+  const entry = await getSessionEntry(sessionId);
+  if (!entry.navPage || entry.navPage.isClosed()) {
+    entry.navPage = await entry.context.newPage();
+    await entry.navPage.setExtraHTTPHeaders({
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     });
-    logger.info('Created new navPage');
+    logger.info('Created new navPage for session %s', sessionId);
   }
-  return navPage;
+  sessionStore.touch(sessionId);
+  return entry.navPage;
 }
 
-async function captureNavScreenshot() {
-  const buf = await navPage.screenshot({ type: 'png' });
+async function captureNavScreenshot(page) {
+  const buf = await page.screenshot({ type: 'png' });
   return buf.toString('base64');
 }
 
@@ -110,7 +193,7 @@ function applyJitter(x, y) {
 
 // Standard response for all interaction endpoints (#1416)
 async function navInteractionResponse(page) {
-  const screenshot = await captureNavScreenshot();
+  const screenshot = await captureNavScreenshot(page);
   const vp = page.viewportSize() || { width: 1280, height: 720 };
   return {
     success: true,
@@ -124,10 +207,19 @@ async function navInteractionResponse(page) {
 
 app.get('/status', async (req, res) => {
   try {
+    const sessionId = sessionIdFromRequest(req);
     const connected = browser && browser.isConnected();
+    const entry = sessionStore.peek(sessionId);
+    const navPage = entry ? entry.navPage : null;
     const pageOpen = navPage && !navPage.isClosed();
     const currentUrl = pageOpen ? navPage.url() : null;
-    res.json({ status: connected ? 'connected' : 'disconnected', browser_connected: connected, page_open: pageOpen, current_url: currentUrl });
+    res.json({
+      status: connected ? 'connected' : 'disconnected',
+      browser_connected: connected,
+      page_open: pageOpen,
+      current_url: currentUrl,
+      session_id: sessionId,
+    });
   } catch (e) {
     res.status(500).json({ status: 'error', browser_connected: false, page_open: false, error: e.message });
   }
@@ -135,9 +227,10 @@ app.get('/status', async (req, res) => {
 
 app.post('/navigate', async (req, res) => {
   const { url } = req.body;
+  const sessionId = sessionIdFromRequest(req);
   if (!url) return res.status(400).json({ success: false, error: 'url required' });
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     res.json(await navInteractionResponse(page));
   } catch (e) {
@@ -147,8 +240,9 @@ app.post('/navigate', async (req, res) => {
 });
 
 app.post('/screenshot', async (req, res) => {
+  const sessionId = sessionIdFromRequest(req);
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     res.json(await navInteractionResponse(page));
   } catch (e) {
     logger.error('screenshot error:', e.message);
@@ -157,8 +251,9 @@ app.post('/screenshot', async (req, res) => {
 });
 
 app.post('/back', async (req, res) => {
+  const sessionId = sessionIdFromRequest(req);
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     await page.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 });
     res.json(await navInteractionResponse(page));
   } catch (e) {
@@ -168,8 +263,9 @@ app.post('/back', async (req, res) => {
 });
 
 app.post('/forward', async (req, res) => {
+  const sessionId = sessionIdFromRequest(req);
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     await page.goForward({ waitUntil: 'domcontentloaded', timeout: 15000 });
     res.json(await navInteractionResponse(page));
   } catch (e) {
@@ -179,8 +275,9 @@ app.post('/forward', async (req, res) => {
 });
 
 app.post('/reload', async (req, res) => {
+  const sessionId = sessionIdFromRequest(req);
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
     res.json(await navInteractionResponse(page));
   } catch (e) {
@@ -195,11 +292,12 @@ app.post('/reload', async (req, res) => {
 
 app.post('/click', async (req, res) => {
   const { x, y } = req.body;
+  const sessionId = sessionIdFromRequest(req);
   if (typeof x !== 'number' || typeof y !== 'number') {
     return res.status(400).json({ success: false, error: 'x and y coordinates required' });
   }
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     const jittered = applyJitter(x, y);
     logger.info('Click at:', { original: { x, y }, jittered });
     await page.mouse.click(jittered.x, jittered.y);
@@ -213,11 +311,12 @@ app.post('/click', async (req, res) => {
 
 app.post('/scroll', async (req, res) => {
   const { deltaX = 0, deltaY = 0 } = req.body;
+  const sessionId = sessionIdFromRequest(req);
   if (typeof deltaX !== 'number' || typeof deltaY !== 'number') {
     return res.status(400).json({ success: false, error: 'deltaX and deltaY must be numbers' });
   }
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     logger.info('Scroll:', { deltaX, deltaY });
     await page.mouse.wheel(deltaX, deltaY);
     await page.waitForTimeout(200);
@@ -230,11 +329,12 @@ app.post('/scroll', async (req, res) => {
 
 app.post('/type', async (req, res) => {
   const { text } = req.body;
+  const sessionId = sessionIdFromRequest(req);
   if (!text || typeof text !== 'string') {
     return res.status(400).json({ success: false, error: 'text string required' });
   }
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     logger.info('Type:', text.substring(0, 50));
     await page.keyboard.type(text, { delay: 30 + Math.random() * 40 });
     await page.waitForTimeout(200);
@@ -247,11 +347,12 @@ app.post('/type', async (req, res) => {
 
 app.post('/hover', async (req, res) => {
   const { x, y } = req.body;
+  const sessionId = sessionIdFromRequest(req);
   if (typeof x !== 'number' || typeof y !== 'number') {
     return res.status(400).json({ success: false, error: 'x and y coordinates required' });
   }
   try {
-    const page = await ensureNavPage();
+    const page = await ensureNavPage(sessionId);
     const jittered = applyJitter(x, y);
     logger.info('Hover at:', { original: { x, y }, jittered });
     await page.mouse.move(jittered.x, jittered.y);
@@ -268,18 +369,21 @@ app.post('/hover', async (req, res) => {
 
 app.post('/search', async (req, res) => {
   logger.info('Received search request:', req.body);
+  const { query, search_engine = 'duckduckgo' } = req.body;
+
+  if (!query) {
+    return res.status(400).json({
+      success: false,
+      error: 'Query parameter is required'
+    });
+  }
+
+  // Declared outside the try so the finally block can always close it,
+  // even if browser.newPage()/goto() throws before the inner try runs.
+  let page = null;
   try {
-    const { query, search_engine = 'duckduckgo' } = req.body;
-
-    if (!query) {
-      return res.status(400).json({
-        success: false,
-        error: 'Query parameter is required'
-      });
-    }
-
     const browser = await initBrowser();
-    const page = await browser.newPage();
+    page = await browser.newPage();
 
     await page.setExtraHTTPHeaders({
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -346,8 +450,6 @@ app.post('/search', async (req, res) => {
       logger.error('Error with search:', e.message);
     }
 
-    await page.close();
-
     res.json({
       success: true,
       query: query,
@@ -361,6 +463,14 @@ app.post('/search', async (req, res) => {
       success: false,
       error: error.message
     });
+  } finally {
+    if (page && !page.isClosed()) {
+      try {
+        await page.close();
+      } catch (e) {
+        logger.warn('Search: page close failed: %s', e.message);
+      }
+    }
   }
 });
 
@@ -834,28 +944,71 @@ app.post('/test-frontend', async (req, res) => {
 
 // =============================================================================
 // MCP automation dispatcher – browser_mcp.py sends POST /automation with
-// { action, params } payload to control a dedicated MCP browser page.
+// { action, params, session_id } payload to control the MCP browser page
+// dedicated to that conversation/session (#11539 — was one shared page for
+// every conversation).
 // =============================================================================
 
-let mcpPage = null;
-
-async function ensureMcpPage() {
-  const b = await initBrowser();
-  if (!mcpPage || mcpPage.isClosed()) {
-    mcpPage = await b.newPage();
-    logger.info('MCP automation page created');
+async function ensureMcpPage(sessionId) {
+  const entry = await getSessionEntry(sessionId);
+  if (!entry.mcpPage || entry.mcpPage.isClosed()) {
+    entry.mcpPage = await entry.context.newPage();
+    logger.info('MCP automation page created for session %s', sessionId);
   }
-  return mcpPage;
+  sessionStore.touch(sessionId);
+  return entry.mcpPage;
 }
+
+// --- Indexed interactive-element state (#11537) ---
+//
+// "state" here is what OpenManus feeds the model on every step: the current
+// URL/title/scroll position plus a numbered menu of interactive elements, so
+// the model can click_index/fill_index instead of guessing a CSS selector.
+async function capturePageState(page) {
+  const elements = await collectIndexedElements(page);
+  const scroll = await page.evaluate(() => ({
+    x: window.scrollX,
+    y: window.scrollY,
+    maxX: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
+    maxY: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+  }));
+  return {
+    url: page.url(),
+    title: await page.title(),
+    scroll,
+    elements,
+    // #11538 review MINOR 3: callers echo this back as expected_element_count
+    // on a later *_index call so a stale index (page changed shape since this
+    // state was captured) is rejected instead of silently acting on the
+    // wrong element — see resolveElementByIndex's stale-index guard.
+    element_count: elements.length,
+  };
+}
+
+// New browser-worker endpoint (#11537 task 2): current page state, numbered
+// interactive elements included, for the session's MCP automation page.
+app.post('/state', async (req, res) => {
+  const sessionId = sessionIdFromRequest(req);
+  try {
+    const page = await ensureMcpPage(sessionId);
+    const state = await capturePageState(page);
+    res.json({ success: true, session_id: sessionId, ...state, timestamp: new Date().toISOString() });
+  } catch (e) {
+    logger.error('state error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+// --- End indexed interactive-element state (#11537) ---
 
 app.post('/automation', async (req, res) => {
   const { action, params = {} } = req.body;
+  const sessionId = sessionIdFromRequest(req);
   if (!action) {
     return res.status(400).json({ success: false, error: 'action is required' });
   }
-  logger.info('Automation action:', action);
+  logger.info('Automation action:', action, 'session:', sessionId);
   try {
-    const page = await ensureMcpPage();
+    const page = await ensureMcpPage(sessionId);
     let result = {};
     switch (action) {
       case 'navigate': {
@@ -917,10 +1070,73 @@ app.post('/automation', async (req, res) => {
         result = { success: true };
         break;
       }
+      // --- Indexed interactive-element actions (#11537) ---
+      // The index is resolved against a freshly-collected element list on
+      // every call (never a stale cache), then acted on via its xpath
+      // locator — "resolved server-side" so the LLM never has to guess a
+      // CSS selector.
+      case 'browser_state': {
+        result = await capturePageState(page);
+        break;
+      }
+      case 'click_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.click(resolved.element.selector, { timeout: params.timeout || 10000 });
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      case 'fill_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.fill(resolved.element.selector, params.value, { timeout: params.timeout || 10000 });
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      case 'select_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.selectOption(resolved.element.selector, params.value);
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      case 'hover_index': {
+        const elements = await collectIndexedElements(page);
+        const resolved = resolveElementByIndex(elements, params.index, params.expected_element_count);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, error: resolved.error, action });
+        }
+        await page.hover(resolved.element.selector);
+        result = { success: true, index: params.index, resolved: resolved.element };
+        break;
+      }
+      // --- End indexed interactive-element actions (#11537) ---
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
-    res.json({ success: true, action, result, timestamp: new Date().toISOString() });
+    // #11537 task 4: every browser tool result carries the current numbered
+    // element menu, refreshed post-action, so the model always sees an
+    // up-to-date menu without a separate round trip. Non-fatal on failure —
+    // a page mid-navigation/closed should not fail the action that just
+    // succeeded. 'browser_state' already *is* the page state — no need to
+    // capture it twice.
+    if (action !== 'browser_state') {
+      try {
+        result.page_state = await capturePageState(page);
+      } catch (stateErr) {
+        logger.warn('Automation: page_state capture failed for %s: %s', action, stateErr.message);
+      }
+    }
+    res.json({ success: true, action, result, session_id: sessionId, timestamp: new Date().toISOString() });
   } catch (error) {
     logger.error('Automation error:', action, error);
     res.status(500).json({ success: false, error: error.message, action });
@@ -942,6 +1158,8 @@ app.listen(port, '0.0.0.0', async () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('Shutting down gracefully...');
+  clearInterval(sessionGcTimer);
+  await closeAllSessions();
   if (browser) {
     await browser.close();
     logger.info('Browser closed');
@@ -951,6 +1169,8 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   logger.info('Received SIGINT, shutting down...');
+  clearInterval(sessionGcTimer);
+  await closeAllSessions();
   if (browser) {
     await browser.close();
     logger.info('Browser closed');

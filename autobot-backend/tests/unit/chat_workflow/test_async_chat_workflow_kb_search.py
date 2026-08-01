@@ -98,6 +98,25 @@ class TestExecuteKbSearch:
         assert status is KnowledgeStatus.MISSING
         assert results == []
 
+    async def test_quarantine_filter_excludes_research_collection(self, workflow):
+        """#12622: chat/RAG must exclude the quarantined 'research' collection.
+
+        Web-research facts are tagged metadata.collection="research" until
+        Phase 1's promotion gate reviews them; general chat search must never
+        surface them, so every call passes the quarantine exclusion filter.
+        """
+        mock_kb = MagicMock()
+        mock_kb.search = AsyncMock(return_value=[])
+
+        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+            await workflow._execute_kb_search("what is autobot")
+
+        mock_kb.search.assert_awaited_once_with(
+            query="what is autobot",
+            top_k=5,
+            filters={"collection": {"$ne": "research"}},
+        )
+
     async def test_multiple_results_mapped_correctly(self, workflow):
         """Multiple results are mapped with correct keys."""
         from async_chat_workflow import KnowledgeStatus

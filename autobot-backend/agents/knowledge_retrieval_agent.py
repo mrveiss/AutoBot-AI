@@ -238,7 +238,8 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             if not self.knowledge_base:
                 return self._build_kb_unavailable_response()
 
-            search_results = await self.knowledge_base.search(query, n_results=limit)
+            # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
+            search_results = await self.knowledge_base.search(query, top_k=limit)
             processing_time = time.time() - start_time
 
             processed_results = self._process_search_results(search_results, similarity_threshold, query)
@@ -272,7 +273,8 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
                 return {"status": "error", "documents": []}
 
             # Direct vector search without LLM processing
-            results = await self.knowledge_base.search(query, n_results=top_k)
+            # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
+            results = await self.knowledge_base.search(query, top_k=top_k)
 
             # Filter by minimum score if vector scores are available
             filtered_docs = []

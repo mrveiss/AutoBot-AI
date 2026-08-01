@@ -132,7 +132,7 @@ def load_claims(input_path: str) -> List[Dict[str, Any]]:
     Returns:
         List of claim dictionaries
     """
-    with open(input_path, "r") as f:
+    with open(input_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     # Handle both raw claims array and inventory format
@@ -151,15 +151,13 @@ def save_inventory(inventory: Dict[str, Any], output_path: str):
         inventory: Verification inventory dictionary
         output_path: Path to output JSON file
     """
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(inventory, f, indent=2)
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Verify documentation claims against codebase"
-    )
+    parser = argparse.ArgumentParser(description="Verify documentation claims against codebase")
     parser.add_argument(
         "input",
         help="Input claims JSON file (from extract-claims.py)",
@@ -225,18 +223,10 @@ def main():
     summary = inventory["summary"]
     print(f"\nVerification Summary:")
     print(f"  Total claims: {summary['total_claims']}")
-    print(
-        f"  ✅ Wired:     {summary['wired']} ({summary['wired']*100//summary['total_claims']}%)"
-    )
-    print(
-        f"  ⚠️  Partial:   {summary['partial']} ({summary['partial']*100//summary['total_claims']}%)"
-    )
-    print(
-        f"  ❌ Broken:    {summary['broken']} ({summary['broken']*100//summary['total_claims']}%)"
-    )
-    print(
-        f"  📝 Manual:    {summary['manual']} ({summary['manual']*100//summary['total_claims']}%)"
-    )
+    print(f"  ✅ Wired:     {summary['wired']} ({summary['wired']*100//summary['total_claims']}%)")
+    print(f"  ⚠️  Partial:   {summary['partial']} ({summary['partial']*100//summary['total_claims']}%)")
+    print(f"  ❌ Broken:    {summary['broken']} ({summary['broken']*100//summary['total_claims']}%)")
+    print(f"  📝 Manual:    {summary['manual']} ({summary['manual']*100//summary['total_claims']}%)")
     print(f"\nInventory saved to: {output_path}")
 
     return 0

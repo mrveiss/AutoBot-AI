@@ -18,11 +18,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
+import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 const fleetStore = useFleetStore()
-const authStore = useAuthStore()
 const { t } = useI18n()
 
 // Tool definitions - all tools integrated into SLM (Issue #729)
@@ -115,18 +114,29 @@ async function runNetworkTest(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`${getSlmApiBase()}/nodes/test-connection`, {
+    // `rawRequest` (not `post`) keeps the `err.detail` error body this panel
+    // renders. The client contributes the base URL, the bearer, the 401
+    // handler, and — new here — a timeout.
+    //
+    // On the bearer: `authStore.getAuthHeaders()` returns `{}` when the store's
+    // `token` ref is null, and that ref is seeded from storage ONCE, at store
+    // construction (`stores/auth.ts:66`). A token that lands afterwards — a
+    // login in another tab, a refresh through a different store instance — is
+    // invisible to it, and the command was then dispatched to a fleet node with
+    // no credential at all. The client re-reads storage per request.
+    //
+    // On the timeout: every tool here opens an SSH session to a fleet node, so
+    // they take the long remote-exec budget rather than the client's 30s
+    // default, which would abort a command that completes fine today (#13140).
+    const response = await slmApiClient.rawRequest('/nodes/test-connection', {
       method: 'POST',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+      timeout: REMOTE_EXEC_TIMEOUT_MS,
+      body: {
         ip_address: selectedNodeDetails.value?.ip_address,
         ssh_user: selectedNodeDetails.value?.ssh_user || 'autobot',
         ssh_port: selectedNodeDetails.value?.ssh_port || 22,
         auth_method: selectedNodeDetails.value?.auth_method || 'key',
-      }),
+      },
     })
 
     if (!response.ok) {
@@ -160,9 +170,10 @@ async function runHealthCheck(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/health`, {
-      headers: authStore.getAuthHeaders(),
-    })
+    const response = await slmApiClient.rawRequest(
+      `/nodes/${selectedNode.value}/health`,
+      { timeout: REMOTE_EXEC_TIMEOUT_MS }
+    )
 
     if (!response.ok) {
       throw new Error(t('toolsView.healthCheckFailed'))
@@ -195,9 +206,9 @@ async function getServiceLogs(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(
-      `${getSlmApiBase()}/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
-      { headers: authStore.getAuthHeaders() }
+    const response = await slmApiClient.rawRequest(
+      `/nodes/${selectedNode.value}/services/${selectedService.value}/logs?lines=${logLines.value}`,
+      { timeout: REMOTE_EXEC_TIMEOUT_MS }
     )
 
     if (!response.ok) {
@@ -225,12 +236,9 @@ async function serviceAction(action: 'start' | 'stop' | 'restart'): Promise<void
   result.value = null
 
   try {
-    const response = await fetch(
-      `${getSlmApiBase()}/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
-      {
-        method: 'POST',
-        headers: authStore.getAuthHeaders(),
-      }
+    const response = await slmApiClient.rawRequest(
+      `/nodes/${selectedNode.value}/services/${selectedService.value}/${action}`,
+      { method: 'POST', timeout: REMOTE_EXEC_TIMEOUT_MS }
     )
 
     if (!response.ok) {
@@ -269,15 +277,10 @@ async function runRedisCommand(): Promise<void> {
     }
 
     // Execute via ansible ad-hoc
-    const response = await fetch(`${getSlmApiBase()}/nodes/${targetNode.node_id}/exec`, {
+    const response = await slmApiClient.rawRequest(`/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        command: `redis-cli ${redisCommand.value}`,
-      }),
+      timeout: REMOTE_EXEC_TIMEOUT_MS,
+      body: { command: `redis-cli ${redisCommand.value}` },
     })
 
     if (!response.ok) {
@@ -305,15 +308,10 @@ async function runAnsibleCommand(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`${getSlmApiBase()}/nodes/${selectedNode.value}/exec`, {
+    const response = await slmApiClient.rawRequest(`/nodes/${selectedNode.value}/exec`, {
       method: 'POST',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        command: ansibleCommand.value,
-      }),
+      timeout: REMOTE_EXEC_TIMEOUT_MS,
+      body: { command: ansibleCommand.value },
     })
 
     if (!response.ok) {

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # File Upload Functionality Test Script
 # Tests the improved file upload capabilities in FileBrowser component

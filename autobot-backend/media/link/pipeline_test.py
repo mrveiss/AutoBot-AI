@@ -9,6 +9,7 @@
 """Unit tests for LinkPipeline."""
 
 import socket
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -158,35 +159,72 @@ class TestLinkPipelineErrorHandling:
         assert result["processing_status"] == "error"
 
 
-class TestLinkPipelineHttp:
-    """Tests for HTTP fetch path."""
+def _mock_content(body: bytes, chunk_size: int = 65536) -> MagicMock:
+    """Build a mock ``response.content`` whose ``iter_chunked`` streams *body*.
 
-    def _make_mock_session(self, url, status=200):
-        """Helper: build a mock aiohttp ClientSession for fetch tests."""
+    #13021: ``_fetch_and_parse``'s fallback fetch now reads via
+    ``response.content.iter_chunked()`` (bounded streaming read) instead of
+    ``response.text()``, so response mocks must supply this async iterator.
+    """
+
+    async def _chunks():
+        for i in range(0, len(body), chunk_size):
+            yield body[i : i + chunk_size]
+
+    content = MagicMock()
+    content.iter_chunked = MagicMock(return_value=_chunks())
+    return content
+
+
+def _make_fake_pinned_request(mock_response):
+    """Build a fake ``pinned_request_with_redirects`` async-CM factory + a calls log.
+
+    #13019: ``_fetch_and_parse()``'s fallback fetch now routes through
+    ``ssrf_guard.pinned_request_with_redirects`` (lazily imported inside the
+    method) instead of the shared pool's ``get_http_client().tracked_request``,
+    so pure functional tests (success / error-status / TLS passthrough) patch
+    this factory directly rather than doing real DNS + fake aiohttp plumbing;
+    the SSRF-specific hostile tests below (``TestLinkPipelineFetchSSRFPinning``)
+    mock real DNS instead and exercise the genuine guard.
+    """
+    calls = []
+
+    @asynccontextmanager
+    async def _fake(method, url, **kwargs):
+        calls.append({"method": method, "url": url, "kwargs": kwargs})
+        yield mock_response
+
+    return _fake, calls
+
+
+class TestLinkPipelineHttp:
+    """Tests for HTTP fetch path (#13019: pinned_request_with_redirects)."""
+
+    def _make_mock_response(self, url, status=200):
+        """Helper: build a mock response for the pinned-fetch tests."""
         mock_response = AsyncMock()
         mock_response.url = url
         mock_response.headers = {"Content-Type": "text/html"}
         mock_response.text = AsyncMock(return_value=SAMPLE_HTML)
+        mock_response.content = _mock_content(SAMPLE_HTML.encode("utf-8"))
         mock_response.status = status
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        return mock_session
+        return mock_response
 
     @pytest.mark.asyncio
     async def test_fetch_success(self):
+        from media.link import pipeline as pl
+
         pipe = LinkPipeline()
-        mock_session = self._make_mock_session("https://example.com")
+        mock_response = self._make_mock_response("https://example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
+        fake_pinned, calls = _make_fake_pinned_request(mock_response)
 
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
             patch.object(pipe, "_parse_html", return_value=_parsed),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
@@ -195,45 +233,53 @@ class TestLinkPipelineHttp:
         assert result["type"] == "link_fetch"
         assert result["confidence"] > 0
         # Default path must verify TLS certs (ssl=None, not ssl=False)
-        mock_session.get.assert_called_once_with("https://example.com", allow_redirects=True, ssl=None)
+        assert len(calls) == 1
+        assert calls[0]["method"] == "GET"
+        assert calls[0]["url"] == "https://example.com"
+        assert calls[0]["kwargs"] == {
+            "headers": {"User-Agent": pl._USER_AGENT},
+            "timeout": pl._DEFAULT_TIMEOUT,
+            "max_redirects": pl._MAX_REDIRECTS,
+            "ssl": None,
+        }
 
     @pytest.mark.asyncio
     async def test_fetch_default_verifies_tls(self):
         """ssl=None (cert verification) is used when allow_self_signed is absent."""
         pipe = LinkPipeline()
-        mock_session = self._make_mock_session("https://example.com")
+        mock_response = self._make_mock_response("https://example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9}
+        fake_pinned, calls = _make_fake_pinned_request(mock_response)
 
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
             patch.object(pipe, "_parse_html", return_value=_parsed),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             await pipe._fetch_and_parse("https://example.com", {})
 
-        _call_kwargs = mock_session.get.call_args.kwargs
-        assert _call_kwargs.get("ssl") is None, "Default fetch must NOT disable cert verification"
+        assert calls[0]["kwargs"].get("ssl") is None, "Default fetch must NOT disable cert verification"
 
     @pytest.mark.asyncio
     async def test_fetch_allow_self_signed_disables_tls(self):
         """ssl=False is used only when metadata allow_self_signed=True is explicitly set."""
         pipe = LinkPipeline()
-        mock_session = self._make_mock_session("https://internal.example.com")
+        mock_response = self._make_mock_response("https://internal.example.com")
         _parsed = {"type": "link_fetch", "confidence": 0.9}
+        fake_pinned, calls = _make_fake_pinned_request(mock_response)
 
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
             patch.object(pipe, "_parse_html", return_value=_parsed),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             await pipe._fetch_and_parse("https://internal.example.com", {"allow_self_signed": True})
 
-        _call_kwargs = mock_session.get.call_args.kwargs
-        assert _call_kwargs.get("ssl") is False, "allow_self_signed=True must set ssl=False"
+        assert calls[0]["kwargs"].get("ssl") is False, "allow_self_signed=True must set ssl=False"
 
     @pytest.mark.asyncio
     async def test_fetch_http_error(self):
@@ -243,25 +289,202 @@ class TestLinkPipelineHttp:
         mock_response.url = "https://example.com/404"
         mock_response.headers = {"Content-Type": "text/html"}
         mock_response.text = AsyncMock(return_value="")
+        mock_response.content = _mock_content(b"")
         mock_response.status = 404
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
+        fake_pinned, _calls = _make_fake_pinned_request(mock_response)
 
         with (
             patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
             patch("media.link.pipeline._BS4_AVAILABLE", True),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=mock_session),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
         ):
             result = await pipe._fetch_and_parse("https://example.com/404", {})
 
         assert result["processing_status"] == "error"
         assert "404" in result["error"]
+
+
+class TestLinkPipelineContentLengthCap:
+    """Fallback fetch enforces `_MAX_CONTENT_LENGTH` during the streamed read (#13021).
+
+    Previously the constant was declared but never read anywhere else in the
+    module, and ``_fetch_and_parse`` did an unbounded ``response.text()``.
+    """
+
+    def _oversized_mock_response(self, url, body: bytes):
+        mock_response = AsyncMock()
+        mock_response.url = url
+        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.content = _mock_content(body, chunk_size=64)
+        mock_response.status = 200
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        return mock_response
+
+    @pytest.mark.asyncio
+    async def test_oversized_body_is_rejected_not_read_fully(self, caplog):
+        """A body over the cap is refused mid-stream: reading stops, it is never parsed."""
+        import logging
+
+        pipe = LinkPipeline()
+        oversized_body = b"x" * (10 * 65536)  # far larger than the 1 MB default cap
+        mock_response = self._oversized_mock_response("https://big.example.com", oversized_body)
+        fake_pinned, _calls = _make_fake_pinned_request(mock_response)
+
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline._MAX_CONTENT_LENGTH", 1000),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch.object(pipe, "_parse_html") as parse_mock,
+            caplog.at_level(logging.WARNING, logger="media.link.pipeline"),
+        ):
+            result = await pipe._fetch_and_parse("https://big.example.com", {})
+
+        assert result["processing_status"] == "error"
+        assert "max content length" in result["error"]
+        parse_mock.assert_not_called()  # the oversized body must never reach HTML parsing
+        rejections = [r for r in caplog.records if "REJECTED" in r.getMessage()]
+        assert len(rejections) == 1
+
+    @pytest.mark.asyncio
+    async def test_oversized_body_stops_consuming_chunks_once_cap_crossed(self):
+        """The chunk stream is abandoned as soon as the cap is crossed — bytes read stay bounded."""
+        pipe = LinkPipeline()
+        chunks_yielded = []
+
+        async def _tracking_chunks():
+            for _ in range(1000):  # would be 64000 bytes if fully drained
+                chunks_yielded.append(1)
+                yield b"x" * 64
+
+        mock_response = AsyncMock()
+        mock_response.url = "https://big.example.com"
+        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.content = MagicMock()
+        mock_response.content.iter_chunked = MagicMock(return_value=_tracking_chunks())
+        mock_response.status = 200
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        fake_pinned, _calls = _make_fake_pinned_request(mock_response)
+
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("media.link.pipeline._MAX_CONTENT_LENGTH", 200),  # crossed after ~4 chunks
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+        ):
+            result = await pipe._fetch_and_parse("https://big.example.com", {})
+
+        assert result["processing_status"] == "error"
+        # Far fewer than the full 1000 chunks were ever requested — the read
+        # was cut off, not drained then discarded.
+        assert 0 < len(chunks_yielded) < 20
+
+    @pytest.mark.asyncio
+    async def test_body_within_cap_is_parsed_normally(self):
+        """A body under the cap is unaffected — same happy path as before #13021."""
+        pipe = LinkPipeline()
+        small_body = SAMPLE_HTML.encode("utf-8")
+        mock_response = self._oversized_mock_response("https://small.example.com", small_body)
+        _parsed = {"type": "link_fetch", "confidence": 0.9}
+        fake_pinned, _calls = _make_fake_pinned_request(mock_response)
+
+        with (
+            patch("media.link.pipeline._AIOHTTP_AVAILABLE", True),
+            patch("media.link.pipeline._BS4_AVAILABLE", True),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch.object(pipe, "_parse_html", return_value=_parsed) as parse_mock,
+        ):
+            result = await pipe._fetch_and_parse("https://small.example.com", {})
+
+        assert result["type"] == "link_fetch"
+        parse_mock.assert_called_once()
+        assert parse_mock.call_args.args[0] == small_body.decode("utf-8")
+
+
+class TestLinkPipelineFetchSSRFPinning:
+    """Hostile-path tests for the fallback fetch's SSRF pinning (#13019).
+
+    Mocks real DNS at ``autobot_shared.url_safety.socket.getaddrinfo`` — never
+    the guard itself. Prior to this fix, ``_is_public_url_async`` only gated
+    the Jina attempt; a non-public URL simply skipped Jina and fell through to
+    an UNGUARDED direct connect (see ``test_fetch_skips_jina_when_hostname_resolves_to_private_ip``
+    below for the old, now-corrected, expectation). These tests prove the
+    fallback fetch is blocked unconditionally, not just the Jina attempt.
+    """
+
+    @pytest.mark.asyncio
+    async def test_private_ip_literal_blocked_end_to_end(self):
+        pipe = LinkPipeline()
+        with patch("aiohttp.ClientSession") as mock_session_cls:
+            result = await pipe._fetch_and_parse("http://10.0.0.5/admin", {})
+        assert result["processing_status"] == "error"
+        mock_session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dns_rebind_public_at_precheck_private_at_connect_blocked(self):
+        """Public at the Jina pre-check, private by the time the pinned connect
+        happens — must still be refused end-to-end through ``_fetch_and_parse``."""
+        pipe = LinkPipeline()
+        public_infos = [(2, 1, 6, "", ("93.184.216.34", 0))]
+        private_infos = [(2, 1, 6, "", ("10.0.0.9", 0))]
+
+        with (
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch(
+                "autobot_shared.url_safety.socket.getaddrinfo",
+                side_effect=[public_infos, private_infos],
+            ),
+            patch("aiohttp.ClientSession") as mock_session_cls,
+        ):
+            result = await pipe._fetch_and_parse("https://rebind.example.com/page", {})
+
+        assert result["processing_status"] == "error"
+        mock_session_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_internal_rejected_outright(self):
+        """A public site that 302s to a private address is rejected, not followed."""
+        pipe = LinkPipeline()
+        real_getaddrinfo = socket.getaddrinfo
+
+        def _fake_getaddrinfo(host, *args, **kwargs):
+            if host == "open-redirect.example.com":
+                return [(2, 1, 6, "", ("93.184.216.34", 0))]
+            return real_getaddrinfo(host, *args, **kwargs)
+
+        redirect_resp = MagicMock()
+        redirect_resp.status = 302
+        redirect_resp.headers = {"Location": "http://10.0.0.5/internal"}
+        redirect_resp.release = AsyncMock(return_value=None)
+        responses = [redirect_resp]
+
+        class _FakeSession:
+            def __init__(self, *a, **kw):
+                pass
+
+            async def request(self, method, url, **kwargs):
+                return responses.pop(0)
+
+            async def close(self):
+                pass
+
+        with (
+            patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
+            patch("autobot_shared.url_safety.socket.getaddrinfo", side_effect=_fake_getaddrinfo),
+            patch("aiohttp.ClientSession", _FakeSession),
+        ):
+            result = await pipe._fetch_and_parse("https://open-redirect.example.com/go", {})
+
+        assert result["processing_status"] == "error"
+        assert responses == []
 
 
 class TestLinkPipelineJina:
@@ -287,7 +510,7 @@ class TestLinkPipelineJina:
         pipe = LinkPipeline()
         mock_session = self._make_jina_mock_session(status=200, content="Title\n\nSome content text here.")
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)):
             result = await pipe._try_jina("https://example.com")
 
         assert result == "Title\n\nSome content text here."
@@ -323,21 +546,27 @@ class TestLinkPipelineJina:
 
     @pytest.mark.asyncio
     async def test_fetch_skips_jina_when_hostname_resolves_to_private_ip(self):
-        """SSRF guard: hostname resolving to RFC1918 must skip Jina fast-path."""
+        """SSRF guard: hostname resolving to RFC1918 must skip Jina fast-path.
+
+        #13019: the fallback fetch is now ALSO blocked (previously it fell
+        through to an unguarded direct connect — see
+        ``TestLinkPipelineFetchSSRFPinning`` for the dedicated regression
+        tests). Jina must never even be attempted either way.
+        """
         pipe = LinkPipeline()
-        bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://intranet.attacker/"}
         jina_mock = AsyncMock(return_value="should-not-be-called")
 
         with (
             patch.object(pipe, "_try_jina", new=jina_mock),
-            patch.object(pipe, "_parse_html", return_value=bs4_result),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch("aiohttp.ClientSession") as mock_session_cls,
             _mock_getaddrinfo("10.0.0.5"),
         ):
             result = await pipe._fetch_and_parse("https://intranet.attacker/", {})
 
         jina_mock.assert_not_called()
         assert result.get("source") != "jina"
+        assert result["processing_status"] == "error"
+        mock_session_cls.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_jina_non200_falls_back_to_beautifulsoup(self):
@@ -348,16 +577,17 @@ class TestLinkPipelineJina:
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
 
         with (
-            patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)),
+            patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
         ):
             # _try_jina returns None on non-200, triggering BS4 fallback
             jina_result = await pipe._try_jina("https://example.com")
             assert jina_result is None
 
+        fake_pinned, _calls = _make_fake_pinned_request(self._make_mock_bs4_response())
         with (
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
         ):
             result = await pipe._fetch_and_parse("https://example.com", {})
@@ -368,17 +598,13 @@ class TestLinkPipelineJina:
     @pytest.mark.asyncio
     async def test_jina_timeout_falls_back_to_beautifulsoup(self):
         """Jina timeout triggers BeautifulSoup fallback."""
-        import aiohttp as _aiohttp
-
         pipe = LinkPipeline()
         bs4_result = {"type": "link_fetch", "confidence": 0.9, "url": "https://example.com"}
-
-        async def _raise_timeout(*args, **kwargs):
-            raise _aiohttp.ServerTimeoutError()
+        fake_pinned, _calls = _make_fake_pinned_request(self._make_mock_bs4_response())
 
         with (
             patch.object(pipe, "_try_jina", new=AsyncMock(return_value=None)),
-            patch("media.link.pipeline.aiohttp.ClientSession", return_value=self._make_mock_bs4_session()),
+            patch("autobot_shared.security.ssrf_guard.pinned_request_with_redirects", fake_pinned),
             patch.object(pipe, "_parse_html", return_value=bs4_result),
         ):
             result = await pipe._fetch_and_parse("https://example.com", {})
@@ -518,21 +744,17 @@ class TestLinkPipelineJina:
         with _mock_getaddrinfo("10.0.0.1"):
             assert not await pipe._is_public_url_async("https://intranet.attacker/")
 
-    def _make_mock_bs4_session(self, status=200):
-        """Helper: mock ClientSession for the BS4 fallback path."""
+    def _make_mock_bs4_response(self, status=200):
+        """Helper: mock response for the pinned BS4-fallback fetch path."""
         mock_response = AsyncMock()
         mock_response.url = "https://example.com"
         mock_response.headers = {"Content-Type": "text/html"}
         mock_response.text = AsyncMock(return_value=SAMPLE_HTML)
+        mock_response.content = _mock_content(SAMPLE_HTML.encode("utf-8"))
         mock_response.status = status
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = AsyncMock()
-        mock_session.get = MagicMock(return_value=mock_response)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        return mock_session
+        return mock_response
 
 
 # ----------------------------------------------------------------------
@@ -563,10 +785,10 @@ class TestJinaCircuitBreaker:
         pipe = LinkPipeline()
 
         # First N calls raise → circuit opens
-        async def _always_raise(*args, **kwargs):
+        def _always_raise(*args, **kwargs):
             raise RuntimeError("simulated Jina outage")
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(side_effect=_always_raise)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(side_effect=_always_raise)):
             for _ in range(pl._JINA_FAILURE_THRESHOLD):
                 result = await pipe._try_jina("https://example.com/a")
                 assert result is None
@@ -576,11 +798,11 @@ class TestJinaCircuitBreaker:
         assert pl._jina_cooldown_until > __import__("time").monotonic()
 
         # Subsequent call must NOT invoke _get_jina_session (short-circuit)
-        called = AsyncMock()
+        called = MagicMock()
         with patch("media.link.pipeline._get_jina_session", new=called):
             result = await pipe._try_jina("https://example.com/b")
         assert result is None
-        called.assert_not_awaited()
+        called.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_circuit_expires_after_cooldown(self, _reset_jina_state):
@@ -603,8 +825,10 @@ class TestJinaCircuitBreaker:
 
         mock_session = MagicMock()
         mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)):
             result = await pipe._try_jina("https://example.com/c")
 
         assert result == "Title: Foo\n\nBody"
@@ -617,10 +841,10 @@ class TestJinaCircuitBreaker:
         pipe = LinkPipeline()
 
         # Two failures (below threshold)
-        async def _raise(*args, **kwargs):
+        def _raise(*args, **kwargs):
             raise RuntimeError("boom")
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(side_effect=_raise)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(side_effect=_raise)):
             await pipe._try_jina("https://example.com/x")
             await pipe._try_jina("https://example.com/y")
 
@@ -634,8 +858,10 @@ class TestJinaCircuitBreaker:
         mock_response.__aexit__ = AsyncMock(return_value=False)
         mock_session = MagicMock()
         mock_session.get = MagicMock(return_value=mock_response)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("media.link.pipeline._get_jina_session", new=AsyncMock(return_value=mock_session)):
+        with patch("media.link.pipeline._get_jina_session", new=MagicMock(return_value=mock_session)):
             await pipe._try_jina("https://example.com/z")
 
         assert len(pl._jina_failures_in_window) == 0
@@ -646,22 +872,30 @@ class TestJinaPooledSession:
 
     @pytest.mark.asyncio
     async def test_delegates_to_shared_http_client(self, _reset_jina_state):
-        """_get_jina_session returns the canonical shared session."""
+        """_get_jina_session yields the canonical shared session via tracked_session().
+
+        Issue #11656: uses the real HTTPClientManager singleton (only
+        ``get_session`` patched) so the real ``tracked_session()`` delegation
+        path — including active-request tracking — is exercised, not
+        reimplemented in the test.
+        """
+        from autobot_shared.http_client import get_http_client
         from media.link import pipeline as pl
 
-        sentinel_session = MagicMock()
-        mock_manager = MagicMock()
-        mock_manager.get_session = AsyncMock(return_value=sentinel_session)
+        manager = get_http_client()
+        sentinel_session = MagicMock(closed=False)
 
-        with patch("autobot_shared.http_client.get_http_client", return_value=mock_manager):
-            session = await pl._get_jina_session()
+        with patch.object(manager, "get_session", new=AsyncMock(return_value=sentinel_session)):
+            async with pl._get_jina_session() as session:
+                assert session is sentinel_session
 
-        assert session is sentinel_session
-        mock_manager.get_session.assert_awaited_once()
+        assert manager._active_requests == 0, "counter must be back to 0 after the CM exits"
 
     @pytest.mark.asyncio
     async def test_shared_session_reused_across_calls(self, _reset_jina_state):
         """Sequential _try_jina calls fetch through the same shared session."""
+        from autobot_shared.http_client import get_http_client
+
         pipe = LinkPipeline()
 
         mock_response = AsyncMock()
@@ -670,12 +904,11 @@ class TestJinaPooledSession:
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
         mock_response.__aexit__ = AsyncMock(return_value=False)
 
-        shared_session = MagicMock()
+        shared_session = MagicMock(closed=False)
         shared_session.get = MagicMock(return_value=mock_response)
-        mock_manager = MagicMock()
-        mock_manager.get_session = AsyncMock(return_value=shared_session)
 
-        with patch("autobot_shared.http_client.get_http_client", return_value=mock_manager):
+        manager = get_http_client()
+        with patch.object(manager, "get_session", new=AsyncMock(return_value=shared_session)):
             await pipe._try_jina("https://example.com/1")
             await pipe._try_jina("https://example.com/2")
 

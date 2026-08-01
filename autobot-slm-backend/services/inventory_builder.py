@@ -54,6 +54,8 @@ from typing import Any
 
 import yaml
 
+from autobot_shared.ssot_config import config
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -143,7 +145,7 @@ REQUIRED_GROUPS: frozenset = frozenset(
 # Global all.vars — reproduced verbatim from slm-nodes.yml
 _ALL_VARS: dict[str, str] = {
     "ansible_user": "autobot",
-    "ansible_ssh_private_key_file": "/etc/autobot/ssh/autobot_key",
+    "ansible_ssh_private_key_file": config.path.ssh_key_path,  # canonical (#12429)
     "ansible_python_interpreter": "/usr/bin/python3",
     "slm_host": (
         "{{ lookup('env', 'SLM_HOST') | default(lookup('pipe',"

@@ -247,12 +247,24 @@ def _is_direct_uvicorn_url(url: str) -> bool:
         scheme = p.scheme.lower()
         port = p.port  # None means the scheme's default port (80 for http, 443 for https)
 
-        # Loopback address always means direct uvicorn
+        # #12781: an nginx PORT wins over any host heuristic, including
+        # loopback. On a co-located single-box install nginx terminates TLS on
+        # 127.0.0.1:443 and proxies /slm/api/ -> the SLM on :8000, while
+        # /api/ws/ goes to the USER backend. Treating loopback as "direct
+        # uvicorn" therefore chose /api/ws/events, nginx routed it to the user
+        # backend, and that rejected the handshake with 403 on every reconnect.
+        #
+        # This check must come FIRST. It used to sit after the loopback branch,
+        # which made loopback+443 unreachable.
+        if port in _NGINX_HTTP_PORTS or (port is None and scheme in ("http", "https")):
+            return False
+
+        # Loopback on a non-nginx port means direct uvicorn.
         if host in _LOOPBACK_HOSTS:
             return True
 
-        # Plain HTTP on a non-standard port means direct uvicorn;
-        # nginx terminates TLS on 443 or serves plain HTTP on 80.
+        # Plain HTTP on a non-standard port means direct uvicorn — the Docker
+        # Compose case (AUTOBOT_SLM_HOST=autobot-slm, port 8000) from #10459.
         if scheme == "http" and port is not None and port not in _NGINX_HTTP_PORTS:
             return True
 
@@ -876,6 +888,33 @@ _slm_client: SLMClient | None = None
 
 # Module-level service discovery cache
 _discovery_cache = ServiceDiscoveryCache(ttl_seconds=60)
+
+
+def slm_link_state() -> dict:
+    """Snapshot of the backend→SLM control link for health reporting (#12781).
+
+    The link degrades silently today: after ``_WS_AUTH_FAIL_THRESHOLD``
+    rejected handshakes the client pins its backoff to the maximum interval and
+    stops logging, so a node that cannot reach the control plane looks
+    identical to a healthy one from outside. Both paths by which a node reports
+    itself were broken on the node in #12781 and nothing surfaced it — the
+    crash loop in #12777 went unseen in the GUI as a direct result.
+
+    Returns a plain dict (no exceptions) so a health probe can render it even
+    when the client was never initialized.
+    """
+    client = get_slm_client()
+    if client is None:
+        return {"initialized": False, "connected": False, "auth_failures": 0, "backoff_pinned": False}
+
+    return {
+        "initialized": True,
+        "connected": bool(client._ws_connected),
+        "auth_failures": int(client._ws_auth_fail_count),
+        # The tell-tale of a link that has given up rather than one still retrying.
+        "backoff_pinned": client._reconnect_delay >= client._max_reconnect_delay,
+        "slm_url": client.slm_url,
+    }
 
 
 def get_slm_client() -> SLMClient | None:

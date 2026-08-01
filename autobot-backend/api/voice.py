@@ -26,6 +26,7 @@ from api.schemas_code import (
     VoiceTranscribeResponse,
 )
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id
@@ -66,7 +67,7 @@ async def voice_realtime_list_tools(
     the caller's RBAC role.
     """
     role = current_user.get("role", "user")
-    is_admin = role == "admin"
+    is_admin = is_admin_role(role)  # #12717: superadmin gets the admin realtime bridge
     user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     bridge = await get_realtime_bridge(is_admin=is_admin)
     tools = await bridge.list_realtime_tools(user_id=str(user_id) if user_id else None, role=role)
@@ -102,7 +103,7 @@ async def voice_realtime_call_tool(
     """
     from fastapi import HTTPException
 
-    is_admin = current_user.get("role") == "admin"
+    is_admin = is_admin_role(current_user.get("role"))  # #12717
     _id = current_user.get("id")
     user_id = _id if _id is not None else current_user.get("sub")
     session_id = request.headers.get("X-Session-Id")

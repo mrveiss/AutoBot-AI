@@ -543,7 +543,7 @@ async function createCompany() {
 
 .step-connector {
   position: absolute;
-  top: 20px;
+  top: var(--spacing-5);
   left: 50%;
   width: 100%;
   height: 2px;
@@ -773,8 +773,8 @@ async function createCompany() {
 
 .color-swatch {
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: var(--spacing-5);
+  height: var(--spacing-5);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
 }

@@ -10,8 +10,8 @@
  */
 
 import { ref, reactive } from 'vue'
-import axios from 'axios'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
+import type { components } from '@/types/generated/api'
 
 export interface Role {
   name: string
@@ -39,11 +39,11 @@ export interface NodeRoleItem {
   last_error: string | null
 }
 
-export interface PortInfo {
-  port: number
-  process: string | null
-  pid: number | null
-}
+// GET /api/nodes/{node_id}/detected-roles -> NodeRolesInfo.listening_ports
+// (autobot-slm-backend/models/schemas.py:97). Derived: the hand-written copy
+// omitted `address`, the bind interface added by GH#11224 and consumed by the
+// security-posture audit, so the UI could never reach it.
+export type PortInfo = components['schemas']['PortInfo']
 
 export interface NodeRolesInfo {
   node_id: string
@@ -83,17 +83,27 @@ export interface PlaybookMigrateResult {
 }
 
 // Post-sync action types (Issue #1243)
-export interface PostSyncAction {
-  role_name: string
-  display_name: string
-  category: 'build' | 'restart' | 'schema' | 'install'
-  label: string
-  command: string | null
-  systemd_service: string | null
+
+/**
+ * The four categories the backend actually emits.
+ *
+ * `PostSyncAction.category` is declared `str` in the contract
+ * (`autobot-slm-backend/api/roles.py:115`) with no pattern or enum, so the
+ * generated schema widens it to `string`. Every construction site is
+ * enumerable and exhaustive — `roles.py:506` (schema), `:517` (build),
+ * `:528` (install), `:539` (restart) — so the narrowing below is a checked
+ * fact about the server, not an assumption. `OrchestrationView.vue:439`
+ * branches on the literal `'restart'` and relies on it.
+ */
+export type PostSyncActionCategory = 'build' | 'restart' | 'schema' | 'install'
+
+// GET /api/roles/node-actions/{node_id} (autobot-slm-backend/api/roles.py:110)
+export type PostSyncAction = components['schemas']['PostSyncAction'] & {
+  category: PostSyncActionCategory
 }
 
-export interface NodeActionsResponse {
-  node_id: string
+// GET /api/roles/node-actions/{node_id} (autobot-slm-backend/api/roles.py:121)
+export type NodeActionsResponse = components['schemas']['NodeActionsResponse'] & {
   actions: PostSyncAction[]
 }
 
@@ -106,11 +116,9 @@ export interface ExecuteActionResult {
 }
 
 // Decommission types (Issue #1369)
-export interface DecommissionRoleInfo {
-  role_name: string
-  display_name: string
-  reason: string
-}
+// GET /api/nodes/{node_id}/decommission/preflight
+// (autobot-slm-backend/models/schemas.py:2272)
+export type DecommissionRoleInfo = components['schemas']['DecommissionRoleInfo']
 
 export interface DecommissionPreflight {
   can_proceed: boolean
@@ -119,28 +127,30 @@ export interface DecommissionPreflight {
   safe_to_remove: DecommissionRoleInfo[]
 }
 
+// =============================================================================
+// slmApiClient adapter (#12420 Phase 2 batch 7 → consolidated in #12654)
+//
+// useRoles historically owned its own axios instance; the Phase-2 migration
+// routed every call through the canonical `slmApiClient` via a thin axios-compat
+// adapter. That adapter now lives in `utils/slmApiCompat.ts` (shared with
+// useSlmApi). `arrays: true` preserves this composable's serialisation of array
+// params as repeated `key[]=value` (syncRole's `node_ids`).
+// =============================================================================
+
+const client = makeAxiosCompatClient({ arrays: true })
+
 export function useRoles() {
   const roles = ref<Role[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const fleetHealth = ref<FleetHealth | null>(null)
 
-  // Create axios instance with auth
-  const client = axios.create()
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   async function fetchRoles(): Promise<void> {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await client.get<Role[]>(`${getSlmApiBase()}/roles`)
+      const response = await client.get<Role[]>('/roles')
       roles.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -153,7 +163,7 @@ export function useRoles() {
   async function getNodeRoles(nodeId: string): Promise<NodeRolesInfo | null> {
     try {
       const response = await client.get<NodeRolesInfo>(
-        `${getSlmApiBase()}/nodes/${nodeId}/detected-roles`
+        `/nodes/${nodeId}/detected-roles`
       )
       return response.data
     } catch (e: unknown) {
@@ -170,7 +180,7 @@ export function useRoles() {
   ): Promise<NodeRoleItem | null> {
     try {
       const response = await client.post<NodeRoleItem>(
-        `${getSlmApiBase()}/nodes/${nodeId}/detected-roles`,
+        `/nodes/${nodeId}/detected-roles`,
         { role_name: roleName, assignment_type: assignmentType }
       )
       return response.data
@@ -191,7 +201,7 @@ export function useRoles() {
         success: boolean
         message: string
         backup_path?: string
-      }>(`${getSlmApiBase()}/nodes/${nodeId}/detected-roles/${roleName}`, {
+      }>(`/nodes/${nodeId}/detected-roles/${roleName}`, {
         params: { backup },
       })
       return response.data
@@ -205,7 +215,7 @@ export function useRoles() {
 
   async function createRole(roleData: Partial<Role>): Promise<Role | null> {
     try {
-      const response = await client.post<Role>(`${getSlmApiBase()}/roles`, roleData)
+      const response = await client.post<Role>('/roles', roleData)
       return response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -216,7 +226,7 @@ export function useRoles() {
 
   async function updateRole(roleName: string, roleData: Partial<Role>): Promise<Role | null> {
     try {
-      const response = await client.put<Role>(`${getSlmApiBase()}/roles/${roleName}`, roleData)
+      const response = await client.put<Role>(`/roles/${roleName}`, roleData)
       return response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -227,7 +237,7 @@ export function useRoles() {
 
   async function deleteRole(roleName: string): Promise<boolean> {
     try {
-      await client.delete(`${getSlmApiBase()}/roles/${roleName}`)
+      await client.delete(`/roles/${roleName}`)
       return true
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -247,7 +257,7 @@ export function useRoles() {
         params.node_ids = nodeIds
       }
       const response = await client.post<SyncResult>(
-        `${getSlmApiBase()}/code-sync/roles/${roleName}/sync`,
+        `/code-sync/roles/${roleName}/sync`,
         null,
         { params }
       )
@@ -265,7 +275,7 @@ export function useRoles() {
   async function pullFromSource(): Promise<{ success: boolean; message: string; commit: string | null }> {
     try {
       const response = await client.post<{ success: boolean; message: string; commit: string | null }>(
-        `${getSlmApiBase()}/code-sync/pull`
+        '/code-sync/pull'
       )
       return response.data
     } catch (e: unknown) {
@@ -280,7 +290,7 @@ export function useRoles() {
 
   async function fetchFleetHealth(): Promise<void> {
     try {
-      const response = await client.get<FleetHealth>(`${getSlmApiBase()}/roles/fleet-health`)
+      const response = await client.get<FleetHealth>('/roles/fleet-health')
       fleetHealth.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -294,7 +304,7 @@ export function useRoles() {
   ): Promise<PlaybookMigrateResult | null> {
     try {
       const response = await client.post<PlaybookMigrateResult>(
-        `${getSlmApiBase()}/roles/${roleName}/migrate`,
+        `/roles/${roleName}/migrate`,
         { target_node_id: targetNodeId }
       )
       return response.data
@@ -311,7 +321,7 @@ export function useRoles() {
   ): Promise<NodeActionsResponse | null> {
     try {
       const resp = await client.get<NodeActionsResponse>(
-        `${getSlmApiBase()}/roles/node-actions/${nodeId}`
+        `/roles/node-actions/${nodeId}`
       )
       return resp.data
     } catch (e: unknown) {
@@ -334,7 +344,7 @@ export function useRoles() {
   ): Promise<ExecuteActionResult | null> {
     try {
       const resp = await client.post<ExecuteActionResult>(
-        `${getSlmApiBase()}/roles/node-actions/${nodeId}/execute`,
+        `/roles/node-actions/${nodeId}/execute`,
         { role_name: roleName, category }
       )
       return resp.data
@@ -357,7 +367,7 @@ export function useRoles() {
   ): Promise<DecommissionPreflight | null> {
     try {
       const resp = await client.get<DecommissionPreflight>(
-        `${getSlmApiBase()}/nodes/${nodeId}/decommission/preflight`
+        `/nodes/${nodeId}/decommission/preflight`
       )
       return resp.data
     } catch (e: unknown) {
@@ -384,7 +394,7 @@ export function useRoles() {
         message: string
         deployment_id: string
         output: string
-      }>(`${getSlmApiBase()}/nodes/${nodeId}/decommission`, {
+      }>(`/nodes/${nodeId}/decommission`, {
         backup,
         confirm_node_id: confirmNodeId,
       })
@@ -410,7 +420,7 @@ export function useRoles() {
       const resp = await client.post<{
         success: boolean
         message: string
-      }>(`${getSlmApiBase()}/nodes/${nodeId}/reenroll`)
+      }>(`/nodes/${nodeId}/reenroll`)
       return resp.data
     } catch (e: unknown) {
       const err = e as {

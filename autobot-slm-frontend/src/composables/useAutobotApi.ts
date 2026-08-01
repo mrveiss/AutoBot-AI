@@ -182,6 +182,340 @@ export interface BudgetPoliciesList {
   count: number
 }
 
+// =============================================================================
+// Advanced Control (#12653) — desktop streaming + human takeover.
+//
+// The endpoint paths and payload shapes below used to be re-declared inline in
+// AdvancedControlTool.vue, which also re-implemented this composable's
+// transport with a raw `fetch` (no autobot_access_token fallback, no 401
+// handling, no timeout). Declaring them here keeps the SLM app's knowledge of
+// the autobot backend in exactly one place, next to every other tool.
+// =============================================================================
+
+export interface AdvancedControlCapabilities {
+  vnc_available?: boolean
+  novnc_available?: boolean
+  max_sessions?: number
+  supported_resolutions?: string[]
+  supported_depths?: number[]
+  [k: string]: unknown
+}
+
+export interface AdvancedControlStreamingSession {
+  session_id: string
+  user_id?: string
+  display?: string
+  vnc_port?: number
+  status?: string
+  created_at?: string
+  [k: string]: unknown
+}
+
+export interface AdvancedControlPendingRequest {
+  request_id: string
+  trigger?: string
+  reason?: string
+  priority?: string
+  created_at?: string
+  [k: string]: unknown
+}
+
+export interface AdvancedControlActiveSession {
+  session_id: string
+  human_operator?: string
+  status?: string
+  [k: string]: unknown
+}
+
+export type AdvancedControlTakeoverStatus = Record<string, unknown>
+
+/** Triggers accepted by POST /advanced-control/takeover/request. */
+export const ADVANCED_CONTROL_TRIGGERS = [
+  'MANUAL_REQUEST',
+  'CRITICAL_ERROR',
+  'SECURITY_CONCERN',
+  'USER_INTERVENTION_REQUIRED',
+  'SYSTEM_OVERLOAD',
+  'APPROVAL_REQUIRED',
+  'TIMEOUT_EXCEEDED',
+] as const
+
+/** Priorities accepted by POST /advanced-control/takeover/request. */
+export const ADVANCED_CONTROL_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const
+
+export interface AdvancedControlSessionRequest {
+  user_id: string
+  resolution?: string
+  depth?: number
+}
+
+export interface AdvancedControlTakeoverRequest {
+  trigger: string
+  reason: string
+  priority?: string
+  requesting_agent?: string | null
+}
+
+/** Lifecycle transitions on an approved takeover session. */
+export type AdvancedControlSessionAction = 'pause' | 'resume' | 'complete'
+
+// =============================================================================
+// Agent org chart / processes / config revisions / Redis service / RBAC (#13079)
+//
+// The endpoint paths and payload shapes below used to be re-declared inline in
+// OrgChartTab.vue, ProcessMonitorTab.vue, ConfigHistoryTab.vue,
+// RedisServicePanel.vue, UserManagementSettings.vue, CacheSettings.vue and
+// BackendSettings.vue. Each of those files also re-implemented this
+// composable's transport with a raw `fetch` that sent only
+// `Bearer ${authStore.token}` — no `autobot_access_token` fallback, no 401
+// cleanup, no timeout, no shared base-URL resolution. Declaring them here keeps
+// the SLM app's knowledge of the autobot backend in exactly one place
+// (ADR-008 decision rule 3), as `AdvancedControlTool.vue` already does.
+// =============================================================================
+
+/** Node of the agent hierarchy returned by GET /agents/org (#1405). */
+export interface AgentOrgNode {
+  agent_id: string
+  name: string
+  org_role: string
+  title: string | null
+  capabilities: string | null
+  direct_reports_count: number
+  children: AgentOrgNode[]
+}
+
+/** Entry of GET /agents/{id}/reports (#1405). */
+export interface AgentDirectReport {
+  agent_id: string
+  name: string
+  org_role: string
+}
+
+/** Entry of GET /agents/{id}/delegations (#1405). */
+export interface AgentDelegation {
+  id: string
+  delegator_id: string
+  assignee_id: string
+  task_description: string
+  status: string
+  escalated_to: string | null
+  created_at: string | null
+}
+
+/** GET /agents/{id}/activity (#1405). */
+export interface AgentActivitySummary {
+  manager_id: string
+  total_delegated: number
+  by_status: Record<string, number>
+}
+
+/** Body of POST /agents/{id}/delegate (#1405). */
+export interface AgentDelegationRequest {
+  assignee_id: string
+  task_description: string
+}
+
+/** Row of GET /agents/{id}/processes (#1406). */
+export interface ProcessRun {
+  id: string
+  agent_id: string
+  task_id: string | null
+  command: string
+  args: string[]
+  status: string
+  exit_code: number | null
+  signal: string | null
+  log_excerpt: string | null
+  log_path: string | null
+  timeout_seconds: number
+  started_at: string | null
+  completed_at: string | null
+  created_at: string | null
+}
+
+/** Body of POST /processes/spawn (#1406). */
+export interface ProcessSpawnRequest {
+  agent_id: string
+  command: string
+  args: string[]
+  timeout_seconds: number
+}
+
+/** Entry of GET /config-revisions/{entityType}/{entityId} (#1404). */
+export interface ConfigRevision {
+  id: string
+  entity_type: string
+  entity_id: string
+  before_config: Record<string, unknown> | null
+  after_config: Record<string, unknown>
+  changed_keys: string[]
+  source: string
+  created_by: string
+  created_at: string | null
+}
+
+/** GET /redis-service/status (#3381). */
+export interface RedisServiceStatus {
+  status: 'running' | 'stopped' | 'unknown'
+  uptime_seconds: number | null
+  memory_used_bytes: number | null
+  memory_peak_bytes: number | null
+  connected_clients: number | null
+  last_checked: string | null
+  error?: string
+}
+
+/** Lifecycle verbs accepted by POST /redis-service/{action} (#3381). */
+export type RedisServiceAction = 'start' | 'stop' | 'restart'
+
+/** GET /settings/rbac/status. */
+export interface RbacStatus {
+  initialized: boolean
+  message: string
+}
+
+/** Body of POST /settings/rbac/initialize. */
+export interface RbacInitializeRequest {
+  create_admin: boolean
+  admin_username: string
+}
+
+/** Outcome of the GET /health reachability probe behind "Test connection". */
+export interface BackendHealthProbe {
+  ok: boolean
+  status: number
+}
+
+// =============================================================================
+// Skills + skill governance (#731 / #951 / #13079)
+//
+// These shapes and the `/skills/...` paths below used to live in
+// `useSkills.ts`, which drove them through TWO private `axios.create`
+// instances (one with `baseURL: getBackendUrl() + '/skills/'`, one bare) whose
+// interceptors attached only `Bearer ${authStore.token}` — no
+// `autobot_access_token` fallback, no 401 cleanup. Declaring them beside the
+// canonical client keeps the SLM app's knowledge of the autobot backend in one
+// place (ADR-008 decision rule 3).
+//
+// `useSkills.ts` re-exports every type below so its existing consumers
+// (`SkillsView.vue`, `ReposTab.vue`, `ApprovalsTab.vue`) import unchanged.
+// =============================================================================
+
+/** One field of a skill's `config_schema` (GET /skills/{name}). */
+export interface SkillConfigField {
+  type: string
+  default: unknown
+  description: string
+  required: boolean
+  choices: string[] | null
+}
+
+/** Row of GET /skills/. */
+export interface SkillInfo {
+  name: string
+  version: string
+  description: string
+  author: string
+  category: string
+  status: string
+  enabled: boolean
+  tools: readonly string[]
+  triggers: readonly string[]
+  dependencies: readonly string[]
+  tags: readonly string[]
+}
+
+/** Health block carried by GET /skills/{name}. */
+export interface SkillHealth {
+  name: string
+  status: string
+  version: string
+  message: string | null
+  last_checked: string
+  config_valid: boolean
+  dependencies_met: boolean
+  details: Record<string, unknown>
+}
+
+/** GET /skills/{name}. */
+export interface SkillDetail extends SkillInfo {
+  config_schema: Record<string, SkillConfigField>
+  current_config: Record<string, unknown>
+  health: SkillHealth
+}
+
+/** GET /skills/. */
+export interface SkillListResponse {
+  skills: SkillInfo[]
+  total: number
+  categories: string[]
+}
+
+/** GET /skills/categories. */
+export interface CategoryCounts {
+  categories: Record<string, number>
+}
+
+/** Optional filters accepted by GET /skills/. */
+export interface SkillListQuery {
+  category?: string
+  search?: string
+}
+
+/** Row of GET /skills/repos. */
+export interface SkillRepo {
+  id: string
+  name: string
+  url: string
+  repo_type: 'git' | 'local' | 'http' | 'mcp'
+  skill_count: number
+  status: string
+  last_synced: string | null
+}
+
+/** Body of POST /skills/repos. */
+export type SkillRepoCreate = Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_synced'>
+
+/** Row of GET /skills/governance/approvals. */
+export interface SkillApproval {
+  id: string
+  skill_id: string
+  requested_by: string
+  requested_at: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  notes: string | null
+}
+
+/** Body of POST /skills/governance/approvals/{id}. */
+export interface SkillApprovalDecision {
+  approved: boolean
+  notes: string
+  trust_level: string
+}
+
+/** GET/PUT /skills/governance/. */
+export interface GovernanceConfig {
+  mode: 'full_auto' | 'semi_auto' | 'locked'
+  gap_detection_enabled: boolean
+  default_trust_level: string
+}
+
+/**
+ * Unwrap the FastAPI `{ "detail": "..." }` error body (#13079).
+ *
+ * The raw-`fetch` call sites this client replaced read `detail` off the parsed
+ * body and showed it to the operator. Axios rejects with a generic
+ * "Request failed with status code 500" message instead, so the detail has to
+ * be pulled off `error.response.data` explicitly to keep the same error shape.
+ */
+export function autobotApiErrorMessage(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (typeof detail === 'string' && detail.length > 0) return detail
+  if (err instanceof Error && err.message.length > 0) return err.message
+  return fallback
+}
+
 export function useAutobotApi() {
   const authStore = useAuthStore()
 
@@ -1031,7 +1365,400 @@ export function useAutobotApi() {
     return response.data
   }
 
+  // =============================================================================
+  // Advanced Control API (#12653 - desktop streaming + human takeover)
+  // =============================================================================
+
+  const AC = '/advanced-control'
+
+  async function getAdvancedControlCapabilities(): Promise<AdvancedControlCapabilities> {
+    const response = await client.get<AdvancedControlCapabilities>(`${AC}/streaming/capabilities`)
+    return response.data
+  }
+
+  async function listAdvancedControlSessions(): Promise<AdvancedControlStreamingSession[]> {
+    const response = await client.get<{ sessions: AdvancedControlStreamingSession[]; count: number }>(
+      `${AC}/streaming/sessions`
+    )
+    return response.data.sessions ?? []
+  }
+
+  async function createAdvancedControlSession(
+    request: AdvancedControlSessionRequest
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`${AC}/streaming/create`, request)
+    return response.data
+  }
+
+  async function terminateAdvancedControlSession(sessionId: string): Promise<Record<string, unknown>> {
+    const response = await client.delete(`${AC}/streaming/${encodeURIComponent(sessionId)}`)
+    return response.data
+  }
+
+  async function getAdvancedControlTakeoverStatus(): Promise<AdvancedControlTakeoverStatus> {
+    const response = await client.get<AdvancedControlTakeoverStatus>(`${AC}/takeover/status`)
+    return response.data
+  }
+
+  async function getPendingTakeovers(): Promise<AdvancedControlPendingRequest[]> {
+    const response = await client.get<{ pending_requests: AdvancedControlPendingRequest[]; count: number }>(
+      `${AC}/takeover/pending`
+    )
+    return response.data.pending_requests ?? []
+  }
+
+  async function getActiveTakeovers(): Promise<AdvancedControlActiveSession[]> {
+    const response = await client.get<{ active_sessions: AdvancedControlActiveSession[]; count: number }>(
+      `${AC}/takeover/active`
+    )
+    return response.data.active_sessions ?? []
+  }
+
+  async function requestTakeover(
+    request: AdvancedControlTakeoverRequest
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`${AC}/takeover/request`, request)
+    return response.data
+  }
+
+  async function approveTakeover(
+    requestId: string,
+    humanOperator: string
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`${AC}/takeover/${encodeURIComponent(requestId)}/approve`, {
+      human_operator: humanOperator,
+    })
+    return response.data
+  }
+
+  async function takeoverSessionAction(
+    sessionId: string,
+    action: AdvancedControlSessionAction,
+    body?: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `${AC}/takeover/sessions/${encodeURIComponent(sessionId)}/${action}`,
+      body
+    )
+    return response.data
+  }
+
+  // =============================================================================
+  // Agent Org Chart (#1405 / #13079)
+  // =============================================================================
+
+  async function getAgentOrgTree(): Promise<AgentOrgNode[]> {
+    const response = await client.get<AgentOrgNode[]>('/agents/org')
+    return response.data ?? []
+  }
+
+  async function getAgentDirectReports(agentId: string): Promise<AgentDirectReport[]> {
+    const response = await client.get<AgentDirectReport[]>(
+      `/agents/${encodeURIComponent(agentId)}/reports`
+    )
+    return response.data ?? []
+  }
+
+  async function getAgentActivity(agentId: string): Promise<AgentActivitySummary> {
+    const response = await client.get<AgentActivitySummary>(
+      `/agents/${encodeURIComponent(agentId)}/activity`
+    )
+    return response.data
+  }
+
+  async function getAgentDelegations(
+    agentId: string,
+    options?: { role?: string; limit?: number }
+  ): Promise<AgentDelegation[]> {
+    const params = new URLSearchParams()
+    if (options?.role) params.append('role', options.role)
+    if (options?.limit !== undefined) params.append('limit', String(options.limit))
+    const query = params.toString()
+    const response = await client.get<AgentDelegation[]>(
+      `/agents/${encodeURIComponent(agentId)}/delegations${query ? `?${query}` : ''}`
+    )
+    return response.data ?? []
+  }
+
+  async function delegateAgentTask(
+    agentId: string,
+    request: AgentDelegationRequest
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`/agents/${encodeURIComponent(agentId)}/delegate`, request)
+    return response.data
+  }
+
+  // =============================================================================
+  // Agent Processes (#1406 / #13079)
+  // =============================================================================
+
+  async function getAgentProcesses(
+    agentId: string,
+    options?: { limit?: number; status?: string }
+  ): Promise<ProcessRun[]> {
+    const params = new URLSearchParams()
+    params.append('limit', String(options?.limit ?? 50))
+    if (options?.status) params.append('status', options.status)
+    const response = await client.get<{ processes: ProcessRun[] }>(
+      `/agents/${encodeURIComponent(agentId)}/processes?${params}`
+    )
+    return response.data?.processes ?? []
+  }
+
+  /**
+   * Process logs are served as plain text, not JSON. `responseType: 'text'`
+   * disables axios' default JSON parsing so the body arrives verbatim — the
+   * raw `fetch` this replaced used `response.text()` for the same reason.
+   */
+  async function getProcessLogs(processId: string): Promise<string> {
+    const response = await client.get<string>(
+      `/processes/${encodeURIComponent(processId)}/logs`,
+      { responseType: 'text' }
+    )
+    return response.data
+  }
+
+  async function signalProcess(
+    processId: string,
+    signal: string
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`/processes/${encodeURIComponent(processId)}/signal`, {
+      signal,
+    })
+    return response.data
+  }
+
+  async function spawnProcess(request: ProcessSpawnRequest): Promise<Record<string, unknown>> {
+    const response = await client.post('/processes/spawn', request)
+    return response.data
+  }
+
+  // =============================================================================
+  // Config Revisions (#1404 / #13079)
+  // =============================================================================
+
+  async function getConfigRevisions(
+    entityType: string,
+    entityId: string,
+    limit: number = 50
+  ): Promise<ConfigRevision[]> {
+    const response = await client.get<ConfigRevision[]>(
+      `/config-revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}?limit=${limit}`
+    )
+    return response.data ?? []
+  }
+
+  async function rollbackConfigRevision(
+    entityType: string,
+    entityId: string,
+    revisionId: string
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/config-revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/${encodeURIComponent(revisionId)}/rollback`
+    )
+    return response.data
+  }
+
+  // =============================================================================
+  // Redis Service control (#3381 / #13079)
+  // =============================================================================
+
+  async function getRedisServiceStatus(): Promise<RedisServiceStatus> {
+    const response = await client.get<RedisServiceStatus>('/redis-service/status')
+    return response.data
+  }
+
+  async function performRedisServiceAction(
+    action: RedisServiceAction
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`/redis-service/${action}`)
+    return response.data
+  }
+
+  // =============================================================================
+  // RBAC bootstrap + Redis cache admin (#13079)
+  // =============================================================================
+
+  async function getRbacStatus(): Promise<RbacStatus> {
+    const response = await client.get<RbacStatus>('/settings/rbac/status')
+    return response.data
+  }
+
+  async function initializeRbac(request: RbacInitializeRequest): Promise<{ message?: string }> {
+    const response = await client.post<{ message?: string }>('/settings/rbac/initialize', request)
+    return response.data
+  }
+
+  async function clearRedisDatabase(database: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/cache/redis/clear/${encodeURIComponent(database)}`)
+    return response.data
+  }
+
+  /**
+   * Reachability probe behind the "Test connection" control (#13079).
+   *
+   * `validateStatus` accepts every status code so the probe reports
+   * "reachable but rejected" rather than throwing, and — critically — never
+   * trips the response interceptor that clears `autobot_access_token`: a
+   * connectivity diagnostic must not be able to log the operator out.
+   */
+  async function probeBackendHealth(): Promise<BackendHealthProbe> {
+    const response = await client.get('/health', { validateStatus: () => true })
+    return { ok: response.status >= 200 && response.status < 300, status: response.status }
+  }
+
+
+  // =============================================================================
+  // Skills + skill governance (#731 / #951 / #13079)
+  //
+  // Paths keep their exact trailing slashes: `useSkills.ts` reached `/skills/`
+  // and `/skills/governance/` through an axios `baseURL` that preserved them,
+  // and FastAPI answers the slash-less form with a 307 redirect that drops the
+  // Authorization header on a cross-origin hop.
+  // =============================================================================
+
+  async function getSkills(query: SkillListQuery = {}): Promise<SkillListResponse> {
+    const params = new URLSearchParams()
+    if (query.category) params.append('category', query.category)
+    if (query.search) params.append('search', query.search)
+    const qs = params.toString()
+    const response = await client.get<SkillListResponse>(`/skills/${qs ? `?${qs}` : ''}`)
+    return response.data
+  }
+
+  async function getSkillCategories(): Promise<CategoryCounts> {
+    const response = await client.get<CategoryCounts>('/skills/categories')
+    return response.data
+  }
+
+  async function getSkillDetail(name: string): Promise<SkillDetail> {
+    const response = await client.get<SkillDetail>(`/skills/${encodeURIComponent(name)}`)
+    return response.data
+  }
+
+  async function enableSkill(name: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/skills/${encodeURIComponent(name)}/enable`)
+    return response.data
+  }
+
+  async function disableSkill(name: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/skills/${encodeURIComponent(name)}/disable`)
+    return response.data
+  }
+
+  async function updateSkillConfig(
+    name: string,
+    config: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const response = await client.put(`/skills/${encodeURIComponent(name)}/config`, { config })
+    return response.data
+  }
+
+  async function initializeSkills(): Promise<Record<string, unknown>> {
+    const response = await client.post('/skills/initialize')
+    return response.data
+  }
+
+  async function getSkillRepos(): Promise<SkillRepo[]> {
+    const response = await client.get<SkillRepo[]>('/skills/repos')
+    return response.data ?? []
+  }
+
+  async function addSkillRepo(payload: SkillRepoCreate): Promise<Record<string, unknown>> {
+    const response = await client.post('/skills/repos', payload)
+    return response.data
+  }
+
+  /**
+   * POST /skills/repos/{id}/sync.
+   *
+   * `autobot-backend/api/skills_repos.py:117` awaits `GitRepoSync` inline, so a
+   * cold clone runs for as long as the clone takes. The private instance this
+   * replaced capped it at 15s (see `SKILL_APPROVAL_POLL_TIMEOUT_MS` for why
+   * that number carried no intent), which aborted the very operation it was
+   * meant to cover; the client's 30s default applies instead.
+   */
+  async function syncSkillRepo(repoId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/skills/repos/${encodeURIComponent(repoId)}/sync`)
+    return response.data
+  }
+
+  /**
+   * GET /skills/governance/approvals.
+   *
+   * `timeoutMs` exists for the 30s approval poll in `useSkillGovernance`: a tick
+   * that outlived its own interval would overlap the next one, so the polled
+   * read is given a sub-interval budget rather than the client's 30s default.
+   */
+  async function getSkillApprovals(timeoutMs?: number): Promise<SkillApproval[]> {
+    const response = await client.get<SkillApproval[]>(
+      '/skills/governance/approvals',
+      timeoutMs === undefined ? undefined : { timeout: timeoutMs }
+    )
+    return response.data ?? []
+  }
+
+  async function decideSkillApproval(
+    approvalId: string,
+    decision: SkillApprovalDecision
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/skills/governance/approvals/${encodeURIComponent(approvalId)}`,
+      decision
+    )
+    return response.data
+  }
+
+  async function getSkillDrafts(): Promise<Record<string, unknown>[]> {
+    const response = await client.get<Record<string, unknown>[]>('/skills/governance/drafts')
+    return response.data ?? []
+  }
+
+  async function testSkillDraft(skillId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/skills/governance/drafts/${encodeURIComponent(skillId)}/test`
+    )
+    return response.data
+  }
+
+  async function promoteSkillDraft(skillId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/skills/governance/drafts/${encodeURIComponent(skillId)}/promote`
+    )
+    return response.data
+  }
+
+  async function getSkillGovernance(): Promise<GovernanceConfig> {
+    const response = await client.get<GovernanceConfig>('/skills/governance/')
+    return response.data
+  }
+
+  async function updateSkillGovernanceMode(
+    mode: GovernanceConfig['mode']
+  ): Promise<Record<string, unknown>> {
+    const response = await client.put('/skills/governance/', { mode })
+    return response.data
+  }
+
   return {
+    // Skills + governance (#731 / #951 / #13079)
+    getSkills,
+    getSkillCategories,
+    getSkillDetail,
+    enableSkill,
+    disableSkill,
+    updateSkillConfig,
+    initializeSkills,
+    getSkillRepos,
+    addSkillRepo,
+    syncSkillRepo,
+    getSkillApprovals,
+    decideSkillApproval,
+    getSkillDrafts,
+    testSkillDraft,
+    promoteSkillDraft,
+    getSkillGovernance,
+    updateSkillGovernanceMode,
     // Settings
     getSettings,
     updateSettings,
@@ -1151,6 +1878,39 @@ export function useAutobotApi() {
     getBatchStatus,
     // Terminal (Issue #729)
     executeTerminalCommand,
+    // Advanced Control (#12653)
+    getAdvancedControlCapabilities,
+    listAdvancedControlSessions,
+    createAdvancedControlSession,
+    terminateAdvancedControlSession,
+    getAdvancedControlTakeoverStatus,
+    getPendingTakeovers,
+    getActiveTakeovers,
+    requestTakeover,
+    approveTakeover,
+    takeoverSessionAction,
+    // Agent Org Chart (#1405 / #13079)
+    getAgentOrgTree,
+    getAgentDirectReports,
+    getAgentActivity,
+    getAgentDelegations,
+    delegateAgentTask,
+    // Agent Processes (#1406 / #13079)
+    getAgentProcesses,
+    getProcessLogs,
+    signalProcess,
+    spawnProcess,
+    // Config Revisions (#1404 / #13079)
+    getConfigRevisions,
+    rollbackConfigRevision,
+    // Redis Service control (#3381 / #13079)
+    getRedisServiceStatus,
+    performRedisServiceAction,
+    // RBAC bootstrap + Redis cache admin + health probe (#13079)
+    getRbacStatus,
+    initializeRbac,
+    clearRedisDatabase,
+    probeBackendHealth,
     // Log Forwarding Control (Issue #729)
     getLogForwardingStatus,
     startLogForwarding,

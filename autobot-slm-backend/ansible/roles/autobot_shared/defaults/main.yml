@@ -1,0 +1,21 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# autobot_shared Role - Default Variables (#12094)
+# Standalone extraction of the embedded #3649 sync block that previously lived
+# inside roles/backend/tasks/main.yml. Variable names/values intentionally match
+# the backend role so both roles converge on the SAME standalone PYTHONPATH dir.
+
+# Service account owning the synced package (matches common/backend roles).
+backend_user: autobot
+backend_group: autobot
+
+# Canonical git checkout on the box that the deployer pulls into (#3649).
+code_source_dir: /opt/autobot/code_source
+
+# Standalone PYTHONPATH copy imported by backend, Celery, and MCP-bridge
+# services. The backend's embedded autobot_shared path is a symlink here
+# (#10020), so syncing this one directory covers every consumer.
+backend_shared_standalone_dir: /opt/autobot/autobot_shared

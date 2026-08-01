@@ -281,15 +281,17 @@
     </transition>
 
     <!-- Create Entity Modal -->
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4><Icon name="plus-circle" /> {{ $t('knowledge.graph.createEntityTitle') }}</h4>
-          <button @click="showCreateModal = false" class="close-btn">
-            <Icon name="times" />
-          </button>
-        </div>
-        <form @submit.prevent="createEntity" class="entity-form">
+    <BaseModal
+      :model-value="showCreateModal"
+      :title="$t('knowledge.graph.createEntityTitle')"
+      :close-label="$t('common.close')"
+      :width="480"
+      @close="showCreateModal = false"
+    >
+      <template #title>
+        <Icon name="plus-circle" /> {{ $t('knowledge.graph.createEntityTitle') }}
+      </template>
+      <form id="entity-form" @submit.prevent="createEntity" class="entity-form">
           <div class="form-group">
             <label for="entity-name">{{ $t('knowledge.graph.nameLabel') }}</label>
             <input
@@ -326,19 +328,19 @@
               :placeholder="$t('knowledge.graph.observationsPlaceholder')"
             ></textarea>
           </div>
-          <div class="form-actions">
-            <button type="button" @click="showCreateModal = false" class="action-btn">
-              {{ $t('knowledge.graph.cancel') }}
-            </button>
-            <button type="submit" class="action-btn primary" :disabled="isCreating">
-              <Icon name="spinner" class="animate-spin" v-if="isCreating" />
-              <Icon name="plus" v-else />
-              {{ $t('knowledge.graph.create') }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+
+      <template #actions>
+        <button type="button" @click="showCreateModal = false" class="action-btn">
+          {{ $t('knowledge.graph.cancel') }}
+        </button>
+        <button type="submit" form="entity-form" class="action-btn primary" :disabled="isCreating">
+          <Icon name="spinner" class="animate-spin" v-if="isCreating" />
+          <Icon name="plus" v-else />
+          {{ $t('knowledge.graph.create') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Legend -->
     <div class="graph-legend">
@@ -387,13 +389,14 @@
 // Author: mrveiss
 
 import Icon from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
 import { ref, shallowRef, computed, onMounted, onUnmounted, watch, nextTick, defineAsyncComponent } from 'vue'
 // Type-only imports — runtime load handled by the shared composable (#5234).
 import type cytoscape from 'cytoscape'
 import type { Core, NodeSingular } from 'cytoscape'
 import { useCytoscapeLibrary } from '@/composables/charts/useCytoscapeLibrary'
-import { useKnowledgeGraph } from '@/composables/knowledge/useKnowledgeGraph'
-import type { GraphEntity as Entity, GraphRelation as Relation } from '@/composables/knowledge/useKnowledgeGraph'
+import { useKnowledgeGraphEntities } from '@/composables/knowledge/useKnowledgeGraphEntities'
+import type { GraphEntity as Entity, GraphRelation as Relation } from '@/composables/knowledge/useKnowledgeGraphEntities'
 import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
 import { getCssVar } from '@/composables/useCssVars'
@@ -428,7 +431,7 @@ const emit = defineEmits<{
 // Types
 // ============================================================================
 
-// Entity and Relation types are imported from useKnowledgeGraph composable.
+// Entity and Relation types are imported from useKnowledgeGraphEntities composable.
 
 interface NewEntity {
   name: string
@@ -447,7 +450,7 @@ const {
   errorMessage: graphError,
   fetchGraphData,
   createGraphEntity,
-} = useKnowledgeGraph()
+} = useKnowledgeGraphEntities()
 
 const { message: errorMessage, show: showError, clear: clearError } = useTransientError(5000)
 watch(graphError, (msg) => {
@@ -880,7 +883,7 @@ function handleCleanupComplete(): void {
 }
 
 /**
- * Refreshes the knowledge graph by delegating to useKnowledgeGraph.fetchGraphData().
+ * Refreshes the knowledge graph by delegating to useKnowledgeGraphEntities.fetchGraphData().
  * Emits 'graph-refreshed' event on successful load with entity/relation counts.
  */
 async function refreshGraph(): Promise<void> {
@@ -908,7 +911,7 @@ async function refreshGraph(): Promise<void> {
 
 /**
  * Creates a new entity via the composable, updates the graph, and emits events.
- * Validates required fields before delegating to useKnowledgeGraph.createGraphEntity().
+ * Validates required fields before delegating to useKnowledgeGraphEntities.createGraphEntity().
  */
 async function createEntity(): Promise<void> {
   if (!newEntity.value.name || !newEntity.value.type || !newEntity.value.observations) {
@@ -1254,16 +1257,16 @@ watch(layoutMode, () => {
 }
 
 .action-btn.view-mode-btn {
-  border-color: var(--chart-purple, #8b5cf6);
-  color: var(--chart-purple, #8b5cf6);
+  border-color: var(--chart-purple);
+  color: var(--chart-purple);
 }
 
 .action-btn.view-mode-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--chart-purple, #8b5cf6) 15%, transparent);
+  background: color-mix(in srgb, var(--chart-purple) 15%, transparent);
 }
 
 .action-btn.view-mode-btn.active {
-  background: var(--chart-purple, #8b5cf6);
+  background: var(--chart-purple);
   color: white;
 }
 
@@ -1466,8 +1469,8 @@ watch(layoutMode, () => {
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
+  width: var(--spacing-20);
+  height: var(--spacing-20);
   border-radius: 50%;
   background: var(--color-primary-bg);
   display: flex;
@@ -1534,8 +1537,8 @@ watch(layoutMode, () => {
 }
 
 .loading-spinner {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 3px solid var(--border-default, var(--border-subtle));
   border-top-color: var(--color-primary);
   border-radius: 50%;
@@ -1546,10 +1549,10 @@ watch(layoutMode, () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: var(--color-error-bg, rgba(239, 68, 68, 0.12));
-  color: var(--color-error, #ef4444);
+  width: var(--spacing-10);
+  height: var(--spacing-10);
+  background: var(--color-error-bg);
+  color: var(--color-error);
   border-radius: 50%;
   font-weight: bold;
   font-size: var(--text-xl);
@@ -1581,8 +1584,8 @@ watch(layoutMode, () => {
 }
 
 .zoom-controls button {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   border-radius: var(--radius-sm);
@@ -1602,7 +1605,7 @@ watch(layoutMode, () => {
 .zoom-level {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  min-width: 40px;
+  min-width: var(--spacing-10);
   text-align: center;
 }
 
@@ -1640,8 +1643,8 @@ watch(layoutMode, () => {
 }
 
 .entity-icon {
-  width: 28px;
-  height: 28px;
+  width: var(--spacing-7);
+  height: var(--spacing-7);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1781,53 +1784,7 @@ watch(layoutMode, () => {
 }
 
 /* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 480px;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-xl);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--color-primary);
-  color: white;
-}
-
-.modal-header h4 {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-}
-
-.modal-header .close-btn {
-  color: white;
-}
-
-.entity-form {
-  padding: var(--spacing-lg);
-}
+/* #10882: overlay/header/footer chrome now provided by @autobot/ui BaseModal. */
 
 .form-group {
   margin-bottom: var(--spacing-md);
@@ -1867,15 +1824,6 @@ watch(layoutMode, () => {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
-.form-group input:focus-visible,
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-lg);
-}
-
 /* Legend */
 .graph-legend {
   padding: var(--spacing-md);
@@ -1921,8 +1869,8 @@ watch(layoutMode, () => {
 }
 
 .legend-color {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: 50%;
 }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Unified Log Forwarding Service
@@ -51,6 +52,7 @@ sys.path.insert(0, str(_REPO_ROOT / "autobot_shared"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from autobot_shared.time_utils import parse_utc_iso  # noqa: E402
+from autobot_shared.tls import MIN_TLS_VERSION  # noqa: E402
 
 try:
     import docker
@@ -446,7 +448,6 @@ class LokiDestination(LogDestination):
         Groups entries by (source, level) to create efficient streams.
         """
         from collections import defaultdict
-        from datetime import datetime, timezone
 
         # Group entries by stream labels (source + level)
         streams_dict = defaultdict(list)
@@ -663,6 +664,8 @@ class SyslogDestination(LogDestination):
     def _create_ssl_context(self) -> ssl.SSLContext:
         """Create SSL context for TLS connections."""
         context = ssl.create_default_context()
+        # Reject the broken TLSv1/TLSv1_1 protocols (#12285); shared min version.
+        context.minimum_version = MIN_TLS_VERSION
 
         # Configure certificate verification
         if not self.config.ssl_verify:
@@ -1191,7 +1194,7 @@ class LogForwarder:
         # Wait for queue to empty
         try:
             self.log_queue.join()
-        except:
+        except Exception:
             pass
 
         self.logger.info("Log forwarding service stopped")

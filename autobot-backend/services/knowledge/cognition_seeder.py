@@ -27,6 +27,7 @@ import yaml
 
 from autobot_shared.logging_manager import get_logger
 from constants.path_constants import PATH
+from utils.text_chunking import chunk_text
 
 if TYPE_CHECKING:
     from knowledge.backends import BaseClient
@@ -110,22 +111,6 @@ def _load_manifest(manifest_path: str) -> SeedManifest:
         collections.append(SeedCollection(name=coll_data.get("name", COGNITION_COLLECTION), sources=sources))
 
     return SeedManifest(collections=collections)
-
-
-def _chunk_text(content: str, max_chars: int = 1500) -> List[str]:
-    """Split *content* into chunks of at most *max_chars* at paragraph boundaries."""
-    paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
-    chunks: List[str] = []
-    current = ""
-    for para in paragraphs:
-        if current and len(current) + len(para) + 2 > max_chars:
-            chunks.append(current)
-            current = para
-        else:
-            current = f"{current}\n\n{para}".strip() if current else para
-    if current:
-        chunks.append(current)
-    return chunks or [content]
 
 
 def _chunk_id(collection: str, rel_path: str, chunk_index: int) -> str:
@@ -224,11 +209,11 @@ class CognitionSeeder:
             return 0
 
         rel_path = os.path.relpath(abs_path, str(self._root_dir))
-        chunks = _chunk_text(content)
+        chunks = chunk_text(content, max_chars=1500, separator_len=2, split_oversized=False, fallback_to_original=True)
         coll = self._get_or_create_collection(collection_name)
         stored = 0
 
-        for idx, chunk_text in enumerate(chunks):
+        for idx, chunk_content in enumerate(chunks):
             cid = _chunk_id(collection_name, rel_path, idx)
             metadata: Dict[str, Any] = {
                 "seeded": "true",
@@ -241,7 +226,7 @@ class CognitionSeeder:
                 "seeded_at": now_iso,
             }
             try:
-                await asyncio.to_thread(self._upsert_chunk, coll, cid, chunk_text, metadata)
+                await asyncio.to_thread(self._upsert_chunk, coll, cid, chunk_content, metadata)
                 stored += 1
             except Exception as exc:
                 logger.error("Failed to upsert seed chunk %s[%d]: %s", rel_path, idx, exc)

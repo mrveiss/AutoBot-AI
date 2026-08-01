@@ -17,9 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
-from llc.deps import get_session, service_dep
+from llc.deps import assert_company_access, get_session, load_authorized, service_dep
+from user_management.services import TenantContext
 
+from ..models.approval import LLCApproval
 from ..models.enums import ApprovalStatus, ApprovalType
 from ..services.approval import (
     ApprovalNotFoundError,
@@ -81,8 +84,11 @@ async def request_approval(
     body: ApprovalRequest,
     session: AsyncSession = Depends(get_session),
     svc: ApprovalService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ApprovalResponse:
     """Create a pending approval gate record."""
+    assert_company_access(ctx, body.company_id)
     async with session.begin():
         approval = await svc.request_approval(
             session,
@@ -101,6 +107,8 @@ async def list_pending(
     type: Optional[ApprovalType] = Query(None, description="Filter by gate type"),
     session: AsyncSession = Depends(get_session),
     svc: ApprovalService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[ApprovalResponse]:
     """List pending approvals for a company."""
     try:
@@ -108,6 +116,7 @@ async def list_pending(
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid company_id UUID")
 
+    assert_company_access(ctx, cid)
     approvals = await svc.get_pending(session, cid, gate_type=type)
     return [_to_response(a) for a in approvals]
 
@@ -118,12 +127,18 @@ async def decide_approval(
     body: ApprovalDecision,
     session: AsyncSession = Depends(get_session),
     svc: ApprovalService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ApprovalResponse:
     """Approve or reject a pending approval."""
     try:
         aid = uuid.UUID(approval_id)
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid approval_id UUID")
+
+    # IDOR: derive the owning company from the row and tenant-check it before
+    # allowing a decision (GH#12148).
+    await load_authorized(session, LLCApproval, aid, ctx, not_found_detail="Approval not found")
 
     try:
         async with session.begin():

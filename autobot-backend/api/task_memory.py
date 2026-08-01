@@ -156,8 +156,7 @@ async def create_task(request: TaskCreateRequest):
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid priority: {request.priority}")
 
-        task_id = await asyncio.to_thread(
-            memory_manager.create_task_record,
+        task_id = await memory_manager.acreate_task_record(
             request.task_name,
             request.description,
             priority=priority_enum,
@@ -199,12 +198,11 @@ async def update_task(task_id: str, request: TaskUpdateRequest):
                 raise HTTPException(status_code=400, detail=f"Invalid status: {request.status}")
 
             if status_enum == TaskStatus.IN_PROGRESS:
-                success = await asyncio.to_thread(memory_manager.start_task, task_id)
+                success = await memory_manager.astart_task(task_id)
             elif status_enum == TaskStatus.COMPLETED:
-                success = await asyncio.to_thread(memory_manager.complete_task, task_id, request.outputs)
+                success = await memory_manager.acomplete_task(task_id, request.outputs)
             elif status_enum == TaskStatus.FAILED:
-                success = await asyncio.to_thread(
-                    memory_manager.fail_task,
+                success = await memory_manager.afail_task(
                     task_id,
                     request.error_message or "Unknown error",
                 )

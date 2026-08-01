@@ -614,7 +614,8 @@ async def get_historical_trends(
             historical_data["total_historical_calls"] = len(historical_calls)
 
     except Exception as e:
-        historical_data["redis_error"] = str(e)
+        logger.error("Error retrieving historical analytics from Redis: %s", e)
+        historical_data["redis_error"] = "Failed to retrieve historical analytics data"
 
     return historical_data
 

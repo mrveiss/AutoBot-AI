@@ -1,0 +1,51 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The service files that carry code changes: the worker itself, its .env and its
+# systemd unit. Split out of main.yml (#12886) so the builtin updater can refresh
+# a deployed TTS worker without re-running provisioning.
+#
+# Everything main.yml does around these — creating the service account, building
+# the venv, pip-installing torch/pocket-tts, pre-downloading a gated HuggingFace
+# model — is provisioning work that must NOT run on every update. Those steps are
+# slow, need network, and can fail on a box that is already correctly installed.
+#
+# main.yml includes this file rather than repeating it, so there is exactly one
+# definition of "deploy the TTS service files". Copying the tasks into the
+# playbook instead is precisely the inline-vs-role duplication that left this
+# worker undeliverable in the first place (#12959).
+#
+# Handlers (`restart tts-worker`, `reload systemd`) live in the role, so this
+# file is only usable via include_role/import_role — which is intended.
+
+- name: "TTS Worker | Deploy tts-worker.py"
+  ansible.builtin.template:
+    src: tts-worker.py.j2
+    dest: "{{ tts_install_dir }}/tts-worker.py"
+    mode: "0755"
+    owner: "{{ tts_user }}"
+    group: "{{ tts_group }}"
+  notify: restart tts-worker
+  tags: ['tts', 'deploy']
+
+- name: "TTS Worker | Deploy .env file"
+  ansible.builtin.template:
+    src: tts-worker.env.j2
+    dest: "{{ tts_install_dir }}/.env"
+    mode: "0600"
+    owner: "{{ tts_user }}"
+    group: "{{ tts_group }}"
+  notify: restart tts-worker
+  tags: ['tts', 'deploy']
+
+- name: "TTS Worker | Deploy systemd service"
+  ansible.builtin.template:
+    src: autobot-tts-worker.service.j2
+    dest: /etc/systemd/system/autobot-tts-worker.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart tts-worker
+  tags: ['tts', 'deploy']

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Automated Phase Validation System for AutoBot
@@ -856,7 +857,7 @@ class PhaseValidator:
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(self.validation_results, f, indent=2)
 
         logger.info("📊 Validation report saved: %s", output_path)
@@ -893,7 +894,7 @@ def _output_json_results(results: Dict[str, Any], output_file: str = None):
     ]
 
     if output_file:
-        with open(output_file, "w") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=2)
         logger.info("Results saved to %s", output_file)
     else:

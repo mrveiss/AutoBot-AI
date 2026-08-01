@@ -25,9 +25,12 @@ MANIFEST = MCPBridgeManifest(
     endpoint="/api/vnc/mcp/tools",
 )
 
+from api.desktop_control_lock import get_control_lock_state, is_human_active
 from api.schemas_system import (
     BrowserVncContextResponse,
     DesktopClickMcpResponse,
+    DesktopControlStatusMcpResponse,
+    DesktopControlStatusRequest,
     DesktopKeyboardTypeMcpResponse,
     DesktopKeyboardTypeRequest,
     DesktopMouseClickRequest,
@@ -219,6 +222,27 @@ VNC_MCP_TOOL_DEFINITIONS = (
                     "type": "boolean",
                     "description": "Include base64 screenshot in response",
                     "default": True,
+                }
+            },
+            "required": [],
+        },
+    ),
+    # Issue #12002 (#11506 T1): agent<->human input arbitration
+    (
+        "desktop_control_status",
+        (
+            "Check whether a human currently holds the desktop control-lock. When "
+            "human_active is true, all desktop_mouse_click / desktop_keyboard_type / "
+            "desktop_special_key calls are muted (no-op) -- pause desktop actuation and "
+            "wait until the human releases control before continuing."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Desktop control-lock session id",
+                    "default": "default",
                 }
             },
             "required": [],
@@ -454,8 +478,19 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     """
     MCP tool: Click mouse at coordinates on desktop.
     Issue #74: Agent desktop interaction.
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
     """
     from api.vnc_manager import _run_xdotool_cmd
+
+    if await is_human_active(request.session_id):
+        return {
+            "success": False,
+            "message": "Muted: human is in control of the desktop session.",
+            "action": "mouse_click",
+            "coordinates": {"x": request.x, "y": request.y},
+            "button": request.button,
+            "muted": True,
+        }
 
     button_map = {"left": "1", "middle": "2", "right": "3"}
     button_num = button_map.get(request.button, "1")
@@ -483,8 +518,18 @@ async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Meta
     """
     MCP tool: Type text on desktop keyboard.
     Issue #74: Agent desktop interaction.
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
     """
     from api.vnc_manager import _run_xdotool_cmd
+
+    if await is_human_active(request.session_id):
+        return {
+            "success": False,
+            "message": "Muted: human is in control of the desktop session.",
+            "action": "keyboard_type",
+            "text_length": len(request.text),
+            "muted": True,
+        }
 
     result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
         _run_xdotool_cmd, ["type", "--", request.text]
@@ -508,8 +553,18 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
     """
     MCP tool: Send special key or key combination.
     Issue #74: Agent desktop interaction.
+    Issue #12002 (#11506 T1): muted while a human holds the control-lock.
     """
     from api.vnc_manager import _run_xdotool_cmd
+
+    if await is_human_active(request.session_id):
+        return {
+            "success": False,
+            "message": "Muted: human is in control of the desktop session.",
+            "action": "special_key",
+            "key": request.key,
+            "muted": True,
+        }
 
     result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
         _run_xdotool_cmd, ["key", request.key]
@@ -550,7 +605,7 @@ async def desktop_screenshot_mcp() -> Metadata:
             capture_output=True,
             text=True,
             timeout=10,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
 
         if result.returncode != 0:
@@ -561,7 +616,7 @@ async def desktop_screenshot_mcp() -> Metadata:
                 capture_output=True,
                 text=True,
                 timeout=10,
-                env={"DISPLAY": ":1"},
+                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
             )
 
         if result.returncode != 0:
@@ -605,13 +660,21 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
     """
     MCP tool: Observe current desktop state with metadata.
     Issue #74: Agent desktop observation.
+    Issue #12002 (#11506 T1): includes control-lock state so the agent knows
+    to pause actuation when a human is active.
     """
     import subprocess  # nosec B404
+
+    from api.desktop_control_lock import DEFAULT_DESKTOP_SESSION_ID
+
+    lock_state = await get_control_lock_state(DEFAULT_DESKTOP_SESSION_ID)
 
     state = {
         "success": True,
         "action": "observe_state",
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "human_active": lock_state["human_active"],
+        "control_owner": lock_state["owner"],
     }
 
     # Get screen resolution
@@ -622,7 +685,7 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             for line in result.stdout.split("\n"):
@@ -642,7 +705,7 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
             capture_output=True,
             text=True,
             timeout=5,
-            env={"DISPLAY": ":1"},
+            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
         )
         if result.returncode == 0:
             state["active_window"] = result.stdout.strip()
@@ -657,3 +720,42 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
             state["screenshot_format"] = "png"
 
     return state
+
+
+# Issue #12002 (#11506 T1): agent<->human input arbitration
+
+
+def _describe_control_lock_state(lock_state: dict) -> str:
+    """Build a human-readable message for the desktop control-lock state (#12002)."""
+    if not lock_state["redis_available"]:
+        return "Desktop control-lock state unknown (Redis unavailable) -- actuation is muted"
+    if lock_state["human_active"] and lock_state["owner"]:
+        return f"Desktop control held by {lock_state['owner']}"
+    return "Agent has control"
+
+
+@router.post("/mcp/desktop_control_status", response_model=DesktopControlStatusMcpResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_control_status_mcp",
+    error_code_prefix="VNC_MCP",
+)
+async def desktop_control_status_mcp(request: DesktopControlStatusRequest) -> Metadata:
+    """
+    MCP tool: Check whether a human currently holds the desktop control-lock.
+
+    Issue #12002 (#11506 T1): agents should call this (or read human_active
+    from desktop_observe_state) before actuation and pause while a human is
+    active -- desktop_mouse_click/keyboard_type/special_key are muted
+    automatically, but polling this lets the agent avoid wasted calls.
+    """
+    lock_state = await get_control_lock_state(request.session_id)
+
+    return {
+        "success": True,
+        "session_id": request.session_id,
+        "human_active": lock_state["human_active"],
+        "owner": lock_state["owner"],
+        "acquired_at": lock_state["acquired_at"],
+        "message": _describe_control_lock_state(lock_state),
+    }

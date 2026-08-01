@@ -630,8 +630,8 @@ onMounted(() => {
 }
 
 .dismiss-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 /* ── Status Grid ──────────────────────────── */
@@ -662,8 +662,8 @@ onMounted(() => {
 }
 
 .status-card-icon {
-  width: 36px;
-  height: 36px;
+  width: var(--spacing-9);
+  height: var(--spacing-9);
   border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
   display: flex;
@@ -674,8 +674,8 @@ onMounted(() => {
 }
 
 .status-card-icon svg {
-  width: 20px;
-  height: 20px;
+  width: var(--spacing-5);
+  height: var(--spacing-5);
 }
 
 .status-enabled .status-card-icon {
@@ -690,7 +690,7 @@ onMounted(() => {
 }
 
 .status-label {
-  font-size: var(--text-xs, 11px);
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -763,7 +763,7 @@ onMounted(() => {
 }
 
 .field-hint {
-  font-size: var(--text-xs, 12px);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   margin: var(--spacing-0);
   line-height: var(--leading-normal);
@@ -803,7 +803,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   width: 44px;
-  height: 24px;
+  height: var(--spacing-6);
   border-radius: var(--radius-xl);
   border: none;
   cursor: pointer;
@@ -830,9 +830,9 @@ onMounted(() => {
 
 .toggle-thumb {
   position: absolute;
-  left: 2px;
-  width: 20px;
-  height: 20px;
+  left: var(--spacing-0-5);
+  width: var(--spacing-5);
+  height: var(--spacing-5);
   border-radius: 50%;
   background: var(--text-inverse);
   transition: transform var(--duration-200);
@@ -840,7 +840,7 @@ onMounted(() => {
 }
 
 .toggle-on .toggle-thumb {
-  transform: translateX(20px);
+  transform: translateX(var(--spacing-5));
 }
 
 /* ── Circuit Breakers ─────────────────────── */
@@ -865,7 +865,7 @@ onMounted(() => {
 }
 
 .cb-name {
-  font-size: var(--text-xs, 11px);
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -961,8 +961,8 @@ onMounted(() => {
 }
 
 .btn-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   flex-shrink: 0;
 }
 

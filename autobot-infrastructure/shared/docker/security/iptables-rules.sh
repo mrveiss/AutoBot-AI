@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # IPTables Security Rules for AutoBot Sandbox
 # Advanced network isolation and security rules for the Docker sandbox environment
 

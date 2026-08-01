@@ -7,13 +7,17 @@
  * Code Source Assignment Modal (Issue #779)
  *
  * Allows selecting a node to serve as the code source for the fleet.
+ *
+ * The code-source POST is migrated onto the canonical `slmApiClient` (#12420
+ * Phase 2): it resolves the base URL via `getSlmApiBase()`, injects the SLM
+ * bearer token, and centrally handles 401 — replacing the local axios instance
+ * and request interceptor. Node loading still flows through `useSlmApi`.
  */
 
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
+import slmApiClient from '@/utils/ApiClient'
 import type { SLMNode } from '@/types/slm'
 
 const logger = createLogger('CodeSourceModal')
@@ -40,16 +44,6 @@ const isLoading = ref(true)
 const isSaving = ref(false)
 const error = ref<string | null>(null)
 
-// Minimal axios client for code-source POST (Issue #860)
-const api = axios.create({ baseURL: getSlmApiBase(), timeout: 15000 })
-api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('slm_access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
 onMounted(async () => {
   try {
     // Reuse existing API composable (Issue #860)
@@ -71,8 +65,7 @@ async function handleAssign(): Promise<void> {
   error.value = null
 
   try {
-    // Fix double-prefix bug: baseURL is /api, endpoint is /code-source/assign (Issue #860)
-    await api.post('/code-source/assign', {
+    await slmApiClient.post('/code-source/assign', {
       node_id: selectedNodeId.value,
       repo_path: repoPath.value,
       branch: branch.value,
@@ -80,8 +73,7 @@ async function handleAssign(): Promise<void> {
     emit('saved')
     emit('close')
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    error.value = err.response?.data?.detail || err.message || 'Failed to assign code source'
+    error.value = e instanceof Error ? e.message : 'Failed to assign code source'
   } finally {
     isSaving.value = false
   }

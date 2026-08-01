@@ -13,7 +13,7 @@ import logging
 import os
 import signal
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -23,6 +23,8 @@ from business_intelligence_dashboard import BusinessIntelligenceDashboard
 
 # Import monitoring components
 from performance_monitor import ALERT_THRESHOLDS, PerformanceMonitor
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -291,7 +293,7 @@ class ComprehensiveMonitoringController:
         try:
             self.logger.info("📋 Generating monitoring report...")
 
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = utc_timestamp()
 
             # Compile all monitoring data
             report = {
@@ -499,7 +501,7 @@ class ComprehensiveMonitoringController:
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             instant_report = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
                 "report_type": "instant_comprehensive",
                 "performance_data": (
                     results[0] if not isinstance(results[0], Exception) else {"error": str(results[0])}
@@ -523,7 +525,7 @@ class ComprehensiveMonitoringController:
             self.logger.error(f"Error generating instant report: {e}")
             return {
                 "error": "Failed to generate instant report",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
 
     def stop_monitoring(self):

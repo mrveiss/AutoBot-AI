@@ -53,7 +53,8 @@ export function useNodeServices(nodeId: MaybeRef<string>) {
         name: s.service_name,
         status: s.status as Service['status'],
         pid: s.main_pid ?? undefined,
-        memory_mb: s.memory_bytes !== null ? s.memory_bytes / 1024 / 1024 : undefined,
+        // #13138: `memory_bytes` is optional AND nullable in the contract.
+        memory_mb: s.memory_bytes != null ? s.memory_bytes / 1024 / 1024 : undefined,
         category: s.category,
       }))
       return services.value

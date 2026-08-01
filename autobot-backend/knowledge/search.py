@@ -316,7 +316,7 @@ class SearchMixin:
                 hardware_backend="auto",
             )
             # Convert canonical SearchResult -> legacy dict format expected by callers
-            return [
+            results = [
                 {
                     "content": r.text,
                     "score": r.score,
@@ -326,6 +326,13 @@ class SearchMixin:
                 }
                 for r in engine_results
             ]
+            # A1 (#12552): reinforce facts surfaced by a real query. Fire-and-forget;
+            # never blocks or alters the returned results.
+            try:
+                await self.record_fact_access([r.source for r in engine_results if r.source])
+            except Exception:
+                logger.debug("search: record_fact_access skipped", exc_info=True)
+            return results
         except Exception as exc:
             logger.warning(
                 "VectorSearchEngine delegation failed (%s), falling back to direct ChromaDB",
@@ -345,16 +352,20 @@ class SearchMixin:
         Issue #281: Extracted helper.
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
         """
+        from autobot_shared.ssot_config import config
         from knowledge.embedding_cache import get_embedding_cache
         from knowledge.facts import _generate_embedding_with_npu_fallback
 
+        # Issue #12251: cache key is (model, text). The NPU-fallback helper
+        # embeds with the configured default model, so key on that name.
+        model = config.llm.embedding_model
         _embedding_cache = get_embedding_cache()
-        query_embedding = await _embedding_cache.get(query)
+        query_embedding = await _embedding_cache.get(query, model=model)
 
         if query_embedding is None:
             # Cache miss - compute embedding using NPU worker with fallback
             query_embedding = await _generate_embedding_with_npu_fallback(query)
-            await _embedding_cache.put(query, query_embedding)
+            await _embedding_cache.put(query, query_embedding, model=model)
 
         return query_embedding
 

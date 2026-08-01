@@ -43,7 +43,7 @@ vi.mock('@/utils/ApiClient', () => ({
   ApiClient: vi.fn(),
 }))
 
-// Mock ChatRepository to prevent real axios calls
+// Mock ChatRepository to prevent real HTTP calls
 vi.mock('@/models/repositories', () => {
   const mockChatRepo = {
     getChatList: vi.fn().mockResolvedValue([]),

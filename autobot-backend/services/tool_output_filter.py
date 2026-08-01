@@ -272,31 +272,31 @@ def tee_and_hint(raw: str, slug: str, exit_code: int, mode: str = "failures") ->
         return None
 
 
+def _hard_cap(command: str, text: str, raw: str, exit_code: int) -> str:
+    """Enforce the hard character ceiling on *text*, teeing *raw* for the full copy.
+
+    Keep the start and end (where errors and summaries usually sit), drop the
+    middle, and leave a pointer to the full output saved via the same tee
+    mechanism the matched path uses. This is the terminal guard applied to both
+    the unmatched passthrough and matched-rule results (#11543) so no output can
+    reach conversation history above the ceiling, regardless of rule match.
+    """
+    limit = _MAX_UNMATCHED_OUTPUT_CHARS
+    if len(text) <= limit:
+        return text
+
+    keep = limit // 2
+    dropped = len(text) - 2 * keep
+    capped = f"{text[:keep]}\n[... {dropped} chars omitted ...]\n{text[-keep:]}"
+
+    words = command.split()
+    hint = tee_and_hint(raw, words[0] if words else "unknown", exit_code)
+    return f"{capped}\n{hint}" if hint else capped
+
+
 def cap_unmatched_output(command: str, output: str, exit_code: int) -> str:
-    """
-    Hard safety net for output that no rule matched.
-
-    Rule-based filters understand the semantics of a specific command's output
-    (pytest failures, diff hunks, etc). This is the blunt fallback: if nothing
-    matched, output can otherwise flow into conversation history completely
-    uncapped. This guarantees a hard ceiling regardless of rule match, using the
-    same tee-and-hint mechanism the matched-rule path already relies on.
-    """
-    if len(output) <= _MAX_UNMATCHED_OUTPUT_CHARS:
-        return output
-
-    half = _MAX_UNMATCHED_OUTPUT_CHARS // 2
-    head = output[:half]
-    tail = output[-half:]
-    omitted = len(output) - (2 * half)
-    truncated = f"{head}\n[... {omitted} chars omitted ...]\n{tail}"
-
-    slug = command.strip().split()[0] if command.strip() else "unknown"
-    hint = tee_and_hint(output, slug, exit_code)
-    if hint:
-        truncated = truncated + "\n" + hint
-
-    return truncated
+    """Hard-cap output that matched no rule (delegates to :func:`_hard_cap`)."""
+    return _hard_cap(command, output, output, exit_code)
 
 
 def _line_similarity(a: str, b: str) -> float:
@@ -395,9 +395,12 @@ def classify_tool(command: str) -> str:
     return categories.get(cmd, "other")
 
 
-async def record_filter_savings(command: str, original: str, filtered: str) -> None:
-    """Track bytes saved by filter category in Redis analytics (fire-and-forget)."""
-    savings = len(original) - len(filtered)
+async def record_filter_savings(command: str, savings: int) -> None:
+    """Track *savings* bytes for *command*'s category in Redis analytics (fire-and-forget).
+
+    ``savings`` must be the total bytes removed across every reduction stage
+    (soft filter + terminal hard cap) — see :meth:`ToolOutputFilter.filter`.
+    """
     if savings <= 0:
         return
     category = classify_tool(command)
@@ -463,23 +466,39 @@ class ToolOutputFilter:
 
         rule = self._match_rule(command)
         if rule is None:
-            return cap_unmatched_output(command, output, exit_code)
+            result = cap_unmatched_output(command, output, exit_code)
+            self._schedule_savings(command, len(output) - len(result))
+            return result
 
         filtered = self._apply(rule, output, exit_code)
-        pre_hint_filtered = filtered  # snapshot before tee hint for accurate savings
-
-        savings = len(output) - len(pre_hint_filtered)
-        if savings > 200:
+        # Content-level savings, pre-hint (#5895) — the tee-hint pointer is
+        # navigational overhead, not filtered-away content, so it isn't
+        # counted against the metric.
+        content_savings = len(output) - len(filtered)
+        if content_savings > 200:
             hint = tee_and_hint(output, command.strip().split()[0], exit_code)
             if hint and filtered:
                 filtered = filtered + "\n" + hint
 
+        # Issue #11543: terminal guard — a matched rule can still leave output
+        # above the ceiling (huge diff, hundreds of failures). Cap the final
+        # result regardless of match so nothing above the cap reaches history.
+        pre_cap_len = len(filtered)
+        result = _hard_cap(command, filtered, output, exit_code)
+
+        # Issue #12239: the hard cap can trim a matched rule's own output
+        # further — that delta was previously dropped from the metric,
+        # under-counting the true savings whenever the cap fired on a match.
+        hard_cap_savings = max(pre_cap_len - len(result), 0)
+        self._schedule_savings(command, content_savings + hard_cap_savings)
+        return result
+
+    def _schedule_savings(self, command: str, savings: int) -> None:
+        """Fire-and-forget savings recording; no-op outside a running event loop."""
         try:
-            asyncio.get_running_loop().create_task(record_filter_savings(command, output, pre_hint_filtered))
+            asyncio.get_running_loop().create_task(record_filter_savings(command, savings))
         except RuntimeError:
             pass
-
-        return filtered
 
     def filter_blocks(self, output: str, handler: BlockHandler, exit_code: int = 0) -> str:
         """Filter structured block output using *handler* (ESLint, mypy, docker build, etc.)."""

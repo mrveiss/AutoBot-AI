@@ -5,17 +5,17 @@
   <div class="admin-users-view view-container">
     <div class="page-header">
       <div class="page-header-content">
-        <h2 class="page-title">User Management</h2>
-        <p class="page-subtitle">Manage users, roles, and account status</p>
+        <h2 class="page-title">{{ t('adminUsers.title') }}</h2>
+        <p class="page-subtitle">{{ t('adminUsers.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="btn-action-primary" @click="showCreateModal = true">
           <Icon name="user-plus" />
-          Add User
+          {{ t('adminUsers.addUser') }}
         </button>
         <button class="btn-action-secondary" :disabled="loading" @click="loadUsers">
           <Icon name="sync-alt" :spin="loading" />
-          Refresh
+          {{ t('common.refresh') }}
         </button>
       </div>
     </div>
@@ -33,7 +33,7 @@
         v-model="searchQuery"
         type="text"
         class="search-input"
-        placeholder="Search by username, email, or name…"
+:placeholder="t('adminUsers.searchPlaceholder')"
         @input="debouncedSearch"
       />
     </div>
@@ -41,26 +41,26 @@
     <!-- Users table -->
     <div class="table-section">
       <div v-if="loading && users.length === 0" class="loading-state">
-        <Icon name="sync-alt" :spin="true" /> Loading users…
+        <Icon name="sync-alt" :spin="true" /> {{ t('adminUsers.loading') }}
       </div>
 
       <table v-else class="data-table">
         <thead>
           <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Display Name</th>
-            <th>Role</th>
-            <th>Voice Bundle</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{{ t('adminUsers.colUsername') }}</th>
+            <th>{{ t('adminUsers.colEmail') }}</th>
+            <th>{{ t('adminUsers.colDisplayName') }}</th>
+            <th>{{ t('adminUsers.colRole') }}</th>
+            <th>{{ t('adminUsers.colVoiceBundle') }}</th>
+            <th>{{ t('adminUsers.colStatus') }}</th>
+            <th>{{ t('adminUsers.colActions') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="user in users" :key="user.id">
             <td class="username-cell">
               <span class="username">{{ user.username }}</span>
-              <span v-if="user.is_platform_admin" class="badge badge-admin">admin</span>
+              <span v-if="user.is_platform_admin" class="badge badge-admin">{{ t('adminUsers.roleAdmin') }}</span>
             </td>
             <td>{{ user.email }}</td>
             <td>{{ user.display_name || '—' }}</td>
@@ -70,9 +70,9 @@
                 :value="primaryRole(user)"
                 @change="onRoleChange(user, ($event.target as HTMLSelectElement).value)"
               >
-                <option value="admin">admin</option>
-                <option value="user">user</option>
-                <option value="readonly">readonly</option>
+                <option value="admin">{{ t('adminUsers.roleAdmin') }}</option>
+                <option value="user">{{ t('adminUsers.roleUser') }}</option>
+                <option value="readonly">{{ t('adminUsers.roleReadonly') }}</option>
               </select>
             </td>
             <td class="bundle-cell">
@@ -83,14 +83,14 @@
             </td>
             <td>
               <span class="badge" :class="user.is_active ? 'badge-active' : 'badge-inactive'">
-                {{ user.is_active ? 'active' : 'inactive' }}
+                {{ user.is_active ? t('adminUsers.statusActive') : t('adminUsers.statusInactive') }}
               </span>
             </td>
             <td class="actions-cell">
               <button
                 v-if="user.is_active"
                 class="btn-icon btn-warning"
-                title="Deactivate"
+:title="t('adminUsers.titleDeactivate')"
                 @click="toggleActive(user, false)"
               >
                 <Icon name="ban" />
@@ -98,21 +98,21 @@
               <button
                 v-else
                 class="btn-icon btn-success"
-                title="Activate"
+:title="t('adminUsers.titleActivate')"
                 @click="toggleActive(user, true)"
               >
                 <Icon name="check-circle" />
               </button>
               <button
                 class="btn-icon btn-info"
-                title="Assign Voice Bundle"
+:title="t('adminUsers.titleAssignBundle')"
                 @click="openBundleModal(user)"
               >
                 <Icon name="microphone" />
               </button>
               <button
                 class="btn-icon btn-danger"
-                title="Delete"
+:title="t('common.delete')"
                 @click="confirmDelete(user)"
               >
                 <Icon name="trash" />
@@ -120,7 +120,7 @@
             </td>
           </tr>
           <tr v-if="!loading && users.length === 0">
-            <td colspan="7" class="empty-row">No users found.</td>
+            <td colspan="7" class="empty-row">{{ t('adminUsers.empty') }}</td>
           </tr>
         </tbody>
       </table>
@@ -151,24 +151,24 @@
     <BaseModal
       :close-label="t('ui.modal.closeDialog')"
       v-model="showCreateModal"
-      title="Add User"
+:title="t('adminUsers.addUser')"
       size="sm"
     >
       <form @submit.prevent="createUser">
         <div class="form-group">
-          <label>Email</label>
+          <label>{{ t('adminUsers.fieldEmail') }}</label>
           <input v-model="newUser.email" type="email" class="form-input" required />
         </div>
         <div class="form-group">
-          <label>Username</label>
+          <label>{{ t('adminUsers.fieldUsername') }}</label>
           <input v-model="newUser.username" type="text" class="form-input" required minlength="3" />
         </div>
         <div class="form-group">
-          <label>Password</label>
+          <label>{{ t('adminUsers.fieldPassword') }}</label>
           <input v-model="newUser.password" type="password" class="form-input" required minlength="8" />
         </div>
         <div class="form-group">
-          <label>Display Name</label>
+          <label>{{ t('adminUsers.fieldDisplayName') }}</label>
           <input v-model="newUser.display_name" type="text" class="form-input" />
         </div>
         <div v-if="createError" class="error-inline">{{ createError }}</div>
@@ -176,10 +176,10 @@
         <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true"></button>
       </form>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">Cancel</button>
+        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
         <button type="button" class="btn-action-primary" :disabled="creating" @click="createUser">
           <Icon v-if="creating" name="sync-alt" :spin="true" />
-          Create User
+          {{ t('adminUsers.createUser') }}
         </button>
       </template>
     </BaseModal>
@@ -188,18 +188,18 @@
     <BaseModal
       :close-label="t('ui.modal.closeDialog')"
       :model-value="!!bundleTarget"
-      title="Assign Voice Bundle"
+:title="t('adminUsers.titleAssignBundle')"
       size="sm"
       @close="closeBundleModal"
     >
       <template v-if="bundleTarget">
         <p class="bundle-user-name">
-          User: <strong>{{ bundleTarget.username }}</strong>
+          {{ t('adminUsers.userLabel') }} <strong>{{ bundleTarget.username }}</strong>
         </p>
         <div class="form-group">
-          <label>Voice Bundle</label>
+          <label>{{ t('adminUsers.fieldVoiceBundle') }}</label>
           <select v-model="newBundleName" class="form-input" :disabled="bundleModalLoading">
-            <option :value="null">— Use role default —</option>
+            <option :value="null">{{ t('adminUsers.useRoleDefault') }}</option>
             <option v-for="name in VOICE_BUNDLE_NAMES" :key="name" :value="name">
               {{ VOICE_BUNDLE_LABELS[name] }}
             </option>
@@ -208,7 +208,7 @@
         <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
       </template>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="closeBundleModal">Cancel</button>
+        <button type="button" class="btn-action-secondary" @click="closeBundleModal">{{ t('common.cancel') }}</button>
         <button
           type="button"
           class="btn-action-primary"
@@ -216,7 +216,7 @@
           @click="doAssignBundle"
         >
           <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
-          Save
+          {{ t('common.save') }}
         </button>
       </template>
     </BaseModal>
@@ -225,15 +225,15 @@
     <BaseModal
       :close-label="t('ui.modal.closeDialog')"
       :model-value="!!deleteTarget"
-      title="Delete User"
+:title="t('adminUsers.deleteUserTitle')"
       size="sm"
       :show-close="false"
       @close="deleteTarget = null"
     >
-      <p v-if="deleteTarget">Delete <strong>{{ deleteTarget.username }}</strong>? This cannot be undone.</p>
+      <p v-if="deleteTarget">{{ t('adminUsers.deleteConfirm') }} <strong>{{ deleteTarget.username }}</strong>? {{ t('adminUsers.deleteUndone') }}</p>
       <template #actions>
-        <button class="btn-action-secondary" @click="deleteTarget = null">Cancel</button>
-        <button class="btn-action-danger" @click="deleteUser">Delete</button>
+        <button class="btn-action-secondary" @click="deleteTarget = null">{{ t('common.cancel') }}</button>
+        <button class="btn-action-danger" @click="deleteUser">{{ t('common.delete') }}</button>
       </template>
     </BaseModal>
   </div>
@@ -241,9 +241,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
@@ -321,7 +320,7 @@ async function loadUsers(): Promise<void> {
     if (searchQuery.value.trim()) {
       params.set('search', searchQuery.value.trim())
     }
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users?${params}`)
+    const res = await apiClient.rawRequest(`/api/user-management/users?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
@@ -416,10 +415,9 @@ function changePage(delta: number): void {
 
 async function onRoleChange(user: UserRecord, role: string): Promise<void> {
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users/${user.id}/role`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users/${user.id}/role`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role }),
+      body: { role },
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -435,7 +433,7 @@ async function onRoleChange(user: UserRecord, role: string): Promise<void> {
 async function toggleActive(user: UserRecord, activate: boolean): Promise<void> {
   const action = activate ? 'activate' : 'deactivate'
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users/${user.id}/${action}`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users/${user.id}/${action}`, {
       method: 'POST',
     })
     if (!res.ok) {
@@ -456,7 +454,7 @@ function confirmDelete(user: UserRecord): void {
 async function deleteUser(): Promise<void> {
   if (!deleteTarget.value) return
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users/${deleteTarget.value.id}`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users/${deleteTarget.value.id}`, {
       method: 'DELETE',
     })
     if (!res.ok) {
@@ -476,15 +474,14 @@ async function createUser(): Promise<void> {
   creating.value = true
   createError.value = null
   try {
-    const res = await fetchWithAuth(`${getBackendUrl()}/api/user-management/users`, {
+    const res = await apiClient.rawRequest(`/api/user-management/users`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         email: newUser.value.email,
         username: newUser.value.username,
         password: newUser.value.password,
         display_name: newUser.value.display_name || undefined,
-      }),
+      },
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -528,7 +525,7 @@ onMounted(loadUsers)
 
 .page-subtitle {
   font-size: var(--text-sm);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   margin: var(--spacing-0);
 }
 
@@ -542,11 +539,11 @@ onMounted(loadUsers)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-4);
-  background: var(--color-error-bg, #fef2f2);
-  border: 1px solid var(--color-error-border, #fca5a5);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-4);
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
 }
 
 .btn-dismiss {
@@ -567,21 +564,21 @@ onMounted(loadUsers)
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .search-input {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
 .table-section {
-  background: var(--bg-surface, #fff);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   overflow: hidden;
 }
@@ -589,7 +586,7 @@ onMounted(loadUsers)
 .loading-state {
   padding: var(--spacing-8);
   text-align: center;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .data-table {
@@ -604,14 +601,14 @@ onMounted(loadUsers)
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   background: var(--color-surface-alt, #f9fafb);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .data-table td {
   padding: var(--spacing-3) var(--spacing-4);
-  border-bottom: 1px solid var(--border-default, #f3f4f6);
+  border-bottom: 1px solid var(--border-default);
   font-size: var(--text-sm);
 }
 
@@ -638,23 +635,23 @@ onMounted(loadUsers)
 }
 
 .badge-admin {
-  background: var(--color-warning-bg, #fffbeb);
-  color: var(--color-warning, #d97706);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .badge-active {
-  background: var(--color-success-bg, #f0fdf4);
-  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .badge-inactive {
-  background: var(--color-error-bg, #fef2f2);
-  color: var(--color-error, #dc2626);
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .badge-bundle {
-  background: var(--color-info-bg, #eff6ff);
-  color: var(--color-info, #2563eb);
+  background: var(--color-info-bg);
+  color: var(--color-info);
   white-space: nowrap;
 }
 
@@ -664,7 +661,7 @@ onMounted(loadUsers)
 
 .bundle-loading {
   font-size: var(--text-xs);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .bundle-user-name {
@@ -674,7 +671,7 @@ onMounted(loadUsers)
 
 .role-select {
   padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: 0.8125rem;
   background: transparent;
@@ -698,28 +695,28 @@ onMounted(loadUsers)
 }
 
 .btn-warning {
-  background: var(--color-warning-bg, #fffbeb);
-  color: var(--color-warning, #d97706);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .btn-info {
-  background: var(--color-info-bg, #eff6ff);
-  color: var(--color-info, #2563eb);
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .btn-success {
-  background: var(--color-success-bg, #f0fdf4);
-  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .btn-danger {
-  background: var(--color-error-bg, #fef2f2);
-  color: var(--color-error, #dc2626);
+  background: var(--color-error-bg);
+  color: var(--color-error);
 }
 
 .empty-row {
   text-align: center;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   padding: 2rem !important;
 }
 
@@ -729,12 +726,12 @@ onMounted(loadUsers)
   justify-content: center;
   gap: var(--spacing-4);
   padding: var(--spacing-3);
-  border-top: 1px solid var(--border-default, #e5e7eb);
+  border-top: 1px solid var(--border-default);
 }
 
 .btn-page {
   padding: var(--spacing-1-5) var(--spacing-3);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
@@ -747,7 +744,7 @@ onMounted(loadUsers)
 
 .page-info {
   font-size: var(--text-sm);
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .btn-action-primary,
@@ -765,19 +762,19 @@ onMounted(loadUsers)
 }
 
 .btn-action-primary {
-  background: var(--color-primary, #2563eb);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .btn-action-secondary {
   background: transparent;
-  border-color: var(--border-default, #d1d5db);
-  color: var(--text-primary, #111827);
+  border-color: var(--border-default);
+  color: var(--text-primary);
 }
 
 .btn-action-danger {
-  background: var(--color-error, #dc2626);
-  color: #fff;
+  background: var(--color-error);
+  color: var(--text-on-error);
 }
 
 .btn-action-primary:disabled,
@@ -800,14 +797,14 @@ onMounted(loadUsers)
 .form-input {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-3);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
 .error-inline {
-  color: var(--color-error, #dc2626);
+  color: var(--color-error);
   font-size: 0.8125rem;
   margin-top: var(--spacing-2);
 }

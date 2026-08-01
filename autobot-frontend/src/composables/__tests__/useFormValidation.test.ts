@@ -8,8 +8,8 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import { useFormValidation, quickValidate } from '../useFormValidation'
-import type { ValidationRule } from '../useFormValidation'
+import { useFormValidation, quickValidate } from '@autobot/ui'
+import type { ValidationRule } from '@autobot/ui'
 
 describe('useFormValidation composable', () => {
   // ========================================

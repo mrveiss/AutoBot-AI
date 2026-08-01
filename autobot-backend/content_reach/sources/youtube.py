@@ -17,6 +17,7 @@ import re
 import httpx
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
@@ -177,6 +178,18 @@ class YtDlpCaptionBackend(ContentBackend):
 
         _ytdlp_extract_info owns the yt_dlp import check and raises BackendError
         when yt_dlp is unavailable, so no separate guard is needed here.
+
+        Issue #13018: ensure_public_url below is a genuine SSRF guard, but
+        yt-dlp's extract_info() performs its own DNS resolution when it fetches
+        request.url, so the check is stale by connect time (DNS-rebind TOCTOU).
+        Unlike the browser path (research_browser_manager.navigate_to), there is
+        no intervening network work here to narrow away -- the to_thread call
+        already runs immediately after the check -- and yt-dlp exposes no hook
+        to veto its own connection's resolved address. Closing this needs either
+        an egress-validating proxy (yt-dlp accepts a `proxy` option) or a
+        yt-dlp-networking-internals wrapper; both are deployment/architecture
+        decisions, not made yet (see #13018 discussion). This remains an open,
+        documented gap, not a closed one.
         """
         await ensure_public_url(request.url)
 
@@ -202,6 +215,13 @@ class YtDlpCaptionBackend(ContentBackend):
                 exc,
             )
             raise BackendError(f"YtDlpCaptionBackend: HTTP error fetching captions: {exc}") from exc
+        except SSRFError as exc:
+            logger.warning(
+                "YtDlpCaptionBackend: caption track blocked by SSRF guard at connect time for %r: %s",
+                request.url,
+                exc,
+            )
+            raise BackendError(f"YtDlpCaptionBackend: blocked by SSRF guard at connect time: {exc}") from exc
 
         text = _caption_raw_to_text(response.text, ext)
 

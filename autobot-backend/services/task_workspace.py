@@ -20,7 +20,6 @@ import asyncio
 import fcntl
 import json
 import os
-import re
 import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -29,6 +28,8 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
+from services.task_workspace_common import validate_task_id
 
 logger = get_logger(__name__)
 
@@ -75,13 +76,14 @@ def _worktree_guard(workspace_dir: Path, *, blocking: bool = True) -> Iterator[b
         os.close(fd)
 
 
-# task_id must be a safe identifier: UUID hex chars + hyphens, max 128 chars.
-# Rejects path-traversal payloads like "../../etc/passwd" (GH#6471 blocker 2).
-_SAFE_TASK_ID_RE = re.compile(r"^[0-9a-zA-Z_\-]{1,128}$")
-
-
 @dataclass
-class WorkspaceInfo:
+class WorktreeInfo:
+    """Metadata for a git-worktree task workspace.
+
+    GH#11699: renamed from ``WorkspaceInfo`` to disambiguate from the
+    docker-container ``WorkspaceInfo`` in ``services.docker_task_workspace``.
+    """
+
     task_id: str
     agent_id: str
     worktree_path: str
@@ -90,18 +92,12 @@ class WorkspaceInfo:
     created_at: str  # ISO-8601 UTC
 
 
-def _validate_task_id(task_id: str) -> None:
-    """Reject task_ids that could be used for path traversal (GH#6471 blocker 2)."""
-    if not _SAFE_TASK_ID_RE.match(task_id):
-        raise ValueError(f"Invalid task_id {task_id!r}: must match [0-9a-zA-Z_-]{{1,128}}")
-
-
 def allocate(
     task_id: str,
     agent_id: str,
     repo_root: Optional[Path] = None,
     max_per_agent: int = _MAX_WORKTREES_PER_AGENT,
-) -> WorkspaceInfo:
+) -> WorktreeInfo:
     """
     Allocate or resume a worktree for task_id.
 
@@ -112,7 +108,7 @@ def allocate(
 
     Raises ValueError if task_id is not a safe identifier.
     """
-    _validate_task_id(task_id)
+    validate_task_id(task_id)
     root = repo_root or _REPO_ROOT
     workspace_base = root / _WORKSPACE_BASE_NAME
     workspace_dir = workspace_base / f"task-{task_id}"
@@ -137,7 +133,7 @@ def allocate(
                 task_id,
                 workspace_dir,
             )
-            return WorkspaceInfo(
+            return WorktreeInfo(
                 task_id=task_id,
                 agent_id=agent_id,
                 worktree_path=str(workspace_dir),
@@ -151,7 +147,7 @@ def allocate(
     workspace_base.mkdir(parents=True, exist_ok=True)
     _enforce_limit(agent_id, max_per_agent, root)
 
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = utc_timestamp()
     _git_add_worktree(root, workspace_dir, branch)
 
     meta = {
@@ -170,7 +166,7 @@ def allocate(
         agent_id,
         workspace_dir,
     )
-    return WorkspaceInfo(
+    return WorktreeInfo(
         task_id=task_id,
         agent_id=agent_id,
         worktree_path=str(workspace_dir),
@@ -201,7 +197,7 @@ def release(
 
     Raises ValueError if task_id is not a safe identifier.
     """
-    _validate_task_id(task_id)
+    validate_task_id(task_id)
     root = repo_root or _REPO_ROOT
     workspace_dir = root / _WORKSPACE_BASE_NAME / f"task-{task_id}"
 

@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { defineComponent, effectScope, h, nextTick, ref, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { useFocusRestore } from '../useFocusRestore'
+import { useFocusRestore } from '@autobot/ui'
 
 /** Mounts the composable and returns the wrapper for unmount control. */
 function mountWithRestore() {

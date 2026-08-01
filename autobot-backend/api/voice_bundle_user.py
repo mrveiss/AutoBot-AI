@@ -20,8 +20,10 @@ from api.voice_bundle_constants import (
     VALID_BUNDLES,
     BundleAssignRequest,
 )
-from api.voice_bundle_helpers import _count_tools_for_bundle, _require_admin
+from api.voice_bundle_helpers import _count_tools_for_bundle
 from auth_middleware import get_current_user
+from auth_rbac import require_role
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.audit import AuditCategory, AuditEvent, emit
@@ -59,7 +61,16 @@ class UserBundleResponse(BaseModel):
 
 
 def _is_admin(user: dict) -> bool:
-    return user.get("role") == "admin"
+    """#12717: superadmin counts as admin here, matching this router's own writes.
+
+    Before this, a superadmin could ASSIGN a bundle via
+    PUT /voice/users/{id}/bundle — guarded by
+    require_role("admin", "superadmin") below — but could not READ it back via
+    the GET, because the read path came through here and only accepted "admin".
+    Same superadmin-lockout class as #12704; this helper fell outside that
+    issue's scope because it is not one of the six forked _require_admin deps.
+    """
+    return is_admin_role(user.get("role"))
 
 
 def _get_user_id(user: dict) -> str:
@@ -171,7 +182,8 @@ async def set_user_bundle(
     user_id: str,
     body: BundleAssignRequest,
     request: Request,
-    admin_user: dict = Depends(_require_admin),
+    admin_user: dict = Depends(get_current_user),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> UserBundleResponse:
     """Assign or clear a voice bundle override for a user.
 

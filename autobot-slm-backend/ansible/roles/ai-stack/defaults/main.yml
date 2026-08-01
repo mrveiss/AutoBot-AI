@@ -25,6 +25,12 @@ ai_port: 8080
 chromadb_persist_dir: /var/lib/autobot/chromadb
 chromadb_host: "0.0.0.0"
 chromadb_port: 8100
+# CHROMA_SERVER_AUTHN_* token auth (#12513). Empty (default) = auth disabled,
+# matching pre-#12513 behaviour. Override via group_vars/vault; must match
+# the redis role's chromadb_auth_token / backend role's
+# backend_chromadb_auth_token when chroma is co-located here instead of on
+# the db-stack node (#4087 topology).
+chromadb_auth_token: ""
 
 # Ollama (remote on backend node - resolved from inventory)
 ollama_host: "{{ backend_host | default(ansible_host) }}"

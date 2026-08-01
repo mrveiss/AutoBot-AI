@@ -272,8 +272,16 @@ class SkillMetrics(AsyncRedisClientMixin):
 
         try:
             stale_keys = await redis.keys(f"{REDIS_SKILL_HEALTH_PREFIX}*:stale")
+            # The shared client is created with decode_responses=True, so keys
+            # arrive as str. Decoding unconditionally raised AttributeError on
+            # every call and the except below swallowed it into [] -- the caller
+            # saw "no stale skills", never an error. Guarded the same way as
+            # _iter_metric_keys and the duration parse above.
             return [
-                key.decode().replace(f"{REDIS_SKILL_HEALTH_PREFIX}", "").replace(":stale", "") for key in stale_keys
+                (key.decode() if isinstance(key, bytes) else key)
+                .replace(f"{REDIS_SKILL_HEALTH_PREFIX}", "")
+                .replace(":stale", "")
+                for key in stale_keys
             ]
         except Exception as e:
             logger.error("Failed to retrieve stale skills: %s", e)

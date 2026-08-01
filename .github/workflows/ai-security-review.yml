@@ -1,0 +1,168 @@
+# AI security review (#12973)
+#
+# Runs the `secreview` skill headless against the PR diff and posts its findings
+# table as a single PR comment, updated in place.
+#
+# ADVISORY ONLY — never a required check. The reviewer is probabilistic, so it
+# informs the human merge gate rather than gating merge itself. Static scanning
+# (bandit, semgrep, pip-audit, secret detection) lives in security.yml and is
+# not duplicated here; this job covers what pattern matchers structurally cannot
+# see — renames with un-updated call sites, missing ownership checks, fail-open
+# regressions, docstrings that contradict their code.
+#
+# Reviews are billed per run, so the job is deliberately narrow: filtered paths
+# only, no drafts, one run per PR head.
+#
+# Auth is the Claude Code subscription, NOT a metered API key (#12977). Generate
+# a long-lived token locally with `claude setup-token` and store it as the
+# CLAUDE_CODE_OAUTH_TOKEN repository secret. Do not reintroduce
+# ANTHROPIC_API_KEY here — that bills per token against a separate account.
+#
+# Until the secret exists the job skips with a notice rather than failing, so it
+# cannot red every PR.
+
+name: AI Security Review
+
+on:
+  pull_request:
+    branches: [ main, Dev_new_gui ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  changes:
+    name: Detect changed paths
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      reviewable: ${{ steps.filter.outputs.reviewable }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
+        id: filter
+        with:
+          filters: |
+            reviewable:
+              - 'autobot-backend/**/*.py'
+              - 'autobot-slm-backend/**/*.py'
+              - 'autobot_shared/**/*.py'
+              - 'ansible/**'
+              - '.github/workflows/ai-security-review.yml'
+
+  review:
+    name: Security Review
+    needs: changes
+    if: needs.changes.outputs.reviewable == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check for subscription token
+        id: key
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CLAUDE_CODE_OAUTH_TOKEN is not configured — skipping AI security review. Generate one with 'claude setup-token' and add it as a repository secret to enable this job."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.key.outputs.configured == 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        if: steps.key.outputs.configured == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code
+        if: steps.key.outputs.configured == 'true'
+        run: npm install -g @anthropic-ai/claude-code@2
+
+      # The skill enforces the ordering contract (diff only, table within 3 tool
+      # calls, verify after).
+      #
+      # The diff is untrusted input reaching a model, so a crafted PR could try
+      # to steer the review by embedding instructions in the code it changes.
+      # Two mitigations: tools are read-only, so the reviewer cannot edit the
+      # branch it is reviewing or reach the network, and its only output path is
+      # an advisory comment that gates nothing. Treat the comment as a lead to
+      # confirm, never as an authority.
+      #
+      # SHAs are passed via env and dereferenced as shell variables — never
+      # interpolated into the run block, which would be an injection seam.
+      - name: Run secreview
+        id: review
+        if: steps.key.outputs.configured == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -uo pipefail
+          if claude -p "Use the secreview skill to review the diff between ${BASE_SHA} and ${HEAD_SHA}. Output the findings table and the verdict line only — no preamble. If there are no findings, say so in one line." \
+              --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git show:*)" \
+              > /tmp/secreview.md; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            # Advisory job — a transient API failure must not red the PR.
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::secreview did not complete; posting no findings."
+          fi
+
+      - name: Build comment body
+        if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          {
+            echo "<!-- ai-security-review -->"
+            echo "## AI Security Review"
+            echo
+            cat /tmp/secreview.md
+            echo
+            echo "---"
+            echo "_Advisory only — this reviewer is probabilistic and does not gate merge._"
+            echo "_Findings are leads to confirm, not verdicts. Static scanning lives in \`security.yml\`._"
+            echo "_Anything worth keeping should be filed as an issue — a PR comment is not tracking._"
+          } > /tmp/comment.md
+
+      # Upsert by marker so repeated pushes update one comment instead of
+      # appending a new one per run.
+      - name: Post or update PR comment
+        if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/comment.md', 'utf8');
+            const marker = '<!-- ai-security-review -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments, { owner, repo, issue_number }
+            );
+            const existing = comments.find(
+              c => c.user.type === 'Bot' && c.body.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment(
+                { owner, repo, comment_id: existing.id, body }
+              );
+            } else {
+              await github.rest.issues.createComment(
+                { owner, repo, issue_number, body }
+              );
+            }

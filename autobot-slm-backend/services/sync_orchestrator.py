@@ -18,9 +18,10 @@ from typing import Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.ssot_config import config
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
-from services.ssh_utils import _ssh_key_usable
+from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class SyncNodeContext:
 
 # Code cache directory
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
-SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
 
 class SyncOrchestrator:
@@ -107,24 +108,6 @@ class SyncOrchestrator:
             ssh_opts += f" -i {SSH_KEY_PATH}"
         return ssh_opts
 
-    def _build_ssh_command(self, port: int, user: str, host: str) -> list:
-        """
-        Build base SSH command list.
-
-        Helper for sync_node_role (Issue #665).
-        """
-        ssh_cmd = [
-            "ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-p",
-            str(port),
-        ]
-        if _ssh_key_usable(SSH_KEY_PATH):
-            ssh_cmd.extend(["-i", SSH_KEY_PATH])
-        ssh_cmd.append(f"{user}@{host}")
-        return ssh_cmd
-
     async def _rsync_source_path(
         self,
         cache_path: Path,
@@ -185,7 +168,7 @@ class SyncOrchestrator:
             return
 
         try:
-            ssh_cmd = self._build_ssh_command(ctx.node_port, ctx.node_user, ctx.node_ip)
+            ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
             ssh_cmd.append(ctx.post_sync_cmd)
 
             proc = await asyncio.create_subprocess_exec(
@@ -207,7 +190,7 @@ class SyncOrchestrator:
             return
 
         try:
-            ssh_cmd = self._build_ssh_command(ctx.node_port, ctx.node_user, ctx.node_ip)
+            ssh_cmd = build_ssh_base_cmd(ctx.node_ip, ctx.node_user, ctx.node_port, SSH_KEY_PATH)
             ssh_cmd.append(f"sudo systemctl restart {ctx.systemd_service}")
 
             proc = await asyncio.create_subprocess_exec(

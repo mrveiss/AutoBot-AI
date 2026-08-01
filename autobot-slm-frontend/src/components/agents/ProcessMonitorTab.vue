@@ -6,31 +6,24 @@
  * Process Monitor Tab (#1406)
  *
  * Table of background processes with status, logs, and signal controls.
- * Uses /autobot-api proxy to main backend.
+ *
+ * #13079: the REST calls reach the autobot backend through `useAutobotApi`,
+ * the SLM app's single client for that backend, instead of a private `fetch`
+ * that sent only `Bearer ${authStore.token}` (no `autobot_access_token`
+ * fallback, no 401 cleanup, no timeout). The live-log WebSocket below stays on
+ * the native transport — `useAutobotApi` is HTTP-only and a socket has no
+ * equivalent there.
  */
 
-import { computed, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import {
+  useAutobotApi,
+  autobotApiErrorMessage,
+  type ProcessRun,
+} from '@/composables/useAutobotApi'
 
-interface ProcessRun {
-  id: string
-  agent_id: string
-  task_id: string | null
-  command: string
-  args: string[]
-  status: string
-  exit_code: number | null
-  signal: string | null
-  log_excerpt: string | null
-  log_path: string | null
-  timeout_seconds: number
-  started_at: string | null
-  completed_at: string | null
-  created_at: string | null
-}
-
-const authStore = useAuthStore()
+const api = useAutobotApi()
 const processes = ref<ProcessRun[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -51,11 +44,6 @@ const spawnForm = ref({
   timeout_seconds: 300,
 })
 
-const headers = computed(() => ({
-  Authorization: `Bearer ${authStore.token}`,
-  'Content-Type': 'application/json',
-}))
-
 async function fetchProcesses() {
   if (!agentId.value) return
   loading.value = true
@@ -63,14 +51,12 @@ async function fetchProcesses() {
   selectedProcess.value = null
   fullLog.value = null
   try {
-    let url = `${getBackendUrl()}/agents/${agentId.value}/processes?limit=50`
-    if (statusFilter.value) url += `&status=${statusFilter.value}`
-    const res = await fetch(url, { headers: headers.value })
-    if (!res.ok) throw new Error(`Failed to load processes: ${res.status}`)
-    const data = await res.json()
-    processes.value = data.processes || []
+    processes.value = await api.getAgentProcesses(agentId.value, {
+      limit: 50,
+      status: statusFilter.value || undefined,
+    })
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load processes'
+    error.value = autobotApiErrorMessage(err, 'Failed to load processes')
     processes.value = []
   } finally {
     loading.value = false
@@ -80,10 +66,7 @@ async function fetchProcesses() {
 async function fetchFullLog(processId: string) {
   fullLogLoading.value = true
   try {
-    const res = await fetch(`${getBackendUrl()}/processes/${processId}/logs`, {
-      headers: headers.value,
-    })
-    fullLog.value = res.ok ? await res.text() : 'Failed to load log'
+    fullLog.value = await api.getProcessLogs(processId)
   } catch {
     fullLog.value = 'Failed to load log'
   } finally {
@@ -138,47 +121,28 @@ function streamLogs(processId: string) {
 
 async function signalProcess(processId: string, sig: string) {
   try {
-    const res = await fetch(`${getBackendUrl()}/processes/${processId}/signal`, {
-      method: 'POST',
-      headers: headers.value,
-      body: JSON.stringify({ signal: sig }),
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.detail || `Signal failed: ${res.status}`)
-    }
+    await api.signalProcess(processId, sig)
     showKillConfirm.value = null
     await fetchProcesses()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Signal failed'
+    error.value = autobotApiErrorMessage(err, 'Signal failed')
   }
 }
 
 async function spawnProcess() {
   error.value = null
   try {
-    const payload = {
+    await api.spawnProcess({
       agent_id: spawnForm.value.agent_id || agentId.value,
       command: spawnForm.value.command,
-      args: spawnForm.value.args
-        ? spawnForm.value.args.split(' ').filter(Boolean)
-        : [],
+      args: spawnForm.value.args ? spawnForm.value.args.split(' ').filter(Boolean) : [],
       timeout_seconds: spawnForm.value.timeout_seconds,
-    }
-    const res = await fetch(`${getBackendUrl()}/processes/spawn`, {
-      method: 'POST',
-      headers: headers.value,
-      body: JSON.stringify(payload),
     })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.detail || `Spawn failed: ${res.status}`)
-    }
     showSpawnForm.value = false
     spawnForm.value = { agent_id: '', command: '', args: '', timeout_seconds: 300 }
     await fetchProcesses()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Spawn failed'
+    error.value = autobotApiErrorMessage(err, 'Spawn failed')
   }
 }
 
@@ -380,50 +344,50 @@ function formatTime(iso: string | null): string {
 </template>
 
 <style scoped>
-.controls-bar { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 20px; background: white; padding: 16px 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-wrap: wrap; }
-.control-group { display: flex; flex-direction: column; gap: 4px; }
-.control-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary, #6b7280); }
-.control-group input, .control-group select { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; min-width: 160px; }
-.btn-primary { background: #6366f1; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
-.btn-primary:hover { background: #4f46e5; }
+.controls-bar { display: flex; align-items: flex-end; gap: var(--spacing-3); margin-bottom: var(--spacing-5); background: white; padding: var(--spacing-4) var(--spacing-5); border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-wrap: wrap; }
+.control-group { display: flex; flex-direction: column; gap: var(--spacing-1); }
+.control-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+.control-group input, .control-group select { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); min-width: 160px; }
+.btn-primary { background: var(--slm-indigo-500); color: white; border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.btn-primary:hover { background: var(--slm-indigo-600); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary { background: white; color: #374151; border: 1px solid #d1d5db; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; }
-.btn-secondary:hover { background: #f3f4f6; }
-.spawn-form-panel { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
-.spawn-form-panel h4 { font-size: 16px; font-weight: 600; margin: 0 0 16px 0; color: var(--text-primary, #1a1a2e); }
-.spawn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
-.spawn-actions { display: flex; gap: 8px; }
-.btn-cancel { background: #e5e7eb; color: #374151; border: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; }
-.process-table-wrapper { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
-.process-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.process-table th { text-align: left; padding: 12px 16px; background: #f9fafb; color: var(--text-secondary, #6b7280); font-weight: 600; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; }
-.process-table td { padding: 12px 16px; border-bottom: 1px solid #f3f4f6; color: var(--text-primary, #1a1a2e); }
+.btn-secondary { background: white; color: var(--slm-gray-700); border: 1px solid var(--slm-gray-300); padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
+.btn-secondary:hover { background: var(--slm-gray-100); }
+.spawn-form-panel { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: var(--spacing-5); margin-bottom: var(--spacing-5); }
+.spawn-form-panel h4 { font-size: var(--text-base); font-weight: 600; margin: 0 0 var(--spacing-4) 0; color: var(--text-primary); }
+.spawn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-3); margin-bottom: var(--spacing-4); }
+.spawn-actions { display: flex; gap: var(--spacing-2); }
+.btn-cancel { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
+.process-table-wrapper { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+.process-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.process-table th { text-align: left; padding: var(--spacing-3) var(--spacing-4); background: var(--slm-gray-50); color: var(--text-secondary); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; border-bottom: 1px solid var(--slm-gray-200); }
+.process-table td { padding: var(--spacing-3) var(--spacing-4); border-bottom: 1px solid var(--slm-gray-100); color: var(--text-primary); }
 .process-table tr { cursor: pointer; }
-.process-table tr:hover { background: #f9fafb; }
-.process-table tr.selected { background: #e0e7ff; }
-.command-cell { font-family: 'IBM Plex Mono', monospace; font-size: 12px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.time-cell { font-size: 12px; color: var(--text-secondary, #6b7280); }
-.status-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
-.badge-gray { background: #f3f4f6; color: #6b7280; }
-.badge-blue { background: #dbeafe; color: #2563eb; }
-.badge-green { background: #d1fae5; color: #059669; }
-.badge-red { background: #fee2e2; color: #dc2626; }
-.badge-orange { background: #ffedd5; color: #ea580c; }
+.process-table tr:hover { background: var(--slm-gray-50); }
+.process-table tr.selected { background: var(--slm-indigo-100); }
+.command-cell { font-family: 'IBM Plex Mono', monospace; font-size: var(--text-xs); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.time-cell { font-size: var(--text-xs); color: var(--text-secondary); }
+.status-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; text-transform: uppercase; }
+.badge-gray { background: var(--slm-gray-100); color: var(--slm-gray-500); }
+.badge-blue { background: var(--slm-blue-100); color: var(--slm-blue-600); }
+.badge-green { background: var(--slm-emerald-100); color: var(--slm-emerald-600); }
+.badge-red { background: var(--slm-red-100); color: var(--color-danger-600); }
+.badge-orange { background: var(--slm-orange-100); color: var(--slm-orange-600); }
 .badge-pulse { animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-.btn-kill { background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; cursor: pointer; }
-.btn-kill:hover { background: #dc2626; }
-.kill-confirm { display: flex; gap: 4px; align-items: center; }
-.btn-confirm { background: #f59e0b; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
-.btn-danger { background: #ef4444; }
-.btn-cancel-sm { background: #e5e7eb; color: #374151; border: none; padding: 2px 6px; border-radius: 4px; font-size: 11px; cursor: pointer; }
-.log-panel { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-top: 20px; }
-.log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.log-header h4 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary, #1a1a2e); display: flex; align-items: center; gap: 8px; }
-.log-actions { display: flex; gap: 8px; }
-.streaming-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; background: #dc2626; color: white; animation: pulse 1.5s ease-in-out infinite; }
-.log-content { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 16px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
-.error-banner { background: #fee2e2; border: 1px solid #ef4444; color: #b91c1c; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-.loading { text-align: center; color: var(--text-secondary, #6b7280); padding: 60px; }
-.empty-state { text-align: center; color: var(--text-secondary, #6b7280); padding: 60px; }
+.btn-kill { background: var(--color-danger-500); color: white; border: none; padding: var(--spacing-1) 10px; border-radius: var(--radius-default); font-size: var(--text-xs); font-weight: 500; cursor: pointer; }
+.btn-kill:hover { background: var(--color-danger-600); }
+.kill-confirm { display: flex; gap: var(--spacing-1); align-items: center; }
+.btn-confirm { background: var(--slm-amber-500); color: white; border: none; padding: var(--spacing-1) var(--spacing-2); border-radius: var(--radius-default); font-size: 11px; cursor: pointer; }
+.btn-danger { background: var(--color-danger-500); }
+.btn-cancel-sm { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: 2px 6px; border-radius: var(--radius-default); font-size: 11px; cursor: pointer; }
+.log-panel { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: var(--spacing-5); margin-top: var(--spacing-5); }
+.log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-3); }
+.log-header h4 { font-size: var(--text-base); font-weight: 600; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
+.log-actions { display: flex; gap: var(--spacing-2); }
+.streaming-badge { font-size: 10px; padding: 2px var(--spacing-2); border-radius: var(--radius-default); font-weight: 600; background: var(--color-danger-600); color: white; animation: pulse 1.5s ease-in-out infinite; }
+.log-content { background: var(--slm-slate-800); color: var(--slm-slate-200); border-radius: var(--radius-lg); padding: var(--spacing-4); font-family: 'IBM Plex Mono', monospace; font-size: var(--text-xs); line-height: 1.6; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+.error-banner { background: var(--slm-red-100); border: 1px solid var(--color-danger-500); color: var(--slm-red-700); padding: var(--spacing-3) var(--spacing-4); border-radius: var(--radius-lg); margin-bottom: var(--spacing-4); display: flex; justify-content: space-between; align-items: center; }
+.loading { text-align: center; color: var(--text-secondary); padding: 60px; }
+.empty-state { text-align: center; color: var(--text-secondary); padding: 60px; }
 </style>

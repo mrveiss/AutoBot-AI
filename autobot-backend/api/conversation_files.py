@@ -42,6 +42,7 @@ from api.schemas_knowledge import (
     MCPToolCallRequest,
 )
 from auth_middleware import check_admin_permission, get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security_layer import SecurityLayer
@@ -182,7 +183,7 @@ def _check_admin_access(user_data: Dict, session_id: str) -> bool:
         bool: True if admin access granted, False otherwise
     """
     user_role = user_data.get("role")
-    if user_role == "admin":
+    if is_admin_role(user_role):
         logger.debug("Admin user %s accessing session %s", user_data.get("username"), session_id)
         return True
     return False

@@ -39,9 +39,11 @@ from fastapi import Request
 
 from auth_middleware import get_auth_middleware
 from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
+    ADMIN_ROLES,
     ROLE_PERMISSIONS,
     Permission,
     Role,
+    is_admin_role,
 )
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
@@ -51,6 +53,13 @@ from utils.catalog_http_exceptions import raise_auth_error
 logger = get_logger(__name__)
 
 _get_security_layer = lazy_singleton(SecurityLayer)
+
+# #12717/#12786: ADMIN_ROLES and is_admin_role() now live in
+# autobot_shared.auth.permissions, beside the Role enum whose gap they cover.
+# They moved because auth_middleware needs the same answer, and importing them
+# from here would close a cycle -- this module already imports auth_middleware.
+# Both are re-exported above so existing ``from auth_rbac import is_admin_role``
+# callers keep working.
 
 
 def _get_user_permissions(user_role: str) -> List[str]:

@@ -136,6 +136,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "Caur rezerves",
+        "tooltip": "Galvenais nodrošinātājs nav pieejams — atbildēja rezerves nodrošinātājs ({primary} → {fallback})."
       }
     },
     "response": "atbildi",
@@ -210,7 +214,8 @@
       "deleteFailed": "Neizdevās izdzēst dažas tērzēšanas sarunas",
       "sharedSuccess": "Tērzēšana veiksmīgi kopīgota",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Rādīt rezerves atzīmi"
     },
     "interface": {
       "loadFailed": "Neizdevās ielādēt tērzēšanas saskarni",
@@ -727,7 +732,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "Neizdevās izdzēst sarunu. Lūdzu, mēģiniet vēlreiz.",
+      "createFailed": "Neizdevās izveidot sarunu: {error}",
+      "loadSessionsFailed": "Neizdevās ielādēt sarunu sesijas: {error}",
+      "loadMessagesFailed": "Neizdevās ielādēt ziņojumus: {error}",
+      "saveFailed": "Neizdevās saglabāt sarunu: {error}",
+      "resetFailed": "Neizdevās atiestatīt sarunu: {error}",
+      "clearFailed": "Neizdevās notīrīt sarunas: {error}",
+      "invalidFormat": "Nederīgs ziņojuma formāts. Lūdzu, pārbaudiet ievadi un mēģiniet vēlreiz.",
+      "serviceUnavailable": "Sarunu pakalpojums nav pieejams. Lūdzu, atsvaidziniet lapu un mēģiniet vēlreiz.",
+      "serverError": "Radās servera kļūda. Lūdzu, mēģiniet vēlreiz pēc brīža.",
+      "networkFailed": "Neizdevās tīkla savienojums. Lūdzu, pārbaudiet interneta savienojumu.",
+      "timeout": "Pieprasījuma noildze. Lūdzu, mēģiniet vēlreiz ar īsāku ziņojumu.",
+      "sendFailed": "Neizdevās nosūtīt ziņojumu: {error}",
+      "sendFailedAfterRetries": "Neizdevās nosūtīt ziņojumu pēc {attempts} mēģinājumiem: {error}. Lūdzu, pārbaudiet savienojumu un mēģiniet vēlreiz.",
+      "invalidFormatDetail": "Nederīgs ziņojuma formāts: {error}. Lūdzu, pārbaudiet ievadi un mēģiniet vēlreiz.",
+      "networkFailedRetry": "Neizdevās tīkla savienojums. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz."
+    }
   },
   "settings": {
     "title": "Iestatījumi",
@@ -876,7 +899,14 @@
       "disabledMessage": "Vietējie lietojuma rādītāji atspējoti. Rādītāji netiks reģistrēti.",
       "loadFailed": "Neizdevās ielādēt telemetrijas iestatījumus",
       "updateFailed": "Neizdevās atjaunināt telemetrijas iestatījumus"
-    }
+    },
+    "subtitle": "Pielāgojiet savu AutoBot pieredzi ar personiskiem iestatījumiem",
+    "featureFlags": "Funkciju karodziņi",
+    "telegram": "Telegram",
+    "notifications": "Paziņojumi",
+    "mobileDevices": "Mobilās ierīces",
+    "privacy": "Privātums",
+    "providerAuthDesc": "Savienojieties ar pakalpojumu sniedzējiem, izmantojot esošo abonementu, nevis maksas API atslēgu. Marķieri tiek droši glabāti AutoBot noslēpumu glabātavā."
   },
   "voice": {
     "title": "Balss",
@@ -902,7 +932,8 @@
     "creating": "Notiek izveide...",
     "confirmDeleteVoice": "Vai dzēst balsi \"{name}\"?",
     "languageVoicesActive": "{count} valodai konfigurēta balss(-es).",
-    "confirmDeleteVoiceTitle": "Dzēst balss profilu"
+    "confirmDeleteVoiceTitle": "Dzēst balss profilu",
+    "tapToEnableAudio": "Pieskarieties jebkur, lai iespējotu audio atskaņošanu"
   },
   "analytics": {
     "title": "Analytics",
@@ -2474,6 +2505,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "Rāda {shown} no {total}"
     }
   },
   "knowledge": {
@@ -7528,6 +7562,17 @@
       "templates": "Scrape Templates",
       "exitRegionMode": "Exit region mode",
       "markRegions": "Mark regions"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "serviceMessages": {
@@ -7638,7 +7683,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Sistēmas veselība"
+    "systemHealth": "Sistēmas veselība",
+    "providerFallback": "Nodrošinātāja rezerve",
+    "advancedControl": "Papildu vadība"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "Rādīt arhivētos",
+    "delete": "Dzēst",
+    "confirmDeleteTitle": "Dzēst uzņēmumu",
+    "confirmDelete": "Dzēst “{name}”? Tiks noņemts arhivētais uzņēmums un tā dati. To no šejienes nevar atsaukt.",
+    "deleteError": "Neizdevās dzēst uzņēmumu.",
+    "deleteHasChildren": "Šim uzņēmumam ir meitasuzņēmumi. Pirms dzēšanas noņemiet vai pārsaistiet tos.",
+    "onboarding": "Uzsākšana",
+    "active": "Aktīvs",
+    "paused": "Apturēts",
+    "offboarding": "Slēgšana",
+    "archived": "Arhivēts",
+    "activate": "Aktivizēt",
+    "suspend": "Apturēt",
+    "offboard": "Slēgt",
+    "archive": "Arhivēt",
+    "confirmTitle": "Apstiprināt statusa maiņu",
+    "confirmOffboard": "Slēgt “{name}”? Tas sāk uzņēmuma darbības izbeigšanu.",
+    "confirmArchive": "Arhivēt “{name}”? Šis ir gala stāvoklis, un to nevar atsaukt.",
+    "confirm": "Apstiprināt",
+    "updateError": "Neizdevās mainīt uzņēmuma statusu."
   },
   "llcMembers": {
     "title": "Dalibnieki",
@@ -7810,22 +7879,7 @@
       "createFailed": "Failed to create company"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ New",
-      "selectCompany": "Select a company to view threads.",
-      "loading": "Loading...",
-      "noThreads": "No threads yet.",
-      "emptyState": "Select a thread or create a new one.",
-      "loadingMessages": "Loading messages...",
-      "noMessages": "No messages yet.",
-      "messagePlaceholder": "Type a message...",
-      "send": "Send",
-      "newThreadTitle": "New Thread",
-      "titleLabel": "Title",
-      "titlePlaceholder": "Thread title...",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating..."
+      "selectCompany": "Select a company to view threads."
     },
     "dashboard": {
       "title": "Company Dashboard",
@@ -7957,7 +8011,15 @@
       "count": "{count} boards",
       "loading": "Loading boards…",
       "empty": "No boards yet — boards are created per project (Kanban) and per sprint (Sprint).",
-      "created": "Created {date}"
+      "created": "Created {date}",
+      "newKanban": "New Kanban Board",
+      "createTitle": "Create Kanban Board",
+      "project": "Project",
+      "selectProject": "Select a project…",
+      "loadingProjects": "Loading projects…",
+      "noProjects": "No projects yet — create a project first.",
+      "creating": "Creating…",
+      "create": "Create Board"
     },
     "kanban": {
       "title": "Kanban Board",
@@ -7996,7 +8058,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "Ierobežots uz {name}",
+      "showAll": "Rādīt visu uzņēmumu"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "Neizdevās saglabāt izmaiņas. Lūdzu, mēģiniet vēlreiz."
+      }
     },
     "orgChart": {
       "title": "Org Chart",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Neizdevās saglabāt jūsu lēmumu. Lūdzu, mēģiniet vēlreiz."
     },
-    "ceoChat": {
-      "sendError": "Neizdevās nosūtīt jūsu ziņojumu. Tas ir atjaunots, lai jūs varētu mēģināt vēlreiz."
-    },
     "timeline": {
       "rescheduleError": "Neizdevās saglabāt jauno grafiku. Izmaiņas tika atceltas."
     },
@@ -8603,6 +8667,22 @@
       "error": "Neizdevās ielādēt sistēmas veselību",
       "refresh": "Atsvaidzināt",
       "noSources": "Nav konfigurētu satura avotu"
+    },
+    "providerFallback": {
+      "title": "Nodrošinātāja rezerve",
+      "subtitle": "Tiešraides LLM nodrošinātāju un modeļu rezerves aktivitāte",
+      "status": "Statuss",
+      "stateHealthy": "Nav aktīvu rezervju",
+      "stateDegraded": "Rezerve aktīva",
+      "active": "Aktīvās rezerves",
+      "chains": "Konfigurētās ķēdes",
+      "timeline": "Tiešraides aktivitāte",
+      "switched": "Pārslēgts",
+      "exhausted": "Izsmelts",
+      "refresh": "Atsvaidzināt",
+      "loading": "Ielādē rezerves statusu…",
+      "noData": "Nav nodrošinātāja rezerves aktivitātes",
+      "none": "nav"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} tika atjaunots",
   "chat.modelPicker.label": "Modelis",
   "chat.modelPicker.auto": "Automātiski (noklusējuma modelis)",
-  "chat.modelPicker.title": "Izvēlieties modeli un pakalpojumu sniedzēju šai sarunai"
+  "chat.modelPicker.title": "Izvēlieties modeli un pakalpojumu sniedzēju šai sarunai",
+  "budgetPolicies": {
+    "title": "Budžeta politikas",
+    "subtitle": "Pārvaldiet tēriņu sliekšņus un automātiskās pauzes noteikumus aģentiem",
+    "newPolicy": "Jauna politika",
+    "scope": "Tvērums",
+    "scopeAll": "Visi",
+    "scopeAgent": "Aģents",
+    "scopeProject": "Projekts",
+    "scopeTask": "Uzdevums",
+    "scopeTenant": "Nomnieks",
+    "loading": "Ielādē politikas…",
+    "empty": "Nav atrasta neviena budžeta politika. Izveidojiet vienu, lai piemērotu tēriņu ierobežojumus.",
+    "colName": "Nosaukums",
+    "colScope": "Tvērums",
+    "colScopeId": "Tvēruma ID",
+    "colPeriod": "Periods",
+    "colThreshold": "Slieksnis",
+    "colWarning": "Brīdinājums",
+    "colAction": "Darbība",
+    "colStatus": "Statuss",
+    "colActions": "Darbības",
+    "statusEnabled": "iespējots",
+    "statusDisabled": "atspējots",
+    "checkPauseTitle": "Pārbaudīt aģenta pauzes statusu",
+    "agentIdPlaceholder": "Aģenta ID…",
+    "checkStatus": "Pārbaudīt statusu",
+    "labelAgent": "Aģents:",
+    "labelPaused": "Pauzēts:",
+    "labelReason": "Iemesls:",
+    "labelSince": "Kopš:",
+    "resumeAgent": "Atsākt aģentu",
+    "modalEditTitle": "Rediģēt politiku",
+    "modalNewTitle": "Jauna budžeta politika",
+    "fieldName": "Nosaukums",
+    "fieldNamePlaceholder": "Mana politika",
+    "fieldDescription": "Apraksts",
+    "fieldDescriptionPlaceholder": "Neobligāts",
+    "fieldScope": "Tvērums",
+    "fieldScopeId": "Tvēruma ID",
+    "fieldScopeIdPlaceholder": "piem., agent-uuid",
+    "fieldPeriod": "Periods",
+    "periodHour": "Stunda",
+    "periodDay": "Diena",
+    "periodMonth": "Mēnesis",
+    "fieldThreshold": "Slieksnis USD",
+    "fieldWarning": "Brīdinājums % (0–100)",
+    "fieldAction": "Darbība",
+    "actionAlert": "Tikai brīdinājums",
+    "actionPause": "Pauzēt",
+    "actionAlertThenPause": "Brīdināt, tad pauzēt",
+    "fieldEnabled": "Iespējots",
+    "saveChanges": "Saglabāt izmaiņas",
+    "createPolicy": "Izveidot politiku",
+    "deleteTitle": "Dzēst politiku",
+    "deleteConfirm": "Vai tiešām vēlaties dzēst",
+    "deleteUndone": "To nevar atsaukt."
+  },
+  "telemetryConsent": {
+    "title": "Vietējās lietošanas metrikas",
+    "intro": "AutoBot var lokāli reģistrēt {metrics}, lai darbinātu jūsu pašu uzraudzības informācijas paneļus. Šie dati paliek jūsu infrastruktūrā un {never}.",
+    "introMetrics": "anonīmas darbības metrikas",
+    "introNever": "nekad netiek nevienam nosūtīti",
+    "summaryTitle": "Kas tiek reģistrēts lokāli:",
+    "dataApi": "API galapunktu lietojums un atbildes laiki",
+    "dataVoice": "Balss sesiju ilgums un marķieru skaits",
+    "dataFeature": "Funkciju lietošanas modeļi",
+    "privacyLabel": "Nekad netiek reģistrēts:",
+    "privacyText": "personas dati, koda saturs vai tērzēšanas ziņojumi.",
+    "footer": "Šo preferenci var mainīt jebkurā laikā sadaļā {settings}.",
+    "footerSettings": "Iestatījumi → Konfidencialitāte",
+    "keepOff": "Atstāt izslēgtu",
+    "enable": "Iespējot"
+  },
+  "hireAgent": {
+    "title": "Pieņemt aģentu",
+    "agentName": "Aģenta nosaukums",
+    "agentNamePlaceholder": "piem., Builder-1",
+    "model": "Modelis",
+    "modelSonnet": "Sonnet (noklusējums)",
+    "modelHaiku": "Haiku (asistents)",
+    "orgRole": "Organizācijas loma",
+    "roleWorker": "Darbinieks",
+    "roleSpecialist": "Speciālists",
+    "roleCoordinator": "Koordinators",
+    "roleManager": "Vadītājs",
+    "adapter": "Adapteris",
+    "hiring": "Pieņem…",
+    "hire": "Pieņemt"
+  },
+  "advancedControl": {
+    "title": "Papildu vadība",
+    "subtitle": "Apstipriniet pārņemšanas pieprasījumus un pārvaldiet aktīvās manuālās vadības sesijas",
+    "tabListAriaLabel": "Papildu vadības cilnes",
+    "loading": "Notiek pārņemšanas rindas ielāde…",
+    "tabs": {
+      "takeoverQueue": "Pārņemšanas rinda",
+      "streaming": "Straumēšana",
+      "monitoring": "Pārraudzība",
+      "comingSoon": "Drīzumā",
+      "comingSoonMessage": "Šī cilne vēl nav pieejama.",
+      "streamingTitle": "Darbvirsmas straumēšana",
+      "monitoringTitle": "Sistēmas pārraudzība"
+    },
+    "summary": {
+      "pending": "Gaida",
+      "active": "Aktīvas",
+      "paused": "Pauzētas",
+      "completed": "Pabeigtas",
+      "systemStatus": "Sistēmas statuss",
+      "statusNormal": "Normāls",
+      "statusTakeoverActive": "Pārņemšana aktīva",
+      "statusEmergency": "Ārkārtas situācija"
+    },
+    "pending": {
+      "title": "Gaidošie pārņemšanas pieprasījumi",
+      "colTrigger": "Trigeris",
+      "colReason": "Iemesls",
+      "colPriority": "Prioritāte",
+      "colRequestedBy": "Pieprasīja",
+      "colCreatedAt": "Izveidots",
+      "colActions": "Darbības",
+      "unknownAgent": "Nezināms aģents",
+      "emptyTitle": "Nav gaidošu pieprasījumu",
+      "emptyMessage": "Nav pārņemšanas pieprasījumu, kas gaida apstiprinājumu."
+    },
+    "active": {
+      "title": "Aktīvās pārņemšanas sesijas",
+      "colOperator": "Operators",
+      "colStatus": "Statuss",
+      "colStartedAt": "Sākta",
+      "colActionsExecuted": "Izpildītās darbības",
+      "emptyTitle": "Nav aktīvu sesiju",
+      "emptyMessage": "Pašlaik nav aktīvu manuālās vadības sesiju."
+    },
+    "actions": {
+      "approve": "Apstiprināt",
+      "pause": "Pauzēt",
+      "resume": "Atsākt",
+      "complete": "Pabeigt"
+    },
+    "streaming": {
+      "title": "Straumēšanas sesijas",
+      "newSession": "Jauna sesija",
+      "terminate": "Pārtraukt",
+      "capVncAvailable": "VNC pieejams",
+      "capNovncAvailable": "noVNC pieejams",
+      "capMaxSessions": "Maks. sesijas",
+      "formUserIdLabel": "Lietotāja ID",
+      "formUserIdPlaceholder": "piem., user-123",
+      "formResolutionLabel": "Izšķirtspēja",
+      "formResolutionPlaceholder": "piem., 1920x1080",
+      "formDepthLabel": "Krāsu dziļums",
+      "colSessionId": "Sesijas ID",
+      "colUser": "Lietotājs",
+      "colStatus": "Statuss",
+      "colDisplay": "Displejs",
+      "colCreatedAt": "Izveidota",
+      "colActions": "Darbības",
+      "emptyTitle": "Nav aktīvu straumēšanas sesiju",
+      "emptyMessage": "Pašlaik nav aktīvu darbvirsmas straumēšanas sesiju."
+    },
+    "monitoring": {
+      "loading": "Notiek sistēmas pārraudzības datu ielāde…",
+      "healthTitle": "Sistēmas stāvoklis",
+      "healthStatus": "Veselības statuss",
+      "statusHealthy": "Vesels",
+      "statusUnhealthy": "Nav vesels",
+      "desktopStreamingAvailable": "Darbvirsmas straumēšana pieejama",
+      "novncAvailable": "noVNC pieejams",
+      "activeStreamingSessions": "Aktīvas straumēšanas sesijas",
+      "pendingTakeovers": "Gaidošas pārņemšanas",
+      "activeTakeovers": "Aktīvas pārņemšanas",
+      "pausedTasks": "Pauzēti uzdevumi",
+      "resourceTitle": "Resursu izmantojums",
+      "cpuUsage": "CPU izmantojums",
+      "memoryUsage": "Atmiņas izmantojums",
+      "diskUsage": "Diska izmantojums",
+      "processCount": "Procesu skaits",
+      "loadAverage": "Vidējā slodze (1 min / 5 min / 15 min)",
+      "uptime": "Darbības laiks",
+      "emergencyStopTitle": "Bīstamā zona",
+      "emergencyStop": "Avārijas apturēšana",
+      "emergencyStopDescription": "Nekavējoties aptur visas autonomās darbības un pieprasa automātiski apstiprinātu cilvēka pārņemšanu. To nevar atsaukt — izmantojiet tikai tad, ja autonomā darbība nekavējoties jāaptur.",
+      "emergencyStopConfirmTitle": "Aktivizēt avārijas apturēšanu?",
+      "emergencyStopConfirmMessage": "Tas nekavējoties pauzēs visus autonomos uzdevumus un sāks KRITISKAS prioritātes cilvēka pārņemšanu. Šo darbību nevar atsaukt. Turpināt?",
+      "emergencyStopSuccess": "Avārijas apturēšana aktivizēta — visas autonomās darbības ir pauzētas.",
+      "emptyTitle": "Nav pārraudzības datu",
+      "emptyMessage": "Neizdevās ielādēt sistēmas statusu."
+    }
+  },
+  "adminUsers": {
+    "title": "Lietotāju pārvaldība",
+    "subtitle": "Pārvaldiet lietotājus, lomas un konta statusu",
+    "addUser": "Pievienot lietotāju",
+    "searchPlaceholder": "Meklēt pēc lietotājvārda, e-pasta vai vārda…",
+    "loading": "Ielādē lietotājus…",
+    "colUsername": "Lietotājvārds",
+    "colEmail": "E-pasts",
+    "colDisplayName": "Attēlojamais vārds",
+    "colRole": "Loma",
+    "colVoiceBundle": "Balss komplekts",
+    "colStatus": "Statuss",
+    "colActions": "Darbības",
+    "roleAdmin": "administrators",
+    "roleUser": "lietotājs",
+    "roleReadonly": "tikai lasāms",
+    "statusActive": "aktīvs",
+    "statusInactive": "neaktīvs",
+    "titleDeactivate": "Deaktivizēt",
+    "titleActivate": "Aktivizēt",
+    "titleAssignBundle": "Piešķirt balss komplektu",
+    "empty": "Lietotāji nav atrasti.",
+    "fieldEmail": "E-pasts",
+    "fieldUsername": "Lietotājvārds",
+    "fieldPassword": "Parole",
+    "fieldDisplayName": "Attēlojamais vārds",
+    "createUser": "Izveidot lietotāju",
+    "userLabel": "Lietotājs:",
+    "fieldVoiceBundle": "Balss komplekts",
+    "useRoleDefault": "— Izmantot lomas noklusējumu —",
+    "deleteUserTitle": "Dzēst lietotāju",
+    "deleteConfirm": "Dzēst",
+    "deleteUndone": "To nevar atsaukt."
+  },
+  "schedulers": {
+    "title": "Fona plānotāji",
+    "description": "Ieslēdziet vai izslēdziet fona uzdevumus. Izmaiņas stājas spēkā nākamajā ciklā — bez pārstartēšanas.",
+    "refresh": "Atsvaidzināt",
+    "loading": "Ielādē plānotājus…",
+    "empty": "Nav reģistrētu plānotāju.",
+    "overridden": "Pārrakstīts",
+    "defaultLabel": "Noklusējums",
+    "runtimeLabel": "Izpildvide",
+    "on": "Ieslēgts",
+    "off": "Izslēgts",
+    "revertToDefault": "Atjaunot noklusējumu",
+    "enableTitle": "Ieslēgt šo uzdevumu",
+    "disableTitle": "Izslēgt šo uzdevumu",
+    "toggleAria": "Pārslēgt {name}",
+    "loadFailed": "Neizdevās ielādēt plānotājus.",
+    "toggleFailed": "Neizdevās mainīt {name}.",
+    "resetFailed": "Neizdevās atjaunot {name} noklusējumu."
+  }
 }

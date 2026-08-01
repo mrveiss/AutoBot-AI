@@ -8,14 +8,59 @@ Completion Trainer Tests (Issue #904)
 Tests for ML model training infrastructure.
 """
 
+import pickle
 import tempfile
 from pathlib import Path
 
-import torch
+import pytest
 
-from training.completion_model import CompletionModel
-from training.data_loader import Tokenizer
-from training.evaluator import CompletionEvaluator
+# Optional ML dependency (torch is in requirements-gpu.txt, never default reqs).
+# Skip cleanly when absent; run for real when torch IS installed (e.g. GPU CI).
+pytest.importorskip("torch.nn.functional", reason="torch not installed — optional ML dep")
+
+import torch  # noqa: E402 — after importorskip by design
+
+from training.completion_model import CompletionModel  # noqa: E402
+from training.data_loader import Tokenizer  # noqa: E402
+from training.evaluator import CompletionEvaluator  # noqa: E402
+
+# Module-level marker used by the malicious-pickle test below. A crafted
+# checkpoint whose __reduce__ targets this function would flip the flag if the
+# payload were ever executed during deserialization.
+_PICKLE_PAYLOAD = {"executed": False}
+
+
+def _record_payload_execution():
+    """Reduce target for the malicious-pickle gadget (harmless side effect)."""
+    _PICKLE_PAYLOAD["executed"] = True
+    return {}
+
+
+class _MaliciousCheckpoint:
+    """Object whose unpickling would invoke ``_record_payload_execution``."""
+
+    def __reduce__(self):
+        return (_record_payload_execution, ())
+
+
+def test_load_checkpoint_rejects_malicious_pickle():
+    """torch.load(weights_only=True) must refuse code-executing checkpoints (CodeQL #983).
+
+    Proves the py/unsafe-deserialization mitigation: the restricted unpickler
+    rejects a crafted checkpoint before any embedded reduce gadget can run.
+    """
+    _PICKLE_PAYLOAD["executed"] = False
+    with tempfile.TemporaryDirectory() as tmpdir:
+        malicious_path = Path(tmpdir) / "malicious.pt"
+        with open(malicious_path, "wb") as f:
+            pickle.dump(_MaliciousCheckpoint(), f)
+
+        # weights_only=True (the sink used in CompletionTrainer.load_checkpoint)
+        # must raise rather than execute the embedded gadget.
+        with pytest.raises(Exception):
+            torch.load(malicious_path, map_location="cpu", weights_only=True)
+
+        assert _PICKLE_PAYLOAD["executed"] is False, "malicious payload was executed"
 
 
 def test_tokenizer_initialization():

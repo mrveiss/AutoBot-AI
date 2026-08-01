@@ -17,11 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from autobot_shared.time_utils import now_utc
 
 
-def _utcnow() -> datetime:
-    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return now_utc()
-
-
 class ProcessedChunk(BaseModel):
     """
     Represents a processed chunk of text from a document.
@@ -48,4 +43,4 @@ class ProcessedChunk(BaseModel):
     )
     start_offset: int = Field(default=0, description="Character offset where chunk starts in document")
     end_offset: int = Field(default=0, description="Character offset where chunk ends in document")
-    created_at: datetime = Field(default_factory=_utcnow, description="Chunk creation timestamp")
+    created_at: datetime = Field(default_factory=now_utc, description="Chunk creation timestamp")

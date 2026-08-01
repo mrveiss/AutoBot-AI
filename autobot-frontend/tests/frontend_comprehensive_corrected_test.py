@@ -996,7 +996,7 @@ async def main():
 
         report["results"] = serializable_results
 
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         print(f"\n📄 Full test report saved to: {report_file}")

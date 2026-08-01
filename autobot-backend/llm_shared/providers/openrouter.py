@@ -40,7 +40,12 @@ class OpenRouterProvider(OpenAICompatibleProvider):
               OPENROUTER_API_KEY environment variable
     """
 
-    provider_name = ProviderType.OPENROUTER.value if hasattr(ProviderType, "OPENROUTER") else "openrouter"
+    # ProviderType.OPENROUTER is guaranteed to exist now that ProviderType is
+    # a thin alias of the canonical union enum (#12661); the previous
+    # hasattr() guard was defending against the pre-consolidation gap where
+    # ProviderType lacked OPENROUTER (it only existed in the disagreeing
+    # llm_cost_tracker.LLMProvider fork).
+    provider_name = ProviderType.OPENROUTER.value
     default_model = "gpt-3.5-turbo"
     forward_penalty_params = True
     missing_key_error = "OpenRouter API key not found. Set OPENROUTER_API_KEY or provide api_key in settings."

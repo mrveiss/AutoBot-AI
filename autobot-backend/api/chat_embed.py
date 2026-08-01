@@ -65,12 +65,12 @@ if _TRUSTED_PROXIES:
     logger.info(
         "Embed trusted proxies: %d configured — X-Forwarded-For honored only from: %s",
         len(_TRUSTED_PROXIES),
-        ", ".join(sorted(_TRUSTED_PROXIES)),  # codeql[py/clear-text-logging-sensitive-data]
+        ", ".join(sorted(_TRUSTED_PROXIES)),
     )
 else:
     logger.info(
         "Embed trusted proxies: none — rate limiting by direct connection IP only " "(set %s if behind reverse proxy)",
-        _TRUSTED_PROXIES_ENV,  # codeql[py/clear-text-logging-sensitive-data]
+        _TRUSTED_PROXIES_ENV,
     )
 
 

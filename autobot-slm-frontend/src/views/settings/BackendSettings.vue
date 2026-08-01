@@ -11,9 +11,14 @@
 
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import { useAutobotApi } from '@/composables/useAutobotApi'
+import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 
+// `authStore.getApiUrl()` is retained for DISPLAY only (the "API endpoint"
+// field and the summary row): it reports the SLM host origin the operator is
+// pointed at. Every transport call goes through the canonical client (#13140).
 const authStore = useAuthStore()
+const autobotApi = useAutobotApi()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
@@ -37,25 +42,22 @@ async function fetchSettings(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch(`${authStore.getApiUrl()}/api/settings`, {
-      headers: authStore.getAuthHeaders(),
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      data.forEach((s: { key: string; value: string | null }) => {
-        if (s.value !== null && s.key in settings.value) {
-          const key = s.key as keyof typeof settings.value
-          if (typeof settings.value[key] === 'boolean') {
-            (settings.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
-          } else if (typeof settings.value[key] === 'number') {
-            (settings.value as Record<string, string | number | boolean>)[key] = parseInt(s.value)
-          } else {
-            (settings.value as Record<string, string | number | boolean>)[key] = s.value
-          }
+    // #13140: canonical SLM client. A rejected session now surfaces as an
+    // error (and clears the session) instead of being swallowed and leaving
+    // the panel showing its hard-coded defaults.
+    const data = await listSettings()
+    data.forEach((s) => {
+      if (s.value !== null && s.value !== undefined && s.key in settings.value) {
+        const key = s.key as keyof typeof settings.value
+        if (typeof settings.value[key] === 'boolean') {
+          (settings.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
+        } else if (typeof settings.value[key] === 'number') {
+          (settings.value as Record<string, string | number | boolean>)[key] = parseInt(s.value)
+        } else {
+          (settings.value as Record<string, string | number | boolean>)[key] = s.value
         }
-      })
-    }
+      }
+    })
 
     // Set API endpoint from auth store if not in settings
     if (!settings.value.api_endpoint) {
@@ -75,16 +77,15 @@ async function testConnection(): Promise<void> {
 
   try {
     const startTime = Date.now()
-    const response = await fetch(`${getBackendUrl()}/api/health`)
+    // #13079: `probeBackendHealth` accepts every status code, so an
+    // unauthorised backend still reports as reachable and the probe cannot
+    // trip the 401 interceptor that clears `autobot_access_token` — a
+    // connectivity diagnostic must never log the operator out.
+    const probe = await autobotApi.probeBackendHealth()
 
     responseTime.value = Date.now() - startTime
-
-    if (response.ok) {
-      connectionStatus.value = 'connected'
-    } else {
-      connectionStatus.value = 'failed'
-    }
-  } catch (e) {
+    connectionStatus.value = probe.ok ? 'connected' : 'failed'
+  } catch {
     connectionStatus.value = 'failed'
   } finally {
     testingConnection.value = false
@@ -97,16 +98,9 @@ async function saveSetting(key: string, value: string | number | boolean): Promi
   success.value = null
 
   try {
-    const response = await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-      method: 'PUT',
-      headers: {
-        ...authStore.getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ value: String(value) }),
-    })
+    const ok = await upsertSetting(key, { value: String(value) })
 
-    if (!response.ok) {
+    if (!ok) {
       throw new Error('Failed to save setting')
     }
 

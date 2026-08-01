@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.url_safety import host_matches
 from circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from constants.security_constants import SecurityConstants
@@ -158,7 +159,7 @@ class CaptchaSolver:
     async def solve_recaptcha(self, site_key: str, page_url: str, invisible: bool = False) -> str | None:
         """Solve reCAPTCHA using solving service."""
         if not self.api_key:
-            logger.warning("No CAPTCHA API key configured")  # codeql[py/clear-text-logging-sensitive-data]
+            logger.warning("No CAPTCHA API key configured")
             return None
         try:
             if self.service == "2captcha":
@@ -274,40 +275,6 @@ class BrowserFingerprint:
         self.current_fingerprint = self._generate_fingerprint()
 
 
-class RateLimiter:
-    """Rate limiter for web research requests (async-safe)."""
-
-    def __init__(self, max_requests: int = 10, window_seconds: int = 60):
-        """Initialize with request limit and time window."""
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self.requests: List[float] = []
-        self._lock = asyncio.Lock()
-
-    async def acquire(self) -> bool:
-        """Acquire permission for a request (async-safe)."""
-        async with self._lock:
-            return await self._acquire_internal()
-
-    async def _acquire_internal(self) -> bool:
-        """Internal acquire (called when lock is already held)."""
-        now = time.time()
-        self.requests = [t for t in self.requests if now - t < self.window_seconds]
-        if len(self.requests) >= self.max_requests:
-            oldest = min(self.requests)
-            wait_time = self.window_seconds - (now - oldest)
-            if wait_time > 0:
-                logger.info("Rate limit reached, waiting %.2fs", wait_time)
-                self._lock.release()
-                try:
-                    await asyncio.sleep(wait_time)
-                finally:
-                    await self._lock.acquire()
-                return await self._acquire_internal()
-        self.requests.append(now)
-        return True
-
-
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------
@@ -342,11 +309,15 @@ class WebResearcher:
         )
         self.circuit_breaker = CircuitBreaker("web_research", _cb_config)
 
-        # Global rate limiter
-        self.rate_limiter = RateLimiter(
-            max_requests=self.config.get("rate_limit_requests", 5),
-            window_seconds=self.config.get("rate_limit_window", 60),
-        )
+        # Global rate limiter — delegates to the shared limiter's custom
+        # single-window mode (Issue #12646). Scoped per-instance via
+        # id(self) so independently-constructed WebResearcher instances
+        # (e.g. security_scanner_agent.py) keep isolated budgets, matching
+        # the retired local RateLimiter's per-instance semantics exactly.
+        self._rl_max_requests = self.config.get("rate_limit_requests", 5)
+        self._rl_window_seconds = self.config.get("rate_limit_window", 60)
+        self._rl_key = f"researcher:{id(self)}"
+        self.rate_limiter = _SharedRateLimiter(scope_prefix="web_researcher")
 
         # Cache (TTL-based)
         self._cache: Dict[str, Dict[str, Any]] = {}
@@ -966,7 +937,12 @@ class WebResearcher:
             cached["from_cache"] = True
             return cached
 
-        if not await self.rate_limiter.acquire():
+        if not await self.rate_limiter.acquire_window(
+            self._rl_key,
+            max_requests=self._rl_max_requests,
+            window_seconds=self._rl_window_seconds,
+            wait=True,
+        ):
             return self._build_rate_limited_response(query)
 
         max_res = max_results or self.max_results_default
@@ -1381,15 +1357,18 @@ class WebResearcher:
         self.circuit_breaker.reset()
         logger.info("Circuit breaker reset")
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    async def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
+        remaining = await self.rate_limiter.get_remaining_in_window(
+            self._rl_key, max_requests=self._rl_max_requests, window_seconds=self._rl_window_seconds
+        )
         return {
             "cache_size": len(self._cache),
             "cache_ttl": self._cache_ttl,
             "rate_limiter": {
-                "max_requests": self.rate_limiter.max_requests,
-                "window_seconds": self.rate_limiter.window_seconds,
-                "current_requests": len(self.rate_limiter.requests),
+                "max_requests": self._rl_max_requests,
+                "window_seconds": self._rl_window_seconds,
+                "current_requests": self._rl_max_requests - remaining,
             },
         }
 
@@ -1398,7 +1377,7 @@ class WebResearcher:
         return {
             "enabled": self.enabled,
             "circuit_breaker": self.get_circuit_breaker_status(),
-            "cache_stats": self.get_cache_stats(),
+            "cache_stats": await self.get_cache_stats(),
             "browser_initialized": self.browser is not None,
         }
 

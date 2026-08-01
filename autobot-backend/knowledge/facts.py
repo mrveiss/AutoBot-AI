@@ -12,8 +12,9 @@ store, retrieve, update, delete, and vectorization.
 import asyncio
 import hashlib
 import json
+import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
@@ -161,7 +162,7 @@ def get_npu_warmup_status() -> Dict[str, Any]:
     }
 
 
-async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
+async def _generate_embedding_with_npu_fallback(text: str, max_attempts: int = 1) -> List[float]:
     """Generate a single embedding via the canonical NPU-fallback path.
 
     Issue #5105: Thin shim — delegates to
@@ -176,6 +177,9 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
 
     Args:
         text: Text content to embed.
+        max_attempts: Total attempts before giving up. Issue #12312: defaults to 1
+            (fast-fail) so inline user-facing paths never stall behind a downed
+            backend; the background reconcile path passes a higher count to retry.
 
     Returns:
         Embedding vector. Empty list if all backends fail (callers downstream
@@ -183,7 +187,7 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     """
     from services.npu_client import generate_embedding_with_fallback
 
-    embedding = await generate_embedding_with_fallback(text)
+    embedding = await generate_embedding_with_fallback(text, max_attempts=max_attempts)
     return embedding or []
 
 
@@ -242,6 +246,108 @@ def get_embedding_metrics() -> Dict[str, int]:
     except Exception:
         logger.debug("get_embedding_metrics: registry read failed", exc_info=True)
     return {"npu_count": npu_count, "fallback_count": fallback_count}
+
+
+# A1 (#12552): fire-and-forget access-recording tasks are held here so the event
+# loop keeps a strong reference until they finish (create_task otherwise GC-able).
+_ACCESS_TASKS: "set[asyncio.Task]" = set()
+
+# A1 (#12552): atomic usage bump. EXISTS + HINCRBY + HSET in one server-side
+# round-trip so a concurrent delete_fact can never resurrect a ghost hash
+# between the guard and the writes (both HINCRBY/HSET auto-create keys).
+_ACCESS_BUMP_LUA = (
+    "if redis.call('EXISTS', KEYS[1]) == 1 then "
+    "redis.call('HINCRBY', KEYS[1], 'access_count', 1) "
+    "redis.call('HSET', KEYS[1], 'last_accessed', ARGV[1]) "
+    "return 1 end return 0"
+)
+
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var, never raising at import — bad values fall back."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
+        return default
+
+
+def _env_float_safe(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
+        return default
+    return val if val == val else default  # reject NaN
+
+
+# A3 (#12554): fact-lane consolidation thresholds. Conservative by design — see
+# consolidate_facts for the full no-data-loss reasoning. A fact is prunable only
+# if it is UNPROTECTED, low-quality, never recalled since instrumentation began
+# (access_count == 0, A1 #12552), created AFTER the instrumentation epoch (so a
+# 0 count is meaningful, not "predates A1"), and aged past the floor.
+_FACTS_PRUNE_QUALITY_FLOOR: float = _env_float_safe("AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR", 0.1)
+_FACTS_PRUNE_MAX_AGE_DAYS: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS", 180)
+_FACTS_PRUNE_SCAN_LIMIT: int = _env_int("AUTOBOT_FACTS_PRUNE_SCAN_LIMIT", 5000)
+# Instrumentation epoch: ISO date A1 access-tracking began for THIS deployment.
+# Facts created before it have unknown recall history → never pruned. UNSET =
+# feature inert (no candidates) so an un-configured deploy can never mass-delete.
+_FACTS_PRUNE_EPOCH: str = os.environ.get("AUTOBOT_FACTS_PRUNE_EPOCH", "").strip()
+# Circuit breaker: if a single run would prune more than this many facts, refuse
+# and log loudly — a healthy decay pass sheds a trickle, not thousands.
+_FACTS_PRUNE_MAX_PER_RUN: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_PER_RUN", 100)
+
+
+def _fact_is_protected(metadata: Dict[str, Any]) -> bool:
+    """A fact that must never be auto-pruned (A3 #12554, no-data-loss invariant).
+
+    Protected when owned (``owner_id``/``user_id``), human-verified, explicitly
+    kept (``important``/``preserve``/``pinned``), or **curated/ingested** rather
+    than ephemeral conversational cruft: a ``unique_key`` (e.g. man-page facts)
+    or a ``source_connector_id`` (Confluence/Notion/web-crawl/... ingestion) marks
+    knowledge a user deliberately brought in, which a low access_count must not
+    condemn. Superset of the session-cleanup ``preserve_important`` predicate.
+    """
+    if metadata.get("important") or metadata.get("preserve") or metadata.get("pinned"):
+        return True
+    if metadata.get("owner_id") or metadata.get("user_id"):
+        return True
+    if metadata.get("unique_key") or metadata.get("source_connector_id"):
+        return True
+    return metadata.get("verification_status") == "verified"
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    """Parse an ISO timestamp to an aware UTC datetime, or ``None`` if unusable."""
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        ts = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+
+
+def _apply_usage_fields(decoded: Dict[str, Any], metadata: Dict[str, Any]) -> None:
+    """Surface authoritative usage counters from the Redis hash into metadata.
+
+    A1 (#12552): ``access_count`` / ``last_accessed`` live as top-level hash
+    fields (so ``HINCRBY`` stays atomic and the metadata JSON blob is never
+    rewritten on access). They are the single source of truth; on read we copy
+    them into the returned metadata dict, defaulting to 0 / "" when absent so
+    every fact — old or new — exposes the keys.
+    """
+    try:
+        metadata["access_count"] = int(decoded.get("access_count") or 0)
+    except (TypeError, ValueError):
+        metadata["access_count"] = 0
+    metadata["last_accessed"] = decoded.get("last_accessed") or ""
 
 
 def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
@@ -571,7 +677,68 @@ class FactsMixin:
             # is not initialized
             await asyncio.to_thread(self.redis_client.sadd, "user:facts:%s" % owner_id, fact_id)
 
-    async def _vectorize_fact_in_chromadb(self, fact_id: str, content: str, metadata: Dict[str, Any]) -> None:
+    async def _record_failed_vectorization(self, fact_id: str, reason: str) -> None:
+        """Record a vectorization failure as queryable, retriable state (Issue #12312).
+
+        Embedding generation can fail transiently (backend crash-loop, timeout). The
+        fact content is already persisted; only its vector is missing. Rather than
+        silently drop the vector (log-only, unrecoverable), mark the fact so it is:
+
+        * **queryable** — ``vectorization_status=failed`` (plus error + timestamp) on
+          the ``fact:<id>`` hash, so affected records can be found without log forensics;
+        * **retriable / auto-backfilled** — added to the background reconciler's pending
+          set (``kb:vectorize:pending``, #11296) which re-vectorizes it every cycle until
+          it succeeds and is marked ``completed``.
+        """
+        from background_vectorization import PENDING_SET_KEY
+
+        logger.error(
+            "Vectorization FAILED for fact %s — vector NOT stored; marked failed and queued for retry. Reason: %s",
+            fact_id,
+            reason,
+        )
+        try:
+            fact_key = "fact:%s" % fact_id
+            await asyncio.to_thread(
+                self.redis_client.hset,
+                fact_key,
+                mapping={
+                    "vectorization_status": "failed",
+                    "vectorization_error": reason,
+                    "vectorization_failed_at": datetime.now(tz=timezone.utc).isoformat(),
+                },
+            )
+            await asyncio.to_thread(self.redis_client.sadd, PENDING_SET_KEY, fact_id)
+        except Exception as exc:
+            logger.error("Could not record vectorization failure for fact %s: %s", fact_id, exc)
+
+    async def _mark_vectorization_succeeded(self, fact_id: str) -> None:
+        """Clear any failed/pending vectorization state after a successful vector write (Issue #12312).
+
+        Keeps the unvectorized-count metric accurate: a fact that previously failed
+        and then succeeds inline is marked ``completed`` and dropped from the pending
+        set immediately, rather than lingering as ``failed`` until the next reconcile
+        cycle. Mirrors ``BackgroundVectorizer._mark_vectorization_complete`` (#11296).
+        """
+        from background_vectorization import PENDING_SET_KEY
+
+        try:
+            fact_key = "fact:%s" % fact_id
+            await asyncio.to_thread(
+                self.redis_client.hset,
+                fact_key,
+                mapping={
+                    "vectorization_status": "completed",
+                    "vectorized_at": datetime.now(tz=timezone.utc).isoformat(),
+                },
+            )
+            await asyncio.to_thread(self.redis_client.srem, PENDING_SET_KEY, fact_id)
+        except Exception as exc:
+            logger.debug("Could not mark vectorization success for fact %s (non-critical): %s", fact_id, exc)
+
+    async def _vectorize_fact_in_chromadb(
+        self, fact_id: str, content: str, metadata: Dict[str, Any], max_attempts: int = 1
+    ) -> None:
         """
         Vectorize and store fact in ChromaDB vector store.
 
@@ -582,6 +749,9 @@ class FactsMixin:
             fact_id: Fact identifier
             content: Fact content text
             metadata: Fact metadata dict
+            max_attempts: Embedding attempts before giving up. Issue #12312: defaults
+                to 1 (fast-fail) for inline user-facing creates; the on-demand /
+                reconcile path (``vectorize_existing_fact``) passes a higher count.
         """
         if not self.vector_store:
             return
@@ -594,13 +764,25 @@ class FactsMixin:
 
         # Issue #165: Generate embedding using NPU worker with fallback
         # ChromaVectorStore.add() expects nodes with embeddings already set
-        embedding = await _generate_embedding_with_npu_fallback(content)
+        embedding = await _generate_embedding_with_npu_fallback(content, max_attempts=max_attempts)
+
+        # Issue #12312: An empty embedding means generation failed upstream (backend
+        # blip, timeout). Do NOT silently drop the vector and log success — record a
+        # queryable, retriable failure so the background reconciler backfills it once
+        # the backend recovers.
+        if not embedding:
+            await self._record_failed_vectorization(fact_id, "embedding generation returned an empty result")
+            return
 
         # Issue #8391: Route through VectorWriteBuffer when available (LSM-style batching).
         # Falls back to direct LlamaIndex add() when buffer is not yet started.
         write_buffer = getattr(self, "_write_buffer", None)
         if write_buffer is not None:
-            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+            # Issue #12312: honour the write buffer's drop signal so the empty-embedding
+            # contract self-enforces even if the guard above ever moves.
+            if not await write_buffer.write(fact_id, embedding, content, sanitized_metadata):
+                await self._record_failed_vectorization(fact_id, "write buffer rejected the embedding")
+                return
         else:
             from llama_index.core import Document
 
@@ -608,6 +790,7 @@ class FactsMixin:
             doc.embedding = embedding
             await asyncio.to_thread(self.vector_store.add, [doc])
 
+        await self._mark_vectorization_succeeded(fact_id)
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
 
     def _prepare_fact_metadata(
@@ -699,7 +882,14 @@ class FactsMixin:
             if not self.vector_store:
                 return {"status": "error", "message": "Vector store not available"}
 
-            await self._vectorize_fact_in_chromadb(fact_id, fact_info["content"], fact_info["metadata"])
+            # Issue #12312: This is the on-demand / reconcile retry path (admin batch,
+            # retry jobs, background backfill), not a user-facing create — so retry
+            # transient embedding failures with backoff here where latency is hidden.
+            from services.npu_client import EMBEDDING_MAX_ATTEMPTS
+
+            await self._vectorize_fact_in_chromadb(
+                fact_id, fact_info["content"], fact_info["metadata"], max_attempts=EMBEDDING_MAX_ATTEMPTS
+            )
 
             logger.info("Vectorized existing fact %s", fact_id)
             return {
@@ -746,6 +936,7 @@ class FactsMixin:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
+            _apply_usage_fields(decoded, metadata)
             return {
                 "fact_id": fact_id,
                 "content": decoded.get("content", ""),
@@ -756,6 +947,50 @@ class FactsMixin:
         except Exception as e:
             logger.error("Error retrieving fact %s: %s", fact_id, e)
             return None
+
+    async def record_fact_access(self, fact_ids: List[str]) -> None:
+        """Schedule a non-blocking usage bump for surfaced facts (A1, #12552).
+
+        Returns immediately: the actual ``HINCRBY`` runs in a background task so
+        the read path is never blocked and a failure here never propagates to the
+        caller. Reinforcement is best-effort — a dropped bump only costs one
+        ranking signal, never correctness.
+        """
+        ids = [fid for fid in (fact_ids or []) if fid]
+        if not ids:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop (sync/test context): do it inline, still guarded.
+            await self._bump_fact_access(ids)
+            return
+        task = loop.create_task(self._bump_fact_access(ids))
+        _ACCESS_TASKS.add(task)
+        task.add_done_callback(_ACCESS_TASKS.discard)
+
+    async def _bump_fact_access(self, fact_ids: List[str]) -> None:
+        """Atomically increment ``access_count`` and stamp ``last_accessed``.
+
+        Counters are authoritative top-level hash fields, so the metadata JSON
+        blob is never rewritten. The EXISTS+HINCRBY+HSET is done as one atomic
+        Lua ``EVAL`` per fact, so a deleted fact is never resurrected by a bump
+        racing a concurrent ``delete_fact``. Duplicate ids collapse to one bump.
+        """
+        now_iso = datetime.now(tz=timezone.utc).isoformat()
+        unique_ids = list(dict.fromkeys(fact_ids))
+
+        def _work() -> None:
+            for fid in unique_ids:
+                try:
+                    self.redis_client.eval(_ACCESS_BUMP_LUA, 1, "fact:%s" % fid, now_iso)
+                except Exception:
+                    logger.debug("record_fact_access: bump failed for %s (non-fatal)", fid)
+
+        try:
+            await asyncio.to_thread(_work)
+        except Exception:
+            logger.debug("record_fact_access bump failed (non-fatal)", exc_info=True)
 
     def _process_fact_data(
         self,
@@ -787,6 +1022,7 @@ class FactsMixin:
         if collection and metadata.get("collection") != collection:
             return None
 
+        _apply_usage_fields(decoded, metadata)
         return {
             "fact_id": fact_id,
             "content": decoded.get("content", ""),
@@ -868,17 +1104,53 @@ class FactsMixin:
         # Issue #165: Generate embedding using NPU worker with fallback
         embedding = await _generate_embedding_with_npu_fallback(content)
 
+        # Issue #12312: The stale vector was already deleted above; if embedding
+        # generation failed the fact is now unvectorized. Record a queryable,
+        # retriable failure instead of silently dropping and logging success.
+        if not embedding:
+            await self._record_failed_vectorization(
+                fact_id, "embedding generation returned an empty result (re-vectorize)"
+            )
+            return
+
         # Issue #8405: Route through VectorWriteBuffer when available, like _vectorize_fact_in_chromadb.
         write_buffer = getattr(self, "_write_buffer", None)
         if write_buffer is not None:
-            await write_buffer.write(fact_id, embedding, content, sanitized_metadata)
+            # Issue #12312: honour the write buffer's drop signal (self-enforcing contract).
+            if not await write_buffer.write(fact_id, embedding, content, sanitized_metadata):
+                await self._record_failed_vectorization(fact_id, "write buffer rejected the embedding (re-vectorize)")
+                return
         else:
             from llama_index.core import Document
 
             doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
             doc.embedding = embedding
             await asyncio.to_thread(self.vector_store.add, [doc])
+        await self._mark_vectorization_succeeded(fact_id)
         logger.info("Re-vectorized updated fact %s", fact_id)
+
+    async def _sync_fact_metadata_in_chromadb(self, fact_id: str, metadata: Dict[str, Any]) -> None:
+        """Push a metadata-only change through to the ChromaDB vector store.
+
+        Issue #12623: ``update_fact`` previously only synced ChromaDB when
+        *content* changed (via ``_revectorize_fact``); a metadata-only update
+        (e.g. the promotion gate flipping ``collection``) silently left the
+        stale metadata in the vector store, so a ChromaDB-filtered search
+        (like the chat-RAG quarantine filter, #12622) would never see the
+        change. Uses ``collection.update()`` directly — no re-embedding
+        needed since the text is unchanged, so this is cheap.
+        """
+        if not self.vector_store:
+            return
+        from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
+
+        sanitized = _sanitize(metadata)
+        sanitized["fact_id"] = fact_id
+        try:
+            await asyncio.to_thread(self.vector_store._collection.update, ids=[fact_id], metadatas=[sanitized])
+            logger.debug("Synced metadata-only update to ChromaDB for fact %s", fact_id)
+        except Exception as exc:
+            logger.warning("Could not sync metadata-only update to ChromaDB for fact %s: %s", fact_id, exc)
 
     async def _refresh_content_hash(self, fact_id: str, old_content: str, new_content: str) -> None:
         """Refresh content_hash dedup key when content changes. Issue #1375."""
@@ -932,6 +1204,11 @@ class FactsMixin:
 
             if content is not None and self.vector_store:
                 await self._revectorize_fact(fact_id, decoded["content"], current_metadata)
+            elif metadata is not None and self.vector_store:
+                # Issue #12623: content unchanged but metadata changed (e.g. the
+                # promotion gate) — still must propagate to ChromaDB or a
+                # metadata-filtered search never observes the change.
+                await self._sync_fact_metadata_in_chromadb(fact_id, current_metadata)
 
             return {"status": "success", "fact_id": fact_id, "action": "updated"}
 
@@ -1223,6 +1500,126 @@ class FactsMixin:
             await self._delete_single_fact_for_session(fact_id, session_id, important_ids, preserve_important, result)
 
         await self._cleanup_session_tracking(session_id, fact_ids)
+
+    def _collect_prune_candidates(
+        self, facts: List[Dict[str, Any]], quality_floor: float, cutoff: datetime, epoch: datetime
+    ) -> List[str]:
+        """Return fact_ids that are genuinely dead and safe to prune (A3 #12554).
+
+        A candidate must satisfy ALL of: unprotected (incl. curated/ingested — see
+        ``_fact_is_protected``); ``quality_score`` below the floor; ``access_count
+        == 0`` (never recalled); creation time **after ``epoch``** so a 0 count
+        reflects real non-use rather than predating A1 instrumentation; and older
+        than ``cutoff``. Unknown-age, pre-epoch, or newer facts are kept (fail-safe).
+        """
+        candidates: List[str] = []
+        for fact in facts:
+            meta = fact.get("metadata") or {}
+            if _fact_is_protected(meta):
+                continue
+            try:
+                quality = float(meta.get("quality_score", 0.0) or 0.0)
+                access = int(meta.get("access_count", 0) or 0)
+            except (TypeError, ValueError):
+                continue  # unparseable usage -> keep (fail-safe)
+            if access != 0 or quality >= quality_floor:
+                continue
+            created = _parse_iso(fact.get("timestamp") or meta.get("timestamp"))
+            # Keep if age unknown, created before instrumentation (0 count is
+            # meaningless there), or not yet older than the age floor.
+            if created is None or created <= epoch or created > cutoff:
+                continue
+            fid = fact.get("fact_id")
+            if fid:
+                candidates.append(fid)
+        return candidates
+
+    async def consolidate_facts(
+        self,
+        *,
+        quality_floor: float = _FACTS_PRUNE_QUALITY_FLOOR,
+        max_age_days: int = _FACTS_PRUNE_MAX_AGE_DAYS,
+        dry_run: bool = True,
+        now: datetime | None = None,
+    ) -> Dict[str, Any]:
+        """Delete-only consolidation of the essential-story facts lane (A3 #12554).
+
+        Prunes only genuinely-dead facts (see ``_collect_prune_candidates``):
+        unprotected, uncurated, low-quality, never recalled since instrumentation
+        began, and aged out. Multiple no-data-loss safeguards, all fail-safe:
+
+        - **Instrumentation epoch** (``AUTOBOT_FACTS_PRUNE_EPOCH``): UNSET → the
+          task is inert (no candidates), so an unconfigured deploy can never
+          delete. Set it to the date A1 access-tracking began for this instance;
+          facts older than that are never eligible.
+        - **Circuit breaker** (``AUTOBOT_FACTS_PRUNE_MAX_PER_RUN``): if a run would
+          prune more than the cap, it refuses and logs loudly — a healthy decay
+          sheds a trickle, a flood means the signals are wrong.
+        - **dry_run** (default True): logs candidates without deleting.
+
+        Owned/verified/pinned/curated facts are never eligible. Never raises.
+        """
+        self.ensure_initialized()
+        now = now or datetime.now(tz=timezone.utc)
+        cutoff = now - timedelta(days=max_age_days)
+        epoch = _parse_iso(_FACTS_PRUNE_EPOCH)
+        if epoch is None:
+            logger.info(
+                "consolidate_facts: AUTOBOT_FACTS_PRUNE_EPOCH unset — pruning disabled "
+                "(set it to when A1 access-tracking began to enable decay)."
+            )
+            return {"scanned": 0, "candidates": 0, "pruned": 0, "remaining": 0, "dry_run": dry_run, "epoch_unset": True}
+        try:
+            facts = await self.get_all_facts(limit=_FACTS_PRUNE_SCAN_LIMIT)
+        except Exception as exc:
+            logger.warning("consolidate_facts: scan failed (non-fatal): %s", exc)
+            return {"scanned": 0, "candidates": 0, "pruned": 0, "remaining": 0, "dry_run": dry_run}
+
+        candidates = self._collect_prune_candidates(facts, quality_floor, cutoff, epoch)
+        pruned = 0
+        # Circuit breaker: an unexpectedly large candidate set means the signals
+        # are wrong (mis-set epoch, instrumentation gap). Refuse and shout.
+        if not dry_run and len(candidates) > _FACTS_PRUNE_MAX_PER_RUN:
+            logger.error(
+                "consolidate_facts: %d candidates exceed max-per-run %d — refusing to "
+                "prune (likely misconfigured epoch/floor). Review before enforcing.",
+                len(candidates),
+                _FACTS_PRUNE_MAX_PER_RUN,
+            )
+            return {
+                "scanned": len(facts),
+                "candidates": len(candidates),
+                "pruned": 0,
+                "remaining": len(facts),
+                "dry_run": dry_run,
+                "circuit_broken": True,
+            }
+        if not dry_run:
+            for fid in candidates:
+                try:
+                    res = await self.delete_fact(fid, _skip_bm25_refresh=True)
+                    if res.get("status") == "success":
+                        pruned += 1
+                except Exception:
+                    logger.debug("consolidate_facts: delete failed for %s (non-fatal)", fid)
+            if pruned:
+                self._schedule_bm25_refresh()
+
+        summary = {
+            "scanned": len(facts),
+            "candidates": len(candidates),
+            "pruned": pruned,
+            "remaining": len(facts) - pruned,
+            "dry_run": dry_run,
+        }
+        logger.info(
+            "consolidate_facts: scanned=%d candidates=%d pruned=%d dry_run=%s",
+            len(facts),
+            len(candidates),
+            pruned,
+            dry_run,
+        )
+        return summary
 
     async def delete_facts_by_session(self, session_id: str, preserve_important: bool = True) -> Dict[str, Any]:
         """Delete all facts created during a specific session. Issue #620.

@@ -39,6 +39,7 @@ Related: #599 - SSOT Configuration System Epic
 
 from __future__ import annotations
 
+import logging
 import os
 from enum import Enum
 from functools import lru_cache
@@ -231,6 +232,19 @@ class LLMConfig(BaseSettings):
     # Above this temperature responses must vary, so they are never cached.
     llm_response_cache: bool = Field(default=True, alias="AUTOBOT_LLM_RESPONSE_CACHE")
     llm_cache_max_temperature: float = Field(default=0.3, alias="AUTOBOT_LLM_CACHE_MAX_TEMPERATURE")
+
+    # Cross-vendor second-opinion verifier tier (#12618). A second LLM call on a
+    # genuinely distinct provider doubles spend on the verification path, so this
+    # is a preference/threshold pair — the master on/off switch lives in
+    # ``feature.cross_vendor_review_enabled`` (default off).
+    # Comma-separated provider names in preference order (e.g. "anthropic,openai");
+    # empty means "use registry registration order" (no forced preference).
+    cross_vendor_verifier_providers: str = Field(default="", alias="AUTOBOT_LLC_CROSS_VENDOR_VERIFIER_PROVIDERS")
+    # Below this confidence, an agreeing cross-vendor verdict still escalates to
+    # human review rather than auto-resolving (design's "both low-confidence" row).
+    cross_vendor_low_confidence_threshold: float = Field(
+        default=0.5, alias="AUTOBOT_LLC_CROSS_VENDOR_LOW_CONFIDENCE_THRESHOLD"
+    )
     # Prepend the [Source N] citation instruction to the KB context block (#10652,
     # #10736). When True the prompt includes "Answer … cite as [Source N]"; when
     # False the [Source N] labels still render but the instruction is omitted.
@@ -1270,6 +1284,25 @@ class PathConfig(BaseSettings):
     # Override via AUTOBOT_VNC_PASSWD_FILE env var.
     vnc_passwd_file: str = Field(default="/home/autobot/.vnc/x11vnc.passwd", alias="AUTOBOT_VNC_PASSWD_FILE")
 
+    # Canonical inter-node SSH private key (#12429). SINGLE source of truth for
+    # every consumer that SSHes to fleet nodes (SLM -> fleet, deploy, code-sync,
+    # service orchestration). Absolute path — never relative to base_dir. Legacy
+    # per-module SLM_SSH_KEY env override is still honoured via AliasChoices so
+    # existing deployments keep working while resolution collapses to one place.
+    ssh_key_path: str = Field(
+        default="/etc/autobot/ssh/autobot_key",
+        validation_alias=AliasChoices("AUTOBOT_SSH_KEY_PATH", "SLM_SSH_KEY"),
+    )
+
+    # Explicit override for the `claude` CLI binary used by the LLC claude_code
+    # adapter (GH#12478). Empty string means "not configured" — the adapter falls
+    # back to shutil.which("claude") then common per-user install locations before
+    # raising a clear error. Set this when the service account's PATH does not
+    # include the directory the Claude Code CLI was installed into (e.g. a
+    # per-user npm/curl install landed in ~/.local/bin, which systemd services
+    # typically don't inherit).
+    claude_cli_path: str = Field(default="", alias="AUTOBOT_CLAUDE_CLI_PATH")
+
     def resolve(self, relative: str) -> Path:
         """Resolve a path relative to base_dir."""
         p = Path(relative)
@@ -1312,6 +1345,16 @@ class PathConfig(BaseSettings):
         """Absolute path to the x11vnc password file."""
         return Path(self.vnc_passwd_file)
 
+    @property
+    def ssh_key(self) -> Path:
+        """Absolute path to the canonical inter-node SSH private key (#12429)."""
+        return Path(self.ssh_key_path)
+
+    @property
+    def ssh_pubkey_path(self) -> str:
+        """Path to the canonical inter-node SSH public key (private key + .pub)."""
+        return f"{self.ssh_key_path}.pub"
+
 
 class MiscConfig(BaseSettings):
     """Miscellaneous/unmapped environment variables.
@@ -1326,6 +1369,12 @@ class MiscConfig(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    # #12816: MeshBrainScheduler was registered and never started. Now wired in
+    # lifespan but DEFAULT-OFF: mesh_pruner DELETES data on a 7-day cadence and
+    # node_promoter/edge_discoverer mutate state, so ENABLING it is a
+    # data-retention decision rather than a wiring change.
+    mesh_brain_scheduler_enabled: bool = Field(default=False, alias="AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED")
 
     anthropic_api_base_url: str = Field(default="", alias="ANTHROPIC_API_BASE_URL")
     api_key: str = Field(default="", alias="API_KEY")
@@ -1387,6 +1436,17 @@ class MiscConfig(BaseSettings):
     )
     chat_ssot_strict: str = Field(default="", alias="AUTOBOT_CHAT_SSOT_STRICT")
     chat_timeout: int = Field(default=0, alias="AUTOBOT_CHAT_TIMEOUT")
+    chromadb_auth_token: str = Field(
+        default="",
+        alias="AUTOBOT_CHROMADB_AUTH_TOKEN",
+        description=(
+            "Shared-secret token for ChromaDB CHROMA_SERVER_AUTHN_* token auth (#12513). "
+            "Provisioned as a deploy secret (docker-compose root .env / Ansible vault "
+            "var, same pattern as AUTOBOT_JWT_SECRET) — never hardcoded. Empty string "
+            "(default) means the deployment has server auth disabled (dev/local): "
+            "clients then connect without sending auth headers, matching the server."
+        ),
+    )
     chromadb_collection: str = Field(default="", alias="AUTOBOT_CHROMADB_COLLECTION")
     chromadb_path: str = Field(default="", alias="AUTOBOT_CHROMADB_PATH")
     cloud_batch_window_ms: str = Field(default="", alias="AUTOBOT_CLOUD_BATCH_WINDOW_MS")
@@ -1539,6 +1599,78 @@ class MiscConfig(BaseSettings):
     # ("true") with a 300s timeout; False/0 silently disabled HITL checkpoints.
     research_checkpoints_enabled: bool = Field(default=True, alias="AUTOBOT_RESEARCH_CHECKPOINTS_ENABLED")
     research_checkpoint_timeout: int = Field(default=300, alias="AUTOBOT_RESEARCH_CHECKPOINT_TIMEOUT")
+    # #12622: ResearchOrchestrator (/research) budget bounds — hard caps so a
+    # single request can never cascade into an unbounded fetch/LLM-call chain.
+    research_max_sources: int = Field(default=5, alias="AUTOBOT_RESEARCH_MAX_SOURCES")
+    research_max_content_chars: int = Field(default=8000, alias="AUTOBOT_RESEARCH_MAX_CONTENT_CHARS")
+    research_fetch_timeout_seconds: float = Field(default=15.0, alias="AUTOBOT_RESEARCH_FETCH_TIMEOUT_SECONDS")
+    # Quarantine collection name (design doc §5/§9): web-research facts land
+    # here, invisible to general chat/RAG, until Phase 1's promotion gate.
+    research_quarantine_collection: str = Field(default="research", alias="AUTOBOT_RESEARCH_QUARANTINE_COLLECTION")
+    # #12623: N-source corroboration + promotion gate. Every tunable number is
+    # a config field (never a literal in services/claim_verifier.py or
+    # services/research/orchestrator.py). K = minimum independent agreeing
+    # sources before a claim can ever be marked verified — single-source
+    # claims are never promoted regardless of confidence (design §9 Phase 1).
+    research_corroboration_min_sources: int = Field(default=2, alias="AUTOBOT_RESEARCH_CORROBORATION_MIN_SOURCES")
+    # Confidence assigned when exactly K independent sources agree.
+    research_corroboration_confidence_base: float = Field(
+        default=0.75, alias="AUTOBOT_RESEARCH_CORROBORATION_CONFIDENCE_BASE"
+    )
+    # Confidence increment per additional agreeing independent source beyond K.
+    research_corroboration_confidence_per_source: float = Field(
+        default=0.05, alias="AUTOBOT_RESEARCH_CORROBORATION_CONFIDENCE_PER_SOURCE"
+    )
+    # Hard cap so confidence never reaches false certainty (1.0).
+    research_corroboration_confidence_cap: float = Field(
+        default=0.95, alias="AUTOBOT_RESEARCH_CORROBORATION_CONFIDENCE_CAP"
+    )
+    # Minimum corroboration confidence required to promote a fact out of quarantine.
+    research_promotion_confidence_threshold: float = Field(
+        default=0.75, alias="AUTOBOT_RESEARCH_PROMOTION_CONFIDENCE_THRESHOLD"
+    )
+    # Collection metadata value written on promoted facts (must differ from
+    # ``research_quarantine_collection`` so the chat-RAG ``$ne`` filter admits it).
+    research_promoted_collection: str = Field(default="general", alias="AUTOBOT_RESEARCH_PROMOTED_COLLECTION")
+    # How many candidate corroborating facts to retrieve per material claim.
+    research_corroboration_search_top_k: int = Field(default=5, alias="AUTOBOT_RESEARCH_CORROBORATION_SEARCH_TOP_K")
+    # Timeout for the adversarial agreement-classification LLM call.
+    research_corroboration_classify_timeout_seconds: float = Field(
+        default=20.0, alias="AUTOBOT_RESEARCH_CORROBORATION_CLASSIFY_TIMEOUT_SECONDS"
+    )
+    # #12624: Planner loop (decompose / skip-known / prune / saturation stop).
+    # Every bound below is enforced by the loop's own control flow, not merely
+    # consulted (design: a mis-scored branch or a garbage LLM response must
+    # never cause unbounded iteration/spend).
+    # Hard round cap — the backstop that terminates the loop even if
+    # plateau detection never fires (e.g. every branch keeps scoring high).
+    research_planner_max_rounds: int = Field(default=5, alias="AUTOBOT_RESEARCH_PLANNER_MAX_ROUNDS")
+    # Branch-count limit: max sub-questions the LLM decomposition may return
+    # per round (also the fallback-safe truncation point for a garbage/over-long
+    # LLM response).
+    research_planner_max_subquestions_per_round: int = Field(
+        default=4, alias="AUTOBOT_RESEARCH_PLANNER_MAX_SUBQUESTIONS_PER_ROUND"
+    )
+    # Expected-value threshold below which a decomposed sub-question is pruned
+    # before spending a search on it (design §4.3).
+    research_planner_prune_threshold: float = Field(default=0.3, alias="AUTOBOT_RESEARCH_PLANNER_PRUNE_THRESHOLD")
+    # Skip-known confidence threshold: a sub-question is skipped only when an
+    # existing KB fact answers it at >= this confidence. Kept as its own
+    # tunable (distinct from the #12623 promotion threshold) because skipping
+    # is a correctness risk in the opposite direction from pruning — too low a
+    # value lets a wrong/stale fact suppress real re-investigation.
+    research_planner_skip_known_confidence_threshold: float = Field(
+        default=0.75, alias="AUTOBOT_RESEARCH_PLANNER_SKIP_KNOWN_CONFIDENCE_THRESHOLD"
+    )
+    # Saturation/plateau: consecutive no-new-fact rounds required to stop early.
+    research_planner_plateau_window: int = Field(default=2, alias="AUTOBOT_RESEARCH_PLANNER_PLATEAU_WINDOW")
+    # Total search/fetch budget for one /research run across ALL rounds — the
+    # hard ceiling that bounds real spend regardless of round/branch counts.
+    research_planner_max_total_sources: int = Field(default=15, alias="AUTOBOT_RESEARCH_PLANNER_MAX_TOTAL_SOURCES")
+    # Timeout for the decomposition LLM call.
+    research_planner_decompose_timeout_seconds: float = Field(
+        default=20.0, alias="AUTOBOT_RESEARCH_PLANNER_DECOMPOSE_TIMEOUT_SECONDS"
+    )
     routing_model: str = Field(default="", alias="AUTOBOT_ROUTING_MODEL")
     run_jwt: str = Field(default="", alias="AUTOBOT_RUN_JWT")
     schema_dir: str = Field(default="", alias="AUTOBOT_SCHEMA_DIR")
@@ -1563,7 +1695,6 @@ class MiscConfig(BaseSettings):
     tls_key_path: str = Field(default="", alias="AUTOBOT_TLS_KEY_PATH")
     trace_console: str = Field(default="", alias="AUTOBOT_TRACE_CONSOLE")
     trace_sample_rate: float = Field(default=0.0, alias="AUTOBOT_TRACE_SAMPLE_RATE")
-    tts_pipeline_depth: str = Field(default="", alias="AUTOBOT_TTS_PIPELINE_DEPTH")
     urlhaus_feed_url: str = Field(default="", alias="AUTOBOT_URLHAUS_FEED_URL")
     user_mode: str = Field(default="", alias="AUTOBOT_USER_MODE")
     vue_root: str = Field(default="", alias="AUTOBOT_VUE_ROOT")
@@ -1575,6 +1706,14 @@ class MiscConfig(BaseSettings):
     weak_cache_size: int = Field(default=0, alias="AUTOBOT_WEAK_CACHE_SIZE")
     web_fetch_cache_ttl: str = Field(default="", alias="AUTOBOT_WEB_FETCH_CACHE_TTL")
     web_fetch_max_bytes: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_BYTES")
+    # #13019: bounds redirect-hop count for the pinned-redirect SSRF fetch path
+    # shared by web_fetch/fetcher.py and media/link/pipeline.py.
+    web_fetch_max_redirects: int = Field(default=0, alias="AUTOBOT_WEB_FETCH_MAX_REDIRECTS")
+    # #13021: caps media/link/pipeline.py's BeautifulSoup fallback fetch body
+    # size (streamed/enforced during read, not post-hoc) — distinct from the
+    # generic web_fetch_max_bytes cap above since this pipeline's fallback is
+    # a smaller, dedicated 1 MB HTML-download bound.
+    link_pipeline_max_content_bytes: int = Field(default=1_000_000, alias="AUTOBOT_LINK_PIPELINE_MAX_CONTENT_BYTES")
     celery_broker_url: str = Field(default="", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field(default="", alias="CELERY_RESULT_BACKEND")
     ci: str = Field(default="", alias="CI")
@@ -1584,7 +1723,8 @@ class MiscConfig(BaseSettings):
     codebase_index_incremental: str = Field(default="", alias="CODEBASE_INDEX_INCREMENTAL")
     codebase_index_parallel_batches: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_BATCHES")
     codebase_index_parallel_files: str = Field(default="", alias="CODEBASE_INDEX_PARALLEL_FILES")
-    codebase_parallel_mode: str = Field(default="", alias="CODEBASE_PARALLEL_MODE")
+    # #12392: restore pre-#7437 default (True) — "" silently disabled parallel indexing
+    codebase_parallel_mode: str = Field(default="true", alias="CODEBASE_PARALLEL_MODE")
     codebase_scan_parallel_files: str = Field(default="", alias="CODEBASE_SCAN_PARALLEL_FILES")
     config: str = Field(default="", alias="CONFIG")
     # #11681: restore pre-#7437 default (500) — 0 silently disabled the content cache
@@ -1733,6 +1873,26 @@ class FeatureConfig(BaseSettings):
     training: bool = Field(default=False, alias="AUTOBOT_FEATURE_TRAINING_TR")
     graph_rag: bool = Field(default=True, alias="AUTOBOT_FEATURE_GRAPH_RAG")
     mcp: bool = Field(default=True, alias="AUTOBOT_FEATURE_MCP")
+
+    # Issue #10538: Slack/Confluence/Jira KB ingestion connectors.
+    # Disabled by default — no credentials are configured out of the box and
+    # these connectors make outbound calls to third-party SaaS APIs. Set
+    # AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS=true once credentials exist.
+    kb_enterprise_connectors: bool = Field(default=False, alias="AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS")
+
+    # Issue #10538: Offline mock/replay KB connector for dev/CI testing.
+    # Disabled by default — it makes zero network calls, but the flag keeps a
+    # "mock" entry out of the production connector_types listing/UI.
+    kb_mock_connector: bool = Field(default=False, alias="AUTOBOT_FEATURE_KB_MOCK_CONNECTOR")
+
+    # Issue #12618: LLC cross-vendor second-opinion verifier tier. Master
+    # kill-switch — off by default because it doubles LLM spend on the findings
+    # verification path (one extra provider call per verified finding). The
+    # per-company/per-item-type ``requires_cross_vendor_review`` policy flag is a
+    # second, independent gate: BOTH must be true for a second provider call to
+    # ever run, so a company enabling the policy on an install where this is off
+    # still costs nothing extra.
+    cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
 
 
 class CostModelConfig(BaseSettings):
@@ -1997,6 +2157,30 @@ class AutoBotConfig(BaseSettings):
         description=(
             "Max age (days) for generated knowledge cache/temp files before "
             "cleanup_generated_files deletes them. Default 7 days."
+        ),
+    )
+
+    # Issue #12365: daily off-peak population of the analytics /cached stores
+    # (bug-prediction, security-score, anti-pattern, dependencies, duplicates,
+    # import-tree) so panels serve a populated cache instead of always being
+    # empty. 05:30 UTC sits after the 01:00-05:00 data-retention/knowledge/
+    # pricing/audit maintenance block and before the 06:15 testgaps audit.
+    analytics_cache_population_schedule: str = Field(
+        default="30 5 * * *",
+        alias="AUTOBOT_ANALYTICS_CACHE_POPULATION_SCHEDULE",
+        description=(
+            "Cron schedule for analytics.populate_all_caches (daily off-peak "
+            "population of the analytics /cached stores). Default 05:30 UTC "
+            "nightly. 5-field cron: 'm h dom mon dow'."
+        ),
+    )
+    analytics_cache_population_stagger_seconds: int = Field(
+        default=300,
+        alias="AUTOBOT_ANALYTICS_CACHE_POPULATION_STAGGER_SECONDS",
+        description=(
+            "Seconds between each analytics module's population dispatch, so "
+            "6 modules (one up to ~280s) don't all run simultaneously and "
+            "spike CPU/IO. Default 300s (5 min) between modules."
         ),
     )
 
@@ -2749,3 +2933,38 @@ __all__ = [
     "get_agent_model",
     "get_agent_provider",
 ]
+
+
+def database_pool_settings() -> dict:
+    """Canonical SQLAlchemy pool settings from SSOT config (#2860, #12645).
+
+    This exact body was duplicated byte-for-byte in
+    ``autobot-backend/user_management/database.py`` and
+    ``autobot-slm-backend/user_management/database.py``, with a third
+    tuple-shaped variant in ``autobot-slm-backend/config.py``. Three copies of
+    one fallback table means a tuning change lands in one engine and silently
+    not the others.
+
+    The defaults below are the fallback when SSOT config cannot be read; they
+    are deliberately identical to what both copies used, so this is a
+    de-duplication and not a re-tuning.
+    """
+    try:
+        pool_cfg = get_config().database_pool
+        return {
+            "pool_size": pool_cfg.pool_size,
+            "max_overflow": pool_cfg.max_overflow,
+            "pool_recycle": pool_cfg.pool_recycle,
+            "pool_timeout": pool_cfg.pool_timeout,
+        }
+    except Exception:
+        # Module-local logger: ssot_config has no module-level `logger`, and the
+        # fallback path is exactly when SSOT config is already failing — a
+        # NameError here would mask the real problem.
+        logging.getLogger(__name__).warning("Could not load SSOT database pool config, using defaults")
+        return {
+            "pool_size": 10,
+            "max_overflow": 10,
+            "pool_recycle": 3600,
+            "pool_timeout": 30,
+        }

@@ -43,7 +43,12 @@ _SLM_ROLES = [
         ),
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-slm-manager.yml",
+        # #12083: the real file lives at ansible/playbooks/deploy-slm-manager.yml —
+        # the bare "deploy-slm-manager.yml" value (no playbooks/ prefix) resolved to
+        # a non-existent ansible/deploy-slm-manager.yml, so Migrate/Redeploy for
+        # this role raised FileNotFoundError every time (PlaybookExecutor resolves
+        # playbook_name relative to ansible_dir).
+        "ansible_playbook": "playbooks/deploy-slm-manager.yml",
     },
     {
         "name": "slm-frontend",
@@ -59,7 +64,8 @@ _SLM_ROLES = [
         ),  # #10435: VITE_API_URL=/slm
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-slm-manager.yml",
+        # #12083: see slm-backend comment above — same path-prefix fix.
+        "ansible_playbook": "playbooks/deploy-slm-manager.yml",
     },
     {
         "name": "slm-database",
@@ -103,21 +109,25 @@ _BACKEND_ROLES = [
         "auto_restart": True,
         "health_check_port": 8443,
         "health_check_path": "/api/health",
-        # Install deps into the backend venv, then migrate. Mirrors the backend
-        # ansible role (#11117): strip only the editable autobot_shared, and
-        # rewrite the two sibling-relative includes to the canonical code_source
-        # path so pip can resolve them — `-c ../constraints/` (#10524 constraints)
-        # and `-r ../requirements.txt` (the ~23 root runtime deps: paramiko,
-        # asyncssh, pypdf, python-docx/pptx, openpyxl, …). Both siblings live in
-        # code_source but NOT next to the synced autobot-backend/, so stripping
-        # `-r` (as before) silently dropped those deps on deploy — #11135. A bare
-        # `pip install -r requirements.txt` would error on the unresolvable
-        # include and, via the && short-circuit, silently skip alembic (#11069).
+        # Install deps into the backend venv, then migrate. Delegates the
+        # filter+rewrite to the canonical scripts/build-filtered-requirements.sh
+        # (#11134), which strips only the editable autobot_shared and rewrites
+        # the two sibling-relative includes to the canonical code_source path
+        # so pip can resolve them — `-c ../constraints/` (#10524 constraints,
+        # #11117 rewrite) and `-r ../requirements.txt` (the ~23 root runtime
+        # deps: paramiko, asyncssh, pypdf, python-docx/pptx, openpyxl, …). Both
+        # siblings live in code_source but NOT next to the synced
+        # autobot-backend/, so stripping `-r` (as before #11135) silently
+        # dropped those deps on deploy. The backend ansible role
+        # (ansible/roles/backend/tasks/main.yml) invokes the same script, so
+        # both deploy paths share one implementation instead of drifting.
+        # A bare `pip install -r requirements.txt` would error on the
+        # unresolvable include and, via the && short-circuit, silently skip
+        # alembic (#11069).
         "post_sync_cmd": (
             f"cd {_BASE_DIR}/autobot-backend && "
-            "grep -Ev '^-e.*autobot[-_]shared' requirements.txt "
-            f"| sed 's|^-c \\.\\./constraints/|-c {_BASE_DIR}/code_source/constraints/|;"
-            f" s|^-r \\.\\./requirements.txt|-r {_BASE_DIR}/code_source/requirements.txt|' "
+            f"bash {_BASE_DIR}/code_source/scripts/build-filtered-requirements.sh "
+            f"requirements.txt {_BASE_DIR}/code_source "
             "> /tmp/requirements-filtered-slm.txt && "
             "PIP_USE_DEPRECATED=legacy-resolver PIP_DEFAULT_TIMEOUT=120 "
             "venv/bin/pip install -r /tmp/requirements-filtered-slm.txt && "
@@ -125,7 +135,15 @@ _BACKEND_ROLES = [
         ),
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-backend.yml",
+        # #12083: "deploy-backend.yml" never existed anywhere under ansible/ —
+        # Migrate/Redeploy for backend/celery/scheduler always raised
+        # FileNotFoundError. The generic role dispatcher (playbooks/deploy_role.yml)
+        # already `include_role: backend` for role_name == 'backend' — its
+        # ansible/roles/backend/tasks/main.yml deploys the celery + celery-beat
+        # systemd units alongside the backend service itself, so all three roles
+        # correctly converge on ONE playbook run (see deploy_role.yml's updated
+        # `when: deploy_role in ['backend', 'celery', 'scheduler']`).
+        "ansible_playbook": "playbooks/deploy_role.yml",
     },
     {
         "name": "celery",
@@ -137,7 +155,8 @@ _BACKEND_ROLES = [
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-backend.yml",
+        # #12083: see "backend" comment above — shares the backend ansible role.
+        "ansible_playbook": "playbooks/deploy_role.yml",
     },
     {
         "name": "scheduler",
@@ -149,7 +168,8 @@ _BACKEND_ROLES = [
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-backend.yml",
+        # #12083: see "backend" comment above — shares the backend ansible role.
+        "ansible_playbook": "playbooks/deploy_role.yml",
     },
 ]
 
@@ -169,7 +189,10 @@ _FRONTEND_ROLES = [
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build"),
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-frontend.yml",
+        # #12083: "deploy-frontend.yml" never existed anywhere under ansible/ —
+        # Migrate/Redeploy always raised FileNotFoundError. The generic role
+        # dispatcher already handles role_name == 'frontend' directly.
+        "ansible_playbook": "playbooks/deploy_role.yml",
     },
 ]
 
@@ -203,10 +226,11 @@ _DATABASE_ROLES = [
         "auto_restart": True,
         "required": True,
         "degraded_without": [],
-        # No AutoBot-owned playbook provisions postgres; deploy-database.yml
-        # provisions Redis Stack only.  api/roles.py:338-341 returns HTTP 422
-        # for None — correct behaviour for an externally managed service.
-        "ansible_playbook": None,
+        # #12170: postgres now has a dedicated deploy entry point.
+        # playbooks/deploy-postgres-role.yml delegates to the full, tested
+        # deploy-user-management-db.yml; run_role_full_procedure's --limit runs
+        # only the phase matching the migrated node. Was None (HTTP 422).
+        "ansible_playbook": "playbooks/deploy-postgres-role.yml",
     },
 ]
 
@@ -365,7 +389,14 @@ _INFRA_ROLES = [
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot_shared && pip install -e ."),
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-shared.yml",
+        # #12094: the standalone ansible/roles/autobot_shared/ role now exists
+        # (extracted from the embedded #3649 sync block in roles/backend), and
+        # playbooks/deploy_role.yml dispatches role_name == 'autobot_shared' to
+        # it. Repointing at the generic dispatcher (like backend/frontend after
+        # #12083) makes /api/roles/autobot_shared/migrate sync the shared package
+        # as its OWN first-class step, fixing the staleness class of bugs in
+        # #11611. The rsync-based _ensure_autobot_shared_synced path also remains.
+        "ansible_playbook": "playbooks/deploy_role.yml",
     },
     {
         "name": "slm-agent",
@@ -498,6 +529,14 @@ async def list_roles(db: AsyncSession) -> List[Role]:
 
 # Infra roles allowed on multiple nodes simultaneously (#1389)
 MULTI_NODE_ROLES = {"autobot_shared", "slm-agent"}
+
+# Control-plane roles (#12083): the slm_server group in _SLM_ROLES, already brought
+# current by update-all's slm_self_update stage (its Ansible run targets
+# hosts: slm_server — deploy-slm-manager.yml). update-all's co-located
+# managed-role pass (api/code_sync.py _resolve_colocated_managed_services) must
+# never re-run these — they are a different deploy site with a different
+# ordering contract (control plane restarts THIS process; managed roles do not).
+CONTROL_PLANE_ROLE_NAMES: frozenset = frozenset(r["name"] for r in _SLM_ROLES)
 
 
 async def check_role_uniqueness(

@@ -9,7 +9,6 @@ Implements API Key + HMAC-SHA256 authentication for distributed VM infrastructur
 CRITICAL SECURITY: Prevents CVSS 10.0 vulnerability where any service can call any endpoint
 """
 
-import hashlib
 import hmac
 import secrets
 import time
@@ -19,6 +18,7 @@ import structlog
 from fastapi import HTTPException, Request
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.service_signing import _service_signature
 from constants.ttl_constants import TTL_90_DAYS
 from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
@@ -76,6 +76,10 @@ class ServiceAuthManager:
 
         Signature format: HMAC-SHA256(service_key, "service_id:method:path:timestamp")
 
+        Delegates to ``autobot_shared.service_signing._service_signature`` (#12766)
+        — the single canonical implementation shared with the caller-side
+        ``sign_request`` helper, so signer and verifier can never drift.
+
         Args:
             service_id: Service identifier
             service_key: Service's secret key
@@ -86,9 +90,7 @@ class ServiceAuthManager:
         Returns:
             Hex-encoded HMAC-SHA256 signature
         """
-        message = f"{service_id}:{method}:{path}:{timestamp}"
-        signature = hmac.new(service_key.encode(), message.encode(), hashlib.sha256).hexdigest()
-        return signature
+        return _service_signature(service_id, method, path, timestamp, service_key)
 
     def _extract_auth_headers(self, request: Request) -> tuple[str, str, str]:
         """

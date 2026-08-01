@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Secrets Ownership Migration Script
@@ -26,7 +27,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 from encryption_service import encrypt_data, is_encryption_enabled
 
@@ -60,7 +61,7 @@ class SecretsMigrator:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(async_client=True, database="main")
+            self.redis_client = await get_async_redis_client(database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
             logger.info("Encryption enabled: %s", self.encryption_enabled)
@@ -324,7 +325,10 @@ class SecretsMigrator:
 
         # Save rollback SQL
         if not self.dry_run:
-            rollback_file = Path("/tmp/secrets_migration_rollback.sql")
+            # FP: rollback SQL contains only identifiers/metadata
+            # (secret_id, owner_id, scope) — never the secret value itself
+            # (see rollback_sql.append above). No sensitive material is stored.
+            rollback_file = Path("/tmp/secrets_migration_rollback.sql")  # codeql[py/clear-text-storage-sensitive-data]
             rollback_file.write_text("\n".join(self.rollback_sql))
             logger.info("Rollback SQL saved to: %s", rollback_file)
 

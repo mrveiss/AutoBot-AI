@@ -19,11 +19,6 @@ from autobot_shared.time_utils import now_utc
 SummaryLevel = Literal["chunk", "section", "document"]
 
 
-def _utcnow() -> datetime:
-    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return now_utc()
-
-
 class Summary(BaseModel):
     """
     Represents a hierarchical summary of text content.
@@ -47,4 +42,4 @@ class Summary(BaseModel):
     key_entities: List[UUID] = Field(default_factory=list, description="Key entities mentioned in summary")
     word_count: int = Field(default=0, description="Number of words in summary")
     compression_ratio: float = Field(default=0.0, description="Ratio of summary to original text length")
-    created_at: datetime = Field(default_factory=_utcnow, description="Summary creation timestamp")
+    created_at: datetime = Field(default_factory=now_utc, description="Summary creation timestamp")

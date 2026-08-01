@@ -11,8 +11,16 @@ export default mergeConfig(
   defineConfig({
     plugins: [vue()],
     resolve: {
+      // Match vite.config.ts: keep resolution relative to the symlink path so
+      // `file:` workspace packages (@autobot/ui, @autobot/terminal, @autobot/vnc)
+      // find their vue/pinia peers in this app's own node_modules rather than
+      // walking up from the real ../libs / ../autobot-plugins path (MVA-893).
+      preserveSymlinks: true,
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
+        // Mirror vite.config.ts (#13079): without this, any test that mounts a
+        // component importing from '@shared' fails to resolve at transform time.
+        '@shared': fileURLToPath(new URL('../autobot_shared', import.meta.url)),
       },
     },
   }),

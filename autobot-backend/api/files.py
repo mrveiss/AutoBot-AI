@@ -40,7 +40,11 @@ from api.schemas_system import (
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.security.path_validator import validate_relative_path
+from autobot_shared.security.path_validator import (
+    SANDBOX_INVALID_PATH_CHARACTERS,
+    SandboxPathError,
+    resolve_within_sandbox,
+)
 from constants.error_constants import (
     ERR_DIRECTORY_NOT_FOUND,
     ERR_FILE_NOT_FOUND,
@@ -136,8 +140,10 @@ ALLOWED_EXTENSIONS = {
     ".gi",
 }
 
-# Performance optimization: O(1) lookup for invalid path characters (Issue #326)
-INVALID_PATH_CHARACTERS = {"<", ">", ":", '"', "|", "?", "*"}
+# Performance optimization: O(1) lookup for invalid path characters (Issue #326).
+# Canonical set lives in autobot_shared.security.path_validator (#11844); this
+# alias preserves the public name that api.sandbox_files historically imported.
+INVALID_PATH_CHARACTERS = SANDBOX_INVALID_PATH_CHARACTERS
 
 # Issue #380: Module-level frozenset for dangerous filename characters
 _DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
@@ -235,45 +241,15 @@ def _calculate_parent_path(path: str) -> str | None:
 def validate_and_resolve_path(path: str) -> Path:
     """
     Validate and resolve a path within the sandboxed directory.
-    Prevents path traversal attacks with multiple security layers.
+
+    Thin wrapper over the shared sandbox resolver (#11844); traversal
+    protection and the #11823 root-addressing fix are defined once in
+    autobot_shared.security.path_validator.resolve_within_sandbox.
     """
-    if not path:
-        return SANDBOXED_ROOT
-
-    # Remove leading/trailing slashes and normalize
-    clean_path = path.strip("/")
-
-    # "/" (and "//") address the sandbox root itself — after stripping they
-    # collapse to "", which validate_relative_path rejects as an empty
-    # segment, surfacing a misleading "outside sandbox" 400 and making the
-    # root unlistable for every caller of this helper (#11823).
-    if not clean_path:
-        return SANDBOXED_ROOT
-
-    # Enhanced path traversal checks
-    if (
-        ".." in clean_path
-        or clean_path.startswith("/")
-        or "~" in clean_path
-        or any(char in clean_path for char in INVALID_PATH_CHARACTERS)
-    ):
-        raise HTTPException(status_code=400, detail="Invalid path: path traversal not allowed")
-
-    # URL decode to catch encoded traversal attempts
-    import urllib.parse
-
-    decoded_path = urllib.parse.unquote(clean_path)
-    if ".." in decoded_path or decoded_path.startswith("/"):
-        raise HTTPException(status_code=400, detail="Invalid path: encoded traversal not allowed")
-
-    # Validate via shared security module (#1721)
     try:
-        return validate_relative_path(clean_path, SANDBOXED_ROOT)
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Path outside sandbox not allowed",
-        )
+        return resolve_within_sandbox(path, SANDBOXED_ROOT)
+    except SandboxPathError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def get_file_info(file_path: Path, relative_path: str) -> FileInfo:
@@ -1288,7 +1264,7 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="Path is not a directory")
     try:
-        entries = sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))  # codeql[py/path-injection]
+        entries = sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
         return {"files": [_entry_to_file_item(e) for e in entries]}
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -1315,6 +1291,6 @@ async def admin_read_file(path: str) -> dict:
     try:
         # #7467: was sync `target.read_text(...)` blocking the event loop.
         content = await asyncio.to_thread(target.read_text, encoding="utf-8", errors="replace")
-        return {"content": content}  # codeql[py/path-injection]
+        return {"content": content}
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")

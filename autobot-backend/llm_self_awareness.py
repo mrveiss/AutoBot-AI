@@ -430,10 +430,43 @@ class LLMSelfAwareness:
             }
         return rules
 
+    @staticmethod
+    def _has_meaningful_awareness_data(context: Dict[str, Any]) -> bool:
+        """
+        Check whether the system context carries real maturity/capability data.
+
+        Issue #12509: when the phase-progression subsystem's `PhaseValidator`
+        is unavailable (see #12458), `current_capabilities` never gets
+        populated and every metric reports zero. Injecting that broken
+        "0% maturity / 0 capabilities" state into every prompt is worse than
+        omitting it — it pollutes context and biases the model toward
+        hedging. Only treat the context as meaningful when at least one
+        maturity/capability/phase signal is non-zero. Uses `.get()` so a
+        malformed/error fallback context (see `_get_error_context`) is
+        treated as "not meaningful" rather than raising.
+        """
+        identity = context.get("system_identity", {})
+        capabilities = context.get("current_capabilities", {})
+        phase_info = context.get("phase_information", {})
+
+        return bool(identity.get("system_maturity") or capabilities.get("count") or phase_info.get("completed_phases"))
+
     async def inject_awareness_context(self, prompt: str, context_level: str = "basic") -> str:
-        """Inject system awareness context into a prompt"""
+        """Inject system awareness context into a prompt.
+
+        Issue #12509: omits the block entirely when the underlying
+        maturity/capability data is empty (zero-state), instead of
+        asserting a broken "0% maturity / 0 capabilities" state.
+        """
         include_detailed = context_level in DETAILED_CONTEXT_LEVELS  # O(1) lookup (Issue #326)
         context = await self.get_system_context(include_detailed=include_detailed)
+
+        if not self._has_meaningful_awareness_data(context):
+            logger.debug(
+                "llm_self_awareness: omitting self-awareness context block — "
+                "no meaningful maturity/capability data available"
+            )
+            return prompt
 
         # Build context injection
         awareness_prompt = f"""[SYSTEM CONTEXT - AutoBot Self-Awareness]

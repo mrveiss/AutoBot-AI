@@ -403,9 +403,7 @@ class SecureSandboxExecutor:
         safe_lang = "".join(c for c in language if c.isalnum()) or "sh"
 
         # Create temporary script file
-        with tempfile.NamedTemporaryFile(  # codeql[py/path-injection]
-            mode="w", suffix=f".{safe_lang}", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=f".{safe_lang}", delete=False) as f:
             f.write(script_content)
             script_path = f.name
 
@@ -471,7 +469,9 @@ class SecureSandboxExecutor:
         JSON-RPC requests (reply written back to stdin); every other line is the
         script's own output and is appended to *script_out* so the RPC framing
         never pollutes the returned result (GH#11613). Budget exhaustion aborts
-        the container via teardown.
+        the container via teardown. A final result written without a trailing
+        newline is flushed from the residual ``line_buf`` once recv() hits EOF
+        (GH#11663), instead of being silently dropped.
         """
         sock = container.attach_socket(params={"stdin": 1, "stdout": 1, "stream": 1})
         stream = getattr(sock, "_sock", sock)
@@ -487,6 +487,24 @@ class SecureSandboxExecutor:
             aborted, line_buf = await self._drain_lines(stream, broker, line_buf, container, script_out)
             if aborted:
                 return
+        self._flush_residual_line(line_buf, script_out)
+
+    @staticmethod
+    def _flush_residual_line(line_buf: bytes, script_out: "list[str]") -> None:
+        """Flush a trailing-newline-less final line to *script_out* on pump EOF (GH#11663).
+
+        The recv loop only emits complete ``\\n``-terminated lines via
+        ``_drain_lines``; a script that writes its final result without a
+        trailing newline (e.g. ``sys.stdout.write(json.dumps(r))``) leaves that
+        content stranded in ``line_buf`` once ``recv()`` returns empty (EOF).
+        Without this flush the result is silently lost. An unresolved
+        sentinel-prefixed residual (an RPC call that never got its terminating
+        newline) is discarded rather than surfaced as script output.
+        """
+        from chat_workflow.code_exec.protocol import RPC_SENTINEL_BYTES  # lazy
+
+        if line_buf and not line_buf.startswith(RPC_SENTINEL_BYTES):
+            script_out.append(line_buf.decode("utf-8", errors="replace"))
 
     async def _drain_lines(
         self, stream, broker: Any, line_buf: bytes, container, script_out: "list[str]"

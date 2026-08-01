@@ -77,12 +77,18 @@ def _mock_response(status: int, payload: Any, content_type: str = "application/j
     return resp
 
 
-def _mock_session(response: MagicMock) -> MagicMock:
-    session = MagicMock()
-    session.get = MagicMock(return_value=response)
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock(return_value=False)
-    return session
+def _mock_http_client(response: MagicMock) -> MagicMock:
+    """Stub the shared pooled client used by the connector (Issue #12979).
+
+    These connectors no longer build a per-request ``aiohttp.ClientSession``;
+    they call ``get_http_client().tracked_request(method, url, **kwargs)``,
+    which yields the response. Patching ``aiohttp.ClientSession`` therefore no
+    longer intercepts anything — the stub has to target that seam instead, or
+    the test dials out for real.
+    """
+    client = MagicMock()
+    client.tracked_request = MagicMock(return_value=response)
+    return client
 
 
 # ---------------------------------------------------------------------------
@@ -151,8 +157,8 @@ def test_issue_to_text_pr_flag():
 async def test_gitlab_test_connection_ok():
     connector = GitLabConnector(_gl_config())
     resp = _mock_response(200, {"id": 1, "username": "bot"})
-    session = _mock_session(resp)
-    with patch("aiohttp.ClientSession", return_value=session):
+    client = _mock_http_client(resp)
+    with patch("knowledge.connectors.gitlab.get_http_client", return_value=client):
         result = await connector.test_connection()
     assert result is True
 
@@ -161,8 +167,8 @@ async def test_gitlab_test_connection_ok():
 async def test_gitlab_test_connection_fail():
     connector = GitLabConnector(_gl_config())
     resp = _mock_response(401, {"message": "401 Unauthorized"})
-    session = _mock_session(resp)
-    with patch("aiohttp.ClientSession", return_value=session):
+    client = _mock_http_client(resp)
+    with patch("knowledge.connectors.gitlab.get_http_client", return_value=client):
         result = await connector.test_connection()
     assert result is False
 
@@ -327,8 +333,8 @@ async def test_gitlab_fetch_content_bad_source_id():
 async def test_gitea_test_connection_ok():
     connector = GiteaConnector(_gitea_config())
     resp = _mock_response(200, {"id": 1, "login": "alice"})
-    session = _mock_session(resp)
-    with patch("aiohttp.ClientSession", return_value=session):
+    client = _mock_http_client(resp)
+    with patch("knowledge.connectors.gitlab.get_http_client", return_value=client):
         result = await connector.test_connection()
     assert result is True
 
@@ -337,8 +343,8 @@ async def test_gitea_test_connection_ok():
 async def test_gitea_test_connection_fail():
     connector = GiteaConnector(_gitea_config())
     resp = _mock_response(401, {"message": "Unauthorized"})
-    session = _mock_session(resp)
-    with patch("aiohttp.ClientSession", return_value=session):
+    client = _mock_http_client(resp)
+    with patch("knowledge.connectors.gitlab.get_http_client", return_value=client):
         result = await connector.test_connection()
     assert result is False
 

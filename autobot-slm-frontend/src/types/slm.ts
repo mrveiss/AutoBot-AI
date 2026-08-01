@@ -7,8 +7,28 @@
  * SLM Type Definitions
  */
 
-export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline' | 'maintenance' | 'online' | 'error' | 'decommissioned'
+import type { components } from './generated/api'
 
+/**
+ * Node status — derived from the generated OpenAPI type (#12662), which is
+ * itself generated from the backend's canonical `NodeStatus` enum
+ * (autobot-slm-backend/models/database.py). Do not hand-declare this union;
+ * it drifted to 11 hand-invented values ('registered', 'healthy',
+ * 'unhealthy') that the backend has never emitted before #12662 fixed it.
+ * Re-run `npm run gen:types:openapi && npm run gen:types` after a backend
+ * enum change — `verify-generated-types-slm` (CI) fails if this drifts.
+ */
+export type NodeStatus = components['schemas']['NodeStatus']
+
+/**
+ * Role names the SLM fleet can assign.
+ *
+ * Mirror of `DEFAULT_ROLES` in
+ * autobot-slm-backend/services/role_registry.py:416 — the registry is the
+ * source of truth and `constants/node-roles.ts` carries the matching metadata.
+ * `'docker'` (`_INFRA_ROLES`, role_registry.py:372) was missing from this union
+ * until #13138; `GET /deployments/roles` has always returned it.
+ */
 export type NodeRole =
   | 'slm-backend'
   | 'slm-frontend'
@@ -30,6 +50,7 @@ export type NodeRole =
   | 'autobot_shared'
   | 'slm-agent'
   | 'vnc'
+  | 'docker'
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
 
@@ -171,30 +192,78 @@ export interface UpdateInfo {
 }
 
 /**
+ * Raw per-package update record as returned by the backend's
+ * UpdateInfoResponse (models/schemas.py) — field names mirror the wire
+ * format exactly (#11964).
+ */
+export interface NodeUpdateRecord {
+  update_id: string
+  node_id: string | null
+  package_name: string
+  current_version: string | null
+  available_version: string
+  severity: string
+  description: string | null
+  is_applied: boolean
+  applied_at: string | null
+  created_at: string
+}
+
+/**
+ * Response from GET /nodes/{node_id}/updates — the live "Check for updates"
+ * scan (#11964). code_update_available/code_status mirror the SAME
+ * node.code_status field NodeUpdateSummary reads, so the live scan and the
+ * fleet-summary badge can never disagree.
+ */
+export interface NodeUpdateCheckResponse {
+  updates: NodeUpdateRecord[]
+  total: number
+  code_update_available: boolean
+  code_status: string
+}
+
+/**
  * Role category for grouping
  */
 export type RoleCategory = 'core' | 'data' | 'application' | 'ai' | 'automation' | 'observability' | 'remote-access' | 'infrastructure'
 
 /**
- * Available role information from backend
+ * Available role information — response element of GET `/deployments/roles`
+ * (`RoleInfo`, models/schemas.py:421). Derived from the generated contract
+ * (#13138).
+ *
+ * The hand-written declaration omitted `ansible_role` entirely
+ * (schemas.py:427) — the playbook the role maps to — so the UI could not reach
+ * it.
+ *
+ * `name` and `category` are widened to `str` by the contract but stay narrowed
+ * here: `_build_available_roles` (api/deployments.py:149-171) copies
+ * `reg["name"]` out of `role_registry.DEFAULT_ROLES`, which
+ * `constants/node-roles.ts` is documented to mirror, and every `category` comes
+ * from `_ROLE_UI_META` (deployments.py:44-147) or the `"core"` default — both
+ * sets match these unions exactly. Deriving them surfaced the one real gap:
+ * `'docker'` was missing from `NodeRole`.
+ *
+ * `dependencies` is NOT narrowed back to `NodeRole[]`: the builder passes
+ * `dependencies=[]` unconditionally (deployments.py:166), so the old claim
+ * described a field the endpoint never populates.
  */
-export interface RoleInfo {
+export type RoleInfo = components['schemas']['RoleInfo'] & {
   name: NodeRole
-  description: string
   category: RoleCategory
-  required: boolean
-  degraded_without: string[]
-  dependencies: NodeRole[]
-  variables: Record<string, unknown>
-  tools: string[]
 }
 
 /**
- * Response for listing available roles
+ * Response model of GET `/deployments/roles` (models/schemas.py:435).
+ *
+ * NOTE (#13138) — the narrowed member comes FIRST in these list envelopes on
+ * purpose. `A[] & B[]` keeps both `map` signatures and TypeScript resolves the
+ * callback against the first one, so `base & { items: Narrow[] }` silently
+ * types the callback parameter as the WIDE element (that is how
+ * `useNodeServices.ts` ended up mapping `category` as `string`). Writing
+ * `{ items: Narrow[] } & base` picks the narrowed element.
  */
-export interface RoleListResponse {
-  roles: RoleInfo[]
-}
+export type RoleListResponse = { roles: RoleInfo[] } & components['schemas']['RoleListResponse']
 
 /**
  * PKI certificate status for a node
@@ -325,20 +394,25 @@ export interface MaintenanceWindow {
   updated_at: string
 }
 
-export interface MaintenanceWindowCreate {
-  node_id?: string
-  start_time: string
-  end_time: string
-  reason?: string
-  auto_drain?: boolean
-  suppress_alerts?: boolean
-  suppress_remediation?: boolean
+/**
+ * Request body of POST `/maintenance/windows` — `MaintenanceWindowCreate`.
+ * Derived from the generated contract (#13138).
+ *
+ * `Partial<>` because `auto_drain`, `suppress_alerts` and `suppress_remediation`
+ * all carry server-side defaults and openapi-typescript emits defaulted fields
+ * as REQUIRED — backwards for a request body. The two genuinely mandatory
+ * fields are re-required by indexed access so they stay derived.
+ */
+export type MaintenanceWindowCreate = Partial<
+  components['schemas']['MaintenanceWindowCreate']
+> & {
+  start_time: components['schemas']['MaintenanceWindowCreate']['start_time']
+  end_time: components['schemas']['MaintenanceWindowCreate']['end_time']
 }
 
-export interface MaintenanceWindowListResponse {
-  windows: MaintenanceWindow[]
-  total: number
-}
+/** Response model of GET `/maintenance/windows`. */
+export type MaintenanceWindowListResponse = { windows: MaintenanceWindow[] } &
+  components['schemas']['MaintenanceWindowListResponse']
 
 export interface SLMWebSocketMessage {
   type: 'health_update' | 'deployment_status' | 'backup_status' | 'node_status' | 'remediation_event' | 'service_status' | 'rollback_event'
@@ -356,16 +430,10 @@ export interface FleetSummary {
 }
 
 /**
- * Per-node update summary from fleet update check (#682)
+ * Per-node update summary from the fleet update check (#682), derived from the
+ * generated contract (#13138).
  */
-export interface NodeUpdateSummary {
-  node_id: string
-  hostname: string
-  system_updates: number
-  code_update_available: boolean
-  code_status: string
-  total_updates: number
-}
+export type NodeUpdateSummary = components['schemas']['NodeUpdateSummary']
 
 /**
  * Fleet-wide update summary response (#682)
@@ -385,29 +453,29 @@ export type ServiceStatus = 'running' | 'stopped' | 'failed' | 'unknown'
 
 export type ServiceCategory = 'autobot' | 'system'
 
-export interface NodeService {
-  id: number
-  node_id: string
-  service_name: string
+/**
+ * A systemd unit tracked on a node — the `ServiceResponse` model
+ * (autobot-slm-backend/models/schemas.py), derived from the generated contract
+ * (#13138). The hand-written declaration was missing `endpoint_path`, `port`,
+ * `protocol` and `is_discoverable`.
+ *
+ * `status` and `category` are widened to `string` by the contract but kept as
+ * unions here: `category` is written only through `ServiceCategoryUpdate`,
+ * which pins `pattern="^(autobot|system)$"`, and `status` is written only from
+ * the `ServiceStatus` enum. Issue #1019: `extra_data` may include
+ * `error_message` for failed services.
+ */
+export type NodeService = components['schemas']['ServiceResponse'] & {
   status: ServiceStatus
   category: ServiceCategory
-  enabled: boolean
-  description: string | null
-  active_state: string | null
-  sub_state: string | null
-  main_pid: number | null
-  memory_bytes: number | null
-  // Issue #1019: extra_data may include error_message for failed services
-  extra_data: Record<string, unknown>
-  last_checked: string | null
-  created_at: string
-  updated_at: string
 }
 
-export interface ServiceListResponse {
-  services: NodeService[]
-  total: number
-}
+/**
+ * Response model of GET `/nodes/{node_id}/services` (#13138). The intersection
+ * keeps `services` pinned to `NodeService`, whose `status`/`category` literal
+ * unions the contract widens to `string`.
+ */
+export type ServiceListResponse = { services: NodeService[] } & components['schemas']['ServiceListResponse']
 
 export interface ServiceActionResponse {
   action: string
@@ -418,12 +486,8 @@ export interface ServiceActionResponse {
   job_id?: string
 }
 
-export interface ServiceLogsResponse {
-  service_name: string
-  node_id: string
-  logs: string
-  lines_returned: number
-}
+/** Response model of GET `/nodes/{node_id}/services/{name}/logs` (#13138). */
+export type ServiceLogsResponse = components['schemas']['ServiceLogsResponse']
 
 export interface FleetServiceStatus {
   service_name: string
@@ -452,6 +516,16 @@ export interface FleetServicesResponse {
 // Blue-Green Deployment Types (Issue #726 Phase 3)
 // =============================================================================
 
+/**
+ * Blue-green deployment lifecycle status.
+ *
+ * The contract widens `status` to `str`; the real value set is the
+ * `BlueGreenStatus` enum (models/database.py:573-586), which the column
+ * default and every assignment site draw from. `'monitoring'` is the
+ * post-deployment health-watch state added by Issue #726 Phase 3
+ * (services/blue_green.py:780) and was missing from this union — a deployment
+ * sitting in it fell through every bucket of `bgStats` in `DeploymentsView`.
+ */
 export type BlueGreenStatus =
   | 'pending'
   | 'borrowing'
@@ -459,56 +533,49 @@ export type BlueGreenStatus =
   | 'verifying'
   | 'switching'
   | 'active'
+  | 'monitoring'
   | 'rolling_back'
   | 'rolled_back'
   | 'completed'
   | 'failed'
 
-export interface BlueGreenDeployment {
-  id: number
-  bg_deployment_id: string
-  blue_node_id: string
-  blue_roles: string[]
-  green_node_id: string
-  green_original_roles: string[]
-  borrowed_roles: string[]
-  purge_on_complete: boolean
-  deployment_type: 'upgrade' | 'migration' | 'failover'
-  health_check_url: string | null
-  health_check_interval: number
-  health_check_timeout: number
-  auto_rollback: boolean
+/**
+ * `deployment_type` value set — a bare `str` column with an `upgrade` default
+ * and an enumerating comment (models/database.py:617).
+ */
+export type BlueGreenDeploymentType = 'upgrade' | 'migration' | 'failover'
+
+/**
+ * Response model of the blue-green endpoints — `BlueGreenResponse`
+ * (autobot-slm-backend/api/blue_green.py). Derived from the generated contract
+ * (#13138); the intersection keeps the two literal unions the schema widens to
+ * `string`.
+ */
+export type BlueGreenDeployment = components['schemas']['BlueGreenResponse'] & {
   status: BlueGreenStatus
-  progress_percent: number
-  current_step: string | null
-  error: string | null
-  started_at: string | null
-  switched_at: string | null
-  completed_at: string | null
-  rollback_at: string | null
-  triggered_by: string | null
-  created_at: string
-  updated_at: string
+  deployment_type: BlueGreenDeploymentType
 }
 
-export interface BlueGreenDeploymentCreate {
-  blue_node_id: string
-  green_node_id: string
-  roles: string[]
-  deployment_type?: 'upgrade' | 'migration' | 'failover'
-  health_check_url?: string
-  health_check_interval?: number
-  health_check_timeout?: number
-  auto_rollback?: boolean
-  purge_on_complete?: boolean
+/**
+ * Request body of POST `/blue-green` — `BlueGreenCreate`.
+ *
+ * `Partial<>` because every optional knob carries a server-side default and
+ * openapi-typescript emits defaulted fields as REQUIRED, which is backwards for
+ * a request body; the three genuinely mandatory fields are re-required by
+ * indexed access so they stay derived.
+ */
+export type BlueGreenDeploymentCreate = Partial<
+  components['schemas']['BlueGreenCreate']
+> & {
+  blue_node_id: components['schemas']['BlueGreenCreate']['blue_node_id']
+  green_node_id: components['schemas']['BlueGreenCreate']['green_node_id']
+  roles: components['schemas']['BlueGreenCreate']['roles']
+  deployment_type?: BlueGreenDeploymentType
 }
 
-export interface BlueGreenListResponse {
-  deployments: BlueGreenDeployment[]
-  total: number
-  page: number
-  per_page: number
-}
+/** Response model of GET `/blue-green` (paginated list). */
+export type BlueGreenListResponse = { deployments: BlueGreenDeployment[] } &
+  components['schemas']['BlueGreenListResponse']
 
 export interface EligibleNode {
   node_id: string
@@ -519,15 +586,19 @@ export interface EligibleNode {
   status: string
 }
 
-export interface EligibleNodesResponse {
-  nodes: EligibleNode[]
-  total: number
-}
+/** Response model of GET `/blue-green/eligible-nodes` (#13138). */
+export type EligibleNodesResponse = { nodes: EligibleNode[] } &
+  components['schemas']['EligibleNodesResponse']
 
-export interface RolePurgeRequest {
-  node_id: string
-  roles: string[]
-  force?: boolean
+/**
+ * Request body of the role-purge endpoint (#13138). `force` carries a
+ * server-side default, so `Partial<>` + re-required mandatory fields.
+ */
+export type RolePurgeRequest = Partial<
+  components['schemas']['RolePurgeRequest']
+> & {
+  node_id: components['schemas']['RolePurgeRequest']['node_id']
+  roles: components['schemas']['RolePurgeRequest']['roles']
 }
 
 // =============================================================================
@@ -538,13 +609,19 @@ export type NPUDeviceType = 'intel-npu' | 'nvidia-gpu' | 'amd-gpu' | 'unknown'
 
 export type NPULoadBalancingStrategy = 'round-robin' | 'least-loaded' | 'model-affinity'
 
-export interface NPUCapabilities {
-  models: string[]
-  maxConcurrent: number
-  memoryGB: number
-  deviceType: NPUDeviceType
-  utilization: number
-}
+/**
+ * NPU device capabilities reported by detection (#13138).
+ *
+ * `deviceType` is deliberately NOT narrowed back to `NPUDeviceType`: it is
+ * copied verbatim out of an external NPU worker's `/health` payload
+ * (`data.get("deviceType", "unknown")`, api/npu.py:83), so nothing constrains
+ * it to the four known values. All three renderers already fall through to the
+ * raw string for an unknown device (NPUNodeCard.vue:50,
+ * NPUWorkerMonitor.vue:97, NPUDetailsPanel.vue:54), so the union was an
+ * unverifiable claim the UI never relied on. `NPUDeviceType` stays exported as
+ * the set of values that get a friendly label.
+ */
+export type NPUCapabilities = components['schemas']['NPUCapabilities']
 
 export interface NPUNodeStatus {
   node_id: string
@@ -556,10 +633,19 @@ export interface NPUNodeStatus {
   detectionError?: string
 }
 
-export interface NPULoadBalancingConfig {
-  strategy: NPULoadBalancingStrategy
-  modelAffinity: Record<string, string[]>
-}
+/**
+ * NPU load-balancing configuration (#13138).
+ *
+ * `strategy` is a bare `str` on the model (models/schemas.py:2115), but the
+ * value set is enumerated by `NPULoadBalancingStrategy`
+ * (models/schemas.py:2078-2085) and matches this union exactly, so the
+ * narrowing is kept by intersection. `modelAffinity` is `default_factory=dict`,
+ * hence optional in the contract.
+ */
+export type NPULoadBalancingConfig =
+  components['schemas']['NPULoadBalancingConfig'] & {
+    strategy: NPULoadBalancingStrategy
+  }
 
 export interface NPUModelInfo {
   name: string
@@ -571,20 +657,12 @@ export interface NPUModelInfo {
 
 // NPU Metrics & Config Types (Issue #590 - NPU Dashboard Improvements)
 
-export interface NPUWorkerMetrics {
-  node_id: string
-  utilization: number
-  temperature_celsius: number | null
-  inference_count: number
-  avg_latency_ms: number
-  throughput_rps: number
-  queue_depth: number
-  memory_used_gb: number
-  memory_total_gb: number
-  uptime_seconds: number
-  error_count: number
-  timestamp: string | null
-}
+/**
+ * Per-worker NPU metrics (#13138). `temperature_celsius` and `timestamp` are
+ * optional AND nullable in the contract; the hand-written declaration required
+ * both to be present.
+ */
+export type NPUWorkerMetrics = components['schemas']['NPUWorkerMetrics']
 
 export interface NPUFleetMetrics {
   total_nodes: number
@@ -597,13 +675,17 @@ export interface NPUFleetMetrics {
   node_metrics: NPUWorkerMetrics[]
 }
 
-export interface NPUWorkerConfig {
-  priority: number
-  weight: number
-  max_concurrent: number
+/**
+ * Configuration for an individual NPU worker (models/schemas.py:2196), derived
+ * from the generated contract (#13138).
+ *
+ * `failure_action` is a bare `str` with only a `retry` default server-side
+ * (schemas.py:2202); its sole construction site is the four-option `<select>`
+ * at `components/fleet/NPUDetailsPanel.vue:383-386`, so the union is a real
+ * frontend-side guarantee and is kept by intersection.
+ */
+export type NPUWorkerConfig = components['schemas']['NPUWorkerConfig'] & {
   failure_action: 'retry' | 'failover' | 'skip' | 'alert'
-  max_retries: number
-  assigned_models: string[]
 }
 
 // =============================================================================
@@ -631,24 +713,25 @@ export interface ExternalAgent {
   updated_at: string | null
 }
 
-export interface ExternalAgentCreate {
-  name: string
-  base_url: string
-  description?: string
-  tags?: string[]
-  enabled?: boolean
-  ssl_verify?: boolean
-  api_key?: string
+/**
+ * Request body of POST `/external-agents` (#13138).
+ *
+ * `Partial<>` because `enabled`, `ssl_verify` and `tags` carry server-side
+ * defaults that openapi-typescript emits as REQUIRED — backwards for a request
+ * body; `name` and `base_url` are re-required by indexed access.
+ */
+export type ExternalAgentCreate = Partial<
+  components['schemas']['ExternalAgentCreate']
+> & {
+  name: components['schemas']['ExternalAgentCreate']['name']
+  base_url: components['schemas']['ExternalAgentCreate']['base_url']
 }
 
-export interface ExternalAgentUpdate {
-  name?: string
-  description?: string
-  tags?: string[]
-  enabled?: boolean
-  ssl_verify?: boolean
-  api_key?: string
-}
+/**
+ * Request body of PATCH `/external-agents/{id}` (#13138) — every field is a
+ * nullable override, so a plain alias is correct here.
+ */
+export type ExternalAgentUpdate = components['schemas']['ExternalAgentUpdate']
 
 export interface ExternalAgentCard {
   id: number
@@ -658,122 +741,65 @@ export interface ExternalAgentCard {
 }
 
 // =============================================================================
-// Security API Response Types (Issue #3184)
+// Infrastructure Playbooks (Issue #1177)
+//
+// Derived from the generated OpenAPI contract (#13138) — response models of
+// autobot-slm-backend/api/infrastructure.py. `PlaybookInfo` was declared
+// identically in `components/InfrastructureWizard.vue` and
+// `views/InfrastructureView.vue`, so one backend change had two places to
+// drift from; both now import this single definition.
 // =============================================================================
 
-export interface SecurityEventResponse {
-  id: number
-  event_id: string
-  timestamp: string
-  event_type: string
-  severity: string
-  category: string | null
-  source_ip: string | null
-  source_user: string | null
-  source_node_id: string | null
-  target_resource: string | null
-  target_node_id: string | null
-  title: string
-  description: string | null
-  threat_indicator: string | null
-  threat_score: number | null
-  mitre_technique: string | null
-  is_acknowledged: boolean
-  acknowledged_by: string | null
-  acknowledged_at: string | null
-  is_resolved: boolean
-  resolved_by: string | null
-  resolved_at: string | null
-  resolution_notes: string | null
-  created_at: string
-}
+/**
+ * Response element of GET `/infrastructure/playbooks`
+ * (api/infrastructure.py:54).
+ *
+ * Both hand-written copies omitted `tags`, and typed `category` as a bare
+ * `string` where the contract has the `PlaybookCategory` enum.
+ */
+export type PlaybookInfo = components['schemas']['PlaybookInfo']
 
-export interface SecurityOverviewResponse {
-  security_score: number
-  active_threats: number
-  failed_logins_24h: number
-  policy_violations: number
-  total_events_24h: number
-  critical_events: number
-  certificates_expiring: number
-  recent_events: SecurityEventResponse[]
-}
+/** Playbook category enum (api/infrastructure.py:33). */
+export type PlaybookCategory = components['schemas']['PlaybookCategory']
 
-export interface AuditLogResponse {
-  id: number
-  log_id: string
-  timestamp: string
-  user_id: string | null
-  username: string | null
-  ip_address: string | null
-  category: string
-  action: string
-  resource_type: string | null
-  resource_id: string | null
-  description: string | null
-  request_method: string | null
-  request_path: string | null
-  response_status: number | null
-  success: boolean
-  error_message: string | null
-  created_at: string
-}
+/**
+ * Playbook run state (api/infrastructure.py:69). `output` is
+ * `default_factory=list` and therefore optional in the contract.
+ */
+export type PlaybookExecution = components['schemas']['PlaybookExecution']
 
-export interface AuditLogListResponse {
-  logs: AuditLogResponse[]
-  total: number
-  page: number
-  per_page: number
-}
+/** Playbook execution status enum (api/infrastructure.py:44). */
+export type PlaybookStatus = components['schemas']['PlaybookStatus']
 
-export interface SecurityEventListResponse {
-  events: SecurityEventResponse[]
-  total: number
-  page: number
-  per_page: number
-  unacknowledged_count: number
-  critical_count: number
-}
+// =============================================================================
+// Security API Response Types (Issue #3184)
+//
+// Derived from the generated OpenAPI contract (#13138). Every shape below is
+// the response model of a `/security/*` endpoint in
+// autobot-slm-backend/api/security.py, so `vue-tsc` now fails when the backend
+// schema moves instead of the drift reaching a security dashboard unnoticed.
+// =============================================================================
 
-export interface ThreatSummary {
-  total_threats: number
-  critical: number
-  high: number
-  medium: number
-  low: number
-  acknowledged: number
-  resolved: number
-  by_type: Record<string, number>
-  by_source_ip: Record<string, number>
-  trend_24h: Array<Record<string, unknown>>
-}
+/** Response model of GET/POST `/security/events*` (security.py:530, :549, :577). */
+export type SecurityEventResponse = components['schemas']['SecurityEventResponse']
 
-export interface SecurityPolicyResponse {
-  id: number
-  policy_id: string
-  name: string
-  description: string | null
-  category: string
-  policy_type: string
-  rules: unknown[]
-  parameters: Record<string, unknown>
-  applies_to_nodes: unknown[]
-  applies_to_roles: unknown[]
-  status: string
-  is_enforced: boolean
-  last_evaluated: string | null
-  compliance_score: number | null
-  violations_count: number
-  version: number
-  created_by: string | null
-  updated_by: string | null
-  created_at: string
-  updated_at: string
-}
+/** Response model of GET `/security/overview` (security.py:191). */
+export type SecurityOverviewResponse = components['schemas']['SecurityOverviewResponse']
 
-export interface SecurityPolicyListResponse {
-  policies: SecurityPolicyResponse[]
-  total: number
-  page: number
-  per_page: number
-}
+/** Response model of GET `/security/audit-logs/{log_id}` (security.py:292). */
+export type AuditLogResponse = components['schemas']['AuditLogResponse']
+
+/** Response model of GET `/security/audit-logs` (security.py:231). */
+export type AuditLogListResponse = components['schemas']['AuditLogListResponse']
+
+/** Response model of GET `/security/events` (security.py:376). */
+export type SecurityEventListResponse = components['schemas']['SecurityEventListResponse']
+
+/** Response model of GET `/security/events/summary` (security.py:456). */
+export type ThreatSummary = components['schemas']['ThreatSummary']
+
+/** Response model of GET/PATCH `/security/policies/{policy_id}` (security.py:696, :715). */
+export type SecurityPolicyResponse = components['schemas']['SecurityPolicyResponse']
+
+/** Response model of GET `/security/policies` (security.py:617). */
+export type SecurityPolicyListResponse = components['schemas']['SecurityPolicyListResponse']

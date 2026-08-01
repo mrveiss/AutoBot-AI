@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Redis Memory Graph Initialization Script
@@ -491,7 +492,7 @@ class MemoryGraphInitializer:
             Entity dictionary or None if conversion fails
         """
         try:
-            with open(transcript_path, "r") as f:
+            with open(transcript_path, "r", encoding="utf-8") as f:
                 transcript = json.load(f)
 
             conv_id = transcript.get("session_id", transcript_path.stem)

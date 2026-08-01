@@ -18,7 +18,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.voice_bundle_helpers import _require_admin
 from api.voice_bundle_user import (
     _check_self_or_admin,
     _get_user_id,
@@ -26,35 +25,46 @@ from api.voice_bundle_user import (
     router,
 )
 from auth_middleware import get_current_user
-from utils.catalog_http_exceptions import raise_auth_error
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
 _USER_BOB = {"user_id": "bob", "username": "bob", "role": "user"}
 _ADMIN = {"user_id": "admin-user", "username": "admin", "role": "admin"}
+_SUPERADMIN = {"user_id": "root", "username": "root", "role": "superadmin"}
+
+# Holds the user the patched auth middleware returns for the current test.
+_CURRENT: dict = {"user": None}
+
+
+@pytest.fixture(autouse=True)
+def _patch_auth_middleware():
+    """Make the canonical require_role() gate see the injected test user.
+
+    Admin-gated routes use ``require_role("admin", "superadmin")`` (#12704),
+    which reads the user via ``auth_rbac.get_auth_middleware()``.
+    """
+    mw = MagicMock()
+    mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
+    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+        yield
+    _CURRENT["user"] = None
 
 
 def _make_client(user: dict) -> TestClient:
-    """Create a TestClient with dependency_overrides for get_current_user.
+    """Create a TestClient with the injected user wired into auth.
 
-    Admin-gated routes depend on ``_require_admin`` (a Request-based middleware
-    check, GH#9450) rather than ``get_current_user``, so override it too —
-    role-gated against the injected user so admin routes 200 for admins and
-    403 for non-admins (GH#8977).
+    ``get_current_user`` (the acting-user dict) is overridden, and the
+    ``require_role()`` gate reads the same user via the autouse middleware
+    patch, so admin routes 200 for admin/superadmin and 403 for others.
     """
+    _CURRENT["user"] = user
     app = FastAPI()
     app.include_router(router, prefix="/api/voice")
 
     async def _override():
         return user
 
-    def _override_require_admin() -> dict:
-        if user.get("role") != "admin":
-            raise_auth_error("AUTH_0003", "Admin permission required")
-        return user
-
     app.dependency_overrides[get_current_user] = _override
-    app.dependency_overrides[_require_admin] = _override_require_admin
     return TestClient(app)
 
 
@@ -365,6 +375,30 @@ class TestSetUserBundle:
 
         assert response.status_code == 403
 
+    def test_superadmin_assigns_bundle_to_user(self):
+        """superadmin can assign a bundle — previously admin-only (#12704 unlock)."""
+        client = _make_client(_SUPERADMIN)
+
+        with (
+            patch("user_management.database.get_async_session") as mock_session_ctx,
+            patch("api.voice_bundle_user.emit") as mock_emit,
+        ):
+            mock_session = AsyncMock(spec=AsyncSession)
+            mock_session_ctx.return_value.__aenter__.return_value = mock_session
+            mock_result = MagicMock()
+            mock_result.fetchone.return_value = ("voice_safe",)
+            mock_session.execute.return_value = mock_result
+
+            response = client.put(
+                "/api/voice/users/bob/bundle",
+                json={"bundle_name": "voice_safe"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["bundle_name"] == "voice_safe"
+        mock_emit.assert_called_once()
+
     def test_admin_can_assign_admin_bundle(self):
         """Admin can assign voice_admin bundle."""
         client = _make_client(_ADMIN)
@@ -388,3 +422,53 @@ class TestSetUserBundle:
         data = response.json()
         assert data["bundle_name"] == "voice_admin"
         mock_emit.assert_called_once()
+
+
+class TestSuperadminIsNotLockedOut:
+    """#12717: superadmin must count as admin on the READ paths too.
+
+    The write path (PUT /voice/users/{id}/bundle) has always been guarded by
+    require_role("admin", "superadmin"), so a superadmin could ASSIGN a bundle
+    but then got 403 reading it back — the read path went through _is_admin,
+    which only accepted "admin". Same class as #12704.
+    """
+
+    def test_is_admin_accepts_superadmin(self):
+        from api.voice_bundle_user import _is_admin
+
+        assert _is_admin({"role": "superadmin"}) is True
+        assert _is_admin({"role": "admin"}) is True
+
+    def test_is_admin_still_rejects_ordinary_roles(self):
+        from api.voice_bundle_user import _is_admin
+
+        for role in ("user", "readonly", "operator", "analyst", "editor"):
+            assert _is_admin({"role": role}) is False, role
+        assert _is_admin({}) is False
+        assert _is_admin({"role": None}) is False
+
+    def test_is_admin_is_case_insensitive_like_require_role(self):
+        """auth_rbac.require_role lowercases both sides; this must match, or a
+        'SuperAdmin' token would pass the write guard and fail the read."""
+        from api.voice_bundle_user import _is_admin
+
+        assert _is_admin({"role": "SuperAdmin"}) is True
+        assert _is_admin({"role": "ADMIN"}) is True
+
+    def test_superadmin_can_read_another_users_bundle(self):
+        """_check_self_or_admin is what the GET actually calls."""
+        from unittest.mock import MagicMock
+
+        from api.voice_bundle_user import _check_self_or_admin
+
+        superadmin = {"role": "superadmin", "user_id": "admin-1"}
+        assert _check_self_or_admin(MagicMock(), superadmin, "some-other-user") is True
+
+    def test_ordinary_user_still_cannot_read_another_users_bundle(self):
+        from unittest.mock import MagicMock
+
+        from api.voice_bundle_user import _check_self_or_admin
+
+        plain = {"role": "user", "user_id": "user-1"}
+        assert _check_self_or_admin(MagicMock(), plain, "user-2") is False
+        assert _check_self_or_admin(MagicMock(), plain, "user-1") is True

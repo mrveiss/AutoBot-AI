@@ -16,8 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
-from api.voice_bundle_helpers import _require_admin
 from auth_middleware import get_current_user
+from auth_rbac import require_role
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from services.event_log import EventType, emit
 
@@ -67,7 +68,7 @@ async def get_my_bundle(
 
     user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     role = current_user.get("role", "user")
-    is_admin = role == "admin"
+    is_admin = is_admin_role(role)  # #12717: superadmin must not see a reduced tool count
 
     bundle_name, resolution = await resolve_bundle_for_user(str(user_id), role=role)
     tool_count = await _count_tools_for_bundle(bundle_name, is_admin=is_admin)
@@ -88,7 +89,7 @@ async def get_my_bundle(
 async def get_user_bundle(
     user_id: str,
     request: Request,
-    _admin: dict = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> BundleAssignmentResponse:
     """Return the explicit bundle assignment for a user (admin only)."""
     try:
@@ -120,7 +121,8 @@ async def set_user_bundle(
     user_id: str,
     body: BundleAssignRequest,
     request: Request,
-    admin_user: dict = Depends(_require_admin),
+    admin_user: dict = Depends(get_current_user),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> BundleAssignmentResponse:
     """Assign or clear a voice bundle override for a user (admin only)."""
     if body.bundle_name is not None and body.bundle_name not in VALID_BUNDLES:

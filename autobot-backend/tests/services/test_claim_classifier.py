@@ -31,8 +31,22 @@ from services.knowledge_grounding_models import (
 
 @pytest.fixture
 def mock_knowledge_base():
-    """Create a mock knowledge base."""
-    kb = MagicMock()
+    """Create a mock knowledge base exposing ONLY the sync search API (#12839).
+
+    ClaimClassifier._search_kb prefers ``search_async`` when the KB has it:
+
+        if hasattr(self.kb, "search_async"): results = await self.kb.search_async(...)
+        elif hasattr(self.kb, "search"):     results = self.kb.search(...)
+
+    A bare ``MagicMock()`` auto-creates every attribute, so ``hasattr(kb,
+    "search_async")`` was True and the classifier awaited a plain MagicMock —
+    "object MagicMock can't be used in 'await' expression". The classifier
+    caught that, logged it and returned no results, so the test asserted
+    against a degraded path instead of the one it meant to exercise.
+
+    ``spec`` pins the attribute surface so the hasattr probe answers honestly.
+    """
+    kb = MagicMock(spec=["search"])
     kb.search = MagicMock(return_value=[])
     return kb
 

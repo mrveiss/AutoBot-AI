@@ -132,7 +132,7 @@ async def test_slm_self_sync_remote_code_source_uses_ssh_rsync():
         stack.enter_context(
             patch(
                 "api.code_sync._fetch_code_source_connection_info",
-                return_value=("192.168.1.100", "autobot", "/home/autobot/code"),
+                return_value=("192.168.1.100", "autobot", "/home/autobot/code"),  # noqa: ssot-path
             )
         )
         stack.enter_context(patch("autobot_shared.network_utils.is_local_ip", return_value=False))

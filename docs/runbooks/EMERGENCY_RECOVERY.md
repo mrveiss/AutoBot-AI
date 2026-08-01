@@ -104,6 +104,56 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-slm-manager.yml -i inventory/slm-nodes.yml --limit 00-SLM-Manager
 ```
 
+### Scenario: SLM `database: unhealthy` / `asyncpg InvalidPasswordError` after Update-All
+
+The SLM control plane connects `slm_app` to three databases (`slm`, `slm_users`,
+`autobot_users`). Those URLs are **role-managed in `/etc/autobot/db-credentials.env`**.
+systemd loads `db-credentials.env` first and `slm-secrets.env` second (last wins),
+so any `*_DATABASE_URL` line in `slm-secrets.env` overrides the role-managed value.
+
+> IMPORTANT (#12224 / #12297): a DB-URL written to `slm-secrets.env` goes **stale**
+> the next time the postgresql role reconciles the password and takes the DB
+> unhealthy. **Recovery must write DB URLs to `db-credentials.env` (or fix the
+> Postgres role/password) — NEVER to `slm-secrets.env`.** Since #12297 the
+> postgresql role emits all three SLM DB URLs to `db-credentials.env`
+> (topology-aware host) and the `slm_manager` role strips any *duplicate* DB-URL
+> from `slm-secrets.env`; a *deliberate remote-DB override* in `slm-secrets.env`
+> (value that differs) is preserved.
+
+**Step 1: Confirm the source of the URL the service actually uses**
+
+```bash
+ssh autobot@<slm-manager-ip> "sudo grep -H DATABASE_URL /etc/autobot/db-credentials.env /etc/autobot/slm-secrets.env"
+```
+
+**Step 2: Preferred fix — re-run provisioning so the role reconciles both files**
+
+```bash
+# From dev machine (supervised one-box deploy, NOT unattended Update-All):
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-slm-manager.yml -i inventory/slm-nodes.yml --limit 00-SLM-Manager --tags postgresql,slm
+```
+
+This writes the correct role-managed URLs to `db-credentials.env` and strips any
+stale *duplicate* DB-URL from `slm-secrets.env`.
+
+**Step 3: Manual break-glass (only if you cannot run Ansible right now)**
+
+Edit `db-credentials.env` — never `slm-secrets.env`. If `slm-secrets.env` holds a
+DB-URL that *duplicates* `db-credentials.env`, comment it out; if it *differs* and
+is a real remote-DB override, leave it. Back up before editing:
+
+```bash
+ssh autobot@<slm-manager-ip> "sudo cp /etc/autobot/db-credentials.env /etc/autobot/db-credentials.env.bak-$(date +%Y%m%d-%H%M%S)"
+# Fix the offending *_DATABASE_URL in db-credentials.env to match the working
+# slm_app password, then restart and verify:
+ssh autobot@<slm-manager-ip> "sudo systemctl restart autobot-slm-backend && sleep 5 && systemctl show autobot-slm-backend -p NRestarts"
+ssh autobot@<slm-manager-ip> "curl -sf http://127.0.0.1:8000/api/health"
+```
+
+Do **not** run `ALTER ROLE` / regenerate the password (that reintroduces the
+#12224 desync). Confirm `database: healthy` and `NRestarts=0` before leaving.
+
 ---
 
 ## Node Recovery

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Generate service API keys for AutoBot distributed infrastructure.
@@ -26,7 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "autobot-backend"))
 sys.path.insert(0, str(PROJECT_ROOT / "autobot_shared"))
 
-from autobot_shared.redis_client import get_redis_client  # noqa: E402
+from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
 from autobot_shared.ssot_config import config  # noqa: E402
 from security.service_auth import ServiceAuthManager  # noqa: E402
 
@@ -150,7 +151,7 @@ async def generate_keys():
     logger.info("Services: %d", len(SERVICES))
     logger.info("")
 
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     auth_manager = ServiceAuthManager(redis)
 
     generated_keys = await _generate_all_keys(auth_manager)

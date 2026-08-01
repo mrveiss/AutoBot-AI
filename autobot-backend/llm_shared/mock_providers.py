@@ -131,24 +131,27 @@ class LocalLLM:
         try:
             import aiohttp
 
+            from autobot_shared.http_client import get_http_client
+
             data = {
                 "model": model or self._default_model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": False,
             }
 
-            async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=TIMEOUT_HTTP_LONG)
-                async with session.post(f"{self._ollama_url}/api/chat", json=data, timeout=timeout) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        logger.error(
-                            "Ollama request failed: HTTP %s - %s",
-                            response.status,
-                            error_text,
-                        )
-                        return self._create_error_response(f"Error: Ollama returned HTTP {response.status}")
-                    result = await response.json()
+            timeout = aiohttp.ClientTimeout(total=TIMEOUT_HTTP_LONG)
+            async with get_http_client().tracked_request(
+                "POST", f"{self._ollama_url}/api/chat", json=data, timeout=timeout
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(
+                        "Ollama request failed: HTTP %s - %s",
+                        response.status,
+                        error_text,
+                    )
+                    return self._create_error_response(f"Error: Ollama returned HTTP {response.status}")
+                result = await response.json()
 
             return self._format_ollama_response(result)
 

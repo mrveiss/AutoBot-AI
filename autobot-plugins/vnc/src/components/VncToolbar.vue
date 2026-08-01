@@ -88,7 +88,7 @@ const emit = defineEmits<{
   error: [message: string]
 }>()
 
-const controls = useVncControls(props.apiBaseUrl ?? '/api')
+const controls = useVncControls({ baseUrl: props.apiBaseUrl ?? '/api' })
 const lastError = ref<string | null>(null)
 const isFullscreen = ref(false)
 const showTypeDialog = ref(false)

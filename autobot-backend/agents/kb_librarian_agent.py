@@ -20,6 +20,7 @@ from autobot_shared.ssot_config import (
 )
 from config import config
 from constants.path_constants import PATH
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 from services.llm_service import get_llm_service
 
@@ -129,7 +130,11 @@ class KBLibrarianAgent(StandardizedAgent):
         """Search the knowledge base for relevant information."""
         try:
             logger.debug("KB-LIBRARIAN: Searching for '%s'", query)
-            results = await self.knowledge_base.search(query, limit=limit)
+            # Issue #13025: limit= routes search() to the "Enhanced" path which
+            # returns a Dict, not the List this method iterates -- use top_k to
+            # stay on the Basic (List[Dict]) path.
+            # Issue #13009: exclude quarantined research facts (#12622).
+            results = await self.knowledge_base.search(query, top_k=limit, filters=RESEARCH_QUARANTINE_FILTER)
 
             if results:
                 logger.info("KB-LIBRARIAN: Found %s results for '%s'", len(results), query)

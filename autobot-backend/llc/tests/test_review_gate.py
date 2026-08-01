@@ -42,6 +42,7 @@ def _make_policy(
     item_type: WorkItemType = WorkItemType.BUG,
     requires_human_review: bool = True,
     reviewer_role: str | None = None,
+    requires_cross_vendor_review: bool = False,
 ) -> MagicMock:
     p = MagicMock(spec=LLCReviewGatePolicy)
     p.id = policy_id or uuid.uuid4()
@@ -49,6 +50,7 @@ def _make_policy(
     p.item_type = item_type
     p.requires_human_review = requires_human_review
     p.reviewer_role = reviewer_role
+    p.requires_cross_vendor_review = requires_cross_vendor_review
     p.created_at = datetime.now(timezone.utc)
     p.updated_at = datetime.now(timezone.utc)
     return p
@@ -557,3 +559,74 @@ class TestReviewGateEdgeCases:
                 review_gate_svc=gate_svc,
                 handoff_svc=None,
             )
+
+
+# ---------------------------------------------------------------------------
+# ReviewGatePolicyService — requires_cross_vendor_review (#12618)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewGateCrossVendorPolicy:
+    @pytest.mark.asyncio
+    async def test_create_policy_persists_cross_vendor_flag(self) -> None:
+        svc = ReviewGatePolicyService()
+        session = _make_session()
+
+        result = await svc.create_policy(
+            session, str(uuid.uuid4()), WorkItemType.BUG, requires_cross_vendor_review=True
+        )
+
+        assert result.requires_cross_vendor_review is True
+
+    @pytest.mark.asyncio
+    async def test_create_policy_cross_vendor_defaults_off(self) -> None:
+        svc = ReviewGatePolicyService()
+        session = _make_session()
+
+        result = await svc.create_policy(session, str(uuid.uuid4()), WorkItemType.TASK)
+
+        assert result.requires_cross_vendor_review is False
+
+    @pytest.mark.asyncio
+    async def test_update_policy_toggles_cross_vendor_flag(self) -> None:
+        policy = _make_policy(requires_cross_vendor_review=False)
+        session = _make_session(scalar_result=policy)
+        svc = ReviewGatePolicyService()
+
+        updated = await svc.update_policy(session, str(policy.id), requires_cross_vendor_review=True)
+
+        assert updated.requires_cross_vendor_review is True
+
+    @pytest.mark.asyncio
+    async def test_seed_defaults_seeds_cross_vendor_off_for_every_type(self) -> None:
+        """Design: requires_cross_vendor_review seeds OFF for every item type, including bug."""
+        svc = ReviewGatePolicyService()
+        session = AsyncMock()
+        session.flush = AsyncMock()
+        session.add = MagicMock()
+        execute_result = MagicMock()
+        execute_result.scalar_one_or_none.return_value = None
+        session.execute = AsyncMock(return_value=execute_result)
+
+        created = await svc.seed_defaults(session, str(uuid.uuid4()))
+
+        assert all(not p.requires_cross_vendor_review for p in created)
+
+    @pytest.mark.asyncio
+    async def test_requires_cross_vendor_review_true(self) -> None:
+        policy = _make_policy(requires_cross_vendor_review=True)
+        session = _make_session(scalar_result=policy)
+        svc = ReviewGatePolicyService()
+
+        result = await svc.requires_cross_vendor_review(session, str(uuid.uuid4()), WorkItemType.BUG)
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_requires_cross_vendor_review_false_no_policy(self) -> None:
+        session = _make_session(scalar_result=None)
+        svc = ReviewGatePolicyService()
+
+        result = await svc.requires_cross_vendor_review(session, str(uuid.uuid4()), WorkItemType.TASK)
+
+        assert result is False

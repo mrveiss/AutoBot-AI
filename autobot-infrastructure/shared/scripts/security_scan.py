@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Local Security Scanning Script for AutoBot
@@ -380,12 +381,14 @@ class SecurityScanner:
 
         # Save JSON report
         json_report_path = self.reports_dir / f"security_scan_{timestamp}.json"
-        with open(json_report_path, "w") as f:
+        with open(json_report_path, "w", encoding="utf-8") as f:
             json.dump(self.scan_results, f, indent=2)
 
         # Save markdown summary
+        # FP: the markdown report is a summary of counts/status only
+        # (see generate_markdown_report) — no secret values are written.
         md_report_path = self.reports_dir / f"security_summary_{timestamp}.md"
-        with open(md_report_path, "w") as f:
+        with open(md_report_path, "w", encoding="utf-8") as f:  # codeql[py/clear-text-storage-sensitive-data]
             f.write(self.generate_markdown_report())
 
         logger.info("📄 Reports saved to:")

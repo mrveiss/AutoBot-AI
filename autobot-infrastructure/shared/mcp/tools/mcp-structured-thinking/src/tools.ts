@@ -45,21 +45,18 @@ export const reviseThoughtSchema = captureThoughtSchema.extend({
 export const captureThoughtTool: Tool = {
   name: "capture_thought",
   description: "Stores a new thought in memory and in the thought history and runs a pipeline to classify the thought, return metacognitive feedback, and retrieve relevant thoughts.",
-  parameters: captureThoughtSchema,
   inputSchema: zodToInputSchema(captureThoughtSchema)
 };
 
 export const reviseThoughtTool: Tool = {
   name: "revise_thought",
   description: "Revises a thought in memory and in the thought history.",
-  parameters: reviseThoughtSchema,
   inputSchema: zodToInputSchema(reviseThoughtSchema)
 };
 
 export const retrieveRelevantThoughtsTool: Tool = {
   name: "retrieve_relevant_thoughts",
   description: "Finds thoughts from long-term storage that share tags with the specified thought.",
-  parameters: retrieveRelevantThoughtsSchema,
   inputSchema: zodToInputSchema(retrieveRelevantThoughtsSchema)
 };
 
@@ -68,14 +65,12 @@ export const emptySchema = z.object({});
 export const getThinkingSummaryTool: Tool = {
   name: "get_thinking_summary",
   description: "Generate a comprehensive summary of the entire thinking process.",
-  parameters: emptySchema,
   inputSchema: zodToInputSchema(emptySchema)
 };
 
 export const clearThinkingHistoryTool: Tool = {
   name: "clear_thinking_history",
   description: "Clear all recorded thoughts and reset the server state.",
-  parameters: emptySchema,
   inputSchema: zodToInputSchema(emptySchema)
 };
 

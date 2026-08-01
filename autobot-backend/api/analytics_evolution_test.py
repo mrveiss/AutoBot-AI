@@ -8,14 +8,14 @@ Unit tests for analytics_evolution.py source_id scoping (Issue #3436)
 Tests the following functionality:
 - _decode_redis_value helper function
 - _parse_date_range helper function
-- _no_data_response helper function
+- no_data_response shared helper (api.analytics_shared)
 - _calculate_metric_trend helper function
 - _resolve_source_or_404 guard logic (mocked via sys.modules)
 """
 
 import sys
 import types
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -73,20 +73,27 @@ class TestParseDateRange:
         end = "2025-01-31"
         start_ts, end_ts = _parse_date_range(start, end)
 
-        expected_start = datetime.fromisoformat(start).timestamp()
-        expected_end = datetime.fromisoformat(end).timestamp()
+        # Production parses ISO dates as UTC (parse_utc_iso); anchor expectations
+        # to UTC so the assertion is deterministic regardless of runner timezone.
+        expected_start = datetime.fromisoformat(start).replace(tzinfo=timezone.utc).timestamp()
+        expected_end = datetime.fromisoformat(end).replace(tzinfo=timezone.utc).timestamp()
         assert start_ts == expected_start
         assert end_ts == expected_end
 
 
 class TestNoDataResponse:
-    """Tests for _no_data_response in analytics_evolution."""
+    """Tests for the shared no_data_response helper (Issue #12705)."""
 
     def test_default_response_structure(self):
         """Should include status, message, timeline, patterns, trends keys."""
-        from api.analytics_evolution import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response()
+        result = no_data_response(
+            "No evolution data. Redis required for timeline tracking.",
+            timeline=[],
+            patterns={},
+            trends={},
+        )
         assert result["status"] == "no_data"
         assert "message" in result
         assert "timeline" in result
@@ -95,9 +102,9 @@ class TestNoDataResponse:
 
     def test_custom_message(self):
         """Should accept custom message."""
-        from api.analytics_evolution import _no_data_response
+        from api.analytics_shared import no_data_response
 
-        result = _no_data_response("Custom evolution message")
+        result = no_data_response("Custom evolution message", timeline=[], patterns={}, trends={})
         assert result["message"] == "Custom evolution message"
 
 

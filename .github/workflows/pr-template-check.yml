@@ -14,6 +14,14 @@ on:
 jobs:
   check-template:
     name: Validate PR template sections
+    # #12796: bots (Dependabot et al.) write their own fixed PR body and can
+    # never fill this human template, so the job failed 100% of the time on
+    # their PRs. That permanent red buried the REAL failures on bot PRs — e.g.
+    # a broken frontend dep bump whose genuine smoke-test/vue-tsc reds sat in
+    # the same list as this known-meaningless one. Skip (not pass) so the gate
+    # stays honest for human PRs; it is not in the required-checks set, so
+    # skipping changes nothing about what can merge.
+    if: github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read

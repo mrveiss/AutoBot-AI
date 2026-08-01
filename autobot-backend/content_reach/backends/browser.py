@@ -68,12 +68,27 @@ class BrowserBackend(ContentBackend):
 
         return await self._navigate(request)
 
+    @staticmethod
+    def _raise_for_failed_result(result: dict, url: str) -> None:
+        """Raise BackendError for a failed research_url result, distinguishing
+        an SSRF-guard rejection (#13018 -- see research_browser_manager's
+        navigate_to re-check, tagged ``blocked_by_guard``) from any other
+        research_url failure, instead of one generic message for both.
+        """
+        if result.get("blocked_by_guard"):
+            raise BackendError(f"BrowserBackend: blocked by SSRF guard at navigate time for {url!r}")
+        error = result.get("error", "unknown error")
+        raise BackendError(f"BrowserBackend: research_url failed for {url!r}: {error}")
+
     async def _navigate(self, request: ContentRequest) -> ContentResult:
         """Issue the browser navigation call and map result to ContentResult.
 
         Guards (SSRF/robots) are NOT re-checked here — callers must run them
         before calling _navigate (BrowserBackend.fetch does; BrowserSearchBackend
         runs SSRF-only before delegating here, skipping robots for search results).
+        research_url's navigate_to re-validates the SSRF guard immediately
+        before Playwright's own DNS resolution as a compensating control
+        (#13018 -- narrows, does not close, that TOCTOU window).
         """
         manager = _get_manager()
         result = await manager.research_url(
@@ -83,7 +98,7 @@ class BrowserBackend(ContentBackend):
         )
 
         if not result.get("success"):
-            raise BackendError(f"BrowserBackend: research_url returned success=False for {request.url!r}")
+            self._raise_for_failed_result(result, request.url)
 
         content = result.get("content") or {}
         text = content.get("text_content", "")

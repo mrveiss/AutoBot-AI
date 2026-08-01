@@ -15,6 +15,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | Document | Description |
 | --- | --- |
 | [[INTEL_NPU_WINDOWS_DEPLOYMENT_ANALYSIS]] | Intel NPU Windows deployment analysis and feasibility |
+| [[lean-hardware-model-loading]] | Large-model inference on lean hardware — target architecture and capability audit of `llm_shared/optimization/` (#13030) |
 | [[REDIS_OWNERSHIP_CONFLICT_RESEARCH_REPORT]] | Redis ownership conflict investigation and resolution research |
 
 ## Related Sections

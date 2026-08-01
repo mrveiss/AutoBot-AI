@@ -19,9 +19,13 @@ const mockCompany = (overrides: Partial<LlcCompany> = {}): LlcCompany => ({
 })
 
 const getMock = vi.fn()
+const deleteMock = vi.fn()
 
 vi.mock('@/plugins/api', () => ({
-  useApiClient: () => ({ get: (...args: unknown[]) => getMock(...args) }),
+  useApiClient: () => ({
+    get: (...args: unknown[]) => getMock(...args),
+    delete: (...args: unknown[]) => deleteMock(...args),
+  }),
 }))
 
 vi.mock('@/utils/debugUtils', () => ({
@@ -33,6 +37,8 @@ describe('useLlcCompanyStore (GH#9627)', () => {
     setActivePinia(createPinia())
     getMock.mockReset()
     getMock.mockResolvedValue([mockCompany()])
+    deleteMock.mockReset()
+    deleteMock.mockResolvedValue(undefined)
   })
 
   it('starts with no companies and no selection', () => {
@@ -113,5 +119,39 @@ describe('useLlcCompanyStore (GH#9627)', () => {
     store.selectCompany('company-1')
     store.clearSelection()
     expect(store.selectedCompanyId).toBe('')
+  })
+
+  // #12212: archived visibility + delete
+  it('fetchCompanies(true) requests include_archived=true', async () => {
+    const store = useLlcCompanyStore()
+    await store.fetchCompanies(true)
+    expect(getMock).toHaveBeenCalledWith('/api/llc/companies/?include_archived=true')
+  })
+
+  it('deleteCompany DELETEs with the row id as X-Organization-Id and drops it', async () => {
+    const store = useLlcCompanyStore()
+    await store.fetchCompanies()
+    expect(store.companies).toHaveLength(1)
+    await store.deleteCompany('company-1')
+    expect(deleteMock).toHaveBeenCalledWith('/api/llc/companies/company-1', {
+      headers: { 'X-Organization-Id': 'company-1' },
+    })
+    expect(store.companies).toHaveLength(0)
+  })
+
+  it('deleteCompany clears the selection when the deleted company was active', async () => {
+    const store = useLlcCompanyStore()
+    await store.fetchCompanies()
+    store.selectCompany('company-1')
+    await store.deleteCompany('company-1')
+    expect(store.selectedCompanyId).toBe('')
+  })
+
+  it('deleteCompany re-throws and keeps the company on failure', async () => {
+    deleteMock.mockRejectedValue(new Error('HTTP 409: has children'))
+    const store = useLlcCompanyStore()
+    await store.fetchCompanies()
+    await expect(store.deleteCompany('company-1')).rejects.toThrow('409')
+    expect(store.companies).toHaveLength(1)
   })
 })

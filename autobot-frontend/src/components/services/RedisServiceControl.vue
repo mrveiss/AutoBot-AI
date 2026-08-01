@@ -34,7 +34,7 @@
     >
       <div class="detail-item" data-testid="redis-service-uptime">
         <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.uptime') }}</span>
-        <span class="text-lg font-semibold text-autobot-text-primary">{{ formatUptime(serviceStatus.uptime_seconds) }}</span>
+        <span class="text-lg font-semibold text-autobot-text-primary">{{ formatUptime(serviceStatus.uptime_seconds, { nullText: 'N/A', zeroText: 'N/A', daysIncludeMinutes: true }) }}</span>
       </div>
       <div class="detail-item" data-testid="redis-service-memory">
         <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.memory') }}</span>
@@ -228,6 +228,7 @@
 
 <script setup>
 import Icon from '@/components/ui/Icon.vue'
+import { formatUptime } from '@/utils/formatHelpers'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useServiceManagement } from '@/composables/useServiceManagement'
@@ -357,17 +358,6 @@ const handleStopService = () => {
 /**
  * Format uptime from seconds
  */
-const formatUptime = (seconds) => {
-  if (!seconds) return 'N/A'
-
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
-}
 
 /**
  * Format last check timestamp

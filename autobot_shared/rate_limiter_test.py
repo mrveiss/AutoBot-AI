@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
+import time
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -78,6 +79,12 @@ def _make_redis(*, minute_count: int = 0, hour_count: int = 0) -> AsyncMock:
     the cutoff range. For simplicity, the mock always returns *minute_count*
     for the first ``zcount`` call and *hour_count* for the second.
 
+    ``eval`` simulates the Lua script used by ``acquire()`` — it evaluates
+    the same allowed/denied condition as ``is_allowed()`` from *minute_count*
+    / *hour_count* against the ``rpm``/``rph`` args the script receives
+    (pre-existing test gap: ``acquire()`` was previously exercised with an
+    unmocked ``eval``, which always returned truthy and never denied).
+
     Note: ``record()`` calls ``pipe.zadd/zremrangebyscore/expire`` WITHOUT
     ``await`` (they enqueue on the pipeline sync), so those are plain
     MagicMock while ``pipe.execute`` is AsyncMock.
@@ -94,6 +101,11 @@ def _make_redis(*, minute_count: int = 0, hour_count: int = 0) -> AsyncMock:
         return hour_count
 
     redis.zcount = _zcount  # type: ignore[assignment]
+
+    async def _eval(script, numkeys, hour_key, now, rpm, rph):
+        return 0 if (minute_count >= rpm or hour_count >= rph) else 1
+
+    redis.eval = AsyncMock(side_effect=_eval)
 
     # pipeline used by record(): zadd/zremrangebyscore/expire are sync calls
     # on a pipeline object; only execute() is awaited.
@@ -269,22 +281,22 @@ class TestRecord:
 
 class TestAcquire:
     def test_acquire_returns_true_and_records_when_allowed(self) -> None:
-        """acquire() returns True and calls pipeline.execute() when under limit."""
+        """acquire() returns True and invokes the atomic Lua check+record when under limit."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=0, hour_count=0)
         with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
             result = asyncio.run(lim.acquire("user1"))
         assert result is True
-        redis.pipeline.return_value.execute.assert_called_once()
+        redis.eval.assert_called_once()
 
     def test_acquire_returns_false_and_does_not_record_when_denied(self) -> None:
-        """acquire() returns False and does NOT record when over limit."""
+        """acquire() returns False when the Lua script reports the limit is hit."""
         lim = _limiter(rpm=5, rph=20)
         redis = _make_redis(minute_count=5, hour_count=0)
         with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
             result = asyncio.run(lim.acquire("user1"))
         assert result is False
-        redis.pipeline.return_value.execute.assert_not_called()
+        redis.eval.assert_called_once()
 
     def test_acquire_redis_unavailable_returns_true(self) -> None:
         """acquire() returns True (fail-open) when Redis is None."""
@@ -450,3 +462,157 @@ class TestGracefulDegradation:
         lim = _limiter()
         with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
             assert asyncio.run(lim.get_retry_after_seconds("x")) == 0
+
+    def test_acquire_window_none_redis(self) -> None:
+        lim = _limiter()
+        with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
+            assert asyncio.run(lim.acquire_window("x", max_requests=5, window_seconds=60)) is True
+
+    def test_get_remaining_in_window_none_redis(self) -> None:
+        lim = _limiter()
+        with patch(_PATCH_TARGET, AsyncMock(return_value=None)):
+            result = asyncio.run(lim.get_remaining_in_window("x", max_requests=5, window_seconds=60))
+        assert result == 5
+
+
+# ---------------------------------------------------------------------------
+# Tests — acquire_window / get_remaining_in_window (Issue #12646 fold-in)
+# ---------------------------------------------------------------------------
+
+
+def _make_window_redis(*, count: int, oldest_ts_offset: float = 10.0) -> AsyncMock:
+    """Return an AsyncMock Redis client for acquire_window/get_remaining_in_window.
+
+    Simulates the Lua ``eval`` call used by ``_try_acquire_window`` and the
+    plain ``zcount`` used by ``get_remaining_in_window``.
+    """
+    redis = AsyncMock()
+    now = time.time()
+    oldest_ts = now - oldest_ts_offset
+
+    async def _eval(script, numkeys, win_key, now_arg, window, max_requests):
+        if count >= max_requests:
+            retry_after = window - (now_arg - oldest_ts)
+            return [0, str(retry_after)]
+        return [1, "0"]
+
+    redis.eval = _eval  # type: ignore[assignment]
+    redis.zcount = AsyncMock(return_value=count)
+    return redis
+
+
+class TestAcquireWindow:
+    def test_allowed_under_limit(self) -> None:
+        lim = _limiter()
+        redis = _make_window_redis(count=2)
+        with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
+            result = asyncio.run(lim.acquire_window("k", max_requests=5, window_seconds=60))
+        assert result is True
+
+    def test_denied_at_limit_no_wait(self) -> None:
+        """At the limit with wait=False → immediately returns False."""
+        lim = _limiter()
+        redis = _make_window_redis(count=5, oldest_ts_offset=10.0)
+        with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
+            result = asyncio.run(lim.acquire_window("k", max_requests=5, window_seconds=60, wait=False))
+        assert result is False
+
+    def test_wait_true_blocks_then_succeeds(self) -> None:
+        """wait=True retries via _try_acquire_window until allowed; never returns False."""
+        lim = _limiter()
+        calls = {"n": 0}
+
+        async def _fake_try_acquire(key, max_requests, window_seconds):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return False, 0.01
+            return True, 0.0
+
+        lim._try_acquire_window = _fake_try_acquire  # type: ignore[assignment]
+        result = asyncio.run(lim.acquire_window("k", max_requests=5, window_seconds=60, wait=True))
+        assert result is True
+        assert calls["n"] == 2
+
+    def test_redis_exception_allows_request(self) -> None:
+        async def _raise(*a, **kw) -> None:
+            raise ConnectionError("Redis unreachable")
+
+        lim = _limiter()
+        with patch(_PATCH_TARGET, _raise):
+            result = asyncio.run(lim.acquire_window("k", max_requests=5, window_seconds=60))
+        assert result is True
+
+
+class TestGetRemainingInWindow:
+    def test_returns_remaining_count(self) -> None:
+        lim = _limiter()
+        redis = _make_window_redis(count=2)
+        with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
+            result = asyncio.run(lim.get_remaining_in_window("k", max_requests=5, window_seconds=60))
+        assert result == 3
+
+    def test_returns_zero_when_over_limit(self) -> None:
+        lim = _limiter()
+        redis = _make_window_redis(count=10)
+        with patch(_PATCH_TARGET, AsyncMock(return_value=redis)):
+            result = asyncio.run(lim.get_remaining_in_window("k", max_requests=5, window_seconds=60))
+        assert result == 0
+
+    def test_redis_exception_returns_max(self) -> None:
+        async def _raise(*a, **kw) -> None:
+            raise ConnectionError("Redis unreachable")
+
+        lim = _limiter()
+        with patch(_PATCH_TARGET, _raise):
+            result = asyncio.run(lim.get_remaining_in_window("k", max_requests=5, window_seconds=60))
+        assert result == 5
+
+
+# ---------------------------------------------------------------------------
+# Tests — acquire_token (token-bucket mode, Issue #12646 fold-in)
+# ---------------------------------------------------------------------------
+
+
+class TestAcquireToken:
+    def test_burst_allows_immediate_acquisition(self) -> None:
+        """First N tokens (N=burst_size) should acquire quickly."""
+        lim = _limiter()
+
+        async def _run() -> float:
+            start = time.time()
+            for _ in range(5):
+                await lim.acquire_token("platform", requests_per_second=10, burst_size=5)
+            return time.time() - start
+
+        elapsed = asyncio.run(_run())
+        assert elapsed < 1.0
+
+    def test_exceeding_burst_waits(self) -> None:
+        """Requests beyond the burst size must wait for refill."""
+        lim = _limiter()
+
+        async def _run() -> float:
+            for _ in range(2):
+                await lim.acquire_token("platform2", requests_per_second=2, burst_size=2)
+            start = time.time()
+            await lim.acquire_token("platform2", requests_per_second=2, burst_size=2)
+            return time.time() - start
+
+        elapsed = asyncio.run(_run())
+        assert elapsed > 0.05
+
+    def test_independent_keys_have_independent_buckets(self) -> None:
+        """Two distinct keys must not share bucket state."""
+        lim = _limiter()
+
+        async def _run() -> None:
+            # Exhaust key "a" down to a near-empty bucket.
+            for _ in range(3):
+                await lim.acquire_token("a", requests_per_second=1, burst_size=1)
+            # A brand-new key "b" must not be throttled by key "a"'s state.
+            start = time.time()
+            await lim.acquire_token("b", requests_per_second=100, burst_size=1)
+            elapsed = time.time() - start
+            assert elapsed < 0.5
+
+        asyncio.run(_run())

@@ -24,12 +24,20 @@ initialization of security agent with comprehensive report structure. Low priori
 """
 
 import logging
+import sys
+from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from utils.line_index import LineIndex  # #12884
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = get_logger(__name__)
+
+# Issue #12660: auto-tools/ has no __init__.py (hyphenated dir name isn't a
+# valid package identifier) — add this directory to sys.path so the shared
+# tool skeleton can be imported by every standalone script here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
 _HTML_EXTENSIONS = (".html", ".htm")
@@ -94,21 +102,26 @@ _DOM_PURIFY_SCRIPT = """
 })();
 </script>"""
 
-import hashlib
-import json
-import os
-import re
-import shutil
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+import hashlib  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+from typing import Any, Dict, List, Tuple  # noqa: E402
+
+from tool_base import SecurityFixToolBase  # noqa: E402
 
 
-class SecurityFixAgent:
+class SecurityFixAgent(SecurityFixToolBase):
     """
     Enhanced automated security fix agent for comprehensive XSS vulnerability remediation.
+
+    Issue #12660: create_backup/save_report/cli_main now live on
+    ``SecurityFixToolBase``; this class only provides the XSS scan/fix
+    logic and the enhanced_security_tool.py-specific report text.
     """
+
+    REPORT_FILE_PREFIX = "enhanced_security_report"
+    USAGE_PROGRAM_NAME = "enhanced_security_tool.py"
 
     @staticmethod
     def _build_xss_patterns() -> Dict[str, Any]:
@@ -246,26 +259,6 @@ class SecurityFixAgent:
         ]
         return sum(indicators) >= 2
 
-    def create_backup(self, file_path: str) -> str:
-        """Create a backup of the original file."""
-        try:
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-            backup_name = f"{Path(file_path).name}.backup_{timestamp}"
-
-            if not self.backup_dir:
-                self.backup_dir = Path(file_path).parent / "security_backups"
-                self.backup_dir.mkdir(exist_ok=True)
-
-            backup_path = self.backup_dir / backup_name
-            shutil.copy2(file_path, backup_path)
-
-            logger.info("Backup created: %sbackup_path ")
-            return str(backup_path)
-
-        except Exception:
-            logger.error("Failed to create backup: %se ")
-            return ""
-
     def scan_for_vulnerabilities(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Enhanced vulnerability scanning with context analysis."""
         vulnerabilities = []
@@ -276,8 +269,11 @@ class SecurityFixAgent:
 
             matches = list(re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE))
 
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in matches:
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 match_text = match.group()
 
                 # Skip if this appears to be safe in context
@@ -517,14 +513,14 @@ class SecurityFixAgent:
     def fix_file(self, file_path: str) -> Dict[str, Any]:
         """Enhanced file fixing with multiple security layers."""
         try:
-            logger.info("\n🔍 Analyzing file: {file_path}")
+            logger.info("\n🔍 Analyzing file: %s", file_path)
 
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 original_content = f.read()
 
             original_hash = hashlib.sha256(original_content.encode()).hexdigest()
             vulnerabilities = self.scan_for_vulnerabilities(original_content, file_path)
-            logger.warning("Found %slen(vulnerabilities)  potential XSS vulnerabilities")
+            logger.warning("Found %s potential XSS vulnerabilities", len(vulnerabilities))
 
             # Issue #1183: Delegate count display to extracted helper
             library_vulns, direct_vulns = self._display_vuln_counts(vulnerabilities)
@@ -565,8 +561,8 @@ class SecurityFixAgent:
                 "enhancements": all_enhancements,
             }
 
-        except Exception:
-            logger.error("Error processing file %sfile_path : %se ")
+        except Exception as e:
+            logger.error("Error processing file %s: %s", file_path, e)
             return {
                 "file": file_path,
                 "status": "error",
@@ -584,8 +580,8 @@ class SecurityFixAgent:
                         file_path = os.path.join(root, file)
                         html_files.append(file_path)
 
-        except Exception:
-            logger.error("Error scanning directory %sdirectory : %se ")
+        except Exception as e:
+            logger.error("Error scanning directory %s: %s", directory, e)
 
         return html_files
 
@@ -820,29 +816,6 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
 
         return report_content
 
-    def save_report(self, report_content: str, output_dir: str) -> str:
-        """Save the comprehensive security report."""
-        try:
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-            report_filename = f"enhanced_security_report_{timestamp}.md"
-            report_path = os.path.join(output_dir, report_filename)
-
-            with open(report_path, "w", encoding="utf-8") as f:
-                f.write(report_content)
-
-            # Also save JSON version for machine processing
-            json_filename = f"enhanced_security_report_{timestamp}.json"
-            json_path = os.path.join(output_dir, json_filename)
-
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(self.report, f, indent=2)
-
-            return report_path
-
-        except Exception:
-            logger.error("Error saving report: %se ")
-            return ""
-
     def run(self, target_path: str) -> None:
         """Main execution method."""
         logger.info("🛡️  AutoBot Enhanced Security Fix Agent v2.0.0")
@@ -853,17 +826,17 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
         if os.path.isfile(target_path):
             files_to_process = [target_path]
         elif os.path.isdir(target_path):
-            logger.info("📂 Scanning directory: {target_path}")
+            logger.info("📂 Scanning directory: %s", target_path)
             files_to_process = self.scan_directory(target_path)
         else:
-            logger.error("Target path not found: %starget_path ")
+            logger.error("Target path not found: %s", target_path)
             return
 
         if not files_to_process:
             logger.info("❌ No HTML files found to process")
             return
 
-        logger.info("📋 Found {len(files_to_process)} HTML files to analyze")
+        logger.info("📋 Found %s HTML files to analyze", len(files_to_process))
 
         # Process each file
         results = []
@@ -877,24 +850,24 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
         report_path = self.save_report(report_content, os.path.dirname(target_path))
 
         if report_path:
-            logger.info("Security report saved: %sreport_path ")
+            logger.info("Security report saved: %s", report_path)
 
         # Print summary
-        sum(r.get("vulnerabilities_found", 0) for r in results)
+        total_vulnerabilities = sum(r.get("vulnerabilities_found", 0) for r in results)
         total_fixes = sum(r.get("fixes_applied", 0) for r in results)
         total_enhancements = sum(r.get("security_enhancements", 0) for r in results)
 
         logger.info("=" * 55)
         logger.info("🎯 SECURITY ENHANCEMENT SUMMARY")
         logger.info("=" * 55)
-        logger.info("Files processed: {len(results)}")
-        logger.info("Vulnerabilities found: {total_vulnerabilities}")
-        logger.info("Direct fixes applied: {total_fixes}")
-        logger.info("Security enhancements: {total_enhancements}")
+        logger.info("Files processed: %s", len(results))
+        logger.info("Vulnerabilities found: %s", total_vulnerabilities)
+        logger.info("Direct fixes applied: %s", total_fixes)
+        logger.info("Security enhancements: %s", total_enhancements)
 
         if total_fixes > 0 or total_enhancements > 0:
             logger.info("Security enhancements successfully applied!")
-            logger.info("📁 Backups created in: {self.backup_dir}")
+            logger.info("📁 Backups created in: %s", self.backup_dir)
             logger.info("🛡️  Multi-layer XSS protection now active")
         else:
             logger.info("✅ Files already secure - no enhancements needed")
@@ -902,20 +875,7 @@ The Enhanced Security Fix Agent implements a multi-layered defense strategy:
 
 def main():
     """Main entry point."""
-    if len(sys.argv) != 2:
-        logger.info("Usage: python enhanced_security_tool.py <file_or_directory_path>")
-        logger.info("Example: python enhanced_security_tool.py /path/to/playwright-report/")
-        sys.exit(1)
-
-    target_path = sys.argv[1]
-
-    if not os.path.exists(target_path):
-        logger.error("Error: Path '%starget_path ' does not exist")
-        sys.exit(1)
-
-    # Create and run the enhanced security fix agent
-    agent = SecurityFixAgent()
-    agent.run(target_path)
+    SecurityFixAgent.cli_main()
 
 
 if __name__ == "__main__":

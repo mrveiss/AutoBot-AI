@@ -25,30 +25,22 @@ from typing import TYPE_CHECKING, Dict, Tuple
 
 from autobot_shared.logging_manager import get_logger
 
+from ..torch_loader import lazy_torch
+
 if TYPE_CHECKING:
     import torch
 
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
-# Lazy torch import — module degrades gracefully without it
+# Lazy torch import — module degrades gracefully without it.
+# Issue #12714: unified onto the shared thread-safe llm_shared.torch_loader.
 # ---------------------------------------------------------------------------
-_torch = None
-_torch_checked = False
 
 
 def _get_torch():
-    """Return the torch module, importing lazily on first call."""
-    global _torch, _torch_checked  # noqa: PLW0603
-    if not _torch_checked:
-        _torch_checked = True
-        try:
-            import torch as _t
-
-            _torch = _t
-        except (ImportError, RuntimeError):
-            _torch = None
-    return _torch
+    """Return the torch module, importing lazily on first call. None if unavailable."""
+    return lazy_torch(required=False)
 
 
 # ---------------------------------------------------------------------------

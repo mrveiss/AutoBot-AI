@@ -17,6 +17,7 @@ from urllib.parse import quote
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from integrations.base import (
@@ -235,15 +236,14 @@ class AWSIntegration(BaseIntegration):
         """Make HTTP request to AWS API."""
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers) as resp:
-                    text = await resp.text()
-                    body = self._parse_xml_response(text)
-                    return {
-                        "status_code": resp.status,
-                        "body": body,
-                        "headers": dict(resp.headers),
-                    }
+            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
+                text = await resp.text()
+                body = self._parse_xml_response(text)
+                return {
+                    "status_code": resp.status,
+                    "body": body,
+                    "headers": dict(resp.headers),
+                }
         except aiohttp.ClientError as exc:
             self.logger.warning("AWS request to %s failed: %s", url, exc)
             return {"status_code": 0, "body": {}, "error": str(exc)}
@@ -428,14 +428,13 @@ class AzureIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers) as resp:
-                    body = await resp.json()
-                    return {
-                        "status_code": resp.status,
-                        "body": body,
-                        "headers": dict(resp.headers),
-                    }
+            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
+                body = await resp.json()
+                return {
+                    "status_code": resp.status,
+                    "body": body,
+                    "headers": dict(resp.headers),
+                }
         except aiohttp.ClientError as exc:
             self.logger.warning("Azure request to %s failed: %s", url, exc)
             return {"status_code": 0, "body": {}, "error": str(exc)}
@@ -598,14 +597,13 @@ class GCPIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers) as resp:
-                    body = await resp.json()
-                    return {
-                        "status_code": resp.status,
-                        "body": body,
-                        "headers": dict(resp.headers),
-                    }
+            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
+                body = await resp.json()
+                return {
+                    "status_code": resp.status,
+                    "body": body,
+                    "headers": dict(resp.headers),
+                }
         except aiohttp.ClientError as exc:
             self.logger.warning("GCP request to %s failed: %s", url, exc)
             return {"status_code": 0, "body": {}, "error": str(exc)}

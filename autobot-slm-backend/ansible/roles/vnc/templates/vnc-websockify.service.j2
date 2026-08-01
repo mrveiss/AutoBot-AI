@@ -15,9 +15,12 @@ User={{ vnc_user }}
 Group={{ vnc_group }}
 
 # Calculate VNC port from display number (5900 + display)
+# #13060: use the dedicated VNC keypair. This unit runs as {{ vnc_user }}, which
+# cannot read the shared node key (/etc/autobot/certs/server-key.pem, root:root
+# 0600) — with that key, --ssl-only websockify failed to start.
 ExecStart=/usr/bin/websockify --web={{ novnc_path }} \
-    --cert=/etc/autobot/certs/server-cert.pem \
-    --key=/etc/autobot/certs/server-key.pem \
+    --cert={{ vnc_tls_cert }} \
+    --key={{ vnc_tls_key }} \
     --ssl-only \
     0.0.0.0:{{ websockify_port }} localhost:{{ 5900 + vnc_display | int }}
 

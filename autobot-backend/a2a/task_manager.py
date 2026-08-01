@@ -34,7 +34,7 @@ from typing import Any, Dict, List
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import utc_timestamp
 
 from .tracing import TraceContext, TraceEvent, new_trace_id
 from .types import A2ATaskStatus, Task, TaskArtifact, TaskState
@@ -48,10 +48,6 @@ _KEY_TASK = "a2a:task:{}"
 _KEY_AUDIT = "a2a:audit:{}"
 _KEY_TASKS = "a2a:tasks"
 _KEY_EVENTS = "a2a:events:{}"  # pub/sub channel for SSE streaming (#4554)
-
-
-def _utcnow() -> str:
-    return now_utc().isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +280,7 @@ class TaskManager:
             return task
 
         task.status = A2ATaskStatus(state=state, message=message)
-        task.updated_at = _utcnow()
+        task.updated_at = utc_timestamp()
         event = TraceEvent(
             event="task.state_transition",
             data={"state": state.value, "message": message},
@@ -303,7 +299,7 @@ class TaskManager:
             logger.warning("add_artifact: task %s not found", task_id)
             return False
         task.artifacts.append(artifact)
-        task.updated_at = _utcnow()
+        task.updated_at = utc_timestamp()
         self._save(task)
         return True
 
@@ -318,7 +314,7 @@ class TaskManager:
         if task.status.state in _TERMINAL_STATES:
             return False
         task.status = A2ATaskStatus(state=TaskState.CANCELLED)
-        task.updated_at = _utcnow()
+        task.updated_at = utc_timestamp()
         event = TraceEvent(event="task.cancelled")
         if task.trace_context:
             task.trace_context.events.append(event)

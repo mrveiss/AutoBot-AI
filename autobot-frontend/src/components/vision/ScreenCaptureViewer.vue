@@ -460,8 +460,8 @@ onUnmounted(() => {
 }
 
 .toggle-switch {
-  width: 36px;
-  height: 20px;
+  width: var(--spacing-9);
+  height: var(--spacing-5);
   background: var(--bg-tertiary);
   border-radius: var(--radius-xl);
   position: relative;
@@ -471,10 +471,10 @@ onUnmounted(() => {
 .toggle-switch::after {
   content: '';
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
+  top: var(--spacing-0-5);
+  left: var(--spacing-0-5);
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   background: var(--text-tertiary);
   border-radius: 50%;
   transition: all var(--duration-200);
@@ -519,7 +519,7 @@ onUnmounted(() => {
 }
 
 .filter-group input[type="range"] {
-  width: 80px;
+  width: var(--spacing-20);
 }
 
 .confidence-value {
@@ -621,8 +621,8 @@ onUnmounted(() => {
 }
 
 .element-icon {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -719,8 +719,8 @@ onUnmounted(() => {
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
+  width: var(--spacing-20);
+  height: var(--spacing-20);
   border-radius: 50%;
   background: var(--bg-tertiary);
   display: flex;

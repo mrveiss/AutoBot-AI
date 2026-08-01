@@ -30,6 +30,17 @@ This module retains ownership of:
 
 None of these helpers are removed; they are kept here to preserve all call
 sites intact (see issue #7401 caller audit).
+
+SSRF (#13019): ``_fetch_and_parse``'s BeautifulSoup fallback previously had
+no enforcement of its own — ``_is_public_url_async`` only gated the Jina
+fast-path attempt, so a non-public URL simply skipped Jina and fell through
+to an UNGUARDED direct connect. It now routes through
+``autobot_shared.security.ssrf_guard.pinned_request_with_redirects``, which
+independently resolves + pins every hop (including redirects) before
+connecting, unconditionally — closing both the missing-gate bug and the
+check-then-connect TOCTOU in one fix. ``_try_jina`` is unaffected: its
+connect target is always the fixed, trusted ``r.jina.ai`` host (the caller's
+``url`` is only embedded in the request path), so pinning it is a no-op.
 """
 
 import ipaddress
@@ -40,6 +51,7 @@ from typing import Any, Dict, List
 from urllib.parse import urljoin
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
 from media.core.pipeline import BasePipeline
 from media.core.types import MediaInput, MediaType, ProcessingResult
@@ -64,9 +76,23 @@ logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=15) if _AIOHTTP_AVAILABLE else None
 _JINA_TIMEOUT = aiohttp.ClientTimeout(total=5) if _AIOHTTP_AVAILABLE else None
-_MAX_CONTENT_LENGTH = 1_000_000  # 1 MB cap on HTML download
+# #13021: 1 MB cap (env-overridable) on the fallback fetch's HTML download,
+# now actually enforced by ``_read_bounded_content`` during the streamed
+# read — previously declared but never applied, so an oversized/slow-drip
+# response could be read unbounded into memory.
+_MAX_CONTENT_LENGTH = config.link_pipeline_max_content_bytes
+_READ_CHUNK_SIZE = 65536
 _USER_AGENT = "AutoBot/1.0 (media-pipeline)"
 _JINA_BASE_URL = "https://r.jina.ai/"
+
+
+def _resolve_max_redirects() -> int:
+    """Return max redirect hops for the pinned fallback fetch from env var (default 5)."""
+    raw = config.misc.web_fetch_max_redirects
+    return raw if raw else 5
+
+
+_MAX_REDIRECTS: int = _resolve_max_redirects()
 
 # SSRF guard constants moved with the implementation to
 # ``autobot_shared.url_safety`` (#7477): _PRIVATE_TLDS, _IPV6_ULA,
@@ -83,6 +109,30 @@ _jina_failures_in_window: List[float] = []
 
 # Jina Reader requests go through the shared HTTPClientManager session
 # (#11641) — no private session fork; see _get_jina_session().
+
+
+async def _read_bounded_content(response: Any, url: str) -> bytes | None:
+    """Stream *response*'s body in chunks, refusing it once it exceeds
+    ``_MAX_CONTENT_LENGTH`` instead of reading it fully into memory (#13021).
+
+    Mirrors ``web_fetch/fetcher.py._fetch_bs4``'s chunked-read guard. Returns
+    ``None`` (never partial bytes) the moment the cap is crossed — the
+    remaining chunks are never requested from the transport, so an oversized
+    or slow-drip response is cut off mid-stream rather than read to
+    completion and discarded after the fact.
+    """
+    content = b""
+    async for chunk in response.content.iter_chunked(_READ_CHUNK_SIZE):
+        content += chunk
+        if len(content) > _MAX_CONTENT_LENGTH:
+            logger.warning(
+                "Link pipeline fallback fetch REJECTED %s: body exceeded max_content_length=%d bytes "
+                "(distinct from a fetch/connection failure)",
+                url,
+                _MAX_CONTENT_LENGTH,
+            )
+            return None
+    return content
 
 
 class LinkPipeline(BasePipeline):
@@ -164,14 +214,14 @@ class LinkPipeline(BasePipeline):
 
         jina_url = f"{_JINA_BASE_URL}{url}"
         try:
-            session = await _get_jina_session()
-            async with session.get(jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT) as response:
-                if response.status == 200:
-                    text = await response.text(encoding="utf-8", errors="replace")
-                    _record_jina_success()
-                    return text
-                # Non-200 counts as a failure for circuit-breaker purposes.
-                _record_jina_failure()
+            async with _get_jina_session() as session:
+                async with session.get(jina_url, allow_redirects=True, timeout=_JINA_TIMEOUT) as response:
+                    if response.status == 200:
+                        text = await response.text(encoding="utf-8", errors="replace")
+                        _record_jina_success()
+                        return text
+                    # Non-200 counts as a failure for circuit-breaker purposes.
+                    _record_jina_failure()
         except Exception as exc:
             logger.debug("Jina Reader fast-path failed for %s: %s", url, exc)
             _record_jina_failure()
@@ -206,7 +256,15 @@ class LinkPipeline(BasePipeline):
         }
 
     async def _fetch_and_parse(self, url: str, metadata: Dict) -> Dict[str, Any]:
-        """Fetch URL — tries Jina Reader fast-path first, falls back to BeautifulSoup."""
+        """Fetch URL — tries Jina Reader fast-path first, falls back to BeautifulSoup.
+
+        The fallback fetch is SSRF-guarded unconditionally (#13019): it no
+        longer relies on the ``_is_public_url_async`` check above (which only
+        ever gated the Jina attempt, not this path) — every real connection
+        is resolved + pinned per hop by ``pinned_request_with_redirects``, so
+        a non-public or DNS-rebound URL is rejected here even when Jina was
+        skipped.
+        """
         # Fast-path: Jina Reader (public URLs only, 5-second timeout).
         # DNS resolution runs in a thread to avoid blocking the event loop.
         if await self._is_public_url_async(url):
@@ -221,13 +279,21 @@ class LinkPipeline(BasePipeline):
         # Callers may pass metadata={"allow_self_signed": True} to opt-in to skipping
         # cert verification for known-safe internal URLs.
         ssl_context = False if metadata.get("allow_self_signed") else None
+        from autobot_shared.security.ssrf_guard import SSRFError, pinned_request_with_redirects
+
         try:
-            async with aiohttp.ClientSession(headers=headers, timeout=_DEFAULT_TIMEOUT) as session:
-                async with session.get(url, allow_redirects=True, ssl=ssl_context) as response:
-                    final_url = str(response.url)
-                    content_type = response.headers.get("Content-Type", "")
-                    raw_html = await response.text(encoding="utf-8", errors="replace")
-                    status = response.status
+            async with pinned_request_with_redirects(
+                "GET",
+                url,
+                headers=headers,
+                timeout=_DEFAULT_TIMEOUT,
+                max_redirects=_MAX_REDIRECTS,
+                ssl=ssl_context,
+            ) as response:
+                final_url = str(response.url)
+                content_type = response.headers.get("Content-Type", "")
+                status = response.status
+                raw_bytes = await _read_bounded_content(response, url)
 
             if status >= 400:
                 return self._error_result(
@@ -235,8 +301,14 @@ class LinkPipeline(BasePipeline):
                     f"HTTP {status} for {url}",
                     metadata,
                 )
+            if raw_bytes is None:
+                return self._error_result(url, "response body exceeded max content length", metadata)
+            raw_html = raw_bytes.decode("utf-8", errors="replace")
             return self._parse_html(raw_html, final_url, content_type, metadata)
 
+        except SSRFError as exc:
+            logger.warning("Link pipeline fetch blocked by SSRF guard for %s: %s", url, exc)
+            return self._error_result(url, "blocked by SSRF guard", metadata)
         except aiohttp.ClientConnectorError as exc:
             logger.warning("Link pipeline connection error: %s", exc)
             return self._error_result(url, f"Connection error: {exc}", metadata)
@@ -446,18 +518,24 @@ async def process_url(url: str, render: str = "auto", timeout: float = 30.0) -> 
 # ----------------------------------------------------------------------
 
 
-async def _get_jina_session() -> "aiohttp.ClientSession":
-    """Return the shared pooled aiohttp session.
+def _get_jina_session():
+    """Return an async context manager yielding the shared pooled aiohttp session.
 
     Issue #11641: the private module-level Jina session forked the concept
     owned by ``autobot_shared.http_client.HTTPClientManager``. Delegates to
     the canonical singleton (lifecycle managed there); the Jina-specific
     timeout stays per-request via ``_JINA_TIMEOUT``. Kept as an indirection
     point — tests patch this seam.
+
+    Issue #11656: delegates to ``HTTPClientManager.tracked_session()`` (not
+    the raw ``get_session()``) so a Jina fetch is counted in the SAME
+    ``_active_requests`` counter ``request()`` uses. Without this, a pool
+    resize driven by concurrent ``request()`` traffic could close the
+    shared session out from under an in-flight Jina fetch.
     """
     from autobot_shared.http_client import get_http_client
 
-    return await get_http_client().get_session()
+    return get_http_client().tracked_session()
 
 
 def _record_jina_failure() -> None:

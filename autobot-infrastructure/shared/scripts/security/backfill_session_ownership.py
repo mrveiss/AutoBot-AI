@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Session Ownership Backfill Script for AutoBot
@@ -40,7 +41,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from backend.security.session_ownership import SessionOwnershipValidator
 
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class SessionOwnershipBackfill:
     async def initialize(self):
         """Initialize Redis connections"""
         logger.info("Initializing Redis connections...")
-        self.redis = await get_redis_client(async_client=True, database="main")
+        self.redis = await get_async_redis_client(database="main")
         self.validator = SessionOwnershipValidator(self.redis)
         logger.info("✓ Connected to Redis")
 

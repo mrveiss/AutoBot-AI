@@ -184,7 +184,6 @@ class OpenAIGPT4VProvider(BaseAIProvider):
                 self.client = openai.AsyncOpenAI(api_key=self.config.api_key)
                 logger.info("OpenAI GPT-4V client initialized")
             else:
-                # codeql[py/clear-text-logging-sensitive-data]
                 logger.warning("OpenAI API key not provided")
         except ImportError:
             logger.warning("OpenAI library not available")
@@ -236,8 +235,14 @@ class OpenAIGPT4VProvider(BaseAIProvider):
             logger.error("OpenAI GPT-4 text generation failed: %s", e)
             return self._create_error_response(request, "AI provider request failed")
 
-    def _build_openai_image_content(self, prompt: str, images: List[str]) -> List[Dict[str, Any]]:
-        """Build content list with text and images for OpenAI API. Issue #620."""
+    @staticmethod
+    def _build_openai_image_content(prompt: str, images: List[str]) -> List[Dict[str, Any]]:
+        """Build content list with text and images for OpenAI API. Issue #620.
+
+        Issue #11538: static (no ``self`` usage) so chat_workflow/manager.py can
+        reuse it to thread browser/VNC screenshots into the continuation payload
+        without instantiating a provider (which needs an API key/client).
+        """
         content = [{"type": "text", "text": prompt}]
         for image_b64 in images:
             content.append(
@@ -324,7 +329,6 @@ class AnthropicClaudeProvider(BaseAIProvider):
                 self.client = anthropic.AsyncAnthropic(api_key=self.config.api_key)
                 logger.info("Anthropic Claude client initialized")
             else:
-                # codeql[py/clear-text-logging-sensitive-data]
                 logger.warning("Anthropic API key not provided")
         except ImportError:
             logger.warning("Anthropic library not available")
@@ -460,7 +464,6 @@ class GoogleGeminiProvider(BaseAIProvider):
                 self.client = genai
                 logger.info("Google Gemini client initialized")
             else:
-                # codeql[py/clear-text-logging-sensitive-data]
                 logger.warning("Google AI API key not provided")
         except ImportError:
             logger.warning("Google GenerativeAI library not available")

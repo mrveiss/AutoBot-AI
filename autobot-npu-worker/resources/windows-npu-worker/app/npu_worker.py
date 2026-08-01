@@ -1283,7 +1283,8 @@ class WindowsNPUWorker:
                     info["available_providers"] = manager_info.get("available_providers", [])
                     info["directml_available"] = manager_info.get("directml_available", False)
                 except Exception as e:
-                    info["model_manager_error"] = str(e)
+                    logger.error("Error getting model manager device info: %s", e)
+                    info["model_manager_error"] = "Failed to retrieve model manager info"
             else:
                 info["model_manager"] = None
                 info["selected_device"] = "MOCK (no model manager)"

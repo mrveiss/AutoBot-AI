@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Debug script to test the chat flow and identify where responses are getting lost
@@ -128,7 +129,7 @@ def test_frontend_config():
         # Check if the frontend is making requests to the right place
         frontend_env_file = Path("autobot-vue/.env")
         if frontend_env_file.exists():
-            with open(frontend_env_file, "r") as f:
+            with open(frontend_env_file, "r", encoding="utf-8") as f:
                 content = f.read()
                 logger.info("   Frontend .env content:")
                 for line in content.split("\n"):

@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { defineComponent, h, ref, nextTick, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { useBodyScrollLock, __resetLockStateForTests } from '../useBodyScrollLock'
+import { useBodyScrollLock, __resetLockStateForTests } from '@autobot/ui'
 
 function mountWithLock(initial: boolean): {
   wrapper: ReturnType<typeof mount>

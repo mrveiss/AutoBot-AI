@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+from utils.line_index import LineIndex  # #12884
+
 
 class SimplePerformanceAnalyzer:
     """Simple and fast performance analyzer"""
@@ -89,8 +91,11 @@ class SimplePerformanceAnalyzer:
         # Issue #510: Use precompiled combined patterns
         for category, compiled in self._compiled_patterns.items():
             try:
+                # #12884: build the offset->line map once; the per-match
+                # `content[:start].count()` was O(n*m) and held the GIL.
+                _line_index = LineIndex(content)
                 for match in compiled.finditer(content):
-                    line_num = content[: match.start()].count("\n") + 1
+                    line_num = _line_index.line_of(match.start())
                     # Find which pattern matched using lastgroup
                     group_name = match.lastgroup
                     description = self._pattern_descriptions.get(group_name, "Performance issue")

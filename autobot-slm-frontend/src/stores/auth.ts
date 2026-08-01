@@ -14,6 +14,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { createLogger } from '@/utils/debugUtils'
+import { slmApiClient } from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('AuthStore')
 
@@ -22,22 +24,36 @@ interface User {
   isAdmin: boolean
 }
 
-interface TokenResponse {
-  access_token: string
-  token_type: string
-  expires_in: number
-}
+/**
+ * Token payload of `POST /api/auth/login`, `/api/auth/refresh` and
+ * `/api/mfa/verify-login`, derived from the generated OpenAPI contract
+ * (#13138). The hand-written copy omitted `token` — the SLM mirrors the JWT
+ * under both `access_token` and `token` so a client written against the core
+ * backend reads it too (autobot-slm-backend/models/schemas.py:31-48).
+ */
+type TokenResponse = components['schemas']['TokenResponse']
 
-interface MFALoginResponse {
-  requires_mfa?: boolean
-  temp_token?: string
-  access_token?: string
-  token_type?: string
-  expires_in?: number
-}
+/**
+ * MFA challenge branch of `POST /api/auth/login`, whose response model is the
+ * union `TokenResponse | MfaChallengeResponse` (autobot-slm-backend/api/auth.py:81).
+ * Modelled as the union rather than one flattened all-optional shape so the
+ * `requires_mfa` branch is the only place `temp_token` is readable.
+ */
+type MfaChallengeResponse = components['schemas']['MfaChallengeResponse']
+
+type LoginResponse = TokenResponse | MfaChallengeResponse
 
 interface LogoutResponse {
   logout_url?: string | null
+}
+
+/**
+ * Narrow the `/api/auth/login` union. Both members carry an
+ * `additionalProperties` catch-all in the contract, so a structural check on
+ * the discriminator is required rather than a bare `in` test.
+ */
+function isMfaChallenge(data: LoginResponse): data is MfaChallengeResponse {
+  return data.requires_mfa === true && typeof data.temp_token === 'string'
 }
 
 const TOKEN_KEY = 'slm_access_token'
@@ -63,6 +79,14 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.isAdmin ?? false)
 
+  /**
+   * Host origin the SLM admin app is pointed at, for DISPLAY only
+   * (`APISettings.vue`, `BackendSettings.vue`). It is deliberately NOT a
+   * transport base: it hard-returns `''` under `import.meta.env.DEV`, so it
+   * ignores `VITE_API_URL` where `getSlmApiBase()` honours it. Every request
+   * in this store now goes through `slmApiClient`, which resolves
+   * `getSlmApiBase()` (#13140).
+   */
   function getApiUrl(): string {
     if (import.meta.env.DEV) {
       return ''
@@ -75,12 +99,14 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      const response = await fetch(`${getApiUrl()}/api/auth/login`, {
+      // `rawRequest` (not `post`) so the `detail` error body and the
+      // TokenResponse|MfaChallengeResponse union below are read exactly as
+      // before; the client contributes base-URL resolution, the request
+      // timeout, and its auth-endpoint opt-out from the 401 session handler
+      // (a 401 here is a bad credential, not a rejected session) — #13140.
+      const response = await slmApiClient.rawRequest('/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
+        body: { username, password },
       })
 
       if (!response.ok) {
@@ -88,16 +114,16 @@ export const useAuthStore = defineStore('auth', () => {
         throw new Error(data.detail || 'Login failed')
       }
 
-      const data: MFALoginResponse = await response.json()
+      const data: LoginResponse = await response.json()
 
-      if (data.requires_mfa && data.temp_token) {
+      if (isMfaChallenge(data)) {
         mfaPending.value = true
         mfaTempToken.value = data.temp_token
         return false
       }
 
-      token.value = data.access_token!
-      sessionStorage.setItem(TOKEN_KEY, data.access_token!)
+      token.value = data.access_token
+      sessionStorage.setItem(TOKEN_KEY, data.access_token)
 
       await fetchCurrentUser()
       return true
@@ -113,11 +139,17 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch(`${getApiUrl()}/api/mfa/verify-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, temp_token: mfaTempToken.value }),
-      })
+      // `temp_token` is a QUERY parameter, not a body field: the backend
+      // declares it as a bare `str` argument beside the Pydantic body model
+      // (autobot-slm-backend/api/mfa.py:96-99), which FastAPI binds from the
+      // query string. The generated contract confirms it under
+      // `parameters.query`. Sending it in the body 422s on the missing
+      // required query parameter, blocking MFA login entirely (#12420).
+      const query = new URLSearchParams({ temp_token: mfaTempToken.value })
+      const response = await slmApiClient.rawRequest(
+        `/mfa/verify-login?${query.toString()}`,
+        { method: 'POST', body: { code } }
+      )
       if (!response.ok) {
         const data = await response.json()
         throw new Error(data.detail || 'MFA verification failed')
@@ -147,11 +179,11 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return
 
     try {
-      const response = await fetch(`${getApiUrl()}/api/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token.value}`,
-        },
-      })
+      // The client attaches the bearer itself, reading sessionStorage with a
+      // localStorage fallback — the same pair this store initialises `token`
+      // from (line 65) — so a session restored from localStorage no longer
+      // depends on the ref having been hydrated first.
+      const response = await slmApiClient.rawRequest('/auth/me')
 
       if (!response.ok) {
         throw new Error('Failed to fetch user')
@@ -172,11 +204,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return false
 
     try {
-      const response = await fetch(`${getApiUrl()}/api/auth/refresh`, {
+      const response = await slmApiClient.rawRequest('/auth/refresh', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token.value}`,
-        },
       })
 
       if (!response.ok) {
@@ -206,11 +235,11 @@ export const useAuthStore = defineStore('auth', () => {
 
     if (currentToken) {
       try {
-        const response = await fetch(`${getApiUrl()}/api/auth/logout`, {
+        // Storage still holds `currentToken` at this point (it is cleared
+        // below), so the client attaches the same bearer this call used to
+        // build by hand.
+        const response = await slmApiClient.rawRequest('/auth/logout', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${currentToken}`,
-          },
         })
         if (response.ok) {
           const data: LogoutResponse = await response.json()

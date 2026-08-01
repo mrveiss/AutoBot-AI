@@ -8,6 +8,7 @@
  */
 
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
+import { formatFileSize } from '@/utils/formatHelpers'
 import type { IconName } from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue'
 import { useApiClient } from '@/plugins/api'
@@ -309,16 +310,6 @@ export function useConversationFiles(sessionId: string) {
   // SVG IconName; the previous FA class strings rendered empty SVGs.
   const getFileIcon = (mimeType: string): IconName => {
     return getFileIconNameByMimeType(mimeType)
-  }
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes'
-
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
   }
 
   // Issue #70: New file manager operations

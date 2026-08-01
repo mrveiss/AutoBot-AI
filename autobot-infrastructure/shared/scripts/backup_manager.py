@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Backup Manager
@@ -349,7 +350,7 @@ class BackupManager:
             metadata = self.create_backup_metadata(backup_id, "full", backed_up_paths)
             metadata_file = backup_path / "backup_metadata.json"
 
-            with open(metadata_file, "w") as f:
+            with open(metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2)
 
             # Create compressed archive
@@ -477,7 +478,7 @@ class BackupManager:
         metadata["base_backup_id"] = base_backup_id
 
         metadata_file = backup_path / "backup_metadata.json"
-        with open(metadata_file, "w") as f:
+        with open(metadata_file, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
         # Create archive
@@ -554,7 +555,7 @@ class BackupManager:
         registry = {}
         if registry_file.exists():
             try:
-                with open(registry_file, "r") as f:
+                with open(registry_file, "r", encoding="utf-8") as f:
                     registry = json.load(f)
             except Exception:
                 registry = {}
@@ -568,7 +569,7 @@ class BackupManager:
             "deployment_mode": metadata["deployment_mode"],
         }
 
-        with open(registry_file, "w") as f:
+        with open(registry_file, "w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2)
 
     def list_backups(self) -> Dict[str, Any]:
@@ -579,7 +580,7 @@ class BackupManager:
             return {}
 
         try:
-            with open(registry_file, "r") as f:
+            with open(registry_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return {}
@@ -758,7 +759,7 @@ class BackupManager:
         # Update registry
         if removed_count > 0:
             registry_file = self.backup_dir / "backup_registry.json"
-            with open(registry_file, "w") as f:
+            with open(registry_file, "w", encoding="utf-8") as f:
                 json.dump(backups, f, indent=2)
 
         size_mb = total_size_freed / (1024 * 1024)

@@ -38,7 +38,7 @@ import aiohttp
 from autobot_shared.logging_manager import get_logger
 
 # Import canonical Redis client pattern
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Configure logging
@@ -243,7 +243,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = get_redis_client(async_client=True, database="metrics")  # METRICS_DB
+        redis_client = await get_async_redis_client(database="metrics")  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -308,7 +308,7 @@ class AsyncBaselineTest:
                 file_path = test_dir / f"test_file_{op_id}.json"
                 test_data = {"op_id": op_id, "timestamp": datetime.now().isoformat()}
 
-                async with aiofiles.open(file_path, "w") as f:
+                async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(test_data))
 
                 # Redis cache operation
@@ -316,7 +316,7 @@ class AsyncBaselineTest:
                 await redis_client.set(cache_key, json.dumps(test_data), ex=60)
 
                 # Verify both operations
-                async with aiofiles.open(file_path, "r") as f:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     file_content = await f.read()
 
                 cached_content = await redis_client.get(cache_key)
@@ -341,7 +341,7 @@ class AsyncBaselineTest:
         start_time = time.perf_counter()
 
         # Create async Redis connection using canonical pattern
-        redis_client = get_redis_client(async_client=True, database="metrics")  # METRICS_DB
+        redis_client = await get_async_redis_client(database="metrics")  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -406,7 +406,7 @@ class AsyncBaselineTest:
             try:
                 if vm_name == "redis":
                     # Special handling for Redis (not HTTP) using canonical pattern
-                    redis_client = get_redis_client(async_client=True, database="main")  # MAIN_DB (default DB 0)
+                    redis_client = await get_async_redis_client(database="main")  # MAIN_DB (default DB 0)
                     try:
                         start = time.perf_counter()
                         await redis_client.ping()
@@ -554,7 +554,7 @@ class AsyncBaselineTest:
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_file = output_dir / f"async_baseline_{timestamp_str}.json"
 
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         logger.info(f"📊 Baseline report saved: {report_file}")

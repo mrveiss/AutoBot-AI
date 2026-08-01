@@ -383,8 +383,14 @@ class HeartbeatScheduler:
         the DB commit is visible to other connections (avoids the race where
         _run_adapter's RUNNING UPDATE matches 0 rows because the INSERT is
         still uncommitted).
+
+        Looks up the agent with ``require_enabled=False`` (GH#12210): a manual
+        trigger is an explicit one-off run request, independent of the periodic
+        cron toggle. ``AgentHireRequest.heartbeat_enabled`` defaults to False,
+        so a freshly hired agent that never opted into periodic dispatch would
+        otherwise be invisible here and every manual trigger would raise.
         """
-        agent = await self._get_agent_config(session, agent_id)
+        agent = await self._get_agent_config(session, agent_id, require_enabled=False)
         if agent is None:
             raise ValueError(f"Agent {agent_id!r} not found or not configured")
 
@@ -413,18 +419,27 @@ class HeartbeatScheduler:
     # Shared helpers
     # ------------------------------------------------------------------
 
-    async def _get_agent_config(self, session: AsyncSession, agent_id: str) -> Optional[Dict[str, Any]]:
-        result = await session.execute(
-            text("""
-                SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
-                       aon.adapter_type, aon.adapter_config, aon.context_mode,
-                       aon.company_id
-                FROM agent_org_nodes aon
-                WHERE aon.agent_id = :agent_id
-                  AND aon.heartbeat_enabled = true
-                """),
-            {"agent_id": agent_id},
-        )
+    async def _get_agent_config(
+        self, session: AsyncSession, agent_id: str, require_enabled: bool = True
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve adapter config for *agent_id* from ``agent_org_nodes``.
+
+        ``require_enabled`` gates on the periodic ``heartbeat_enabled`` cron
+        toggle. It stays True for the scheduler's own dispatch path (its Redis
+        schedule is populated exclusively from enabled agents — see
+        ``_load_enabled_agents``), but manual triggers (GH#12210) pass False so
+        a hired-but-not-yet-cron-enabled agent still resolves.
+        """
+        query = """
+            SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
+                   aon.adapter_type, aon.adapter_config, aon.context_mode,
+                   aon.company_id
+            FROM agent_org_nodes aon
+            WHERE aon.agent_id = :agent_id
+        """
+        if require_enabled:
+            query += " AND aon.heartbeat_enabled = true"
+        result = await session.execute(text(query), {"agent_id": agent_id})
         row = result.mappings().first()
         return dict(row) if row else None
 
@@ -817,14 +832,15 @@ async def _dispatch_adapter(agent: Dict[str, Any], context: Dict[str, Any]) -> O
             agent["agent_id"], f"no LLC adapter registered for type {adapter_type!r}"
         ) from None
 
-    # GH#9793: skip dispatch when the required CLI binary is absent from PATH.
+    # GH#9793: skip dispatch when the required CLI binary can't be resolved
+    # (PATH, configured override, or common install locations — GH#12478).
     # Converts every-heartbeat FAILED runs into a clean degraded state (GH#9951).
     if is_subprocess_adapter(adapter) and not adapter.is_cli_available():  # type: ignore[union-attr]
-        raise HeartbeatDispatchSkipped(
-            agent["agent_id"],
-            f"adapter {adapter_type!r} requires CLI "
-            f"{adapter._required_cli!r} which is not on PATH",  # type: ignore[union-attr]
-        )
+        message = adapter.cli_not_found_message()  # type: ignore[union-attr]
+        # GH#12478: this is a genuine deployment misconfiguration, not routine
+        # degraded-agent noise — warn so it's visible without polling run history.
+        logger.warning("Heartbeat dispatch skipped for agent %s: %s", agent["agent_id"], message)
+        raise HeartbeatDispatchSkipped(agent["agent_id"], message)
 
     return await _dispatch_registry_adapter(adapter, agent, context)
 

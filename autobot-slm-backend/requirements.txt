@@ -7,10 +7,10 @@
 #
 
 # Prometheus metrics (Issue #937: shared monitoring implementation)
-prometheus-client>=0.25.0
+prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.139.2                # SECURITY UPDATE - requires starlette >=1.3.1
+fastapi>=0.140.1                # SECURITY UPDATE - requires starlette >=1.3.1
 starlette>=1.3.1              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
 uvicorn[standard]>=0.51.0
 
@@ -34,13 +34,21 @@ redis[asyncio]>=8.0.1
 
 # Async utilities
 aiofiles>=25.1.0
-websockets>=16.1,<17       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
+websockets>=16.1.1,<17       # Issue #3098: relaxed from >=16.0 (#10386): slm_client uses only API present in 15.x; <16 satisfies langgraph-sdk 0.4.2 on backend side
 
 # Ansible integration
 ansible-runner>=2.4.3
 
-# HTTP client (for health checks)
-httpx>=0.28.1
+# HTTP clients
+httpx>=0.28.1  # health checks, general async HTTP calls
+# Async HTTP client — genuine runtime dependency, not an optional extra:
+# user_management/services/vault_client.py (SSO/system-secrets vault HTTP
+# calls), services/a2a_card_fetcher.py, services/reconciler.py's node health
+# check, and autobot_shared/retry_mechanism.py's network-retry helper all
+# import it (lazily, at call time) — a fresh install was already broken the
+# first time any of those code paths ran; this was just never surfaced
+# until CI started building the app to verify generated types (#13118).
+aiohttp>=3.14.3  # SECURITY UPDATE — matches autobot-backend/requirements.txt pin
 
 # System metrics
 psutil>=7.2.2

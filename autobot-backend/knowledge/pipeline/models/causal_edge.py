@@ -28,11 +28,6 @@ EffectType = Literal[
 ]
 
 
-def _utcnow() -> datetime:
-    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return now_utc()
-
-
 class CausalEdge(BaseModel):
     """
     Represents an extracted causal relationship between two entities.
@@ -77,8 +72,8 @@ class CausalEdge(BaseModel):
         default=False,
         description="Whether the inverse relationship also holds (rare for causality)",
     )
-    created_at: datetime = Field(default_factory=_utcnow, description="Causal edge creation timestamp")
-    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=now_utc, description="Causal edge creation timestamp")
+    updated_at: datetime = Field(default_factory=now_utc, description="Last update timestamp")
 
     def to_causal_string(self) -> str:
         """Format as human-readable causal statement."""

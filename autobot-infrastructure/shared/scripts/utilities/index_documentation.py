@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Documentation Indexing Script for AutoBot Knowledge Base
@@ -535,7 +536,7 @@ async def main():
         results_file = PROJECT_ROOT / "logs" / f"doc_indexing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         results_file.parent.mkdir(exist_ok=True)
 
-        with open(results_file, "w") as f:
+        with open(results_file, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)
 
         logger.info("Results written to: %s", results_file)

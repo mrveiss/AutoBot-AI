@@ -18,7 +18,14 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('DeploymentLogViewer')
 
-interface LogEntry {
+/**
+ * A message received on the deployment log WebSocket — NOT an HTTP response.
+ *
+ * Renamed from `LogEntry` in #13138: it collided with the generated
+ * `components['schemas']['LogEntry']` (api/monitoring.py:128) despite sharing
+ * no field with it (`type`/`log_type`, and a `Date` rather than an ISO string).
+ */
+interface DeploymentLogMessage {
   type: string
   log_type: string
   message: string
@@ -36,7 +43,7 @@ const emit = defineEmits<{
   statusChange: [status: string]
 }>()
 
-const logs = ref<LogEntry[]>([])
+const logs = ref<DeploymentLogMessage[]>([])
 const status = ref<string>('connecting')
 const progress = ref<number>(0)
 const error = ref<string | null>(null)

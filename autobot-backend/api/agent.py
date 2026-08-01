@@ -49,6 +49,7 @@ from constants.threshold_constants import TimingConstants
 from dependencies import get_config, get_knowledge_base
 from events.bus import PersistStrategy, get_event_bus
 from exceptions import InternalError, SubprocessError
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from utils.response_helpers import create_success_response, handle_ai_stack_error
@@ -973,7 +974,8 @@ async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
         return payload.context
 
     try:
-        kb_results = await knowledge_base.search(query=payload.goal, top_k=5)
+        # Issue #13009: exclude quarantined research facts (#12622).
+        kb_results = await knowledge_base.search(query=payload.goal, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
         if kb_results:
             kb_context = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]])
             return f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
@@ -1152,7 +1154,12 @@ async def comprehensive_research_task(
         research_query = request_data.research_query
         if knowledge_base:
             try:
-                kb_results = await knowledge_base.search(query=request_data.research_query, top_k=3)
+                # Issue #13009: exclude quarantined research facts (#12622). This is a
+                # general multi-agent context-enhancement read, not the #12623
+                # corroboration/promotion gate, so quarantined facts must stay hidden.
+                kb_results = await knowledge_base.search(
+                    query=request_data.research_query, top_k=3, filters=RESEARCH_QUARANTINE_FILTER
+                )
                 if kb_results:
                     kb_context = "\n".join([f"- {item.get('content', '')[:150]}..." for item in kb_results])
                     research_query = f"{request_data.research_query}\n\nExisting" f"knowledge:\n{kb_context}"

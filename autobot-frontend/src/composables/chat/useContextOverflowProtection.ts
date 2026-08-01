@@ -143,7 +143,7 @@ export function useContextOverflowProtection(
         original_message_count: number
         summary_token_count: number
         timestamp: string
-      }>('/chat/summarize', {
+      }>('/api/chat/summarize', {
         session_id: sessionId,
         message_ids: messageIds,
         target_length: targetSummaryLength,

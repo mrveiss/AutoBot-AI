@@ -15,9 +15,10 @@ Related to Issue #11340.
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ async def get_redis_status() -> dict:
         "memory_used_bytes": memory_used_bytes,
         "memory_peak_bytes": memory_peak_bytes,
         "connected_clients": connected_clients,
-        "last_checked": datetime.now(timezone.utc).isoformat(),
+        "last_checked": utc_timestamp(),
     }
 
 

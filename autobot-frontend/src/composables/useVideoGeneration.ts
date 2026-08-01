@@ -53,7 +53,7 @@ export function useVideoGeneration() {
 
   async function submit(params: GenerateVideoParams): Promise<VideoJobResponse | null> {
     try {
-      const result = await apiClient.post<VideoJobResponse>('/video-generation/generate', params)
+      const result = await apiClient.post<VideoJobResponse>('/api/video-generation/generate', params)
       if (!result.success) {
         error.value = result.error ?? 'Video generation failed'
       }
@@ -66,7 +66,7 @@ export function useVideoGeneration() {
 
   async function pollStatus(jobId: string): Promise<VideoStatusResponse | null> {
     try {
-      return await apiClient.get<VideoStatusResponse>(`/video-generation/status/${jobId}`)
+      return await apiClient.get<VideoStatusResponse>(`/api/video-generation/status/${jobId}`)
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : String(err)
       return null
@@ -118,7 +118,7 @@ export function useVideoGeneration() {
 
   async function fetchProviders(): Promise<void> {
     try {
-      const data = await apiClient.get<{ providers: VideoProviderStatus[] }>('/video-generation/providers')
+      const data = await apiClient.get<{ providers: VideoProviderStatus[] }>('/api/video-generation/providers')
       providers.value = data.providers ?? []
     } catch {
       providers.value = []

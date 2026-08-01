@@ -88,7 +88,16 @@ class ProjectStateTracker:
         # Core components
         self.progression_manager = get_progression_manager()
         self.legacy_state_manager = ProjectStateManager()
-        self.validator = PhaseValidator(self.project_root)
+        # PhaseValidator lives in autobot-infrastructure — guard against MissingDep
+        # so the tracker (and the llm_awareness singleton that depends on it via
+        # get_state_tracker()) can be constructed even when the infrastructure
+        # repo is not on PYTHONPATH. Mirrors the same guard in
+        # PhaseProgressionManager.__init__ (#10466). Issue #12458.
+        try:
+            self.validator = PhaseValidator(self.project_root)
+        except Exception:
+            logger.debug("PhaseValidator unavailable; phase-validation snapshots disabled")
+            self.validator = None
 
         # State tracking
         self.state_history: List[StateSnapshot] = []
@@ -196,8 +205,14 @@ class ProjectStateTracker:
         Issue #620: Further refactored to extract snapshot creation and history.
         """
         try:
-            # Get phase validation results and capabilities
-            validation_results = await self.validator.validate_all_phases()
+            # Get phase validation results and capabilities. #12458: validator
+            # is None when the optional PhaseValidator dependency is absent —
+            # fall back to an empty validation result instead of failing the
+            # snapshot outright.
+            if self.validator is None:
+                validation_results = {"phases": {}, "overall_assessment": {"system_maturity_score": 0}}
+            else:
+                validation_results = await self.validator.validate_all_phases()
             capabilities = self.progression_manager.get_current_system_capabilities()
 
             # Extract phase states and calculate metrics (Issue #665: uses helpers)

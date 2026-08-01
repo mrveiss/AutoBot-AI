@@ -229,10 +229,10 @@ onUnmounted(() => {
 .grafana-embed {
   position: relative;
   width: 100%;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--slm-gray-100);
+  border: 1px solid var(--slm-gray-200);
 }
 
 .grafana-embed.fullscreen {
@@ -260,15 +260,15 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #f9fafb;
+  background: var(--slm-gray-50);
   z-index: 10;
 }
 
 .loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e5e7eb;
-  border-top-color: #3b82f6;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
+  border: 4px solid var(--slm-gray-200);
+  border-top-color: var(--slm-blue-500);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -280,40 +280,40 @@ onUnmounted(() => {
 .controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--slm-gray-50);
+  border-top: 1px solid var(--slm-gray-200);
 }
 
 .select-sm {
-  padding: 6px 12px;
+  padding: 6px var(--spacing-3);
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
+  border: 1px solid var(--slm-gray-200);
+  border-radius: var(--radius-default);
   font-size: 13px;
   cursor: pointer;
 }
 
 .select-sm:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--slm-blue-500);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .btn-icon {
   margin-left: auto;
-  padding: 6px 12px;
+  padding: 6px var(--spacing-3);
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
+  border: 1px solid var(--slm-gray-200);
+  border-radius: var(--radius-default);
   cursor: pointer;
   font-size: 14px;
   transition: background 0.2s;
 }
 
 .btn-icon:hover {
-  background: #f3f4f6;
+  background: var(--slm-gray-100);
 }
 
 .btn {

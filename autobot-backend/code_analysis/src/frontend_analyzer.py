@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from utils.line_index import LineIndex  # #12884
 
 # Add AutoBot root to path for imports
 autobot_root = Path(__file__).parent.parent.parent
@@ -533,8 +534,11 @@ class FrontendAnalyzer:
                     continue
 
                 for compiled_pattern, description, severity in compiled_list:
+                    # #12884: build the offset->line map once; the per-match
+                    # `content[:start].count()` was O(n*m) and held the GIL.
+                    _line_index = LineIndex(content)
                     for match in compiled_pattern.finditer(content):
-                        line_num = content[: match.start()].count("\n") + 1
+                        line_num = _line_index.line_of(match.start())
 
                         issues.append(
                             FrontendIssue(

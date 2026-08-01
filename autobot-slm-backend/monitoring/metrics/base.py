@@ -3,29 +3,12 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Base Metrics Recorder
+Base Metrics Recorder — Issue #12648
 
-Base class for domain-specific metrics recorders.
+Re-exports the canonical implementation from autobot_shared so that the
+SLM-backend local metrics package stays in sync with the shared recorder.
 """
 
-from prometheus_client import CollectorRegistry
-
-
-class BaseMetricsRecorder:
-    """Base class for metrics recorders."""
-
-    def __init__(self, registry: CollectorRegistry):
-        """
-        Initialize the metrics recorder.
-
-        Args:
-            registry: Prometheus CollectorRegistry instance
-        """
-        self.registry = registry
-        self._init_metrics()
-
-    def _init_metrics(self) -> None:
-        """Initialize metrics. Override in subclasses."""
-
+from autobot_shared.monitoring.metrics.base import BaseMetricsRecorder  # noqa: F401
 
 __all__ = ["BaseMetricsRecorder"]

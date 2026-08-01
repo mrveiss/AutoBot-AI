@@ -80,9 +80,9 @@ async def _send_failure_notification(payload: dict) -> None:
 
 async def monitor_service_health() -> None:
     """Subscribe to HealthCollector state-change events and react to failures."""
-    from autobot_shared.redis_client import get_redis_client
+    from autobot_shared.redis_client import get_async_redis_client
 
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     if redis is None:
         logger.error("Could not connect to Redis — aborting monitor loop.")
         return

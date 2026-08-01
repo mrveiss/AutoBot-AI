@@ -20,6 +20,7 @@ from uuid import uuid4
 
 import yaml
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
@@ -520,9 +521,7 @@ class SecurityPolicyManager:
         self._save_policy(policy)
         self._update_policy_statistics()
 
-        logger.info(  # codeql[py/clear-text-logging-sensitive-data]
-            "Created new security policy: %s (%s)", name, policy_id
-        )
+        logger.info("Created new security policy: %s (%s)", name, policy_id)
         return policy_id
 
     def update_policy(self, policy_id: str, updates: Dict, author: str) -> bool:
@@ -773,7 +772,7 @@ class SecurityPolicyManager:
 
         for rule in policy.rules:
             if rule["name"] == "admin_access_approval":
-                if rule["value"] and user_role == "admin" and not context.get("manager_approved", False):
+                if rule["value"] and is_admin_role(user_role) and not context.get("manager_approved", False):
                     result["compliant"] = False
                     result["violation_type"] = "admin_access_not_approved"
                     result["severity"] = "high"

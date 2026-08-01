@@ -103,9 +103,16 @@ class EmbeddingCache:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _make_key(self, query: str) -> str:
-        """Create cache key from query text using SHA-256 hash."""
-        return hashlib.sha256(query.encode("utf-8")).hexdigest()
+    def _make_key(self, model: str, query: str) -> str:
+        """Create cache key from (model, query) using SHA-256 hash.
+
+        Issue #12251: the embedding model id is folded into the key so the
+        same text embedded by two different models never collides — a
+        cross-model read would otherwise return a wrong-space vector. The
+        NUL separator keeps ``model``/``query`` boundaries unambiguous.
+        """
+        payload = f"{model}\x00{query}".encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
     def _is_expired(self, key: str) -> bool:
         """Return True if the cached entry has exceeded its TTL."""
@@ -162,7 +169,7 @@ class EmbeddingCache:
     # Public interface
     # ------------------------------------------------------------------
 
-    async def get(self, query: str) -> Optional[List[float]]:
+    async def get(self, query: str, model: str) -> Optional[List[float]]:
         """
         Get embedding from cache if available and not expired.
 
@@ -171,11 +178,12 @@ class EmbeddingCache:
 
         Args:
             query: Query text
+            model: Embedding model id (part of the cache key — Issue #12251)
 
         Returns:
             Cached embedding or None if not found/expired
         """
-        key = self._make_key(query)
+        key = self._make_key(model, query)
 
         async with self._lock:
             # --- Check T1 ---
@@ -209,7 +217,7 @@ class EmbeddingCache:
             self._misses += 1
             return None
 
-    async def put(self, query: str, embedding: List[float]) -> None:
+    async def put(self, query: str, embedding: List[float], model: str) -> None:
         """
         Store embedding in cache using ARC insertion policy.
 
@@ -220,8 +228,9 @@ class EmbeddingCache:
         Args:
             query: Query text
             embedding: Computed embedding vector
+            model: Embedding model id (part of the cache key — Issue #12251)
         """
-        key = self._make_key(query)
+        key = self._make_key(model, query)
 
         async with self._lock:
             # If already live, update value and timestamp (update in place)

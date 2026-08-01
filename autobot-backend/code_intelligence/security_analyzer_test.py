@@ -166,6 +166,78 @@ class TestSecurityAnalyzer:
             assert len(hash_results) >= 1
             assert "md5" in hash_results[0].description.lower()
 
+    def test_detect_weak_encryption_des(self):
+        """Test detection of weak DES cipher usage.
+
+        Issue #12362: WEAK_ENCRYPTION was defined in constants.py (des/3des/
+        rc4/blowfish) but never wired to a check — gap left by the legacy
+        code_analysis.src.security_analyzer's "insecure_crypto" category
+        (DES/RC4/MD4) not being carried over during the #712 modularization.
+        """
+        code = textwrap.dedent("""
+            from Crypto.Cipher import DES
+
+            def encrypt(key, data):
+                cipher = DES.new(key)
+                return cipher.encrypt(data)
+        """)
+
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = SecurityAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            enc_results = [r for r in results if r.vulnerability_type == VulnerabilityType.WEAK_ENCRYPTION]
+
+            assert len(enc_results) >= 1
+            assert enc_results[0].severity == SecuritySeverity.HIGH
+            assert "CWE-327" in (enc_results[0].cwe_id or "")
+
+    def test_detect_weak_encryption_rc4(self):
+        """Test detection of weak RC4 cipher usage."""
+        code = textwrap.dedent("""
+            from Crypto.Cipher import ARC4
+
+            def encrypt(key, data):
+                cipher = ARC4.new(key)
+                return cipher.encrypt(data)
+        """)
+
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = SecurityAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            enc_results = [r for r in results if r.vulnerability_type == VulnerabilityType.WEAK_ENCRYPTION]
+
+            assert len(enc_results) >= 1
+            assert "rc4" in enc_results[0].description.lower()
+
+    def test_no_false_positive_aes(self):
+        """Test that AES (strong cipher) does not trigger a weak-encryption finding."""
+        code = textwrap.dedent("""
+            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+            def encrypt(key, nonce, data):
+                cipher = Cipher(algorithms.AES(key), modes.GCM(nonce))
+                return cipher.encryptor().update(data)
+        """)
+
+        with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w") as f:
+            f.write(code)
+            f.flush()
+
+            analyzer = SecurityAnalyzer()
+            results = analyzer.analyze_file(f.name)
+
+            enc_results = [r for r in results if r.vulnerability_type == VulnerabilityType.WEAK_ENCRYPTION]
+
+            assert enc_results == []
+
     def test_detect_insecure_random(self):
         """Test detection of insecure random usage."""
         code = textwrap.dedent("""

@@ -9,7 +9,7 @@
  * Provides REST API integration for all SLM endpoints.
  */
 
-import axios, { type AxiosInstance } from 'axios'
+import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import type {
   SLMNode,
   NodeHealth,
@@ -19,7 +19,7 @@ import type {
   NodeEvent,
   NodeEventFilters,
   CertificateInfo,
-  UpdateInfo,
+  NodeUpdateCheckResponse,
   ConnectionTestRequest,
   ConnectionTestResult,
   Deployment,
@@ -45,7 +45,6 @@ import type {
   FleetUpdateSummary,
   EligibleNode,
 } from '@/types/slm'
-import { getSlmApiBase } from '@/config/ssot-config'
 import type {
   ActionResponse,
   SyncVerifyResponse,
@@ -53,10 +52,12 @@ import type {
   RestartAllServicesResponse,
   VNCCredentialCreate,
   VNCCredentialResponse,
+  VNCCredentialListResponse,
   VNCEndpointsResponse,
   VNCConnectionInfo,
   TLSCredentialCreate,
   TLSCredentialResponse,
+  TLSCredentialListResponse,
   TLSEndpointsResponse,
   TLSRenewResponse,
   TLSRotateResponse,
@@ -67,6 +68,7 @@ import type {
   MonitoringSystemHealth,
   DashboardOverview,
   LogsResponse,
+  AppLogsResponse,
   BlueGreenDeploymentApi,
   BlueGreenCreate,
   BlueGreenListResponse,
@@ -97,8 +99,17 @@ import type {
   WizardStatusResponse,
 } from '@/types/api-responses'
 
-// SLM Admin uses the local SLM backend API
-const API_BASE = getSlmApiBase()
+// =============================================================================
+// slmApiClient adapter (#12420 Phase 2 batch 5 → consolidated in #12654)
+//
+// useSlmApi historically owned its own axios instance; the Phase-2 migration
+// routed every call through the canonical `slmApiClient` via a thin axios-compat
+// adapter. That adapter now lives in `utils/slmApiCompat.ts` (shared with
+// useRoles). `textFallback: true` preserves this composable's behaviour of
+// returning `response.text()` for a non-JSON 2xx body (PEM cert downloads).
+// =============================================================================
+
+const client = makeAxiosCompatClient({ textFallback: true })
 
 // Backend response types (different from frontend SLMNode)
 interface BackendNodeResponse {
@@ -177,22 +188,6 @@ interface ReplicationsResponse {
 }
 
 export function useSlmApi() {
-  const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   // Nodes
   async function getNodes(): Promise<SLMNode[]> {
     const response = await client.get<NodesResponse>('/nodes')
@@ -313,16 +308,19 @@ export function useSlmApi() {
   }
 
   // Updates
-  async function checkUpdates(nodeId: string): Promise<UpdateInfo[]> {
-    const response = await client.get<{ updates: UpdateInfo[] }>(`/nodes/${nodeId}/updates`)
-    return response.data.updates
+  // Returns the full check response (#11964): code_update_available/
+  // code_status mirror the same node.code_status field the fleet
+  // update-summary badge reads, so callers can reconcile the two.
+  async function checkUpdates(nodeId: string): Promise<NodeUpdateCheckResponse> {
+    const response = await client.get<NodeUpdateCheckResponse>(`/nodes/${nodeId}/updates`)
+    return response.data
   }
 
   async function applyUpdates(
     nodeId: string,
     updateIds: string[]
   ): Promise<{ applied_updates: string[]; failed_updates: string[] }> {
-    const response = await client.post(`/nodes/${nodeId}/updates/apply`, { update_ids: updateIds })
+    const response = await client.post<{ applied_updates: string[]; failed_updates: string[] }>(`/nodes/${nodeId}/updates/apply`, { update_ids: updateIds })
     return response.data
   }
 
@@ -431,7 +429,7 @@ export function useSlmApi() {
     nodeId: string,
     serviceType = 'redis'
   ): Promise<{ is_healthy: boolean; details: Record<string, unknown> }> {
-    const response = await client.post('/stateful/verify', {
+    const response = await client.post<{ is_healthy: boolean; details: Record<string, unknown> }>('/stateful/verify', {
       node_id: nodeId,
       service_type: serviceType,
     })
@@ -548,8 +546,8 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function getNodeVncCredentials(nodeId: string): Promise<{ credentials: VNCCredentialResponse[]; total: number }> {
-    const response = await client.get<{ credentials: VNCCredentialResponse[]; total: number }>(
+  async function getNodeVncCredentials(nodeId: string): Promise<VNCCredentialListResponse> {
+    const response = await client.get<VNCCredentialListResponse>(
       `/nodes/${nodeId}/vnc-credentials`
     )
     return response.data
@@ -597,9 +595,9 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function getNodeTlsCredentials(nodeId: string, includeInactive = false): Promise<{ credentials: TLSCredentialResponse[]; total: number }> {
+  async function getNodeTlsCredentials(nodeId: string, includeInactive = false): Promise<TLSCredentialListResponse> {
     const params = includeInactive ? '?include_inactive=true' : ''
-    const response = await client.get<{ credentials: TLSCredentialResponse[]; total: number }>(
+    const response = await client.get<TLSCredentialListResponse>(
       `/nodes/${nodeId}/tls-credentials${params}`
     )
     return response.data
@@ -760,7 +758,7 @@ export function useSlmApi() {
   }
 
   async function getNodeMetrics(nodeId: string): Promise<FleetMetrics['nodes'][0]> {
-    const response = await client.get(`/monitoring/metrics/node/${nodeId}`)
+    const response = await client.get<FleetMetrics['nodes'][0]>(`/monitoring/metrics/node/${nodeId}`)
     return response.data
   }
 
@@ -808,6 +806,31 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function getAppLogs(options: {
+    node_id: string
+    service: string
+    severity?: string
+    hours?: number
+    q?: string
+    page?: number
+    per_page?: number
+    mcp_instance?: string
+  }): Promise<AppLogsResponse> {
+    const params = new URLSearchParams()
+    params.append('node_id', options.node_id)
+    params.append('service', options.service)
+    if (options.severity) params.append('severity', options.severity)
+    if (options.hours) params.append('hours', options.hours.toString())
+    if (options.q) params.append('q', options.q)
+    if (options.page) params.append('page', options.page.toString())
+    if (options.per_page) params.append('per_page', options.per_page.toString())
+    if (options.mcp_instance) params.append('mcp_instance', options.mcp_instance)
+    const response = await client.get<AppLogsResponse>(
+      `/monitoring/app-logs?${params.toString()}`
+    )
+    return response.data
+  }
+
   async function getErrorSummary(hours?: number): Promise<{
     total_errors: number
     by_type: Record<string, number>
@@ -823,7 +846,20 @@ export function useSlmApi() {
     time_window_hours: number
   }> {
     const params = hours ? `?hours=${hours}` : ''
-    const response = await client.get(`/monitoring/errors${params}`)
+    const response = await client.get<{
+      total_errors: number
+      by_type: Record<string, number>
+      by_node: Record<string, number>
+      recent_errors: Array<{
+        event_id: string
+        node_id: string
+        hostname: string
+        event_type: string
+        message: string
+        timestamp: string
+      }>
+      time_window_hours: number
+    }>(`/monitoring/errors${params}`)
     return response.data
   }
 
@@ -1208,7 +1244,13 @@ export function useSlmApi() {
     error: string | null
     elapsed_seconds?: number
   }> {
-    const response = await client.get('/setup/provision-status', {
+    const response = await client.get<{
+      status: string
+      lines: string[]
+      total_lines: number
+      error: string | null
+      elapsed_seconds?: number
+    }>('/setup/provision-status', {
       params: { since_line: sinceLine },
     })
     return response.data
@@ -1221,7 +1263,13 @@ export function useSlmApi() {
     missing_required_roles: string[]
     ready: boolean
   }> {
-    const response = await client.get('/setup/validate')
+    const response = await client.get<{
+      health: string
+      total_nodes: number
+      online_nodes: number
+      missing_required_roles: string[]
+      ready: boolean
+    }>('/setup/validate')
     return response.data
   }
 
@@ -1322,6 +1370,7 @@ export function useSlmApi() {
     getSystemHealth,
     getMonitoringDashboard,
     getMonitoringLogs,
+    getAppLogs,
     getErrorSummary,
     // Blue-Green Deployments (Issue #726)
     getBlueGreenDeployments,

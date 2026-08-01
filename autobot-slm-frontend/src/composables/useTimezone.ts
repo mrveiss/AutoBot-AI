@@ -12,7 +12,7 @@
  */
 
 import { ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { getTimeConfig } from '@/utils/slmSettingsApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useTimezone')
@@ -22,14 +22,13 @@ const cachedTimezone = ref<string | null>(null)
 let fetchPromise: Promise<void> | null = null
 
 async function loadTimezone(): Promise<void> {
-  const authStore = useAuthStore()
   try {
-    const res = await fetch(
-      `${authStore.getApiUrl()}/api/settings/time/config`,
-      { headers: authStore.getAuthHeaders() },
-    )
-    if (res.ok) {
-      const data: { timezone: string } = await res.json()
+    // #13140: routed through the canonical SLM client (base URL, token
+    // fallback, timeout, 401 handling) instead of a hand-built fetch. The
+    // "unavailable -> keep the browser locale" contract is preserved: a
+    // non-OK response yields null rather than throwing.
+    const data = await getTimeConfig()
+    if (data) {
       cachedTimezone.value = data.timezone || 'UTC'
       logger.info('Loaded timezone:', cachedTimezone.value)
     }
@@ -55,8 +54,12 @@ export function ensureTimezone(): Promise<void> {
 /**
  * Format an ISO date string using the fleet-configured timezone.
  * Falls back to browser locale if timezone is not yet loaded.
+ *
+ * Accepts `undefined` as well as `null`: the generated OpenAPI contract models
+ * nullable backend timestamps as optional (`expires_at?: string | null`), so
+ * call sites forward possibly-absent values here (#12420).
  */
-export function formatDateTime(dateStr: string | null): string {
+export function formatDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return 'Never'
   const date = new Date(dateStr)
   if (isNaN(date.getTime())) return dateStr

@@ -17,6 +17,7 @@ import asyncio
 import urllib.robotparser
 from urllib.parse import urlparse
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -51,10 +52,15 @@ async def _fetch_robots_text(domain: str, timeout: float = 10.0) -> str:
 
         robots_url = f"{domain}/robots.txt"
         aio_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(robots_url, timeout=aio_timeout, allow_redirects=True) as resp:
-                if resp.status == 200:
-                    return await resp.text(encoding="utf-8", errors="replace")
+        async with get_http_client().tracked_request(
+            "GET",
+            robots_url,
+            timeout=aio_timeout,
+            allow_redirects=True,
+            suppress_error_log=True,
+        ) as resp:
+            if resp.status == 200:
+                return await resp.text(encoding="utf-8", errors="replace")
         return ""
     except Exception as exc:
         logger.debug("robots.txt fetch failed for %s: %s", domain, exc)

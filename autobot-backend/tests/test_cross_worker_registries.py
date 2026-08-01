@@ -269,12 +269,28 @@ class _FakeRedis:
 
 
 def _make_memory_manager() -> MagicMock:
-    """Return a MemoryManager stub that records calls but doesn't touch DB."""
+    """Return a MemoryManager stub that records calls but doesn't touch DB.
+
+    The a-prefixed methods must be AsyncMock: TakeoverManager awaits
+    ``acreate_task_record``/``astart_task``/``acomplete_task``/``afail_task``,
+    and awaiting a plain MagicMock raises
+    ``TypeError: object MagicMock can't be used in 'await' expression``.
+
+    The sync spellings are kept alongside them. This stub was written against
+    the sync API; MemoryManager later grew the async variants and the stub was
+    never updated, which is what broke all 8 tests in this module. Same shape as
+    the redis-client stub rot in #12903 — a hand-listed double lagging the thing
+    it doubles.
+    """
     mm = MagicMock()
     mm.create_task_record.return_value = "task-123"
     mm.start_task.return_value = None
     mm.complete_task.return_value = None
     mm.fail_task.return_value = None
+    mm.acreate_task_record = AsyncMock(return_value="task-123")
+    mm.astart_task = AsyncMock(return_value=None)
+    mm.acomplete_task = AsyncMock(return_value=None)
+    mm.afail_task = AsyncMock(return_value=None)
     return mm
 
 

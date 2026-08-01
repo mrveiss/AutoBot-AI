@@ -16,8 +16,12 @@ Usage:
         wav_bytes = await client.synthesize("Hello world", voice_id="alba")
 """
 
+import asyncio
+from collections.abc import AsyncIterator
+
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config, get_config
 
@@ -44,11 +48,13 @@ class TTSClient:
         """Return True if the TTS worker health check passes."""
         try:
             timeout = aiohttp.ClientTimeout(total=HEALTH_TIMEOUT)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"{self.base_url}/health") as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data.get("model_loaded", False)
+            client = get_http_client()
+            async with client.tracked_request(
+                "GET", f"{self.base_url}/health", timeout=timeout, suppress_error_log=True
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get("model_loaded", False)
         except Exception as e:
             logger.debug("TTS worker health check failed: %s", e)
         return False
@@ -56,45 +62,86 @@ class TTSClient:
     async def synthesize(self, text: str, voice_id: str = "", language: str = "") -> bytes:
         """Send text to TTS worker and return WAV bytes."""
         timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            data = aiohttp.FormData()
-            data.add_field("text", text)
-            if voice_id:
-                data.add_field("voice_id", voice_id)
-            if language:
-                data.add_field("language", language)
-            async with session.post(f"{self.base_url}/tts/synthesize", data=data) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    raise RuntimeError(f"TTS worker error {resp.status}: {body}")
-                return await resp.read()
+        data = aiohttp.FormData()
+        data.add_field("text", text)
+        if voice_id:
+            data.add_field("voice_id", voice_id)
+        if language:
+            data.add_field("language", language)
+        client = get_http_client()
+        async with client.tracked_request(
+            "POST", f"{self.base_url}/tts/synthesize", data=data, timeout=timeout
+        ) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(f"TTS worker error {resp.status}: {body}")
+            return await resp.read()
+
+    async def synthesize_stream(self, text: str, voice_id: str = "", language: str = "") -> AsyncIterator[bytes]:
+        """Stream TTS audio from the worker as individually-decodable WAV chunks (#12501).
+
+        Consumes the worker's length-prefixed framing
+        (``[4-byte big-endian length][WAV bytes]``, see
+        ``/tts/synthesize/stream`` in tts-worker.py.j2) and yields each
+        chunk's raw WAV bytes as soon as it arrives, so the caller can
+        forward audio to the client the instant the first ~250ms is ready
+        instead of waiting for the whole utterance.
+        """
+        timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
+        data = aiohttp.FormData()
+        data.add_field("text", text)
+        if voice_id:
+            data.add_field("voice_id", voice_id)
+        if language:
+            data.add_field("language", language)
+        client = get_http_client()
+        async with client.tracked_request(
+            "POST", f"{self.base_url}/tts/synthesize/stream", data=data, timeout=timeout
+        ) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(f"TTS worker error {resp.status}: {body}")
+            while True:
+                try:
+                    header = await resp.content.readexactly(4)
+                except asyncio.IncompleteReadError:
+                    break
+                chunk_len = int.from_bytes(header, "big")
+                try:
+                    yield await resp.content.readexactly(chunk_len)
+                except asyncio.IncompleteReadError as e:
+                    raise RuntimeError("TTS stream truncated mid-chunk") from e
 
     async def clone_voice(self, text: str, reference_audio: bytes) -> bytes:
         """Send text + reference audio to TTS worker; returns WAV bytes."""
         timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            data = aiohttp.FormData()
-            data.add_field("text", text)
-            data.add_field(
-                "reference_audio",
-                reference_audio,
-                filename="reference.wav",
-                content_type="audio/wav",
-            )
-            async with session.post(f"{self.base_url}/tts/clone-voice", data=data) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    raise RuntimeError(f"TTS worker error {resp.status}: {body}")
-                return await resp.read()
+        data = aiohttp.FormData()
+        data.add_field("text", text)
+        data.add_field(
+            "reference_audio",
+            reference_audio,
+            filename="reference.wav",
+            content_type="audio/wav",
+        )
+        client = get_http_client()
+        async with client.tracked_request(
+            "POST", f"{self.base_url}/tts/clone-voice", data=data, timeout=timeout
+        ) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(f"TTS worker error {resp.status}: {body}")
+            return await resp.read()
 
     async def list_voices(self) -> list[dict]:
         """List available voice profiles from TTS worker."""
         timeout = aiohttp.ClientTimeout(total=HEALTH_TIMEOUT)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"{self.base_url}/voices") as resp:
-                    if resp.status == 200:
-                        return await resp.json()
+            client = get_http_client()
+            async with client.tracked_request(
+                "GET", f"{self.base_url}/voices", timeout=timeout, suppress_error_log=True
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
         except Exception as e:
             logger.warning("Failed to list voices: %s", e)
         return []
@@ -102,28 +149,30 @@ class TTSClient:
     async def create_voice(self, name: str, audio_bytes: bytes, filename: str = "ref.wav") -> dict:
         """Create a voice profile from reference audio."""
         timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            data = aiohttp.FormData()
-            data.add_field("name", name)
-            data.add_field(
-                "audio",
-                audio_bytes,
-                filename=filename,
-                content_type="audio/wav",
-            )
-            async with session.post(f"{self.base_url}/voices/create", data=data) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    raise RuntimeError(f"Voice create error {resp.status}: {body}")
-                return await resp.json()
+        data = aiohttp.FormData()
+        data.add_field("name", name)
+        data.add_field(
+            "audio",
+            audio_bytes,
+            filename=filename,
+            content_type="audio/wav",
+        )
+        client = get_http_client()
+        async with client.tracked_request("POST", f"{self.base_url}/voices/create", data=data, timeout=timeout) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(f"Voice create error {resp.status}: {body}")
+            return await resp.json()
 
     async def delete_voice(self, voice_id: str) -> bool:
         """Delete a voice profile."""
         timeout = aiohttp.ClientTimeout(total=HEALTH_TIMEOUT)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.delete(f"{self.base_url}/voices/{voice_id}") as resp:
-                    return resp.status == 200
+            client = get_http_client()
+            async with client.tracked_request(
+                "DELETE", f"{self.base_url}/voices/{voice_id}", timeout=timeout, suppress_error_log=True
+            ) as resp:
+                return resp.status == 200
         except Exception as e:
             logger.warning("Failed to delete voice %s: %s", voice_id, e)
         return False

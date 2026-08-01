@@ -414,16 +414,16 @@ onMounted(() => {
 .view-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .state-msg {
   padding: 1.5rem 0;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .state-error {
-  color: var(--color-danger, #b91c1c);
+  color: var(--color-danger);
 }
 
 .routines-grid-wrapper {
@@ -442,22 +442,22 @@ onMounted(() => {
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted, #6b7280);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .routine-row {
   cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle, #f3f4f6);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .routine-row:hover {
-  background: var(--bg-hover, #f9fafb);
+  background: var(--bg-hover);
 }
 
 .routines-grid td {
   padding: 0.625rem 0.75rem;
-  color: var(--text-secondary, #374151);
+  color: var(--text-secondary);
   vertical-align: middle;
 }
 
@@ -469,20 +469,20 @@ onMounted(() => {
 
 .name-text {
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
 }
 
 .name-desc {
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .cron {
   font-family: var(--font-mono, monospace);
   font-size: 0.8125rem;
-  background: var(--bg-code, #f3f4f6);
+  background: var(--bg-code, var(--routines-bg-code));
   padding: 0.125rem 0.375rem;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
 }
 
 .status-badge {
@@ -491,23 +491,23 @@ onMounted(() => {
   font-size: 0.75rem;
   font-weight: 600;
   border-radius: 999px;
-  background: var(--bg-muted, #f3f4f6);
-  color: var(--text-secondary, #4b5563);
+  background: var(--bg-muted, var(--routines-badge-neutral-bg));
+  color: var(--text-secondary);
 }
 
 .status-active {
-  background: var(--color-success-subtle, #dcfce7);
-  color: var(--color-success-text, #15803d);
+  background: var(--color-success-subtle, var(--routines-success-bg));
+  color: var(--color-success-text, var(--routines-success-text));
 }
 
 .status-paused {
-  background: var(--color-warning-subtle, #fef3c7);
-  color: var(--color-warning-text, #b45309);
+  background: var(--color-warning-subtle, var(--routines-warning-bg));
+  color: var(--color-warning-text, var(--routines-warning-text));
 }
 
 .status-archived {
-  background: var(--bg-muted, #e5e7eb);
-  color: var(--text-muted, #6b7280);
+  background: var(--bg-muted, var(--routines-status-archived-bg));
+  color: var(--text-muted);
 }
 
 .routine-actions {
@@ -521,9 +521,9 @@ onMounted(() => {
   font-size: 0.875rem;
   font-weight: 600;
   border: none;
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-accent, #c4651a);
-  color: #fff;
+  border-radius: var(--radius-md);
+  background: var(--color-accent, var(--routines-accent));
+  color: var(--routines-on-accent);
   cursor: pointer;
 }
 
@@ -535,10 +535,10 @@ onMounted(() => {
 .btn-sm {
   padding: 0.25rem 0.625rem;
   font-size: 0.8125rem;
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #111827);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -548,8 +548,8 @@ onMounted(() => {
 }
 
 .btn-danger {
-  color: var(--color-danger, #b91c1c);
-  border-color: var(--color-danger-subtle, #fecaca);
+  color: var(--color-danger);
+  border-color: var(--color-danger-subtle, var(--routines-danger-border));
 }
 
 .btn-close {
@@ -557,7 +557,7 @@ onMounted(() => {
   background: none;
   font-size: 1rem;
   cursor: pointer;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .modal-overlay,
@@ -576,8 +576,8 @@ onMounted(() => {
 
 .modal {
   width: min(32rem, 92vw);
-  background: var(--bg-surface, #fff);
-  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   max-height: 90vh;
   overflow-y: auto;
@@ -589,7 +589,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .modal-body {
@@ -605,7 +605,7 @@ onMounted(() => {
   gap: 0.25rem;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--text-secondary, #4b5563);
+  color: var(--text-secondary);
 }
 
 .field input,
@@ -613,16 +613,16 @@ onMounted(() => {
   padding: 0.4375rem 0.5rem;
   font-size: 0.875rem;
   font-weight: 400;
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #111827);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  color: var(--text-primary);
 }
 
 .field-hint {
   font-weight: 400;
   font-size: 0.75rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .modal-actions {
@@ -636,7 +636,7 @@ onMounted(() => {
   margin-left: auto;
   width: min(28rem, 92vw);
   height: 100%;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
 }
@@ -654,38 +654,38 @@ onMounted(() => {
   align-items: center;
   gap: 0.625rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border-subtle, #f3f4f6);
+  border-bottom: 1px solid var(--border-subtle);
   font-size: 0.8125rem;
 }
 
 .run-date {
-  color: var(--text-secondary, #4b5563);
+  color: var(--text-secondary);
 }
 
 .run-duration,
 .run-wi {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-size: 0.75rem;
 }
 
 .status-run-succeeded,
 .status-run-completed {
-  background: var(--color-success-subtle, #dcfce7);
-  color: var(--color-success-text, #15803d);
+  background: var(--color-success-subtle, var(--routines-success-bg));
+  color: var(--color-success-text, var(--routines-success-text));
 }
 
 .status-run-failed {
-  background: var(--color-danger-subtle, #fee2e2);
-  color: var(--color-danger, #b91c1c);
+  background: var(--color-danger-subtle, var(--routines-run-failed-bg));
+  color: var(--color-danger);
 }
 
 .status-run-running {
-  background: var(--color-info-subtle, #dbeafe);
-  color: var(--color-info-text, #1d4ed8);
+  background: var(--color-info-subtle, var(--routines-info-bg));
+  color: var(--color-info-text, var(--routines-info-text));
 }
 
 .status-run-queued {
-  background: var(--bg-muted, #f3f4f6);
-  color: var(--text-secondary, #4b5563);
+  background: var(--bg-muted, var(--routines-badge-neutral-bg));
+  color: var(--text-secondary);
 }
 </style>

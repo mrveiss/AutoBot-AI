@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Fix Ollama thread count to reduce CPU usage and GUI lag
 
 echo "🔧 Fixing Ollama thread count (11 → 6 threads)"

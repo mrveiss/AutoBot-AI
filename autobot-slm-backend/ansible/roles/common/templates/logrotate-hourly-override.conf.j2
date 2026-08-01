@@ -1,0 +1,26 @@
+# systemd drop-in for logrotate.timer — managed by Ansible (common role).
+# Do not edit on the host; changes are overwritten on the next deploy.
+#
+# #12783: /etc/logrotate.d/autobot sets `maxsize 100M` specifically so a
+# runaway log is capped BEFORE the next daily run. That guarantee was never
+# real: `maxsize` is only evaluated when logrotate actually runs, and the
+# stock timer is OnCalendar=daily. Between 00:00 ticks a log could grow
+# without bound, and `maxsize` only decided WHETHER to rotate at the daily
+# tick, never WHEN. chromadb.log reached 737 MB — 7.4x the cap — and was
+# rotated at 00:00 having already blown past it.
+#
+# Running the timer hourly makes the existing cap enforceable: a log can now
+# exceed 100 MB by at most one hour's worth of writes instead of a full day's.
+#
+# This matters beyond disk usage: backend-error.log is named in that config's
+# own comment and is exactly the file needed to diagnose the #12777 SIGABRT
+# crash loop, so it must survive rather than be truncated after unbounded
+# growth.
+#
+# Persistent=true is inherited from the stock unit; adding OnCalendar here
+# would ACCUMULATE with the vendor value rather than replace it, so the empty
+# assignment below clears it first. Same for OnUnitActiveSec.
+[Timer]
+OnCalendar=
+OnCalendar=hourly
+AccuracySec=1m

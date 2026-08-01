@@ -12,7 +12,6 @@ import asyncio
 import statistics
 import time
 from dataclasses import dataclass
-from enum import Enum
 from functools import wraps
 from threading import Lock
 from typing import Any, Callable, Dict, List
@@ -25,13 +24,11 @@ from constants import CircuitBreakerDefaults
 logger = get_logger(__name__)
 
 
-class CircuitState(Enum):
-    """Circuit breaker states"""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Circuit is open, rejecting calls
-    HALF_OPEN = "half_open"  # Testing if service has recovered
-
+# #12656: CircuitState is now canonical in autobot_shared.ssot_constants and
+# re-exported here so the existing `from circuit_breaker import CircuitState`
+# importers keep working. Three identical copies existed; separate Enum classes
+# with the same members never compare equal across module boundaries.
+from autobot_shared.ssot_constants import CircuitState  # noqa: F401
 
 CircuitBreakerState = CircuitState
 
@@ -235,6 +232,21 @@ class CircuitBreaker:
             return self._try_transition_to_half_open(time.time())
 
         return False
+
+    @property
+    def is_rejecting(self) -> bool:
+        """Read-only: True when the breaker would reject a call WITHOUT probing.
+
+        #11498: callers (provider registry health checks, pre-rate-limit fail-fast)
+        need to know a provider is currently unavailable without triggering the
+        OPEN->HALF_OPEN probe transition that ``_can_execute`` performs. This is
+        only True while OPEN and still inside the recovery cooldown; once the
+        cooldown elapses (OPEN and ready to probe) it returns False so the next
+        real call can transition to HALF_OPEN and recover.
+        """
+        if self.state != CircuitState.OPEN:
+            return False
+        return (time.time() - self.last_failure_time) < self.config.recovery_timeout
 
     def _record_success(self, duration: float):
         """Record a successful call"""

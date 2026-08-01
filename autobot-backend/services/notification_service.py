@@ -43,7 +43,7 @@ from typing import Any, Dict, List
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
 
@@ -183,7 +183,7 @@ class NotificationStore:
         }
         serialised = json.dumps(record)
         try:
-            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
+            client = await get_async_redis_client(database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning(
                     "Redis unavailable — in-app notification not stored (user=%s)",
@@ -208,7 +208,7 @@ class NotificationStore:
         Returns an empty list if Redis is unavailable or no notifications exist.
         """
         try:
-            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
+            client = await get_async_redis_client(database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning("Redis unavailable — cannot list notifications (user=%s)", user_id)
                 return []
@@ -235,7 +235,7 @@ class NotificationStore:
         is unavailable.
         """
         try:
-            client = await get_redis_client(async_client=True, database=_NOTIFICATIONS_REDIS_DB)
+            client = await get_async_redis_client(database=_NOTIFICATIONS_REDIS_DB)
             if client is None:
                 logger.warning(
                     "Redis unavailable — cannot mark notification %s as read",
@@ -474,18 +474,21 @@ class NotificationService:
         }
         timeout = aiohttp.ClientTimeout(total=10)
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, json=payload, headers=headers) as resp:
-                    if resp.status >= 400:
-                        body_text = await resp.text()
-                        logger.error(
-                            "Webhook POST to %s returned HTTP %d: %s",
-                            url,
-                            resp.status,
-                            body_text[:200],
-                        )
-                        resp.raise_for_status()
-                    logger.info("Webhook delivered to %s (status=%d)", url, resp.status)
+            from autobot_shared.http_client import get_http_client
+
+            async with get_http_client().tracked_request(
+                "POST", url, json=payload, headers=headers, timeout=timeout
+            ) as resp:
+                if resp.status >= 400:
+                    body_text = await resp.text()
+                    logger.error(
+                        "Webhook POST to %s returned HTTP %d: %s",
+                        url,
+                        resp.status,
+                        body_text[:200],
+                    )
+                    resp.raise_for_status()
+                logger.info("Webhook delivered to %s (status=%d)", url, resp.status)
         except aiohttp.ClientError as exc:
             logger.error("HTTP client error delivering webhook to %s: %s", url, exc)
             raise

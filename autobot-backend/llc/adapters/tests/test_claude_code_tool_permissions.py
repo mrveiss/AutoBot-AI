@@ -38,7 +38,7 @@ def test_sanitizes_injection_and_delimiters():
 
 
 def _cmd(resume, cfg, prompt="do it"):
-    return ClaudeCodeAdapter._build_command("claude", resume, cfg, prompt)
+    return ClaudeCodeAdapter._build_command("claude", resume, cfg, prompt, session_id="fresh-sid")
 
 
 def test_fresh_session_command_has_model_and_tools_and_terminator():

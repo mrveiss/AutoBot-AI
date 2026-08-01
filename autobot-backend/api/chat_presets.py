@@ -25,7 +25,6 @@ Frontend contract: plain JSON, no envelope wrapper.
 """
 
 import json
-from datetime import datetime, timezone
 from typing import Literal, Optional
 from uuid import uuid4
 
@@ -36,6 +35,7 @@ from pydantic import BaseModel
 from auth_middleware import get_current_user
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 
@@ -50,10 +50,6 @@ def _user_hash_key(user_id: str) -> str:
 
 def _org_hash_key(org_id: str) -> str:
     return f"chat:presets:org:{org_id}"
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _is_org_admin(current_user: dict) -> bool:
@@ -131,7 +127,7 @@ async def create_preset(
         if not _is_org_admin(current_user):
             raise HTTPException(status_code=403, detail="Only org admins can create org-wide presets")
 
-    now = _now_iso()
+    now = utc_timestamp()
     preset = {
         "id": str(uuid4()),
         "name": payload.name,
@@ -208,7 +204,7 @@ async def update_preset(
         preset["description"] = payload.description
     if payload.content is not None:
         preset["content"] = payload.content
-    preset["updatedAt"] = _now_iso()
+    preset["updatedAt"] = utc_timestamp()
 
     await redis.hset(hash_key, preset_id, json.dumps(preset))
     logger.info("Updated %s preset %s", "org" if is_org_preset else "personal", preset_id)

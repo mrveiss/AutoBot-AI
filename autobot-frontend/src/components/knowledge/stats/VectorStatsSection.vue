@@ -50,9 +50,9 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('VectorStatsSection')
 
 const { vectorStats } = useVectorStats()
-// useKnowledgeStats is per-instance state: the fetch must happen on the SAME
-// instance this section reads from (a parent-side refresh populates a
-// different ref and the chart renders 0% bars).
+// useKnowledgeStats is a shared-singleton (#11658): every call returns the
+// same module-level refs, so this section fetches its own category facts and
+// any other consumer observes the same `categoryFactCounts`.
 const { categoryFactCounts, refreshCategoryFacts } = useKnowledgeStats()
 
 onMounted(async () => {

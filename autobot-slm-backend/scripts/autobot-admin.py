@@ -92,7 +92,7 @@ def cmd_reset_password(args: argparse.Namespace) -> None:
         )
         if "SLM_ADMIN_PASSWORD=" not in updated:
             updated += f"\nSLM_ADMIN_PASSWORD={args.new_password}\n"
-        with open(secrets_path, "w", encoding="utf-8") as fh:  # codeql[py/clear-text-storage-sensitive-data]
+        with open(secrets_path, "w", encoding="utf-8") as fh:
             fh.write(updated)
         print(f"Updated SLM_ADMIN_PASSWORD in {secrets_path}")
 

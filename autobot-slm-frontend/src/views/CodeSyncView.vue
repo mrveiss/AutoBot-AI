@@ -14,6 +14,9 @@
 import { ref, watch, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
 import {
   useCodeSync,
+  isSelfUpdateReconnecting,
+  classifyUpdateAllPollError,
+  SLM_SELF_UPDATE_STAGE,
   type PendingNode,
   type SyncOptions,
   type UpdateSchedule,
@@ -21,6 +24,8 @@ import {
   type FileDriftReport,
   type UpdateAllJob,
   type UpdateAllStage,
+  type ComponentSyncJobStatus,
+  type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -71,11 +76,39 @@ const isResolvingDrift = ref(false) // #7149: separate from drift-check spinner
 const showDriftDetails = ref(false)
 const selectedDriftComponent = ref('autobot-slm-backend')
 
+// Async drift/resolve job polling (#11303) — mirrors the update-all pattern so
+// the Resync button returns immediately instead of blocking on the rsync +
+// post-sync steps (which can take 40-120s and may restart the component itself).
+const resolveDriftJob = ref<ComponentSyncJobStatus | null>(null)
+const resolveDriftPolling = ref(false)
+const resolveDriftTransientErrors = ref(0)
+const RESOLVE_DRIFT_MAX_TRANSIENT_ERRORS = 90 // ~3 min at 2s intervals
+const RESOLVE_DRIFT_LOST_CONTACT_ERRORS = 30 // ~1 min before "lost contact" banner
+const resolveDriftLostContact = ref(false)
+let resolveDriftPollTimer: ReturnType<typeof setTimeout> | null = null
+
 // Clear stale results when the user switches to a different component (#3433)
 watch(selectedDriftComponent, () => {
   driftReport.value = null
   showDriftDetails.value = false
 })
+
+// =============================================================================
+// Fleet sync job tracking (#13157)
+// =============================================================================
+// `syncFleet` returns a `job_id` for an asynchronous, per-node rollout, but the
+// view used to throw it away: the "queued" toast was the last thing an operator
+// ever saw, so a job that failed minutes later reported nothing and the
+// backend's `failure_reason` (`autobot-slm-backend/api/code_sync.py:402`) had no
+// route to the screen at all. These poll `getJobStatus` for the job just
+// started and list the last few jobs via `getRecentJobs`.
+const fleetSyncJob = ref<FleetSyncJobStatus | null>(null)
+const fleetSyncPolling = ref(false)
+const recentFleetJobs = ref<FleetSyncJobStatus[]>([])
+const recentFleetJobsLoading = ref(false)
+const FLEET_JOB_POLL_INTERVAL_MS = 2000
+const RECENT_FLEET_JOBS_LIMIT = 5
+let fleetSyncPollTimer: ReturnType<typeof setTimeout> | null = null
 
 // =============================================================================
 // One-click update-all state (#9971)
@@ -127,7 +160,7 @@ function stageStatusI18nKey(stage: UpdateAllStage): string {
     success: 'codeSyncView.pipelineStageSuccess',
     failed: 'codeSyncView.pipelineStageFailed',
     skipped: 'codeSyncView.pipelineStageSkipped',
-    current: 'codeSyncView.pipelineStageSuccess',
+    current: 'codeSyncView.pipelineStageCurrent',
   }
   return keyMap[stage.status] ?? stage.status
 }
@@ -139,6 +172,15 @@ function stageStatusText(stage: UpdateAllStage): string | null {
     return `${j.completed_fleet_nodes} / ${j.total_fleet_nodes}`
   }
   return null
+}
+
+// #12593: while reconnecting, the stage-3 box shows "reconnecting..." instead
+// of the generic "updating..." so the self-restart window doesn't read as dead.
+function stageRunningStatusKey(stage: UpdateAllStage): string {
+  if (stage.name === SLM_SELF_UPDATE_STAGE && updateAllReconnecting.value) {
+    return 'codeSyncView.pipelineStageReconnecting'
+  }
+  return stageStatusI18nKey(stage)
 }
 
 const updateAllButtonLabel = computed(() => {
@@ -156,6 +198,20 @@ const updateAllButtonLabel = computed(() => {
 const updateAllIsRunning = computed(() => {
   const s = updateAllJob.value?.status
   return s === 'pending' || s === 'running'
+})
+
+// #12593: reconnecting affordance during the stage-3 (slm_self_update) window,
+// when the SLM control plane restarts itself and polling fails transiently.
+// Derives from the last-known running stage + transient-error count, so it
+// resets to false automatically as soon as a poll succeeds again.
+const updateAllReconnecting = computed(() =>
+  isSelfUpdateReconnecting(updateAllJob.value, updateAllTransientErrors.value),
+)
+
+// #12593: auto-expand stage-3 logs while reconnecting so the backend
+// "service will restart" message is visible during the restart window.
+watch(updateAllReconnecting, (reconnecting) => {
+  if (reconnecting) expandedStageLogs.value.add(SLM_SELF_UPDATE_STAGE)
 })
 
 function toggleStageLog(name: string): void {
@@ -207,7 +263,10 @@ function toggleNode(nodeId: string): void {
   }
 }
 
-function formatVersion(version: string | null): string {
+// `current_version` / `stage.sha` are optional *and* nullable in the contract
+// (`autobot-slm-backend/models/schemas.py:1721`), so `undefined` is reachable.
+// `getCommitHashDisplay` already accepts it; only this wrapper narrowed it out.
+function formatVersion(version: string | null | undefined): string {
   // Use 12-character format for consistency (Issue #866)
   return getCommitHashDisplay(version).display
 }
@@ -278,6 +337,9 @@ async function handleSyncSelected(): Promise<void> {
   })
 
   if (result.success) {
+    // #13157: the rollout is asynchronous — follow the returned job so a later
+    // per-node failure and its `failure_reason` still reach the operator.
+    trackFleetSyncJob(result.job_id)
     const count = nodeIds.length
     successMessage.value = `Successfully synced ${count} node${count > 1 ? 's' : ''}`
 
@@ -305,6 +367,8 @@ async function handleSyncAll(): Promise<void> {
   })
 
   if (result.success) {
+    // #13157: same asynchronous rollout as handleSyncSelected.
+    trackFleetSyncJob(result.job_id)
     const count = result.nodes_queued || codeSync.pendingNodes.value.length
     successMessage.value = `Successfully queued sync for ${count} node${count > 1 ? 's' : ''}`
 
@@ -495,22 +559,187 @@ async function handleCheckDrift(): Promise<void> {
   }
 }
 
-// #7149: Resync the selected component from code_source/, then re-check drift.
-async function handleResolveDrift(): Promise<void> {
-  if (!driftReport.value?.drift_detected) return
-  isResolvingDrift.value = true
-  try {
-    const result = await codeSync.resolveDrift(selectedDriftComponent.value)
-    if (result?.success) {
-      successMessage.value = `Resynced ${result.component} from code_source`
-      // Re-run drift check to confirm resolution
-      await handleCheckDrift()
-    }
-    // Errors are surfaced via codeSync.error already
-  } finally {
+function _stopResolveDriftPoll(): void {
+  if (resolveDriftPollTimer) {
+    clearTimeout(resolveDriftPollTimer)
+    resolveDriftPollTimer = null
+  }
+  resolveDriftPolling.value = false
+}
+
+/**
+ * A transient error means the request never reached the poller (e.g. the
+ * component restarting itself). Returns true if polling should continue.
+ */
+function _handleResolveDriftTransientError(): boolean {
+  resolveDriftTransientErrors.value += 1
+  if (resolveDriftTransientErrors.value >= RESOLVE_DRIFT_MAX_TRANSIENT_ERRORS) {
+    resolveDriftLostContact.value = true
+    _stopResolveDriftPoll()
     isResolvingDrift.value = false
+    return false
+  }
+  if (resolveDriftTransientErrors.value >= RESOLVE_DRIFT_LOST_CONTACT_ERRORS) {
+    resolveDriftLostContact.value = true
+  }
+  return true
+}
+
+/** Job reached a terminal status ('completed'/'failed') — stop polling and report. */
+async function _handleResolveDriftTerminal(result: ComponentSyncJobStatus): Promise<void> {
+  _stopResolveDriftPoll()
+  isResolvingDrift.value = false
+  if (result.status === 'completed' && result.success) {
+    successMessage.value = result.message || `Resynced ${result.component} from code_source`
+    await handleCheckDrift()
+  } else {
+    codeSync.setError(result.message || 'Drift resolve job failed')
   }
 }
+
+/**
+ * Resilient polling loop for the async drift/resolve job (#11303). Mirrors
+ * _scheduleUpdateAllPoll: undefined = transient error (component's own
+ * restart) → keep polling; null = unknown job_id → stop; otherwise update the
+ * job state and keep polling until a terminal status.
+ */
+function _scheduleResolveDriftPoll(jobId: string): void {
+  if (resolveDriftPolling.value) return
+  resolveDriftPolling.value = true
+  resolveDriftTransientErrors.value = 0
+
+  const poll = async () => {
+    const result = await codeSync.getResolveDriftStatus(jobId)
+
+    if (result === undefined) {
+      if (_handleResolveDriftTransientError()) {
+        resolveDriftPollTimer = setTimeout(poll, 2000)
+      }
+      return
+    }
+
+    resolveDriftLostContact.value = false
+    resolveDriftTransientErrors.value = 0
+
+    if (result === null) {
+      _stopResolveDriftPoll()
+      isResolvingDrift.value = false
+      return
+    }
+
+    resolveDriftJob.value = result
+    if (result.status === 'running' || result.status === 'queued') {
+      resolveDriftPollTimer = setTimeout(poll, 2000)
+      return
+    }
+
+    await _handleResolveDriftTerminal(result)
+  }
+
+  resolveDriftPollTimer = setTimeout(poll, 1000)
+}
+
+// #7149/#11303: Resync the selected component from code_source/ as an async
+// job so the button returns immediately instead of blocking on the rsync +
+// post-sync steps (which can take 40-120s and may restart the component).
+async function handleResolveDrift(): Promise<void> {
+  if (!driftReport.value?.drift_detected) return
+  codeSync.clearError()
+  resolveDriftLostContact.value = false
+  resolveDriftJob.value = null
+  isResolvingDrift.value = true
+  const job = await codeSync.startResolveDriftAsync(selectedDriftComponent.value)
+  if (!job) {
+    isResolvingDrift.value = false
+    return
+  }
+  _scheduleResolveDriftPoll(job.job_id)
+}
+
+// =============================================================================
+// Fleet sync job methods (#13157)
+// =============================================================================
+
+function _stopFleetJobPoll(): void {
+  if (fleetSyncPollTimer) {
+    clearTimeout(fleetSyncPollTimer)
+    fleetSyncPollTimer = null
+  }
+  fleetSyncPolling.value = false
+}
+
+/** Load the last few fleet sync jobs so past failures stay inspectable. */
+async function loadRecentFleetJobs(): Promise<void> {
+  recentFleetJobsLoading.value = true
+  try {
+    recentFleetJobs.value = await codeSync.getRecentJobs(RECENT_FLEET_JOBS_LIMIT)
+  } finally {
+    recentFleetJobsLoading.value = false
+  }
+}
+
+/**
+ * Poll one fleet sync job to completion.
+ *
+ * `getJobStatus` is a single-shot call that already reports its own failures
+ * through `codeSync.error` and returns `null`, so `null` ends the loop rather
+ * than being retried here.
+ */
+function _scheduleFleetJobPoll(jobId: string): void {
+  if (fleetSyncPolling.value) return
+  fleetSyncPolling.value = true
+
+  const poll = async () => {
+    const result = await codeSync.getJobStatus(jobId)
+    if (result === null) {
+      _stopFleetJobPoll()
+      return
+    }
+    fleetSyncJob.value = result
+    if (result.status === 'pending' || result.status === 'running') {
+      fleetSyncPollTimer = setTimeout(poll, FLEET_JOB_POLL_INTERVAL_MS)
+      return
+    }
+    _stopFleetJobPoll()
+    await loadRecentFleetJobs()
+  }
+
+  fleetSyncPollTimer = setTimeout(poll, FLEET_JOB_POLL_INTERVAL_MS)
+}
+
+/** Begin tracking the job a just-queued fleet sync returned (#13157). */
+function trackFleetSyncJob(jobId: string | undefined): void {
+  if (!jobId) return
+  _stopFleetJobPoll()
+  fleetSyncJob.value = null
+  _scheduleFleetJobPoll(jobId)
+}
+
+function fleetJobStatusClass(jobStatus: string): string {
+  const map: Record<string, string> = {
+    pending: 'bg-gray-100 text-gray-500',
+    running: 'bg-blue-100 text-blue-700',
+    completed: 'bg-green-100 text-green-700',
+    failed: 'bg-red-100 text-red-700',
+  }
+  return map[jobStatus] ?? 'bg-gray-100 text-gray-500'
+}
+
+function fleetJobStatusI18nKey(jobStatus: string): string {
+  const map: Record<string, string> = {
+    pending: 'codeSyncView.pipelineStagePending',
+    running: 'codeSyncView.pipelineStageRunning',
+    completed: 'codeSyncView.pipelineStageSuccess',
+    failed: 'codeSyncView.pipelineStageFailed',
+  }
+  return map[jobStatus] ?? jobStatus
+}
+
+// Refresh the recent-jobs list whenever the Advanced section is opened, so the
+// list an operator reads is never a stale snapshot from an earlier visit.
+watch(showAdvanced, (open) => {
+  if (open) void loadRecentFleetJobs()
+})
 
 // =============================================================================
 // One-click update-all methods (#9971)
@@ -541,17 +770,24 @@ function _scheduleUpdateAllPoll(): void {
     if (result === undefined) {
       // Transient error (SLM restart in progress)
       updateAllTransientErrors.value += 1
-      if (updateAllTransientErrors.value >= UPDATE_ALL_MAX_TRANSIENT_ERRORS) {
+      const decision = classifyUpdateAllPollError(
+        updateAllTransientErrors.value,
+        UPDATE_ALL_LOST_CONTACT_ERRORS,
+        UPDATE_ALL_MAX_TRANSIENT_ERRORS,
+      )
+      if (decision === 'giveup') {
         // Gave up — show "lost contact" banner, re-enable CTA
         updateAllLostContact.value = true
         updateAllPolling.value = false
         updateAllPollTimer = null
         return
       }
-      if (updateAllTransientErrors.value >= UPDATE_ALL_LOST_CONTACT_ERRORS) {
+      if (decision === 'lost-contact') {
         updateAllLostContact.value = true
       }
-      // Keep polling (backoff: 2s)
+      // Keep polling (backoff: 2s). During stage-3, updateAllReconnecting is
+      // already true (transient errors >= 1) so the reconnecting affordance
+      // shows immediately without waiting for the lost-contact threshold.
       updateAllPollTimer = setTimeout(poll, 2000)
       return
     }
@@ -621,6 +857,8 @@ onMounted(async () => {
 onUnmounted(() => {
   if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
   _stopUpdateAllPoll()
+  _stopResolveDriftPoll()
+  _stopFleetJobPoll()
 })
 </script>
 
@@ -704,6 +942,16 @@ onUnmounted(() => {
 
       <!-- Pipeline progress display (shown when job exists) -->
       <div v-if="updateAllJob" class="mt-5">
+        <!-- #12593: inline reconnecting notice during the stage-3 self-restart window -->
+        <div
+          v-if="updateAllReconnecting"
+          class="mb-3 flex items-center gap-2 text-sm text-amber-700"
+        >
+          <svg class="w-4 h-4 animate-spin shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
+        </div>
         <!-- Stage track -->
         <div class="flex items-start gap-0 overflow-x-auto">
           <template v-for="(stage, idx) in updateAllJob.stages" :key="stage.name">
@@ -719,13 +967,26 @@ onUnmounted(() => {
                   <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  <!-- Fleet progress shows numeric fraction; others use i18n status key -->
+                  <!-- Fleet progress shows numeric fraction; others use i18n status key
+                       (stage-3 shows "reconnecting..." while the control plane restarts, #12593) -->
                   <span v-if="stageStatusText(stage) !== null">{{ stageStatusText(stage) }}</span>
-                  <span v-else>{{ $t(stageStatusI18nKey(stage)) }}</span>
+                  <span v-else>{{ $t(stageRunningStatusKey(stage)) }}</span>
                 </div>
                 <!-- F2: terminal/pending status via i18n -->
                 <div v-else class="text-xs">{{ $t(stageStatusI18nKey(stage)) }}</div>
               </div>
+              <!-- #13156: the backend's own per-stage explanation. Rendered for
+                   EVERY stage that carries one, not just failed/skipped ones:
+                   the fleet stage of a `partial` run ends `success` with
+                   `message = "Updated N/M nodes (K skipped - not operational)"`
+                   (code_sync.py:4937-4941), so a non-terminal-only filter would
+                   hide exactly the reason #13156 was filed about. -->
+              <div
+                v-if="stage.message"
+                class="mt-1 text-xs text-gray-600 text-center leading-4 break-words w-full"
+                :title="stage.message"
+                data-testid="stage-message"
+              >{{ stage.message }}</div>
               <!-- SHA badge -->
               <div v-if="stage.sha" class="mt-1 text-xs text-gray-400">
                 <a
@@ -779,6 +1040,20 @@ onUnmounted(() => {
           {{ updateAllJob.failure_reason }}
         </div>
 
+        <!-- Partial: fleet stage skipped one or more non-operational nodes
+             (#11511). The backend reports this as its own terminal status, so
+             without this branch the run ended with no outcome at all — neither
+             the failure banner above nor the success banner below matched. -->
+        <div
+          v-if="updateAllJob.status === 'partial'"
+          class="mt-3 flex items-center gap-2 text-sm text-amber-700"
+        >
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" />
+          </svg>
+          {{ $t('codeSyncView.pipelinePartial', { count: updateAllJob.skipped_fleet_nodes }) }}
+        </div>
+
         <!-- Completed success: F2 use i18n for both terminal labels -->
         <div
           v-if="updateAllJob.status === 'completed' || updateAllJob.status === 'already_current'"
@@ -792,21 +1067,36 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- F1: Lost contact banner — shown when polling gives up after transient errors -->
+    <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
+         during the stage-3 self-restart window; escalates to a static warning
+         with a retry CTA only once polling has lost contact / given up. -->
     <div
-      v-if="updateAllLostContact"
+      v-if="updateAllLostContact || updateAllReconnecting"
       class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-center justify-between"
     >
       <div class="flex items-center gap-3">
-        <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          v-if="updateAllReconnecting && !updateAllLostContact"
+          class="w-5 h-5 text-amber-600 animate-spin"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <svg v-else class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div class="flex-1">
           <div class="font-medium text-amber-900">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
-          <div class="text-sm text-amber-700">{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</div>
+          <div class="text-sm text-amber-700">
+            <span v-if="updateAllReconnecting && !updateAllLostContact">
+              {{ $t('codeSyncView.pipelineReconnectingAttempt', { attempt: updateAllTransientErrors }) }}
+            </span>
+            <span v-else>{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</span>
+          </div>
         </div>
       </div>
       <button
+        v-if="updateAllLostContact"
         @click="updateAllLostContact = false; handleUpdateAll()"
         class="btn btn-secondary text-sm shrink-0 ml-4"
       >
@@ -1039,7 +1329,7 @@ onUnmounted(() => {
           <select
             id="drift-component-select"
             v-model="selectedDriftComponent"
-            :disabled="isDriftLoading"
+            :disabled="isDriftLoading || isResolvingDrift"
             class="form-select text-sm rounded border-gray-300 focus:border-primary-500 focus:ring-primary-500"
           >
             <option value="autobot-slm-backend">autobot-slm-backend</option>
@@ -1124,6 +1414,31 @@ onUnmounted(() => {
           >
             {{ showDriftDetails ? $t('codeSyncView.hideDetails') : $t('codeSyncView.showDetails') }}
           </button>
+        </div>
+
+        <!-- #11303: Async resolve job progress (rsync/pip/build/restart may take 40-120s) -->
+        <div
+          v-if="isResolvingDrift && resolveDriftJob && !resolveDriftLostContact"
+          class="text-sm text-gray-600 mb-3 flex items-center gap-2"
+        >
+          <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {{ resolveDriftJob.post_steps[resolveDriftJob.post_steps.length - 1] || $t('codeSyncView.resyncing') }}
+        </div>
+
+        <!-- #11303: Lost contact banner — component's own service restart drops the connection -->
+        <div
+          v-if="resolveDriftLostContact"
+          class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3 flex items-center gap-3"
+        >
+          <svg class="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <div class="font-medium text-amber-900 text-sm">{{ $t('codeSyncView.sLMManagerRestarting') }}</div>
+            <div class="text-sm text-amber-700">{{ $t('codeSyncView.codeSyncedSuccessfullyBackend') }}</div>
+          </div>
         </div>
 
         <!-- Drifted files table -->
@@ -1236,6 +1551,102 @@ onUnmounted(() => {
             <span class="text-sm text-gray-700">{{ $t('codeSyncView.restartServiceAfterSync') }}</span>
           </label>
         </div>
+      </div>
+    </div>
+
+    <!-- Fleet sync jobs (#13157) — the asynchronous per-node rollout that
+         "Sync Selected" / "Sync All" queue. Without this panel the job_id
+         returned by syncFleet was discarded, so `failure_reason` and the
+         per-node ansible error never reached the operator. -->
+    <div class="card p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900">{{ $t('codeSyncView.fleetSyncJobs') }}</h2>
+          <p class="text-sm text-gray-500">{{ $t('codeSyncView.fleetSyncJobsDesc') }}</p>
+        </div>
+        <button
+          @click="loadRecentFleetJobs"
+          :disabled="recentFleetJobsLoading"
+          class="btn btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {{ recentFleetJobsLoading ? $t('codeSyncView.refreshing') : $t('codeSyncView.refresh') }}
+        </button>
+      </div>
+
+      <!-- The job started from this page, polled to completion -->
+      <div
+        v-if="fleetSyncJob"
+        data-testid="fleet-sync-job"
+        class="border border-gray-200 rounded-md p-3 mb-4"
+      >
+        <div class="flex items-center gap-2 flex-wrap">
+          <span
+            :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(fleetSyncJob.status)]"
+          >{{ $t(fleetJobStatusI18nKey(fleetSyncJob.status)) }}</span>
+          <span class="font-mono text-xs text-gray-500">{{ fleetSyncJob.job_id }}</span>
+          <span class="text-sm text-gray-700">{{
+            $t('codeSyncView.fleetJobProgress', {
+              completed: fleetSyncJob.completed_nodes,
+              total: fleetSyncJob.total_nodes,
+            })
+          }}</span>
+          <span v-if="fleetSyncJob.failed_nodes > 0" class="text-sm text-red-700">{{
+            $t('codeSyncView.fleetJobFailedNodes', { count: fleetSyncJob.failed_nodes })
+          }}</span>
+        </div>
+        <!-- #13157: the reason the backend recorded (code_sync.py:402) -->
+        <div
+          v-if="fleetSyncJob.failure_reason"
+          data-testid="fleet-job-failure-reason"
+          class="mt-2 bg-red-50 border border-red-200 rounded-md p-2 text-sm text-red-700"
+        >
+          <span class="font-medium">{{ $t('codeSyncView.fleetJobFailureReason') }}</span>
+          {{ fleetSyncJob.failure_reason }}
+        </div>
+        <!-- Per-node outcome; `message` carries the ansible fatal on failure -->
+        <ul v-if="fleetSyncJob.nodes.length > 0" class="mt-2 space-y-1">
+          <li
+            v-for="node in fleetSyncJob.nodes"
+            :key="node.node_id"
+            class="text-xs text-gray-600 flex gap-2"
+          >
+            <span class="font-medium shrink-0">{{ node.hostname || node.node_id }}</span>
+            <span class="shrink-0">{{ node.status }}</span>
+            <span v-if="node.message" class="text-gray-500 break-words">{{ node.message }}</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Recent jobs, so a rollout that failed while the page was closed is
+           still inspectable -->
+      <h3 class="text-sm font-medium text-gray-700 mb-2">{{ $t('codeSyncView.recentFleetJobs') }}</h3>
+      <div v-if="recentFleetJobs.length > 0" class="space-y-2">
+        <div
+          v-for="job in recentFleetJobs"
+          :key="job.job_id"
+          data-testid="recent-fleet-job"
+          class="border border-gray-200 rounded-md p-2"
+        >
+          <div class="flex items-center gap-2 flex-wrap">
+            <span
+              :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(job.status)]"
+            >{{ $t(fleetJobStatusI18nKey(job.status)) }}</span>
+            <span class="font-mono text-xs text-gray-500">{{ job.job_id }}</span>
+            <span class="text-xs text-gray-500">{{ formatDateTime(job.created_at) }}</span>
+            <span class="text-xs text-gray-700">{{
+              $t('codeSyncView.fleetJobProgress', {
+                completed: job.completed_nodes,
+                total: job.total_nodes,
+              })
+            }}</span>
+          </div>
+          <div v-if="job.failure_reason" class="mt-1 text-xs text-red-700 break-words">
+            {{ job.failure_reason }}
+          </div>
+        </div>
+      </div>
+      <div v-else-if="!recentFleetJobsLoading" class="text-sm text-gray-500">
+        {{ $t('codeSyncView.noRecentFleetJobs') }}
       </div>
     </div>
 

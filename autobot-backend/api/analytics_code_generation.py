@@ -49,7 +49,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_constants import TTL_30_DAYS
 from llm_shared.types import LLMType
@@ -440,10 +440,10 @@ class CodeGenerationEngine:
     async def _get_redis(self):
         """Get Redis client lazily"""
         if self._redis is None:
-            # get_redis_client(async_client=True) returns a COROUTINE — must be awaited
+            # get_async_redis_client() returns a COROUTINE — must be awaited
             # (see autobot_shared/redis_client.py landmine note). Missing await here
             # silently broke every stats/version Redis op (AttributeError swallowed).
-            self._redis = await get_redis_client(async_client=True, database=RedisDatabase.MAIN)
+            self._redis = await get_async_redis_client(database=RedisDatabase.MAIN)
         return self._redis
 
     def _get_llm_client(self):

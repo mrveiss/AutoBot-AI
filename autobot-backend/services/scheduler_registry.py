@@ -14,16 +14,54 @@ enforces this automatically at CI time.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
+
+# GH#12836: the set of valid runtimes lives here and nowhere else. It used to be
+# restated by hand in the tests, including a hand-maintained *subset*
+# (_LIFESPAN_RUNTIMES) that gates the #12810 startup-enforcement check. Adding a
+# runtime to the Literal and forgetting the subset silently exempted every job
+# using it from the gate — the exact "registered but inert" failure that gate
+# exists to catch, reintroduced through a stale copy.
+SchedulerRuntime = Literal["asyncio_per_worker", "celery_beat", "leader_elected", "apscheduler"]
+
+#: Every valid runtime, derived from the type so the two can never drift.
+SCHEDULER_RUNTIMES: frozenset[str] = frozenset(get_args(SchedulerRuntime))
+
+#: Runtimes whose jobs are launched from ``initialization/lifespan.py`` and are
+#: therefore subject to the startup-enforcement check.
+LIFESPAN_RUNTIMES: frozenset[str] = frozenset({"asyncio_per_worker", "leader_elected", "apscheduler"})
+
+#: Runtimes launched by something other than lifespan, and exempt from that check.
+#: ``celery_beat`` jobs come from the Celery beat schedule.
+NON_LIFESPAN_RUNTIMES: frozenset[str] = frozenset({"celery_beat"})
 
 
 @dataclass
 class ScheduledJob:
+    """One background job, and — for lifespan-run jobs — proof that it starts.
+
+    GH#12810: registration alone never made a job run. ``SkillHealthScheduler`` and
+    ``MeshBrainScheduler`` were both registered, described, and dead, with the fact
+    buried in prose in ``description``. Every lifespan-run job must now declare
+    either ``startup_marker`` (a symbol that must appear in ``initialization/lifespan.py``)
+    or ``inert_reason`` (a deliberate, stated decision not to run it).
+    ``tests/services/test_scheduler_registry.py`` enforces exactly one of the two,
+    so "registered but silently inert" cannot ship again.
+
+    GH#12820: ``default_enabled`` is what the job does with no operator override
+    present — the default an operator toggle departs from, and the value the
+    resolver falls back to when Redis is unreachable. Jobs declared inert default
+    to ``False``; every other default is set to preserve exactly what runs today.
+    """
+
     name: str
     interval_seconds: int | str
     owner_file: str
-    runtime: Literal["asyncio_per_worker", "celery_beat", "leader_elected", "apscheduler"]
+    runtime: SchedulerRuntime
     description: str
+    startup_marker: str | None = None
+    inert_reason: str | None = None
+    default_enabled: bool = True
 
 
 REGISTRY: list[ScheduledJob] = [
@@ -36,6 +74,7 @@ REGISTRY: list[ScheduledJob] = [
             "Polls for pending scheduled workflows and dispatches them when due. "
             "Tick interval is WorkflowConfig.SCHEDULER_CHECK_INTERVAL_S (10 s)."
         ),
+        startup_marker="get_workflow_scheduler",
     ),
     ScheduledJob(
         name="HeartbeatScheduler",
@@ -45,6 +84,7 @@ REGISTRY: list[ScheduledJob] = [
         description=(
             "Fires agent heartbeat runs on per-agent intervals persisted in the DB; " "minimum enforced floor is 10 s."
         ),
+        startup_marker="_init_heartbeat_scheduler",
     ),
     ScheduledJob(
         name="ConnectorScheduler",
@@ -55,6 +95,7 @@ REGISTRY: list[ScheduledJob] = [
             "Triggers knowledge connector syncs. Interval is per-connector and "
             "resolved dynamically from connector configuration."
         ),
+        startup_marker="_start_connector_scheduler",
     ),
     ScheduledJob(
         name="MeshBrainScheduler",
@@ -63,16 +104,44 @@ REGISTRY: list[ScheduledJob] = [
         runtime="asyncio_per_worker",
         description=(
             "Runs four sub-tasks: edge_sync (300 s), node_promoter (24 h), "
-            "edge_discoverer (24 h), mesh_pruner (7 d), edge_learner (realtime Redis consumer). "
-            "NOTE: not initialized in lifespan.py — currently inert."
+            "edge_discoverer (24 h), mesh_pruner (7 d), edge_learner (realtime Redis consumer)."
         ),
+        startup_marker="initialization/lifespan.py::_init_mesh_brain_scheduler",
+        inert_reason=(
+            "Wired in lifespan (#12816) but DEFAULT-OFF via "
+            "AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED. mesh_pruner deletes data on a 7-day "
+            "cadence, so ENABLING it remains a data-retention decision — the wiring gap "
+            "is closed, the retention call is not."
+        ),
+        default_enabled=False,
     ),
     ScheduledJob(
         name="SkillHealthScheduler",
         interval_seconds=300,
         owner_file="services/skill_management/skill_health_scheduler.py",
         runtime="asyncio_per_worker",
-        description=("Checks skill health every 300 s. " "NOTE: not initialized in lifespan.py — currently inert."),
+        description=(
+            "Checks skill health every 300 s and auto-disables skills below the health "
+            "threshold. Started as a background task in lifespan.py (GH#12810) — its "
+            "start() is an infinite loop, so it is spawned, never awaited."
+        ),
+        startup_marker="_init_skill_health_scheduler",
+    ),
+    ScheduledJob(
+        name="SkillDistillationScheduler",
+        interval_seconds="config:AUTOBOT_SKILL_DISTILLATION_INTERVAL_S",
+        owner_file="services/skill_management/skill_distillation_scheduler.py",
+        runtime="leader_elected",
+        description=(
+            "Distils conversations finished since the last run into proposed skills "
+            "(SkillExtractor -> SkillProposer). Leader-elected so N workers do not each "
+            "propose the same skill; cursor advances only after a proposal returns. "
+            "Interval defaults to 3600 s; gated off by default behind "
+            "AUTOBOT_SKILL_DISTILLATION_ENABLED. Wired in lifespan.py (GH#12809)."
+        ),
+        startup_marker="_init_skill_distillation_scheduler",
+        # Ships off: an hourly pass costs real LLM tokens, so it is opt-in (GH#12809).
+        default_enabled=False,
     ),
     ScheduledJob(
         name="LLMKeyRotationScheduler",
@@ -83,6 +152,7 @@ REGISTRY: list[ScheduledJob] = [
             "Auto-revokes expired LLM API keys. Interval (in minutes) comes from "
             "the AUTOBOT_LLM_KEY_ROTATION_INTERVAL_MINUTES environment variable."
         ),
+        startup_marker="_init_llm_key_rotation_scheduler",
     ),
     ScheduledJob(
         name="BackupScheduler",
@@ -94,6 +164,7 @@ REGISTRY: list[ScheduledJob] = [
             "(default 02:00 UTC) and calls KnowledgeBase.create_backup(). "
             "Implemented in GH#7912."
         ),
+        startup_marker="_init_backup_scheduler",
     ),
     ScheduledJob(
         name="CeleryBeat:cleanup_orphans",
@@ -137,6 +208,7 @@ REGISTRY: list[ScheduledJob] = [
             "_init_heartbeat_scheduler; the legacy services/heartbeat_scheduler.py "
             "is the fallback when the LLC package is unavailable."
         ),
+        startup_marker="_init_heartbeat_scheduler",
     ),
     ScheduledJob(
         name="LLCRoutineScheduler",
@@ -148,5 +220,6 @@ REGISTRY: list[ScheduledJob] = [
             "llc:heartbeat:schedule sorted set and polls every 5 s for due entries. "
             "Started in initialization/lifespan._init_llc_routine_scheduler."
         ),
+        startup_marker="_init_llc_routine_scheduler",
     ),
 ]

@@ -416,7 +416,7 @@ async def renew_tls_certificate(
             node.hostname,
         )
 
-        return {  # codeql[py/stack-trace-exposure]
+        return {
             "success": True,
             "message": "Certificate renewed successfully",
             "old_credential_id": credential_id,
@@ -541,9 +541,7 @@ async def rotate_tls_certificate(
             node.hostname,
         )
 
-        return _build_rotation_response(  # codeql[py/stack-trace-exposure]
-            credential_id, new_credential, deployment_result, deactivate_old
-        )
+        return _build_rotation_response(credential_id, new_credential, deployment_result, deactivate_old)
 
     except Exception as e:
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
@@ -668,7 +666,7 @@ async def bulk_renew_expiring_certificates(
 
     logger.info("Bulk certificate renewal: %d renewed, %d failed", renewed, failed)
 
-    return _build_renewal_response(renewed, failed, results)  # codeql[py/stack-trace-exposure]
+    return _build_renewal_response(renewed, failed, results)
 
 
 def _check_ansible_availability() -> str:
@@ -936,7 +934,7 @@ def _write_cert_files(tmpdir: str, certs: dict) -> tuple:
     # TLS private key written to ephemeral tmpdir for Ansible
     # deployment; directory cleaned up after use.
     with open(key_path, "w", encoding="utf-8") as f:
-        f.write(certs["private_key"])  # lgtm[py/clear-text-storage-sensitive-data]
+        f.write(certs["private_key"])
 
     if chain_path:
         with open(chain_path, "w", encoding="utf-8") as f:

@@ -22,6 +22,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL, config
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from utils.line_index import LineIndex  # #12884
 
 # Issue #542: Handle imports for both standalone execution and backend import
 # When imported from backend, project root is in sys.path
@@ -770,8 +771,11 @@ class EnvironmentAnalyzer:
 
         # Use precompiled combined patterns
         for category, compiled in self._compiled_patterns.items():
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in compiled.finditer(content):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
 
                 # Issue #632: Skip matches inside docstrings
                 if line_num in docstring_lines:
@@ -1339,18 +1343,26 @@ class EnvironmentAnalyzer:
         """Check if Ollama service is available.
 
         Helper for llm_filter_hardcoded (#633).
+
+        Issue #12979: routed through the shared pooled client's
+        ``tracked_request()``. ``suppress_error_log=True`` — Ollama being
+        unavailable is an expected condition this health probe already
+        handles by returning unfiltered results (logged at WARNING here).
         """
         import aiohttp
 
+        from autobot_shared.http_client import get_http_client
+
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"http://{host}:{port}/api/tags",
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as resp:
-                    if resp.status != 200:
-                        logger.warning("Ollama not available, " "returning unfiltered results")
-                        return False
+            async with get_http_client().tracked_request(
+                "GET",
+                f"http://{host}:{port}/api/tags",
+                timeout=aiohttp.ClientTimeout(total=5),
+                suppress_error_log=True,
+            ) as resp:
+                if resp.status != 200:
+                    logger.warning("Ollama not available, " "returning unfiltered results")
+                    return False
         except Exception as e:
             logger.warning(f"Ollama health check failed: {e}, " "returning unfiltered results")
             return False
@@ -1377,7 +1389,7 @@ class EnvironmentAnalyzer:
             prompt = self._build_llm_filter_prompt(batch)
 
             try:
-                true_indices = await self._call_ollama_filter(ollama_url, model, prompt, session=None)
+                true_indices = await self._call_ollama_filter(ollama_url, model, prompt)
                 for idx in true_indices:
                     if 0 <= idx < len(batch):
                         filtered_results.append(batch[idx])
@@ -1458,23 +1470,31 @@ class EnvironmentAnalyzer:
         url: str,
         model: str,
         prompt: str,
-        session: Any | None = None,
     ) -> list[int]:
         """
         Call Ollama API for filtering and parse response.
 
         Issue #633: Handles Ollama generate API response.
 
+        Issue #12979: routed through the shared pooled client's
+        ``tracked_request()`` instead of a per-call ``aiohttp.ClientSession``.
+        Dropped the ``session`` parameter — its "caller supplies its own
+        session" branch had exactly one caller (``_process_llm_batches``,
+        same file) and it always passed ``session=None``, so the reused-
+        session path was dead code; the pooled client now provides the
+        connection reuse that parameter existed to allow.
+
         Args:
             url: Ollama generate endpoint URL
             model: Model name to use
             prompt: The filter prompt
-            session: Optional aiohttp session (creates new if None)
 
         Returns:
             List of 1-indexed line numbers that are true issues
         """
         import aiohttp
+
+        from autobot_shared.http_client import get_http_client
 
         payload = {
             "model": model,
@@ -1486,24 +1506,17 @@ class EnvironmentAnalyzer:
             },
         }
 
-        should_close = session is None
-        if session is None:
-            session = aiohttp.ClientSession()
+        async with get_http_client().tracked_request(
+            "POST", url, json=payload, timeout=aiohttp.ClientTimeout(total=60)
+        ) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                raise Exception(f"Ollama API error {response.status}: {error_text}")
 
-        try:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(f"Ollama API error {response.status}: {error_text}")
+            result = await response.json()
+            response_text = result.get("response", "").strip()
 
-                result = await response.json()
-                response_text = result.get("response", "").strip()
-
-                return self._parse_llm_filter_response(response_text)
-
-        finally:
-            if should_close:
-                await session.close()
+            return self._parse_llm_filter_response(response_text)
 
     def _parse_llm_filter_response(self, response_text: str) -> list[int]:
         """

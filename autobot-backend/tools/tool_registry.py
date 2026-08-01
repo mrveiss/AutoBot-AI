@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
     from worker_node import WorkerNode
 from autobot_shared.logging_manager import get_logger
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 logger = get_logger(__name__)
 
@@ -56,6 +57,23 @@ class ToolRegistry:
         self.worker_node = worker_node
         self.knowledge_base = knowledge_base
         self.logger = get_logger(__name__)
+
+    async def _resolve_knowledge_base(self) -> "KnowledgeBase | None":
+        """Lazily resolve the knowledge base if not injected at construction (#13027).
+
+        ``get_tool_registry = lazy_singleton(ToolRegistry)`` is constructed with
+        no args by every call site (``services/llm_service.py``,
+        ``api/image_generation.py``), so ``knowledge_base`` is permanently
+        ``None`` via the constructor. Falling back to the shared async KB
+        singleton makes the KB-search tools work regardless of construction
+        order, instead of requiring a specific call site to inject it first.
+        """
+        if self.knowledge_base is not None:
+            return self.knowledge_base
+        from knowledge_factory import get_knowledge_base_async  # noqa: PLC0415
+
+        self.knowledge_base = await get_knowledge_base_async()
+        return self.knowledge_base
 
     def _generate_task_id(self) -> str:
         """Generate a unique task ID."""
@@ -350,7 +368,8 @@ class ToolRegistry:
 
     async def search_knowledge_base(self, query: str, n_results: int = 5) -> Dict[str, Any]:
         """Search the knowledge base."""
-        if not self.knowledge_base:
+        kb = await self._resolve_knowledge_base()
+        if not kb:
             return {
                 "tool_name": "search_knowledge_base",
                 "tool_args": {"query": query, "n_results": n_results},
@@ -359,7 +378,9 @@ class ToolRegistry:
             }
 
         try:
-            results = await self.knowledge_base.search(query, n_results=n_results)
+            # Issue #13024/#13027: canonical search() has no n_results kwarg.
+            # Issue #13009: exclude quarantined research facts (#12622).
+            results = await kb.search(query, top_k=n_results, filters=RESEARCH_QUARANTINE_FILTER)
 
             if results:
                 formatted_results = []
@@ -395,7 +416,8 @@ class ToolRegistry:
         self, file_path: str, file_type: str, metadata: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """Add a file to the knowledge base."""
-        if not self.knowledge_base:
+        kb = await self._resolve_knowledge_base()
+        if not kb:
             return {
                 "tool_name": "add_file_to_knowledge_base",
                 "tool_args": {"file_path": file_path, "file_type": file_type},
@@ -404,7 +426,7 @@ class ToolRegistry:
             }
 
         try:
-            result = await self.knowledge_base.add_file(file_path, file_type, metadata or {})
+            result = await kb.add_file(file_path, file_type, metadata or {})
             return {
                 "tool_name": "add_file_to_knowledge_base",
                 "tool_args": {
@@ -430,7 +452,8 @@ class ToolRegistry:
 
     async def store_fact(self, content: str, metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """Store a fact in the knowledge base."""
-        if not self.knowledge_base:
+        kb = await self._resolve_knowledge_base()
+        if not kb:
             return {
                 "tool_name": "store_fact",
                 "tool_args": {"content": content, "metadata": metadata},
@@ -439,7 +462,7 @@ class ToolRegistry:
             }
 
         try:
-            result = await self.knowledge_base.store_fact(content, metadata or {})
+            result = await kb.store_fact(content, metadata or {})
             return {
                 "tool_name": "store_fact",
                 "tool_args": {"content": content, "metadata": metadata},
@@ -457,7 +480,8 @@ class ToolRegistry:
 
     async def get_fact(self, fact_id: int | None = None, query: str | None = None) -> Dict[str, Any]:
         """Get facts from the knowledge base."""
-        if not self.knowledge_base:
+        kb = await self._resolve_knowledge_base()
+        if not kb:
             return {
                 "tool_name": "get_fact",
                 "tool_args": {"fact_id": fact_id, "query": query},
@@ -468,10 +492,11 @@ class ToolRegistry:
         try:
             # Issue #788: get_fact() only accepts fact_id, use search() for queries
             if fact_id is not None:
-                result = self.knowledge_base.get_fact(str(fact_id))
+                result = kb.get_fact(str(fact_id))
                 results = [result] if result else []
             elif query:
-                results = await self.knowledge_base.search(query, top_k=5)
+                # Issue #13009: exclude quarantined research facts (#12622).
+                results = await kb.search(query, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             else:
                 results = []
 
@@ -535,7 +560,9 @@ class ToolRegistry:
     async def bring_window_to_front(self, window_title: str) -> Dict[str, Any]:
         """Bring a window to the front."""
         task = self._create_base_task("gui_bring_window_to_front")
-        task["window_title"] = window_title
+        # Issue #12070: key must be "app_title" — GUIBringWindowToFrontHandler
+        # (task_handlers/gui_handlers.py) requires that key, not "window_title".
+        task["app_title"] = window_title
 
         result = await self._execute_worker_task(task)
         return {
@@ -544,6 +571,40 @@ class ToolRegistry:
             "result": result.get(
                 "output",
                 result.get("message", f"Brought window to front: {window_title}"),
+            ),
+            "status": result.get("status", "success"),
+        }
+
+    async def read_text_from_region(self, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
+        """OCR-read text from a screen region (Issue #12070)."""
+        task = self._create_base_task("gui_read_text_from_region")
+        task["x"] = x
+        task["y"] = y
+        task["width"] = width
+        task["height"] = height
+
+        result = await self._execute_worker_task(task)
+        return {
+            "tool_name": "read_text_from_region",
+            "tool_args": {"x": x, "y": y, "width": width, "height": height},
+            "result": result.get("text", result.get("message", "")),
+            "status": result.get("status", "success"),
+        }
+
+    async def move_mouse(self, x: int, y: int, duration: float = 0.0) -> Dict[str, Any]:
+        """Move the mouse cursor to the specified coordinates (Issue #12070)."""
+        task = self._create_base_task("gui_move_mouse")
+        task["x"] = x
+        task["y"] = y
+        task["duration"] = duration
+
+        result = await self._execute_worker_task(task)
+        return {
+            "tool_name": "move_mouse",
+            "tool_args": {"x": x, "y": y, "duration": duration},
+            "result": result.get(
+                "output",
+                result.get("message", f"Moved mouse to ({x}, {y})"),
             ),
             "status": result.get("status", "success"),
         }
@@ -625,6 +686,10 @@ class ToolRegistry:
             "typetext": lambda args: self.type_text(args.get("text", "")),
             "clickelement": lambda args: self.click_element(args.get("image_path", "")),
             "bringwindowtofront": lambda args: self.bring_window_to_front(args.get("window_title", "")),
+            "readtextfromregion": lambda args: self.read_text_from_region(
+                args.get("x", 0), args.get("y", 0), args.get("width", 0), args.get("height", 0)
+            ),
+            "movemouse": lambda args: self.move_mouse(args.get("x", 0), args.get("y", 0), args.get("duration", 0.0)),
             "askuserformanual": lambda args: self.ask_user_for_manual(
                 args.get("program_name", ""), args.get("question_text", "")
             ),
@@ -805,6 +870,9 @@ class ToolRegistry:
             "type_text",
             "click_element",
             "bring_window_to_front",
+            # Issue #12070: previously had handlers but no task-creation wiring
+            "read_text_from_region",
+            "move_mouse",
             "ask_user_for_manual",
             "respond_conversationally",
             "code_interpreter",

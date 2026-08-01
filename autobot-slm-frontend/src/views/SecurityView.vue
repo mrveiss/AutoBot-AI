@@ -17,6 +17,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { usePagination } from '@autobot/ui'
 import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
@@ -82,9 +83,46 @@ const uploadForm = ref({
   server_key: '',
 })
 
-// Pagination
-const currentPage = ref(1)
-const perPage = ref(50)
+// Pagination — one usePagination instance per data set (server-side, reactive
+// total). Each list owns its own page state so navigating one list no longer
+// moves the others (a single shared currentPage previously drove all three). #12044
+const PER_PAGE = 50
+
+const {
+  currentPage: auditPage,
+  totalPages: auditTotalPages,
+  itemsPerPage: auditPerPage,
+  next: auditNext,
+  prev: auditPrev,
+} = usePagination<AuditLog>(auditLogs, {
+  itemsPerPage: PER_PAGE,
+  serverTotalItems: auditLogsTotal,
+  onPageChange: () => fetchAuditLogs(),
+})
+
+const {
+  currentPage: eventsPage,
+  totalPages: eventsTotalPages,
+  itemsPerPage: eventsPerPage,
+  next: eventsNext,
+  prev: eventsPrev,
+} = usePagination<SecurityEvent>(securityEvents, {
+  itemsPerPage: PER_PAGE,
+  serverTotalItems: eventsTotal,
+  onPageChange: () => fetchSecurityEvents(),
+})
+
+const {
+  currentPage: policiesPage,
+  totalPages: policiesTotalPages,
+  itemsPerPage: policiesPerPage,
+  next: policiesNext,
+  prev: policiesPrev,
+} = usePagination<SecurityPolicy>(policies, {
+  itemsPerPage: PER_PAGE,
+  serverTotalItems: policiesTotal,
+  onPageChange: () => fetchPolicies(),
+})
 
 // Filters
 const auditCategoryFilter = ref('')
@@ -151,8 +189,8 @@ async function fetchAuditLogs() {
   try {
     loading.value = true
     const response = await slmApi.getAuditLogs(
-      currentPage.value,
-      perPage.value,
+      auditPage.value,
+      auditPerPage.value,
       auditCategoryFilter.value || undefined
     )
     auditLogs.value = response.logs
@@ -170,8 +208,8 @@ async function fetchSecurityEvents() {
   try {
     loading.value = true
     const response = await slmApi.getSecurityEvents(
-      currentPage.value,
-      perPage.value,
+      eventsPage.value,
+      eventsPerPage.value,
       eventSeverityFilter.value || undefined
     )
     securityEvents.value = response.events
@@ -183,6 +221,16 @@ async function fetchSecurityEvents() {
   } finally {
     loading.value = false
   }
+}
+
+function onAuditCategoryChange() {
+  auditPage.value = 1
+  fetchAuditLogs()
+}
+
+function onEventSeverityChange() {
+  eventsPage.value = 1
+  fetchSecurityEvents()
 }
 
 async function fetchThreatSummary() {
@@ -199,8 +247,8 @@ async function fetchPolicies() {
   try {
     loading.value = true
     const response = await slmApi.getSecurityPolicies(
-      currentPage.value,
-      perPage.value
+      policiesPage.value,
+      policiesPerPage.value
     )
     policies.value = response.policies
     policiesTotal.value = response.total
@@ -364,8 +412,10 @@ async function uploadTlsCertificate() {
   }
 }
 
-function formatExpiryStatus(daysUntil: number | null): { text: string; class: string } {
-  if (daysUntil === null) return { text: 'Unknown', class: 'bg-gray-100 text-gray-700' }
+// `days_until_expiry` is nullable AND optional in the contract
+// (TLSEndpointResponse, tls.py:282) — accept both absent and null.
+function formatExpiryStatus(daysUntil: number | null | undefined): { text: string; class: string } {
+  if (daysUntil == null) return { text: 'Unknown', class: 'bg-gray-100 text-gray-700' }
   if (daysUntil <= 0) return { text: 'Expired', class: 'bg-red-100 text-red-700' }
   if (daysUntil <= 7) return { text: `${daysUntil}d`, class: 'bg-red-100 text-red-700' }
   if (daysUntil <= 30) return { text: `${daysUntil}d`, class: 'bg-yellow-100 text-yellow-700' }
@@ -472,7 +522,9 @@ async function enableTlsOnSelectedServices() {
 // Watch tab changes
 function onTabChange(tabId: string) {
   navigateToTab(tabId)
-  currentPage.value = 1
+  auditPage.value = 1
+  eventsPage.value = 1
+  policiesPage.value = 1
   error.value = null
 
   switch (tabId) {
@@ -590,12 +642,12 @@ const scoreColor = computed(() => {
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-lg font-semibold">{{ $t('securityView.recentSecurityEvents') }}</h2>
           </div>
-          <div v-if="overview.recent_events.length === 0" class="p-6 text-center text-gray-500">
+          <div v-if="!overview.recent_events?.length" class="p-6 text-center text-gray-500">
             {{ $t('securityView.noRecentSecurityEvents') }}
           </div>
           <div v-else class="divide-y divide-gray-200">
             <div
-              v-for="event in overview.recent_events"
+              v-for="event in overview.recent_events ?? []"
               :key="event.event_id"
               class="px-6 py-4 flex items-center justify-between"
             >
@@ -959,7 +1011,7 @@ const scoreColor = computed(() => {
         <select
           id="audit-category-filter"
           v-model="auditCategoryFilter"
-          @change="fetchAuditLogs()"
+          @change="onAuditCategoryChange()"
           class="rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 text-sm"
         >
           <option value="">{{ $t('securityView.allCategories') }}</option>
@@ -1019,7 +1071,27 @@ const scoreColor = computed(() => {
             </tr>
           </tbody>
         </table>
-        <div v-if="auditLogsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Logs', { count: auditLogs.length, value1: auditLogsTotal }) }}</div>
+        <div
+          v-if="auditLogsTotal > auditPerPage"
+          class="px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-4"
+        >
+          <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Logs', { count: auditLogs.length, value1: auditLogsTotal }) }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: auditPage, value1: auditTotalPages }) }}</span>
+            <div class="flex gap-2">
+              <button
+                @click="auditPrev"
+                :disabled="auditPage === 1"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
+              >{{ $t('securityView.previous') }}</button>
+              <button
+                @click="auditNext"
+                :disabled="auditPage * auditPerPage >= auditLogsTotal"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
+              >{{ $t('securityView.next') }}</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1055,7 +1127,7 @@ const scoreColor = computed(() => {
         <select
           id="event-severity-filter"
           v-model="eventSeverityFilter"
-          @change="fetchSecurityEvents()"
+          @change="onEventSeverityChange()"
           class="rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 text-sm"
         >
           <option value="">{{ $t('securityView.allSeverities') }}</option>
@@ -1122,7 +1194,27 @@ const scoreColor = computed(() => {
             </div>
           </div>
         </div>
-        <div v-if="eventsTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Events', { count: securityEvents.length, value1: eventsTotal }) }}</div>
+        <div
+          v-if="eventsTotal > eventsPerPage"
+          class="px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-4"
+        >
+          <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Events', { count: securityEvents.length, value1: eventsTotal }) }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: eventsPage, value1: eventsTotalPages }) }}</span>
+            <div class="flex gap-2">
+              <button
+                @click="eventsPrev"
+                :disabled="eventsPage === 1"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
+              >{{ $t('securityView.previous') }}</button>
+              <button
+                @click="eventsNext"
+                :disabled="eventsPage * eventsPerPage >= eventsTotal"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
+              >{{ $t('securityView.next') }}</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1176,7 +1268,27 @@ const scoreColor = computed(() => {
             </div>
           </div>
         </div>
-        <div v-if="policiesTotal > perPage" class="px-6 py-4 border-t border-gray-200 text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Policies', { count: policies.length, value1: policiesTotal }) }}</div>
+        <div
+          v-if="policiesTotal > policiesPerPage"
+          class="px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-4"
+        >
+          <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Policies', { count: policies.length, value1: policiesTotal }) }}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: policiesPage, value1: policiesTotalPages }) }}</span>
+            <div class="flex gap-2">
+              <button
+                @click="policiesPrev"
+                :disabled="policiesPage === 1"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
+              >{{ $t('securityView.previous') }}</button>
+              <button
+                @click="policiesNext"
+                :disabled="policiesPage * policiesPerPage >= policiesTotal"
+                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
+              >{{ $t('securityView.next') }}</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

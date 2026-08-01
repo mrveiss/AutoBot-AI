@@ -27,6 +27,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from code_intelligence.shared.scoring import get_grade_from_score
 
 # Import shared analytics controller from analytics module
 # This will be set after analytics.py is updated
@@ -552,19 +553,6 @@ def _calculate_quality_factors(cached_analysis: dict) -> dict:
     return quality_factors
 
 
-def _score_to_grade(score: float) -> str:
-    """Convert numeric score to letter grade (Issue #665: extracted)."""
-    if score >= 90:
-        return "A"
-    if score >= 80:
-        return "B"
-    if score >= 70:
-        return "C"
-    if score >= 60:
-        return "D"
-    return "F"
-
-
 @router.get("/code/metrics/quality-score", response_model=AnalyticsCodeQualityScoreResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -595,7 +583,7 @@ async def get_code_quality_score(
 
     return {
         "overall_score": round(overall_score, 1),
-        "grade": _score_to_grade(overall_score),
+        "grade": get_grade_from_score(overall_score),
         "quality_factors": quality_factors,
         "recommendations": [],
         "last_analysis": cached_analysis.get("timestamp"),

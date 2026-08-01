@@ -28,6 +28,7 @@ from api.user_management.dependencies import (
     require_platform_admin,
     require_user_management_enabled,
 )
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.pagination import PaginationParams
 from user_management.middleware.rate_limit import (
@@ -217,7 +218,7 @@ async def get_current_user_profile(
         is_active=True,
         is_verified=True,
         mfa_enabled=False,
-        is_platform_admin=current_user.get("role") == "admin" or current_user.get("is_platform_admin", False),
+        is_platform_admin=is_admin_role(current_user.get("role")) or current_user.get("is_platform_admin", False),
         preferences={},
         roles=[],
         created_at=None,

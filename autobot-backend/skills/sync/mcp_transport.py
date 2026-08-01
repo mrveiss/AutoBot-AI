@@ -19,6 +19,7 @@ from typing import Any, AsyncIterator, Dict
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -161,7 +162,16 @@ class SSETransport(MCPTransport):
         self._sse_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
-        """Open HTTP session and start background SSE reader task."""
+        """Open HTTP session and start background SSE reader task.
+
+        #12979 RAW carve-out (long-lived + streaming category): this session
+        is held open for the transport's full lifetime — the background
+        ``_read_sse`` task streams an SSE response with ``timeout=None`` for
+        as long as the transport is connected, and ``send()`` reuses the same
+        session for every outgoing POST. It is explicitly torn down in
+        ``close()``. Not a per-request construction, so not a pooling
+        candidate.
+        """
         self._session = aiohttp.ClientSession()
         self._sse_task = asyncio.create_task(self._read_sse())
         logger.info("SSETransport: connected to %s", self._base_url)
@@ -251,15 +261,15 @@ class HTTPTransport(MCPTransport):
 
     async def send(self, request: Dict[str, Any]) -> None:
         """POST the JSON-RPC request and buffer the response for receive()."""
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{self._base_url}/rpc",
-                json=request,
-                timeout=aiohttp.ClientTimeout(total=self._timeout),
-            ) as resp:
-                if resp.status != 200:
-                    raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
-                self._pending = await resp.json()
+        async with get_http_client().tracked_request(
+            "POST",
+            f"{self._base_url}/rpc",
+            json=request,
+            timeout=aiohttp.ClientTimeout(total=self._timeout),
+        ) as resp:
+            if resp.status != 200:
+                raise aiohttp.ClientResponseError(resp.request_info, resp.history, status=resp.status)
+            self._pending = await resp.json()
         logger.debug("HTTPTransport: sent method=%s", request.get("method"))
 
     async def receive(self) -> Dict[str, Any]:

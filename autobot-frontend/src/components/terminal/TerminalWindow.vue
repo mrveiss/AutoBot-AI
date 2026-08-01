@@ -1490,8 +1490,8 @@ export default {
   flex-direction: column;
   /* #10750 C2: fill the flex parent (viewport - header) instead of full viewport */
   height: 100%;
-  background-color: #000;
-  color: #ffffff;
+  background-color: var(--bg-dark);
+  color: var(--terminal-text);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   overflow: hidden;
 }
@@ -1500,9 +1500,9 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #2d2d2d;
+  background-color: var(--terminal-chrome-bg);
   padding: var(--spacing-2) var(--spacing-4);
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--terminal-border-subtle);
   user-select: none;
 }
 
@@ -1524,9 +1524,9 @@ export default {
 }
 
 .control-button {
-  background-color: #444;
-  border: 1px solid #666;
-  color: #fff;
+  background-color: var(--terminal-border);
+  border: 1px solid var(--terminal-border-strong);
+  color: var(--terminal-text);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
   cursor: pointer;
@@ -1535,7 +1535,7 @@ export default {
 }
 
 .control-button:hover:not(:disabled) {
-  background-color: #555;
+  background-color: var(--terminal-btn-hover-bg);
   transform: translateY(-1px);
 }
 
@@ -1552,11 +1552,11 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #1e1e1e;
+  background-color: var(--terminal-chrome-bg-alt);
   padding: var(--spacing-1) var(--spacing-4);
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--terminal-border-subtle);
   font-size: var(--text-xs);
-  color: #888;
+  color: var(--terminal-text-muted);
 }
 
 .status-left, .status-right {
@@ -1616,7 +1616,7 @@ export default {
 }
 
 .line-error {
-  color: #ff6b6b;
+  color: var(--terminal-ansi-red);
 }
 
 .line-warning {
@@ -1628,11 +1628,11 @@ export default {
 }
 
 .line-command {
-  color: #87ceeb;
+  color: var(--terminal-ansi-cyan);
 }
 
 .line-system {
-  color: #9370db;
+  color: var(--terminal-ansi-purple);
 }
 
 .terminal-input-wrapper {
@@ -1644,11 +1644,11 @@ export default {
   display: flex;
   align-items: center;
   padding: var(--spacing-0) var(--spacing-4) var(--spacing-4) var(--spacing-4);
-  background-color: #000;
+  background-color: var(--bg-dark);
 }
 
 .prompt {
-  color: #00ff00;
+  color: var(--terminal-ansi-green);
   margin-right: var(--spacing-2);
   flex-shrink: 0;
 }
@@ -1656,7 +1656,7 @@ export default {
 .terminal-input {
   background: none;
   border: none;
-  color: #fff;
+  color: var(--terminal-text);
   font-family: inherit;
   font-size: inherit;
   outline: none;
@@ -1670,7 +1670,7 @@ export default {
 }
 
 .cursor {
-  color: #00ff00;
+  color: var(--terminal-ansi-green);
   font-weight: bold;
   margin-left: var(--spacing-0-5);
 }
@@ -1683,14 +1683,14 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #2d2d2d;
+  background-color: var(--terminal-chrome-bg);
   padding: var(--spacing-1-5) var(--spacing-4);
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--terminal-border-subtle);
   font-size: var(--text-xs);
 }
 
 .footer-info {
-  color: #888;
+  color: var(--terminal-text-muted);
 }
 
 .footer-actions {
@@ -1699,9 +1699,9 @@ export default {
 }
 
 .footer-button {
-  background-color: #444;
-  border: 1px solid #666;
-  color: #ccc;
+  background-color: var(--terminal-border);
+  border: 1px solid var(--terminal-border-strong);
+  color: var(--terminal-text-dim);
   padding: 3px 8px;
   border-radius: var(--radius-default);
   cursor: pointer;
@@ -1710,7 +1710,7 @@ export default {
 }
 
 .footer-button:hover {
-  background-color: #555;
+  background-color: var(--terminal-btn-hover-bg);
 }
 
 .footer-button.workflow-test {
@@ -1731,7 +1731,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: var(--terminal-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1739,8 +1739,8 @@ export default {
 }
 
 .modal-content {
-  background-color: #2d2d2d;
-  color: #fff;
+  background-color: var(--terminal-chrome-bg);
+  color: var(--terminal-text);
   padding: var(--spacing-6);
   border-radius: var(--radius-lg);
   max-width: 400px;
@@ -1851,7 +1851,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: var(--overlay-backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1860,14 +1860,14 @@ export default {
 }
 
 .confirmation-modal {
-  background-color: #2d2d2d;
-  color: #fff;
+  background-color: var(--terminal-chrome-bg);
+  color: var(--terminal-text);
   padding: var(--spacing-0);
   border-radius: var(--radius-xl);
   max-width: 600px;
   width: 90%;
   box-shadow: var(--shadow-lg);
-  border: 1px solid #444;
+  border: 1px solid var(--terminal-border);
 }
 
 .confirmation-modal.emergency {
@@ -1877,9 +1877,9 @@ export default {
 
 .modal-header {
   padding: var(--spacing-5) var(--spacing-6) var(--spacing-4) var(--spacing-6);
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--terminal-border);
   background: var(--bg-secondary);
-  border-radius: var(--radius-xl) 12px 0 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .modal-title {
@@ -1893,7 +1893,7 @@ export default {
 }
 
 .confirmation-modal.emergency .modal-title {
-  color: #ff6b6b;
+  color: var(--terminal-ansi-red);
 }
 
 .modal-content {
@@ -1901,8 +1901,8 @@ export default {
 }
 
 .command-preview {
-  background-color: #1e1e1e;
-  border: 1px solid #444;
+  background-color: var(--terminal-chrome-bg-alt);
+  border: 1px solid var(--terminal-border);
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
   margin-bottom: var(--spacing-5);
@@ -1910,7 +1910,7 @@ export default {
 
 .command-label {
   font-size: var(--text-xs);
-  color: #888;
+  color: var(--terminal-text-muted);
   margin-bottom: var(--spacing-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1919,8 +1919,8 @@ export default {
 .command-text {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: var(--text-sm);
-  color: #87ceeb;
-  background-color: #000;
+  color: var(--terminal-ansi-cyan);
+  background-color: var(--bg-dark);
   padding: var(--spacing-3);
   border-radius: var(--radius-md);
   border-left: 4px solid var(--color-warning);
@@ -1953,9 +1953,9 @@ export default {
 }
 
 .risk-level.high {
-  background-color: rgba(255, 107, 107, 0.2);
-  color: #ff6b6b;
-  border: 1px solid #ff6b6b;
+  background-color: var(--terminal-ansi-red-bg);
+  color: var(--terminal-ansi-red);
+  border: 1px solid var(--terminal-ansi-red);
 }
 
 .risk-level.critical {
@@ -1966,7 +1966,7 @@ export default {
 }
 
 .risk-reasons {
-  color: #ccc;
+  color: var(--terminal-text-dim);
 }
 
 .risk-reason {
@@ -1975,7 +1975,7 @@ export default {
 }
 
 .confirmation-message {
-  color: #ddd;
+  color: var(--terminal-text-dim-strong);
 }
 
 .confirmation-message p {
@@ -1989,11 +1989,11 @@ export default {
 
 .confirmation-message li {
   margin-bottom: var(--spacing-1-5);
-  color: #ccc;
+  color: var(--terminal-text-dim);
 }
 
 .emergency-warning {
-  color: #ff6b6b;
+  color: var(--terminal-ansi-red);
 }
 
 .emergency-warning p {
@@ -2002,13 +2002,13 @@ export default {
 }
 
 .process-item {
-  background-color: #1e1e1e;
+  background-color: var(--terminal-chrome-bg-alt);
   padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-default);
   margin-bottom: var(--spacing-1);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: var(--text-sm);
-  color: #87ceeb;
+  color: var(--terminal-ansi-cyan);
 }
 
 .modal-actions {
@@ -2016,29 +2016,29 @@ export default {
   gap: var(--spacing-3);
   justify-content: flex-end;
   padding: var(--spacing-5) var(--spacing-6);
-  border-top: 1px solid #444;
-  background-color: #252525;
+  border-top: 1px solid var(--terminal-border);
+  background-color: var(--terminal-chrome-bg-actions);
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 
 /* Enhanced animations */
 @keyframes pulse-danger {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+    box-shadow: 0 0 0 0 var(--terminal-shadow-danger);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(220, 53, 69, 0);
+    box-shadow: 0 0 0 8px var(--terminal-shadow-danger-fade);
   }
 }
 
 /* Process status indicators */
 .line-system_message {
-  color: #9370db;
+  color: var(--terminal-ansi-purple);
   font-weight: 500;
 }
 
 .line-error {
-  color: #ff6b6b;
+  color: var(--terminal-ansi-red);
 }
 
 .line-command.high {
@@ -2084,13 +2084,13 @@ export default {
 
 .step-description p {
   margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
-  color: #ccc;
+  color: var(--terminal-text-dim);
   font-size: var(--text-sm);
   line-height: 1.5;
 }
 
 .workflow-options {
-  background-color: #1e1e1e;
+  background-color: var(--terminal-chrome-bg-alt);
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
   margin-top: var(--spacing-5);
@@ -2106,7 +2106,7 @@ export default {
 .option-info ul {
   margin: var(--spacing-0);
   padding-left: var(--spacing-5);
-  color: #ccc;
+  color: var(--terminal-text-dim);
 }
 
 .option-info li {
@@ -2116,7 +2116,7 @@ export default {
 }
 
 .option-info li strong {
-  color: #fff;
+  color: var(--terminal-text);
 }
 
 .workflow-actions {
@@ -2174,9 +2174,9 @@ export default {
 }
 
 .line-workflow_info {
-  color: #6f42c1;
-  background-color: rgba(111, 66, 193, 0.1);
-  border-left: 3px solid #6f42c1;
+  color: var(--terminal-ansi-violet);
+  background-color: var(--terminal-ansi-violet-bg);
+  border-left: 3px solid var(--terminal-ansi-violet);
   padding-left: var(--spacing-2);
   font-style: italic;
 }
@@ -2199,20 +2199,20 @@ export default {
 
 /* Scrollbar styling */
 .terminal-output::-webkit-scrollbar {
-  width: 8px;
+  width: var(--scrollbar-width);
 }
 
 .terminal-output::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--terminal-chrome-bg-alt);
 }
 
 .terminal-output::-webkit-scrollbar-thumb {
-  background: #555;
+  background: var(--terminal-btn-hover-bg);
   border-radius: var(--radius-default);
 }
 
 .terminal-output::-webkit-scrollbar-thumb:hover {
-  background: #777;
+  background: var(--terminal-scrollbar-thumb-hover);
 }
 
 /* Responsive */

@@ -106,6 +106,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         use_llm: bool = True,
         use_cache: bool = True,
         embedding_model: str = "nomic-embed-text",
+        source_id: str | None = None,
     ):
         """
         Initialize the detector.
@@ -115,11 +116,24 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             use_llm: Whether to use LLM for semantic analysis
             use_cache: Whether to use Redis caching
             embedding_model: Model to use for embeddings (Ollama)
+            source_id: Code source this analysis is scoped to (Issue #12356).
+                Folded into the ChromaDB pattern metadata/query filter and the
+                embedding-cache key so one project can never read another
+                project's cross-language patterns when they share a fallback
+                ChromaDB path (e.g. AutoBot's own root).
         """
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.use_llm = use_llm
         self.use_cache = use_cache
         self.embedding_model = embedding_model
+        # Issue #12356: scope tag for chroma metadata/query and embedding cache.
+        self.source_id = source_id
+        self._source_tag = source_id or "default"
+        # Fold the source tag into the embedding-cache model id (mirrors the
+        # #12251 model-folding trick) so cache reads never cross project
+        # boundaries even if a detector instance is reused across sources. The
+        # real embedding request below still uses ``self.embedding_model``.
+        self._embedding_cache_model = f"{embedding_model}::src::{self._source_tag}"
 
         # Initialize extractors
         self.python_extractor = PythonPatternExtractor()
@@ -189,10 +203,10 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         if not self.use_llm or not text.strip():
             return None
 
-        # Check cache first
+        # Check cache first (Issue #12356: source-scoped cache key)
         cache = await self._get_embedding_cache()
         if cache:
-            cached = await cache.get(text)
+            cached = await cache.get(text, model=self._embedding_cache_model)
             if cached:
                 self._cache_hits += 1
                 return cached
@@ -205,7 +219,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             if embedding:
                 self._embeddings_generated += 1
                 if cache:
-                    await cache.put(text, embedding)
+                    await cache.put(text, embedding, model=self._embedding_cache_model)
                 return embedding
         except Exception as e:
             logger.warning("Failed to generate embedding: %s", e)
@@ -249,7 +263,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
             if not text or not text.strip():
                 continue
             if cache:
-                cached = await cache.get(text)
+                cached = await cache.get(text, model=self._embedding_cache_model)
                 if cached:
                     self._cache_hits += 1
                     results[idx] = cached
@@ -278,7 +292,7 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
                     results[idx] = embedding
                     self._embeddings_generated += 1
                     if cache:
-                        await cache.put(text, embedding)
+                        await cache.put(text, embedding, model=self._embedding_cache_model)
 
         logger.info(
             "Batch generated %d embeddings (%d concurrent)",
@@ -831,11 +845,15 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         Build metadata dictionary for a single pattern.
 
         Issue #620.
+        Issue #12356: Tag every stored pattern with ``source_id`` so the query
+        filter can scope matches to a single project — without it, patterns from
+        different sources sharing a fallback ChromaDB path would cross-match.
         """
         return {
             "language": pattern["language"],
             "type": str(pattern["pattern"].get("type", "unknown")),
             "name": pattern["pattern"].get("name", ""),
+            "source_id": self._source_tag,
         }
 
     async def _batch_insert_patterns(self, collection, patterns: List[Dict]) -> bool:
@@ -980,12 +998,16 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         matches = []
         ts_pattern_lookup = {p["id"]: p for p in typescript_patterns}
 
+        # Issue #12356: constrain matches to this project's stored patterns so
+        # a shared/fallback ChromaDB path can never surface another source's
+        # patterns (mirrors the dependencies.py source_id where-filter).
+        match_where = {"$and": [{"language": "typescript"}, {"source_id": self._source_tag}]}
         for py_p in python_patterns[:50]:
             try:
                 results = await collection.query(
                     query_embeddings=[py_p["embedding"]],
                     n_results=5,
-                    where={"language": "typescript"},
+                    where=match_where,
                 )
                 matches.extend(self._process_query_results(results, py_p, ts_pattern_lookup))
             except Exception as e:

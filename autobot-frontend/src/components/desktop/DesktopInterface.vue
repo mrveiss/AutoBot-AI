@@ -73,6 +73,19 @@
       <div class="connection-status">
         <span :class="connectionStatusClass">{{ connectionStatusDisplay }}</span>
       </div>
+      <!-- Desktop control-lock toggle (Issue #12002, #11506 T1) -->
+      <div class="control-lock" :class="{ 'control-lock-mine': isMine }">
+        <button
+          v-if="!humanActive || isMine"
+          @click="handleControlLockToggle"
+          class="control-btn"
+          :disabled="controlLockLoading"
+        >
+          <span v-if="isMine">{{ $t('desktop.controlLock.releaseControl') }}</span>
+          <span v-else>{{ $t('desktop.controlLock.takeControl') }}</span>
+        </button>
+        <span class="control-lock-owner">{{ controlLockLabel }}</span>
+      </div>
     </div>
 
     <!-- Context Panel (collapsible right-side) -->
@@ -197,8 +210,10 @@ import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import TouchFriendlyButton from '@/components/ui/TouchFriendlyButton.vue'
 import DesktopContextPanel from '@/components/desktop/DesktopContextPanel.vue'
 import { useLoadingState } from '@/composables/useLoadingState'
-import { useVncControls } from '@/composables/useVncControls'
+import { useVncControls } from '@autobot/vnc'
+import ApiClient from '@/utils/ApiClient'
 import { usePollingJob } from '@/composables/usePollingJob'
+import { useDesktopControlLock } from '@/composables/useDesktopControlLock'
 import { createLogger } from '@/utils/debugUtils'
 import type { SelectorHost } from '@/composables/useHostSelector'
 
@@ -219,9 +234,54 @@ const { wrap: wrapCheckConnection } = useLoadingState()
 const errorVnc = ref<Error | null>(null)
 const errorCheck = ref<Error | null>(null)
 
+// Issue #12002 (#11506 T1): DesktopInterface has no real per-session context
+// of its own (single canonical shared desktop -- no chat session/route param
+// here to mirror #11539/#11579's session_id threading against). "default" is
+// the SAME literal both composables already defaulted to independently;
+// naming it here ties them together explicitly instead of relying on two
+// separate defaults coincidentally matching.
+const DESKTOP_CONTROL_SESSION_ID = 'default'
+
 // VNC controls (Issue #74)
-const vncControls = useVncControls()
+// #12931: the shared composable from @autobot/vnc, with this app's ApiClient
+// injected so auth headers, base-URL resolution and error-envelope handling are
+// preserved — the plugin package cannot import ApiClient itself (vue is its only
+// peer dependency), which is why the transport is a parameter.
+const vncControls = useVncControls({
+  sessionId: DESKTOP_CONTROL_SESSION_ID,
+  request: <T,>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> =>
+    method === 'GET' ? ApiClient.get<T>(path) : ApiClient.post<T>(path, body),
+})
 const showContextPanel = ref(false)
+
+// Desktop control-lock (Issue #12002, #11506 T1)
+const {
+  owner: controlLockOwner,
+  humanActive,
+  isMine,
+  loading: controlLockLoading,
+  refreshStatus: refreshControlLockStatus,
+  takeControl,
+  releaseControl
+} = useDesktopControlLock('desktop', DESKTOP_CONTROL_SESSION_ID)
+
+const controlLockLabel = computed(() => {
+  if (!humanActive.value) return t('desktop.controlLock.agentHasControl')
+  if (isMine.value) return t('desktop.controlLock.youHaveControl')
+  if (controlLockOwner.value) return t('desktop.controlLock.userHasControl', { user: controlLockOwner.value })
+  return t('desktop.controlLock.unknown')
+})
+
+async function handleControlLockToggle(): Promise<void> {
+  const wasMine = isMine.value
+  const result = wasMine ? await releaseControl() : await takeControl()
+  if (result && !result.success) {
+    error.value = wasMine
+      ? t('desktop.controlLock.releaseFailed', { error: result.message })
+      : t('desktop.controlLock.acquireFailed', { error: result.message })
+  }
+}
+
 const showScreenshotModal = ref(false)
 const screenshotData = ref<string | null>(null)
 const textToType = ref('')
@@ -451,6 +511,9 @@ onMounted(async () => {
 
   // Listen for fullscreen changes
   document.addEventListener('fullscreenchange', handleFullscreenChange)
+
+  // Desktop control-lock: surface current owner immediately (Issue #12002)
+  await refreshControlLockStatus()
 })
 
 // Define fullscreen handler function for proper cleanup
@@ -581,6 +644,23 @@ onUnmounted(() => {
 
 .connection-status {
   font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* Desktop control-lock toggle (Issue #12002, #11506 T1) */
+.control-lock {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.control-lock-owner {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.control-lock-mine .control-lock-owner {
+  color: var(--color-warning);
   font-weight: 500;
 }
 

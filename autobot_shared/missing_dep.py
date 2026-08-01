@@ -84,6 +84,26 @@ class MissingDep:
             f"{self._name} is not available — install the optional dependencies " f"(original error: {self._error})"
         )
 
+    def __or__(self, _other: object) -> "MissingDep":
+        """Support ``stub | None`` in a type expression at module-load time (#12900).
+
+        The ``__getattr__`` dunder short-circuit above was believed to cover
+        this, but it cannot: Python resolves ``|`` via ``type(x).__or__`` and
+        never consults ``__getattr__``. With no ``__or__`` defined, any module
+        annotating ``OptionalDep | None`` raised
+        ``TypeError: unsupported operand type(s) for |`` the moment the
+        dependency was absent — which is precisely the import-time crash the
+        sentinel exists to prevent.
+
+        Returns the sentinel, mirroring ``__getitem__``: the union no-ops and
+        the real failure stays at call / attribute access.
+        """
+        return self
+
+    def __ror__(self, _other: object) -> "MissingDep":
+        """Right-hand form — ``None | stub`` must behave like ``stub | None``."""
+        return self
+
     def __getitem__(self, _params: object) -> "MissingDep":
         """Support ``MissingDep_instance | None`` and similar generic-like
         subscripting at module-load time without raising.

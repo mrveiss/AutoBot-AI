@@ -27,7 +27,7 @@ from typing import Any, Dict, List
 import aiofiles
 
 from autobot_shared.network_constants import NetworkConstants
-from autobot_shared.time_utils import parse_utc_iso
+from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +318,7 @@ class AdvancedAPMSystem:
             request_data = self.active_requests.pop(trace_id, {})
 
             api_metric = APIMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 endpoint=endpoint,
                 method=request_data.get("method", "GET"),
                 status_code=status_code,
@@ -369,7 +369,7 @@ class AdvancedAPMSystem:
             hit_rate = (cache_stat["hits"] / total_ops * 100) if total_ops > 0 else 0
 
             cache_metric = CacheMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 cache_type=cache_type,
                 operation=operation,
                 key=key,
@@ -415,7 +415,7 @@ class AdvancedAPMSystem:
             ).hexdigest()[:12]
 
             db_metric = DatabaseMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 database=database,
                 operation=operation,
                 table_or_collection=table,
@@ -599,7 +599,7 @@ class AdvancedAPMSystem:
             # Create new alert
             msg = f"{rule.name}: {context} - " f"Value: {metric_value:.2f}, Threshold: {rule.threshold_value:.2f}"
             alert = Alert(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 rule_name=rule.name,
                 severity=rule.severity,
                 message=msg,
@@ -625,7 +625,7 @@ class AdvancedAPMSystem:
             for alert_key, alert in self.active_alerts.items():
                 if alert.rule_name == rule_name and not alert.resolved:
                     alert.resolved = True
-                    alert.resolution_timestamp = datetime.now(timezone.utc).isoformat()
+                    alert.resolution_timestamp = utc_timestamp()
                     resolved_keys.append(alert_key)
                     self.logger.info(f"✅ RESOLVED: {alert.message}")
 
@@ -726,7 +726,7 @@ class AdvancedAPMSystem:
             alerts_summary = self._compute_alerts_summary()
 
             return {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
                 "api_performance": api_summary,
                 "cache_performance": cache_summary,
                 "database_performance": db_summary,
@@ -770,7 +770,7 @@ class AdvancedAPMSystem:
                 self.redis_client.hset(
                     "autobot:apm:latest_report",
                     mapping={
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                         "data": json.dumps(report, default=str),
                     },
                 )

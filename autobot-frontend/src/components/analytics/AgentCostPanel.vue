@@ -192,7 +192,7 @@ const formatNumber = (num: number): string => {
 const fetchAgentCosts = async () => {
   loading.value = true
   try {
-    const res = await api.get<{ data: { agents: AgentCost[] } }>(`${getApiBase()}/cost/by-agent`)
+    const res = await api.get<{ data: { agents: AgentCost[] } }>(`${getApiBase()}/analytics/cost/by-agent`)
     agents.value = res.data?.agents || []
   } catch (error) {
     logger.error('Failed to fetch agent costs:', error)
@@ -219,7 +219,7 @@ const saveBudget = async () => {
   budgetDialog.value.saving = true
   try {
     await api.put<unknown>(
-      `${getApiBase()}/cost/by-agent/${budgetDialog.value.agentId}/budget`,
+      `${getApiBase()}/analytics/cost/by-agent/${budgetDialog.value.agentId}/budget`,
       { budget_monthly_usd: budgetDialog.value.amount }
     )
     closeBudgetDialog()

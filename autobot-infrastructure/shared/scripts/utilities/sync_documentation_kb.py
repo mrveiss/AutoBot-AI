@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Documentation Knowledge Base Synchronization Script
@@ -74,7 +75,7 @@ class DocumentationSyncManager:
             return {}
 
         try:
-            with open(self.state_file, "r") as f:
+            with open(self.state_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.error("Failed to load sync state: %s", e)
@@ -83,7 +84,7 @@ class DocumentationSyncManager:
     def save_sync_state(self, state: Dict):
         """Save sync state to disk"""
         try:
-            with open(self.state_file, "w") as f:
+            with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(state, f, indent=2)
             logger.debug("Sync state saved: %s files tracked", len(state))
         except Exception as e:

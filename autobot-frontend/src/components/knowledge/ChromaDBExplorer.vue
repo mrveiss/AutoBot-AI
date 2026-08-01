@@ -461,8 +461,8 @@ onMounted(() => {
 }
 
 .header-icon {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   color: var(--color-info);
 }
 
@@ -496,8 +496,8 @@ onMounted(() => {
 }
 
 .error-alert svg {
-  width: 20px;
-  height: 20px;
+  width: var(--spacing-5);
+  height: var(--spacing-5);
   flex-shrink: 0;
 }
 
@@ -514,8 +514,8 @@ onMounted(() => {
 }
 
 .error-alert button svg {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 /* ============================================
@@ -571,8 +571,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   background: transparent;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -664,8 +664,8 @@ onMounted(() => {
 }
 
 .collection-item svg {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
   flex-shrink: 0;
 }
 
@@ -684,8 +684,8 @@ onMounted(() => {
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 3px solid var(--border-default);
   border-top-color: var(--color-info);
   border-radius: 50%;
@@ -694,8 +694,8 @@ onMounted(() => {
 }
 
 .empty-state svg {
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   margin-bottom: var(--spacing-3);
   opacity: 0.5;
 }
@@ -713,8 +713,8 @@ onMounted(() => {
 }
 
 .empty-selection svg {
-  width: 64px;
-  height: 64px;
+  width: var(--spacing-16);
+  height: var(--spacing-16);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
@@ -763,8 +763,8 @@ onMounted(() => {
 }
 
 .back-btn svg {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 .details-header h2 {
@@ -844,7 +844,7 @@ onMounted(() => {
 }
 
 .search-limit {
-  width: 80px;
+  width: var(--spacing-20);
   padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-primary);
   border: 1px solid var(--border-default);
@@ -878,8 +878,8 @@ onMounted(() => {
 }
 
 .search-btn svg {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 /* ============================================
@@ -1015,8 +1015,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   background: transparent;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -1036,8 +1036,8 @@ onMounted(() => {
 }
 
 .page-btn svg {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 .page-info {
@@ -1117,8 +1117,8 @@ onMounted(() => {
 }
 
 .metadata-toggle svg {
-  width: 14px;
-  height: 14px;
+  width: var(--spacing-3-5);
+  height: var(--spacing-3-5);
   transition: transform var(--duration-150) ease;
 }
 

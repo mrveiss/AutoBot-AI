@@ -13,13 +13,15 @@ belongs to that category.  The lookup is case-insensitive.
 |---|---|
 | `cloud storage` | `gdrive`, `onedrive`, `nextcloud` |
 | `source control` | `gitlab`, `gitea` |
-| `wiki` | `notion` |
-| `knowledge base` | `notion`, `file_server`, `web_crawler` |
+| `wiki` | `notion`, `confluence` |
+| `knowledge base` | `notion`, `file_server`, `web_crawler`, `confluence` |
 | `file system` | `file_server` |
 | `database` | `database` |
 | `web` | `web_crawler` |
 | `audio` | `audio` |
 | `external` | `external_adapter` |
+| `chat` | `slack` |
+| `issue tracker` | `jira` |
 
 ## Connector Types
 
@@ -36,6 +38,9 @@ belongs to that category.  The lookup is case-insensitive.
 | `database` | `database.py` | SQLAlchemy-backed databases |
 | `audio` | `audio_connector.py` | Audio file ingestion |
 | `external_adapter` | `external_adapter.py` | Subprocess / stdout-JSON adapters |
+| `slack` | `slack.py` | Slack Web API channel/thread history — Issue #10538, feature-flagged (`AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS`, default off) |
+| `confluence` | `confluence.py` | Atlassian Confluence REST API pages — Issue #10538, feature-flagged (`AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS`, default off) |
+| `jira` | `jira.py` | Atlassian Jira REST API v3 issues + comments — Issue #10538, feature-flagged (`AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS`, default off) |
 
 ## Usage
 

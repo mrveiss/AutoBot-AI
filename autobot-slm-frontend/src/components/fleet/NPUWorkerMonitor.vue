@@ -37,9 +37,7 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null
 const npuNodes = computed(() => fleetStore.npuNodes)
 
 const onlineCount = computed(() => {
-  return npuNodes.value.filter(
-    n => n.status === 'online' || n.status === 'healthy'
-  ).length
+  return npuNodes.value.filter(n => n.status === 'online').length
 })
 
 const avgUtilization = computed(() => {
@@ -56,7 +54,6 @@ function nodeMetrics(nodeId: string): NPUWorkerMetrics | undefined {
 function nodeStatusIndicator(node: SLMNode): string {
   switch (node.status) {
     case 'online':
-    case 'healthy':
       return 'bg-green-500'
     case 'degraded':
       return 'bg-yellow-500'
@@ -68,14 +65,12 @@ function nodeStatusIndicator(node: SLMNode): string {
 function nodeStatusLabel(node: SLMNode): string {
   switch (node.status) {
     case 'online':
-    case 'healthy':
       return 'Online'
     case 'degraded':
       return 'Degraded'
     case 'offline':
       return 'Offline'
     case 'error':
-    case 'unhealthy':
       return 'Error'
     default:
       return node.status
@@ -110,13 +105,13 @@ function currentTask(nodeId: string): string {
 }
 
 function connectionStatus(node: SLMNode): string {
-  if (node.status === 'online' || node.status === 'healthy') return 'Connected'
+  if (node.status === 'online') return 'Connected'
   if (node.status === 'degraded') return 'Unstable'
   return 'Disconnected'
 }
 
 function connectionColor(node: SLMNode): string {
-  if (node.status === 'online' || node.status === 'healthy') {
+  if (node.status === 'online') {
     return 'text-green-600'
   }
   if (node.status === 'degraded') return 'text-yellow-600'

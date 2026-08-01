@@ -6,19 +6,27 @@
 User Model
 
 Core user model with authentication, profile, and tenant association.
+
+Everything this model shares with SLM now lives in
+``autobot_shared.user_management.models.user.UserCore`` (#12647) — one
+declaration, one place to fix a bug. What stays here is what is genuinely
+backend-only: the activity-tracking relationships (#871), whose target models
+(``models.activities``) exist in ``autobot-backend`` alone. Declaring them on
+the shared core would break ``configure_mappers()`` on the SLM side, where
+those classes are not in the registry.
+
+The concrete class stays in this module (rather than being re-exported from
+``autobot_shared``) because the two backends need *different* concrete
+mappings of the same table, and because every existing
+``from user_management.models.user import User`` importer keeps working
+unchanged.
 """
 
-import uuid
-from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import Uuid
+from sqlalchemy.orm import Mapped, relationship
 
-from autobot_shared.time_utils import now_utc
-from user_management.models.base import Base
+from autobot_shared.user_management.models.user import UserCore
 
 if TYPE_CHECKING:
     from models.activities import (
@@ -28,12 +36,6 @@ if TYPE_CHECKING:
         SecretUsageModel,
         TerminalActivityModel,
     )
-    from user_management.models.api_key import APIKey
-    from user_management.models.mfa import UserMFA
-    from user_management.models.organization import Organization
-    from user_management.models.role import UserRole
-    from user_management.models.sso import UserSSOLink
-    from user_management.models.team import TeamMembership
 
 # Runtime imports for SQLAlchemy relationships (avoid circular imports)
 try:
@@ -48,166 +50,16 @@ except ImportError:
     pass
 
 
-class User(Base):
-    """
-    User model.
+class User(UserCore):
+    """Backend's concrete ``users`` mapping.
 
-    Attributes:
-        id: Unique identifier (UUID)
-        org_id: Organization this user belongs to (nullable for platform admins)
-        email: Unique email address
-        username: Unique username
-        password_hash: Bcrypt hashed password (nullable for SSO-only users)
-        display_name: User's display name
-        avatar_url: URL to avatar image
-        is_active: Whether the user can log in
-        is_verified: Email verification status
-        mfa_enabled: Whether 2FA is enabled
-        preferences: User preferences (theme, language, etc.)
+    All shared columns, relationships and helpers come from ``UserCore`` — see
+    ``autobot_shared/user_management/models/user.py`` for their documentation.
     """
 
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-    )
-
-    # Organization association (nullable for platform admins in provider mode)
-    org_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("organizations.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
-
-    # Authentication
-    email: Mapped[str] = mapped_column(
-        String(255),
-        unique=True,
-        nullable=False,
-        index=True,
-    )
-
-    username: Mapped[str] = mapped_column(
-        String(100),
-        unique=True,
-        nullable=False,
-        index=True,
-    )
-
-    password_hash: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,  # Nullable for SSO-only users
-    )
-
-    # Profile
-    display_name: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,
-    )
-
-    avatar_url: Mapped[str | None] = mapped_column(
-        String(500),
-        nullable=True,
-    )
-
-    bio: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
-
-    # Status flags
-    is_active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        nullable=False,
-    )
-
-    is_verified: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        nullable=False,
-    )
-
-    mfa_enabled: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        nullable=False,
-    )
-
-    # Platform admin flag (provider mode only)
-    is_platform_admin: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        nullable=False,
-    )
-
-    # User preferences (theme, language, notifications, etc.)
-    preferences: Mapped[dict] = mapped_column(
-        JSONB,
-        default=dict,
-        nullable=False,
-    )
-
-    # Timestamps
-    last_login_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    email_verified_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    # Soft delete
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-    )
-
-    # Relationships
-    organization: Mapped[Optional["Organization"]] = relationship(
-        "Organization",
-        back_populates="users",
-    )
-
-    team_memberships: Mapped[list["TeamMembership"]] = relationship(
-        "TeamMembership",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-
-    user_roles: Mapped[list["UserRole"]] = relationship(
-        "UserRole",
-        back_populates="user",
-        foreign_keys="[UserRole.user_id]",
-        cascade="all, delete-orphan",
-    )
-
-    api_keys: Mapped[list["APIKey"]] = relationship(
-        "APIKey",
-        back_populates="user",
-        foreign_keys="[APIKey.user_id]",
-        cascade="all, delete-orphan",
-    )
-
-    sso_links: Mapped[list["UserSSOLink"]] = relationship(
-        "UserSSOLink",
-        back_populates="user",
-        cascade="all, delete-orphan",
-    )
-
-    mfa: Mapped[Optional["UserMFA"]] = relationship(
-        "UserMFA",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
-
-    # Activity tracking relationships (Issue #871)
+    # Activity tracking relationships (Issue #871) — backend-only
     terminal_activities: Mapped[list["TerminalActivityModel"]] = relationship(
         "TerminalActivityModel",
         back_populates="user",
@@ -237,53 +89,3 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-
-    def __repr__(self) -> str:
-        return f"<User(id={self.id}, username={self.username}, email={self.email})>"
-
-    @property
-    def is_deleted(self) -> bool:
-        """Check if user is soft-deleted."""
-        return self.deleted_at is not None
-
-    def soft_delete(self) -> None:
-        """Soft delete the user."""
-        self.deleted_at = now_utc()
-        self.is_active = False
-
-    def get_preference(self, key: str, default=None):
-        """Get a preference value by key with dot notation support."""
-        keys = key.split(".")
-        value = self.preferences
-        for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
-            else:
-                return default
-        return value
-
-    def set_preference(self, key: str, value) -> None:
-        """Set a preference value by key with dot notation support."""
-        keys = key.split(".")
-        preferences = self.preferences.copy()
-        current = preferences
-        for k in keys[:-1]:
-            if k not in current:
-                current[k] = {}
-            current = current[k]
-        current[keys[-1]] = value
-        self.preferences = preferences
-
-    @property
-    def full_name(self) -> str:
-        """Return display name or username as fallback."""
-        return self.display_name or self.username
-
-    def record_login(self) -> None:
-        """Record a successful login."""
-        self.last_login_at = now_utc()
-
-    def verify_email(self) -> None:
-        """Mark email as verified."""
-        self.is_verified = True
-        self.email_verified_at = now_utc()

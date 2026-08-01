@@ -26,6 +26,12 @@ _DEFAULT_POLICIES: dict[WorkItemType, bool] = {
     WorkItemType.BUG: True,
 }
 
+# #12618: cross-vendor second-opinion verifier tier — seeded OFF for every item
+# type (design: docs/design/2026-07-26-cross-vendor-review-gate.md). Companies
+# opt in explicitly per item type via update_policy(); the global
+# AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED switch must also be on for it to run.
+_DEFAULT_CROSS_VENDOR_POLICIES: dict[WorkItemType, bool] = {}
+
 
 class ReviewGatePolicyNotFoundError(Exception):
     """Raised when the requested policy does not exist."""
@@ -46,6 +52,7 @@ class ReviewGatePolicyService(LLCServiceBase):
         *,
         requires_human_review: bool = False,
         reviewer_role: Optional[str] = None,
+        requires_cross_vendor_review: bool = False,
     ) -> LLCReviewGatePolicy:
         """Create a review gate policy. Raises ReviewGatePolicyConflictError on duplicate."""
         policy = LLCReviewGatePolicy(
@@ -54,6 +61,7 @@ class ReviewGatePolicyService(LLCServiceBase):
             item_type=item_type,
             requires_human_review=requires_human_review,
             reviewer_role=reviewer_role,
+            requires_cross_vendor_review=requires_cross_vendor_review,
         )
         session.add(policy)
         try:
@@ -109,6 +117,7 @@ class ReviewGatePolicyService(LLCServiceBase):
         *,
         requires_human_review: Optional[bool] = None,
         reviewer_role: Optional[str] = None,
+        requires_cross_vendor_review: Optional[bool] = None,
     ) -> LLCReviewGatePolicy:
         """Update mutable fields. Raises ReviewGatePolicyNotFoundError if missing."""
         policy = await self.get_policy_by_id(session, policy_id)
@@ -118,6 +127,8 @@ class ReviewGatePolicyService(LLCServiceBase):
             policy.requires_human_review = requires_human_review
         if reviewer_role is not None:
             policy.reviewer_role = reviewer_role
+        if requires_cross_vendor_review is not None:
+            policy.requires_cross_vendor_review = requires_cross_vendor_review
         await session.flush()
         return policy
 
@@ -154,12 +165,14 @@ class ReviewGatePolicyService(LLCServiceBase):
             if existing is not None:
                 continue
             requires = _DEFAULT_POLICIES.get(item_type, False)
+            requires_cv = _DEFAULT_CROSS_VENDOR_POLICIES.get(item_type, False)
             policy = LLCReviewGatePolicy(
                 id=uuid.uuid4(),
                 company_id=uuid.UUID(company_id),
                 item_type=item_type,
                 requires_human_review=requires,
                 reviewer_role=None,
+                requires_cross_vendor_review=requires_cv,
             )
             session.add(policy)
             created.append(policy)
@@ -178,3 +191,20 @@ class ReviewGatePolicyService(LLCServiceBase):
         if policy is None:
             return False, None
         return policy.requires_human_review, policy.reviewer_role
+
+    async def requires_cross_vendor_review(
+        self,
+        session: AsyncSession,
+        company_id: str,
+        item_type: WorkItemType,
+    ) -> bool:
+        """Return the cross-vendor policy flag for this item type, defaulting to False (#12618).
+
+        Company-level opt-in only; callers must ALSO check
+        ``config.cross_vendor_review_enabled`` before spending on a second
+        provider call — this method never reads that global switch.
+        """
+        policy = await self.get_policy(session, company_id, item_type)
+        if policy is None:
+            return False
+        return policy.requires_cross_vendor_review

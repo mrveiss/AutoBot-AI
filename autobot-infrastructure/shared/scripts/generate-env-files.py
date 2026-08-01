@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Environment File Generator
@@ -15,7 +16,7 @@ import yaml
 def load_config():
     """Load the complete.yaml configuration"""
     config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -530,7 +531,7 @@ def main():
             content = generator_func(config)
 
             # Write file
-            with open(full_path, "w") as f:
+            with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             print(f"✓ Generated {file_path}")

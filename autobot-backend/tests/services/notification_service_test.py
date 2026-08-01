@@ -336,25 +336,20 @@ class TestSendWebhook:
 
     @pytest.mark.asyncio
     async def test_posts_json_payload(self):
+        from autobot_shared.http_client import get_http_client
+
         svc = self._svc()
         mock_resp = AsyncMock()
         mock_resp.status = 200
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
-        mock_session = AsyncMock()
-        mock_session.post = MagicMock(return_value=mock_resp)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
-        with patch(
-            "services.notification_service.aiohttp.ClientSession",
-            return_value=mock_session,
-        ):
+        manager = get_http_client()
+        with patch.object(manager, "tracked_request", return_value=mock_resp) as mock_tracked_request:
             await svc._send_webhook("https://example.com/hook", {"key": "val"})
 
-        mock_session.post.assert_called_once()
-        call_kwargs = mock_session.post.call_args[1]
+        mock_tracked_request.assert_called_once()
+        call_kwargs = mock_tracked_request.call_args.kwargs
         assert call_kwargs["json"] == {"key": "val"}
 
     @pytest.mark.asyncio
@@ -362,6 +357,8 @@ class TestSendWebhook:
         import aiohttp as _aiohttp
         from multidict import CIMultiDict
         from yarl import URL
+
+        from autobot_shared.http_client import get_http_client
 
         svc = self._svc()
         mock_resp = AsyncMock()
@@ -378,15 +375,8 @@ class TestSendWebhook:
         mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
         mock_resp.__aexit__ = AsyncMock(return_value=False)
 
-        mock_session = AsyncMock()
-        mock_session.post = MagicMock(return_value=mock_resp)
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
-        with patch(
-            "services.notification_service.aiohttp.ClientSession",
-            return_value=mock_session,
-        ):
+        manager = get_http_client()
+        with patch.object(manager, "tracked_request", return_value=mock_resp):
             with pytest.raises(_aiohttp.ClientResponseError):
                 await svc._send_webhook("https://example.com/hook", {})
 
@@ -416,7 +406,7 @@ class TestNotificationStoreStore:
         store = NotificationStore()
         mock_redis = make_async_redis()
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -434,7 +424,7 @@ class TestNotificationStoreStore:
         store = NotificationStore()
         mock_redis = make_async_redis()
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -452,7 +442,7 @@ class TestNotificationStoreStore:
     async def test_returns_none_when_redis_unavailable(self):
         store = NotificationStore()
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -470,7 +460,7 @@ class TestNotificationStoreStore:
         mock_redis = make_async_redis()
         mock_redis.lpush = AsyncMock(side_effect=ConnectionError("redis gone"))
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -491,7 +481,7 @@ class TestNotificationStoreStore:
         mock_redis.set = AsyncMock(side_effect=_capture_set)
 
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -534,7 +524,7 @@ class TestNotificationStoreList:
         raw = [json.dumps(record).encode()]
         mock_redis = make_async_redis(lrange_returns=raw)
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -546,7 +536,7 @@ class TestNotificationStoreList:
     async def test_returns_empty_list_when_redis_unavailable(self):
         store = NotificationStore()
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -558,7 +548,7 @@ class TestNotificationStoreList:
         store = NotificationStore()
         mock_redis = make_async_redis()
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -571,7 +561,7 @@ class TestNotificationStoreList:
         raw = [b"not-json", json.dumps({"id": "ok"}).encode()]
         mock_redis = make_async_redis(lrange_returns=raw)
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -585,7 +575,7 @@ class TestNotificationStoreList:
         mock_redis = make_async_redis()
         mock_redis.lrange = AsyncMock(side_effect=ConnectionError("redis gone"))
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -617,7 +607,7 @@ class TestNotificationStoreMarkRead:
         store = NotificationStore()
         mock_redis = make_async_redis(get_returns=self._make_record())
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -637,7 +627,7 @@ class TestNotificationStoreMarkRead:
         mock_redis.set = AsyncMock(side_effect=_capture_set)
 
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -651,7 +641,7 @@ class TestNotificationStoreMarkRead:
         store = NotificationStore()
         mock_redis = make_async_redis(get_returns=None)
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):
@@ -662,7 +652,7 @@ class TestNotificationStoreMarkRead:
     async def test_returns_false_when_redis_unavailable(self):
         store = NotificationStore()
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -675,7 +665,7 @@ class TestNotificationStoreMarkRead:
         mock_redis = make_async_redis(get_returns=self._make_record())
         mock_redis.set = AsyncMock(side_effect=ConnectionError("redis gone"))
         with patch(
-            "services.notification_service.get_redis_client",
+            "services.notification_service.get_async_redis_client",
             new_callable=AsyncMock,
             return_value=mock_redis,
         ):

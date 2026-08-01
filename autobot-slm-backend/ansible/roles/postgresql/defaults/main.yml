@@ -72,6 +72,17 @@ databases:
   - slm_users
   - autobot_users
 
+# #12297: Host at which the SLM control plane (slm_app) reaches the
+# autobot_users DB. Topology-aware and derived exactly like
+# deploy-user-management-db.yml Phase 3 (redis_host | default('127.0.0.1')):
+#   - Co-located single box: redis_host is left undefined by the inventory
+#     (#12214), so this resolves to 127.0.0.1 (autobot_users is local).
+#   - Remote DB VM: redis_host points at the database VM, so the role-managed
+#     AUTOBOT_USERS_DATABASE_URL targets the correct remote host instead of a
+#     hardcoded localhost. Genuinely-remote credentials/overrides still live in
+#     slm-secrets.env and are preserved by the #12297 duplicate-only strip.
+slm_autobot_users_host: "{{ redis_host | default('127.0.0.1') }}"
+
 # AutoBot user
 autobot_user: "autobot"
 autobot_group: "autobot"

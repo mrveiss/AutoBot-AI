@@ -57,6 +57,26 @@ PROVIDER_AUTH_SECRET_TYPE = "provider_auth_token"  # nosec B105 - vault type tag
 # Grace window before expiry at which a refresh is proactively triggered (seconds).
 _REFRESH_GRACE_SECONDS = 300
 
+# Legacy pre-#11497 vault subject: a single system-wide token shared by every
+# authenticated user. Retained as the dual-read fallback so existing connections
+# keep working with zero reconnect while new persists move to a per-org subject.
+LEGACY_SUBJECT = "global"
+
+
+def org_vault_subject(org_id: Any | None) -> str:
+    """Return the per-org vault subject for a token, or the legacy shared subject.
+
+    Finding #1 (#11497): provider tokens are keyed to the caller's org/tenant so
+    an admin connects once and only that org shares the connection — isolated
+    between orgs. When no org is available (single-tenant deployment, or a code
+    path without an org principal) we keep the legacy ``"global"`` subject so
+    behaviour is byte-identical to the pre-#11497 shared model.
+    """
+    if org_id is None:
+        return LEGACY_SUBJECT
+    org_id = str(org_id).strip()
+    return f"org:{org_id}" if org_id else LEGACY_SUBJECT
+
 
 class ProviderAuthError(Exception):
     """Unrecoverable auth failure — the provider cannot be used."""
@@ -165,6 +185,38 @@ async def _vault_read(
         return None
 
 
+async def _vault_read_dual(
+    session: Any,
+    *,
+    provider_name: str,
+    subject: str,
+    owner_vault_str: str,
+) -> dict[str, Any] | None:
+    """Read a token, trying the org-scoped *subject* then the legacy subject.
+
+    Backward-compatible dual-read for finding #1 (#11497): tokens written under
+    the pre-#11497 ``"global"`` subject stay readable after callers move to a
+    per-org subject. The org-scoped entry wins when present; the legacy
+    ``"global"`` entry is the fallback so existing connections keep working with
+    zero reconnect. When *subject* already IS the legacy subject this is a single
+    read (no redundant lookup).
+    """
+    token_data = await _vault_read(
+        session,
+        provider_name=provider_name,
+        subject=subject,
+        owner_vault_str=owner_vault_str,
+    )
+    if token_data is not None or subject == LEGACY_SUBJECT:
+        return token_data
+    return await _vault_read(
+        session,
+        provider_name=provider_name,
+        subject=LEGACY_SUBJECT,
+        owner_vault_str=owner_vault_str,
+    )
+
+
 async def _vault_write(
     session: Any,
     *,
@@ -193,7 +245,14 @@ async def _vault_write(
     plaintext = json.dumps(token_data, separators=(",", ":")).encode("utf-8")
 
     if isinstance(created_by_id, str):
-        created_by_id = uuid.UUID(created_by_id)
+        # The JWT ``user_id`` claim is NOT guaranteed to be a UUID (e.g. the
+        # auth-disabled "admin" principal, or an empty device-JWT claim), so a
+        # malformed id must never break token persistence (#11849). Fall back to
+        # the zero-UUID audit sentinel rather than raising on the write path.
+        try:
+            created_by_id = uuid.UUID(created_by_id)
+        except ValueError:
+            created_by_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
     svc = EnvelopeSecretsService()
     await svc.create(
@@ -253,7 +312,7 @@ class OAuthAuth(ProviderAuthStrategy):
     async def resolve_token(self, session: Any | None = None) -> str:
         if session is None:
             raise ProviderAuthError("OAuthAuth.resolve_token requires a DB session")
-        token_data = await _vault_read(
+        token_data = await _vault_read_dual(
             session,
             provider_name=self._provider_name,
             subject=self._subject,
@@ -276,6 +335,7 @@ class OAuthAuth(ProviderAuthStrategy):
         return await self._refresh(session, token_data, refresh_token)
 
     async def _refresh(self, session: Any, old_data: dict, refresh_token: str) -> str:
+        from autobot_shared.security.ssrf_guard import SSRFError, pinned_connector  # noqa: PLC0415
         from autobot_shared.url_safety import get_oauth_allowed_hosts, require_allowlisted_https  # noqa: PLC0415
         from knowledge.connectors.oauth_flow import refresh_access_token  # noqa: PLC0415
 
@@ -286,6 +346,16 @@ class OAuthAuth(ProviderAuthStrategy):
                 f"OAuth refresh blocked: unsafe token_url for {self._provider_name!r}: {exc}"
             ) from exc
 
+        # Finding #2 (#11497): resolve the token host once, assert it is public,
+        # and pin the outbound POST to that IP so DNS cannot be rebound to a
+        # private address between validation and connect (TOCTOU rebinding).
+        try:
+            connector = await pinned_connector(self._token_url)
+        except SSRFError as exc:
+            raise ProviderAuthError(
+                f"OAuth refresh blocked: token_url for {self._provider_name!r} is not publicly routable: {exc}"
+            ) from exc
+
         logger.info("Refreshing OAuth token for provider %s", self._provider_name)
         try:
             resp = await refresh_access_token(
@@ -293,9 +363,14 @@ class OAuthAuth(ProviderAuthStrategy):
                 self._client_id,
                 self._client_secret,
                 refresh_token,
+                connector=connector,
             )
         except RuntimeError as exc:
             raise ProviderAuthError(f"OAuth refresh failed for {self._provider_name!r}: {exc}") from exc
+
+        # Finding #3 (#11497): reject a mismatched token_type / issuer / audience
+        # before the refreshed pair is persisted.
+        validate_token_response(resp, provider_name=self._provider_name, client_id=self._client_id)
 
         new_data = _merge_token_response(old_data, resp)
         await _vault_write(
@@ -353,7 +428,7 @@ class DeviceCodeAuth(ProviderAuthStrategy):
     async def resolve_token(self, session: Any | None = None) -> str:
         if session is None:
             raise ProviderAuthError("DeviceCodeAuth.resolve_token requires a DB session")
-        token_data = await _vault_read(
+        token_data = await _vault_read_dual(
             session,
             provider_name=self._provider_name,
             subject=self._subject,
@@ -417,7 +492,7 @@ class SessionAuth(ProviderAuthStrategy):
     async def resolve_token(self, session: Any | None = None) -> str:
         if session is None:
             raise ProviderAuthError("SessionAuth.resolve_token requires a DB session")
-        token_data = await _vault_read(
+        token_data = await _vault_read_dual(
             session,
             provider_name=self._provider_name,
             subject=self._subject,
@@ -459,6 +534,99 @@ def _merge_token_response(old: dict, resp: dict) -> dict:
     return new
 
 
+# ---------------------------------------------------------------------------
+# Token audience / issuer / type validation (finding #3, #11497)
+# ---------------------------------------------------------------------------
+
+# Known OIDC issuers per provider — the ``iss`` claim of an id_token is matched
+# against these prefixes (tenant / path suffixes vary). Providers absent here
+# (e.g. github, gitlab) rarely mint an id_token; when one is present we still
+# require its issuer host to be an allowlisted OAuth host (defence-in-depth).
+_EXPECTED_ISSUER_PREFIXES: dict[str, tuple[str, ...]] = {
+    "google": ("https://accounts.google.com",),
+    "microsoft": ("https://login.microsoftonline.com/",),
+}
+
+
+def _decode_jwt_claims(id_token: str) -> dict[str, Any]:
+    """Decode (WITHOUT signature verification) the payload of a compact JWS.
+
+    Used only to cross-check the ``iss`` / ``aud`` claims of an OIDC id_token
+    against the expected provider + client_id. The access token's authenticity
+    still rests on the TLS-authenticated token endpoint; this is defence-in-depth
+    against a swapped-audience / wrong-issuer token, not a trust anchor.
+    """
+    import base64
+    import json
+
+    parts = id_token.split(".")
+    if len(parts) != 3:
+        raise ProviderAuthError("id_token is not a well-formed JWT")
+    payload_b64 = parts[1]
+    payload_b64 += "=" * (-len(payload_b64) % 4)  # restore base64url padding
+    try:
+        raw = base64.urlsafe_b64decode(payload_b64.encode("ascii"))
+        claims = json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise ProviderAuthError(f"id_token payload is undecodable: {exc}") from exc
+    if not isinstance(claims, dict):
+        raise ProviderAuthError("id_token payload is not a JSON object")
+    return claims
+
+
+def validate_token_response(resp: dict, *, provider_name: str, client_id: str) -> None:
+    """Validate ``token_type`` / ``iss`` / ``aud`` before a token is persisted.
+
+    Finding #3 (#11497). Lenient-but-strict: a field is only rejected when it is
+    PRESENT and wrong, so providers that legitimately omit ``token_type`` or an
+    ``id_token`` (RFC 6749 token responses) keep working with zero regression.
+
+    - ``token_type``: must be ``bearer`` (case-insensitive) when present.
+    - ``id_token`` (OIDC): when present, its ``aud`` must contain *client_id*
+      and its ``iss`` must be an https URL on an allowlisted OAuth host — and,
+      for a known OIDC provider, match that provider's issuer prefix.
+
+    Raises ``ProviderAuthError`` on any mismatch.
+    """
+    token_type = resp.get("token_type")
+    if token_type is not None and str(token_type).lower() != "bearer":
+        raise ProviderAuthError(f"unexpected token_type {token_type!r} for provider {provider_name!r}")
+
+    id_token = resp.get("id_token")
+    if not id_token:
+        return
+
+    claims = _decode_jwt_claims(id_token)
+
+    aud = claims.get("aud")
+    if aud is not None:
+        audiences = {aud} if isinstance(aud, str) else set(aud or [])
+        azp = claims.get("azp")
+        if client_id and client_id not in audiences and client_id != azp:
+            raise ProviderAuthError(f"id_token audience does not include client_id for provider {provider_name!r}")
+
+    iss = claims.get("iss")
+    if iss is not None:
+        _validate_issuer(str(iss), provider_name)
+
+
+def _validate_issuer(iss: str, provider_name: str) -> None:
+    """Reject an id_token issuer that is not an allowlisted / expected host."""
+    from urllib.parse import urlparse  # noqa: PLC0415
+
+    from autobot_shared.url_safety import get_oauth_allowed_hosts  # noqa: PLC0415
+
+    parsed = urlparse(iss)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ProviderAuthError(f"id_token issuer {iss!r} is not an https URL for provider {provider_name!r}")
+    if parsed.hostname.lower() not in get_oauth_allowed_hosts():
+        raise ProviderAuthError(f"id_token issuer host {parsed.hostname!r} is not allowlisted")
+
+    expected = _EXPECTED_ISSUER_PREFIXES.get(provider_name.lower())
+    if expected and not any(iss.startswith(prefix) for prefix in expected):
+        raise ProviderAuthError(f"id_token issuer {iss!r} is not valid for provider {provider_name!r}")
+
+
 def build_token_data(
     resp: dict,
     *,
@@ -486,8 +654,11 @@ __all__ = [
     "DeviceCodeAuth",
     "SessionAuth",
     "PROVIDER_AUTH_SECRET_TYPE",
-    "build_token_data",
+    "LEGACY_SUBJECT",
+    "org_vault_subject",
+    "validate_token_response",
     "build_token_data",
     "_vault_write",
     "_vault_read",
+    "_vault_read_dual",
 ]

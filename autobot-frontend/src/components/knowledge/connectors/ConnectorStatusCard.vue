@@ -55,10 +55,10 @@ const typeBadgeVariant = computed(() => {
  */
 const tierValue = computed(() => (typeof props.config.tier === 'number' ? props.config.tier : 0))
 
-const tierBadgeVariant = computed<'success' | 'warning' | 'error'>(() => {
+const tierBadgeVariant = computed<'success' | 'warning' | 'danger'>(() => {
   switch (tierValue.value) {
     case 2:
-      return 'error'
+      return 'danger'
     case 1:
       return 'warning'
     default:
@@ -94,13 +94,13 @@ const lastSyncDisplay = computed(() => {
 })
 
 const syncStatusVariant = computed(() => {
-  const map: Record<string, 'success' | 'error' | 'warning' | 'default'> = {
+  const map: Record<string, 'success' | 'danger' | 'warning' | 'neutral'> = {
     success: 'success',
-    failed: 'error',
+    failed: 'danger',
     running: 'warning',
-    never: 'default'
+    never: 'neutral'
   }
-  return map[props.status.last_sync_status] || 'default'
+  return map[props.status.last_sync_status] || 'neutral'
 })
 
 function handleSync() {

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot System Monitor - Real-time monitoring of optimized system performance.
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 def _check_cpu_for_npu() -> bool:
     """Check if CPU model has NPU support (Issue #315 - extracted)."""
     try:
-        with open("/proc/cpuinfo", "r") as f:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
             cpuinfo = f.read()
             return "Intel(R) Core(TM) Ultra" in cpuinfo
     except Exception:
@@ -35,7 +36,7 @@ def _check_cpu_for_npu() -> bool:
 def _check_wsl_environment() -> bool:
     """Check if running in WSL environment (Issue #315 - extracted)."""
     try:
-        with open("/proc/version", "r") as f:
+        with open("/proc/version", "r", encoding="utf-8") as f:
             version_info = f.read()
             return "WSL" in version_info or "Microsoft" in version_info
     except Exception:

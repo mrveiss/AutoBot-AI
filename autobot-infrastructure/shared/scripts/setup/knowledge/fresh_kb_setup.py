@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Fresh knowledge base setup - let llama_index create everything from scratch.
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import centralized Redis client
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 
 def _clean_redis_indexes(r) -> None:
@@ -71,7 +72,7 @@ def _create_test_document() -> str:
     Helper for fresh_setup (Issue #825).
     """
     test_file = "/tmp/test_kb_doc.md"
-    with open(test_file, "w") as f:
+    with open(test_file, "w", encoding="utf-8") as f:
         f.write("""
 # AutoBot Documentation Test
 

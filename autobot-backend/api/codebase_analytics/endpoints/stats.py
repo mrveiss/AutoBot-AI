@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.analytics_shared import no_data_response
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
@@ -25,7 +26,7 @@ from ..storage import get_code_collection, get_redis_connection
 from .shared import (
     _in_memory_storage,
     filter_problems_by_file_existence,
-    get_project_root,
+    resolve_project_root,
     resolve_source_root,
 )
 
@@ -83,11 +84,6 @@ def _parse_stats_metadata(stats_metadata: dict) -> dict:
             stats[ratio_field] = stats_metadata[ratio_field]
 
     return stats
-
-
-def _no_data_response(message: str = "No codebase data found. Run indexing first."):
-    """Return standardized no-data response. (Issue #315 - extracted)"""
-    return JSONResponse({"status": "no_data", "message": message, "stats": None})
 
 
 # Issue #540: Maximum time (seconds) before a task is considered stale
@@ -216,7 +212,7 @@ async def get_codebase_stats(source_id: str | None = None):
                 "Indexing in progress. ChromaDB connection pending.",
                 active_task,
             )
-        return _no_data_response("ChromaDB connection failed.")
+        return JSONResponse(no_data_response("ChromaDB connection failed.", stats=None))
 
     # Issue #1710: Per-source stats use source-scoped document ID
     stats_doc_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
@@ -227,7 +223,7 @@ async def get_codebase_stats(source_id: str | None = None):
         # Issue #540, #665: Show indexing status even on query failure
         if active_task:
             return _build_indexing_response("Indexing in progress.", active_task)
-        return _no_data_response()
+        return JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
 
     # Check if we have data
     if not results.get("metadatas") or len(results["metadatas"]) == 0:
@@ -237,7 +233,7 @@ async def get_codebase_stats(source_id: str | None = None):
                 "Indexing in progress. Stats will be available when complete.",
                 active_task,
             )
-        return _no_data_response()
+        return JSONResponse(no_data_response("No codebase data found. Run indexing first.", stats=None))
 
     # Parse and return stats (Issue #315 - use extracted helper)
     stats_metadata = results["metadatas"][0]
@@ -442,7 +438,11 @@ def _fetch_problems_from_chromadb(
     problems = [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
     # Issue #2724: Validate file paths against the indexed repository root.
-    root = source_root if source_root else get_project_root()
+    # Issue #12399: Fall back to resolve_project_root() (deployed-layout-aware,
+    # #10730) rather than get_project_root() (hardcoded parents[4], which
+    # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+    # standalone rsync layout).
+    root = source_root if source_root else Path(resolve_project_root())
     return filter_problems_by_file_existence(problems, root)
 
 

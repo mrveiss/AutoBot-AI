@@ -5,7 +5,7 @@
 """
 Unit Tests — Microsoft365Integration (Issue #9041)
 
-Tests are isolated: all aiohttp calls are patched so no real network traffic occurs.
+Tests are isolated: all HTTP calls are patched so no real network traffic occurs.
 Tests cover Calendar, Outlook, and Teams operations via Microsoft Graph API.
 """
 
@@ -29,8 +29,17 @@ def _make_config(**kwargs) -> IntegrationConfig:
     return IntegrationConfig(**defaults)
 
 
-def _mock_session(status: int, body: dict | None = None):
-    """Build a nested mock that mimics aiohttp.ClientSession context manager."""
+def _mock_client(status: int, body: dict | None = None):
+    """Build a mock ``HTTPClientManager`` whose ``tracked_request()`` yields a
+    response mimicking the given status/body.
+
+    Issue #12979: ``_make_graph_request`` routes through the shared pool's
+    ``get_http_client().tracked_request(method, url, **kwargs)`` rather than
+    constructing its own ``aiohttp.ClientSession`` — the ``async with`` here
+    is entered/exited by ``tracked_request()`` on the real client, so the
+    mock only needs to reproduce ``__aenter__``/``__aexit__`` on the value
+    returned directly by a patched ``get_http_client()``.
+    """
     resp = AsyncMock()
     resp.status = status
     if body is not None:
@@ -39,17 +48,13 @@ def _mock_session(status: int, body: dict | None = None):
         # For 204 No Content responses
         resp.json = AsyncMock(side_effect=Exception("No content"))
 
-    cm_inner = AsyncMock()
-    cm_inner.__aenter__ = AsyncMock(return_value=resp)
-    cm_inner.__aexit__ = AsyncMock(return_value=False)
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session = MagicMock()
-    mock_session.request = MagicMock(return_value=cm_inner)
-
-    cm_outer = MagicMock()
-    cm_outer.__aenter__ = AsyncMock(return_value=mock_session)
-    cm_outer.__aexit__ = AsyncMock(return_value=False)
-    return cm_outer
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=cm)
+    return mock_client
 
 
 @pytest.mark.asyncio
@@ -60,10 +65,10 @@ class TestMicrosoft365Integration:
     # test_connection
     # ------------------------------------------------------------------
 
-    @patch("aiohttp.ClientSession")
-    async def test_test_connection_success(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_test_connection_success(self, mock_get_client):
         """Returns CONNECTED status on HTTP 200 from /me."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "userPrincipalName": "testuser@example.com",
@@ -78,10 +83,10 @@ class TestMicrosoft365Integration:
         assert health.details["user"] == "testuser@example.com"
         assert health.details["display_name"] == "Test User"
 
-    @patch("aiohttp.ClientSession")
-    async def test_test_connection_unauthorized(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_test_connection_unauthorized(self, mock_get_client):
         """Returns UNAUTHORIZED status on HTTP 401."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             401,
             {"error": {"message": "Invalid token"}},
         )
@@ -91,8 +96,8 @@ class TestMicrosoft365Integration:
         assert health.status == IntegrationStatus.UNAUTHORIZED
         assert "expired or invalid" in health.message
 
-    @patch("aiohttp.ClientSession")
-    async def test_test_connection_no_token(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_test_connection_no_token(self, mock_get_client):
         """Returns ERROR status when token is missing."""
         integration = Microsoft365Integration(_make_config(token=None))
         health = await integration.test_connection()
@@ -104,10 +109,10 @@ class TestMicrosoft365Integration:
     # Calendar operations
     # ------------------------------------------------------------------
 
-    @patch("aiohttp.ClientSession")
-    async def test_list_calendar_events(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_list_calendar_events(self, mock_get_client):
         """Successfully lists calendar events."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "value": [
@@ -130,10 +135,10 @@ class TestMicrosoft365Integration:
         assert len(result["value"]) == 1
         assert result["value"][0]["subject"] == "Team Meeting"
 
-    @patch("aiohttp.ClientSession")
-    async def test_create_calendar_event(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_create_calendar_event(self, mock_get_client):
         """Successfully creates a calendar event."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             201,
             {
                 "id": "new-event-id",
@@ -154,10 +159,10 @@ class TestMicrosoft365Integration:
         assert result["id"] == "new-event-id"
         assert result["subject"] == "New Meeting"
 
-    @patch("aiohttp.ClientSession")
-    async def test_delete_calendar_event(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_delete_calendar_event(self, mock_get_client):
         """Successfully deletes a calendar event."""
-        mock_session_cls.return_value = _mock_session(204)
+        mock_get_client.return_value = _mock_client(204)
         integration = Microsoft365Integration(_make_config())
         result = await integration.execute_action(
             "delete_calendar_event",
@@ -170,10 +175,10 @@ class TestMicrosoft365Integration:
     # Outlook email operations
     # ------------------------------------------------------------------
 
-    @patch("aiohttp.ClientSession")
-    async def test_list_messages(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_list_messages(self, mock_get_client):
         """Successfully lists inbox messages."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "value": [
@@ -194,10 +199,10 @@ class TestMicrosoft365Integration:
         assert len(result["value"]) == 1
         assert result["value"][0]["subject"] == "Test Email"
 
-    @patch("aiohttp.ClientSession")
-    async def test_send_email(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_send_email(self, mock_get_client):
         """Successfully sends an email."""
-        mock_session_cls.return_value = _mock_session(202, {})
+        mock_get_client.return_value = _mock_client(202, {})
         integration = Microsoft365Integration(_make_config())
         result = await integration.execute_action(
             "send_email",
@@ -214,10 +219,10 @@ class TestMicrosoft365Integration:
     # Teams operations
     # ------------------------------------------------------------------
 
-    @patch("aiohttp.ClientSession")
-    async def test_send_teams_message(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_send_teams_message(self, mock_get_client):
         """Successfully sends a Teams channel message."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             201,
             {
                 "id": "msg-id",
@@ -236,10 +241,10 @@ class TestMicrosoft365Integration:
 
         assert result["id"] == "msg-id"
 
-    @patch("aiohttp.ClientSession")
-    async def test_list_teams(self, mock_session_cls):
+    @patch("integrations.microsoft365_integration.get_http_client")
+    async def test_list_teams(self, mock_get_client):
         """Successfully lists joined teams."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "value": [

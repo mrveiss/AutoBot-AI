@@ -23,6 +23,7 @@ from autobot_shared.auth.jwt_core import (
     hash_password,
     verify_password,
 )
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config as ssot_config
@@ -99,19 +100,16 @@ class AuthenticationMiddleware:
             return secret
 
         # 3. Generate and store a secure random secret
-        logger.warning(  # codeql[py/clear-text-logging-sensitive-data]
-            "No secure JWT secret found. Generating secure random secret."
-        )
+        logger.warning("No secure JWT secret found. Generating secure random secret.")
         secure_secret = secrets.token_urlsafe(64)  # 512-bit secret
 
         # Store in configuration for consistency across restarts
         try:
             # Update the config in memory using the correct method
             config.set_nested("security_config.jwt_secret", secure_secret)
-            logger.info("Generated and stored secure JWT secret")  # noqa: codeql[py/clear-text-logging-sensitive-data]
+            logger.info("Generated and stored secure JWT secret")
             return secure_secret
         except Exception as e:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to store JWT secret in config: %s", e)
             # Still return the secure secret even if we can't store it
             return secure_secret
@@ -566,9 +564,23 @@ class AuthenticationMiddleware:
         if not token_data:
             return None
 
+        # #12135: hard `token_data["username"]` crashed with an unhandled
+        # KeyError -> 500 for a structurally-valid, signature-verified token
+        # that simply carries the identity in a different claim (e.g. tokens
+        # minted by autobot-slm-backend use "sub", not "username" — see
+        # autobot-slm-backend/services/auth.py). The rest of the codebase
+        # already treats user_id/sub/username as interchangeable identity
+        # claims (see api/documents.py, api/voice.py, api/users.py), so fall
+        # back through them here rather than reject a valid token. Only a
+        # token with NO identity claim at all is treated as invalid.
+        username = token_data.get("username") or token_data.get("sub") or token_data.get("user_id")
+        if not username:
+            logger.warning("JWT verified but carries no username/sub/user_id claim — rejecting")
+            return None
+
         user = {
-            "username": token_data["username"],
-            "role": token_data["role"],
+            "username": username,
+            "role": token_data.get("role", "user"),
             "email": token_data.get("email", ""),
             "auth_method": "jwt",
         }
@@ -955,7 +967,7 @@ def check_admin_permission(request: Request) -> bool:
     user_role = user_data.get("role")
     if not user_role:
         raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-    if user_role != "admin":
+    if not is_admin_role(user_role):
         raise_auth_error("AUTH_0003", "Admin permission required for this operation")
 
     return True

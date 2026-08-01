@@ -255,7 +255,7 @@ export function useKnowledgeCollaboration() {
     error.value = null
     return wrap(async () => {
       try {
-        const response = await apiClient.post<ScopedSearchResult>('/knowledge/search/scoped', {
+        const response = await apiClient.post<ScopedSearchResult>('/api/knowledge/search/scoped', {
           query,
           top_k: options.top_k || 10,
           mode: options.mode || 'hybrid',

@@ -6,20 +6,26 @@
 Tests for issue #10849: AnthropicProvider routes outbound sends through
 AutoBotClaudeAPIAdapter's pre-send optimization pipeline.
 
+Also covers issue #10945: the provider's pre-send hook was switched from the
+flat-string ``optimize_for_send`` (whose optimized result was discarded) to
+the structured ``optimize_request``, which mutates ``LLMRequest.messages`` in
+place so payload-mutation actually reaches the outbound payload.
+
 Tests are split into two tiers:
   - Tier 1 (always run): adapter-level methods (optimize_for_send,
-    record_send_result) and rate-limit dict-truthiness fix — no runtime deps
-    beyond the autobot-backend package.
+    optimize_request, record_send_result) and rate-limit dict-truthiness fix —
+    no runtime deps beyond the autobot-backend package.
   - Tier 2 (skipped unless anthropic SDK installed): AnthropicProvider
     integration — imported via pytest.importorskip so the suite still green
     when anthropic is absent.
 
 Verifies:
-  - optimize_for_send is called when adapter is present and initialized
+  - optimize_request is called (and applied to request.messages) when the
+    adapter is present and initialized
   - record_send_result is called after a successful send
   - record_send_result is called with success=False after an error
   - everything is skipped (fail-safe) when adapter is absent or not initialized
-  - stream_completion calls optimize_for_send before streaming
+  - stream_completion calls optimize_request before streaming
   - _check_and_apply_rate_limit correctly reads can_proceed from dict result
 """
 
@@ -214,6 +220,137 @@ class TestAdapterNewMethods:
 
 
 # ---------------------------------------------------------------------------
+# Structured LLMRequest path (#10945)
+# ---------------------------------------------------------------------------
+
+
+class TestStructuredLLMRequestPath:
+    """optimize_request wires payload-mutation through structured messages."""
+
+    def setup_method(self) -> None:
+        from utils.claude_api_integration import AutoBotClaudeAPIAdapter
+
+        AutoBotClaudeAPIAdapter.reset_instance()
+
+    def teardown_method(self) -> None:
+        from utils.claude_api_integration import AutoBotClaudeAPIAdapter
+
+        AutoBotClaudeAPIAdapter.reset_instance()
+
+    @pytest.mark.asyncio
+    async def test_optimize_payload_if_enabled_no_longer_raises_attributeerror(self) -> None:
+        """Bugfix regression (#10945): OptimizationResult has no .optimized/.optimized_content."""
+        from utils.claude_api_integration import ClaudeAPIBatchManager, ClaudeAPIConfig
+
+        with patch("utils.graceful_degradation.Path.mkdir"):
+            mgr = ClaudeAPIBatchManager(ClaudeAPIConfig())
+        mgr.payload_optimizer.warning_size = 10
+        mgr.payload_optimizer.max_size = 100000  # avoid the chunking branch
+
+        long_text = "the quick brown fox jumps over the very lazy dog. " * 5
+        result = await mgr._optimize_payload_if_enabled(long_text)
+
+        assert result != long_text
+        assert len(result) < len(long_text)
+
+    @pytest.mark.asyncio
+    async def test_optimize_messages_if_enabled_preserves_message_structure(self) -> None:
+        from utils.claude_api_integration import ClaudeAPIBatchManager, ClaudeAPIConfig
+
+        with patch("utils.graceful_degradation.Path.mkdir"):
+            mgr = ClaudeAPIBatchManager(ClaudeAPIConfig())
+        mgr.payload_optimizer.warning_size = 10
+        mgr.payload_optimizer.max_size = 100000
+
+        messages = [
+            {"role": "system", "content": "the quick brown fox jumps over the very lazy dog. " * 5},
+            {"role": "user", "content": "hi"},
+        ]
+        optimized = await mgr._optimize_messages_if_enabled(messages)
+
+        assert optimized[0]["role"] == "system"
+        assert optimized[0]["content"] != messages[0]["content"]
+        assert optimized[1] == {"role": "user", "content": "hi"}
+
+    @pytest.mark.asyncio
+    async def test_optimize_request_mutates_and_returns_request(self) -> None:
+        """optimize_request must write optimized content back onto request.messages."""
+        from utils.claude_api_integration import AutoBotClaudeAPIAdapter
+
+        adapter = AutoBotClaudeAPIAdapter()
+        mock_manager = MagicMock()
+        mock_manager.is_running = True
+        mock_manager._increment_metric = AsyncMock()
+        mock_manager._check_and_apply_rate_limit = AsyncMock(return_value=True)
+        mock_manager._optimize_messages_if_enabled = AsyncMock(return_value=[{"role": "user", "content": "optimized"}])
+        mock_manager.rate_limiter = None
+        adapter.manager = mock_manager
+        adapter._initialized = True
+
+        class _Req:
+            messages = [{"role": "user", "content": "original"}]
+
+        req = _Req()
+        result = await adapter.optimize_request(req, context_type="chat")
+
+        assert result is req
+        assert req.messages == [{"role": "user", "content": "optimized"}]
+        mock_manager._optimize_messages_if_enabled.assert_awaited_once_with([{"role": "user", "content": "original"}])
+
+    @pytest.mark.asyncio
+    async def test_optimize_request_fail_safe_on_rate_limit(self) -> None:
+        from utils.claude_api_integration import AutoBotClaudeAPIAdapter
+
+        adapter = AutoBotClaudeAPIAdapter()
+        mock_manager = MagicMock()
+        mock_manager.is_running = True
+        mock_manager._increment_metric = AsyncMock()
+        mock_manager._check_and_apply_rate_limit = AsyncMock(return_value=False)
+        mock_manager.degradation_manager = None
+        adapter.manager = mock_manager
+        adapter._initialized = True
+
+        class _Req:
+            messages = [{"role": "user", "content": "original"}]
+
+        req = _Req()
+        result = await adapter.optimize_request(req, context_type="chat")
+
+        assert result is req
+        assert req.messages == [{"role": "user", "content": "original"}]
+
+    @pytest.mark.asyncio
+    async def test_optimize_request_noop_when_manager_absent(self) -> None:
+        from utils.claude_api_integration import AutoBotClaudeAPIAdapter
+
+        adapter = AutoBotClaudeAPIAdapter()
+        adapter.manager = None
+        adapter._initialized = True
+
+        class _Req:
+            messages = [{"role": "user", "content": "original"}]
+
+        req = _Req()
+        result = await adapter.optimize_request(req, context_type="chat")
+        assert result is req
+
+    @pytest.mark.asyncio
+    async def test_content_via_llm_request_round_trips_through_structured_path(self) -> None:
+        """submit_request's flat-string path now optimizes via the same
+        structured messages helper the live provider send path uses."""
+        from utils.claude_api_integration import ClaudeAPIBatchManager, ClaudeAPIConfig
+
+        with patch("utils.graceful_degradation.Path.mkdir"):
+            mgr = ClaudeAPIBatchManager(ClaudeAPIConfig())
+        mgr._optimize_messages_if_enabled = AsyncMock(return_value=[{"role": "user", "content": "optimized-content"}])
+
+        result = await mgr._optimize_content_via_llm_request("original-content", "general")
+
+        assert result == "optimized-content"
+        mgr._optimize_messages_if_enabled.assert_awaited_once_with([{"role": "user", "content": "original-content"}])
+
+
+# ---------------------------------------------------------------------------
 # Rate-limit dict-truthiness fix (#10849)
 # ---------------------------------------------------------------------------
 
@@ -328,10 +465,15 @@ def _make_sdk_response(text: str = "pong") -> MagicMock:
     return resp
 
 
+async def _identity_optimize_request(request, context_type="general"):
+    """Mimic the real ``optimize_request`` no-op path (payload optimizer disabled)."""
+    return request
+
+
 def _make_initialized_adapter() -> MagicMock:
     adapter = MagicMock()
     adapter.is_initialized = True
-    adapter.optimize_for_send = AsyncMock(return_value="Hello")
+    adapter.optimize_request = AsyncMock(side_effect=_identity_optimize_request)
     adapter.record_send_result = AsyncMock()
     return adapter
 
@@ -344,7 +486,7 @@ class TestAnthropicProviderAdapterWiring:
         return _AnthropicProvider(settings={"api_key": "test-key"})
 
     @pytest.mark.asyncio
-    async def test_optimize_for_send_called_when_adapter_present(self) -> None:
+    async def test_optimize_request_called_when_adapter_present(self) -> None:
         provider = self._make_provider()
         sdk_resp = _make_sdk_response("response text")
         mock_adapter = _make_initialized_adapter()
@@ -360,9 +502,36 @@ class TestAnthropicProviderAdapterWiring:
             req = _make_request()
             await provider._chat_completion_impl(req)
 
-        mock_adapter.optimize_for_send.assert_awaited_once()
-        call_kwargs = mock_adapter.optimize_for_send.call_args.kwargs
-        assert call_kwargs["content"] == "Hello"
+        mock_adapter.optimize_request.assert_awaited_once()
+        call = mock_adapter.optimize_request.call_args
+        assert call.args[0].messages == [{"role": "user", "content": "Hello"}]
+        assert call.kwargs["context_type"]
+
+    @pytest.mark.asyncio
+    async def test_optimize_request_mutation_reaches_sent_payload(self) -> None:
+        """Issue #10945: optimized message content must reach the SDK call kwargs."""
+        provider = self._make_provider()
+        sdk_resp = _make_sdk_response("response text")
+        mock_adapter = _make_initialized_adapter()
+
+        async def _mutate(request, context_type="general"):
+            request.messages = [{"role": "user", "content": "Hello (optimized)"}]
+            return request
+
+        mock_adapter.optimize_request = AsyncMock(side_effect=_mutate)
+
+        with (
+            patch("llm_shared.providers.anthropic._get_adapter_sync", return_value=mock_adapter),
+            patch.object(provider, "_ensure_client") as mock_client_fn,
+        ):
+            mock_client = MagicMock()
+            mock_client.messages.create = AsyncMock(return_value=sdk_resp)
+            mock_client_fn.return_value = mock_client
+
+            await provider._chat_completion_impl(_make_request())
+
+        sent_kwargs = mock_client.messages.create.call_args.kwargs
+        assert sent_kwargs["messages"] == [{"role": "user", "content": "Hello (optimized)"}]
 
     @pytest.mark.asyncio
     async def test_record_send_result_called_on_success(self) -> None:
@@ -443,15 +612,15 @@ class TestAnthropicProviderAdapterWiring:
             resp = await provider._chat_completion_impl(_make_request())
 
         assert resp.content == "direct2"
-        mock_adapter.optimize_for_send.assert_not_called()
+        mock_adapter.optimize_request.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_optimize_exception_is_fail_safe(self) -> None:
-        """If optimize_for_send raises, send still proceeds (fail-safe)."""
+        """If optimize_request raises, send still proceeds (fail-safe)."""
         provider = self._make_provider()
         sdk_resp = _make_sdk_response("safe")
         mock_adapter = _make_initialized_adapter()
-        mock_adapter.optimize_for_send = AsyncMock(side_effect=RuntimeError("optimizer boom"))
+        mock_adapter.optimize_request = AsyncMock(side_effect=RuntimeError("optimizer boom"))
 
         with (
             patch("llm_shared.providers.anthropic._get_adapter_sync", return_value=mock_adapter),
@@ -469,13 +638,13 @@ class TestAnthropicProviderAdapterWiring:
 
 @_skip_no_provider
 class TestAnthropicStreamAdapterWiring:
-    """AnthropicProvider.stream_completion calls adapter optimize_for_send."""
+    """AnthropicProvider.stream_completion calls adapter optimize_request."""
 
     def _make_provider(self):
         return _AnthropicProvider(settings={"api_key": "test-key"})
 
     @pytest.mark.asyncio
-    async def test_optimize_for_send_called_before_stream(self) -> None:
+    async def test_optimize_request_called_before_stream(self) -> None:
         provider = self._make_provider()
         mock_adapter = _make_initialized_adapter()
 
@@ -500,7 +669,7 @@ class TestAnthropicStreamAdapterWiring:
                 chunks.append(chunk)
 
         assert chunks == ["chunk1", "chunk2"]
-        mock_adapter.optimize_for_send.assert_awaited_once()
+        mock_adapter.optimize_request.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_stream_proceeds_when_adapter_absent(self) -> None:

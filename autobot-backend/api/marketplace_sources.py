@@ -15,7 +15,6 @@ import json
 import re
 import socket
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
@@ -32,6 +31,7 @@ from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.url_safety import resolve_safe_ip_async
 
 logger = get_logger(__name__)
@@ -144,7 +144,7 @@ async def add_marketplace(
         url=url,
         description=request.description,
         is_builtin=False,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=utc_timestamp(),
     )
     redis = await get_async_redis_client(database="main")
     if redis is None:
@@ -199,6 +199,16 @@ async def _fetch_catalog_document(url: str) -> CatalogDocument:
     via `_resolve_safe_ip` (blocks RFC1918/loopback/link-local) and
     ``allow_redirects=False`` (defeats redirect-rebind). Raises
     HTTPException(400) on any fetch/parse/validation failure.
+
+    Issue #12979: deliberately NOT converted to the shared pooled client. The
+    ``_PinnedResolver``/``connector=`` below pin this session to the
+    pre-resolved public IP so the fetch cannot be DNS-rebound to a private
+    address between validation and connect. A connector is session-level —
+    the pooled ``HTTPClientManager`` owns exactly one shared ``TCPConnector``
+    and ``session.request()`` accepts no per-request override — so routing
+    this through the pool would silently drop the pin and reopen the
+    DNS-rebinding hole this function exists to close. Same carve-out category
+    as ``knowledge/connectors/oauth_flow.py::_post_token()``.
     """
     _validate_url_scheme(url)
     parsed = urlparse(url)

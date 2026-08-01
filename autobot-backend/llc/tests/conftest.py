@@ -28,12 +28,82 @@ from unittest.mock import AsyncMock, MagicMock, patch  # noqa: F401 — used in 
 import pytest  # noqa: F401 — used for @pytest.fixture decorator below
 from httpx import ASGITransport, AsyncClient  # noqa: F401 — used in fixtures below
 
+# #13084: real-load the in-memory adapter classes BEFORE ``knowledge`` is
+# stubbed below. They are dependency-light (no chromadb import at module
+# level — verified: only ``get_default_client``/``get_async_default_client``
+# lazily import the chromadb chain), so importing them here is safe and lets
+# the ``knowledge.backends`` stub re-export the REAL classes instead of
+# omitting them, which previously shadowed the real
+# ``knowledge.backends.InMemoryClient`` for any test collected afterward in
+# the same session (see _make_knowledge_submodule_stubs).
+from knowledge.backends.async_memory_adapter import (  # noqa: E402
+    AsyncInMemoryClient,
+    AsyncInMemoryCollection,
+)
+from knowledge.backends.memory_adapter import (  # noqa: E402
+    InMemoryClient,
+    InMemoryCollection,
+)
+
+_SESSION_STUB_KEYS = (
+    "knowledge",
+    "knowledge.embedding_cache",
+    "knowledge.utils",
+    "agents",
+    "agents.base_agent",
+)
+
+
+def _snapshot_session_stub_keys() -> dict:
+    """Capture the pre-stub sys.modules state for every key this file stubs.
+
+    Issue #13084: these stubs were previously installed unconditionally at
+    module import time with no restore, so once ``llc/tests/`` was collected
+    in a full-suite run they permanently shadowed the REAL ``knowledge``/
+    ``services``/``agents`` packages for the rest of the session — breaking
+    genuine consumers collected later (e.g.
+    ``services/research/quarantine_boundary_test.py``'s
+    ``from knowledge.backends import InMemoryClient``, which fails only in a
+    full run, never in isolation). ``None`` means the key was absent before
+    this file ran.
+    """
+    return {key: sys.modules.get(key) for key in _SESSION_STUB_KEYS}
+
+
+# #13107: __file__ = .../autobot-backend/llc/tests/conftest.py → parents[2]
+# = .../autobot-backend, matching the same on-disk-path derivation already
+# used by _shield_codebase_analytics_package below.
+_KNOWLEDGE_DIR = str(Path(__file__).parents[2] / "knowledge")
+
 
 def _make_knowledge_stub() -> types.ModuleType:
-    """Return a thin module stub for the ``knowledge`` package."""
+    """Return a thin module stub for the ``knowledge`` package.
+
+    #13107: ``__path__`` points at the REAL on-disk ``knowledge/`` directory
+    instead of ``[]`` — the "hollow package" pattern already used for
+    ``api`` in ``autobot-slm-backend/conftest.py`` and for
+    ``api.codebase_analytics`` later in this same file. Python's import
+    machinery uses ``__path__`` only to locate a submodule NOT already
+    present in ``sys.modules``, so submodules this file explicitly stubs
+    (``knowledge.embedding_cache``, ``knowledge.utils``,
+    ``knowledge.backends`` — see ``_make_knowledge_submodule_stubs``) are
+    unaffected: their ``sys.modules`` entry is found first and wins.
+
+    An empty ``__path__`` previously blocked EVERY other real
+    ``knowledge.X`` submodule too, not just the ones this file omits —
+    e.g. ``knowledge.facts`` — breaking any test collected afterward in the
+    same session that needs one (reproduced via
+    ``services/research/quarantine_boundary_test.py``). ``knowledge/*``
+    mixin modules (``facts.py``, ``documents.py``, etc.) do not import
+    chromadb/llama_index at module level — only ``knowledge/_composed.py``
+    does, and it is reached exclusively via ``knowledge/__init__.py``'s
+    PEP 562 ``__getattr__``, which this stub module never defines, so
+    resolving a real submodule here can never trigger the heavy chain.
+    """
     mod = types.ModuleType("knowledge")
-    mod.__path__ = []  # type: ignore[attr-defined]
+    mod.__path__ = [_KNOWLEDGE_DIR]  # type: ignore[attr-defined]
     mod.__package__ = "knowledge"
+    mod.__spec__ = None  # type: ignore[attr-defined]
     mod.get_knowledge_base = AsyncMock(return_value=MagicMock())
     mod.KnowledgeBase = MagicMock  # type: ignore[attr-defined]
     return mod
@@ -55,11 +125,33 @@ def _make_knowledge_submodule_stubs() -> None:
     # backends stub, the bare ``knowledge`` stub above shadows the real package and
     # any cross-suite run (llc tests collected before analytics tests) fails to
     # collect them with ModuleNotFoundError: No module named 'knowledge.backends' (#11256).
+    #
+    # #13084: only ``get_default_client``/``get_async_default_client`` need
+    # mocking (they lazily import the heavy chromadb chain). The in-memory
+    # adapter classes (real-loaded at module top, before ``knowledge`` is
+    # stubbed) are a REAL, separate consumer's public API — a previous
+    # version of this stub omitted them, which silently shadowed the real
+    # ``knowledge.backends.InMemoryClient`` for any test collected afterward
+    # in the same session (reproduced via
+    # ``services/research/quarantine_boundary_test.py``, which fails only in
+    # a full-suite run, never in isolation, because collection-time imports
+    # happen before any fixture teardown could restore this stub). Re-exporting
+    # the real classes here means no restore is even needed for this key.
     kb = types.ModuleType("knowledge.backends")
     kb.get_default_client = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
     kb.get_async_default_client = AsyncMock(return_value=MagicMock())  # type: ignore[attr-defined]
+    kb.InMemoryClient = InMemoryClient  # type: ignore[attr-defined]
+    kb.InMemoryCollection = InMemoryCollection  # type: ignore[attr-defined]
+    kb.AsyncInMemoryClient = AsyncInMemoryClient  # type: ignore[attr-defined]
+    kb.AsyncInMemoryCollection = AsyncInMemoryCollection  # type: ignore[attr-defined]
     sys.modules["knowledge.backends"] = kb
 
+
+# #13084: snapshot BEFORE stubbing so the package-scoped fixture below can
+# restore these exact keys once every test under llc/tests/ has run — the
+# stub is required for this package's own collection/tests but must not
+# outlive it (see _snapshot_session_stub_keys docstring).
+_PRE_STUB_MODULES = _snapshot_session_stub_keys()
 
 # The ``knowledge`` module imports lazily but fails when attributes are accessed
 # because chromadb → opentelemetry has a broken dependency in the dev venv.
@@ -70,24 +162,53 @@ _make_knowledge_submodule_stubs()
 
 
 def _make_services_stub() -> types.ModuleType:
-    """Return a thin stub for the ``services`` package hierarchy."""
-    services_mod = types.ModuleType("services")
-    services_mod.__path__ = []  # type: ignore[attr-defined]
-    services_mod.__package__ = "services"
+    """Return a thin stub for the ``services`` package hierarchy.
 
-    llm_mod = types.ModuleType("services.llm_service")
-    llm_mod.__package__ = "services"
-    llm_mod.get_llm_service = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+    #12463: guarded per-name so this never *unconditionally* overwrites a
+    module the root ``autobot-backend/conftest.py`` already set up. That
+    root conftest stubs ``services``/``services.llm_service`` with a real
+    on-disk ``__path__`` plus a catch-all ``__getattr__`` fallback (so
+    ``services.mesh_brain`` / ``services.agents`` / any attribute resolves),
+    and real-loads ``services.slm_client`` from disk in ``pytest_configure``
+    (giving it ``_SERVICE_JWT_TTL_HOURS`` etc). Blindly replacing those with
+    this file's narrower stand-ins — which lack the catch-all and the real
+    ``__path__`` — poisoned ``sys.modules`` for the rest of the pytest
+    session: every later-collected file needing an attribute or submodule
+    not on this file's short hand list failed with a confusing, unrelated-
+    looking ``ImportError``/``ModuleNotFoundError``.
 
-    slm_mod = types.ModuleType("services.slm_client")
-    slm_mod.__package__ = "services"
-    slm_mod.get_slm_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
+    The parent-package bind (``services_mod.llm_service = ...``) below is
+    still required EVERY time, even when reusing an already-present
+    ``sys.modules`` entry: ``unittest.mock.patch("services.llm_service.X")``
+    resolves the dotted path via ``getattr(sys.modules["services"],
+    "llm_service")`` — NOT via ``sys.modules["services.llm_service"]``
+    directly (mirrors the root conftest's own ``_real_load_and_bind`` /
+    #11532 note). The root conftest's stub loop never does this bind for
+    ``services.llm_service``, so skipping it here left ``patch()`` silently
+    resolving the *package's* generic catch-all mock instead of the real
+    submodule — an inert patch (#12463).
+    """
+    if "services" not in sys.modules:
+        services_mod = types.ModuleType("services")
+        services_mod.__path__ = []  # type: ignore[attr-defined]
+        services_mod.__package__ = "services"
+        sys.modules["services"] = services_mod
+    services_mod = sys.modules["services"]
 
-    services_mod.llm_service = llm_mod  # type: ignore[attr-defined]
-    services_mod.slm_client = slm_mod  # type: ignore[attr-defined]
-    sys.modules["services"] = services_mod
-    sys.modules["services.llm_service"] = llm_mod
-    sys.modules["services.slm_client"] = slm_mod
+    if "services.llm_service" not in sys.modules:
+        llm_mod = types.ModuleType("services.llm_service")
+        llm_mod.__package__ = "services"
+        llm_mod.get_llm_service = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+        sys.modules["services.llm_service"] = llm_mod
+    services_mod.llm_service = sys.modules["services.llm_service"]  # type: ignore[attr-defined]
+
+    if "services.slm_client" not in sys.modules:
+        slm_mod = types.ModuleType("services.slm_client")
+        slm_mod.__package__ = "services"
+        slm_mod.get_slm_client = MagicMock(return_value=None)  # type: ignore[attr-defined]
+        sys.modules["services.slm_client"] = slm_mod
+    services_mod.slm_client = sys.modules["services.slm_client"]  # type: ignore[attr-defined]
+
     return services_mod
 
 
@@ -369,6 +490,30 @@ def _build_llc_app(
     _patch_kb.start()
 
     return app, _patch_kb
+
+
+@pytest.fixture(scope="package", autouse=True)
+def _restore_session_stubs_after_package():
+    """Restore the module-level ``knowledge``/``agents`` stubs after this
+    package finishes (#13084).
+
+    The stubs installed above at import time are required for llc/tests/
+    itself to collect (chromadb/opentelemetry are unavailable in dev/CI), but
+    were previously left in ``sys.modules`` for the rest of the pytest
+    session with no restore — shadowing the REAL ``knowledge.backends``
+    package for any test collected afterward in the same worker (reproduced:
+    ``services/research/quarantine_boundary_test.py``'s
+    ``from knowledge.backends import InMemoryClient`` fails only in a
+    full-suite run, never in isolation). Restoring here — rather than a
+    session-scoped hook — ties the fix to exactly the lifetime that needs
+    the stub.
+    """
+    yield
+    for key, prior in _PRE_STUB_MODULES.items():
+        if prior is None:
+            sys.modules.pop(key, None)
+        else:
+            sys.modules[key] = prior
 
 
 @pytest.fixture

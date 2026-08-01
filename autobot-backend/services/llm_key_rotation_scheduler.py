@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from services.llm_api_key_service import get_llm_api_key_service
@@ -29,7 +30,11 @@ def _resolve_rotation_interval_minutes() -> int:
     int("") raised ValueError at import time and silently disabled the scheduler
     on every startup. Default to hourly (#6590) instead of crashing the import.
     """
-    raw = (config.llm_key_rotation_interval_minutes or "").strip()
+    # #12782: an unset knob is "" from ssot_config, not None — treat it as
+    # absent so the default applies silently instead of warning every boot.
+    raw = blank_to_none(config.llm_key_rotation_interval_minutes)
+    if raw is None:
+        return _DEFAULT_ROTATION_INTERVAL_MINUTES
     try:
         minutes = int(raw)
     except ValueError:

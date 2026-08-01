@@ -33,11 +33,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 # Import using sys.path manipulation since directory has dashes
 import importlib.util
 
+# #12436: tools/code-analysis-suite/src/anti_pattern_detector.py was deleted
+# during the Phase 1/2 repo restructuring (#781, #926); the directory-level
+# analyzer (whole-codebase class index: `.classes`/`.modules`, cycle
+# detection) now lives at autobot-backend/code_analysis/src/anti_pattern_detector.py
+# — same lineage/Issue #221, confirmed production-canonical for cross-file
+# rules (see code_intelligence/anti_pattern_detector.py facade docstring,
+# GH#6757).
 spec = importlib.util.spec_from_file_location(
     "anti_pattern_detector",
     os.path.join(
         os.path.dirname(__file__),
-        "../../tools/code-analysis-suite/src/anti_pattern_detector.py",
+        "../code_analysis/src/anti_pattern_detector.py",
     ),
 )
 anti_pattern_module = importlib.util.module_from_spec(spec)
@@ -51,6 +58,11 @@ AntiPatternType = anti_pattern_module.AntiPatternType
 ClassInfo = anti_pattern_module.ClassInfo
 ModuleInfo = anti_pattern_module.ModuleInfo
 Severity = anti_pattern_module.Severity
+# #7414 consolidated the local `Severity.score()` method onto the canonical
+# `autobot_shared.status_enums.Severity` enum, extracting the int 0-100 score
+# into this module-level helper (canonical `Severity.to_score()` keeps a
+# separate 0.0-0.9 float contract). Tests below use the helper accordingly.
+anti_pattern_score = anti_pattern_module.anti_pattern_score
 
 
 class TestSeverity:
@@ -65,16 +77,16 @@ class TestSeverity:
 
     def test_severity_scores(self):
         """Test severity score ordering."""
-        assert Severity.CRITICAL.score() > Severity.HIGH.score()
-        assert Severity.HIGH.score() > Severity.MEDIUM.score()
-        assert Severity.MEDIUM.score() > Severity.LOW.score()
+        assert anti_pattern_score(Severity.CRITICAL) > anti_pattern_score(Severity.HIGH)
+        assert anti_pattern_score(Severity.HIGH) > anti_pattern_score(Severity.MEDIUM)
+        assert anti_pattern_score(Severity.MEDIUM) > anti_pattern_score(Severity.LOW)
 
     def test_severity_score_values(self):
         """Test specific severity score values."""
-        assert Severity.CRITICAL.score() == 100
-        assert Severity.HIGH.score() == 75
-        assert Severity.MEDIUM.score() == 50
-        assert Severity.LOW.score() == 25
+        assert anti_pattern_score(Severity.CRITICAL) == 100
+        assert anti_pattern_score(Severity.HIGH) == 75
+        assert anti_pattern_score(Severity.MEDIUM) == 50
+        assert anti_pattern_score(Severity.LOW) == 25
 
 
 class TestAntiPatternType:

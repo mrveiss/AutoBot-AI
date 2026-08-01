@@ -391,6 +391,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         """Save assessment to Redis."""
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot save assessment %s", assessment.id)
+                raise RuntimeError("Redis unavailable: cannot save assessment")
             key = self._assessment_key(assessment.id)
 
             # Update timestamp
@@ -424,6 +427,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         """
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot get assessment %s", assessment_id)
+                raise RuntimeError("Redis unavailable: cannot get assessment")
             key = self._assessment_key(assessment_id)
 
             data = await redis.get(key)
@@ -439,6 +445,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         """List all active (non-complete) assessments."""
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot list active assessments")
+                raise RuntimeError("Redis unavailable: cannot list active assessments")
             assessment_ids = await redis.smembers(self.REDIS_ACTIVE_INDEX)
 
             if not assessment_ids:
@@ -1185,6 +1194,9 @@ class SecurityWorkflowManager(AsyncRedisClientMixin):
         """
         try:
             redis = await self._get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot delete assessment %s", assessment_id)
+                raise RuntimeError("Redis unavailable: cannot delete assessment")
             key = self._assessment_key(assessment_id)
 
             deleted = await redis.delete(key)

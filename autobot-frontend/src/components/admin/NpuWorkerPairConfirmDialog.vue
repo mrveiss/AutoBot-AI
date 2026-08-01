@@ -99,7 +99,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, useId } from 'vue'
-import { useFocusTrap } from '@/composables/useFocusTrap'
+import { useFocusTrap } from '@autobot/ui'
 import type { NpuWorkerPairResult, NpuWorkerProfile } from '@/composables/useNpuWorkers'
 
 // ---------------------------------------------------------------------------

@@ -16,7 +16,7 @@ Issue: #402 - [Code Quality] Reduce Deep Nesting - 524 functions exceed 4 levels
 
 import json
 from typing import Any, Dict
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,177 +24,188 @@ from autobot_shared.ssot_config import config
 
 
 class TestReorganizeRedisHelpers:
-    """Tests for reorganize_redis_databases.py helper functions."""
+    """Tests for the _decode_key helper (Issue #11954).
+
+    ``analysis/reorganize_redis_databases.py`` (the original source of these
+    helpers) was a one-time Redis-DB-reorganization migration script deleted
+    in #6716/#6717 ("delete stale audit artifacts", verified zero live
+    imports). ``_determine_target_db``/``DB_INDEX_TO_NAME`` were specific to
+    that one-time migration and have no live equivalent, so their tests were
+    removed rather than pointed at dead code. ``_decode_key`` is a generic
+    bytes-decode helper with a live, functionally-identical twin in
+    ``api/knowledge_maintenance.py`` — repointed there.
+    """
 
     def test_decode_key_bytes(self):
         """Test _decode_key with bytes input."""
-        # Import locally to avoid module-level import issues
-        import sys
-
-        sys.path.insert(0, config.project_root)
-        from analysis.reorganize_redis_databases import _decode_key
+        from api.knowledge_maintenance import _decode_key
 
         result = _decode_key(b"test_key")
         assert result == "test_key"
 
     def test_decode_key_string(self):
         """Test _decode_key with string input."""
-        import sys
-
-        sys.path.insert(0, config.project_root)
-        from analysis.reorganize_redis_databases import _decode_key
+        from api.knowledge_maintenance import _decode_key
 
         result = _decode_key("already_string")
         assert result == "already_string"
 
     def test_decode_key_unicode(self):
         """Test _decode_key with unicode bytes."""
-        import sys
-
-        sys.path.insert(0, config.project_root)
-        from analysis.reorganize_redis_databases import _decode_key
+        from api.knowledge_maintenance import _decode_key
 
         result = _decode_key("unicode_тест".encode("utf-8"))
         assert result == "unicode_тест"
 
-    def test_determine_target_db_fact(self):
-        """Test _determine_target_db routes facts to DB1."""
-        import sys
-
-        sys.path.insert(0, config.project_root)
-        from analysis.reorganize_redis_databases import _determine_target_db
-
-        assert _determine_target_db("fact:user_preferences") == 1
-        assert _determine_target_db("some_fact_key") == 1
-
-    def test_determine_target_db_workflow(self):
-        """Test _determine_target_db routes workflows to DB2."""
-        import sys
-
-        sys.path.insert(0, config.project_root)
-        from analysis.reorganize_redis_databases import _determine_target_db
-
-        assert _determine_target_db("workflow_rules") == 2
-        assert _determine_target_db("classification_data") == 2
-
-    def test_determine_target_db_other(self):
-        """Test _determine_target_db routes other keys to DB3."""
-        import sys
-
-        sys.path.insert(0, config.project_root)
-        from analysis.reorganize_redis_databases import _determine_target_db
-
-        assert _determine_target_db("random_key") == 3
-        assert _determine_target_db("session:abc123") == 3
-
-    def test_db_index_to_name_mapping(self):
-        """Test explicit database index to name mapping."""
-        import sys
-
-        sys.path.insert(0, config.project_root)
-        from analysis.reorganize_redis_databases import DB_INDEX_TO_NAME
-
-        assert DB_INDEX_TO_NAME[0] == "main"
-        assert DB_INDEX_TO_NAME[1] == "knowledge"
-        assert DB_INDEX_TO_NAME[2] == "cache"
-        assert DB_INDEX_TO_NAME[3] == "sessions"
-        assert len(DB_INDEX_TO_NAME) == 4
-
 
 class TestMCPClientHelpers:
-    """Tests for base.py MCP client helper methods."""
+    """Tests for docs/examples/mcp_agent_workflows/base.py MCPClient (#11954).
+
+    The original targets (``_create_error_for_status``, module-level
+    ``NON_RETRYABLE_STATUS_CODES``, ``_RetrySignal``, ``_should_retry``) never
+    existed anywhere in this file's git history — not a rename, the test was
+    written against a hypothetical API. The #825 nesting-reduction refactor
+    settled on a different, real shape: ``_raise_client_error`` (sync, raises
+    ``MCPToolError`` for the 400/403/404/422 client-error codes),
+    ``_execute_request`` (returns ``None`` to signal "retry" for a 5xx while
+    attempts remain, else raises with a "Server error: ..." message), and
+    ``_retry_or_raise`` (sleeps to retry, or raises on the final attempt).
+    Rewritten below against those real symbols, also fixing the
+    ``examples.mcp_agent_workflows`` -> ``docs.examples.mcp_agent_workflows``
+    import path (the package only exists under docs/).
+    """
+
+    @staticmethod
+    def _mock_http_response(status: int, text: str):
+        """Build an aiohttp.ClientSession mock yielding one POST response.
+
+        Helper for _execute_request tests (#11954).
+        """
+        mock_response = AsyncMock()
+        mock_response.status = status
+        mock_response.text = AsyncMock(return_value=text)
+
+        mock_post_cm = AsyncMock()
+        mock_post_cm.__aenter__.return_value = mock_response
+
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=mock_post_cm)
+
+        mock_session_cm = AsyncMock()
+        mock_session_cm.__aenter__.return_value = mock_session
+        return mock_session_cm
 
     def test_create_error_for_status_400(self):
-        """Test error creation for 400 status."""
+        """Test error creation for 400 status via _raise_client_error."""
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import MCPClient
+        from docs.examples.mcp_agent_workflows.base import MCPClient, MCPToolError
 
         client = MCPClient(log_requests=False)
-        error = client._create_error_for_status("test", "tool", 400, "bad request")
+        with pytest.raises(MCPToolError) as exc_info:
+            client._raise_client_error("test", "tool", 400, "bad request")
 
-        assert error.status == 400
-        assert "Validation error" in error.message
+        assert exc_info.value.status == 400
+        assert "Validation error" in exc_info.value.message
 
     def test_create_error_for_status_404(self):
-        """Test error creation for 404 status."""
+        """Test error creation for 404 status via _raise_client_error."""
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import MCPClient
+        from docs.examples.mcp_agent_workflows.base import MCPClient, MCPToolError
 
         client = MCPClient(log_requests=False)
-        error = client._create_error_for_status("test", "missing_tool", 404, "not found")
+        with pytest.raises(MCPToolError) as exc_info:
+            client._raise_client_error("test", "missing_tool", 404, "not found")
 
-        assert error.status == 404
-        assert "Tool not found" in error.message
-        assert "missing_tool" in error.message
+        assert exc_info.value.status == 404
+        assert "Tool not found" in exc_info.value.message
+        assert "missing_tool" in exc_info.value.message
 
-    def test_create_error_for_status_500(self):
-        """Test error creation for 500 status."""
+    @pytest.mark.asyncio
+    async def test_create_error_for_status_500(self):
+        """Test that a 5xx response raises with a "Server error" message
+        once retries are exhausted (_execute_request's final-attempt path)."""
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import MCPClient
+        from docs.examples.mcp_agent_workflows.base import MCPClient, MCPToolError
 
-        client = MCPClient(log_requests=False)
-        error = client._create_error_for_status("test", "tool", 500, "internal error")
+        client = MCPClient(max_retries=3, log_requests=False)
+        session_cm = self._mock_http_response(500, "internal error")
 
-        assert error.status == 500
-        assert "Server error" in error.message
+        with patch("aiohttp.ClientSession", return_value=session_cm):
+            with pytest.raises(MCPToolError) as exc_info:
+                await client._execute_request("http://x", {}, "test", "tool", client.max_retries - 1)
 
-    def test_non_retryable_status_codes(self):
-        """Test NON_RETRYABLE_STATUS_CODES constant."""
+        assert exc_info.value.status == 500
+        assert "Server error" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_non_retryable_status_codes(self):
+        """Client-error codes (400/403/404/422) raise immediately — no retry."""
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import NON_RETRYABLE_STATUS_CODES
+        from docs.examples.mcp_agent_workflows.base import MCPClient, MCPToolError
 
-        assert 400 in NON_RETRYABLE_STATUS_CODES
-        assert 403 in NON_RETRYABLE_STATUS_CODES
-        assert 404 in NON_RETRYABLE_STATUS_CODES
-        assert 422 in NON_RETRYABLE_STATUS_CODES
-        assert 500 not in NON_RETRYABLE_STATUS_CODES
+        client = MCPClient(max_retries=3, log_requests=False)
 
-    def test_retry_signal_exception_exists(self):
-        """Test _RetrySignal exception class exists."""
+        for status in (400, 403, 404, 422):
+            session_cm = self._mock_http_response(status, "client error")
+            with patch("aiohttp.ClientSession", return_value=session_cm):
+                with pytest.raises(MCPToolError) as exc_info:
+                    await client._execute_request("http://x", {}, "test", "tool", 0)
+            assert exc_info.value.status == status
+
+    @pytest.mark.asyncio
+    async def test_retry_signal_exception_exists(self):
+        """A 5xx response with attempts remaining signals retry by returning
+        None (no exception) — the real replacement for the old _RetrySignal
+        exception-based design."""
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import _RetrySignal
+        from docs.examples.mcp_agent_workflows.base import MCPClient
 
-        # Should be able to instantiate and raise
-        signal = _RetrySignal()
-        assert isinstance(signal, Exception)
+        client = MCPClient(max_retries=3, log_requests=False)
+        session_cm = self._mock_http_response(500, "internal error")
+
+        with patch("aiohttp.ClientSession", return_value=session_cm):
+            result = await client._execute_request("http://x", {}, "test", "tool", 0)
+
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_should_retry_first_attempt(self):
-        """Test _should_retry returns True on first attempt."""
+        """Test _retry_or_raise sleeps (retries) rather than raising when
+        attempts remain."""
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import MCPClient
+        from docs.examples.mcp_agent_workflows.base import MCPClient
 
         client = MCPClient(max_retries=3, log_requests=False)
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            result = await client._should_retry(0, "Test error")
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await client._retry_or_raise("test", "tool", 0, "Timeout", "Test error")
 
-        assert result is True
+        mock_sleep.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_should_retry_max_attempts_exceeded(self):
-        """Test _should_retry returns False when max attempts exceeded."""
+        """Test _retry_or_raise raises MCPToolError on the final attempt."""
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import MCPClient
+        from docs.examples.mcp_agent_workflows.base import MCPClient, MCPToolError
 
         client = MCPClient(max_retries=3, log_requests=False)
-        result = await client._should_retry(2, "Test error")
 
-        assert result is False
+        with pytest.raises(MCPToolError):
+            await client._retry_or_raise("test", "tool", 2, "Timeout", "Test error")
 
 
 class TestCodeVectorKnowledgeHelpers:
@@ -373,7 +384,7 @@ class TestWorkflowResult:
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import WorkflowResult
+        from docs.examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
 
@@ -387,7 +398,7 @@ class TestWorkflowResult:
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import WorkflowResult
+        from docs.examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
         result.add_step("step1", "success", data={"key": "value"})
@@ -403,7 +414,7 @@ class TestWorkflowResult:
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import WorkflowResult
+        from docs.examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
         result.add_step("step1", "failed", error="Something went wrong")
@@ -417,7 +428,7 @@ class TestWorkflowResult:
         import sys
 
         sys.path.insert(0, config.project_root)
-        from examples.mcp_agent_workflows.base import WorkflowResult
+        from docs.examples.mcp_agent_workflows.base import WorkflowResult
 
         result = WorkflowResult("test_workflow")
         result.add_step("step1", "success")

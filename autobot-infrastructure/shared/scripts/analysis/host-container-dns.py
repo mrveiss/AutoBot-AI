@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Host-to-Container DNS Service
@@ -91,7 +92,7 @@ class HostContainerDNS:
         """Update /etc/hosts with new entries"""
         try:
             # Read current hosts file
-            with open(self.hosts_file, "r") as f:
+            with open(self.hosts_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Remove old AutoBot entries

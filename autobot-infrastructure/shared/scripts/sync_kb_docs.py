@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 # NOTE: CLI tool uses print() for user-facing output per LOGGING_STANDARDS.md
 """Sync documentation changes to knowledge base"""
@@ -129,7 +130,7 @@ def _save_sync_state(success_count: int, removed_count: int, total_files: int) -
     }
 
     os.makedirs("data", exist_ok=True)
-    with open("data/kb_sync_state.json", "w") as f:
+    with open("data/kb_sync_state.json", "w", encoding="utf-8") as f:
         json.dump(sync_data, f, indent=2)
 
     logger.info("✅ Sync state saved to data/kb_sync_state.json")

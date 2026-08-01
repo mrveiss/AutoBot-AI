@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Test script for AutoBot Web Research Security Components
@@ -333,7 +334,7 @@ class WebResearchSecurityTester:
             # Test 2: Settings validation
             settings_file = Path("config/settings.json")
             if settings_file.exists():
-                with open(settings_file) as f:
+                with open(settings_file, encoding="utf-8") as f:
                     settings = json.load(f)
 
                 if settings.get("web_research", {}).get("enabled"):
@@ -560,7 +561,7 @@ async def main():
 
     # Save results to file
     results_file = Path("test_results_web_research_security.json")
-    with open(results_file, "w") as f:
+    with open(results_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
     logger.info(f"\nDetailed results saved to: {results_file}")

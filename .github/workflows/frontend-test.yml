@@ -9,6 +9,9 @@ on:
     paths:
       - 'autobot-frontend/**'
       - '.github/workflows/frontend-test.yml'
+      # Canonical source for the cross-language parity guard (#13073, #13074):
+      # a port/enum edit here with no frontend edit must still run the suite.
+      - 'autobot_shared/ssot_config.py'
   pull_request:
     # 'Dev_*' covers the Dev_new_gui integration branch — every frontend PR
     # merges here, so the suite must run pre-merge, not only post-merge on the
@@ -52,6 +55,8 @@ jobs:
             frontend:
               - 'autobot-frontend/**'
               - '.github/workflows/frontend-test.yml'
+              # See the push paths above (#13073, #13074).
+              - 'autobot_shared/ssot_config.py'
 
   # Job 1: Unit and Integration Tests
   unit-tests:

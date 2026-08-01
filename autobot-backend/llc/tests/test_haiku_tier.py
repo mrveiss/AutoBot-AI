@@ -12,10 +12,13 @@ Covers:
 
 from __future__ import annotations
 
+import uuid
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from user_management.services import TenantContext
 
 # GH#9995 / GH#10140: ``llc.api.agent_hires`` and ``llc.api.budget`` import
 # cleanly in the test environment, so import them normally. The previous
@@ -116,6 +119,86 @@ class TestAgentsMdGeneration:
         mod = _get_agent_hires_mod()
         req = mod.AgentHireRequest(agent_name="SonnetBot")
         assert req.model is None  # resolved to SONNET_MODEL in the handler
+
+
+# ===========================================================================
+# 1b. GH#12134 — named-bind dict regression for the agent_org_nodes /
+#     llc_agent_hires INSERTs (asyncpg PostgresSyntaxError on ':')
+# ===========================================================================
+
+
+class TestHireAgentNamedBindDict:
+    """A bare ``:name::jsonb`` Postgres cast right after a named bind breaks
+    SQLAlchemy's ``text()`` tokenizer: it truncates the bind name (e.g.
+    ``adapter_config`` -> ``adapter_confi``) and the untranslated ``:name::type``
+    literal is left in the compiled SQL, which asyncpg then rejects with
+    ``PostgresSyntaxError: syntax error at or near ":"``.  Fixed by using
+    ``CAST(:name AS jsonb)`` instead of ``:name::jsonb``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_hire_agent_insert_binds_match_named_params(self) -> None:
+        mod = _get_agent_hires_mod()
+        from sqlalchemy.dialects import postgresql
+
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        session.commit = AsyncMock()
+
+        body = mod.AgentHireRequest(agent_name="ABR CEO", org_role="manager", title="Chief Executive")
+        company_id = uuid.uuid4()
+
+        with (
+            patch.object(mod, "registered_adapter_types", return_value=["claude_code"]),
+            patch.object(mod.BudgetService, "provision_budget", new=AsyncMock()),
+        ):
+            ctx = TenantContext(org_id=None, user_id=uuid.uuid4(), is_platform_admin=True)
+            await mod.hire_agent(company_id=company_id, body=body, session=session, ctx=ctx)
+
+        stmt, params = session.execute.call_args_list[0].args
+        assert isinstance(params, dict), "params must be a named-bind dict, not a positional tuple"
+
+        compiled = stmt.compile(dialect=postgresql.dialect(paramstyle="pyformat"))
+        required = set(compiled.params.keys())
+        assert required == set(params.keys()), (
+            f"SQL bind names {sorted(required)} must exactly match execute() "
+            f"params {sorted(params)} — a mismatch means a ':name::type' cast "
+            "left an unresolved literal ':' in the compiled SQL (GH#12134)."
+        )
+        assert ":" not in compiled.string.replace("%(", "").replace(")s", ""), compiled.string
+
+    @pytest.mark.asyncio
+    async def test_create_agent_hire_insert_binds_match_named_params(self) -> None:
+        mod = _get_agent_hires_mod()
+        from sqlalchemy.dialects import postgresql
+
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        session.commit = AsyncMock()
+        session.rollback = AsyncMock()
+
+        body = mod.AgentHireCreate(company_id=uuid.uuid4())
+        ctx = TenantContext(org_id=body.company_id, user_id=uuid.uuid4(), is_platform_admin=False)
+        await mod.create_agent_hire(body=body, session=session, ctx=ctx)
+
+        stmt, params = session.execute.call_args_list[0].args
+        assert isinstance(params, dict), "params must be a named-bind dict, not a positional tuple"
+
+        compiled = stmt.compile(dialect=postgresql.dialect(paramstyle="pyformat"))
+        required = set(compiled.params.keys())
+        assert required == set(params.keys()), (
+            f"SQL bind names {sorted(required)} must exactly match execute() " f"params {sorted(params)} (GH#12134)."
+        )
+
+    def test_no_naked_colon_colon_cast_after_named_bind(self) -> None:
+        """Guard against reintroducing ':name::type' anywhere in the module."""
+        import inspect
+        import re
+
+        mod = _get_agent_hires_mod()
+        source = inspect.getsource(mod)
+        offenders = re.findall(r":\w+::\w+", source)
+        assert not offenders, f"Use CAST(:name AS type), not ':name::type' (GH#12134): {offenders}"
 
 
 # ===========================================================================

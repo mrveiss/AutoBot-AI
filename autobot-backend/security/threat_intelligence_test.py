@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from security.threat_intelligence import (
-    RateLimiter,
     ThreatIntelligenceCache,
     ThreatIntelligenceService,
     ThreatLevel,
@@ -72,31 +71,74 @@ class TestThreatLevel:
         assert ThreatLevel.UNKNOWN.value == "unknown"
 
 
-class TestRateLimiter:
-    """Tests for RateLimiter class"""
+class TestRateLimiterWiring:
+    """VirusTotalClient/URLVoidClient delegate to the shared
+    autobot_shared.rate_limiter.RateLimiter's custom single-window mode --
+    migrated off the retired local RateLimiter class (#12646). The window
+    limit algorithm itself is covered by autobot_shared/rate_limiter_test.py;
+    these tests pin the wiring (correct max_requests/window_seconds per
+    client, independent per-instance keys)."""
+
+    def test_virustotal_wires_configured_rate_limit(self):
+        client = VirusTotalClient(api_key="k", rate_limit=7)
+        assert client._rate_limit == 7
+        assert client._rl_key.startswith("virustotal:")
+
+    def test_urlvoid_wires_configured_rate_limit(self):
+        client = URLVoidClient(api_key="k", rate_limit=12)
+        assert client._rate_limit == 12
+        assert client._rl_key.startswith("urlvoid:")
+
+    def test_distinct_instances_get_distinct_keys(self):
+        """Two clients must not share a rate-limit bucket (Issue #12646)."""
+        client_a = VirusTotalClient(api_key="k")
+        client_b = VirusTotalClient(api_key="k")
+        assert client_a._rl_key != client_b._rl_key
 
     @pytest.mark.asyncio
-    async def test_acquire_within_limit(self):
-        """Test acquiring slots within rate limit."""
-        limiter = RateLimiter(requests_per_minute=10)
+    async def test_check_url_acquires_with_configured_limit(self):
+        """check_url must call acquire_window with this client's rate_limit
+        and the fixed 60s window before hitting the API."""
+        client = VirusTotalClient(api_key="k", rate_limit=9)
+        client._rate_limiter.acquire_window = AsyncMock(return_value=True)
 
-        # Should allow 10 requests
-        for _ in range(10):
-            result = await limiter.acquire()
-            assert result is True
+        mock_http_response = AsyncMock()
+        mock_http_response.status = 200
+        mock_http_response.json = AsyncMock(
+            return_value={"data": {"attributes": {"last_analysis_stats": {}, "last_analysis_date": 0}}}
+        )
+        mock_http_response.__aenter__ = AsyncMock(return_value=mock_http_response)
+        mock_http_response.__aexit__ = AsyncMock()
+        mock_http_client = MagicMock()
+        mock_http_client.get = AsyncMock(return_value=mock_http_response)
+
+        with patch.object(client, "_http_client", mock_http_client):
+            await client.check_url("https://example.com")
+
+        client._rate_limiter.acquire_window.assert_called_once_with(
+            client._rl_key, max_requests=9, window_seconds=60, wait=True
+        )
 
     @pytest.mark.asyncio
-    async def test_get_remaining(self):
-        """Test getting remaining requests."""
-        limiter = RateLimiter(requests_per_minute=5)
+    async def test_check_domain_acquires_with_configured_limit(self):
+        """check_domain must call acquire_window with this client's
+        rate_limit and the fixed 60s window before hitting the API."""
+        client = URLVoidClient(api_key="k", rate_limit=11)
+        client._rate_limiter.acquire_window = AsyncMock(return_value=True)
 
-        assert limiter.get_remaining() == 5
+        mock_http_response = AsyncMock()
+        mock_http_response.status = 429
+        mock_http_response.__aenter__ = AsyncMock(return_value=mock_http_response)
+        mock_http_response.__aexit__ = AsyncMock()
+        mock_http_client = MagicMock()
+        mock_http_client.get = AsyncMock(return_value=mock_http_response)
 
-        await limiter.acquire()
-        assert limiter.get_remaining() == 4
+        with patch.object(client, "_http_client", mock_http_client):
+            await client.check_domain("https://example.com")
 
-        await limiter.acquire()
-        assert limiter.get_remaining() == 3
+        client._rate_limiter.acquire_window.assert_called_once_with(
+            client._rl_key, max_requests=11, window_seconds=60, wait=True
+        )
 
 
 class TestThreatIntelligenceCache:

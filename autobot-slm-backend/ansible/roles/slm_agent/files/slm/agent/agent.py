@@ -21,11 +21,12 @@ import signal
 import socket
 import sqlite3
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 import aiohttp
 from aiohttp import web
+
+from autobot_shared.time_utils import utc_timestamp
 
 from .health_collector import HealthCollector
 from .port_scanner import get_listening_ports
@@ -173,7 +174,7 @@ class SLMAgent:
         conn = sqlite3.connect(self.buffer_db)
         conn.execute(
             "INSERT INTO event_buffer (timestamp, event_type, data) VALUES (?, ?, ?)",
-            (datetime.now(timezone.utc).isoformat(), event_type, json.dumps(data)),
+            (utc_timestamp(), event_type, json.dumps(data)),
         )
         conn.commit()
         conn.close()
@@ -578,7 +579,7 @@ class SLMAgent:
                 "node_id": self.node_id,
                 "commit": commit,
                 "is_code_source": True,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
             async with self._session.post(
                 url,

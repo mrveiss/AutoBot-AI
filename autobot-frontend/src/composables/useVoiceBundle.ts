@@ -12,8 +12,7 @@
 
 import { ref } from 'vue'
 import type { InjectionKey, Ref } from 'vue'
-import { getBackendUrl } from '@/config/ssot-config'
-import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVoiceBundle')
@@ -56,7 +55,7 @@ export function useVoiceBundle() {
     loading.value = true
     error.value = null
     try {
-      const res = await fetchWithAuth(`${getBackendUrl()}/api/voice/realtime/bundle/me`)
+      const res = await apiClient.rawRequest(`/api/voice/realtime/bundle/me`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
@@ -85,10 +84,9 @@ export function useAdminVoiceBundle() {
     saving.value = true
     saveError.value = null
     try {
-      const res = await fetchWithAuth(`${getBackendUrl()}/api/admin/voice/bundle/${userId}`, {
+      const res = await apiClient.rawRequest(`/api/admin/voice/bundle/${userId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bundle_name: bundleName }),
+        body: { bundle_name: bundleName },
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -106,7 +104,7 @@ export function useAdminVoiceBundle() {
 
   async function getUserBundle(userId: string): Promise<UserBundleAssignment | null> {
     try {
-      const res = await fetchWithAuth(`${getBackendUrl()}/api/admin/voice/bundle/${userId}`)
+      const res = await apiClient.rawRequest(`/api/admin/voice/bundle/${userId}`)
       if (!res.ok) return null
       return (await res.json()) as UserBundleAssignment
     } catch {

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Real-Time Validation Dashboard Generator
@@ -563,12 +564,12 @@ class ValidationDashboardGenerator:
 
         # Save dashboard
         dashboard_path = self.output_dir / "validation_dashboard.html"
-        with open(dashboard_path, "w") as f:
+        with open(dashboard_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
         # Also save JSON data for API access
         json_path = self.output_dir / "validation_data.json"
-        with open(json_path, "w") as f:
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(report_data, f, indent=2, default=str)
 
         logger.info("Dashboard generated: %s", dashboard_path)

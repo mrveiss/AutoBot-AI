@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Terminal Input Consistency Test Script
 # Tests the terminal input fixes for automated testing scenarios

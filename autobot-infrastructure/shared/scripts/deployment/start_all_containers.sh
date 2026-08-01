@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # =============================================================================
 # DEV/SANDBOX ONLY - This script assumes Docker containers.
 # Production uses native deployments. See Ansible roles for equivalent.

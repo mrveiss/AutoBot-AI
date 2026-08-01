@@ -266,6 +266,40 @@ _TYPE_MAP: Dict[str, Any] = {
 }
 
 
+# #12900: 2 decimal places floored any sub-10us tool to duration_ms=0.0, which is
+# indistinguishable from ToolResult's unpopulated default — a caller could not tell
+# "instant" from "never measured". perf_counter (highest available resolution) plus
+# 4dp keeps a fast in-process tool measurable.
+_DURATION_PRECISION = 4
+
+
+def _json_type_name(value: Any) -> str:
+    """Return the JSON Schema type name for *value* (#12900).
+
+    Error messages previously mixed vocabularies — "must be of type integer,
+    got str" names the expectation in JSON Schema terms and the actual value in
+    Python terms, which reads as two different things being compared.
+
+    ``bool`` is tested before ``int`` deliberately: ``isinstance(True, int)`` is
+    True in Python, so the obvious ordering would report a boolean as an integer.
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return type(value).__name__
+
+
 def _check_type(data: Any, schema_type: str, path: str) -> None:
     """Raise ToolInputError if *data* does not match *schema_type* (#3018).
 
@@ -280,7 +314,7 @@ def _check_type(data: Any, schema_type: str, path: str) -> None:
     if expected and not isinstance(data, expected):
         label = path or "input"
         raise ToolInputError(
-            f"'{label}' must be of type {schema_type}, got {type(data).__name__}",
+            f"'{label}' must be of type {schema_type}, got {_json_type_name(data)}",
             field=path,
         )
 
@@ -429,11 +463,11 @@ async def _timed_execute(tool: BaseTool, validated_input: Dict[str, Any]) -> Too
     Returns:
         ToolResult with ``duration_ms`` populated.
     """
-    start = time.monotonic()
+    start = time.perf_counter()
     try:
         result = await tool.execute(validated_input)
     except Exception as exc:  # noqa: BLE001 — catch-all intentional here
-        duration = (time.monotonic() - start) * 1000
+        duration = (time.perf_counter() - start) * 1000
         logger.error(
             "Tool '%s' raised an unhandled exception: %s",
             tool.metadata.name,
@@ -443,8 +477,8 @@ async def _timed_execute(tool: BaseTool, validated_input: Dict[str, Any]) -> Too
         return ToolResult(
             success=False,
             error=f"Unhandled tool error: {exc}",
-            duration_ms=round(duration, 2),
+            duration_ms=round(duration, _DURATION_PRECISION),
         )
-    duration = (time.monotonic() - start) * 1000
-    result.duration_ms = round(duration, 2)
+    duration = (time.perf_counter() - start) * 1000
+    result.duration_ms = round(duration, _DURATION_PRECISION)
     return result

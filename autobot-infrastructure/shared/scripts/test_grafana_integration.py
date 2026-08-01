@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Test script for Phase 4 Grafana Integration (Issue #347)
@@ -53,7 +54,7 @@ for filename, title in dashboards:
     if path.exists():
         # Validate JSON
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
                 panels = len(data.get("panels", []))
                 uid = data.get("uid", "unknown")
@@ -78,7 +79,7 @@ compat_api = Path(__file__).parent.parent / "backend" / "api" / "monitoring_comp
 print("\n✓ REST API Compatibility Layer:")
 if compat_api.exists():
     # Check for required endpoints
-    with open(compat_api) as f:
+    with open(compat_api, encoding="utf-8") as f:
         content = f.read()
         endpoints = [
             ("/system/current", "get_system_metrics_current"),

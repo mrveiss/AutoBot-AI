@@ -125,8 +125,9 @@ class TestOktaEndSessionEndpoint:
 
     def test_okta_end_session_uses_domain(self):
         template = _get_template("okta", domain="example.okta.com")
-        assert "example.okta.com" in template["end_session_endpoint"]
-        assert "/oauth2/v1/logout" in template["end_session_endpoint"]
+        endpoint = template["end_session_endpoint"]
+        assert "example.okta.com" in endpoint
+        assert "/oauth2/v1/logout" in endpoint
 
 
 class TestMicrosoftEntraEndSessionEndpoint:

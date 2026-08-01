@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Configuration Consolidation Migration Script
@@ -204,7 +205,7 @@ class ConfigMigrator:
         """Generate detailed migration report"""
         report_path = self.project_root / "CONFIGURATION_CONSOLIDATION_REPORT.md"
 
-        with open(report_path, "w") as f:
+        with open(report_path, "w", encoding="utf-8") as f:
             f.write("# Configuration Consolidation Migration Report\n\n")
             f.write(f"**Migration Date**: {__import__('datetime').datetime.now()}\n\n")
 

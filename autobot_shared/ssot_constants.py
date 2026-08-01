@@ -26,6 +26,7 @@ This module replaces:
 
 import re
 from dataclasses import dataclass
+from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, FrozenSet, List
@@ -401,6 +402,21 @@ class PathConstants:
     # Temp/generated-files dir cleaned by tasks.cleanup_generated_files (#10385-adjacent)
     TEMP_DIR: Path = DATA_DIR / "temp"
 
+    @classmethod
+    def get_config_path(cls, *parts: str) -> Path:
+        """Get configuration file path (GH#12467: restored, dropped in GH#7440 consolidation)"""
+        return cls.CONFIG_DIR.joinpath(*parts)
+
+    @classmethod
+    def get_data_path(cls, *parts: str) -> Path:
+        """Get data file path (GH#12467: restored, dropped in GH#7440 consolidation)"""
+        return cls.DATA_DIR.joinpath(*parts)
+
+    @classmethod
+    def get_log_path(cls, *parts: str) -> Path:
+        """Get log file path (GH#12467: restored, dropped in GH#7440 consolidation)"""
+        return cls.LOGS_DIR.joinpath(*parts)
+
 
 PATH = PathConstants()
 
@@ -518,6 +534,22 @@ class ComputerVisionThresholds:
 
     SEARCH_RESULT_LIMIT = 10
     SIMILARITY_THRESHOLD = 0.7
+
+
+class CircuitState(Enum):
+    """Canonical circuit-breaker state (#12656).
+
+    Converged from three byte-identical definitions — `circuit_breaker.py`,
+    `agents/agent_orchestration/types.py`, and the npu-worker's copy in
+    `core/npu_integration.py`. Beyond the duplication, three separate Enum
+    classes with the same members are not interchangeable: a value from one
+    never compares equal to the "same" member of another, so any code that
+    passed a state across those boundaries was silently always-unequal.
+    """
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing — calls rejected / worker excluded
+    HALF_OPEN = "half_open"  # Recovery probe: one call allowed, result decides
 
 
 class CircuitBreakerDefaults:

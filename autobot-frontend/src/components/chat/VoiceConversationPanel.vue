@@ -1,5 +1,10 @@
 <template>
-  <div class="voice-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
+  <div
+    class="voice-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
+    tabindex="-1"
+    ref="panelRef"
+    @keydown.escape="close"
+  >
     <!-- Header -->
     <div class="flex items-center justify-between p-3 border-b border-autobot-border shrink-0">
       <div class="flex items-center gap-2">
@@ -89,16 +94,29 @@
       {{ voiceConversation.errorMessage.value }}
     </div>
 
-    <!-- Insecure context warning -->
+    <!-- Insecure-context warning (#1059) — shown when mic-dependent mode selected
+         but browser blocks getUserMedia due to an untrusted certificate -->
     <div
       v-if="showInsecureContextWarning"
       class="voice-panel__cert-warning"
     >
-      <p class="font-semibold text-xs">
+      <p class="voice-panel__cert-warning-title">
         <Icon name="lock" class="me-1" />{{ $t('chat.voice.micBlocked') }}
       </p>
-      <p class="text-xs opacity-80">
-        {{ $t('chat.voice.certRequiredShort') }}
+      <p class="voice-panel__cert-warning-body">
+        {{ $t('chat.voice.certRequired') }}
+      </p>
+      <ol class="voice-panel__cert-warning-steps">
+        <li>{{ $t('chat.voice.certStep1') }}</li>
+        <li>
+          {{ $t('chat.voice.certStep2Pre') }}
+          <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>,
+          {{ $t('chat.voice.certStep2Post', { origin: currentOrigin }) }}
+        </li>
+      </ol>
+      <p class="voice-panel__cert-warning-fallback">
+        <Icon name="info-circle" class="me-1" />
+        {{ $t('chat.voice.walkieTalkieFallback') }}
       </p>
     </div>
 
@@ -168,7 +186,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import type { ConversationMode } from '@/composables/useVoiceConversation'
@@ -179,6 +197,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const voiceConversation = useVoiceConversation()
+const panelRef = ref<HTMLElement | null>(null)
 
 const isFullDuplex = computed(
   () => voiceConversation.mode.value === 'full-duplex',
@@ -196,6 +215,7 @@ const isAutoMode = computed(
 const showInsecureContextWarning = computed(
   () => isAutoMode.value && !voiceConversation.micAccessAvailable.value,
 )
+const currentOrigin = window.location.origin
 
 const stateClass = computed(() => ({
   'voice-panel__state-ring--idle': voiceConversation.state.value === 'idle',
@@ -269,6 +289,12 @@ function close(): void {
 onBeforeUnmount(() => {
   voiceConversation.cleanup()
 })
+
+// Focus panel for keyboard accessibility (mirrors VoiceConversationOverlay)
+onMounted(async () => {
+  await nextTick()
+  panelRef.value?.focus()
+})
 </script>
 
 <style scoped>
@@ -287,7 +313,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.15);
-  color: #60a5fa;
+  color: var(--voiceoverlay-accent-blue);
   font-size: var(--text-xs);
 }
 
@@ -295,11 +321,11 @@ onBeforeUnmount(() => {
   appearance: none;
   padding: 0.2rem 1.5rem 0.2rem 0.4rem;
   border-radius: var(--radius-default);
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
-  background: var(--bg-tertiary, #1e293b)
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-tertiary)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5L6 8l3-3.5H3z'/%3E%3C/svg%3E")
     no-repeat right 0.35rem center;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   font-size: 0.6875rem;
   cursor: pointer;
 }
@@ -312,7 +338,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-default);
   background: rgba(37, 99, 235, 0.1);
   border: 1px solid rgba(37, 99, 235, 0.2);
-  color: #93c5fd;
+  color: var(--voiceoverlay-accent-blue-light);
   font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -324,8 +350,8 @@ onBeforeUnmount(() => {
 }
 
 .voice-panel__ws-dot {
-  width: 6px;
-  height: 6px;
+  width: var(--spacing-1-5);
+  height: var(--spacing-1-5);
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.6);
   transition: background var(--duration-200);
@@ -347,26 +373,26 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 2px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
-  color: var(--text-muted, #64748b);
+  border: 2px solid var(--border-subtle);
+  color: var(--text-muted);
   transition: all var(--duration-300) var(--ease-out);
 }
 
 .voice-panel__state-ring--listening {
   border-color: rgba(239, 68, 68, 0.5);
-  color: #f87171;
+  color: var(--voiceoverlay-accent-red);
   box-shadow: 0 0 20px -4px rgba(239, 68, 68, 0.25);
   animation: ring-glow-red 1.5s ease-in-out infinite alternate;
 }
 
 .voice-panel__state-ring--processing {
   border-color: rgba(37, 99, 235, 0.3);
-  color: #93c5fd;
+  color: var(--voiceoverlay-accent-blue-light);
 }
 
 .voice-panel__state-ring--speaking {
   border-color: rgba(16, 185, 129, 0.4);
-  color: #34d399;
+  color: var(--voiceoverlay-accent-green);
   box-shadow: 0 0 20px -4px rgba(16, 185, 129, 0.2);
   animation: ring-glow-green 1s ease-in-out infinite alternate;
 }
@@ -388,7 +414,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   background: rgba(37, 99, 235, 0.06);
   border: 1px dashed rgba(37, 99, 235, 0.2);
-  color: #93c5fd;
+  color: var(--voiceoverlay-accent-blue-light);
   font-size: var(--text-xs);
   font-style: italic;
   word-break: break-word;
@@ -401,7 +427,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  color: var(--voiceoverlay-error-text);
   font-size: var(--text-xs);
 }
 
@@ -412,11 +438,42 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.25);
-  color: #fcd34d;
+  color: var(--voiceoverlay-warning-text);
   font-size: var(--text-xs);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-1);
+}
+
+.voice-panel__cert-warning-title {
+  font-weight: 600;
+  font-size: var(--text-xs);
+}
+
+.voice-panel__cert-warning-body {
+  color: var(--voiceoverlay-warning-body-text);
+}
+
+.voice-panel__cert-warning-steps {
+  padding-left: var(--spacing-4);
+  list-style: decimal;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.voice-panel__cert-warning-steps code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-default);
+  font-size: 0.625rem;
+  word-break: break-all;
+}
+
+.voice-panel__cert-warning-fallback {
+  color: var(--voiceoverlay-muted-text);
+  font-size: 0.625rem;
+  margin-top: var(--spacing-1);
 }
 
 /* Hands-free controls */
@@ -437,7 +494,7 @@ onBeforeUnmount(() => {
 .voice-panel__amplitude-bar {
   height: 100%;
   border-radius: var(--radius-xs);
-  background: linear-gradient(90deg, #60a5fa, #818cf8);
+  background: linear-gradient(90deg, var(--voiceoverlay-accent-blue), var(--voiceoverlay-accent-indigo));
   transition: width var(--duration-100) var(--ease-out);
   min-width: 0;
 }
@@ -458,20 +515,20 @@ onBeforeUnmount(() => {
 
 .voice-panel__slider::-webkit-slider-thumb {
   appearance: none;
-  width: 10px;
-  height: 10px;
+  width: var(--spacing-2-5);
+  height: var(--spacing-2-5);
   border-radius: 50%;
   background: var(--color-primary);
-  border: 2px solid var(--bg-card, #0f172a);
+  border: 2px solid var(--bg-card);
   cursor: pointer;
 }
 
 .voice-panel__slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
+  width: var(--spacing-2-5);
+  height: var(--spacing-2-5);
   border-radius: 50%;
   background: var(--color-primary);
-  border: 2px solid var(--bg-card, #0f172a);
+  border: 2px solid var(--bg-card);
   cursor: pointer;
 }
 
@@ -481,7 +538,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   padding: var(--spacing-4) var(--spacing-3) var(--spacing-5);
-  border-top: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.08));
+  border-top: 1px solid var(--border-subtle);
 }
 
 .voice-panel__mic-container {
@@ -515,15 +572,15 @@ onBeforeUnmount(() => {
 .voice-panel__mic-btn {
   position: relative;
   z-index: 1;
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid rgba(37, 99, 235, 0.3);
   background: rgba(37, 99, 235, 0.1);
-  color: #60a5fa;
+  color: var(--voiceoverlay-accent-blue);
   cursor: pointer;
   transition: all var(--duration-200) var(--ease-out);
   box-shadow: 0 0 16px -4px rgba(37, 99, 235, 0.2);
@@ -547,7 +604,7 @@ onBeforeUnmount(() => {
 .voice-panel__mic-btn--listening {
   background: rgba(239, 68, 68, 0.15);
   border-color: rgba(239, 68, 68, 0.5);
-  color: #f87171;
+  color: var(--voiceoverlay-accent-red);
   box-shadow: 0 0 24px -4px rgba(239, 68, 68, 0.3);
   animation: mic-glow-red 1.5s ease-in-out infinite alternate;
 }
@@ -560,13 +617,13 @@ onBeforeUnmount(() => {
 .voice-panel__mic-btn--processing {
   background: rgba(37, 99, 235, 0.08);
   border-color: rgba(37, 99, 235, 0.2);
-  color: #93c5fd;
+  color: var(--voiceoverlay-accent-blue-light);
 }
 
 .voice-panel__mic-btn--speaking {
   background: rgba(16, 185, 129, 0.12);
   border-color: rgba(16, 185, 129, 0.4);
-  color: #34d399;
+  color: var(--voiceoverlay-accent-green);
   box-shadow: 0 0 24px -4px rgba(16, 185, 129, 0.25);
   animation: mic-glow-green 1s ease-in-out infinite alternate;
 }
@@ -578,7 +635,7 @@ onBeforeUnmount(() => {
 
 /* Scrollbar */
 .overflow-y-auto::-webkit-scrollbar {
-  width: 4px;
+  width: var(--spacing-1);
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
@@ -586,7 +643,7 @@ onBeforeUnmount(() => {
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: var(--border-default, rgba(148, 163, 184, 0.15));
+  background: var(--border-default);
   border-radius: var(--radius-xs);
 }
 </style>

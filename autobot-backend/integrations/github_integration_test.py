@@ -3,14 +3,14 @@
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
 """
-Unit tests — GitHubIntegration rate limiting (Issues #4097, #4162)
+Unit tests — GitHubIntegration rate limiting (Issues #4097, #4162, #6311)
 
 All HTTP calls are patched; no real network traffic.
 Covers:
-- Successful requests record quota
+- Successful requests delegate recording to the shared Redis-backed limiter
 - HTTP 429 triggers Retry-After enforcement and returns structured response
 - HTTP 403 secondary rate limit is handled gracefully
-- Local window exhaustion returns rate_limit_timeout error
+- Shared-limiter exhaustion returns a structured 429 rate_limit_exceeded error
 - X-RateLimit-Remaining=0 blocks subsequent requests
 - Connection errors return structured error dict
 """
@@ -61,23 +61,25 @@ def _make_config(**kwargs) -> IntegrationConfig:
 
 
 def _build_response_mock(status: int, body: Any, headers: Dict[str, str] | None = None):
-    """Return a nested async context-manager mock for aiohttp.ClientSession.request."""
+    """Return a mock ``HTTPClientManager`` whose ``tracked_request()`` yields a
+    response mimicking the given status/body/headers.
+
+    Issue #12979: ``_github_request`` routes through the shared pool's
+    ``get_http_client().tracked_request(method, url, **kwargs)`` rather than
+    constructing its own ``aiohttp.ClientSession``.
+    """
     resp = AsyncMock()
     resp.status = status
     resp.headers = headers or {}
     resp.json = AsyncMock(return_value=body)
 
-    inner_cm = AsyncMock()
-    inner_cm.__aenter__ = AsyncMock(return_value=resp)
-    inner_cm.__aexit__ = AsyncMock(return_value=False)
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
 
-    session = MagicMock()
-    session.request = MagicMock(return_value=inner_cm)
-
-    outer_cm = AsyncMock()
-    outer_cm.__aenter__ = AsyncMock(return_value=session)
-    outer_cm.__aexit__ = AsyncMock(return_value=False)
-    return outer_cm
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=cm)
+    return mock_client
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ def _build_response_mock(status: int, body: Any, headers: Dict[str, str] | None 
 async def test_test_connection_success():
     gh = GitHubIntegration(_make_config())
     body = {"login": "testuser", "type": "User"}
-    with patch("aiohttp.ClientSession", return_value=_build_response_mock(200, body)):
+    with patch("integrations.github_integration.get_http_client", return_value=_build_response_mock(200, body)):
         health = await gh.test_connection()
     assert health.status == IntegrationStatus.CONNECTED
     assert "testuser" in health.message
@@ -99,7 +101,7 @@ async def test_test_connection_success():
 async def test_test_connection_unauthorized():
     gh = GitHubIntegration(_make_config())
     body = {"message": "Bad credentials"}
-    with patch("aiohttp.ClientSession", return_value=_build_response_mock(401, body)):
+    with patch("integrations.github_integration.get_http_client", return_value=_build_response_mock(401, body)):
         health = await gh.test_connection()
     assert health.status == IntegrationStatus.UNAUTHORIZED
 
@@ -109,7 +111,7 @@ async def test_test_connection_timeout():
     gh = GitHubIntegration(_make_config())
     # Patch acquire to pass through, then simulate network timeout
     with patch.object(gh._rate_limiter, "acquire", new=AsyncMock()):
-        with patch("aiohttp.ClientSession", side_effect=asyncio.TimeoutError):
+        with patch("integrations.github_integration.get_http_client", side_effect=asyncio.TimeoutError):
             health = await gh.test_connection()
     assert health.status == IntegrationStatus.ERROR
     assert "timed out" in health.message.lower()
@@ -127,7 +129,7 @@ async def test_github_request_429_returns_error_and_sets_retry_after():
     headers = {"Retry-After": "60"}
     with patch("asyncio.sleep", new=AsyncMock()):
         with patch(
-            "aiohttp.ClientSession",
+            "integrations.github_integration.get_http_client",
             return_value=_build_response_mock(429, body, headers),
         ):
             result = await gh._github_request("GET", "/repos/owner/repo")
@@ -149,7 +151,7 @@ async def test_github_request_403_secondary_rate_limit():
     body = {"message": "You have exceeded a secondary rate limit."}
     headers = {"Retry-After": "30"}
     with patch(
-        "aiohttp.ClientSession",
+        "integrations.github_integration.get_http_client",
         return_value=_build_response_mock(403, body, headers),
     ):
         result = await gh._github_request("GET", "/repos/owner/repo")
@@ -174,7 +176,7 @@ async def test_x_ratelimit_remaining_zero_blocks_next_request():
     reset_time = int(time.time()) + 60
     headers = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": str(reset_time)}
     with patch(
-        "aiohttp.ClientSession",
+        "integrations.github_integration.get_http_client",
         return_value=_build_response_mock(200, body, headers),
     ):
         await gh._github_request("GET", "/user")
@@ -186,21 +188,31 @@ async def test_x_ratelimit_remaining_zero_blocks_next_request():
 
 
 # ---------------------------------------------------------------------------
-# Local rate limit exhaustion → rate_limit_timeout error
+# Shared-limiter exhaustion → structured 429 rate_limit_exceeded error (#6311)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_acquire_timeout_returns_structured_error():
-    gh = GitHubIntegration(_make_config())
-    # Replace rate limiter with one that always raises TimeoutError on acquire
-    mock_limiter = MagicMock()
-    mock_limiter.acquire = AsyncMock(side_effect=asyncio.TimeoutError)
-    gh._rate_limiter = mock_limiter
+async def test_rate_limit_exceeded_returns_structured_error():
+    """When the shared Redis-backed limiter denies the request (#6311),
+    ``_github_request`` must short-circuit with a structured 429 dict — not
+    raise and not perform the HTTP call.
 
-    result = await gh._github_request("GET", "/repos/owner/repo")
+    Since #6311 the acquire decision comes from the module-level
+    ``_shared_rate_limiter`` (Redis-backed), not the per-instance in-memory
+    limiter; patch that path to simulate exhaustion.
+    """
+    gh = GitHubIntegration(_make_config())
+
+    with patch.object(
+        _gh_mod._shared_rate_limiter,
+        "acquire",
+        new=AsyncMock(return_value=False),
+    ):
+        result = await gh._github_request("GET", "/repos/owner/repo")
+
     assert result["status_code"] == 429
-    assert result["error"] == "rate_limit_timeout"
+    assert result["error"] == "rate_limit_exceeded"
 
 
 # ---------------------------------------------------------------------------
@@ -210,17 +222,22 @@ async def test_acquire_timeout_returns_structured_error():
 
 @pytest.mark.asyncio
 async def test_github_request_connection_error():
+    """A transport-level connection failure returns a structured error dict.
+
+    The response body deliberately reports a generic ``integration_error``
+    message (never the raw exception text) to avoid leaking internal details;
+    the machine-readable ``error`` field carries the ``connection_error`` code.
+    """
     gh = GitHubIntegration(_make_config())
-    with patch.object(gh._rate_limiter, "acquire", new=AsyncMock()):
-        with patch(
-            "aiohttp.ClientSession",
-            side_effect=aiohttp.ClientConnectionError("refused"),
-        ):
-            result = await gh._github_request("GET", "/repos/owner/repo")
+    with patch(
+        "integrations.github_integration.get_http_client",
+        side_effect=aiohttp.ClientConnectionError("refused"),
+    ):
+        result = await gh._github_request("GET", "/repos/owner/repo")
 
     assert result["status_code"] == 0
     assert result["error"] == "connection_error"
-    assert "refused" in result["body"]["message"]
+    assert result["body"]["message"] == "integration_error"
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +252,7 @@ async def test_github_request_5xx_returns_after_max_retries(caplog):
 
     with patch("asyncio.sleep", new=AsyncMock()):
         with patch(
-            "aiohttp.ClientSession",
+            "integrations.github_integration.get_http_client",
             return_value=_build_response_mock(503, body),
         ):
             result = await gh._github_request("GET", "/repos/owner/repo")
@@ -254,7 +271,7 @@ async def test_execute_action_get_repository():
     gh = GitHubIntegration(_make_config())
     repo_body = {"id": 1, "full_name": "owner/repo", "private": False}
     with patch(
-        "aiohttp.ClientSession",
+        "integrations.github_integration.get_http_client",
         return_value=_build_response_mock(200, repo_body),
     ):
         result = await gh.execute_action("get_repository", {"owner": "owner", "repo": "repo"})
@@ -278,26 +295,33 @@ async def test_execute_action_unknown_returns_error_dict():
 
 
 # ---------------------------------------------------------------------------
-# Rate limiting: quota records after each request
+# Rate limiting: request dispatch delegates recording to the shared limiter
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_rate_limit_records_after_successful_request():
+    """Since #6311 the request slot is acquired+recorded atomically by the
+    shared Redis-backed limiter (``_shared_rate_limiter.acquire``), not the
+    per-instance in-memory limiter's local history.  Assert the successful
+    request delegated acquisition to the shared limiter with the token key.
+    """
     gh = GitHubIntegration(_make_config())
-    # Give fresh limiter so history is clean
-    fresh_limiter = IntegrationRateLimiter(requests_per_minute=100, requests_per_hour=5000)
-    gh._rate_limiter = fresh_limiter
 
     body = {"login": "u", "type": "User"}
-    with patch(
-        "aiohttp.ClientSession",
-        return_value=_build_response_mock(200, body),
-    ):
-        await gh._github_request("GET", "/user")
+    with patch.object(
+        _gh_mod._shared_rate_limiter,
+        "acquire",
+        new=AsyncMock(return_value=True),
+    ) as mock_acquire:
+        with patch(
+            "integrations.github_integration.get_http_client",
+            return_value=_build_response_mock(200, body),
+        ):
+            await gh._github_request("GET", "/user")
 
-    state = fresh_limiter._get_state(gh._token_key)
-    assert len(state.history) == 1
+    mock_acquire.assert_awaited_once()
+    assert mock_acquire.await_args.args[0] == gh._token_key
 
 
 # ---------------------------------------------------------------------------
@@ -332,19 +356,15 @@ async def test_slack_make_request_429_applies_retry_after():
     resp.status = 429
     resp.headers = {"Retry-After": "30"}
     resp.json = AsyncMock(return_value=body)
+    resp.__aenter__ = AsyncMock(return_value=resp)
+    resp.__aexit__ = AsyncMock(return_value=False)
 
-    inner_cm = AsyncMock()
-    inner_cm.__aenter__ = AsyncMock(return_value=resp)
-    inner_cm.__aexit__ = AsyncMock(return_value=False)
+    # #12979: _make_slack_request routes through the shared pool's
+    # tracked_request() rather than constructing its own aiohttp.ClientSession.
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=resp)
 
-    session = MagicMock()
-    session.post = MagicMock(return_value=inner_cm)
-
-    outer_cm = AsyncMock()
-    outer_cm.__aenter__ = AsyncMock(return_value=session)
-    outer_cm.__aexit__ = AsyncMock(return_value=False)
-
-    with patch("aiohttp.ClientSession", return_value=outer_cm):
+    with patch("integrations.communication_integration.get_http_client", return_value=mock_client):
         result = await slack._make_slack_request(
             "POST",
             "https://slack.com/api/chat.postMessage",

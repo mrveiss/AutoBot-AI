@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Simple validation script for Chat Knowledge Management System
@@ -109,7 +110,7 @@ def test_frontend_components():
 
         for component_path in components_to_check:
             if os.path.exists(component_path):
-                with open(component_path, "r") as f:
+                with open(component_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     if len(content) > 100:  # Basic content check
                         logger.info(

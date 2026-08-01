@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 DNS Cache Service for AutoBot
@@ -47,7 +48,7 @@ class DNSCacheService:
         """Load existing cache from disk"""
         try:
             if self.cache_file.exists():
-                with open(self.cache_file, "r") as f:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     # Filter out old entries (older than 5 minutes)
                     cutoff = time.time() - 300
@@ -60,7 +61,7 @@ class DNSCacheService:
     def save_cache(self):
         """Save cache to disk"""
         try:
-            with open(self.cache_file, "w") as f:
+            with open(self.cache_file, "w", encoding="utf-8") as f:
                 json.dump(self.cache, f, indent=2)
         except Exception as e:
             logger.error("Could not save DNS cache: %s", e)

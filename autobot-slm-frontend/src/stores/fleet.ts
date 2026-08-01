@@ -26,7 +26,8 @@ import type {
   NodeEvent,
   NodeEventFilters,
   CertificateInfo,
-  UpdateInfo,
+  NodeUpdateRecord,
+  NodeUpdateCheckResponse,
   ConnectionTestResult,
   RoleInfo,
   NPUNodeStatus,
@@ -59,7 +60,7 @@ export const useFleetStore = defineStore('fleet', () => {
   const certificateStatus = ref<Map<string, CertificateInfo>>(new Map())
 
   /** Cache of available updates by node ID */
-  const nodeUpdates = ref<Map<string, UpdateInfo[]>>(new Map())
+  const nodeUpdates = ref<Map<string, NodeUpdateRecord[]>>(new Map())
 
   /** Available roles from the backend */
   const availableRoles = ref<RoleInfo[]>([])
@@ -88,13 +89,11 @@ export const useFleetStore = defineStore('fleet', () => {
     for (const node of nodes.value.values()) {
       switch (node.status) {
         case 'online':
-        case 'healthy':
           healthy++
           break
         case 'degraded':
           degraded++
           break
-        case 'unhealthy':
         case 'error':
           unhealthy++
           break
@@ -167,7 +166,7 @@ export const useFleetStore = defineStore('fleet', () => {
   async function fetchFleetUpdateSummary(): Promise<void> {
     try {
       fleetUpdateSummary.value = await api.getFleetUpdateSummary()
-    } catch (_err) {
+    } catch {
       // Silently fail - updates are supplementary info
       fleetUpdateSummary.value = null
     }
@@ -178,6 +177,36 @@ export const useFleetStore = defineStore('fleet', () => {
    */
   function getNodeUpdateSummary(nodeId: string): NodeUpdateSummary | undefined {
     return fleetUpdateSummary.value?.nodes.find(n => n.node_id === nodeId)
+  }
+
+  /**
+   * Reconcile a single node's cached update summary with a fresh live-check
+   * result (#11964).
+   *
+   * The live "Check for updates" scan (NodeLifecyclePanel) re-reads
+   * node.code_status directly from the DB at click-time. The fleet-wide
+   * summary that drives the node-card badge is otherwise only fetched once
+   * on page load, so it can go stale. Patching the cached entry here after
+   * every live check keeps the badge and the live scan from disagreeing.
+   */
+  function reconcileNodeUpdateSummary(
+    nodeId: string,
+    systemUpdates: number,
+    codeUpdateAvailable: boolean,
+    codeStatus: string
+  ): void {
+    const summary = fleetUpdateSummary.value
+    const entry = summary?.nodes.find(n => n.node_id === nodeId)
+    if (!summary || !entry) return
+
+    entry.system_updates = systemUpdates
+    entry.code_update_available = codeUpdateAvailable
+    entry.code_status = codeStatus
+    entry.total_updates = systemUpdates + (codeUpdateAvailable ? 1 : 0)
+
+    summary.total_system_updates = summary.nodes.reduce((sum, n) => sum + n.system_updates, 0)
+    summary.total_code_updates = summary.nodes.filter(n => n.code_update_available).length
+    summary.nodes_needing_updates = summary.nodes.filter(n => n.total_updates > 0).length
   }
 
   // ============================================================
@@ -279,9 +308,9 @@ export const useFleetStore = defineStore('fleet', () => {
     const node = nodes.value.get(nodeId)
     if (node) {
       node.health = health
-      node.status = health.status === 'healthy' ? 'healthy' :
+      node.status = health.status === 'healthy' ? 'online' :
                     health.status === 'degraded' ? 'degraded' :
-                    health.status === 'unhealthy' ? 'unhealthy' : 'offline'
+                    health.status === 'unhealthy' ? 'error' : 'offline'
       nodes.value.set(nodeId, { ...node })
     }
   }
@@ -528,13 +557,19 @@ export const useFleetStore = defineStore('fleet', () => {
   // ============================================================
 
   /**
-   * Check for available updates for a node
+   * Check for available updates for a node.
+   *
+   * Reconciles the cached fleet-wide update summary with this fresh scan
+   * (#11964) so the node-card badge can never disagree with a live check.
+   * Returns the full check response so callers get code_update_available/
+   * code_status directly, even if this node has no cached summary entry yet.
    */
-  async function checkNodeUpdates(nodeId: string): Promise<UpdateInfo[]> {
+  async function checkNodeUpdates(nodeId: string): Promise<NodeUpdateCheckResponse> {
     try {
-      const updates = await api.checkUpdates(nodeId)
-      nodeUpdates.value.set(nodeId, updates)
-      return updates
+      const result = await api.checkUpdates(nodeId)
+      nodeUpdates.value.set(nodeId, result.updates)
+      reconcileNodeUpdateSummary(nodeId, result.total, result.code_update_available, result.code_status)
+      return result
     } catch (err) {
       error.value = err instanceof Error
         ? err.message
@@ -891,6 +926,7 @@ export const useFleetStore = defineStore('fleet', () => {
     // Actions - Fleet Update Summary (#682)
     fetchFleetUpdateSummary,
     getNodeUpdateSummary,
+    reconcileNodeUpdateSummary,
 
     // Actions - Roles
     fetchRoles,

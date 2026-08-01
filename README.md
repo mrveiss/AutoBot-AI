@@ -28,7 +28,7 @@ Your data stays on your machines. Your AI stays yours.
 |---|---|
 | Chat interface | Your prompts |
 | RAG knowledge base | Your documents |
-| Fleet management | Your infrastructure |
+| Service lifecycle management (SLM) | Your infrastructure |
 | Module ecosystem | Your data |
 
 ## The Platform Model
@@ -52,22 +52,27 @@ AutoBot is three layers, bottom to top:
 
 → Full picture: [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.md)
 
-## Quick Start (3 Steps)
+## Quick Start
 
-### 1. Clone the Repository
+**Option A — One-line installer (recommended, full platform).** Deploys the Service
+Lifecycle Manager (SLM) and all dependencies:
+```bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash
+```
+When it finishes, the installer prints your **SLM URL** (`https://<server-ip>/slm/`) and
+admin credentials. Open that URL and log in — the **Setup Wizard** then walks you through
+adding fleet nodes, enrolling agents, assigning roles, and provisioning.
+
+**Option B — Docker Compose (quick eval / development).**
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-```
-
-### 2. Start with Docker
-```bash
 cp .env.example .env
 docker compose up -d
 ```
+User UI at **http://localhost**, SLM admin at **http://localhost/slm**.
 
-### 3. Open Your Dashboard
-Visit **http://localhost** in your browser. AutoBot is ready to use.
+→ Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -245,7 +250,7 @@ AutoBot runs as a coordinated set of services:
 |---------|------|------|
 | **Frontend** | Vue.js UI, TLS termination | 80, 443 |
 | **Backend** | FastAPI API server | 8001 |
-| **SLM** | Service Lifecycle Manager — fleet deploy/operate/scale | (via dashboard `/slm`) |
+| **SLM** | Service Lifecycle Manager — deploys, operates, and scales AutoBot's own services | (via dashboard `/slm`) |
 | **Redis** | Cache, message queue | 6379 |
 | **PostgreSQL** | Relational database | 5432 |
 | **ChromaDB** | Vector embeddings store | 8100 |
@@ -291,7 +296,6 @@ All configuration uses environment variables in `.env`. See `.env.example` for a
 Key settings:
 - `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`
 - `AUTOBOT_LLM_PROVIDER` — `ollama` (default) or others
-- `AUTOBOT_SINGLE_USER_MODE` — `true` (development) or `false` (multi-user)
 
 ### LLM Providers and Fallback
 
@@ -404,8 +408,10 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 
 ## Roadmap
 
+### Shipped
+- [x] Multi-user authentication and RBAC (single-user mode retired)
+
 ### Upcoming
-- [ ] Multi-user authentication and RBAC
 - [ ] Kubernetes orchestration support
 - [ ] Advanced analytics dashboards
 - [ ] Module ecosystem and registry

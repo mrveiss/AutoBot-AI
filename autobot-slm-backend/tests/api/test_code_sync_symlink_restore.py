@@ -22,61 +22,23 @@ path is ever hardcoded.
 from __future__ import annotations
 
 import sys
-import types
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock  # MagicMock used in sys.modules guard below
+from unittest.mock import AsyncMock
 
 # ---------------------------------------------------------------------------
-# Dev-host stub: models.schemas contains real Pydantic models in CI but on
-# the dev box (no SLM venv) it is a MagicMock that makes FastAPI's
-# response_model validation fail at decoration time.  Pre-populate the module
-# with minimal real BaseModel subclasses so the router can be imported.
-# Must happen before the api.code_sync import below.
+# #12572: import api.code_sync via the shared helper.  On the dev host / under
+# the stubbed conftests models.schemas is a MagicMock, which makes FastAPI's
+# response_model validation fail at router-decoration time.  The helper installs
+# minimal real BaseModel stand-ins for the import only, then restores the
+# original models entries so they never leak into later-collected directories
+# (#11794).  It keys the decision on models.schemas — not the models parent,
+# which tests/services/conftest.py turns into a real hollow package (the root
+# cause of the order-dependent collection errors, #12572).
 # ---------------------------------------------------------------------------
-# #11794: snapshot the models entries — restored right after api.code_sync
-# loads (see below) so the pydantic stand-ins don't leak across directories.
-_MODELS_SNAPSHOT = {_k: sys.modules.get(_k) for _k in ("models", "models.schemas")}
-if "models" not in sys.modules or isinstance(sys.modules.get("models"), MagicMock):
-    from pydantic import BaseModel as _BM
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _code_sync_import import import_code_sync  # noqa: E402
 
-    def _pydantic_stub(name: str, **fields) -> type:
-        return type(name, (_BM,), {"__annotations__": {k: type(v) for k, v in fields.items()}, **fields})
-
-    _schemas = types.ModuleType("models.schemas")
-    # Enumerate every name imported from models.schemas in api/code_sync.py.
-    for _cls in [
-        "CodeSyncStatusResponse",
-        "CodeSyncRefreshResponse",
-        "CodeVersionNotification",
-        "CodeVersionNotificationResponse",
-        "ComponentSyncJobStatus",
-        "DriftResolveJobResponse",
-        "DriftResolveRequest",
-        "DriftResolveResponse",
-        "FileDriftReport",
-        "FleetSyncJobStatus",
-        "FleetSyncNodeStatus",
-        "FleetSyncRequest",
-        "FleetSyncResponse",
-        "MarkSyncedResponse",
-        "NodeSyncRequest",
-        "NodeSyncResponse",
-        "PendingNodeResponse",
-        "PendingNodesResponse",
-        "ScheduleCreate",
-        "ScheduleResponse",
-        "ScheduleRunResponse",
-        "ScheduleUpdate",
-    ]:
-        setattr(_schemas, _cls, _pydantic_stub(_cls))
-    _models = sys.modules.get("models") or types.ModuleType("models")
-    _models.schemas = _schemas  # type: ignore[attr-defined]
-    sys.modules["models"] = _models
-    sys.modules["models.schemas"] = _schemas
-
-# Add autobot-slm-backend to path so api.code_sync imports resolve.
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_BACKEND_ROOT))
+import_code_sync()
 
 import asyncio  # noqa: E402
 
@@ -88,27 +50,21 @@ from api.code_sync import (  # noqa: E402
     _run_post_sync_steps,
 )
 
-# #11794: restore the pre-file models/models.schemas sys.modules entries now
-# that api.code_sync is loaded.  The narrow pydantic stand-ins otherwise leak
-# into later-collected directories (tests/services/test_saml_slo.py and
-# test_token_denylist.py real-load services/auth.py, whose
-# `from models.schemas import TokenResponse` breaks against them).
-for _k, _v in _MODELS_SNAPSHOT.items():
-    if _v is None:
-        sys.modules.pop(_k, None)
-    else:
-        sys.modules[_k] = _v
-if "models" in sys.modules and "models.schemas" in sys.modules:
-    sys.modules["models"].schemas = sys.modules["models.schemas"]
-del _MODELS_SNAPSHOT
-
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # A dedicated loop per call — resilient when a prior test (e.g. anything in
+    # tests/services) has closed or cleared the main-thread event loop, which
+    # makes the deprecated asyncio.get_event_loop() raise "no current event
+    # loop" under Python 3.10 (#12572).
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 # ---------------------------------------------------------------------------

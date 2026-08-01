@@ -9,10 +9,8 @@
  * Issue #582: GUI integration for Vision & Multimodal Interface
  */
 
-import appConfig from '@/config/AppConfig.js';
-import { NetworkConstants } from '@/constants/network';
+import apiClient from '@/utils/ApiClient';
 import { createLogger } from '@/utils/debugUtils';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { getApiBase } from '@/config/ssot-config';
 import type { ApiResponse } from '@/types/api';
 
@@ -318,51 +316,17 @@ export interface GalleryItem {
  * Communicates with /api/vision and /api/multimodal endpoints
  */
 class VisionMultimodalApiClient {
-  private baseUrl: string = '';
-  private baseUrlPromise: Promise<string> | null = null;
-
-  constructor() {
-    this.initializeBaseUrl();
-  }
-
-  private async initializeBaseUrl(): Promise<void> {
-    try {
-      this.baseUrl = await appConfig.getApiUrl('');
-    } catch {
-      logger.warn('AppConfig initialization failed, using NetworkConstants fallback');
-      this.baseUrl = `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
-    }
-  }
-
-  private async ensureBaseUrl(): Promise<string> {
-    if (this.baseUrl) {
-      return this.baseUrl;
-    }
-
-    if (!this.baseUrlPromise) {
-      this.baseUrlPromise = this.initializeBaseUrl().then(() => this.baseUrl);
-    }
-
-    return await this.baseUrlPromise;
-  }
+  // Base-URL resolution, auth-token injection (with expiry check), 401
+  // auto-logout+redirect, and org-context headers all live on the shared
+  // apiClient singleton (#12152) — this client is a thin typed wrapper
+  // around it, translating raw Response into the local ApiResponse<T> shape.
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: { method?: string; body?: unknown } = {}
   ): Promise<ApiResponse<T>> {
-    const baseUrl = await this.ensureBaseUrl();
-    const url = `${baseUrl}${endpoint}`;
-
-    const defaultHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
     try {
-      const response = await fetchWithAuth(url, {
-        ...options,
-        headers: { ...defaultHeaders, ...options.headers },
-      });
-
+      const response = await apiClient.rawRequest(endpoint, options);
       const data = await response.json();
 
       if (!response.ok) {
@@ -387,16 +351,15 @@ class VisionMultimodalApiClient {
     endpoint: string,
     formData: FormData
   ): Promise<ApiResponse<T>> {
-    const baseUrl = await this.ensureBaseUrl();
-    const url = `${baseUrl}${endpoint}`;
-
     try {
-      const response = await fetchWithAuth(url, {
+      // apiClient.rawRequest already handles FormData bodies generically
+      // (strips Content-Type so the browser sets the multipart boundary),
+      // so it composes multi-field/multi-file payloads exactly like the
+      // previous fetchWithAuth-based implementation.
+      const response = await apiClient.rawRequest(endpoint, {
         method: 'POST',
         body: formData,
-        // Don't set Content-Type - browser will set it with boundary for multipart
       });
-
       const data = await response.json();
 
       if (!response.ok) {
@@ -446,7 +409,7 @@ class VisionMultimodalApiClient {
   ): Promise<ApiResponse<ScreenAnalysisResponse>> {
     return this.request<ScreenAnalysisResponse>(`${getApiBase()}/vision/analyze`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 
@@ -459,7 +422,7 @@ class VisionMultimodalApiClient {
   ): Promise<ApiResponse<ElementDetectionResponse>> {
     return this.request<ElementDetectionResponse>(`${getApiBase()}/vision/elements`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 
@@ -470,7 +433,7 @@ class VisionMultimodalApiClient {
   async extractText(request: OCRRequest = {}): Promise<ApiResponse<OCRResponse>> {
     return this.request<OCRResponse>(`${getApiBase()}/vision/ocr`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 
@@ -581,7 +544,7 @@ class VisionMultimodalApiClient {
   ): Promise<ApiResponse<MultiModalResponse>> {
     return this.request<MultiModalResponse>(`${getApiBase()}/multimodal/process/text`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 
@@ -594,7 +557,7 @@ class VisionMultimodalApiClient {
   ): Promise<ApiResponse<EmbeddingResponse>> {
     return this.request<EmbeddingResponse>(`${getApiBase()}/multimodal/embeddings/generate`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 
@@ -607,7 +570,7 @@ class VisionMultimodalApiClient {
   ): Promise<ApiResponse<CrossModalSearchResponse>> {
     return this.request<CrossModalSearchResponse>(`${getApiBase()}/multimodal/search/cross-modal`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 

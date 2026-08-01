@@ -23,6 +23,7 @@ from typing import Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
@@ -61,17 +62,16 @@ class SkillRanker:
             List of skill dictionaries with id, name, description, platform fields
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.slm_host}/api/skills/active"
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        skills = data.get("skills", []) if isinstance(data, dict) else data
-                        logger.debug("Fetched %d active skills from SLM", len(skills))
-                        return skills
-                    else:
-                        logger.warning("SLM returned status %d for /api/skills/active", resp.status)
-                        return []
+            url = f"{self.slm_host}/api/skills/active"
+            async with get_http_client().tracked_request("GET", url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    skills = data.get("skills", []) if isinstance(data, dict) else data
+                    logger.debug("Fetched %d active skills from SLM", len(skills))
+                    return skills
+                else:
+                    logger.warning("SLM returned status %d for /api/skills/active", resp.status)
+                    return []
         except asyncio.TimeoutError:
             logger.warning("SLM /api/skills/active request timed out")
             return []
@@ -119,24 +119,25 @@ class SkillRanker:
             return None
 
         try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{self.slm_host}/api/embeddings"
-                payload = {"input": text}
-                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        # Handle both OpenAI and custom formats
-                        if isinstance(data, dict) and "data" in data:
-                            embeddings = data["data"]
-                            if embeddings and isinstance(embeddings, list):
-                                embedding = embeddings[0]
-                                if isinstance(embedding, dict):
-                                    return embedding.get("embedding", [])
-                                return embedding
-                        return None
-                    else:
-                        logger.debug("SLM embedding returned status %d", resp.status)
-                        return None
+            url = f"{self.slm_host}/api/embeddings"
+            payload = {"input": text}
+            async with get_http_client().tracked_request(
+                "POST", url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    # Handle both OpenAI and custom formats
+                    if isinstance(data, dict) and "data" in data:
+                        embeddings = data["data"]
+                        if embeddings and isinstance(embeddings, list):
+                            embedding = embeddings[0]
+                            if isinstance(embedding, dict):
+                                return embedding.get("embedding", [])
+                            return embedding
+                    return None
+                else:
+                    logger.debug("SLM embedding returned status %d", resp.status)
+                    return None
         except asyncio.TimeoutError:
             logger.debug("SLM embedding request timed out")
             return None

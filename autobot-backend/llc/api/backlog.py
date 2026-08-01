@@ -13,7 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from llc.deps import get_session, service_dep
+from api.user_management.dependencies import get_current_user, require_org_context
+from llc.deps import assert_company_access, get_session, service_dep
+from user_management.services import TenantContext
 
 from ..models.enums import WorkItemStatus, WorkItemType
 from ..models.work_item import LLCWorkItem
@@ -94,8 +96,11 @@ async def get_backlog(
     limit: int = Query(50, ge=1, le=500, description="Page size"),
     offset: int = Query(0, ge=0, description="Page offset"),
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> BacklogResponse:
     """Return backlog items ordered by priority (CRITICAL → HIGH → MEDIUM → LOW), then age."""
+    assert_company_access(ctx, company_id)
     items, total = await _service().list_backlog(
         session,
         company_id=company_id,
@@ -118,12 +123,15 @@ async def get_backlog(
 async def bulk_assign_sprint(
     body: BulkAssignSprintRequest,
     session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> BulkAssignSprintResponse:
     """Assign multiple backlog items to a sprint in a single DB round-trip.
 
     Items that don't belong to the given company are silently excluded.
     Returns the count of rows actually updated.
     """
+    assert_company_access(ctx, body.company_id)
     if not body.work_item_ids:
         raise HTTPException(status_code=422, detail="work_item_ids must not be empty")
 

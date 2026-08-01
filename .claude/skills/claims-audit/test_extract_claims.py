@@ -14,9 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import from hyphenated module name
 import importlib.util
 
-spec = importlib.util.spec_from_file_location(
-    "extract_claims", Path(__file__).parent / "extract-claims.py"
-)
+spec = importlib.util.spec_from_file_location("extract_claims", Path(__file__).parent / "extract-claims.py")
 extract_claims_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(extract_claims_module)
 ClaimExtractor = extract_claims_module.ClaimExtractor
@@ -63,7 +61,7 @@ def test_infrastructure_patterns():
             ],
         }
 
-        with open(patterns_dir / "infrastructure.json", "w") as f:
+        with open(patterns_dir / "infrastructure.json", "w", encoding="utf-8") as f:
             json.dump(infrastructure_patterns, f)
 
         extractor = ClaimExtractor(patterns_dir)
@@ -78,19 +76,14 @@ def test_infrastructure_patterns():
 
             found = False
             for claim in claims:
-                if (
-                    claim["type"] == expected_type
-                    and expected_match in claim["matched_text"]
-                ):
+                if claim["type"] == expected_type and expected_match in claim["matched_text"]:
                     found = True
                     assert claim["category"] == "infrastructure"
                     assert claim["source"]["file"] == str(test_file)
                     assert claim["source"]["line"] == 1
                     break
 
-            assert (
-                found
-            ), f"Expected match '{expected_match}' of type '{expected_type}' not found in: {claims}"
+            assert found, f"Expected match '{expected_match}' of type '{expected_type}' not found in: {claims}"
 
     print("✓ Infrastructure pattern tests passed")
 
@@ -135,7 +128,7 @@ def test_feature_patterns():
             ],
         }
 
-        with open(patterns_dir / "features.json", "w") as f:
+        with open(patterns_dir / "features.json", "w", encoding="utf-8") as f:
             json.dump(feature_patterns, f)
 
         extractor = ClaimExtractor(patterns_dir)
@@ -148,9 +141,7 @@ def test_feature_patterns():
             assert len(claims) > 0, f"No claims found for: {claim_text}"
 
             found = any(
-                c["type"] == expected_type
-                and expected_match.lower() in c["matched_text"].lower()
-                for c in claims
+                c["type"] == expected_type and expected_match.lower() in c["matched_text"].lower() for c in claims
             )
             assert (
                 found
@@ -199,7 +190,7 @@ def test_api_patterns():
             ],
         }
 
-        with open(patterns_dir / "api.json", "w") as f:
+        with open(patterns_dir / "api.json", "w", encoding="utf-8") as f:
             json.dump(api_patterns, f)
 
         extractor = ClaimExtractor(patterns_dir)
@@ -212,9 +203,7 @@ def test_api_patterns():
             assert len(claims) > 0, f"No claims found for: {claim_text}"
 
             found = any(
-                c["type"] == expected_type
-                and expected_match.lower() in c["matched_text"].lower()
-                for c in claims
+                c["type"] == expected_type and expected_match.lower() in c["matched_text"].lower() for c in claims
             )
             assert (
                 found
@@ -263,7 +252,7 @@ def test_architecture_patterns():
             ],
         }
 
-        with open(patterns_dir / "architecture.json", "w") as f:
+        with open(patterns_dir / "architecture.json", "w", encoding="utf-8") as f:
             json.dump(architecture_patterns, f)
 
         extractor = ClaimExtractor(patterns_dir)
@@ -276,9 +265,7 @@ def test_architecture_patterns():
             assert len(claims) > 0, f"No claims found for: {claim_text}"
 
             found = any(
-                c["type"] == expected_type
-                and expected_match.lower() in c["matched_text"].lower()
-                for c in claims
+                c["type"] == expected_type and expected_match.lower() in c["matched_text"].lower() for c in claims
             )
             assert (
                 found
@@ -305,7 +292,7 @@ def test_deduplication():
             ],
         }
 
-        with open(patterns_dir / "test.json", "w") as f:
+        with open(patterns_dir / "test.json", "w", encoding="utf-8") as f:
             json.dump(test_patterns, f)
 
         extractor = ClaimExtractor(patterns_dir)

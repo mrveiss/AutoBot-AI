@@ -64,6 +64,11 @@ class TestFeatureConfigSubsystemDefaults:
         cfg = _fresh_feature_config()
         assert cfg.osint_enabled is True
 
+    def test_kb_enterprise_connectors_disabled_default(self) -> None:
+        """Issue #10538: Slack/Confluence/Jira connectors default OFF."""
+        cfg = _fresh_feature_config()
+        assert cfg.kb_enterprise_connectors is False
+
 
 # ---------------------------------------------------------------------------
 # FeatureConfig env-var overrides
@@ -101,6 +106,11 @@ class TestFeatureConfigEnvVarOverrides:
         cfg = _fresh_feature_config(AUTOBOT_FEATURE_NPU="true")
         assert cfg.npu_enabled is True
 
+    def test_kb_enterprise_connectors_enabled_via_env(self) -> None:
+        """Issue #10538: opt-in via AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS."""
+        cfg = _fresh_feature_config(AUTOBOT_FEATURE_KB_ENTERPRISE_CONNECTORS="true")
+        assert cfg.kb_enterprise_connectors is True
+
 
 # ---------------------------------------------------------------------------
 # is_feature_enabled
@@ -114,16 +124,18 @@ class TestIsFeatureEnabled:
         """Patch get_config().feature with controlled attribute values."""
         from unittest.mock import MagicMock
 
+        from autobot_shared.feature_flags import _SUBSYSTEM_FLAG_MAP
+
         feature_cfg = MagicMock()
-        # Default all flags to True, then apply overrides.
-        defaults = {
-            "npu_enabled": True,
-            "voice_enabled": True,
-            "browser_enabled": True,
-            "computer_vision_enabled": True,
-            "training_enabled": True,
-            "osint_enabled": True,
-        }
+        # #12900: derive the attribute set from _SUBSYSTEM_FLAG_MAP rather than
+        # hand-listing it. The list had drifted — `kb_mock_connector` was added
+        # to the map and never here, so `getattr` returned a MagicMock instead
+        # of a bool and `test_all_known_flags_accepted` failed. A MagicMock
+        # never raises on a missing attribute, so nothing pointed at the cause.
+        # Deriving it means a newly added flag is covered automatically.
+        defaults = {attr: True for attr in _SUBSYSTEM_FLAG_MAP.values()}
+        # Opt-in subsystems default off, matching FeatureConfig.
+        defaults["kb_enterprise_connectors"] = False
         defaults.update(kwargs)
         for attr, val in defaults.items():
             setattr(feature_cfg, attr, val)

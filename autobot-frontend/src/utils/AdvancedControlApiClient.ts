@@ -9,8 +9,8 @@
  * Issue #583: GUI integration for Advanced Control & Session Takeover
  */
 
+import apiClient from '@/utils/ApiClient';
 import { getConfig, getApiBase } from '@/config/ssot-config';
-import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import type { ApiResponse } from '@/types/api';
 
@@ -189,26 +189,19 @@ export interface AdvancedControlInfo {
  * takeover management, and system monitoring.
  */
 class AdvancedControlApiClient {
-  private getBaseUrl(): string {
-    return getConfig().backendUrl;
-  }
+  // Base-URL resolution, auth-token injection (with expiry check), 401
+  // auto-logout+redirect, and org-context headers all live on the shared
+  // apiClient singleton (#12152) — this client is a thin typed wrapper
+  // around it, translating raw Response into the local ApiResponse<T> shape.
+  // rawRequest is used (single-shot, no retry) to preserve the exact
+  // pre-migration semantics of the previous fetchWithAuth-based transport.
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: { method?: string; body?: unknown } = {}
   ): Promise<ApiResponse<T>> {
-    const baseUrl = this.getBaseUrl();
-    const url = `${baseUrl}${endpoint}`;
-
-    const defaultHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
     try {
-      const response = await fetchWithAuth(url, {
-        ...options,
-        headers: { ...defaultHeaders, ...options.headers },
-      });
+      const response = await apiClient.rawRequest(endpoint, options);
 
       const data = await response.json();
 
@@ -255,7 +248,7 @@ class AdvancedControlApiClient {
   ): Promise<ApiResponse<StreamingSessionResponse>> {
     return this.request<StreamingSessionResponse>(`${getApiBase()}/advanced-control/streaming/create`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 
@@ -303,7 +296,7 @@ class AdvancedControlApiClient {
   ): Promise<ApiResponse<{ success: boolean; request_id: string }>> {
     return this.request(`${getApiBase()}/advanced-control/takeover/request`, {
       method: 'POST',
-      body: JSON.stringify(request),
+      body: request,
     });
   }
 
@@ -317,7 +310,7 @@ class AdvancedControlApiClient {
   ): Promise<ApiResponse<{ success: boolean; session_id: string }>> {
     return this.request(`${getApiBase()}/advanced-control/takeover/${encodeURIComponent(requestId)}/approve`, {
       method: 'POST',
-      body: JSON.stringify(approval),
+      body: approval,
     });
   }
 
@@ -331,7 +324,7 @@ class AdvancedControlApiClient {
   ): Promise<ApiResponse<{ success: boolean; result: Record<string, unknown> }>> {
     return this.request(`${getApiBase()}/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/action`, {
       method: 'POST',
-      body: JSON.stringify(action),
+      body: action,
     });
   }
 
@@ -369,7 +362,7 @@ class AdvancedControlApiClient {
   ): Promise<ApiResponse<{ success: boolean; session_id: string; status: string }>> {
     return this.request(`${getApiBase()}/advanced-control/takeover/sessions/${encodeURIComponent(sessionId)}/complete`, {
       method: 'POST',
-      body: JSON.stringify(completion),
+      body: completion,
     });
   }
 

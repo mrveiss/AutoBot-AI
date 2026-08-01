@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Quick import cleanup utility for AutoBot codebase
@@ -46,7 +47,7 @@ def remove_unused_imports(file_path: str, max_removals: int = 10) -> bool:
         # Limit removals for safety
         unused_imports = unused_imports[:max_removals]
 
-        with open(file_path, "r") as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         original_content = content
@@ -90,7 +91,7 @@ def remove_unused_imports(file_path: str, max_removals: int = 10) -> bool:
 
         # Only write if we actually changed something
         if new_content != original_content:
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
             print(f"Cleaned {len(unused_imports)} unused imports from {file_path}")
             return True

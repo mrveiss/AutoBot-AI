@@ -11,7 +11,9 @@
  * Issue #752 - Comprehensive performance monitoring.
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { formatDuration } from '@/utils/formatHelpers'
+import { usePagination } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatDateTime } from '@/composables/useTimezone'
 import type {
@@ -34,8 +36,21 @@ const {
 const timeRange = ref('24')
 const statusFilter = ref('all')
 const nodeFilter = ref('')
-const page = ref(1)
-const pageSize = ref(50)
+
+// Server-side pagination via shared @autobot/ui composable (#10885).
+// The API returns one page of traces; the composable owns page state +
+// navigation and re-fetches through onPageChange. serverTotalItems tracks the
+// reactive trace total so totalPages/next/prev stay in sync after each fetch.
+const {
+  currentPage: page,
+  itemsPerPage: pageSize,
+  totalPages,
+  goToPage,
+} = usePagination<TraceItem>(traces, {
+  itemsPerPage: 50,
+  serverTotalItems: traceTotal,
+  onPageChange: () => loadTraces(),
+})
 
 // Expanded trace detail
 const expandedTraceId = ref<string | null>(null)
@@ -55,8 +70,6 @@ const statusOptions = [
   { label: 'Error', value: 'error' },
   { label: 'Timeout', value: 'timeout' },
 ]
-
-const totalPages = computed(() => Math.max(1, Math.ceil(traceTotal.value / pageSize.value)))
 
 /**
  * Build query params from current filter state.
@@ -84,16 +97,6 @@ async function loadTraces(): Promise<void> {
 function onFilterChange(): void {
   page.value = 1
   loadTraces()
-}
-
-/**
- * Navigate to a page.
- */
-function goToPage(p: number): void {
-  if (p >= 1 && p <= totalPages.value) {
-    page.value = p
-    loadTraces()
-  }
 }
 
 /**
@@ -198,15 +201,10 @@ function spanBarColor(status: string): string {
 /**
  * Format duration for display.
  */
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms.toFixed(0)}ms`
-  return `${(ms / 1000).toFixed(2)}s`
-}
 
 function formatDate(dateStr: string): string {
   return formatDateTime(dateStr)
 }
-
 
 // Watch for filter changes that require immediate reload
 watch([timeRange, statusFilter], () => {
@@ -346,7 +344,7 @@ onMounted(() => {
                   {{ trace.name }}
                 </td>
                 <td class="px-4 py-2 text-sm font-mono">
-                  {{ formatDuration(trace.duration_ms) }}
+                  {{ formatDuration(trace.duration_ms, { style: 'msSeconds2dp' }) }}
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600">{{ trace.span_count }}</td>
                 <td class="px-4 py-2">
@@ -394,7 +392,7 @@ onMounted(() => {
                         ></div>
                       </div>
                       <span class="text-xs font-mono text-gray-600 w-16 text-right shrink-0">
-                        {{ formatDuration(span.duration_ms) }}
+                        {{ formatDuration(span.duration_ms, { style: 'msSeconds2dp' }) }}
                       </span>
                       <span
                         :class="[

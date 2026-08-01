@@ -99,19 +99,20 @@ async def test_set_user_bundle_invalid_bundle():
     from fastapi.testclient import TestClient
 
     from api.voice_bundle_admin import bundle_admin_router
+    from auth_middleware import get_current_user
 
     app = FastAPI()
 
-    # Mock auth middleware to return admin user BEFORE including router
+    # Admin user seen by both the require_role() gate (#12704) and the
+    # acting-user dependency, so validation runs and rejects the bad bundle.
+    admin = {"username": "admin", "role": "admin", "user_id": "admin-1"}
     mock_auth = MagicMock()
-    mock_auth.get_user_from_request.return_value = {
-        "username": "admin",
-        "role": "admin",
-        "user_id": "admin-1",
-    }
+    mock_auth.get_user_from_request.return_value = admin
 
-    with patch("api.voice_bundle_helpers.get_auth_middleware", return_value=mock_auth):
-        app.include_router(bundle_admin_router)
+    app.include_router(bundle_admin_router)
+    app.dependency_overrides[get_current_user] = lambda: admin
+
+    with patch("auth_rbac.get_auth_middleware", return_value=mock_auth):
         with TestClient(app) as client:
             resp = client.put(
                 "/admin/voice/bundle/user-abc",
@@ -132,14 +133,15 @@ async def test_user_cannot_call_admin_bundle_endpoint_unauthenticated():
     app = FastAPI()
     app.include_router(bundle_admin_router)
 
-    with TestClient(app, raise_server_exceptions=False) as client:
-        with patch(
-            "api.voice_bundle_admin._require_admin",
-            side_effect=lambda req: None,  # Returns None to simulate unauthenticated
-        ):
+    # No authenticated user → require_role() (#12704) must reject.
+    mock_auth = MagicMock()
+    mock_auth.get_user_from_request.return_value = None
+
+    with patch("auth_rbac.get_auth_middleware", return_value=mock_auth):
+        with TestClient(app, raise_server_exceptions=False) as client:
             resp = client.get("/admin/voice/bundle/user-abc")
     # Expect 401 or 403
-    assert resp.status_code in (401, 403, 422)
+    assert resp.status_code in (401, 403)
 
 
 # ---------------------------------------------------------------------------

@@ -20,10 +20,9 @@ import json
 import os
 import re
 import threading
-from collections import defaultdict
+import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
-from time import time
 from typing import Dict, List
 
 from cryptography.fernet import Fernet
@@ -50,9 +49,12 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.time_utils import parse_utc_iso
 from middleware.proxy_utils import get_client_ip
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
+from services.json_secrets_read import load_imported_json_secret
+from services.provider_key_vault import mirror_provider_key_best_effort
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -64,41 +66,10 @@ SECRET_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window
 
-
-class RateLimiter:
-    """Simple in-memory rate limiter for secrets API"""
-
-    def __init__(
-        self,
-        window: int = RATE_LIMIT_WINDOW,
-        max_requests: int = RATE_LIMIT_MAX_REQUESTS,
-    ):
-        """Initialize rate limiter with window size and request limit."""
-        self.window = window
-        self.max_requests = max_requests
-        self.requests: Dict[str, List[float]] = defaultdict(list)
-
-    def is_allowed(self, client_id: str) -> bool:
-        """Check if request is allowed under rate limit"""
-        now = time()
-        # Clean old requests
-        self.requests[client_id] = [t for t in self.requests[client_id] if now - t < self.window]
-        # Check limit
-        if len(self.requests[client_id]) >= self.max_requests:
-            return False
-        # Record request
-        self.requests[client_id].append(now)
-        return True
-
-    def get_remaining(self, client_id: str) -> int:
-        """Get remaining requests for client"""
-        now = time()
-        self.requests[client_id] = [t for t in self.requests[client_id] if now - t < self.window]
-        return max(0, self.max_requests - len(self.requests[client_id]))
-
-
-# Global rate limiter instance
-rate_limiter = RateLimiter()
+# Shared sliding-window limiter scoped to the secrets API (Issue #12646).
+# Delegates to autobot_shared.rate_limiter.RateLimiter's custom single-window
+# mode (window=60s, max=30) rather than the retired local in-memory class.
+rate_limiter = RateLimiter(scope_prefix="secrets")
 
 
 def validate_secret_name(name: str) -> str:
@@ -146,7 +117,7 @@ class SecretsManager:
             # Fernet key must persist to decrypt secrets on next startup;
             # secured by 0o600 file permissions.
             with open(self.key_file, "wb") as f:
-                f.write(key)  # lgtm[py/clear-text-storage-sensitive-data]
+                f.write(key)
             os.chmod(self.key_file, 0o600)  # Restrict permissions
 
         self.cipher = Fernet(key)
@@ -224,7 +195,6 @@ class SecretsManager:
             with open(self.secrets_file, "w", encoding="utf-8") as f:
                 # Values in `secrets` are Fernet-encrypted (stored as
                 # `encrypted_value`); raw plaintext is never written to disk.
-                # codeql[py/clear-text-storage-sensitive-data]
                 # Fernet-encrypted `encrypted_value` fields — no plaintext secret is written.
                 json.dump(secrets, f, indent=2, default=json_serializer)
             os.chmod(self.secrets_file, 0o600)  # Restrict permissions
@@ -268,7 +238,6 @@ class SecretsManager:
         secrets[secret.id] = secret_data
         self._save_secrets(secrets)
 
-        # codeql[py/clear-text-logging-sensitive-data]
         logger.info("Created %s (ID: %s)", request.get_log_summary(), secret.id)
         return secret
 
@@ -350,7 +319,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Updated secret (ID: %s...)", secret_id[:8])  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("Updated secret (ID: %s...)", secret_id[:8])
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -373,7 +342,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info("Deleted secret (ID: %s...)", secret_id[:8])  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("Deleted secret (ID: %s...)", secret_id[:8])
         return True
 
     def transfer_secrets(self, request: SecretTransferRequest, chat_id: str | None = None) -> Metadata:
@@ -492,10 +461,13 @@ def get_client_id(request: Request) -> str:
     return get_client_ip(request) or "unknown"
 
 
-def check_rate_limit(request: Request) -> None:
+async def check_rate_limit(request: Request) -> None:
     """Check rate limit and raise exception if exceeded"""
     client_id = get_client_id(request)
-    if not rate_limiter.is_allowed(client_id):
+    allowed = await rate_limiter.acquire_window(
+        client_id, max_requests=RATE_LIMIT_MAX_REQUESTS, window_seconds=RATE_LIMIT_WINDOW
+    )
+    if not allowed:
         logger.warning("[Secrets] Rate limit exceeded for client: %s", client_id)
         raise HTTPException(
             status_code=429,
@@ -516,13 +488,45 @@ def audit_log(
     status = "SUCCESS" if success else "FAILED"
     # Redact secret_id to prevent sensitive data in logs
     safe_id = secret_id[:8] + "..." if secret_id and len(secret_id) > 8 else secret_id
-    logger.info(  # codeql[py/clear-text-logging-sensitive-data]
+    logger.info(
         "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
         status,
         operation,
-        safe_id,  # codeql[py/clear-text-logging-sensitive-data]
+        safe_id,
         client_id,
     )
+
+
+async def _mirror_llm_provider_key(name: str, value: str, user: Dict | None) -> None:
+    """Best-effort System-vault mirror for an LLM-provider-key capture (#10088 Task 7).
+
+    No-op for any secret name that isn't a known LLM provider key (see
+    ``provider_key_vault.LLM_PROVIDER_KEY_NAMES``). Never raises -- a
+    dev/test environment without a configured vault root key must not turn a
+    successful legacy secret creation into a failed request.
+    """
+    raw_user_id = (user or {}).get("user_id")
+    try:
+        created_by = uuid.UUID(str(raw_user_id))
+    except (TypeError, ValueError):
+        created_by = uuid.UUID("00000000-0000-0000-0000-000000000000")
+    await mirror_provider_key_best_effort(name, value, created_by)
+
+
+async def _get_secret_dual_read(secret_id: str, chat_id: str | None) -> Dict | None:
+    """Try the unified envelope store (#10088 Task 3 dual-read), else the legacy JSON file.
+
+    Chat-scope access control is enforced identically on both paths so a secret imported
+    into the unified store is never *less* protected than it was in the legacy file.
+    """
+    secret = await load_imported_json_secret(secret_id)
+    if secret is not None:
+        if secret.get("scope") == ChatSecretScope.CHAT.value:
+            if not chat_id or secret.get("chat_id") != chat_id:
+                raise PermissionError("Access denied: Chat-scoped secret from different chat")
+        return secret
+    # Issue #666: Wrap blocking file I/O in asyncio.to_thread
+    return await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
 
 
 # API Endpoints
@@ -540,7 +544,7 @@ async def create_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Create a new secret (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.create_secret, request)
@@ -564,6 +568,9 @@ async def create_secret(
             session_id=None,
             outcome="success",
         )
+        # #10088 Task 7: mirror LLM-provider-key captures into the System vault
+        # (best-effort -- never turns a successful legacy write into a failure).
+        await _mirror_llm_provider_key(request.name, request.value, _user)
         return JSONResponse(
             status_code=201,
             content={
@@ -577,7 +584,7 @@ async def create_secret(
         raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
-        logger.error("Failed to create secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.error("Failed to create secret: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
@@ -594,7 +601,7 @@ async def list_secrets(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """List secrets with optional filtering (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager.list_secrets, chat_id=chat_id, scope=scope)
@@ -725,10 +732,9 @@ async def get_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get a specific secret with its value (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
-        # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-        secret = await asyncio.to_thread(secrets_manager.get_secret, secret_id, chat_id=chat_id)
+        secret = await _get_secret_dual_read(secret_id, chat_id)
         if not secret:
             audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
@@ -750,7 +756,7 @@ async def get_secret(
                             "original_scope": secret.get("scope"),
                         },
                     )
-                    logger.debug(  # codeql[py/clear-text-logging-sensitive-data]
+                    logger.debug(
                         "[Issue #608] Created secret entity for %s... in session %s",
                         secret_id[:8],
                         chat_id,
@@ -773,7 +779,7 @@ async def get_secret(
         raise
     except Exception as e:
         audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to get secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.error("Failed to get secret: %s", e)
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
@@ -791,7 +797,7 @@ async def update_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Update a secret's metadata (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
@@ -830,7 +836,7 @@ async def update_secret(
         raise
     except Exception as e:
         audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to update secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.error("Failed to update secret: %s", e)
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
@@ -847,7 +853,7 @@ async def delete_secret(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete a secret (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         success = await asyncio.to_thread(secrets_manager.delete_secret, secret_id, chat_id=chat_id)
@@ -883,7 +889,7 @@ async def delete_secret(
         raise
     except Exception as e:
         audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to delete secret: %s", e)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.error("Failed to delete secret: %s", e)
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
@@ -900,7 +906,7 @@ async def transfer_secrets(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Transfer secrets between scopes (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         result = await asyncio.to_thread(secrets_manager.transfer_secrets, request, chat_id=chat_id)
@@ -960,7 +966,7 @@ async def delete_chat_secrets(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Delete secrets for a specific chat (Issue #744: requires admin authentication)"""
-    check_rate_limit(http_request)
+    await check_rate_limit(http_request)
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         result = await asyncio.to_thread(secrets_manager.delete_chat_secrets, chat_id, secret_ids)

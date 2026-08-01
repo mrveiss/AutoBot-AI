@@ -12,32 +12,12 @@
 
 import { ref, computed, watch, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
+import { PLAYBOOK_EXECUTE_TIMEOUT_MS, POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
+import type { PlaybookInfo, PlaybookExecution } from '@/types/slm'
 
 const logger = createLogger('InfrastructureWizard')
 
-interface PlaybookInfo {
-  id: string
-  name: string
-  description: string
-  category: string
-  playbook_file: string
-  target_hosts: string[]
-  variables: Record<string, unknown>
-  estimated_duration: string
-  requires_confirmation: boolean
-}
-
-interface PlaybookExecution {
-  execution_id: string
-  playbook_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  started_at: string | null
-  completed_at: string | null
-  output: string[]
-  error: string | null
-  triggered_by: string
-}
 
 const props = defineProps<{
   visible: boolean
@@ -130,18 +110,18 @@ function stopPolling(): void {
 async function loadPlaybooks(): Promise<void> {
   isLoadingPlaybooks.value = true
   try {
-    const response = await fetch(`${getSlmApiBase()}/infrastructure/playbooks`, {
-      headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
-      },
-    })
-    if (response.ok) {
-      const data = await response.json()
-      playbooks.value = data.playbooks
-    } else {
-      logger.error('Failed to load playbooks:', response.statusText)
-    }
+    // All four calls here built `Bearer ${sessionStorage.getItem(...)}`
+    // UNCONDITIONALLY, sending the literal `Bearer null` with no session. The
+    // client reads the same key (with a localStorage fallback) and omits the
+    // header when there is no token, and supplies the base URL, a timeout and
+    // the 401 handling these calls had none of (#13140).
+    const data = await slmApiClient.get<{ playbooks: PlaybookInfo[] }>(
+      '/infrastructure/playbooks'
+    )
+    playbooks.value = data.playbooks
   } catch (e) {
+    // A non-OK response used to be logged in an else branch and a thrown one
+    // here; `get()` rejects on both, so there is now one failure path.
     logger.error('Error loading playbooks:', e)
   } finally {
     isLoadingPlaybooks.value = false
@@ -155,16 +135,16 @@ async function execute(): Promise<void> {
   executeError.value = null
 
   try {
-    const response = await fetch(`${getSlmApiBase()}/infrastructure/execute`, {
+    // `rawRequest` keeps the `error.detail` body surfaced in `executeError`.
+    // Registering a run resolves the inventory, so it gets the longer playbook
+    // budget rather than the client's 30s default.
+    const response = await slmApiClient.rawRequest('/infrastructure/execute', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
-      },
-      body: JSON.stringify({
+      timeout: PLAYBOOK_EXECUTE_TIMEOUT_MS,
+      body: {
         playbook_id: selectedPlaybookId.value,
         variables: customVariables.value,
-      }),
+      },
     })
 
     if (!response.ok) {
@@ -194,21 +174,20 @@ function startStatusPolling(executionId: string): void {
 
 async function pollExecutionStatus(executionId: string): Promise<void> {
   try {
-    const response = await fetch(`${getSlmApiBase()}/infrastructure/executions/${executionId}`, {
-      headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
-      },
-    })
+    // `POLLED_READ_MAX_RETRIES`: this runs on a 1s interval, and the client's
+    // default GET retry (3 attempts, ~3s of exponential backoff) would leave
+    // several ticks in flight at once and make the reported status lag the run
+    // it describes. A failed tick is retried by the next tick, not in-place.
+    const data = await slmApiClient.get<{ execution: PlaybookExecution }>(
+      `/infrastructure/executions/${executionId}`,
+      { maxRetries: POLLED_READ_MAX_RETRIES }
+    )
+    currentExecution.value = data.execution
 
-    if (response.ok) {
-      const data = await response.json()
-      currentExecution.value = data.execution
-
-      // Stop polling when execution is complete
-      if (isExecutionComplete.value) {
-        stopPolling()
-        emit('executed', executionId)
-      }
+    // Stop polling when execution is complete
+    if (isExecutionComplete.value) {
+      stopPolling()
+      emit('executed', executionId)
     }
   } catch (e) {
     logger.error('Error polling execution status:', e)
@@ -219,21 +198,11 @@ async function cancelExecution(): Promise<void> {
   if (!currentExecution.value) return
 
   try {
-    const response = await fetch(
-      `${getSlmApiBase()}/infrastructure/executions/${currentExecution.value.execution_id}/cancel`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
-        },
-      }
+    const data = await slmApiClient.post<{ execution: PlaybookExecution }>(
+      `/infrastructure/executions/${currentExecution.value.execution_id}/cancel`
     )
-
-    if (response.ok) {
-      const data = await response.json()
-      currentExecution.value = data.execution
-      stopPolling()
-    }
+    currentExecution.value = data.execution
+    stopPolling()
   } catch (e) {
     logger.error('Error cancelling execution:', e)
   }

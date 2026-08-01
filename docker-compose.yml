@@ -135,6 +135,20 @@ services:
     environment:
       - ANONYMIZED_TELEMETRY=False
       - IS_PERSISTENT=TRUE
+      # #12513: CHROMA_SERVER_AUTHN_* token auth, driven by a SINGLE knob
+      # (AUTOBOT_CHROMADB_AUTH_TOKEN — same var name as the ssot_config field
+      # and the client-side env var below) via Compose's "${VAR:+alt}"
+      # substitution operator. This is deliberately atomic: the provider line
+      # only ever gets a value when the token is also set, so it's never
+      # possible to have the provider configured with empty credentials
+      # (chroma crashes at boot on that combination) or a token sent by
+      # clients while the server silently stays unauthenticated. Unset token
+      # = both lines empty = auth disabled, matching pre-#12513 behaviour
+      # (dev/local, unauthenticated HttpClient). To enable: set
+      # AUTOBOT_CHROMADB_AUTH_TOKEN in the root .env (never commit real
+      # values) — both lines below populate together.
+      - CHROMA_SERVER_AUTHN_PROVIDER=${AUTOBOT_CHROMADB_AUTH_TOKEN:+chromadb.auth.token_authn.TokenAuthenticationServerProvider}
+      - CHROMA_SERVER_AUTHN_CREDENTIALS=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
     healthcheck:
       # The chroma 1.x image is minimal (no curl/wget); use bash /dev/tcp to hit
       # the v2 heartbeat and confirm a 200 (#9717).
@@ -227,6 +241,11 @@ services:
       - AUTOBOT_LLM_FAILSAFE_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
+      # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the
+      # autobot-chromadb service above — empty by default (auth disabled,
+      # dev/local); ssot_config.misc.chromadb_auth_token omits client auth
+      # settings entirely when unset, matching an unauthenticated server.
+      - AUTOBOT_CHROMADB_AUTH_TOKEN=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
       - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
@@ -355,6 +374,11 @@ services:
       - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
+      # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the
+      # autobot-chromadb service above — empty by default (auth disabled,
+      # dev/local); ssot_config.misc.chromadb_auth_token omits client auth
+      # settings entirely when unset, matching an unauthenticated server.
+      - AUTOBOT_CHROMADB_AUTH_TOKEN=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
       # User-mgmt/RBAC tasks need the same Postgres + mode wiring as the backend.
       # Defaults to single_user; the backend entrypoint bootstraps the schema
@@ -455,6 +479,11 @@ services:
       - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
+      # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the
+      # autobot-chromadb service above — empty by default (auth disabled,
+      # dev/local); ssot_config.misc.chromadb_auth_token omits client auth
+      # settings entirely when unset, matching an unauthenticated server.
+      - AUTOBOT_CHROMADB_AUTH_TOKEN=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
     depends_on:
       autobot-redis:
         condition: service_healthy

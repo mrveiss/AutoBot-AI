@@ -89,7 +89,9 @@ describe('useKnowledgeCategories', () => {
       const result = await fetchCategory('security')
 
       expect(result).toEqual(mockCategory)
-      expect(apiClient.get).toHaveBeenCalledWith('/knowledge_base/knowledge_base/category/security')
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/knowledge_base/knowledge_base/categories/security/facts'
+      )
     })
 
     it('should throw error for invalid category', async () => {

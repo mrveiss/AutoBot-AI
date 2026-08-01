@@ -226,7 +226,7 @@ async def live_events_endpoint(websocket: WebSocket):
         # instead of a handshake 403 (project WS rule).
         await websocket.accept()
         await websocket.close(code=4001, reason="Unauthorized")
-        logger.info("Live events WebSocket rejected: invalid token")  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("Live events WebSocket rejected: invalid token")
         return
     await websocket.accept()
     logger.info(

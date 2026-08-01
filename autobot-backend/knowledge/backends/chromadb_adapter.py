@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 from knowledge.backends.base import (
     BaseClient,
     BaseCollection,
@@ -191,9 +192,8 @@ class ChromaDBClient(BaseClient):
         metadata: Metadata | None = None,
         embedding_function: Any | None = None,
     ) -> BaseCollection:
-        from datetime import datetime, timezone
 
-        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        provenance: dict = {"created_at": utc_timestamp()}
         if metadata:
             provenance.update(metadata)
         kwargs: dict = {"name": name, "metadata": provenance}
@@ -214,9 +214,8 @@ class ChromaDBClient(BaseClient):
         metadata: Metadata | None = None,
         embedding_function: Any | None = None,
     ) -> BaseCollection:
-        from datetime import datetime, timezone
 
-        provenance: dict = {"created_at": datetime.now(timezone.utc).isoformat()}
+        provenance: dict = {"created_at": utc_timestamp()}
         if metadata:
             provenance.update(metadata)
         kwargs: dict = {"name": name, "metadata": provenance}

@@ -5,7 +5,7 @@ Unit tests for KnowledgeBase async Redis initialization.
 
 Covers _init_redis_connections() which uses get_async_redis_client() (#3962).
 
-Root cause of #3962: the original code called get_redis_client(async_client=True)
+Root cause of #3962: the original code called get_async_redis_client()
 without await.  get_redis_client is a *sync* function that returns the coroutine
 produced by RedisConnectionManager.get_async_client() without awaiting it.
 Storing that coroutine in self._aioredis_client then caused:

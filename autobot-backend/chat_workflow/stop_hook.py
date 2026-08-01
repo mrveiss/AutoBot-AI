@@ -19,9 +19,8 @@ All ``.delay()`` calls are synchronous and non-blocking; they only publish
 a message to Redis.  The actual work happens in background Celery workers.
 """
 
-from datetime import datetime, timezone
-
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 
@@ -57,7 +56,7 @@ async def on_turn_complete(
         from tasks.memory_tasks import extract_facts_task as _ef  # type: ignore[assignment]
         from tasks.memory_tasks import write_verbatim_task as _wv  # type: ignore[assignment]
 
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = utc_timestamp()
 
     try:
         # Verbatim store writes — one task per role for parallelism

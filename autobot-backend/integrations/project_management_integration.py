@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
@@ -280,12 +281,13 @@ class JiraIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers, json=json_data) as resp:
-                    if resp.status == 204:
-                        return {"status_code": 204, "body": {}}
-                    body = await resp.json()
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(
+                method, url, headers=headers, json=json_data, timeout=timeout
+            ) as resp:
+                if resp.status == 204:
+                    return {"status_code": 204, "body": {}}
+                body = await resp.json()
+                return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
             self.logger.warning("Jira request to %s failed: %s", url, exc)
             return {"status_code": 0, "error": str(exc)}
@@ -496,15 +498,15 @@ class TrelloIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method,
-                    url,
-                    params=params,
-                    json=data if method != "GET" else None,
-                ) as resp:
-                    body = await resp.json()
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(
+                method,
+                url,
+                params=params,
+                json=data if method != "GET" else None,
+                timeout=timeout,
+            ) as resp:
+                body = await resp.json()
+                return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
             self.logger.warning("Trello request to %s failed: %s", url, exc)
             return {"status_code": 0, "error": str(exc)}
@@ -734,10 +736,11 @@ class AsanaIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers, json=json_data) as resp:
-                    body = await resp.json()
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(
+                method, url, headers=headers, json=json_data, timeout=timeout
+            ) as resp:
+                body = await resp.json()
+                return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
             self.logger.warning("Asana request to %s failed: %s", url, exc)
             return {"status_code": 0, "error": str(exc)}

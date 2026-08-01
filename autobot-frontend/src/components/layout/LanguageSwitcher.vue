@@ -131,8 +131,8 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   border-radius: var(--radius-md);
   background-color: transparent;
   color: var(--text-secondary);
@@ -154,7 +154,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
 
 .lang-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + var(--spacing-2));
   right: 0;
   min-width: 160px;
   background: var(--bg-secondary);
@@ -190,7 +190,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
 .lang-option__check {
   font-size: var(--font-size-xs);
   color: var(--color-primary);
-  width: 12px;
+  width: var(--spacing-3);
 }
 
 .lang-option__name {
@@ -207,7 +207,7 @@ onUnmounted(() => document.removeEventListener('click', handleOutsideClick))
 }
 
 .lang-mobile-icon {
-  width: 16px;
+  width: var(--spacing-4);
   text-align: center;
 }
 

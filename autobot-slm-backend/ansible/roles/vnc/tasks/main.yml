@@ -24,12 +24,51 @@
       - tigervnc-tools
       - x11vnc
       - websockify
-      - novnc
       - xfce4
       - xfce4-terminal
       - dbus-x11
     state: present
   become: true
+
+# --- Pinned noVNC from upstream (#13069) ---
+# The distro `novnc` package is 1.0.0 (2018) on Ubuntu 22.04 — it predates
+# VeNCrypt support and caused the unreachable-server failure in #13060. Removed
+# so the packaged copy and the pinned copy cannot diverge.
+- name: Remove distro noVNC package (superseded by pinned upstream; #13069)
+  ansible.builtin.apt:
+    name: novnc
+    state: absent
+  become: true
+
+# Upstream publishes no release assets, so the tag archive is the distribution.
+# If GitHub ever re-compresses it the checksum fails loudly, which is the safe
+# failure mode — a mismatched archive is never installed.
+- name: Download noVNC {{ novnc_version }} tarball (#13069)
+  ansible.builtin.get_url:
+    url: "https://github.com/novnc/noVNC/archive/refs/tags/v{{ novnc_version }}.tar.gz"
+    dest: "/tmp/noVNC-{{ novnc_version }}.tar.gz"
+    checksum: "sha256:{{ novnc_archive_sha256 }}"
+    mode: "0644"
+  become: true
+
+- name: Unpack noVNC {{ novnc_version }} to versioned root (#13069)
+  ansible.builtin.unarchive:
+    src: "/tmp/noVNC-{{ novnc_version }}.tar.gz"
+    dest: /opt
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ novnc_install_root }}/vnc.html"
+  become: true
+
+- name: Point {{ novnc_path }} at noVNC {{ novnc_version }} (#13069)
+  ansible.builtin.file:
+    src: "{{ novnc_install_root }}"
+    dest: "{{ novnc_path }}"
+    state: link
+    force: true
+  become: true
+  notify: restart websockify
 
 - name: Create VNC user if not exists
   ansible.builtin.user:
@@ -97,7 +136,11 @@
   become: true
   when: vnc_password_result.stdout | length > 0
 
-# --- TLS cert verification for websockify (#1962) ---
+# --- Node-level TLS cert (#1962) ---
+# Shared node keypair, also provisioned by roles/backend and setup-internal-ca.
+# Kept here so a vnc-only node still ends up with one. It stays root:root 0600
+# because nginx, Redis and PostgreSQL consume it — VNC gets its own pair below
+# rather than widening access to this key (#13060).
 - name: Ensure TLS cert directory exists
   ansible.builtin.file:
     path: /etc/autobot/certs
@@ -125,6 +168,36 @@
     chmod 0600 /etc/autobot/certs/server-key.pem
   become: true
   when: tls_cert_check.results | selectattr('stat.exists', 'equalto', false) | list | length > 0
+
+# --- Dedicated VNC keypair (#13060) ---
+# Xvnc (for the X509Vnc security type) and websockify (--ssl-only) both run as
+# {{ vnc_user }} and must be able to read this key. Previously websockify pointed
+# at the shared node key above, which is root:root 0600 — so the --ssl-only unit
+# could never start.
+- name: Generate dedicated VNC TLS keypair (#13060)
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -newkey rsa:2048 -nodes
+      -keyout {{ vnc_tls_key }}
+      -out {{ vnc_tls_cert }}
+      -days 3650
+      -subj /CN={{ inventory_hostname }}.autobot.internal
+    creates: "{{ vnc_tls_key }}"
+  become: true
+
+- name: Restrict VNC TLS keypair to the VNC user (#13060)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ vnc_user }}"
+    group: "{{ vnc_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: "{{ vnc_tls_cert }}", mode: "0644"}
+    - {path: "{{ vnc_tls_key }}", mode: "0600"}
+  become: true
+  notify:
+    - restart vnc-server
+    - restart websockify
 
 - name: Deploy VNC xstartup script
   ansible.builtin.template:

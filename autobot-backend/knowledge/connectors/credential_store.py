@@ -233,11 +233,19 @@ class ConnectorCredentialStore:
         Raises PermissionError on owner mismatch, LookupError when the secret is
         missing or holds no refresh token while the access token is expired.
         Propagates RuntimeError from the token endpoint on a failed refresh.
+
+        When the vault-read flag is on, the vault envelope store is tried first
+        (matching :meth:`load`'s expand-phase read-first behaviour, #10088 Task 5) —
+        OAuth-managed connector tokens follow the same cutover path as static creds.
         """
-        secret = await asyncio.get_running_loop().run_in_executor(
-            None,
-            lambda: self._svc.get_secret(secret_id=secret_id, include_value=True, accessed_by=owner_id),
-        )
+        secret = None
+        if _vault_read_enabled():
+            secret = await load_imported_credential(secret_id, owner_id)
+        if secret is None:
+            secret = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: self._svc.get_secret(secret_id=secret_id, include_value=True, accessed_by=owner_id),
+            )
         if secret is None:
             raise LookupError(f"OAuth secret {secret_id!r} not found or expired")
         stored_owner = secret.get("created_by") or ""

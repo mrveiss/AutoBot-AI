@@ -9,131 +9,75 @@
  * Provides REST API integration for user management via the SLM backend.
  * Manages both SLM admin users (local DB) and AutoBot application users (remote DB).
  * Issue #576 - User Management System.
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()`, injects the SLM bearer token,
+ * and centrally handles 401 for these non-auth endpoints (clear session +
+ * redirect to `/login`) — matching the previous axios interceptor that called
+ * `authStore.logout()`. Query parameters (skip/limit) are serialised onto the
+ * endpoint since the canonical client takes a relative path, not an axios
+ * `params` object; call sites receive parsed JSON directly.
+ *
+ * Contract types (#12420 Phase 3): the request/response shapes below are DERIVED
+ * from the generated OpenAPI schema (`@/types/generated/api`), which is produced
+ * from the SLM backend's own Pydantic models and CI-guarded by
+ * `verify-generated-types-slm`. Do not hand-declare them — a backend schema
+ * change must surface here as a type error, not as a silent runtime mismatch.
  */
 
-import axios, { type AxiosInstance } from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
-
-// SLM API is proxied via nginx at /api/
-const SLM_API_BASE = getSlmApiBase()
+import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
 // =============================================================================
-// Type Definitions
+// Type Definitions — derived from the generated OpenAPI contract
 // =============================================================================
 
-export interface RoleResponse {
-  id: string
-  name: string
-  description: string | null
-  is_system: boolean
-}
+// Both /slm-users and /autobot-users serve the `autobot_shared` user schemas
+// (the generated names are FastAPI's disambiguation of two same-named models).
+export type RoleResponse =
+  components['schemas']['autobot_shared__user_management__schemas__user__RoleResponse']
+export type SlmUserResponse =
+  components['schemas']['autobot_shared__user_management__schemas__user__UserResponse']
+export type SlmUserListResponse = components['schemas']['UserListResponse']
+export type CreateUserPayload =
+  components['schemas']['autobot_shared__user_management__schemas__user__UserCreate']
+export type PasswordChange = components['schemas']['PasswordChange']
 
-export interface SlmUserResponse {
-  id: string
-  email: string
-  username: string
-  display_name: string | null
-  bio: string | null
-  avatar_url: string | null
-  org_id: string | null
-  is_active: boolean
-  is_verified: boolean
-  mfa_enabled: boolean
-  is_platform_admin: boolean
-  preferences: Record<string, unknown>
-  roles: RoleResponse[]
-  last_login_at: string | null
-  created_at: string
-  updated_at: string
-}
+export type TeamResponse = components['schemas']['TeamResponse']
+export type TeamListResponse = components['schemas']['TeamListResponse']
+export type CreateTeamPayload = components['schemas']['TeamCreate']
+export type TeamMemberAdd = components['schemas']['TeamMemberAdd']
 
-export interface SlmUserListResponse {
-  users: SlmUserResponse[]
-  total: number
-  limit: number
-  offset: number
-}
-
-export interface TeamResponse {
-  id: string
-  name: string
-  description: string | null
-  organization_id: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface TeamListResponse {
-  teams: TeamResponse[]
-  total: number
-  limit: number
-  offset: number
-}
-
-export interface CreateUserPayload {
-  email: string
-  username: string
-  password: string
-  display_name?: string
-  role_ids?: string[]
-}
-
-export interface CreateTeamPayload {
-  name: string
-  description?: string
-  organization_id?: string
+// Serialise pagination params onto the endpoint (the canonical client takes a
+// relative path, not an axios `params` object).
+function withPaging(path: string, skip: number, limit: number): string {
+  const query = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit),
+  })
+  return `${path}?${query.toString()}`
 }
 
 export function useSlmUserApi() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: SLM_API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000,
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
-
   // ===========================================================================
   // SLM Admin Users (local SLM database)
   // ===========================================================================
 
   async function getSlmUsers(skip = 0, limit = 100): Promise<SlmUserListResponse> {
-    const response = await client.get<SlmUserListResponse>('/slm-users', {
-      params: { skip, limit },
-    })
-    return response.data
+    return slmApiClient.get<SlmUserListResponse>(withPaging('/slm-users', skip, limit))
   }
 
   async function createSlmUser(data: CreateUserPayload): Promise<SlmUserResponse> {
-    const response = await client.post<SlmUserResponse>('/slm-users', data)
-    return response.data
+    return slmApiClient.post<SlmUserResponse>('/slm-users', data)
   }
 
   async function deleteSlmUser(userId: string): Promise<void> {
-    await client.delete(`/slm-users/${userId}`)
+    await slmApiClient.delete(`/slm-users/${userId}`)
   }
 
   async function changeSlmUserPassword(userId: string, newPassword: string): Promise<void> {
-    await client.post(`/slm-users/${userId}/change-password`, { new_password: newPassword })
+    const body: PasswordChange = { new_password: newPassword }
+    await slmApiClient.post(`/slm-users/${userId}/change-password`, body)
   }
 
   // ===========================================================================
@@ -141,23 +85,20 @@ export function useSlmUserApi() {
   // ===========================================================================
 
   async function getAutobotUsers(skip = 0, limit = 100): Promise<SlmUserListResponse> {
-    const response = await client.get<SlmUserListResponse>('/autobot-users', {
-      params: { skip, limit },
-    })
-    return response.data
+    return slmApiClient.get<SlmUserListResponse>(withPaging('/autobot-users', skip, limit))
   }
 
   async function createAutobotUser(data: CreateUserPayload): Promise<SlmUserResponse> {
-    const response = await client.post<SlmUserResponse>('/autobot-users', data)
-    return response.data
+    return slmApiClient.post<SlmUserResponse>('/autobot-users', data)
   }
 
   async function deleteAutobotUser(userId: string): Promise<void> {
-    await client.delete(`/autobot-users/${userId}`)
+    await slmApiClient.delete(`/autobot-users/${userId}`)
   }
 
   async function changeAutobotUserPassword(userId: string, newPassword: string): Promise<void> {
-    await client.post(`/autobot-users/${userId}/change-password`, { new_password: newPassword })
+    const body: PasswordChange = { new_password: newPassword }
+    await slmApiClient.post(`/autobot-users/${userId}/change-password`, body)
   }
 
   // ===========================================================================
@@ -165,19 +106,15 @@ export function useSlmUserApi() {
   // ===========================================================================
 
   async function getTeams(skip = 0, limit = 100): Promise<TeamListResponse> {
-    const response = await client.get<TeamListResponse>('/autobot-teams', {
-      params: { skip, limit },
-    })
-    return response.data
+    return slmApiClient.get<TeamListResponse>(withPaging('/autobot-teams', skip, limit))
   }
 
   async function createTeam(data: CreateTeamPayload): Promise<TeamResponse> {
-    const response = await client.post<TeamResponse>('/autobot-teams', data)
-    return response.data
+    return slmApiClient.post<TeamResponse>('/autobot-teams', data)
   }
 
   async function deleteTeam(teamId: string): Promise<void> {
-    await client.delete(`/autobot-teams/${teamId}`)
+    await slmApiClient.delete(`/autobot-teams/${teamId}`)
   }
 
   async function addTeamMember(
@@ -185,14 +122,12 @@ export function useSlmUserApi() {
     userId: string,
     role = 'member'
   ): Promise<void> {
-    await client.post(`/autobot-teams/${teamId}/members`, {
-      user_id: userId,
-      role,
-    })
+    const body: TeamMemberAdd = { user_id: userId, role }
+    await slmApiClient.post(`/autobot-teams/${teamId}/members`, body)
   }
 
   async function removeTeamMember(teamId: string, userId: string): Promise<void> {
-    await client.delete(`/autobot-teams/${teamId}/members/${userId}`)
+    await slmApiClient.delete(`/autobot-teams/${teamId}/members/${userId}`)
   }
 
   return {

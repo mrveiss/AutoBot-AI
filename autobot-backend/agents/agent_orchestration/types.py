@@ -160,12 +160,10 @@ class AgentCapabilityDescriptor:
     resource_usage: str
 
 
-class CircuitState(Enum):
-    """Circuit breaker state for a distributed agent (Issue #4694)."""
-
-    CLOSED = "closed"  # Normal operation — agent receives tasks.
-    OPEN = "open"  # Agent quarantined — excluded from routing.
-    HALF_OPEN = "half_open"  # Recovery probe: one task allowed; result decides next state.
+# #12656: converged onto the canonical enum. Semantics per member are unchanged
+# for a distributed agent — CLOSED: receives tasks; OPEN: quarantined, excluded
+# from routing; HALF_OPEN: one probe task allowed, its result decides.
+from autobot_shared.ssot_constants import CircuitState  # noqa: F401
 
 
 @dataclass

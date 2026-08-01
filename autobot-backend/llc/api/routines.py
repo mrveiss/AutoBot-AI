@@ -12,6 +12,14 @@ Routes:
   DELETE /api/llc/routines/{routine_id}
   GET    /api/llc/routines/{routine_id}/runs
   POST   /api/llc/routines/{routine_id}/trigger
+
+Tenant isolation (#12215): every handler requires ``require_org_context`` and
+enforces ``assert_company_access`` — company-scoped routes against the path
+``company_id``, resource-scoped routes against the fetched routine's
+``company_id`` (see ``docs/llc/tenant-context.md``). Previously this router
+had no tenant check at all: any authenticated user could list/create routines
+for an arbitrary company, or read/update/delete/trigger any other company's
+routine by UUID.
 """
 
 import time
@@ -27,9 +35,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import get_current_user
+from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.redis_client import get_async_redis_client
-from llc.deps import get_session, service_dep
+from llc.deps import assert_company_access, get_session, service_dep
+from user_management.services import TenantContext
 
 from ..models.enums import RoutineProduces, RoutineStatus
 from ..scheduler.routine_scheduler import _SCHEDULE_KEY
@@ -104,6 +113,20 @@ class TriggerResponse(BaseModel):
     message: str = "Routine scheduled for immediate execution"
 
 
+async def _load_owned_routine(session: AsyncSession, routine_id: uuid.UUID, ctx: TenantContext):
+    """Fetch a routine by id; 404 if missing or owned by another company.
+
+    Shared IDOR guard for the resource-level routine routes (#12215), mirrors
+    ``llc.deps.load_authorized`` — 404 (not 403) so a cross-tenant caller
+    can't distinguish "not my routine" from "doesn't exist".
+    """
+    routine = await _service().get(session, routine_id)
+    if routine is None:
+        raise HTTPException(status_code=404, detail="Routine not found")
+    assert_company_access(ctx, routine.company_id)
+    return routine
+
+
 # ------------------------------------------------------------------
 # Company-scoped routes
 # ------------------------------------------------------------------
@@ -117,7 +140,9 @@ async def list_routines(
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[RoutineRead]:
+    assert_company_access(ctx, company_id)
     routines = await _service().list(
         session,
         company_id=company_id,
@@ -138,7 +163,9 @@ async def create_routine(
     body: RoutineCreate,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
+    assert_company_access(ctx, company_id)
     if croniter is None:
         raise HTTPException(status_code=503, detail="Routine scheduling unavailable — croniter not installed")
     if not croniter.is_valid(body.cron_schedule):
@@ -179,10 +206,9 @@ async def get_routine(
     routine_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
-    routine = await _service().get(session, routine_id)
-    if routine is None:
-        raise HTTPException(status_code=404, detail="Routine not found")
+    routine = await _load_owned_routine(session, routine_id, ctx)
     return RoutineRead.model_validate(routine)
 
 
@@ -192,7 +218,9 @@ async def update_routine(
     body: RoutineUpdate,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> RoutineRead:
+    await _load_owned_routine(session, routine_id, ctx)
     updates = body.model_dump(exclude_unset=True)
     new_cron = updates.get("cron_schedule")
     if croniter is None and new_cron is not None:
@@ -229,10 +257,9 @@ async def delete_routine(
     routine_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
-    routine = await _service().get(session, routine_id)
-    if routine is None:
-        raise HTTPException(status_code=404, detail="Routine not found")
+    await _load_owned_routine(session, routine_id, ctx)
     await _service().delete(session, routine_id)
     await session.commit()
 
@@ -244,10 +271,9 @@ async def list_routine_runs(
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[RoutineRunRead]:
-    routine = await _service().get(session, routine_id)
-    if routine is None:
-        raise HTTPException(status_code=404, detail="Routine not found")
+    await _load_owned_routine(session, routine_id, ctx)
     runs = await _service().list_runs(session, routine_id, limit=limit, offset=offset)
     return [RoutineRunRead.model_validate(r) for r in runs]
 
@@ -261,10 +287,9 @@ async def trigger_routine(
     routine_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> TriggerResponse:
-    routine = await _service().get(session, routine_id)
-    if routine is None:
-        raise HTTPException(status_code=404, detail="Routine not found")
+    routine = await _load_owned_routine(session, routine_id, ctx)
     if routine.status != RoutineStatus.ACTIVE:
         raise HTTPException(status_code=409, detail="Routine is not active")
     # Schedule for immediate dispatch — the scheduler creates the run record when it fires,

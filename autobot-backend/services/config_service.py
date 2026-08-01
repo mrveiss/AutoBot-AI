@@ -351,10 +351,19 @@ class ConfigService:
     @staticmethod
     def get_redis_config() -> Metadata:
         """
-        Get current Redis configuration.
+        Get current Redis task-transport configuration.
 
         SSOT Migration (Issue #602):
             Host and port now default to SSOT config values.
+
+        Issue #12748: NOT a fork of config.service_config.ServiceConfigMixin.
+        get_redis_config() (the canonical core connection config). This
+        method resolves the "task_transport.redis" section — used by the
+        redis-backed task queue/pubsub transport, keyed to db_tasks — a
+        different scope/owner than the core cache/connection config (keyed
+        to db_main), sharing only the method name. Consumed by
+        GET/POST /api/redis/config (api/redis.py) for editing transport
+        settings from the frontend. Intentionally left unconverged.
         """
         try:
             task_transport_config = unified_config_manager.get("task_transport", {})

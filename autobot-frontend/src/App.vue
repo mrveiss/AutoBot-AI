@@ -52,7 +52,7 @@
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 shrink-0"
                 >
                   <div class="flex items-center gap-1">
-                    <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" :viewBox="item.iconViewBox || '0 0 20 20'" xmlns="http://www.w3.org/2000/svg">
                       <template v-if="item.iconPaths">
                         <path v-for="(p, pi) in item.iconPaths" :key="pi" :d="p" :fill-rule="item.iconRule" :clip-rule="item.iconRule"></path>
                       </template>
@@ -149,7 +149,7 @@
                     class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
                     @click="showProfileDropdown = false"
                   >
-                    <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                    <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" :viewBox="item.iconViewBox || '0 0 20 20'" aria-hidden="true">
                       <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
                     </svg>
                     <span>{{ $t(item.labelKey) }}</span>
@@ -167,7 +167,7 @@
                       class="flex items-center gap-2 px-3 py-2 text-sm transition-colors duration-150 hover:bg-autobot-bg-tertiary text-autobot-text-primary"
                       @click="showProfileDropdown = false"
                     >
-                      <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                      <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" :viewBox="item.iconViewBox || '0 0 20 20'" aria-hidden="true">
                         <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
                       </svg>
                       <span>{{ $t(item.labelKey) }}</span>
@@ -243,7 +243,7 @@
               class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center gap-2">
-                <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <svg class="w-4 h-4" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" :viewBox="item.iconViewBox || '0 0 20 20'" xmlns="http://www.w3.org/2000/svg">
                   <template v-if="item.iconPaths">
                     <path v-for="(p, pi) in item.iconPaths" :key="pi" :d="p" :fill-rule="item.iconRule" :clip-rule="item.iconRule"></path>
                   </template>
@@ -296,7 +296,7 @@
                 }"
                 class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
               >
-                <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" :viewBox="item.iconViewBox || '0 0 20 20'" aria-hidden="true">
                   <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
                 </svg>
                 <span>{{ $t(item.labelKey) }}</span>
@@ -318,7 +318,7 @@
                   }"
                   class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
-                  <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" viewBox="0 0 20 20" aria-hidden="true">
+                  <svg class="w-4 h-4 shrink-0" :fill="item.iconStroke ? 'none' : 'currentColor'" :stroke="item.iconStroke ? 'currentColor' : undefined" :viewBox="item.iconViewBox || '0 0 20 20'" aria-hidden="true">
                     <path :d="item.icon" :fill-rule="item.iconRule" :clip-rule="item.iconRule" :stroke-linecap="item.iconStroke ? 'round' : undefined" :stroke-linejoin="item.iconStroke ? 'round' : undefined" :stroke-width="item.iconStroke ? '2' : undefined" />
                   </svg>
                   <span>{{ $t(item.labelKey) }}</span>
@@ -488,7 +488,11 @@
     />
 
     <!-- Telemetry Consent Modal (Issue #9035) -->
-    <TelemetryConsentModal />
+    <!-- Gated behind authentication (#12334): the consent prompt persists its
+         choice via authenticated endpoints, so mounting it on the login/
+         unauthenticated route overlaid the Sign In form and 401'd, re-nagging
+         forever. Defer until after successful login. -->
+    <TelemetryConsentModal v-if="userStore.isAuthenticated" />
 
     <!-- System Status Notifications (limit to last 5 to prevent teleport accumulation) -->
     <SystemStatusNotification

@@ -33,6 +33,8 @@ def mock_redis():
     redis.expire = AsyncMock()
     redis.lrange = AsyncMock(return_value=[])
     redis.delete = AsyncMock()
+    # GH#11534: persist normalizes then caps distinct keys via a SCAN sweep.
+    redis.scan = AsyncMock(return_value=(0, []))
     return redis
 
 
@@ -84,7 +86,7 @@ class TestTaskOutcomeJudge:
     async def test_get_outcomes_returns_records(self, judge, mock_redis):
         judge._redis_client = mock_redis
         record = TaskOutcomeRecord(
-            task_type="t",
+            task_type="code_generation",
             goal="g",
             output_summary="o",
             strategy_used="s",
@@ -93,17 +95,26 @@ class TestTaskOutcomeJudge:
             timestamp="2025-01-01T00:00:00",
         )
         mock_redis.lrange.return_value = [json.dumps(record.__dict__).encode()]
-        outcomes = await judge.get_outcomes("t", tenant_id="org1")
+        outcomes = await judge.get_outcomes("code_generation", tenant_id="org1")
         assert len(outcomes) == 1
         assert outcomes[0].score == 0.7
         # GH#11071: read from the tenant-scoped key
-        assert mock_redis.lrange.await_args.args[0] == "task:outcomes:org1:t"
+        assert mock_redis.lrange.await_args.args[0] == "task:outcomes:org1:code_generation"
 
     @pytest.mark.asyncio
     async def test_clear_outcomes(self, judge, mock_redis):
         judge._redis_client = mock_redis
-        await judge.clear_outcomes("mytype", tenant_id="org1")
-        mock_redis.delete.assert_awaited_once_with(REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="mytype"))
+        await judge.clear_outcomes("code_generation", tenant_id="org1")
+        mock_redis.delete.assert_awaited_once_with(
+            REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="code_generation")
+        )
+
+    @pytest.mark.asyncio
+    async def test_clear_outcomes_buckets_unknown_to_other(self, judge, mock_redis):
+        """GH#11534: an unknown free-form type resolves to the shared 'other' key."""
+        judge._redis_client = mock_redis
+        await judge.clear_outcomes("some_free_form_type", tenant_id="org1")
+        mock_redis.delete.assert_awaited_once_with(REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="other"))
 
     @pytest.mark.asyncio
     async def test_persist_outcome_trims_list(self, judge, mock_redis):
@@ -125,10 +136,35 @@ class TestTaskOutcomeJudge:
             processing_time_ms=10.0,
             llm_model_used="test",
         )
-        await judge._persist_outcome("t", "goal", "output", "strategy", result, tenant_id="org1")
+        await judge._persist_outcome("code_generation", "goal", "output", "strategy", result, tenant_id="org1")
         mock_redis.ltrim.assert_awaited_once_with(
-            REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="t"), 0, MAX_OUTCOMES_PER_TYPE - 1
+            REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="code_generation"), 0, MAX_OUTCOMES_PER_TYPE - 1
         )
+
+    @pytest.mark.asyncio
+    async def test_persist_outcome_normalizes_unknown_to_other(self, judge, mock_redis):
+        """GH#11534: a free-form task_type is bucketed to 'other' before persisting,
+        keeping the judge's key in agreement with TaskPatternLearner."""
+        judge._redis_client = mock_redis
+        from judges import JudgmentConfidence, JudgmentResult
+
+        result = JudgmentResult(
+            subject_id="x",
+            judge_type="task_outcome",
+            timestamp=datetime_now(),
+            overall_score=0.6,
+            recommendation="APPROVE",
+            confidence=JudgmentConfidence.MEDIUM,
+            criterion_scores=[],
+            reasoning="ok",
+            alternatives_considered=[],
+            improvement_suggestions=[],
+            context_used={},
+            processing_time_ms=10.0,
+            llm_model_used="test",
+        )
+        await judge._persist_outcome("totally-random type", "g", "o", "s", result, tenant_id="org1")
+        assert mock_redis.lpush.await_args.args[0] == REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type="other")
 
     @pytest.mark.asyncio
     async def test_persist_outcome_redis_failure_does_not_raise(self, judge):
@@ -153,6 +189,35 @@ class TestTaskOutcomeJudge:
         )
         # Should not raise
         await judge._persist_outcome("t", "g", "o", "s", result, tenant_id="org1")
+
+    @pytest.mark.asyncio
+    async def test_judge_and_learner_agree_on_persisted_key(self, judge, mock_redis):
+        """GH#11534: the judge persists an outcome under exactly the key the
+        TaskPatternLearner would read/write for the same task_type input."""
+        from agents.task_pattern_learner import normalize_task_type
+
+        judge._redis_client = mock_redis
+        from judges import JudgmentConfidence, JudgmentResult
+
+        result = JudgmentResult(
+            subject_id="x",
+            judge_type="task_outcome",
+            timestamp=datetime_now(),
+            overall_score=0.6,
+            recommendation="APPROVE",
+            confidence=JudgmentConfidence.MEDIUM,
+            criterion_scores=[],
+            reasoning="ok",
+            alternatives_considered=[],
+            improvement_suggestions=[],
+            context_used={},
+            processing_time_ms=10.0,
+            llm_model_used="test",
+        )
+        raw_type = "Code-Generation"
+        await judge._persist_outcome(raw_type, "g", "o", "s", result, tenant_id="org1")
+        expected = REDIS_OUTCOMES_KEY.format(tenant_id="org1", task_type=normalize_task_type(raw_type))
+        assert mock_redis.lpush.await_args.args[0] == expected
 
     @pytest.mark.asyncio
     async def test_prepare_judgment_prompt_contains_goal(self):

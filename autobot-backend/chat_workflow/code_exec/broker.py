@@ -90,9 +90,9 @@ class CodeExecBroker:
 
     async def _emit_audit(self, tool: str, params_hash: str, ok: bool) -> None:
         try:
-            from autobot_shared.redis_client import get_redis_client  # lazy import
+            from autobot_shared.redis_client import get_async_redis_client  # lazy import
 
-            rc = get_redis_client(async_client=True)
+            rc = await get_async_redis_client()
             await rc.xadd(
                 self._security_key,
                 {"run_id": self._run_id, "tool": tool, "params_hash": params_hash, "ok": str(ok)},

@@ -171,7 +171,7 @@ async def index_codebase(request: CodeSearchIndexRequest):
         result = await index_project(request.root_path, request.force_reindex)
 
         if result["status"] == "success":
-            return JSONResponse(  # codeql[py/stack-trace-exposure]
+            return JSONResponse(
                 status_code=200,
                 content={
                     "message": "Codebase indexed successfully",
@@ -182,7 +182,7 @@ async def index_codebase(request: CodeSearchIndexRequest):
                 },
             )
         elif result["status"] == "already_indexed":
-            return JSONResponse(  # codeql[py/stack-trace-exposure]
+            return JSONResponse(
                 status_code=200,
                 content={
                     "message": "Codebase already indexed",
@@ -191,7 +191,7 @@ async def index_codebase(request: CodeSearchIndexRequest):
                 },
             )
         else:
-            return JSONResponse(  # codeql[py/stack-trace-exposure]
+            return JSONResponse(
                 status_code=500,
                 content={
                     "error": "Indexing failed",

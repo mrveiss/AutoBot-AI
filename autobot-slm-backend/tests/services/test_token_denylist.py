@@ -33,7 +33,22 @@ sys.path.insert(0, str(_ROOT))
 # ---------------------------------------------------------------------------
 # Pre-populate sys.modules stubs BEFORE loading the real service modules via
 # spec_from_file_location so their top-level imports resolve cleanly.
+#
+# #13084: snapshot sys.modules (and the ``services`` module's own
+# ``token_denylist`` attribute) BEFORE the stub-heavy bootstrap so everything
+# can be rolled back afterward. Previously ``sys.modules["config"] = MagicMock()``
+# and the stub loop below ran unconditionally with no restore — in a
+# whole-backend sweep this silently shadowed the REAL ``config`` module for
+# every test collected afterward in the same session, including
+# ``autobot-backend/utils/thread_safety_test.py::test_concurrent_config_saves``,
+# whose own config-file redirect then resolved against this throwaway stub
+# instead of the real ``ConfigService`` singleton and wrote unpatched to the
+# developer's real ``config/config.yaml`` (#13083, the severity bar for this
+# issue).
 # ---------------------------------------------------------------------------
+_PRE_BOOTSTRAP_MODULES = dict(sys.modules)
+_PRE_BOOTSTRAP_SERVICES_HAD_DENYLIST = "services" in sys.modules and hasattr(sys.modules["services"], "token_denylist")
+
 _SECRET_KEY = "test-secret-key-for-jti-tests-32chars"
 _EXPIRE_MINUTES = 30
 
@@ -96,6 +111,24 @@ _auth_spec.loader.exec_module(_auth_mod)  # type: ignore[union-attr]
 
 AuthService = _auth_mod.AuthService
 
+# ---------------------------------------------------------------------------
+# #13084: restore the pre-bootstrap sys.modules state (see snapshot above).
+# Tests only use the module/attribute references captured above (_dl_mod,
+# _auth_mod, revoke_jti, is_jti_revoked, _denylist_key, AuthService), so none
+# of the forced stubs — including ``config`` — may outlive this module's
+# import.
+# ---------------------------------------------------------------------------
+for _k in list(sys.modules):
+    if _k not in _PRE_BOOTSTRAP_MODULES:
+        del sys.modules[_k]
+    elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
+        sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
+del _PRE_BOOTSTRAP_MODULES
+
+if not _PRE_BOOTSTRAP_SERVICES_HAD_DENYLIST and "services" in sys.modules:
+    if hasattr(sys.modules["services"], "token_denylist"):
+        delattr(sys.modules["services"], "token_denylist")
+
 
 # ---------------------------------------------------------------------------
 # Helper: async Redis mock
@@ -138,31 +171,31 @@ class TestRevokeJti:
     async def test_stores_key_with_ttl(self):
         redis_mock = _make_redis_mock()
         get_client = AsyncMock(return_value=redis_mock)
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             await revoke_jti("jti-001", ttl_seconds=600)
 
-        get_client.assert_called_once_with(async_client=True)
+        get_client.assert_called_once_with()
         redis_mock.set.assert_awaited_once_with("slm:jwt:denylist:jti-001", "1", ex=600)
 
     @pytest.mark.asyncio
     async def test_ttl_clamped_to_minimum_1(self):
         redis_mock = _make_redis_mock()
         get_client = AsyncMock(return_value=redis_mock)
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             await revoke_jti("jti-002", ttl_seconds=-5)
 
-        get_client.assert_called_once_with(async_client=True)
+        get_client.assert_called_once_with()
         _, kwargs = redis_mock.set.call_args
         assert kwargs["ex"] >= 1
 
     @pytest.mark.asyncio
     async def test_noop_when_redis_unavailable(self):
-        """revoke_jti must not raise when get_redis_client returns None."""
+        """revoke_jti must not raise when get_async_redis_client returns None."""
         get_client = AsyncMock(return_value=None)
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             await revoke_jti("jti-003", ttl_seconds=60)  # must not raise
 
-        get_client.assert_called_once_with(async_client=True)
+        get_client.assert_called_once_with()
 
 
 # ---------------------------------------------------------------------------
@@ -175,10 +208,10 @@ class TestIsJtiRevoked:
     async def test_returns_true_when_key_exists(self):
         redis_mock = _make_redis_mock(exists_return=1)
         get_client = AsyncMock(return_value=redis_mock)
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             result = await is_jti_revoked("jti-exists")
 
-        get_client.assert_called_once_with(async_client=True)
+        get_client.assert_called_once_with()
         assert result is True
         redis_mock.exists.assert_awaited_once_with("slm:jwt:denylist:jti-exists")
 
@@ -186,20 +219,20 @@ class TestIsJtiRevoked:
     async def test_returns_false_when_key_absent(self):
         redis_mock = _make_redis_mock(exists_return=0)
         get_client = AsyncMock(return_value=redis_mock)
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             result = await is_jti_revoked("jti-absent")
 
-        get_client.assert_called_once_with(async_client=True)
+        get_client.assert_called_once_with()
         assert result is False
 
     @pytest.mark.asyncio
     async def test_returns_false_when_redis_unavailable(self):
         """Fail-open: no crash, returns False."""
         get_client = AsyncMock(return_value=None)
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             result = await is_jti_revoked("jti-no-redis")
 
-        get_client.assert_called_once_with(async_client=True)
+        get_client.assert_called_once_with()
         assert result is False
 
 
@@ -293,8 +326,8 @@ class TestDecodeTokenAsyncRevocation:
 class TestBoundedRedisAccess:
     @pytest.mark.asyncio
     async def test_hanging_client_acquisition_is_cut_by_deadline(self):
-        """A hanging get_redis_client (retry-under-lock) must not hang auth:
-        the deadline cuts it and the check fails open (#11443)."""
+        """A hanging get_async_redis_client (retry-under-lock) must not hang
+        auth: the deadline cuts it and the check fails open (#11443)."""
         import asyncio as _asyncio
 
         async def _hang(*a, **kw):
@@ -302,7 +335,7 @@ class TestBoundedRedisAccess:
 
         with (
             patch.object(_dl_mod, "_REDIS_DEADLINE_SECONDS", 0.05),
-            patch.object(_dl_mod, "get_redis_client", new=_hang),
+            patch.object(_dl_mod, "get_async_redis_client", new=_hang),
         ):
             loop = _asyncio.get_event_loop()
             start = loop.time()
@@ -317,7 +350,7 @@ class TestBoundedRedisAccess:
         """After a failure, subsequent checks skip Redis entirely for the
         fail-open window instead of re-paying the deadline (#11443)."""
         get_client = AsyncMock(return_value=None)
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             assert await is_jti_revoked("jti-a") is False  # arms the window
             assert await is_jti_revoked("jti-b") is False  # short-circuits
 
@@ -329,6 +362,6 @@ class TestBoundedRedisAccess:
         redis_mock = _make_redis_mock(exists_return=1)
         get_client = AsyncMock(return_value=redis_mock)
         _dl_mod._unavailable_until = 0.0
-        with patch.object(_dl_mod, "get_redis_client", get_client):
+        with patch.object(_dl_mod, "get_async_redis_client", get_client):
             assert await is_jti_revoked("jti-ok") is True
         assert _dl_mod._unavailable_until == 0.0

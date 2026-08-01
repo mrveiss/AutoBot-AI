@@ -35,7 +35,10 @@ const success = ref<string | null>(null)
 const liveMetrics = ref<NPUWorkerMetrics | null>(null)
 const showConfigSection = ref(false)
 
-const workerConfig = reactive<NPUWorkerConfig>({
+// #13138: `assigned_models` is `default_factory=list` server-side and therefore
+// OPTIONAL in the contract, but this form always keeps a concrete array so the
+// checkbox list and `toggleModel` have something to index.
+const workerConfig = reactive<NPUWorkerConfig & { assigned_models: string[] }>({
   priority: 1,
   weight: 1,
   max_concurrent: 1,
@@ -78,7 +81,8 @@ const tempColor = computed(() => {
 async function loadWorkerConfig(): Promise<void> {
   const cfg = await fleetStore.fetchNpuWorkerConfig(props.node.node_id)
   if (cfg) {
-    Object.assign(workerConfig, cfg)
+    // The response may omit `assigned_models` entirely — keep the array.
+    Object.assign(workerConfig, cfg, { assigned_models: cfg.assigned_models ?? [] })
   }
 }
 

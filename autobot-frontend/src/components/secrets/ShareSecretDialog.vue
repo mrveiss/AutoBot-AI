@@ -10,10 +10,7 @@
 import { ref, computed, toRef, watch } from 'vue'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useBatchSelection } from '@/composables/useBatchSelection'
-import { useFocusTrap } from '@/composables/useFocusTrap'
-import { useFocusRestore } from '@/composables/useFocusRestore'
-import { useInitialFocus } from '@/composables/useInitialFocus'
-import { useBodyScrollLock } from '@/composables/useBodyScrollLock'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
 
 const { sessionPresence, shareSecretWithSession } = useSessionCollaboration()
 

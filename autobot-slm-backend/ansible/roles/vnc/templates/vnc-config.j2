@@ -12,5 +12,10 @@ depth={{ vnc_depth }}
 SecurityTypes={{ vnc_security_type }}
 localhost=no
 
+# X509 material for the X509Vnc security type (#13060). Dedicated VNC keypair —
+# readable by {{ vnc_user }}, unlike the shared root:root 0600 node key.
+X509Cert={{ vnc_tls_cert }}
+X509Key={{ vnc_tls_key }}
+
 # Performance settings
 AlwaysShared={{ vnc_always_shared | default(0) }}

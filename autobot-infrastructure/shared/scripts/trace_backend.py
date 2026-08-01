@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Function Call Tracer for Backend
@@ -33,7 +34,7 @@ class FunctionTracer:
         self.call_count = 0
 
         # Clear the log file
-        with open(self.output_file, "w") as f:
+        with open(self.output_file, "w", encoding="utf-8") as f:
             f.write("BACKEND FUNCTION CALL TRACE\n")
             f.write("=" * 50 + "\n\n")
 
@@ -62,7 +63,7 @@ class FunctionTracer:
                 self.start_times[id(frame)] = timestamp
 
                 # Log the call
-                with open(self.output_file, "a") as f:
+                with open(self.output_file, "a", encoding="utf-8") as f:
                     f.write(f"{indent}→ {func_name}() [{Path(filename).name}:{lineno}] @{timestamp:.6f}\n")
 
                 # Print to console for real-time monitoring
@@ -78,13 +79,13 @@ class FunctionTracer:
                 indent = "  " * len(self.call_stack)
 
                 # Log the return with duration
-                with open(self.output_file, "a") as f:
+                with open(self.output_file, "a", encoding="utf-8") as f:
                     f.write(f"{indent}← {call_info['name']}() DONE ({duration:.6f}s)\n")
 
                 # Highlight slow functions (> 0.1s)
                 if duration > 0.1:
                     print(f"{indent}← {call_info['name']}() SLOW: {duration:.3f}s ⚠️")
-                    with open(self.output_file, "a") as f:
+                    with open(self.output_file, "a", encoding="utf-8") as f:
                         f.write(f"{indent}*** SLOW FUNCTION: {duration:.6f}s ***\n")
 
         return self.trace_calls

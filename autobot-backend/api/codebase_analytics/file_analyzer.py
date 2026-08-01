@@ -12,6 +12,7 @@ import asyncio
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from utils.file_categorization import (
@@ -46,7 +47,7 @@ logger = get_logger(__name__)
 # Higher values = faster scanning but more memory/CPU usage
 # Default: 50, Range: 1-200
 try:
-    _parallel_concurrency = int(config.codebase_index_parallel_files)
+    _parallel_concurrency = int(blank_to_none(config.codebase_index_parallel_files) or 50)
     PARALLEL_FILE_CONCURRENCY = max(1, min(_parallel_concurrency, 200))
 except ValueError:
     logger.warning("Invalid CODEBASE_INDEX_PARALLEL_FILES, using default 50")

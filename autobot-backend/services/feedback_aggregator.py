@@ -196,11 +196,11 @@ class FeedbackAggregator:
             return self._redis
         if self._redis_unavailable:
             return None
-        from autobot_shared.redis_client import get_redis_client
+        from autobot_shared.redis_client import get_async_redis_client
 
         try:
             self._redis = await asyncio.wait_for(
-                get_redis_client(async_client=True, database="analytics"),
+                get_async_redis_client(database="analytics"),
                 timeout=_REDIS_TIMEOUT_SECONDS,
             )
         except (asyncio.TimeoutError, Exception) as exc:  # noqa: BLE001

@@ -152,20 +152,20 @@ const tabs: Tab[] = [
 /* ── Header ─────────────────────────────────────────────────────────────── */
 
 .wrp-header {
-  padding: 20px 24px 16px;
+  padding: var(--spacing-5) var(--spacing-6) var(--spacing-4);
   border-bottom: 1px solid var(--border-primary);
 }
 
 .wrp-header__content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
 }
 
 .wrp-header__title {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
@@ -190,12 +190,12 @@ const tabs: Tab[] = [
 .wrp-banner {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin: 12px 24px 0;
-  padding: 12px 14px;
+  gap: var(--spacing-2-5);
+  margin: var(--spacing-3) var(--spacing-6) 0;
+  padding: var(--spacing-3) var(--spacing-3-5);
   background: color-mix(in srgb, var(--status-warning) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--status-warning) 35%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   color: var(--text-primary);
 }
@@ -204,7 +204,7 @@ const tabs: Tab[] = [
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: var(--spacing-px);
   color: var(--status-warning);
 }
 
@@ -229,8 +229,8 @@ const tabs: Tab[] = [
 }
 
 .wrp-banner__dismiss-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-4);
+  height: var(--spacing-4);
 }
 
 /* ── Tab bar ────────────────────────────────────────────────────────────── */
@@ -240,12 +240,12 @@ const tabs: Tab[] = [
   gap: 0;
   border-bottom: 1px solid var(--border-primary);
   background: var(--bg-secondary);
-  padding: 0 16px;
+  padding: 0 var(--spacing-4);
   overflow-x: auto;
 }
 
 .wrp-tab {
-  padding: 12px 18px;
+  padding: var(--spacing-3) 18px;
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-muted);
@@ -277,7 +277,7 @@ const tabs: Tab[] = [
 .wrp-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 </style>
 
@@ -288,32 +288,32 @@ const tabs: Tab[] = [
 .wr-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .wr-form-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .wr-form-row--inline {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .wr-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--spacing-1-5);
 }
 
 .wr-field--checkbox {
   justify-content: flex-end;
-  padding-bottom: 2px;
+  padding-bottom: var(--spacing-0-5);
 }
 
 /* ── Inputs ──────────────────────────────────────────────────────────────── */
@@ -327,10 +327,10 @@ const tabs: Tab[] = [
 }
 
 .wr-input {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-tertiary, var(--bg-secondary));
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
   outline: none;
@@ -356,10 +356,10 @@ const tabs: Tab[] = [
 }
 
 .wr-select {
-  padding: 8px 12px;
+  padding: var(--spacing-2) var(--spacing-3);
   background: var(--bg-tertiary, var(--bg-secondary));
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
   outline: none;
@@ -372,10 +372,10 @@ const tabs: Tab[] = [
 }
 
 .wr-textarea {
-  padding: 10px 12px;
+  padding: var(--spacing-2-5) var(--spacing-3);
   background: var(--bg-tertiary, var(--bg-secondary));
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.8rem;
   font-family: monospace;
@@ -391,7 +391,7 @@ const tabs: Tab[] = [
 .wr-checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   font-size: 0.875rem;
   color: var(--text-secondary, var(--text-primary));
   cursor: pointer;
@@ -407,18 +407,18 @@ const tabs: Tab[] = [
 
 .wr-form-actions {
   display: flex;
-  gap: 12px;
+  gap: var(--spacing-3);
   align-items: center;
 }
 
 .wr-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
   padding: 9px 18px;
   font-size: 0.875rem;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: none;
   cursor: pointer;
   transition: background 0.15s, opacity 0.15s;
@@ -459,8 +459,8 @@ const tabs: Tab[] = [
 
 .wr-spinner {
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: var(--spacing-3-5);
+  height: var(--spacing-3-5);
   border: 2px solid transparent;
   border-top-color: currentColor;
   border-radius: 50%;
@@ -476,16 +476,16 @@ const tabs: Tab[] = [
 .wr-skeleton-block {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 0;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4) 0;
 }
 
 .wr-skeleton {
   background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
   background-size: 200% 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   animation: wr-shimmer 1.4s infinite;
-  height: 16px;
+  height: var(--spacing-4);
 }
 
 .wr-skeleton--title { height: 22px; width: 40%; }
@@ -502,21 +502,21 @@ const tabs: Tab[] = [
 .wr-progress-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 0;
+  gap: var(--spacing-2-5);
+  padding: var(--spacing-4) 0;
 }
 
 .wr-progress-bar {
-  height: 4px;
+  height: var(--spacing-1);
   background: var(--bg-secondary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
 .wr-progress-bar__fill {
   height: 100%;
   background: var(--color-primary);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   transition: width 0.3s ease;
 }
 
@@ -541,11 +541,11 @@ const tabs: Tab[] = [
 .wr-error {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3-5) var(--spacing-4);
   background: color-mix(in srgb, var(--color-error) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   color: var(--color-error);
 }
@@ -554,16 +554,16 @@ const tabs: Tab[] = [
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  margin-top: 1px;
+  margin-top: var(--spacing-px);
 }
 
 .wr-error__retry {
   margin-left: auto;
-  padding: 4px 12px;
+  padding: var(--spacing-1) var(--spacing-3);
   font-size: 0.8rem;
   background: transparent;
   border: 1px solid currentColor;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   color: inherit;
   cursor: pointer;
   white-space: nowrap;
@@ -576,15 +576,15 @@ const tabs: Tab[] = [
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 48px 24px;
+  gap: var(--spacing-4);
+  padding: var(--spacing-12) var(--spacing-6);
   color: var(--text-muted);
   text-align: center;
 }
 
 .wr-empty__icon {
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   opacity: 0.4;
 }
 
@@ -598,13 +598,13 @@ const tabs: Tab[] = [
 .wr-result {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .wr-result__header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-2-5);
   flex-wrap: wrap;
 }
 
@@ -635,8 +635,8 @@ const tabs: Tab[] = [
 .wr-result__content {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
-  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3-5) var(--spacing-4);
   font-size: 0.8rem;
   font-family: monospace;
   white-space: pre-wrap;
@@ -661,7 +661,7 @@ const tabs: Tab[] = [
 .wr-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: var(--spacing-0-5) var(--spacing-2);
   border-radius: 99px;
   font-size: 0.7rem;
   font-weight: 600;
@@ -697,20 +697,20 @@ const tabs: Tab[] = [
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-1);
   max-height: 420px;
   overflow-y: auto;
   border: 1px solid var(--border-primary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
-  padding: 8px 0;
+  padding: var(--spacing-2) 0;
 }
 
 .wr-url-list__item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: var(--spacing-2);
+  padding: var(--spacing-1-5) var(--spacing-3-5);
   font-size: 0.8rem;
 }
 
@@ -726,8 +726,8 @@ const tabs: Tab[] = [
 }
 
 .wr-url-list__tree-icon {
-  width: 14px;
-  height: 14px;
+  width: var(--spacing-3-5);
+  height: var(--spacing-3-5);
   flex-shrink: 0;
   color: var(--text-muted);
 }
@@ -735,7 +735,7 @@ const tabs: Tab[] = [
 .wr-url-list__content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-0-5);
   min-width: 0;
 }
 
@@ -761,7 +761,7 @@ const tabs: Tab[] = [
 .wr-filter-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-3);
 }
 
 .wr-filter-count {
@@ -774,6 +774,6 @@ const tabs: Tab[] = [
   text-align: center;
   font-size: 0.875rem;
   color: var(--text-muted);
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 </style>

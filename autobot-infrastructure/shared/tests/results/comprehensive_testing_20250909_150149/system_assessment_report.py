@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot System Comprehensive Testing and Analysis
 Testing all aspects of the AutoBot application for integrity and performance assessment
@@ -474,7 +476,7 @@ class AutoBotSystemTester:
         package_json = os.path.join(frontend_dir, "package.json")
         if os.path.exists(package_json):
             try:
-                with open(package_json, "r") as f:
+                with open(package_json, "r", encoding="utf-8") as f:
                     package_data = json.load(f)
 
                 # Check for critical dependencies
@@ -804,12 +806,12 @@ def main():
 
     # JSON report for detailed analysis
     json_file = os.path.join(results_dir, f"system_assessment_report_{timestamp}.json")
-    with open(json_file, "w") as f:
+    with open(json_file, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, default=str)
 
     # Human-readable report
     text_file = os.path.join(results_dir, f"system_assessment_summary_{timestamp}.txt")
-    with open(text_file, "w") as f:
+    with open(text_file, "w", encoding="utf-8") as f:
         f.write("AutoBot Comprehensive System Assessment Report\n")
         f.write(f"Generated: {report['timestamp']}\n")
         f.write("=" * 80 + "\n\n")

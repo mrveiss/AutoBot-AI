@@ -1,0 +1,37 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# Shared: generate a self-signed TLS cert and lock down its private key (#12181).
+#
+# Extracted from the byte-identical slm/backend/frontend blocks in
+# playbooks/rotate-certs.yml so cert generation lives in ONE place, mirroring the
+# _shared/tasks/stat_tls_certs.yml convention (#7272).
+#
+# Consumers set these before include_tasks (the rotate-certs plays already do):
+#   _cert_days     - validity in days
+#   _key_file      - private key output path
+#   _cert_file     - certificate output path
+#   _cert_subject  - openssl -subj string
+#   cert_label     - optional log label (slm/backend/frontend); defaults to 'node'
+#
+# Discoverable: grep -rn "generate_self_signed_cert.yml" lists all consumers.
+
+- name: "Certs [{{ cert_label | default('node') }}] | Generate new self-signed cert"
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes
+      -days {{ _cert_days }}
+      -newkey rsa:2048
+      -keyout {{ _key_file }}
+      -out {{ _cert_file }}
+      -subj '{{ _cert_subject }}'
+  changed_when: true
+
+- name: "Certs [{{ cert_label | default('node') }}] | Set key permissions"
+  ansible.builtin.file:
+    path: "{{ _key_file }}"
+    mode: "0600"
+    owner: root
+    group: root

@@ -16,12 +16,11 @@ then rehydrates all schedules from Redis automatically.
 
 import asyncio
 import json
-import os
 import re
-import socket
 import time
 from typing import Dict
 
+from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
@@ -76,20 +75,6 @@ def _parse_interval_seconds(schedule: str) -> int | None:
 
 _SCHEDULE_PREFIX = "connector:schedule:"
 _LEADER_KEY = "connector:scheduler:leader"
-_LEADER_TTL_MS = 30_000  # leader lease - 30 seconds
-_LEADER_REFRESH_S = 10  # leader refreshes its lease every 10 s
-_LEADER_POLL_S = 15  # non-leaders poll for an open slot every 15 s
-
-# Atomic compare-and-expire: refresh TTL only if the key still holds our worker_id.
-# A plain GET→PEXPIRE pair is non-atomic; a rival can replace the key between the
-# two commands, causing dual-leader under GC pause or network delay.
-_REFRESH_LUA = """
-if redis.call('GET', KEYS[1]) == ARGV[1] then
-    return redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[2]))
-else
-    return 0
-end
-"""
 
 
 def _decode(val: object) -> str:
@@ -112,8 +97,9 @@ class ConnectorScheduler:
 
     def __init__(self) -> None:
         self._tasks: Dict[str, asyncio.Task] = {}
-        self._is_leader = False
-        self._worker_id = "%s-%d" % (socket.gethostname(), os.getpid())
+        # GH#12835: leader election lives in autobot_shared.leader_lease, shared
+        # with skill_distillation_scheduler. Only the key and database are ours.
+        self._lease = LeaderLease(key=_LEADER_KEY, database="knowledge", label="Connector scheduler")
         self._leader_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
@@ -140,7 +126,7 @@ class ConnectorScheduler:
 
         await self._redis_set_schedule(connector_id, schedule, interval)
 
-        if self._is_leader:
+        if self._lease.is_leader:
             await self._start_local_task(connector_id, interval)
 
         logger.info(
@@ -205,51 +191,11 @@ class ConnectorScheduler:
             )
 
     async def _leader_loop(self) -> None:
-        """Continuously attempt to hold or acquire the leader lock; reconcile each cycle."""
-        while True:
-            try:
-                won = await self._try_acquire_or_refresh()
-
-                if won and not self._is_leader:
-                    logger.info("Connector scheduler: became leader (%s)", self._worker_id)
-                    self._is_leader = True
-                elif not won and self._is_leader:
-                    logger.warning(
-                        "Connector scheduler: lost leadership (%s) - stopping local tasks",
-                        self._worker_id,
-                    )
-                    self._is_leader = False
-                    await self._cancel_all_local_tasks()
-
-                if self._is_leader:
-                    await self._reconcile_schedules()
-
-                await asyncio.sleep(_LEADER_REFRESH_S if self._is_leader else _LEADER_POLL_S)
-            except asyncio.CancelledError:
-                break
-            except Exception as exc:
-                logger.error("Leader loop error: %s", exc)
-                await asyncio.sleep(_LEADER_POLL_S)
-
-    async def _try_acquire_or_refresh(self) -> bool:
-        """Acquire leader lock via SETNX (new) or atomic Lua refresh."""
-        redis = await get_async_redis_client(database="knowledge")
-        if redis is None:
-            return False
-        try:
-            if self._is_leader:
-                # Atomic refresh: Lua script compares and extends TTL in one
-                # round-trip, preventing dual-leader under GC pause or network
-                # delay that would split a plain GET->PEXPIRE pair.
-                result = await redis.eval(_REFRESH_LUA, 1, _LEADER_KEY, self._worker_id, str(_LEADER_TTL_MS))
-                return bool(result)
-            else:
-                # New acquisition: SET only if key does not exist (NX)
-                result = await redis.set(_LEADER_KEY, self._worker_id, nx=True, px=_LEADER_TTL_MS)
-                return result is not None
-        except Exception as exc:
-            logger.warning("Leader election Redis error: %s", exc)
-            return False
+        """Hold or contest the leader lease, reconciling schedules while leader."""
+        await self._lease.run(
+            on_tick=self._reconcile_schedules,
+            on_lost=self._cancel_all_local_tasks,
+        )
 
     # ------------------------------------------------------------------
     # Schedule reconciliation (leader only)

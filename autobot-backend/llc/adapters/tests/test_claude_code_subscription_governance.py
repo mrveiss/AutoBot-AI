@@ -14,7 +14,7 @@ from llc.adapters.claude_code_subscription_adapter import ClaudeCodeSubscription
 
 
 def _cmd(resume, cfg, prompt="do it"):
-    return ClaudeCodeSubscriptionAdapter._build_command("claude", resume, cfg, prompt)
+    return ClaudeCodeSubscriptionAdapter._build_command("claude", resume, cfg, prompt, session_id="fresh-sid")
 
 
 def test_fresh_session_enforces_disallowed_and_terminator():

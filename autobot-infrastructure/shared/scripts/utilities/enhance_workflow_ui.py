@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Enhance Workflow UI with additional features
@@ -768,6 +769,7 @@ def main():
     with open(
         "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowNotifications.vue",
         "w",
+        encoding="utf-8",
     ) as f:
         f.write(notification_component)
 
@@ -783,6 +785,7 @@ def main():
     with open(
         "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/autobot-vue/src/components/WorkflowProgressWidget.vue",
         "w",
+        encoding="utf-8",
     ) as f:
         f.write(progress_widget)
 

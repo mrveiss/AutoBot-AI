@@ -194,7 +194,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "سسٹم کی صحت"
+    "systemHealth": "سسٹم کی صحت",
+    "providerFallback": "فراہم کنندہ فال بیک",
+    "advancedControl": "ایڈوانسڈ کنٹرول"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "محفوظ شدہ دکھائیں",
+    "delete": "حذف کریں",
+    "confirmDeleteTitle": "کمپنی حذف کریں",
+    "confirmDelete": "«{name}» حذف کریں؟ اس سے محفوظ شدہ کمپنی اور اس کا ڈیٹا ہٹ جائے گا۔ اسے یہاں سے واپس نہیں کیا جا سکتا۔",
+    "deleteError": "کمپنی حذف نہیں کی جا سکی۔",
+    "deleteHasChildren": "اس کمپنی کی ذیلی کمپنیاں ہیں۔ حذف کرنے سے پہلے انہیں ہٹائیں یا دوبارہ منسلک کریں۔",
+    "onboarding": "آن بورڈنگ",
+    "active": "فعال",
+    "paused": "معطل",
+    "offboarding": "اختتام",
+    "archived": "محفوظ شدہ",
+    "activate": "فعال کریں",
+    "suspend": "معطل کریں",
+    "offboard": "اختتام کریں",
+    "archive": "محفوظ کریں",
+    "confirmTitle": "اسٹیٹس کی تبدیلی کی تصدیق کریں",
+    "confirmOffboard": "«{name}» کو اختتام کریں؟ یہ کمپنی کو بند کرنے کا آغاز کرتا ہے۔",
+    "confirmArchive": "«{name}» کو محفوظ کریں؟ یہ ایک حتمی حالت ہے اور اسے واپس نہیں کیا جا سکتا۔",
+    "confirm": "تصدیق کریں",
+    "updateError": "کمپنی کا اسٹیٹس تبدیل نہیں کیا جا سکا۔"
   },
   "llcMembers": {
     "title": "اراکین",
@@ -1881,6 +1905,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "{total} میں سے {shown} دکھائے جا رہے ہیں"
     }
   },
   "knowledge": {
@@ -4332,6 +4359,17 @@
       "presetHigh": "High",
       "presetMediumDesc": "Balanced quality and performance",
       "delay": "Delay:"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "redis": {
@@ -4957,7 +4995,8 @@
       "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
       "deletedSuccess": "Deleted {count} chats",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "متبادل بیج دکھائیں"
     },
     "overseer": {
       "copyCommand": "Copy command",
@@ -5389,6 +5428,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "متبادل کے ذریعے",
+        "tooltip": "بنیادی فراہم کنندہ دستیاب نہیں — متبادل فراہم کنندہ کے ذریعے جواب دیا گیا ({primary} → {fallback})."
       }
     },
     "docResult": {
@@ -5518,7 +5561,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "چیٹ حذف نہیں ہو سکی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "createFailed": "چیٹ بنائی نہیں جا سکی: {error}",
+      "loadSessionsFailed": "چیٹ سیشنز لوڈ نہیں ہو سکے: {error}",
+      "loadMessagesFailed": "پیغامات لوڈ نہیں ہو سکے: {error}",
+      "saveFailed": "چیٹ محفوظ نہیں ہو سکی: {error}",
+      "resetFailed": "چیٹ ری سیٹ نہیں ہو سکی: {error}",
+      "clearFailed": "چیٹس صاف نہیں ہو سکیں: {error}",
+      "invalidFormat": "پیغام کی شکل غلط ہے۔ براہ کرم اپنی ان پٹ چیک کریں اور دوبارہ کوشش کریں۔",
+      "serviceUnavailable": "چیٹ سروس دستیاب نہیں ہے۔ براہ کرم صفحہ ریفریش کریں اور دوبارہ کوشش کریں۔",
+      "serverError": "سرور کی خرابی پیش آئی۔ براہ کرم ایک لمحے میں دوبارہ کوشش کریں۔",
+      "networkFailed": "نیٹ ورک کنکشن ناکام ہو گیا۔ براہ کرم اپنا انٹرنیٹ کنکشن چیک کریں۔",
+      "timeout": "درخواست کا وقت ختم ہو گیا۔ براہ کرم مختصر پیغام کے ساتھ دوبارہ کوشش کریں۔",
+      "sendFailed": "پیغام بھیجا نہیں جا سکا: {error}",
+      "sendFailedAfterRetries": "{attempts} کوششوں کے بعد پیغام بھیجا نہیں جا سکا: {error}۔ براہ کرم اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+      "invalidFormatDetail": "پیغام کی شکل غلط ہے: {error}۔ براہ کرم اپنی ان پٹ چیک کریں اور دوبارہ کوشش کریں۔",
+      "networkFailedRetry": "نیٹ ورک کنکشن ناکام ہو گیا۔ براہ کرم اپنا انٹرنیٹ کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
+    }
   },
   "serviceMessages": {
     "metadata": "Metadata",
@@ -6652,7 +6713,14 @@
       "disabledMessage": "مقامی استعمال کے میٹرکس غیر فعال ہو گئے۔ کوئی میٹرکس ریکارڈ نہیں ہوں گے۔",
       "loadFailed": "ٹیلی میٹری ترتیبات لوڈ کرنے میں ناکام",
       "updateFailed": "ٹیلی میٹری ترتیبات اپ ڈیٹ کرنے میں ناکام"
-    }
+    },
+    "subtitle": "ذاتی ترجیحات کے ساتھ اپنے AutoBot تجربے کو اپنی مرضی کے مطابق بنائیں",
+    "featureFlags": "فیچر فلیگز",
+    "telegram": "ٹیلیگرام",
+    "notifications": "اطلاعات",
+    "mobileDevices": "موبائل آلات",
+    "privacy": "رازداری",
+    "providerAuthDesc": "بل شدہ API کلید کے بجائے اپنی موجودہ سبسکرپشن استعمال کرتے ہوئے فراہم کنندگان سے منسلک ہوں۔ ٹوکنز AutoBot سیکرٹس والٹ میں محفوظ طریقے سے محفوظ کیے جاتے ہیں۔"
   },
   "visualizations": {
     "systemArchitecture": {
@@ -7187,7 +7255,8 @@
     "custom": "custom",
     "stopListening": "Stop listening",
     "stop": "Stop",
-    "confirmDeleteVoiceTitle": "صوتی پروفائل حذف کریں"
+    "confirmDeleteVoiceTitle": "صوتی پروفائل حذف کریں",
+    "tapToEnableAudio": "آڈیو چلانے کو فعال کرنے کے لیے کہیں بھی ٹیپ کریں"
   },
   "auth": {
     "login": {
@@ -7810,22 +7879,7 @@
       "createFailed": "Failed to create company"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ New",
-      "selectCompany": "Select a company to view threads.",
-      "loading": "Loading...",
-      "noThreads": "No threads yet.",
-      "emptyState": "Select a thread or create a new one.",
-      "loadingMessages": "Loading messages...",
-      "noMessages": "No messages yet.",
-      "messagePlaceholder": "Type a message...",
-      "send": "Send",
-      "newThreadTitle": "New Thread",
-      "titleLabel": "Title",
-      "titlePlaceholder": "Thread title...",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating..."
+      "selectCompany": "Select a company to view threads."
     },
     "dashboard": {
       "title": "Company Dashboard",
@@ -7957,7 +8011,15 @@
       "count": "{count} boards",
       "loading": "Loading boards…",
       "empty": "No boards yet — boards are created per project (Kanban) and per sprint (Sprint).",
-      "created": "Created {date}"
+      "created": "Created {date}",
+      "newKanban": "New Kanban Board",
+      "createTitle": "Create Kanban Board",
+      "project": "Project",
+      "selectProject": "Select a project…",
+      "loadingProjects": "Loading projects…",
+      "noProjects": "No projects yet — create a project first.",
+      "creating": "Creating…",
+      "create": "Create Board"
     },
     "kanban": {
       "title": "Kanban Board",
@@ -7996,7 +8058,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "{name} تک محدود",
+      "showAll": "پوری کمپنی دکھائیں"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "آپ کی تبدیلی محفوظ نہیں ہو سکی۔ براہ کرم دوبارہ کوشش کریں۔"
+      }
     },
     "orgChart": {
       "title": "Org Chart",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
     },
-    "ceoChat": {
-      "sendError": "Failed to send your message. It has been restored so you can retry."
-    },
     "timeline": {
       "rescheduleError": "Failed to save the new schedule. The change was reverted."
     },
@@ -8603,6 +8667,22 @@
       "error": "سسٹم کی صحت لوڈ کرنے میں ناکامی",
       "refresh": "تازہ کریں",
       "noSources": "کوئی مواد کا ذریعہ ترتیب نہیں دیا گیا"
+    },
+    "providerFallback": {
+      "title": "فراہم کنندہ فال بیک",
+      "subtitle": "LLM فراہم کنندگان اور ماڈلز کے فال بیک کی براہ راست سرگرمی",
+      "status": "حیثیت",
+      "stateHealthy": "کوئی فعال فال بیک نہیں",
+      "stateDegraded": "فال بیک فعال",
+      "active": "فعال فال بیکس",
+      "chains": "ترتیب شدہ زنجیریں",
+      "timeline": "براہ راست سرگرمی",
+      "switched": "تبدیل ہو گیا",
+      "exhausted": "ختم ہو گیا",
+      "refresh": "تازہ کریں",
+      "loading": "فال بیک حیثیت لوڈ ہو رہی ہے…",
+      "noData": "کوئی فراہم کنندہ فال بیک سرگرمی نہیں",
+      "none": "کوئی نہیں"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} کو اپ ڈیٹ کیا گیا",
   "chat.modelPicker.label": "ماڈل",
   "chat.modelPicker.auto": "خودکار (طے شدہ ماڈل)",
-  "chat.modelPicker.title": "اس گفتگو کے لیے ماڈل اور فراہم کنندہ منتخب کریں"
+  "chat.modelPicker.title": "اس گفتگو کے لیے ماڈل اور فراہم کنندہ منتخب کریں",
+  "budgetPolicies": {
+    "title": "Budget Policies",
+    "subtitle": "Manage spend thresholds and auto-pause rules for agents",
+    "newPolicy": "New Policy",
+    "scope": "Scope",
+    "scopeAll": "All",
+    "scopeAgent": "Agent",
+    "scopeProject": "Project",
+    "scopeTask": "Task",
+    "scopeTenant": "Tenant",
+    "loading": "Loading policies…",
+    "empty": "No budget policies found. Create one to enforce spend limits.",
+    "colName": "Name",
+    "colScope": "Scope",
+    "colScopeId": "Scope ID",
+    "colPeriod": "Period",
+    "colThreshold": "Threshold",
+    "colWarning": "Warning",
+    "colAction": "Action",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "statusEnabled": "enabled",
+    "statusDisabled": "disabled",
+    "checkPauseTitle": "Check Agent Pause Status",
+    "agentIdPlaceholder": "Agent ID…",
+    "checkStatus": "Check Status",
+    "labelAgent": "Agent:",
+    "labelPaused": "Paused:",
+    "labelReason": "Reason:",
+    "labelSince": "Since:",
+    "resumeAgent": "Resume Agent",
+    "modalEditTitle": "Edit Policy",
+    "modalNewTitle": "New Budget Policy",
+    "fieldName": "Name",
+    "fieldNamePlaceholder": "My policy",
+    "fieldDescription": "Description",
+    "fieldDescriptionPlaceholder": "Optional",
+    "fieldScope": "Scope",
+    "fieldScopeId": "Scope ID",
+    "fieldScopeIdPlaceholder": "e.g. agent-uuid",
+    "fieldPeriod": "Period",
+    "periodHour": "Hour",
+    "periodDay": "Day",
+    "periodMonth": "Month",
+    "fieldThreshold": "Threshold USD",
+    "fieldWarning": "Warning % (0–100)",
+    "fieldAction": "Action",
+    "actionAlert": "Alert only",
+    "actionPause": "Pause",
+    "actionAlertThenPause": "Alert then Pause",
+    "fieldEnabled": "Enabled",
+    "saveChanges": "Save Changes",
+    "createPolicy": "Create Policy",
+    "deleteTitle": "Delete Policy",
+    "deleteConfirm": "Are you sure you want to delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "telemetryConsent": {
+    "title": "Local Usage Metrics",
+    "intro": "AutoBot can record {metrics} locally to power your own monitoring dashboards. This data stays on your infrastructure and is {never}.",
+    "introMetrics": "anonymous operational metrics",
+    "introNever": "never sent to anyone",
+    "summaryTitle": "What's recorded locally:",
+    "dataApi": "API endpoint usage and response times",
+    "dataVoice": "Voice session duration and token counts",
+    "dataFeature": "Feature usage patterns",
+    "privacyLabel": "Never recorded:",
+    "privacyText": "personal data, code content, or chat messages.",
+    "footer": "You can change this preference anytime in {settings}.",
+    "footerSettings": "Settings → Privacy",
+    "keepOff": "Keep Off",
+    "enable": "Enable"
+  },
+  "hireAgent": {
+    "title": "Hire Agent",
+    "agentName": "Agent name",
+    "agentNamePlaceholder": "e.g. Builder-1",
+    "model": "Model",
+    "modelSonnet": "Sonnet (default)",
+    "modelHaiku": "Haiku (assistant)",
+    "orgRole": "Org role",
+    "roleWorker": "Worker",
+    "roleSpecialist": "Specialist",
+    "roleCoordinator": "Coordinator",
+    "roleManager": "Manager",
+    "adapter": "Adapter",
+    "hiring": "Hiring…",
+    "hire": "Hire"
+  },
+  "advancedControl": {
+    "title": "ایڈوانسڈ کنٹرول",
+    "subtitle": "قبضے کی درخواستوں کی منظوری دیں اور فعال انسانی کنٹرول سیشنز کا نظم کریں",
+    "tabListAriaLabel": "ایڈوانسڈ کنٹرول ٹیبز",
+    "loading": "قبضے کی قطار لوڈ ہو رہی ہے…",
+    "tabs": {
+      "takeoverQueue": "قبضے کی قطار",
+      "streaming": "اسٹریمنگ",
+      "monitoring": "نگرانی",
+      "comingSoon": "جلد آ رہا ہے",
+      "comingSoonMessage": "یہ ٹیب ابھی دستیاب نہیں ہے۔",
+      "streamingTitle": "ڈیسک ٹاپ اسٹریمنگ",
+      "monitoringTitle": "سسٹم کی نگرانی"
+    },
+    "summary": {
+      "pending": "زیر التوا",
+      "active": "فعال",
+      "paused": "موقوف",
+      "completed": "مکمل",
+      "systemStatus": "سسٹم کی حالت",
+      "statusNormal": "نارمل",
+      "statusTakeoverActive": "قبضہ فعال",
+      "statusEmergency": "ہنگامی"
+    },
+    "pending": {
+      "title": "زیر التوا قبضے کی درخواستیں",
+      "colTrigger": "محرک",
+      "colReason": "وجہ",
+      "colPriority": "ترجیح",
+      "colRequestedBy": "درخواست دہندہ",
+      "colCreatedAt": "تخلیق شدہ",
+      "colActions": "اقدامات",
+      "unknownAgent": "نامعلوم ایجنٹ",
+      "emptyTitle": "کوئی زیر التوا درخواست نہیں",
+      "emptyMessage": "منظوری کے منتظر کوئی قبضے کی درخواست موجود نہیں ہے۔"
+    },
+    "active": {
+      "title": "فعال قبضہ سیشنز",
+      "colOperator": "آپریٹر",
+      "colStatus": "حالت",
+      "colStartedAt": "شروع ہوا",
+      "colActionsExecuted": "انجام شدہ اقدامات",
+      "emptyTitle": "کوئی فعال سیشن نہیں",
+      "emptyMessage": "اس وقت کوئی فعال انسانی کنٹرول سیشن موجود نہیں ہے۔"
+    },
+    "actions": {
+      "approve": "منظور کریں",
+      "pause": "موقوف کریں",
+      "resume": "دوبارہ شروع کریں",
+      "complete": "مکمل کریں"
+    },
+    "streaming": {
+      "title": "اسٹریمنگ سیشنز",
+      "newSession": "نیا سیشن",
+      "terminate": "ختم کریں",
+      "capVncAvailable": "VNC دستیاب ہے",
+      "capNovncAvailable": "noVNC دستیاب ہے",
+      "capMaxSessions": "زیادہ سے زیادہ سیشنز",
+      "formUserIdLabel": "صارف کی شناخت",
+      "formUserIdPlaceholder": "مثلاً: user-123",
+      "formResolutionLabel": "ریزولیوشن",
+      "formResolutionPlaceholder": "مثلاً: 1920x1080",
+      "formDepthLabel": "کلر ڈیپتھ",
+      "colSessionId": "سیشن کی شناخت",
+      "colUser": "صارف",
+      "colStatus": "حالت",
+      "colDisplay": "ڈسپلے",
+      "colCreatedAt": "تخلیق شدہ",
+      "colActions": "اقدامات",
+      "emptyTitle": "کوئی فعال اسٹریمنگ سیشن نہیں",
+      "emptyMessage": "اس وقت کوئی فعال ڈیسک ٹاپ اسٹریمنگ سیشن موجود نہیں ہے۔"
+    },
+    "monitoring": {
+      "loading": "سسٹم مانیٹرنگ ڈیٹا لوڈ ہو رہا ہے…",
+      "healthTitle": "سسٹم کی صحت",
+      "healthStatus": "صحت کی حالت",
+      "statusHealthy": "صحت مند",
+      "statusUnhealthy": "غیر صحت مند",
+      "desktopStreamingAvailable": "ڈیسک ٹاپ اسٹریمنگ دستیاب ہے",
+      "novncAvailable": "noVNC دستیاب ہے",
+      "activeStreamingSessions": "فعال اسٹریمنگ سیشنز",
+      "pendingTakeovers": "زیر التوا قبضے",
+      "activeTakeovers": "فعال قبضے",
+      "pausedTasks": "روکے گئے کام",
+      "resourceTitle": "وسائل کا استعمال",
+      "cpuUsage": "CPU استعمال",
+      "memoryUsage": "میموری استعمال",
+      "diskUsage": "ڈسک استعمال",
+      "processCount": "پراسیس کی تعداد",
+      "loadAverage": "اوسط لوڈ (1 منٹ / 5 منٹ / 15 منٹ)",
+      "uptime": "اپ ٹائم",
+      "emergencyStopTitle": "خطرے کا علاقہ",
+      "emergencyStop": "ہنگامی روک تھام",
+      "emergencyStopDescription": "فوری طور پر تمام خودمختار کارروائیاں روک دیتا ہے اور خودکار طور پر منظور شدہ انسانی قبضے کی درخواست کرتا ہے۔ اسے واپس نہیں لیا جا سکتا — صرف اس وقت استعمال کریں جب خودمختار رویے کو فوری طور پر روکنا ضروری ہو۔",
+      "emergencyStopConfirmTitle": "ہنگامی روک تھام فعال کریں؟",
+      "emergencyStopConfirmMessage": "اس سے تمام خودمختار کام فوری طور پر روک دیے جائیں گے اور CRITICAL ترجیح کے ساتھ انسانی قبضہ شروع ہو جائے گا۔ یہ کارروائی واپس نہیں لی جا سکتی۔ جاری رکھیں؟",
+      "emergencyStopSuccess": "ہنگامی روک تھام فعال کر دی گئی — تمام خودمختار کارروائیاں روک دی گئی ہیں۔",
+      "emptyTitle": "کوئی مانیٹرنگ ڈیٹا موجود نہیں",
+      "emptyMessage": "سسٹم کی حالت لوڈ نہیں ہو سکی۔"
+    }
+  },
+  "adminUsers": {
+    "title": "User Management",
+    "subtitle": "Manage users, roles, and account status",
+    "addUser": "Add User",
+    "searchPlaceholder": "Search by username, email, or name…",
+    "loading": "Loading users…",
+    "colUsername": "Username",
+    "colEmail": "Email",
+    "colDisplayName": "Display Name",
+    "colRole": "Role",
+    "colVoiceBundle": "Voice Bundle",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "roleAdmin": "admin",
+    "roleUser": "user",
+    "roleReadonly": "readonly",
+    "statusActive": "active",
+    "statusInactive": "inactive",
+    "titleDeactivate": "Deactivate",
+    "titleActivate": "Activate",
+    "titleAssignBundle": "Assign Voice Bundle",
+    "empty": "No users found.",
+    "fieldEmail": "Email",
+    "fieldUsername": "Username",
+    "fieldPassword": "Password",
+    "fieldDisplayName": "Display Name",
+    "createUser": "Create User",
+    "userLabel": "User:",
+    "fieldVoiceBundle": "Voice Bundle",
+    "useRoleDefault": "— Use role default —",
+    "deleteUserTitle": "Delete User",
+    "deleteConfirm": "Delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "پس منظر شیڈولر",
+    "description": "پس منظر کے کام آن یا آف کریں۔ تبدیلیاں اگلے چکر میں لاگو ہوتی ہیں — دوبارہ شروع کرنے کی ضرورت نہیں۔",
+    "refresh": "تازہ کریں",
+    "loading": "شیڈولر لوڈ ہو رہے ہیں…",
+    "empty": "کوئی شیڈولر رجسٹرڈ نہیں۔",
+    "overridden": "اوور رائیڈ شدہ",
+    "defaultLabel": "ڈیفالٹ",
+    "runtimeLabel": "رن ٹائم",
+    "on": "آن",
+    "off": "آف",
+    "revertToDefault": "ڈیفالٹ پر واپس",
+    "enableTitle": "یہ کام فعال کریں",
+    "disableTitle": "یہ کام غیر فعال کریں",
+    "toggleAria": "{name} ٹوگل کریں",
+    "loadFailed": "شیڈولر لوڈ نہیں ہو سکے۔",
+    "toggleFailed": "{name} تبدیل نہیں ہو سکا۔",
+    "resetFailed": "{name} کو ڈیفالٹ پر واپس نہیں کیا جا سکا۔"
+  }
 }

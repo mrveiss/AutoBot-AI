@@ -33,6 +33,7 @@ from typing import Callable, Dict, List, Tuple
 
 from fastapi import HTTPException
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.path_constants import PATH
@@ -97,7 +98,7 @@ logger = get_logger(__name__)
 # Default: 50, Range: 1-100
 # =============================================================================
 try:
-    _parallel_files = int(config.codebase_scan_parallel_files)
+    _parallel_files = int(blank_to_none(config.codebase_scan_parallel_files) or 50)
     PARALLEL_FILE_PROCESSING = max(1, min(_parallel_files, 100))
 except ValueError:
     logger.warning("Invalid CODEBASE_SCAN_PARALLEL_FILES, using default 50")

@@ -19,7 +19,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 
 @dataclass
@@ -54,12 +54,31 @@ def check_redis_schemas() -> CheckResult:
         )
 
 
+def _chromadb_http_client() -> Any:
+    """Build the ChromaDB HttpClient the doctor uses to check collections.
+
+    Issue #12513: routes through ssot_config (matching every other client
+    construction site) instead of a hardcoded "localhost:8000", and wires the
+    CHROMA_SERVER_AUTHN_* token when configured — empty token = no auth
+    settings, so an unauthenticated (dev/local) server keeps working.
+    """
+    import chromadb
+    from chromadb.config import Settings as ChromaSettings
+
+    from autobot_shared.ssot_config import config as ssot_config
+    from utils.chromadb_auth import chroma_client_auth_kwargs
+
+    return chromadb.HttpClient(
+        host=ssot_config.vm.chromadb,
+        port=ssot_config.port.chromadb,
+        settings=ChromaSettings(**chroma_client_auth_kwargs()),
+    )
+
+
 def check_chromadb_collections() -> CheckResult:
     """Verify required ChromaDB collections exist."""
     try:
-        import chromadb
-
-        client = chromadb.HttpClient(host="localhost", port=8000)
+        client = _chromadb_http_client()
         collections = {c.name for c in client.list_collections()}
         expected = {"autobot_docs", "code_kb"}
         missing = expected - collections
@@ -86,9 +105,7 @@ def check_chromadb_collections() -> CheckResult:
 
 
 def _bootstrap_chromadb_collections(missing: set[str]) -> None:
-    import chromadb
-
-    client = chromadb.HttpClient(host="localhost", port=8000)
+    client = _chromadb_http_client()
     for name in missing:
         client.get_or_create_collection(name)
 
@@ -110,7 +127,7 @@ def check_env_file(env_path: str = "/opt/autobot/autobot-backend/.env") -> Check
                 message=f"Env file not found: {env_path}",
                 fixable=False,
             )
-        with open(env_path) as f:
+        with open(env_path, encoding="utf-8") as f:
             content = f.read()
         defined = {
             line.split("=")[0].strip() for line in content.splitlines() if "=" in line and not line.startswith("#")

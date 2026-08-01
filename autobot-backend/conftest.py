@@ -78,6 +78,22 @@ def _real_load_and_bind(name: str, path: Path) -> None:
     """
     import importlib.util as _rlb_ilu
 
+    # #12839: never re-execute a module that is ALREADY real-loaded from this
+    # same file. Re-executing builds a second set of class objects and swaps
+    # them into sys.modules, while every module that imported the first set
+    # keeps referencing it — so `isinstance(x, Cls)` fails against an object
+    # whose repr says it IS a Cls. That is what broke test_claim_classifier:
+    # services.claim_classifier imported .knowledge_grounding_models at
+    # collection, then _real_load_light_services re-executed the same file.
+    # Re-execution is only needed to replace a *stub*, so an already-real module
+    # is left alone and only the parent bind below is (re)applied.
+    _existing = sys.modules.get(name)
+    if _existing is not None and getattr(_existing, "__file__", None) == str(path):
+        parent, _, child = name.rpartition(".")
+        if parent and parent in sys.modules:
+            setattr(sys.modules[parent], child, _existing)
+        return
+
     spec = _rlb_ilu.spec_from_file_location(name, str(path))
     if not spec or not spec.loader:
         return
@@ -196,6 +212,17 @@ if "celery_app" not in sys.modules:
         import celery as _cel_pkg  # noqa: F401
 
         _test_app = _cel_pkg.Celery("test_autobot", broker="memory://", backend="cache+memory://")
+        # GH#12522: ``store_eager_result`` is bound onto each task class at
+        # *finalize* time (Task.from_config), and ``Task.bind`` only reads the
+        # conf value while the attribute is still ``None``. Any test that
+        # introspects ``celery_app.tasks`` (celery_beat_registration_test,
+        # analytics_cache_population_test, batch_job_tasks_test) finalizes this
+        # shared session app first, freezing ``store_eager_result=False`` before
+        # an eager-result test's fixture can flip the runtime conf -- a later
+        # ``AsyncResult`` then reads the stale PROGRESS meta and reports
+        # "running". Setting it at creation binds every task with terminal-result
+        # storage regardless of which test file finalizes the app first.
+        _test_app.conf.task_store_eager_result = True
     except (ImportError, Exception):
         # Fall back to the stub Celery that is already in sys.modules["celery"]
         _StubCeleryClass = sys.modules["celery"].Celery
@@ -263,6 +290,20 @@ if "services.npu_profile_suggester" not in sys.modules:
         "services.npu_profile_suggester",
         backend_root / "services" / "npu_profile_suggester.py",
     )
+# services.npu_client (#12114 / demonstrated by #12407) — the embedding client is
+# imported almost exclusively via lazy, function-level ``from services.npu_client
+# import ...`` calls in production code, so it is essentially never bound on the
+# ``services`` package stub at collection time.  Any test that is the first to do
+# ``patch("services.npu_client.<name>")`` therefore silently patches the stub's
+# catch-all MagicMock (an INERT patch) unless some earlier-collected module happened
+# to import it — making test outcomes depend on collection ORDER (#12407 had to work
+# around this with ``patch.object(npu_client_module, ...)``).  Real-load and bind it
+# here — light deps only (stdlib + aiohttp + autobot_shared; prometheus_client is
+# stubbed) — so the real module is always present and string-form patch() targets
+# the real globals.  Mirrors the #11248 tool_output_filter / #11731 npu_profile_suggester
+# pattern the module docstring recommends.
+if "services.npu_client" not in sys.modules:
+    _real_load_and_bind("services.npu_client", backend_root / "services" / "npu_client.py")
 # Provide the SUPPORTED_LANGUAGES symbol consumed by api.schemas_agent
 if not hasattr(sys.modules.get("services.personality_service", object()), "SUPPORTED_LANGUAGES"):
     sys.modules["services.personality_service"].SUPPORTED_LANGUAGES = {}  # type: ignore[attr-defined]
@@ -358,6 +399,11 @@ if "llm_shared" not in sys.modules:
 
     _real_load_and_bind("llm_shared.types", _llm_root / "types.py")
     _real_load_and_bind("llm_shared.models", _llm_root / "models.py")
+    # #12714: thread-safe lazy torch loader shared by 9 call sites (flash_attention,
+    # ssm_kernels, kv_cache, layer_inference, ai_hardware_accelerator,
+    # multimodal_processor + vision/voice, incremental_trainer). No deps beyond
+    # stdlib threading — safe to real-load unconditionally, early.
+    _real_load_and_bind("llm_shared.torch_loader", _llm_root / "torch_loader.py")
     # #11520: canonical JSON parser and schema-typed extraction helper — lightweight,
     # no heavy deps; load real so tests importing them don't hit the stub.
     _real_load_and_bind("llm_shared.json_utils", _llm_root / "json_utils.py")
@@ -367,6 +413,10 @@ if "llm_shared" not in sys.modules:
     # #11519: provider degradation store — load real BEFORE model_fallback_coordinator
     # and provider_registry which import it at module level.
     _real_load_and_bind("llm_shared.provider_degradation", _llm_root / "provider_degradation.py")
+    # #11995: PROVIDER_FALLBACK event emission helper — load real BEFORE
+    # model_fallback_coordinator, which imports it at module level. events.bus
+    # / events.event_types are unstubbed lightweight modules, safe to import here.
+    _real_load_and_bind("llm_shared.fallback_events", _llm_root / "fallback_events.py")
     _real_load_and_bind("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
     # #9017: reasoning_effort utility is imported by chat_workflow.manager at module level;
     # load the real file so tests that import manager don't hit the providers MagicMock stub.
@@ -395,6 +445,11 @@ if "llm_shared" not in sys.modules:
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
     _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
+    # #11541: pre-request cumulative token budget gate — base_provider imports it
+    # at module level (`from .token_budget import get_token_budget_gate`); light
+    # dep (autobot_shared.env_utils/logging_manager/singleton_factory + .models),
+    # load real before base_provider so the gate isn't a MagicMock stub.
+    _real_load_and_bind("llm_shared.token_budget", _llm_root / "token_budget.py")
     _real_load_and_bind("llm_shared.base_provider", _llm_root / "base_provider.py")
     _real_load_and_bind("llm_shared.model_param_registry", _llm_root / "model_param_registry.py")
     _real_load_and_bind("llm_shared.provider_registry", _llm_root / "provider_registry.py")
@@ -468,6 +523,39 @@ if "llm_shared" not in sys.modules:
             _llm_stub.HardwareDetector = _hw_mod.HardwareDetector  # type: ignore[attr-defined]
         if hasattr(_hw_mod, "TORCH_AVAILABLE"):
             _llm_stub.TORCH_AVAILABLE = _hw_mod.TORCH_AVAILABLE  # type: ignore[attr-defined]
+
+    # #12438: Real-load llm_shared.pricing — auto-refresh pricing sources (GH#6480).
+    # Self-contained aside from autobot_shared.logging_manager (already patched)
+    # and autobot_shared.redis_client (real module); the llm_shared stub's empty
+    # __path__ otherwise breaks every provider-source import and its colocated
+    # services/pricing_refresh_test.py. Dependency order: sources → redis_store
+    # → per-provider sources → package __init__.
+    _real_load_and_bind("llm_shared.pricing.sources", _llm_root / "pricing" / "sources.py")
+    _real_load_and_bind("llm_shared.pricing.redis_store", _llm_root / "pricing" / "redis_store.py")
+    _real_load_and_bind("llm_shared.pricing.anthropic_source", _llm_root / "pricing" / "anthropic_source.py")
+    _real_load_and_bind("llm_shared.pricing.openai_source", _llm_root / "pricing" / "openai_source.py")
+    _real_load_and_bind("llm_shared.pricing.google_source", _llm_root / "pricing" / "google_source.py")
+    _real_load_and_bind("llm_shared.pricing.deepseek_source", _llm_root / "pricing" / "deepseek_source.py")
+    _real_load_and_bind("llm_shared.pricing.vertexai_source", _llm_root / "pricing" / "vertexai_source.py")
+    _real_load_and_bind("llm_shared.pricing", _llm_root / "pricing" / "__init__.py")
+    # The submodule real-loads above ran before "llm_shared.pricing" existed in
+    # sys.modules, so _real_load_and_bind's own parent-bind was a no-op for them
+    # (and __init__.py's "from llm_shared.pricing.X import Y" doesn't re-trigger
+    # it either, since those submodules were already sys.modules-cached). Bind
+    # them explicitly now so patch("llm_shared.pricing.redis_store.X") resolves
+    # via getattr(llm_shared.pricing, "redis_store") instead of raising
+    # AttributeError.
+    _pricing_pkg = sys.modules["llm_shared.pricing"]
+    for _pricing_sub in (
+        "sources",
+        "redis_store",
+        "anthropic_source",
+        "openai_source",
+        "google_source",
+        "deepseek_source",
+        "vertexai_source",
+    ):
+        setattr(_pricing_pkg, _pricing_sub, sys.modules[f"llm_shared.pricing.{_pricing_sub}"])
 
     # llm_shared.cache — provide symbols consumed by services.llm_service
     _cache_stub = sys.modules["llm_shared.cache"]
@@ -616,10 +704,10 @@ except Exception:
 
 # orchestration.causal_error_recovery / causal_error_analyzer stubs (#7431).
 # orchestration/__init__.py imports CausalErrorRecovery from causal_error_recovery,
-# which cascades through agent_loop → tools → code_intelligence — a chain of
+# which cascades through agent_loop → code_intelligence — a chain of
 # modules with Python-3.10-incompatible annotations or missing config keys.
-# Stub these modules so the lightweight types-only tests (workflow_planning_test,
-# workflow_integration_test) can collect without needing the full backend stack.
+# Stub these modules so the lightweight types-only tests can collect without
+# needing the full backend stack.
 for _causal_mod in [
     "orchestration.causal_error_recovery",
     "orchestration.causal_error_analyzer",
@@ -627,12 +715,38 @@ for _causal_mod in [
     "agent_loop",
     "agent_loop.loop",
     "agent_loop.think_tool",
-    "tools.parallel",
-    "tools.parallel.executor",
     "code_intelligence",
 ]:
     if _causal_mod not in sys.modules:
         sys.modules[_causal_mod] = _make_pkg_stub(_causal_mod)
+
+# code_intelligence.code_generation.diff real-load (#12438) — tools/parallel/executor.py
+# imports the real DiffGenerator (self-contained: stdlib difflib only) to build CODE_DIFF
+# artifacts. code_intelligence itself is stubbed above (its __init__ has Python-3.10-
+# incompatible annotations), so real-load this leaf submodule bypassing that __init__.
+# NOTE: tools.parallel / tools.parallel.executor are intentionally NOT in the stub list
+# above — they are self-contained aside from this one dependency and executor_artifacts_test.py
+# needs the real ParallelToolExecutor/DiffGenerator behaviour.
+if "code_intelligence.code_generation" not in sys.modules:
+    sys.modules["code_intelligence.code_generation"] = _make_pkg_stub("code_intelligence.code_generation")
+_real_load_and_bind(
+    "code_intelligence.code_generation.diff",
+    backend_root / "code_intelligence" / "code_generation" / "diff.py",
+)
+
+# code_intelligence.shared.scoring real-load (#12686) — api/analytics_code.py,
+# api/code_intelligence.py, api/analytics_reporting.py, and services/analytics_service.py
+# import get_grade_from_score from code_intelligence.shared.scoring at module level
+# (canonicalized 5 duplicate score->grade forks onto this shared helper). scoring.py is
+# self-contained (stdlib only: math, typing), so real-load this leaf submodule bypassing
+# code_intelligence.shared's own __init__ (which pulls ASTCache/FileListCache — heavier
+# deps not needed here), same pattern as code_intelligence.code_generation.diff above.
+if "code_intelligence.shared" not in sys.modules:
+    sys.modules["code_intelligence.shared"] = _make_pkg_stub("code_intelligence.shared")
+_real_load_and_bind(
+    "code_intelligence.shared.scoring",
+    backend_root / "code_intelligence" / "shared" / "scoring.py",
+)
 
 # code_intelligence submodule stubs — code_intelligence itself is stubbed above
 # (its __init__ has Python-3.10-incompatible annotations), so submodule imports
@@ -643,15 +757,47 @@ _ci_anti_stub.AntiPatternSeverity = MagicMock()  # type: ignore[attr-defined]
 _ci_anti_stub.AntiPatternResult = MagicMock()  # type: ignore[attr-defined]
 sys.modules["code_intelligence.anti_pattern_detector"] = _ci_anti_stub
 
-_ci_merge_stub = _make_pkg_stub("code_intelligence.merge_conflict_resolver")
-_ci_merge_stub.ConflictBlock = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.ConflictParser = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.ConflictSeverity = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.MergeConflictResolver = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.ResolutionStrategy = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.analyze_repository = MagicMock()  # type: ignore[attr-defined]
-sys.modules["code_intelligence.merge_conflict_resolver"] = _ci_merge_stub
+# code_intelligence.merge_conflict_resolver real-load (#13111) — this module used
+# to be a MagicMock package stub here, which poisoned TWO test files:
+#   * code_intelligence/merge_conflict_resolver_test.py (its own unit tests), and
+#   * api/merge_conflict_resolution_test.py — api/merge_conflict_resolution.py binds
+#     ConflictBlock/ConflictParser/MergeConflictResolver/... into its module globals
+#     at import time, so every TestClient endpoint test dispatched into mocked types.
+# The api/ consumer is why this real-load lives HERE and not in
+# code_intelligence/conftest.py: pytest collects api/ before code_intelligence/, so a
+# subdirectory-conftest fix would land after api/merge_conflict_resolution.py has
+# already bound the stub's mocks.
+# Safe to real-load: merge_conflict_resolver.py is self-contained (stdlib ast/re/
+# dataclasses/enum/pathlib/typing plus autobot_shared.logging_manager, which is
+# patched to a stdlib logger above). Same pattern as code_intelligence.code_generation.diff
+# and code_intelligence.shared.scoring — it bypasses code_intelligence/__init__.py, which
+# stays stubbed. _real_load_and_bind falls back to a package stub if the load ever fails,
+# so import-time behaviour for api/*.py is never worse than the old hand-written stub.
+_real_load_and_bind(
+    "code_intelligence.merge_conflict_resolver",
+    backend_root / "code_intelligence" / "merge_conflict_resolver.py",
+)
 
+# NOTE (#13111): every entry below that also owns a colocated ``<name>_test.py`` is
+# real-loaded again by code_intelligence/conftest.py, which runs after this file and
+# repairs code_intelligence.__path__ so the real submodules resolve. The stubs here
+# must stay: api/*.py imports several of these at module level and is collected
+# BEFORE code_intelligence/, so removing an entry would turn an api-side import into
+# a collection error. Add a matching _load_real_submodule() call over there whenever a
+# new colocated test file is added for a stubbed submodule — otherwise that test
+# silently asserts against MagicMock attributes instead of real behaviour.
+#
+# NOTE: "code_intelligence.test_pattern_analyzer" is intentionally NOT in this
+# list (#12437). Stubbing it here would poison sys.modules before pytest ever
+# collects code_intelligence/test_pattern_analyzer.py itself: with
+# --import-mode=importlib, pytest's import_path() returns whatever is already
+# in sys.modules[module_name] rather than re-importing, so the real test file
+# would never execute — pytest would instead try to treat the MagicMock-backed
+# stub module as the test module, and accessing its (mocked) `pytestmark`
+# attribute raises TypeError during collection. Nothing else in the codebase
+# imports this submodule (code_intelligence/__init__.py does, but that package
+# is itself fully stubbed above and never executes its real __init__), so
+# leaving it unstubbed is safe.
 for _ci_sub in [
     "code_intelligence.performance_analyzer",
     "code_intelligence.redis_optimizer",
@@ -665,7 +811,6 @@ for _ci_sub in [
     "code_intelligence.pattern_analysis",
     "code_intelligence.precommit_analyzer",
     "code_intelligence.shell_analyzer",
-    "code_intelligence.test_pattern_analyzer",
     "code_intelligence.typescript_analyzer",
     "code_intelligence.vue_analyzer",
     "code_intelligence.doc_generator",
@@ -906,6 +1051,37 @@ def mock_llm():
     return AsyncMock()
 
 
+@pytest.fixture
+def single_use_fake_redis():
+    """Synchronous in-memory Redis stub for single-use OAuth-state tests (#11699).
+
+    Backs ``set(ex=)`` / ``get`` / ``getdel`` / ``delete`` with an
+    introspectable ``.store`` dict.  Consolidates the byte-identical
+    ``_FakeRedis`` copies that lived in the connector- and provider-auth OAuth
+    endpoint tests (they exercise the ``client_setex`` / ``client_getdel`` /
+    ``client_get`` single-use-state helpers now in autobot_shared.redis_client).
+    """
+
+    class _SingleUseFakeRedis:
+        def __init__(self) -> None:
+            self.store: dict = {}
+
+        def set(self, key, value, ex=None):
+            self.store[key] = value
+            return True
+
+        def get(self, key):
+            return self.store.get(key)
+
+        def getdel(self, key):
+            return self.store.pop(key, None)
+
+        def delete(self, key):
+            return 1 if self.store.pop(key, None) is not None else 0
+
+    return _SingleUseFakeRedis()
+
+
 @pytest.fixture(autouse=True)
 def set_test_environment():
     """
@@ -921,6 +1097,62 @@ def set_test_environment():
 
     os.environ.clear()
     os.environ.update(original_env)
+
+
+@pytest.fixture(autouse=True)
+def _reset_synthesis_schema_cache():
+    """Clear the rag_service synthesis-schema singleton around every test (#12531).
+
+    ``services.rag_service._SYNTHESIS_SCHEMA_CACHE`` is a module-level singleton guarded
+    by ``if ... is None``: the first test that triggers a real load permanently caches
+    the on-disk schema, so later tests that patch ``load_synthesis_schema`` are silently
+    ignored. Resetting before and after each test keeps the cache from leaking across the
+    process regardless of which test populated it.
+    """
+    try:
+        import services.rag_service as _rag
+    except Exception:
+        yield
+        return
+    _rag.reset_synthesis_schema_cache()
+    yield
+    _rag.reset_synthesis_schema_cache()
+
+
+# #12438: Modules deliberately handled elsewhere in this conftest — skip them in
+# the generalized real-load loop so it doesn't clobber their configured stubs or
+# double-load the ones already loaded via _real_load_and_bind above.
+_SERVICES_REAL_LOAD_SKIP = frozenset(
+    {
+        "__init__",
+        "llm_service",  # deliberate heavy stub (Redis/npu chain — see block near L206)
+        "personality_service",  # deliberate stub carrying SUPPORTED_LANGUAGES symbol
+        "llm_api_key_service",  # real-loaded in pytest_configure below
+        "llm_cost_tracker",  # real-loaded in pytest_configure below
+        "tool_output_filter",  # real-loaded at import time (#11248)
+        "npu_client",  # real-loaded at import time (#12114)
+        "npu_profile_suggester",  # real-loaded at import time (#11731)
+    }
+)
+
+
+def _real_load_light_services() -> None:
+    """#12438: Real-load every light ``services/*.py`` submodule tests import at
+    module level, generalizing the one-at-a-time #12114/#11248/#11731 real-loads.
+
+    conftest stubs the whole ``services`` package as a MagicMock, so any
+    module-level ``from services.<mod> import ...`` errored collection with
+    ``No module named 'services.<mod>'`` even though the file exists on disk.
+    ``_real_load_and_bind`` already falls back to a package stub on any import
+    failure, so heavy or side-effectful modules stay stubbed automatically — no
+    hand-listing needed.  Runs from pytest_configure, after every stub is set.
+    """
+    services_dir = backend_root / "services"
+    for svc_path in sorted(services_dir.glob("*.py")):
+        name = svc_path.stem
+        if name in _SERVICES_REAL_LOAD_SKIP or name.startswith("test_") or name.endswith(("_test", "_examples")):
+            continue
+        _real_load_and_bind(f"services.{name}", svc_path)
 
 
 def pytest_configure(config):  # noqa: ANN001
@@ -943,3 +1175,73 @@ def pytest_configure(config):  # noqa: ANN001
     """
     _real_load_and_bind("services.llm_api_key_service", backend_root / "services" / "llm_api_key_service.py")
     _real_load_and_bind("services.llm_cost_tracker", backend_root / "services" / "llm_cost_tracker.py")
+    _real_load_light_services()
+
+
+# #12463: cascade hardening for manually-installed stub modules.
+#
+# CPython's import machinery already removes a module from ``sys.modules``
+# itself when its ``exec_module()`` raises mid-import — a genuinely
+# half-built REAL module does NOT persist in the cache, so it does not need
+# this hook. What DOES persist and poison later collectors is a module a
+# test file installed by hand (e.g. ``sys.modules["x"] = types.ModuleType(...)``
+# or ``sys.modules["x"] = MagicMock()``) *before* the surrounding collection
+# failed for some other reason — that manual assignment bypasses the normal
+# import protocol entirely, so nothing ever cleans it up. The next file that
+# needs the real ``x`` gets the abandoned stub instead of a fresh import
+# attempt, and fails with a confusing, unrelated-looking error (``cannot
+# import name X from Y`` / ``No module named Y.Z``).
+#
+# This hook does NOT mask the real failure — the file whose collection
+# actually failed still reports its own (correct) error via the normal
+# CollectReport. It only prevents that failure from poisoning other files'
+# imports of the same stub: on a FAILED Module collection, any module newly
+# present in sys.modules is evicted ONLY if it looks like a manual/uninitialized
+# stub rather than a healthy, fully-imported real module — see
+# ``_looks_like_uninitialized_stub`` — so a real module that happened to
+# import cleanly earlier in the same (later-failing) file is left alone and
+# is not re-executed (double-running its import-time side effects) by a
+# subsequent file's fresh import.
+#
+# Keyed by nodeid (not a plain stack) because ``pytest_collectreport`` fires
+# for every collector level (Dir/Package/Module/...), not just Module — a
+# stack would pop the wrong snapshot for non-Module reports interleaved
+# between a Module's collectstart and its own collectreport.
+_module_collect_snapshots: dict = {}
+
+
+def _looks_like_uninitialized_stub(mod) -> bool:  # noqa: ANN001
+    """True if *mod* was never legitimately finished importing.
+
+    A module the real import system completed has a real ``ModuleSpec``
+    whose ``_initializing`` flag is ``False`` by the time ``exec_module()``
+    returns. A module installed by hand (``sys.modules[name] = MagicMock()``
+    / ``types.ModuleType(name)`` never passed through ``exec_module``) either
+    has no ``__spec__`` at all or one still flagged ``_initializing`` (import
+    machinery normally clears that flag on success; a manual stand-in never
+    sets it, so it reads as truthy-missing via ``getattr(..., False)`` — the
+    only way this is ``True`` is a bare ``ModuleSpec()`` some hand-rolled
+    stub constructed itself, which is exactly the anti-pattern being
+    targeted here).
+    """
+    spec = getattr(mod, "__spec__", None)
+    return spec is None or getattr(spec, "_initializing", False)
+
+
+def pytest_collectstart(collector) -> None:  # noqa: ANN001
+    """Snapshot sys.modules before a Module collector imports its file."""
+    if type(collector).__name__ == "Module":
+        _module_collect_snapshots[collector.nodeid] = set(sys.modules.keys())
+
+
+def pytest_collectreport(report) -> None:  # noqa: ANN001
+    """On a failed Module collection, evict any uninitialized-stub module it left behind."""
+    before = _module_collect_snapshots.pop(report.nodeid, None)
+    if before is None:
+        return
+    if report.failed:
+        for _name in set(sys.modules.keys()) - before:
+            _mod = sys.modules.get(_name)
+            if _mod is not None and not _looks_like_uninitialized_stub(_mod):
+                continue  # healthy real module — leave it cached, don't re-run its import
+            sys.modules.pop(_name, None)

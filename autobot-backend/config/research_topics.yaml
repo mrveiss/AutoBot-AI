@@ -1,0 +1,36 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Keyword -> topic map used by services.research.router.infer_topic (#12625).
+# Extend this file (no code change) to teach the Source Router new topics;
+# a source declared in config/research_sources.yaml can then set its
+# `category` to one of these keys so a matching sub-question routes to it
+# ahead of the general-web fallback.
+#
+# A sub-question's topic is the first key whose keyword list contains a
+# substring match against the (lower-cased) sub-question text; no match
+# defaults to "general" (the unchanged registry fallback order).
+topics:
+  academic:
+    - study
+    - research
+    - paper
+    - journal
+    - theorem
+    - hypothesis
+    - experiment
+  code:
+    - code
+    - function
+    - library
+    - programming
+    - framework
+    - compile
+    - syntax
+  news:
+    - news
+    - today
+    - yesterday
+    - breaking
+    - announced
+    - latest

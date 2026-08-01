@@ -262,4 +262,72 @@ describe('useChatStore', () => {
       expect(session).toBeDefined()
     })
   })
+
+  // Issue #11843: assistant reply rendered twice (two bubbles ~1min apart) because
+  // a re-hydration / poll / live-event echo re-added the SAME backend reply through
+  // a path that did not reuse the backend message_id. addOrUpdateMessage now dedups
+  // by the stable server id whether it arrives as `id` (stream) or `message_id`
+  // (poll / live-event echo).
+  describe('addOrUpdateMessage server-id deduplication - #11843', () => {
+    const serverId = 'srv-msg-abc123'
+
+    it('collapses the same server id (via id) added twice into ONE message', () => {
+      const store = useChatStore()
+      store.createNewSession('Dedup Session')
+
+      store.addOrUpdateMessage({ id: serverId, content: 'The answer is 42.', sender: 'assistant', type: 'response' })
+      // Second delivery of the identical reply (e.g. from a poll/refresh)
+      store.addOrUpdateMessage({ id: serverId, content: 'The answer is 42.', sender: 'assistant', type: 'response' })
+
+      expect(store.currentMessages).toHaveLength(1)
+      expect(store.currentMessages[0].content).toBe('The answer is 42.')
+    })
+
+    it('dedups when the reply first arrives via id (stream) then via message_id (poll/echo)', () => {
+      const store = useChatStore()
+      store.createNewSession('Dedup Session')
+
+      // Stream / normal path: server id lands in `id`
+      store.addOrUpdateMessage({ id: serverId, content: 'Grounded reply.', sender: 'assistant', type: 'response' })
+      // Poll / live-event echo: the same server id lands in `message_id`
+      store.addOrUpdateMessage({ message_id: serverId, content: 'Grounded reply.', sender: 'assistant', type: 'response' })
+
+      expect(store.currentMessages).toHaveLength(1)
+    })
+
+    it('dedups a streaming placeholder (addMessage w/ message_id) against a later echo (addOrUpdateMessage w/ id)', () => {
+      const store = useChatStore()
+      store.createNewSession('Dedup Session')
+
+      // Streaming placeholder carries the backend id in message_id (frontend id differs)
+      store.addMessage({ content: 'Streamed reply.', sender: 'assistant', type: 'response', message_id: serverId })
+      // Live-event echo re-adds the same reply keyed on the server id
+      store.addOrUpdateMessage({ id: serverId, content: 'Streamed reply.', sender: 'assistant', type: 'response' })
+
+      expect(store.currentMessages).toHaveLength(1)
+      expect(store.currentMessages[0].content).toBe('Streamed reply.')
+    })
+
+    it('keeps distinct server ids as separate messages (no over-dedup)', () => {
+      const store = useChatStore()
+      store.createNewSession('Dedup Session')
+
+      store.addOrUpdateMessage({ id: 'srv-1', content: 'First reply.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({ id: 'srv-2', content: 'Second reply.', sender: 'assistant', type: 'response' })
+
+      expect(store.currentMessages).toHaveLength(2)
+    })
+
+    it('does NOT dedup replies that carry NEITHER id NOR message_id (no server identity)', () => {
+      const store = useChatStore()
+      store.createNewSession('Dedup Session')
+
+      // Two distinct replies with no stable server id must stay separate bubbles.
+      // Guards against over-dedupping the no-server-id path onto a single message.
+      store.addOrUpdateMessage({ content: 'First reply.', sender: 'assistant', type: 'response' })
+      store.addOrUpdateMessage({ content: 'Second reply.', sender: 'assistant', type: 'response' })
+
+      expect(store.currentMessages).toHaveLength(2)
+    })
+  })
 })

@@ -296,7 +296,9 @@ async def test_index_code_accepts_project_root_itself(tmp_path) -> None:
         mock_path.PROJECT_ROOT = str(project)
         response = await index_code({"root_dir": str(project)})
 
-    assert response["status"] == "ok"
+    # #4912: index_code now enqueues a background task and returns immediately.
+    assert response["status"] == "queued"
+    assert response["task_id"]
 
 
 @requires_tree_sitter
@@ -357,7 +359,9 @@ async def test_index_code_accepts_subdir_of_project_root(tmp_path) -> None:
         mock_path.PROJECT_ROOT = str(project)
         response = await index_code({"root_dir": str(subdir)})
 
-    assert response["status"] == "ok"
+    # #4912: index_code now enqueues a background task and returns immediately.
+    assert response["status"] == "queued"
+    assert response["task_id"]
 
 
 # ---------------------------------------------------------------------------

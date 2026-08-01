@@ -42,9 +42,7 @@ class ConfigVerifier(BaseVerifier):
     def can_verify(self, claim: dict) -> bool:
         """Check if claim mentions configuration values."""
         text = claim.get("text", "").lower()
-        return any(
-            re.search(pattern, text, re.IGNORECASE) for pattern in self.CONFIG_PATTERNS
-        )
+        return any(re.search(pattern, text, re.IGNORECASE) for pattern in self.CONFIG_PATTERNS)
 
     def verify(self, claim: dict) -> VerificationResult:
         """Verify config claim by searching configuration files."""
@@ -146,7 +144,7 @@ class ConfigVerifier(BaseVerifier):
                     rel_path = file_path.replace(self.repo_root + "/", "")
 
                     # Get the matching line content
-                    with open(file_path, "r") as f:
+                    with open(file_path, "r", encoding="utf-8") as f:
                         for i, line in enumerate(f, 1):
                             if re.search(pattern, line, re.IGNORECASE):
                                 return {

@@ -75,9 +75,7 @@ const avgUtilization = computed(() => {
 })
 
 const healthyNpuNodes = computed(() => {
-  return npuNodes.value.filter(n =>
-    n.status === 'online' || n.status === 'healthy'
-  ).length
+  return npuNodes.value.filter(n => n.status === 'online').length
 })
 
 // Methods

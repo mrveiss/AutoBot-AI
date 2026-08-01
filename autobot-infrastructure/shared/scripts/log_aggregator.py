@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Log Aggregation System
@@ -489,7 +490,7 @@ class LogAggregator:
             alerts = []
             if alert_file.exists():
                 try:
-                    with open(alert_file, "r") as f:
+                    with open(alert_file, "r", encoding="utf-8") as f:
                         alerts = json.load(f)
                 except Exception:
                     alerts = []
@@ -500,7 +501,7 @@ class LogAggregator:
             if len(alerts) > 1000:
                 alerts = alerts[-1000:]
 
-            with open(alert_file, "w") as f:
+            with open(alert_file, "w", encoding="utf-8") as f:
                 json.dump(alerts, f, indent=2)
 
         # Print alert notification
@@ -642,7 +643,7 @@ class LogAggregator:
         alert_file = self.logs_dir / "alerts.json"
         if alert_file.exists():
             try:
-                with open(alert_file, "r") as f:
+                with open(alert_file, "r", encoding="utf-8") as f:
                     all_alerts = json.load(f)
                     # Filter recent alerts
                     cutoff_time = datetime.now() - timedelta(hours=last_hours)
@@ -674,7 +675,7 @@ class LogAggregator:
         analysis: Dict[str, Any],
     ) -> None:
         """Analyze a file-based log source. (Issue #315 - extracted)"""
-        with open(log_path, "r") as f:
+        with open(log_path, "r", encoding="utf-8") as f:
             for line in f:
                 parsed = self.parse_log_line(line, config.get("format", "text"))
                 self._update_analysis_stats(source_name, parsed, analysis)
@@ -733,7 +734,7 @@ class LogAggregator:
 
         # Save to file if specified
         if output_file:
-            with open(output_file, "w") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 f.write(output)
             self.print_step(f"Logs exported to: {output_file}", "success")
 
@@ -763,7 +764,7 @@ class LogAggregator:
         """Collect logs from a file-based source. (Issue #315 - extracted)"""
         logs = []
 
-        with open(log_path, "r") as f:
+        with open(log_path, "r", encoding="utf-8") as f:
             for line in f:
                 parsed = self.parse_log_line(line, config.get("format", "text"))
                 parsed["source"] = source_name
@@ -808,7 +809,7 @@ class LogAggregator:
         config_file = self.project_root / "config" / "logging.yml"
         config_file.parent.mkdir(exist_ok=True)
 
-        with open(config_file, "w") as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             yaml.dump(log_config, f)
 
         self.print_step(f"Logging configuration saved to: {config_file}", "success")
@@ -834,7 +835,7 @@ find "$ARCHIVE_DIR" -name "*.gz" -mtime +$MAX_AGE_DAYS -delete
 echo "Log rotation completed at $(date)"
 """
 
-        with open(rotation_script, "w") as f:
+        with open(rotation_script, "w", encoding="utf-8") as f:
             f.write(rotation_script_content)
 
         rotation_script.chmod(0o755)
@@ -903,7 +904,7 @@ async def _handle_search_command(log_aggregator: LogAggregator, args: argparse.N
     )
 
     if args.output:
-        with open(args.output, "w") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             json.dump({"results": results}, f, indent=2)
         logger.info(f"✅ Search results saved to: {args.output}")
     else:
@@ -924,7 +925,7 @@ def _handle_analyze_command(log_aggregator: LogAggregator, args: argparse.Namesp
     analysis = log_aggregator.analyze_logs(sources=services, last_hours=args.last_hours)
 
     if args.output:
-        with open(args.output, "w") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             json.dump(analysis, f, indent=2)
         logger.info(f"✅ Analysis saved to: {args.output}")
     else:

@@ -57,9 +57,13 @@
   become: true
   tags: ['slm_agent', 'node_exporter']
 
+# Canonical node_exporter service template lives in the monitoring role
+# (roles/monitoring/templates/node_exporter.service.j2); referenced here so the
+# two roles share one source. `node_exporter_port` is supplied by this role's
+# defaults, so rendered output is unchanged. See #12765.
 - name: "Node Exporter | Deploy systemd service"
   ansible.builtin.template:
-    src: node_exporter.service.j2
+    src: ../../monitoring/templates/node_exporter.service.j2
     dest: /etc/systemd/system/node_exporter.service
     owner: root
     group: root

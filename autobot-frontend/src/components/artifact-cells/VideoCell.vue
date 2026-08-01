@@ -162,9 +162,9 @@ const copyVideoUrl = async (url: string) => {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  border: 1px dashed var(--border-default, #e5e7eb);
+  border: 1px dashed var(--border-default);
   border-radius: 0.5rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .placeholder-content {
@@ -191,9 +191,9 @@ const copyVideoUrl = async (url: string) => {
 .size-badge {
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  background: var(--color-surface-2, #f3f4f6);
-  color: var(--text-muted, #6b7280);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2, var(--videocell-surface-2));
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -202,7 +202,7 @@ const copyVideoUrl = async (url: string) => {
   max-width: 640px;
   border-radius: 0.5rem;
   overflow: hidden;
-  background: #000;
+  background: var(--videocell-video-bg);
 }
 
 .generated-video {
@@ -217,7 +217,7 @@ const copyVideoUrl = async (url: string) => {
   align-items: center;
   gap: 0.5rem;
   padding: 1.5rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
   max-width: 640px;
 }
@@ -225,8 +225,8 @@ const copyVideoUrl = async (url: string) => {
 .spinner {
   width: 1.75rem;
   height: 1.75rem;
-  border: 3px solid var(--color-surface-2, #f3f4f6);
-  border-top-color: var(--color-primary, #3b82f6);
+  border: 3px solid var(--color-surface-2, var(--videocell-surface-2));
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -234,20 +234,20 @@ const copyVideoUrl = async (url: string) => {
 .progress-track {
   width: 100%;
   height: 0.375rem;
-  background: var(--color-surface-2, #f3f4f6);
-  border-radius: 9999px;
+  background: var(--color-surface-2, var(--videocell-surface-2));
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .progress-bar {
   height: 100%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   transition: width 0.3s ease;
 }
 
 .progress-label {
   font-size: 0.8125rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .video-error {
@@ -256,8 +256,8 @@ const copyVideoUrl = async (url: string) => {
   gap: 0.5rem;
   padding: 1rem;
   border-radius: 0.5rem;
-  background: var(--color-surface-2, #f3f4f6);
-  color: var(--color-error, #dc2626);
+  background: var(--color-surface-2, var(--videocell-surface-2));
+  color: var(--color-error);
   font-size: 0.875rem;
   max-width: 640px;
 }
@@ -267,7 +267,7 @@ const copyVideoUrl = async (url: string) => {
   align-items: flex-start;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   font-style: italic;
   line-height: 1.4;
   margin: 0;
@@ -285,17 +285,17 @@ const copyVideoUrl = async (url: string) => {
   gap: 0.25rem;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
-  color: var(--text-primary, #374151);
+  background: var(--bg-surface);
+  color: var(--text-primary);
   cursor: pointer;
   text-decoration: none;
   transition: background 0.15s;
 }
 
 .action-btn:hover {
-  background: var(--color-surface-2, #f3f4f6);
+  background: var(--color-surface-2, var(--videocell-surface-2));
 }
 
 @keyframes spin {

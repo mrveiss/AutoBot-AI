@@ -150,7 +150,7 @@ async def test_scan_queues_only_real_and_skips_promoted():
     async def mock_gather(proj, min_sev, sess):
         return [finding_real, finding_fake, finding_promoted]
 
-    async def mock_verify(finding, cp):
+    async def mock_verify(finding, cp, **_kwargs):
         return fake_verdict if finding["file_path"] == "b.py" else real_verdict
 
     session = AsyncMock()
@@ -162,6 +162,10 @@ async def test_scan_queues_only_real_and_skips_promoted():
         patch("llc.services.finding_proposal_service._get_clone_path", return_value=clone_path),
         patch("llc.services.finding_proposal_service._lookup_existing", side_effect=mock_lookup),
         patch("llc.services.finding_proposal_service._upsert_proposal", side_effect=mock_upsert),
+        patch(
+            "llc.services.finding_proposal_service._requires_cross_vendor_review",
+            AsyncMock(return_value=False),
+        ),
     ):
         result = await scan(project, session)
 
@@ -306,6 +310,44 @@ async def test_dismiss_from_non_pending_raises():
 
     with pytest.raises(ProposalStateError):
         await dismiss(proposal, session, "already promoted")
+
+
+@pytest.mark.asyncio
+async def test_scan_wires_cross_vendor_policy_into_verify_finding():
+    """Reachability proof (#12618): when the per-item-type policy says
+    requires_cross_vendor_review=True, scan() forwards cross_vendor=True into
+    verify_finding — the live call path from the findings-scan entry point to
+    the cross-vendor verifier tier.
+    """
+    policy = _make_policy(enabled=True, batch_size=5)
+    project = _make_project()
+    finding = _make_finding(ftype="bug")
+    real_verdict = SimpleNamespace(is_real=True, confidence=0.9, rationale="real", escalate_to_human=False)
+
+    captured_kwargs: dict = {}
+
+    async def mock_verify(finding_arg, cp, **kwargs):
+        captured_kwargs.update(kwargs)
+        return real_verdict
+
+    session = AsyncMock()
+
+    with (
+        patch("llc.services.finding_proposal_service.get_findings_policy", AsyncMock(return_value=policy)),
+        patch("llc.services.finding_proposal_service.gather_findings", AsyncMock(return_value=[finding])),
+        patch("llc.services.finding_proposal_service.verify_finding", side_effect=mock_verify),
+        patch("llc.services.finding_proposal_service._get_clone_path", return_value="/tmp/clone"),
+        patch("llc.services.finding_proposal_service._lookup_existing", AsyncMock(return_value=None)),
+        patch("llc.services.finding_proposal_service._upsert_proposal", AsyncMock(return_value=None)),
+        patch(
+            "llc.services.finding_proposal_service._requires_cross_vendor_review",
+            AsyncMock(return_value=True),
+        ) as mock_policy_check,
+    ):
+        await scan(project, session)
+
+    mock_policy_check.assert_awaited_once()
+    assert captured_kwargs.get("cross_vendor") is True
 
 
 @pytest.mark.asyncio

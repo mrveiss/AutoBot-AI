@@ -10,6 +10,11 @@ import os
 import sys
 from datetime import datetime
 
+import pytest
+
+# utils.entity_resolver requires sklearn (optional dep, not in requirements-ci) — Issue #11954
+pytest.importorskip("sklearn")
+
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

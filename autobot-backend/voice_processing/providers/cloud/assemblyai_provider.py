@@ -14,9 +14,10 @@ import asyncio
 import os
 from typing import List, Optional
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from voice_processing.providers import TranscriptSegment
-from voice_processing.providers.cloud.base import CloudSpeechProvider
+from voice_processing.providers.cloud.base import _DEFAULT_TIMEOUT, CloudSpeechProvider
 
 logger = get_logger(__name__)
 
@@ -54,11 +55,12 @@ class AssemblyAIProvider(CloudSpeechProvider):
     async def _upload(self, audio_bytes: bytes) -> str:
         """Upload raw audio and return the AssemblyAI upload_url."""
         headers = {"authorization": self._api_key or "", "content-type": "application/octet-stream"}
-        async with self._make_session() as session:
-            async with session.post(f"{_BASE_URL}/upload", headers=headers, data=audio_bytes) as resp:
-                if resp.status != 200:
-                    raise RuntimeError(f"AssemblyAI upload failed: {resp.status}")
-                data = await resp.json()
+        async with get_http_client().tracked_request(
+            "POST", f"{_BASE_URL}/upload", headers=headers, data=audio_bytes, timeout=_DEFAULT_TIMEOUT
+        ) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"AssemblyAI upload failed: {resp.status}")
+            data = await resp.json()
         return data["upload_url"]
 
     async def _submit(self, upload_url: str, language: Optional[str]) -> str:
@@ -66,28 +68,30 @@ class AssemblyAIProvider(CloudSpeechProvider):
         payload: dict = {"audio_url": upload_url, "speaker_labels": True}
         if language:
             payload["language_code"] = language
-        async with self._make_session() as session:
-            async with session.post(f"{_BASE_URL}/transcript", headers=self._headers(), json=payload) as resp:
-                if resp.status != 200:
-                    raise RuntimeError(f"AssemblyAI submit failed: {resp.status}")
-                data = await resp.json()
+        async with get_http_client().tracked_request(
+            "POST", f"{_BASE_URL}/transcript", headers=self._headers(), json=payload, timeout=_DEFAULT_TIMEOUT
+        ) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"AssemblyAI submit failed: {resp.status}")
+            data = await resp.json()
         return data["id"]
 
     async def _poll(self, transcript_id: str, language: Optional[str]) -> List[TranscriptSegment]:
         """Poll until complete or timeout; return parsed segments."""
         elapsed = 0.0
-        async with self._make_session() as session:
-            while elapsed < _POLL_TIMEOUT:
-                async with session.get(f"{_BASE_URL}/transcript/{transcript_id}", headers=self._headers()) as resp:
-                    data = await resp.json()
-                status = data.get("status")
-                if status == "completed":
-                    return self._parse(data, language)
-                if status == "error":
-                    logger.error("AssemblyAIProvider: job error: %s", data.get("error"))
-                    return []
-                await asyncio.sleep(_POLL_INTERVAL)
-                elapsed += _POLL_INTERVAL
+        while elapsed < _POLL_TIMEOUT:
+            async with get_http_client().tracked_request(
+                "GET", f"{_BASE_URL}/transcript/{transcript_id}", headers=self._headers(), timeout=_DEFAULT_TIMEOUT
+            ) as resp:
+                data = await resp.json()
+            status = data.get("status")
+            if status == "completed":
+                return self._parse(data, language)
+            if status == "error":
+                logger.error("AssemblyAIProvider: job error: %s", data.get("error"))
+                return []
+            await asyncio.sleep(_POLL_INTERVAL)
+            elapsed += _POLL_INTERVAL
         logger.error("AssemblyAIProvider: poll timeout after %.0fs", _POLL_TIMEOUT)
         return []
 

@@ -74,25 +74,23 @@ DEEPGRAM_RESPONSE = {
 @pytest.mark.asyncio
 async def test_deepgram_transcribe_request_shape(audio_file):
     """Verify Deepgram sends correct params and auth header."""
+    from autobot_shared.http_client import get_http_client
+
     mock_resp = AsyncMock()
     mock_resp.status = 200
     mock_resp.json = AsyncMock(return_value=DEEPGRAM_RESPONSE)
     mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
     mock_resp.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session = MagicMock()
-    mock_session.post = MagicMock(return_value=mock_resp)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-
     with patch.dict(os.environ, {"DEEPGRAM_API_KEY": "dg-key-123"}):
         provider = DeepgramProvider()
 
-    with patch("voice_processing.providers.cloud.deepgram_provider.aiohttp.ClientSession", return_value=mock_session):
+    manager = get_http_client()
+    with patch.object(manager, "tracked_request", return_value=mock_resp) as mock_tracked_request:
         segments = await provider.transcribe(audio_file, "en")
 
-    mock_session.post.assert_called_once()
-    call_kwargs = mock_session.post.call_args
+    mock_tracked_request.assert_called_once()
+    call_kwargs = mock_tracked_request.call_args
     assert call_kwargs.kwargs["headers"]["Authorization"] == "Bearer dg-key-123"
     assert call_kwargs.kwargs["params"]["diarize"] == "true"
 
@@ -106,21 +104,19 @@ async def test_deepgram_transcribe_request_shape(audio_file):
 
 @pytest.mark.asyncio
 async def test_deepgram_returns_empty_on_api_error(audio_file):
+    from autobot_shared.http_client import get_http_client
+
     mock_resp = AsyncMock()
     mock_resp.status = 401
     mock_resp.text = AsyncMock(return_value="unauthorized")
     mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
     mock_resp.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session = MagicMock()
-    mock_session.post = MagicMock(return_value=mock_resp)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-
     with patch.dict(os.environ, {"DEEPGRAM_API_KEY": "bad-key"}):
         provider = DeepgramProvider()
 
-    with patch("voice_processing.providers.cloud.deepgram_provider.aiohttp.ClientSession", return_value=mock_session):
+    manager = get_http_client()
+    with patch.object(manager, "tracked_request", return_value=mock_resp):
         segments = await provider.transcribe(audio_file, "en")
 
     assert segments == []
@@ -150,6 +146,8 @@ ASSEMBLYAI_COMPLETED = {
 @pytest.mark.asyncio
 async def test_assemblyai_transcribe_request_shape(audio_file):
     """Verify upload→submit→poll flow and speaker label mapping."""
+    from autobot_shared.http_client import get_http_client
+
     upload_resp = AsyncMock()
     upload_resp.status = 200
     upload_resp.json = AsyncMock(return_value={"upload_url": "https://fake/audio"})
@@ -167,18 +165,12 @@ async def test_assemblyai_transcribe_request_shape(audio_file):
     poll_resp.__aenter__ = AsyncMock(return_value=poll_resp)
     poll_resp.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session = MagicMock()
-    mock_session.post = MagicMock(side_effect=[upload_resp, submit_resp])
-    mock_session.get = MagicMock(return_value=poll_resp)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-
     with patch.dict(os.environ, {"ASSEMBLYAI_API_KEY": "aai-key"}):
         provider = AssemblyAIProvider()
 
-    with patch("voice_processing.providers.cloud.assemblyai_provider.asyncio.sleep", new=AsyncMock()):
-        # Each _upload/_submit/_poll creates its own session via _make_session()
-        with patch.object(provider, "_make_session", return_value=mock_session):
+    manager = get_http_client()
+    with patch.object(manager, "tracked_request", side_effect=[upload_resp, submit_resp, poll_resp]):
+        with patch("voice_processing.providers.cloud.assemblyai_provider.asyncio.sleep", new=AsyncMock()):
             segments = await provider.transcribe(audio_file, "en")
 
     assert len(segments) == 2

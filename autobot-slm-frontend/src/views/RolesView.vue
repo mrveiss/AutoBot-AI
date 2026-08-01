@@ -13,12 +13,11 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
+import { REMOTE_EXEC_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 const logger = createLogger('RolesView')
-const authStore = useAuthStore()
 const { t } = useI18n()
 
 // Types
@@ -124,13 +123,29 @@ const healthClass = computed(() => {
   }[fleetHealth.value.health] ?? 'bg-gray-100 text-gray-600'
 })
 
-// API helper
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T | null> {
+/**
+ * API helper — one request through the canonical client (#13140).
+ *
+ * `rawRequest`, not the `get`/`post`/... helpers, so the `body.detail` message
+ * this view renders in `errorMessage` survives (the helpers flatten it into
+ * `HTTP <n>: <msg>`) and so writes stay single-shot. The client supplies the
+ * base URL, the bearer, the request timeout and the 401 handler.
+ *
+ * The bearer replaces `authStore.getAuthHeaders()`, which returns `{}` when the
+ * store's `token` ref is null. That ref is seeded from storage once, at store
+ * construction (`stores/auth.ts:66`), so a token that lands later is invisible
+ * to it and the request went out anonymous; the client re-reads storage on
+ * every call.
+ *
+ * `path` stays relative to the API base, exactly as callers already pass it,
+ * and `body` is handed over unserialised (rawRequest JSON-stringifies it).
+ */
+async function apiFetch<T>(
+  path: string,
+  options: { method?: string; body?: unknown; timeout?: number } = {}
+): Promise<T | null> {
   try {
-    const response = await fetch(`${getSlmApiBase()}${path}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...authStore.getAuthHeaders(), ...options?.headers },
-    })
+    const response = await slmApiClient.rawRequest(path, options)
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
       throw new Error(body.detail || `HTTP ${response.status}`)
@@ -225,7 +240,7 @@ async function saveRole(): Promise<void> {
   if (editingRole.value) {
     const result = await apiFetch<RoleDefinition>(
       `/roles/${editingRole.value}`,
-      { method: 'PUT', body: JSON.stringify(payload) }
+      { method: 'PUT', body: payload }
     )
     if (result) {
       successMessage.value = t('rolesView.roleUpdated', { name: result.name })
@@ -236,7 +251,7 @@ async function saveRole(): Promise<void> {
   } else {
     const result = await apiFetch<RoleDefinition>(
       '/roles',
-      { method: 'POST', body: JSON.stringify(payload) }
+      { method: 'POST', body: payload }
     )
     if (result) {
       successMessage.value = t('rolesView.roleCreated', { name: result.name })
@@ -290,7 +305,13 @@ async function executeMigrate(): Promise<void> {
 
   const result = await apiFetch<{ success: boolean; output: string; playbook: string }>(
     `/roles/${migratingRole.value.name}/migrate`,
-    { method: 'POST', body: JSON.stringify({ target_node_id: targetNodeId.value }) }
+    // Runs an ansible playbook against the target node — the client's 30s
+    // default would abort a migration that completes fine today.
+    {
+      method: 'POST',
+      body: { target_node_id: targetNodeId.value },
+      timeout: REMOTE_EXEC_TIMEOUT_MS,
+    }
   )
 
   migrateLoading.value = false

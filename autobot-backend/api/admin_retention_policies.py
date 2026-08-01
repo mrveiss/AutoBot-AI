@@ -12,7 +12,7 @@ Endpoints:
     DELETE /api/admin/retention-policies/{type}      - Delete policy by type
     GET    /api/admin/retention-settings             - Active config + per-type storage counts
 
-Access: admin role required (RBAC enforced via _require_admin dependency).
+Access: admin/superadmin role required (RBAC enforced via require_role dependency).
 """
 
 import uuid
@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_db_session
-from auth_middleware import get_auth_middleware
+from auth_rbac import require_role
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as ssot_config
@@ -34,28 +34,17 @@ from user_management.schemas.retention_policy import (
     RetentionPolicyListResponse,
     RetentionPolicyResponse,
 )
-from utils.catalog_http_exceptions import raise_auth_error
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/admin")
 
 
-def _require_admin(request: Request) -> dict:
-    """Dependency: reject non-admin callers and return user data."""
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
-    if user_data.get("role") != "admin":
-        raise_auth_error("AUTH_0003", "Admin permission required")
-    return user_data
-
-
 @router.get("/retention-policies", response_model=RetentionPolicyListResponse)
 async def list_retention_policies(
     request: Request,
     user_id: uuid.UUID | None = Query(None, description="Filter by user_id (NULL = global)"),
-    _admin: dict = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyListResponse:
     """
@@ -84,7 +73,7 @@ async def list_retention_policies(
 async def create_or_update_retention_policy(
     request: Request,
     policy: RetentionPolicyCreate,
-    _admin: dict = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyResponse:
     """
@@ -129,7 +118,7 @@ async def get_retention_policy(
     request: Request,
     policy_type: PolicyType,
     user_id: uuid.UUID | None = Query(None, description="User ID for user-specific policy"),
-    _admin: dict = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
     session: AsyncSession = Depends(get_db_session),
 ) -> RetentionPolicyResponse:
     """
@@ -173,7 +162,7 @@ async def delete_retention_policy(
     request: Request,
     policy_type: PolicyType,
     user_id: uuid.UUID | None = Query(None, description="User ID for user-specific policy"),
-    _admin: dict = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
     """
@@ -277,7 +266,7 @@ async def _count_kb_facts() -> int:
 @router.get("/retention-settings", response_model=Dict[str, Any])
 async def get_retention_settings(
     request: Request,
-    _admin: dict = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> Dict[str, Any]:
     """Return active retention configuration and per-type storage counts (GH#8995).
 

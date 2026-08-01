@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # AutoBot Centralized Logging Monitoring Dashboard
 # Real-time monitoring interface for distributed AutoBot infrastructure

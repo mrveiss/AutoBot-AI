@@ -70,6 +70,9 @@ from knowledge.schemas.documents import (
     DocsStatsResponse,
     DocsWatcherControlResponse,
     DocsWatcherStatusResponse,
+    SystemDocContentResponse,
+    SystemDocsCategoriesResponse,
+    SystemDocsCategoryResponse,
 )
 from knowledge.schemas.facts import (
     AddFactResponse,
@@ -2082,37 +2085,57 @@ async def query_knowledge(
 # =============================================================================
 
 
-async def _check_facts_cache(kb, category: str | None, limit: int) -> tuple:
+async def _check_facts_cache(kb, category: str | None, limit: int, offset: int = 0) -> tuple:
     """Check cache for facts_by_category result (Issue #281: extracted)."""
     import json
 
-    cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}"
+    cache_key = f"kb:cache:facts_by_category:{category or 'all'}:{limit}:{offset}"
     cached_result = await asyncio.to_thread(kb.redis_client.get, cache_key)
 
     if cached_result:
-        logger.debug(f"Cache HIT for facts_by_category (category={category}, limit={limit})")
+        logger.debug(f"Cache HIT for facts_by_category (category={category}, limit={limit}, offset={offset})")
         return (
             json.loads(cached_result.decode("utf-8") if isinstance(cached_result, bytes) else cached_result),
             cache_key,
         )
 
     logger.info(
-        f"Cache MISS for facts_by_category - using category index lookup " f"(category={category}, limit={limit})"
+        f"Cache MISS for facts_by_category - using category index lookup "
+        f"(category={category}, limit={limit}, offset={offset})"
     )
     return None, cache_key
 
 
-async def _fetch_category_fact_ids(kb, categories_to_fetch: list, limit: int) -> dict:
-    """Fetch fact IDs from category indexes (Issue #281: extracted)."""
-    category_fact_ids = {}
+async def _fetch_category_fact_ids(kb, categories_to_fetch: list, limit: int, offset: int = 0) -> tuple:
+    """Fetch a deterministic page of fact IDs per category index (Issue #12394).
+
+    Uses SMEMBERS + a sorted slice instead of SRANDMEMBER: SRANDMEMBER draws a
+    fresh random sample on every call, so it cannot support stable offset/limit
+    windows across pages (page 2 could re-show page 1's items or skip others).
+    This mirrors ``KnowledgeCategoryManager.get_facts_in_category``
+    (knowledge/categories.py) which paginates the same way over Redis sets.
+
+    Returns:
+        (category_fact_ids, category_totals) where ``category_totals`` holds
+        the full per-category set size (independent of the requested page),
+        used to compute ``has_more``/``total_count`` and to distinguish "index
+        exists but this page is empty" from "no index at all" (legacy-scan
+        fallback trigger).
+    """
+    category_fact_ids: dict = {}
+    category_totals: dict = {}
     for cat in categories_to_fetch:
         index_key = f"category:index:{cat}"
-        fact_ids = await asyncio.to_thread(kb.redis_client.srandmember, index_key, limit)
-        if fact_ids:
-            decoded_ids = [fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids]
-            category_fact_ids[cat] = decoded_ids
-            logger.debug(f"Category index {cat}: fetched {len(decoded_ids)} fact IDs")
-    return category_fact_ids
+        fact_ids = await asyncio.to_thread(kb.redis_client.smembers, index_key)
+        if not fact_ids:
+            continue
+        decoded_ids = sorted(fid.decode("utf-8") if isinstance(fid, bytes) else fid for fid in fact_ids)
+        category_totals[cat] = len(decoded_ids)
+        page = decoded_ids[offset : offset + limit]
+        if page:
+            category_fact_ids[cat] = page
+            logger.debug(f"Category index {cat}: page [{offset}:{offset + limit}] of {len(decoded_ids)} fact IDs")
+    return category_fact_ids, category_totals
 
 
 async def _batch_fetch_facts(kb, category_fact_ids: dict) -> tuple:
@@ -2158,8 +2181,9 @@ def _process_fact_data(fact_data: dict, cat: str, fact_key: str) -> dict | None:
         return {
             "key": fact_key,
             "title": fact_title,
+            # Issue #12370: browse list ships only the snippet; the full
+            # document is lazy-loaded per fact via GET /fact/{fact_key}.
             "content": content[:500] + "..." if len(content) > 500 else content,
-            "full_content": content,
             "category": cat,
             "type": fact_type,
             "metadata": metadata,
@@ -2215,11 +2239,14 @@ async def get_facts_by_category(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
     category: str | None = None,
-    limit: int = 100,
+    limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=QueryDefaults.MAX_PAGE_SIZE),
+    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
 ):
     """Get facts grouped by category for browsing with caching.
 
     Issue #744: Requires admin authentication.
+    Issue #12394: paginated via ``limit``/``offset`` (applied per category) —
+    the response was previously unbounded across all categories.
     """
     kb = await get_or_create_knowledge_base(req.app)
     if kb is None:
@@ -2230,7 +2257,7 @@ async def get_facts_by_category(
         autobot_kb_degradation_total.labels(endpoint="facts_by_category", reason="kb_uninit").inc()
         _raise_kb_unavailable()
 
-    cached_result, cache_key = await _check_facts_cache(kb, category, limit)
+    cached_result, cache_key = await _check_facts_cache(kb, category, limit, offset)
     if cached_result:
         return cached_result
 
@@ -2239,14 +2266,29 @@ async def get_facts_by_category(
     categories_to_fetch = [category] if category else [c.value for c in KnowledgeCategory]
 
     try:
-        category_fact_ids = await _fetch_category_fact_ids(kb, categories_to_fetch, limit)
-        if not category_fact_ids:
+        category_fact_ids, category_totals = await _fetch_category_fact_ids(kb, categories_to_fetch, limit, offset)
+        if not category_totals:
+            # Issue #12394: fall back only when NO category index exists at all.
+            # (Previously this checked `category_fact_ids`, which is also empty
+            # for a legitimate out-of-range page on an existing index, wrongly
+            # triggering the expensive full-keyspace SCAN fallback.)
             logger.warning("No category indexes - falling back to SCAN method")
-            return await _get_facts_by_category_legacy(kb, category, limit)
+            return await _get_facts_by_category_legacy(kb, category, limit, offset)
+
+        total_count = sum(category_totals.values())
+        has_more = any(offset + limit < category_totals.get(cat, 0) for cat in categories_to_fetch)
 
         all_fact_keys, fact_results = await _batch_fetch_facts(kb, category_fact_ids)
         if not all_fact_keys:
-            return {"categories": {}, "total_facts": 0}
+            return {
+                "categories": {},
+                "total_facts": 0,
+                "total_count": total_count,
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+                "category_filter": category,
+            }
 
         categories_dict = _build_categories_dict(all_fact_keys, fact_results)
     except Exception as e:
@@ -2256,6 +2298,10 @@ async def get_facts_by_category(
     result = {
         "categories": categories_dict,
         "total_facts": sum(len(v) for v in categories_dict.values()),
+        "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "has_more": has_more,
         "category_filter": category,
     }
     await _cache_facts_result(kb, cache_key, result)
@@ -2317,16 +2363,29 @@ def _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source) -> tup
         return None
 
 
-async def _get_facts_by_category_legacy(kb, category: str | None, limit: int):
-    """Legacy fallback: Get facts by scanning all keys (Issue #398: refactored)."""
+async def _get_facts_by_category_legacy(kb, category: str | None, limit: int, offset: int = 0):
+    """Legacy fallback: Get facts by scanning all keys (Issue #398: refactored).
+
+    Issue #12394: honors offset/limit per category (windowed on SCAN order,
+    which — unlike the indexed path — is not sorted; "good enough" for this
+    already-degraded fallback that only runs when a category has no index).
+    """
     from knowledge_categories import get_category_for_source
 
     all_fact_keys = await _scan_all_fact_keys(kb)
     if not all_fact_keys:
-        return {"categories": {}, "total_facts": 0}
+        return {
+            "categories": {},
+            "total_facts": 0,
+            "total_count": 0,
+            "limit": limit,
+            "offset": offset,
+            "has_more": False,
+        }
 
     all_facts_data = await _batch_fetch_facts_legacy(kb, all_fact_keys)
     categories_dict: dict = {}
+    category_counts: dict = {}
 
     for fact_key_bytes, fact_data in all_facts_data:
         parsed = _parse_fact_entry(fact_key_bytes, fact_data, get_category_for_source)
@@ -2335,25 +2394,35 @@ async def _get_facts_by_category_legacy(kb, category: str | None, limit: int):
         fact_key, fact_cat, title, content, fact_type, metadata = parsed
         if category and fact_cat != category:
             continue
+        seen_index = category_counts.get(fact_cat, 0)
+        category_counts[fact_cat] = seen_index + 1
+        if seen_index < offset or seen_index >= offset + limit:
+            continue
         if fact_cat not in categories_dict:
             categories_dict[fact_cat] = []
-        if len(categories_dict[fact_cat]) >= limit:
-            continue
         categories_dict[fact_cat].append(
             {
                 "key": fact_key,
                 "title": title,
+                # Issue #12370: snippet only; full document lazy-loaded via
+                # GET /fact/{fact_key}.
                 "content": content[:500] + "..." if len(content) > 500 else content,
-                "full_content": content,
                 "category": fact_cat,
                 "type": fact_type,
                 "metadata": metadata,
             }
         )
 
+    total_count = sum(category_counts.values())
+    has_more = any(offset + limit < category_counts.get(cat, 0) for cat in category_counts)
+
     return {
         "categories": categories_dict,
         "total_facts": sum(len(v) for v in categories_dict.values()),
+        "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "has_more": has_more,
         "category_filter": category,
     }
 
@@ -2766,6 +2835,79 @@ async def get_documentation_stats(
     }
 
 
+# =============================================================================
+# System Docs viewer (Issue #12314)
+#
+# Powers the Knowledge -> System Docs page. Serves the on-disk ``docs/`` tree
+# directly (no ChromaDB/Redis dependency) so the page is always populated.
+# Declaration order matters: the literal ``categories`` and ``category/...``
+# routes MUST precede the ``{doc_id}`` catch-all so they are not shadowed.
+# =============================================================================
+
+
+@router.get("/system-docs/categories", response_model=SystemDocsCategoriesResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_system_doc_categories",
+    error_code_prefix="KNOWLEDGE",
+)
+async def list_system_doc_categories(
+    current_user: dict = Depends(get_current_user),
+):
+    """List system documentation categories with per-category counts.
+
+    Issue #12314: backs ``fetchDocCategories`` in the System Docs viewer.
+    """
+    from services.knowledge.system_docs_service import list_categories
+
+    categories = await asyncio.to_thread(list_categories)
+    return {"categories": categories}
+
+
+@router.get("/system-docs/category/{category_path}", response_model=SystemDocsCategoryResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="list_system_doc_category",
+    error_code_prefix="KNOWLEDGE",
+)
+async def list_system_doc_category(
+    category_path: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List documents in a system-docs category (metadata only, no content).
+
+    Issue #12314: backs ``fetchCategoryDocs``. Unknown/invalid categories
+    resolve to an empty list rather than an error.
+    """
+    from services.knowledge.system_docs_service import list_category_docs
+
+    docs = await asyncio.to_thread(list_category_docs, category_path)
+    return {"docs": docs}
+
+
+@router.get("/system-docs/{doc_id}", response_model=SystemDocContentResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_doc",
+    error_code_prefix="KNOWLEDGE",
+)
+async def get_system_doc(
+    doc_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return a single system document with its full markdown content.
+
+    Issue #12314: backs ``fetchDocContent``. ``doc_id`` is the opaque hash
+    id emitted by the list endpoints, so no client path reaches the disk.
+    """
+    from services.knowledge.system_docs_service import get_doc
+
+    doc = await asyncio.to_thread(get_doc, doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="System document not found")
+    return {"doc": doc}
+
+
 @router.get("/docs/watcher/status", response_model=DocsWatcherStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -3048,7 +3190,7 @@ async def create_watch_folder(
         logger.error("Error creating watch folder: %s", e)
         return {
             "success": False,
-            "message": f"Error: {str(e)}",
+            "message": "Failed to create watch folder due to an internal error",
         }
 
 
@@ -3124,7 +3266,7 @@ async def delete_watch_folder(
         logger.error("Error deleting watch folder: %s", e)
         return {
             "success": False,
-            "message": f"Error: {str(e)}",
+            "message": "Failed to delete watch folder due to an internal error",
         }
 
 
@@ -3164,7 +3306,7 @@ async def control_watch_folder(
         logger.error("Error controlling watch folder: %s", e)
         return {
             "success": False,
-            "message": f"Error: {str(e)}",
+            "message": "Failed to update watch folder due to an internal error",
         }
 
 

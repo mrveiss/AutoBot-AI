@@ -12,8 +12,8 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import config, { getSlmApiBase } from '@/config/ssot-config'
+import config from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 import OrgChartTab from '@/components/agents/OrgChartTab.vue'
 import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
@@ -45,7 +45,6 @@ const CUSTOM_VALUE = '__custom__'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 
 // Active tab — route-based (#1404, #1405, #1406: added admin tabs)
 type AgentTab = 'local-agents' | 'external-agents' | 'org-chart' | 'config-history' | 'processes'
@@ -100,11 +99,16 @@ async function fetchAgents() {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch(`${getSlmApiBase()}/agents`, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    if (!response.ok) throw new Error(`Failed to fetch agents: ${response.status}`)
-    const data = await response.json()
+    // The three calls in this view built `Bearer ${authStore.token}`
+    // UNCONDITIONALLY, so with no session they sent the literal string
+    // `Bearer null` — a malformed credential rather than an absent one. The
+    // client omits the header when there is no token, which also lets its 401
+    // handler tell "session rejected" (clear + redirect to /login) apart from
+    // "never had one" (log only); and it reads the token from storage per
+    // request rather than from a ref seeded there once, at store construction
+    // (`stores/auth.ts:66`), which goes stale the moment a token lands in
+    // storage through any other path (#13140).
+    const data = await slmApiClient.get<{ agents?: Agent[] }>('/agents')
     agents.value = data.agents || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to fetch agents'
@@ -115,12 +119,11 @@ async function fetchAgents() {
 
 async function fetchNodes() {
   try {
-    const response = await fetch(`${getSlmApiBase()}/nodes`, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    if (!response.ok) return
-    const data = await response.json()
-    nodes.value = (data.nodes || data || []).filter(
+    // A non-OK response used to `return` silently; `get()` rejects, so it now
+    // lands in the catch below — the same outcome (fall back to Custom mode)
+    // reached by one code path instead of two.
+    const data = await slmApiClient.get<{ nodes?: FleetNode[] }>('/nodes')
+    nodes.value = (data.nodes || []).filter(
       (n: FleetNode) => n.status === 'online',
     )
   } catch {
@@ -174,15 +177,7 @@ async function saveAgent() {
       llm_temperature: editForm.value.llm_temperature,
       is_active: editForm.value.is_active,
     }
-    const response = await fetch(`${getSlmApiBase()}/agents/${selectedAgent.value.agent_id}`, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${authStore.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-    if (!response.ok) throw new Error(`Failed to update agent: ${response.status}`)
+    await slmApiClient.put(`/agents/${selectedAgent.value.agent_id}`, payload)
     await fetchAgents()
     const updated = agents.value.find(
       (a) => a.agent_id === selectedAgent.value?.agent_id,
@@ -454,34 +449,34 @@ onMounted(() => {
 
 <style scoped>
 .agents-view {
-  padding: 24px;
-  max-width: 1400px;
+  padding: var(--spacing-6);
+  max-width: var(--content-max-width);
   margin: 0 auto;
 }
 
 .view-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-6);
 }
 
 .view-header h1 {
   font-size: 28px;
   font-weight: 600;
-  color: var(--text-primary, #1a1a2e);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .subtitle {
-  color: var(--text-secondary, #6b7280);
-  margin-top: 4px;
+  color: var(--text-secondary);
+  margin-top: var(--spacing-1);
 }
 
 .error-banner {
-  background: #fee2e2;
-  border: 1px solid #ef4444;
-  color: #b91c1c;
-  padding: 12px 16px;
-  border-radius: 8px;
-  margin-bottom: 16px;
+  background: var(--slm-red-100);
+  border: 1px solid var(--color-danger-500);
+  color: var(--slm-red-700);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-4);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -490,14 +485,14 @@ onMounted(() => {
 .agents-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
 }
 
 .stat-card {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
+  background: var(--color-white);
+  padding: var(--spacing-5);
+  border-radius: var(--radius-xl);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   text-align: center;
 }
@@ -506,33 +501,33 @@ onMounted(() => {
   display: block;
   font-size: 32px;
   font-weight: 700;
-  color: var(--primary, #6366f1);
+  color: var(--primary);
 }
 
 .stat-label {
-  color: var(--text-secondary, #6b7280);
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .agents-container {
   display: grid;
   grid-template-columns: 350px 1fr;
-  gap: 24px;
+  gap: var(--spacing-6);
 }
 
 .agents-list {
-  background: white;
-  border-radius: 12px;
+  background: var(--color-white);
+  border-radius: var(--radius-xl);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 16px;
+  padding: var(--spacing-4);
 }
 
 .agents-list h2 {
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 600;
-  margin: 0 0 16px 0;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
+  margin: 0 0 var(--spacing-4) 0;
+  padding-bottom: var(--spacing-3);
+  border-bottom: 1px solid var(--slm-gray-200);
 }
 
 .agents-list ul {
@@ -544,21 +539,21 @@ onMounted(() => {
 }
 
 .agents-list li {
-  padding: 12px;
-  border-radius: 8px;
+  padding: var(--spacing-3);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 4px;
+  gap: var(--spacing-1);
+  margin-bottom: var(--spacing-1);
 }
 
 .agents-list li:hover {
-  background: #f3f4f6;
+  background: var(--slm-gray-100);
 }
 
 .agents-list li.selected {
-  background: #e0e7ff;
+  background: var(--slm-indigo-100);
 }
 
 .agents-list li.inactive {
@@ -567,28 +562,28 @@ onMounted(() => {
 
 .agent-name {
   font-weight: 500;
-  color: var(--text-primary, #1a1a2e);
+  color: var(--text-primary);
 }
 
 .agent-model {
-  font-size: 12px;
-  color: var(--text-secondary, #6b7280);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .default-badge {
   font-size: 10px;
-  background: #6366f1;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 4px;
+  background: var(--slm-indigo-500);
+  color: var(--color-white);
+  padding: 2px var(--spacing-2);
+  border-radius: var(--radius-default);
   align-self: flex-start;
 }
 
 .agent-detail {
-  background: white;
-  border-radius: 12px;
+  background: var(--color-white);
+  border-radius: var(--radius-xl);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  padding: 24px;
+  padding: var(--spacing-6);
 }
 
 .agent-detail.empty {
@@ -596,32 +591,32 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .detail-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--spacing-3);
 }
 
 .detail-header h2 {
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: 600;
   margin: 0;
 }
 
 .description {
-  color: var(--text-secondary, #6b7280);
-  margin-bottom: 24px;
-  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-6);
+  font-size: var(--text-sm);
 }
 
 .config-form {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: var(--spacing-4);
 }
 
 .form-group {
@@ -637,40 +632,40 @@ onMounted(() => {
 .form-group label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .form-group input,
 .form-group select {
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 10px var(--spacing-3);
+  border: 1px solid var(--slm-gray-300);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
 }
 
 .form-group input:disabled,
 .form-group select:disabled {
-  background: #f9fafb;
-  color: var(--text-secondary, #6b7280);
+  background: var(--slm-gray-50);
+  color: var(--text-secondary);
 }
 
 .node-select {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  background: white;
+  padding: 10px var(--spacing-3);
+  border: 1px solid var(--slm-gray-300);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  background: var(--color-white);
   cursor: pointer;
 }
 
 .custom-endpoint-input {
-  margin-top: 8px;
+  margin-top: var(--spacing-2);
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #6366f1;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 10px var(--spacing-3);
+  border: 1px solid var(--slm-indigo-500);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   font-family: monospace;
   box-sizing: border-box;
 }
@@ -680,23 +675,23 @@ onMounted(() => {
   margin-top: 6px;
   font-size: 13px;
   font-family: monospace;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .endpoint-readonly {
-  padding: 10px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 14px;
-  background: #f9fafb;
-  color: var(--text-secondary, #6b7280);
+  padding: 10px var(--spacing-3);
+  border: 1px solid var(--slm-gray-200);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  background: var(--slm-gray-50);
+  color: var(--text-secondary);
   font-family: monospace;
 }
 
 .checkbox-label {
   flex-direction: row !important;
   align-items: center;
-  gap: 8px !important;
+  gap: var(--spacing-2) !important;
 }
 
 .checkbox-label input {
@@ -705,38 +700,38 @@ onMounted(() => {
 
 .actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .btn-edit,
 .btn-save,
 .btn-cancel {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: var(--spacing-2) var(--spacing-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   border: none;
 }
 
 .btn-edit {
-  background: #6366f1;
-  color: white;
+  background: var(--slm-indigo-500);
+  color: var(--color-white);
 }
 
 .btn-save {
-  background: #10b981;
-  color: white;
+  background: var(--slm-emerald-500);
+  color: var(--color-white);
 }
 
 .btn-cancel {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--slm-gray-200);
+  color: var(--slm-gray-700);
 }
 
 .loading {
   text-align: center;
-  color: var(--text-secondary, #6b7280);
-  padding: 40px;
+  color: var(--text-secondary);
+  padding: var(--spacing-10);
 }
 </style>

@@ -12,14 +12,21 @@ NOTE: create_dev_logger_utility (~144 lines) is an ACCEPTABLE EXCEPTION
 per Issue #490 - code generator producing utility module. Low priority.
 """
 
-import argparse
-import json
-import os
-import re
-import shutil
-from datetime import datetime, timezone
+import sys
 from pathlib import Path
-from typing import Dict, Tuple
+
+# Issue #12660: auto-tools/ has no __init__.py (hyphenated dir name isn't a
+# valid package identifier) — add this directory to sys.path so the shared
+# tool skeleton can be imported by every standalone script here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+from typing import Dict, Tuple  # noqa: E402
+
+from tool_base import ConsoleLogToolBase  # noqa: E402
 
 _DEV_LOGGER_JS_CODE = """/**
  * Development Logger Utility
@@ -155,8 +162,20 @@ export { devLog as logger };
 """
 
 
-class DevLoggingFixer:
-    """Replaces console.log with environment-aware development logging."""
+class DevLoggingFixer(ConsoleLogToolBase):
+    """Replaces console.log with environment-aware development logging.
+
+    Issue #12660: create_backup/process_file/cli_main now live on
+    ``ConsoleLogToolBase``; this class only provides the console.log
+    conversion logic and the logging_standardizer.py-specific report text.
+    """
+
+    ARG_DESCRIPTION = "Convert console.log to environment-aware development logging"
+    PROJECT_PATH_HELP = "Path to the project root or specific directory to convert"
+    TARGET_DIR_HELP = "Specific directory to convert (e.g., src/)"
+    REPORT_HELP = "Path for the conversion report"
+    REPORT_COUNT_KEY = "console_logs_converted"
+    ERROR_MESSAGE = "File standardization failed"
 
     def __init__(self, project_root: str, backup_dir: str = None):
         self.project_root = Path(project_root)
@@ -213,17 +232,6 @@ class DevLoggingFixer:
             return False
 
         return True
-
-    def create_backup(self, file_path: Path) -> Path:
-        """Create backup of file before modification."""
-        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-        relative_path = file_path.relative_to(self.project_root)
-        backup_path = self.backup_dir / timestamp / relative_path
-
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(file_path, backup_path)
-
-        return backup_path
 
     def _get_dev_logger_js_code(self) -> str:
         """
@@ -395,38 +403,13 @@ class DevLoggingFixer:
 
         return single_quotes % 2 == 1 or double_quotes % 2 == 1
 
-    def process_file(self, file_path: Path) -> bool:
-        """Process a single file to convert console.logs."""
-        try:
-            # Read file content
-            with open(file_path, "r", encoding="utf-8") as f:
-                original_content = f.read()
+    def _transform_content(self, content: str, file_path: Path) -> Tuple[str, int]:
+        """Hook for ``ConsoleLogToolBase.process_file``: convert console.logs."""
+        return self.convert_console_logs(content, file_path)
 
-            # Convert console.logs
-            modified_content, converted_count = self.convert_console_logs(original_content, file_path)
-
-            # If content changed, write back
-            if converted_count > 0:
-                # Create backup
-                self.create_backup(file_path)
-
-                # Write modified content
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(modified_content)
-
-                self.report["console_logs_converted"] += converted_count
-                return True
-
-            return False
-
-        except Exception:
-            self.report["errors"].append(
-                {
-                    "file": str(file_path.relative_to(self.project_root)),
-                    "error": "File standardization failed",
-                }
-            )
-            return False
+    def run_project(self, target_dir: str = None) -> Dict:
+        """Hook for ``ConsoleLogToolBase.cli_main``."""
+        return self.convert_project(target_dir)
 
     def convert_project(self, target_dir: str = None) -> Dict:
         """Convert console.logs in entire project or specific directory."""
@@ -573,42 +556,22 @@ Import statement has been added: `import {{ devLog }} from '@/utils/devLogger.js
 
         self._save_report_files(report_content, output_file)
 
+    def _print_cli_summary(self, report: Dict) -> None:
+        """Hook for ``ConsoleLogToolBase.cli_main``."""
+        print(f"\n🎉 Conversion Complete!")  # noqa: print
+        print(f"   - Converted {report['console_logs_converted']} console.log statements")  # noqa: print
+        print(f"   - Modified {report['files_modified']} files")  # noqa: print
+        print(f"   - Created development logger utility")  # noqa: print
+        print(f"   - Backups saved to: {self.backup_dir}")  # noqa: print
+
 
 def main():
     """Main entry point for the development logging conversion tool."""
-    parser = argparse.ArgumentParser(description="Convert console.log to environment-aware development logging")
-    parser.add_argument("project_path", help="Path to the project root or specific directory to convert")
-    parser.add_argument("--target-dir", help="Specific directory to convert (e.g., src/)", default=None)
-    parser.add_argument("--backup-dir", help="Directory to store backups", default=None)
-    parser.add_argument("--report", help="Path for the conversion report", default=None)
-
-    args = parser.parse_args()
-
-    # Create converter instance
-    converter = DevLoggingFixer(args.project_path, args.backup_dir)
-
-    # Run conversion
-    if args.target_dir:
-        target_path = Path(args.project_path) / args.target_dir
-        report = converter.convert_project(str(target_path))
-    else:
-        report = converter.convert_project()
-
-    # Generate report
-    converter.generate_report(args.report)
-
-    # Print summary
-    print(f"\n🎉 Conversion Complete!")  # noqa: print
-    print(f"   - Converted {report['console_logs_converted']} console.log statements")  # noqa: print
-    print(f"   - Modified {report['files_modified']} files")  # noqa: print
-    print(f"   - Created development logger utility")  # noqa: print
-    print(f"   - Backups saved to: {converter.backup_dir}")  # noqa: print
+    DevLoggingFixer.cli_main()
 
 
 if __name__ == "__main__":
     # If run directly without arguments, use AutoBot defaults
-    import sys
-
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory - use project-relative path
         # This script is in tools/code-analysis-suite/auto-tools/, so project root is 3 levels up

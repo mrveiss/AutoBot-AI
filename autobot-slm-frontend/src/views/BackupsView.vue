@@ -10,6 +10,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { formatBytes } from '@/utils/formatHelpers'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
@@ -199,14 +200,6 @@ function getReplicationStatusClass(state: string): string {
   }
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-'
   return formatDateTime(dateStr)
@@ -306,7 +299,7 @@ function getNodeHostname(nodeId: string): string {
                 {{ backup.service_type }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatBytes(backup.size_bytes) }}
+                {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span :class="['px-2 py-1 text-xs font-medium rounded-full', getBackupStatusClass(backup.state)]">
@@ -395,7 +388,7 @@ function getNodeHostname(nodeId: string): string {
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center gap-2">
                   <span class="text-xs text-gray-500">
-                    {{ repl.lag_bytes > 0 ? formatBytes(repl.lag_bytes) + ' lag' : 'In sync' }}
+                    {{ repl.lag_bytes > 0 ? formatBytes(repl.lag_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) + ' lag' : 'In sync' }}
                   </span>
                 </div>
               </td>

@@ -136,6 +136,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "Vía alternativa",
+        "tooltip": "Proveedor principal no disponible: respondido por un proveedor alternativo ({primary} → {fallback})."
       }
     },
     "response": "respuesta",
@@ -210,7 +214,8 @@
       "deleteFailed": "No se pudieron eliminar algunos chats",
       "sharedSuccess": "Chat compartido exitosamente",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Mostrar insignia de reserva"
     },
     "interface": {
       "loadFailed": "No se pudo cargar la interfaz de chat",
@@ -727,7 +732,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "No se pudo eliminar el chat. Inténtalo de nuevo.",
+      "createFailed": "No se pudo crear el chat: {error}",
+      "loadSessionsFailed": "No se pudieron cargar las sesiones de chat: {error}",
+      "loadMessagesFailed": "No se pudieron cargar los mensajes: {error}",
+      "saveFailed": "No se pudo guardar el chat: {error}",
+      "resetFailed": "No se pudo restablecer el chat: {error}",
+      "clearFailed": "No se pudieron eliminar los chats: {error}",
+      "invalidFormat": "Formato de mensaje no válido. Comprueba tu entrada e inténtalo de nuevo.",
+      "serviceUnavailable": "Servicio de chat no disponible. Actualiza la página e inténtalo de nuevo.",
+      "serverError": "Se produjo un error del servidor. Inténtalo de nuevo en un momento.",
+      "networkFailed": "Error de conexión de red. Comprueba tu conexión a Internet.",
+      "timeout": "Se agotó el tiempo de espera de la solicitud. Inténtalo de nuevo con un mensaje más corto.",
+      "sendFailed": "No se pudo enviar el mensaje: {error}",
+      "sendFailedAfterRetries": "No se pudo enviar el mensaje después de {attempts} intentos: {error}. Comprueba tu conexión e inténtalo de nuevo.",
+      "invalidFormatDetail": "Formato de mensaje no válido: {error}. Comprueba tu entrada e inténtalo de nuevo.",
+      "networkFailedRetry": "Error de conexión de red. Comprueba tu conexión a Internet e inténtalo de nuevo."
+    }
   },
   "settings": {
     "title": "Ajustes",
@@ -876,7 +899,14 @@
       "disabledMessage": "Métricas de uso local deshabilitadas. No se registrarán métricas.",
       "loadFailed": "No se pudieron cargar los ajustes de telemetría",
       "updateFailed": "No se pudieron actualizar los ajustes de telemetría"
-    }
+    },
+    "subtitle": "Personaliza tu experiencia de AutoBot con preferencias propias",
+    "featureFlags": "Indicadores de funciones",
+    "telegram": "Telegram",
+    "notifications": "Notificaciones",
+    "mobileDevices": "Dispositivos móviles",
+    "privacy": "Privacidad",
+    "providerAuthDesc": "Conéctate a los proveedores usando tu suscripción existente en lugar de una clave de API de pago. Los tokens se almacenan de forma segura en el almacén de secretos de AutoBot."
   },
   "voice": {
     "title": "Voz",
@@ -902,7 +932,8 @@
     "creating": "Creando...",
     "confirmDeleteVoice": "¿Eliminar la voz \"{name}\"?",
     "languageVoicesActive": "Voces específicas del idioma {count} configuradas",
-    "confirmDeleteVoiceTitle": "Eliminar perfil de voz"
+    "confirmDeleteVoiceTitle": "Eliminar perfil de voz",
+    "tapToEnableAudio": "Toca en cualquier lugar para habilitar la reproducción de audio"
   },
   "analytics": {
     "title": "Analítica",
@@ -2474,6 +2505,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "Mostrando {shown} de {total}"
     }
   },
   "knowledge": {
@@ -7528,6 +7562,17 @@
       "templates": "Scrape Templates",
       "exitRegionMode": "Exit region mode",
       "markRegions": "Mark regions"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "serviceMessages": {
@@ -7638,7 +7683,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Salud del sistema"
+    "systemHealth": "Salud del sistema",
+    "providerFallback": "Respaldo de proveedor",
+    "advancedControl": "Control avanzado"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "Mostrar archivadas",
+    "delete": "Eliminar",
+    "confirmDeleteTitle": "Eliminar empresa",
+    "confirmDelete": "¿Eliminar «{name}»? Se eliminará la empresa archivada y sus datos. Esto no se puede deshacer desde aquí.",
+    "deleteError": "No se pudo eliminar la empresa.",
+    "deleteHasChildren": "Esta empresa tiene subempresas. Quítelas o reasígnelas antes de eliminarla.",
+    "onboarding": "Incorporación",
+    "active": "Activa",
+    "paused": "Pausada",
+    "offboarding": "Baja",
+    "archived": "Archivada",
+    "activate": "Activar",
+    "suspend": "Pausar",
+    "offboard": "Dar de baja",
+    "archive": "Archivar",
+    "confirmTitle": "Confirmar cambio de estado",
+    "confirmOffboard": "¿Dar de baja «{name}»? Esto inicia el cierre de la empresa.",
+    "confirmArchive": "¿Archivar «{name}»? Este es un estado final y no se puede deshacer.",
+    "confirm": "Confirmar",
+    "updateError": "No se pudo cambiar el estado de la empresa."
   },
   "llcMembers": {
     "title": "Miembros",
@@ -7810,22 +7879,7 @@
       "createFailed": "No se pudo crear la empresa"
     },
     "ceoChat": {
-      "threads": "Hilos",
-      "newThread": "+ Nuevo",
-      "selectCompany": "Seleccione una empresa para ver los hilos.",
-      "loading": "Cargando...",
-      "noThreads": "Aún no hay hilos.",
-      "emptyState": "Seleccione un hilo o cree uno nuevo.",
-      "loadingMessages": "Cargando mensajes...",
-      "noMessages": "Aún no hay mensajes.",
-      "messagePlaceholder": "Escriba un mensaje...",
-      "send": "Enviar",
-      "newThreadTitle": "Nuevo hilo",
-      "titleLabel": "Título",
-      "titlePlaceholder": "Título del hilo...",
-      "cancel": "Cancelar",
-      "create": "Crear",
-      "creating": "Creando..."
+      "selectCompany": "Seleccione una empresa para ver los hilos."
     },
     "dashboard": {
       "title": "Panel de la empresa",
@@ -7957,7 +8011,15 @@
       "count": "{count} tableros",
       "loading": "Cargando tableros…",
       "empty": "Aún no hay tableros — los tableros se crean por proyecto (Kanban) y por sprint (Sprint).",
-      "created": "Creado el {date}"
+      "created": "Creado el {date}",
+      "newKanban": "Nuevo tablero Kanban",
+      "createTitle": "Crear tablero Kanban",
+      "project": "Proyecto",
+      "selectProject": "Seleccionar un proyecto…",
+      "loadingProjects": "Cargando proyectos…",
+      "noProjects": "Aún no hay proyectos — crea un proyecto primero.",
+      "creating": "Creando…",
+      "create": "Crear tablero"
     },
     "kanban": {
       "title": "Tablero Kanban",
@@ -7996,7 +8058,9 @@
       "noProjects": "Aún no hay proyectos en esta empresa.",
       "noItems": "Este proyecto no tiene elementos de trabajo para planificar.",
       "ariaChart": "Diagrama de Gantt del cronograma del proyecto",
-      "unscheduled": "sin planificar"
+      "unscheduled": "sin planificar",
+      "scopedTo": "Limitado a {name}",
+      "showAll": "Mostrar toda la empresa"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "Ver",
       "noActivity": "No se ha registrado actividad.",
       "noHandoffBrief": "No hay resumen de traspaso disponible.",
-      "loadingBrief": "Cargando resumen..."
+      "loadingBrief": "Cargando resumen...",
+      "errors": {
+        "saveFailed": "No se pudo guardar el cambio. Inténtalo de nuevo."
+      }
     },
     "orgChart": {
       "title": "Organigrama",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "No se pudo registrar tu decisión. Inténtalo de nuevo."
     },
-    "ceoChat": {
-      "sendError": "No se pudo enviar tu mensaje. Se ha restaurado para que puedas reintentarlo."
-    },
     "timeline": {
       "rescheduleError": "No se pudo guardar la nueva planificación. El cambio se revirtió."
     },
@@ -8603,6 +8667,22 @@
       "error": "Error al cargar la salud del sistema",
       "refresh": "Actualizar",
       "noSources": "No hay fuentes de contenido configuradas"
+    },
+    "providerFallback": {
+      "title": "Respaldo de proveedor",
+      "subtitle": "Actividad en vivo de respaldo de proveedores y modelos LLM",
+      "status": "Estado",
+      "stateHealthy": "Sin respaldos activos",
+      "stateDegraded": "Respaldo activo",
+      "active": "Respaldos activos",
+      "chains": "Cadenas configuradas",
+      "timeline": "Actividad en vivo",
+      "switched": "Cambiado",
+      "exhausted": "Agotado",
+      "refresh": "Actualizar",
+      "loading": "Cargando estado de respaldo…",
+      "noData": "Sin actividad de respaldo de proveedor",
+      "none": "ninguno"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} fue actualizado",
   "chat.modelPicker.label": "Modelo",
   "chat.modelPicker.auto": "Automático (modelo predeterminado)",
-  "chat.modelPicker.title": "Elige el modelo y el proveedor para esta conversación"
+  "chat.modelPicker.title": "Elige el modelo y el proveedor para esta conversación",
+  "budgetPolicies": {
+    "title": "Políticas de presupuesto",
+    "subtitle": "Gestione umbrales de gasto y reglas de pausa automática para agentes",
+    "newPolicy": "Nueva política",
+    "scope": "Ámbito",
+    "scopeAll": "Todos",
+    "scopeAgent": "Agente",
+    "scopeProject": "Proyecto",
+    "scopeTask": "Tarea",
+    "scopeTenant": "Inquilino",
+    "loading": "Cargando políticas…",
+    "empty": "No se encontraron políticas de presupuesto. Cree una para aplicar límites de gasto.",
+    "colName": "Nombre",
+    "colScope": "Ámbito",
+    "colScopeId": "ID de ámbito",
+    "colPeriod": "Período",
+    "colThreshold": "Umbral",
+    "colWarning": "Advertencia",
+    "colAction": "Acción",
+    "colStatus": "Estado",
+    "colActions": "Acciones",
+    "statusEnabled": "activado",
+    "statusDisabled": "desactivado",
+    "checkPauseTitle": "Comprobar estado de pausa del agente",
+    "agentIdPlaceholder": "ID de agente…",
+    "checkStatus": "Comprobar estado",
+    "labelAgent": "Agente:",
+    "labelPaused": "En pausa:",
+    "labelReason": "Motivo:",
+    "labelSince": "Desde:",
+    "resumeAgent": "Reanudar agente",
+    "modalEditTitle": "Editar política",
+    "modalNewTitle": "Nueva política de presupuesto",
+    "fieldName": "Nombre",
+    "fieldNamePlaceholder": "Mi política",
+    "fieldDescription": "Descripción",
+    "fieldDescriptionPlaceholder": "Opcional",
+    "fieldScope": "Ámbito",
+    "fieldScopeId": "ID de ámbito",
+    "fieldScopeIdPlaceholder": "p. ej. agent-uuid",
+    "fieldPeriod": "Período",
+    "periodHour": "Hora",
+    "periodDay": "Día",
+    "periodMonth": "Mes",
+    "fieldThreshold": "Umbral USD",
+    "fieldWarning": "Advertencia % (0–100)",
+    "fieldAction": "Acción",
+    "actionAlert": "Solo alerta",
+    "actionPause": "Pausar",
+    "actionAlertThenPause": "Alertar y luego pausar",
+    "fieldEnabled": "Activado",
+    "saveChanges": "Guardar cambios",
+    "createPolicy": "Crear política",
+    "deleteTitle": "Eliminar política",
+    "deleteConfirm": "¿Está seguro de que desea eliminar",
+    "deleteUndone": "Esto no se puede deshacer."
+  },
+  "telemetryConsent": {
+    "title": "Métricas de uso local",
+    "intro": "AutoBot puede registrar {metrics} localmente para alimentar sus propios paneles de monitoreo. Estos datos permanecen en su infraestructura y {never}.",
+    "introMetrics": "métricas operativas anónimas",
+    "introNever": "nunca se envían a nadie",
+    "summaryTitle": "Qué se registra localmente:",
+    "dataApi": "Uso de endpoints de API y tiempos de respuesta",
+    "dataVoice": "Duración de sesiones de voz y recuento de tokens",
+    "dataFeature": "Patrones de uso de funciones",
+    "privacyLabel": "Nunca se registra:",
+    "privacyText": "datos personales, contenido de código o mensajes de chat.",
+    "footer": "Puede cambiar esta preferencia en cualquier momento en {settings}.",
+    "footerSettings": "Configuración → Privacidad",
+    "keepOff": "Mantener desactivado",
+    "enable": "Activar"
+  },
+  "hireAgent": {
+    "title": "Contratar agente",
+    "agentName": "Nombre del agente",
+    "agentNamePlaceholder": "p. ej. Builder-1",
+    "model": "Modelo",
+    "modelSonnet": "Sonnet (predeterminado)",
+    "modelHaiku": "Haiku (asistente)",
+    "orgRole": "Rol en la organización",
+    "roleWorker": "Trabajador",
+    "roleSpecialist": "Especialista",
+    "roleCoordinator": "Coordinador",
+    "roleManager": "Gerente",
+    "adapter": "Adaptador",
+    "hiring": "Contratando…",
+    "hire": "Contratar"
+  },
+  "advancedControl": {
+    "title": "Control avanzado",
+    "subtitle": "Apruebe solicitudes de control manual y gestione las sesiones activas",
+    "tabListAriaLabel": "Pestañas de control avanzado",
+    "loading": "Cargando cola de solicitudes de control…",
+    "tabs": {
+      "takeoverQueue": "Cola de solicitudes",
+      "streaming": "Transmisión",
+      "monitoring": "Monitorización",
+      "comingSoon": "Próximamente",
+      "comingSoonMessage": "Esta pestaña aún no está disponible.",
+      "streamingTitle": "Transmisión de escritorio",
+      "monitoringTitle": "Monitorización del sistema"
+    },
+    "summary": {
+      "pending": "Pendientes",
+      "active": "Activas",
+      "paused": "En pausa",
+      "completed": "Completadas",
+      "systemStatus": "Estado del sistema",
+      "statusNormal": "Normal",
+      "statusTakeoverActive": "Control activo",
+      "statusEmergency": "Emergencia"
+    },
+    "pending": {
+      "title": "Solicitudes de control pendientes",
+      "colTrigger": "Motivo",
+      "colReason": "Razón",
+      "colPriority": "Prioridad",
+      "colRequestedBy": "Solicitado por",
+      "colCreatedAt": "Creado",
+      "colActions": "Acciones",
+      "unknownAgent": "Agente desconocido",
+      "emptyTitle": "No hay solicitudes pendientes",
+      "emptyMessage": "No hay solicitudes de control esperando aprobación."
+    },
+    "active": {
+      "title": "Sesiones de control activas",
+      "colOperator": "Operador",
+      "colStatus": "Estado",
+      "colStartedAt": "Iniciada",
+      "colActionsExecuted": "Acciones ejecutadas",
+      "emptyTitle": "No hay sesiones activas",
+      "emptyMessage": "No hay sesiones de control manual activas en este momento."
+    },
+    "actions": {
+      "approve": "Aprobar",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "complete": "Completar"
+    },
+    "streaming": {
+      "title": "Sesiones de transmisión",
+      "newSession": "Nueva sesión",
+      "terminate": "Finalizar",
+      "capVncAvailable": "VNC disponible",
+      "capNovncAvailable": "noVNC disponible",
+      "capMaxSessions": "Sesiones máximas",
+      "formUserIdLabel": "ID de usuario",
+      "formUserIdPlaceholder": "p. ej., user-123",
+      "formResolutionLabel": "Resolución",
+      "formResolutionPlaceholder": "p. ej., 1920x1080",
+      "formDepthLabel": "Profundidad de color",
+      "colSessionId": "ID de sesión",
+      "colUser": "Usuario",
+      "colStatus": "Estado",
+      "colDisplay": "Pantalla",
+      "colCreatedAt": "Creada",
+      "colActions": "Acciones",
+      "emptyTitle": "No hay sesiones de transmisión activas",
+      "emptyMessage": "No hay sesiones de transmisión de escritorio activas en este momento."
+    },
+    "monitoring": {
+      "loading": "Cargando datos de supervisión del sistema…",
+      "healthTitle": "Salud del sistema",
+      "healthStatus": "Estado de salud",
+      "statusHealthy": "Saludable",
+      "statusUnhealthy": "No saludable",
+      "desktopStreamingAvailable": "Transmisión de escritorio disponible",
+      "novncAvailable": "noVNC disponible",
+      "activeStreamingSessions": "Sesiones de transmisión activas",
+      "pendingTakeovers": "Tomas de control pendientes",
+      "activeTakeovers": "Tomas de control activas",
+      "pausedTasks": "Tareas en pausa",
+      "resourceTitle": "Uso de recursos",
+      "cpuUsage": "Uso de CPU",
+      "memoryUsage": "Uso de memoria",
+      "diskUsage": "Uso de disco",
+      "processCount": "Número de procesos",
+      "loadAverage": "Carga promedio (1 min / 5 min / 15 min)",
+      "uptime": "Tiempo de actividad",
+      "emergencyStopTitle": "Zona de peligro",
+      "emergencyStop": "Parada de emergencia",
+      "emergencyStopDescription": "Detiene inmediatamente todas las operaciones autónomas y solicita una toma de control humana aprobada automáticamente. Esto no se puede deshacer: úsese solo cuando el comportamiento autónomo deba detenerse de inmediato.",
+      "emergencyStopConfirmTitle": "¿Activar la parada de emergencia?",
+      "emergencyStopConfirmMessage": "Esto pausará inmediatamente todas las tareas autónomas e iniciará una toma de control humana de prioridad CRÍTICA. Esta acción no se puede deshacer. ¿Continuar?",
+      "emergencyStopSuccess": "Parada de emergencia activada: todas las operaciones autónomas se han pausado.",
+      "emptyTitle": "Sin datos de supervisión",
+      "emptyMessage": "No se pudo cargar el estado del sistema."
+    }
+  },
+  "adminUsers": {
+    "title": "Gestión de usuarios",
+    "subtitle": "Gestione usuarios, roles y estado de cuenta",
+    "addUser": "Agregar usuario",
+    "searchPlaceholder": "Buscar por nombre de usuario, correo o nombre…",
+    "loading": "Cargando usuarios…",
+    "colUsername": "Nombre de usuario",
+    "colEmail": "Correo electrónico",
+    "colDisplayName": "Nombre para mostrar",
+    "colRole": "Rol",
+    "colVoiceBundle": "Paquete de voz",
+    "colStatus": "Estado",
+    "colActions": "Acciones",
+    "roleAdmin": "administrador",
+    "roleUser": "usuario",
+    "roleReadonly": "solo lectura",
+    "statusActive": "activo",
+    "statusInactive": "inactivo",
+    "titleDeactivate": "Desactivar",
+    "titleActivate": "Activar",
+    "titleAssignBundle": "Asignar paquete de voz",
+    "empty": "No se encontraron usuarios.",
+    "fieldEmail": "Correo electrónico",
+    "fieldUsername": "Nombre de usuario",
+    "fieldPassword": "Contraseña",
+    "fieldDisplayName": "Nombre para mostrar",
+    "createUser": "Crear usuario",
+    "userLabel": "Usuario:",
+    "fieldVoiceBundle": "Paquete de voz",
+    "useRoleDefault": "— Usar valor predeterminado del rol —",
+    "deleteUserTitle": "Eliminar usuario",
+    "deleteConfirm": "Eliminar",
+    "deleteUndone": "Esto no se puede deshacer."
+  },
+  "schedulers": {
+    "title": "Programadores en segundo plano",
+    "description": "Activa o desactiva tareas en segundo plano. Los cambios se aplican en el siguiente ciclo, sin reiniciar.",
+    "refresh": "Actualizar",
+    "loading": "Cargando programadores…",
+    "empty": "No hay programadores registrados.",
+    "overridden": "Anulado",
+    "defaultLabel": "Predeterminado",
+    "runtimeLabel": "Entorno",
+    "on": "Activado",
+    "off": "Desactivado",
+    "revertToDefault": "Restaurar predeterminado",
+    "enableTitle": "Activar esta tarea",
+    "disableTitle": "Desactivar esta tarea",
+    "toggleAria": "Alternar {name}",
+    "loadFailed": "No se pudieron cargar los programadores.",
+    "toggleFailed": "No se pudo cambiar {name}.",
+    "resetFailed": "No se pudo restaurar {name} a su valor predeterminado."
+  }
 }

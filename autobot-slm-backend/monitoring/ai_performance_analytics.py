@@ -16,7 +16,7 @@ import statistics
 import time
 import traceback
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -24,6 +24,7 @@ import aiofiles
 import psutil
 
 from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +195,7 @@ else:
                 )
 
                 return NPUMetrics(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=utc_timestamp(),
                     device_id=device_id,
                     utilization_percent=utilization,
                     memory_used_mb=memory_used,
@@ -283,7 +284,7 @@ else:
         Helper for monitor_multimodal_pipeline. Ref: #1088.
         """
         return MultiModalMetrics(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=utc_timestamp(),
             pipeline_type=pipeline_type,
             input_size_mb=0.0,
             processing_time_ms=0.0,
@@ -319,7 +320,7 @@ else:
             throughput = 1000.0 / total_time if total_time > 0 else 0
 
             return MultiModalMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 pipeline_type=pipeline_type,
                 input_size_mb=input_size,
                 processing_time_ms=total_time,
@@ -410,7 +411,7 @@ else:
         Helper for monitor_knowledge_base_search. Ref: #1088.
         """
         return KnowledgeBaseMetrics(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=utc_timestamp(),
             query_type=search_type,
             query_length=len(query),
             search_time_ms=0.0,
@@ -442,7 +443,7 @@ else:
             ) = await self._run_knowledge_search_stages(query, start_time)
 
             return KnowledgeBaseMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 query_type=search_type,
                 query_length=len(query),
                 search_time_ms=total_time,
@@ -506,7 +507,7 @@ else:
         Helper for monitor_llm_performance. Ref: #1088.
         """
         return LLMPerformanceMetrics(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=utc_timestamp(),
             model_name=request_data.get("model", "unknown"),
             request_type=request_data.get("type", "unknown"),
             input_tokens=0,
@@ -540,7 +541,7 @@ else:
             ) = await self._simulate_llm_processing(request_data, start_time)
 
             return LLMPerformanceMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=utc_timestamp(),
                 model_name=request_data.get("model", "llama3.1"),
                 request_type=request_data.get("type", "chat"),
                 input_tokens=input_tokens,
@@ -694,7 +695,7 @@ else:
 
     async def store_ai_metrics(self, metrics: Dict[str, Any]):
         """Store AI performance metrics in Redis and files."""
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = utc_timestamp()
 
         # Store in Redis
         if self.redis_client:
@@ -732,7 +733,7 @@ else:
         """Generate comprehensive AI performance report."""
         try:
             report = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
                 "npu_metrics": await self.collect_npu_metrics(),
                 "trends": await self.analyze_performance_trends(),
             }
@@ -764,7 +765,7 @@ else:
             self.logger.error(traceback.format_exc())
             return {
                 "error": "Failed to generate AI performance report",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": utc_timestamp(),
             }
 
 
