@@ -259,6 +259,148 @@ export interface AdvancedControlTakeoverRequest {
 /** Lifecycle transitions on an approved takeover session. */
 export type AdvancedControlSessionAction = 'pause' | 'resume' | 'complete'
 
+// =============================================================================
+// Agent org chart / processes / config revisions / Redis service / RBAC (#13079)
+//
+// The endpoint paths and payload shapes below used to be re-declared inline in
+// OrgChartTab.vue, ProcessMonitorTab.vue, ConfigHistoryTab.vue,
+// RedisServicePanel.vue, UserManagementSettings.vue, CacheSettings.vue and
+// BackendSettings.vue. Each of those files also re-implemented this
+// composable's transport with a raw `fetch` that sent only
+// `Bearer ${authStore.token}` — no `autobot_access_token` fallback, no 401
+// cleanup, no timeout, no shared base-URL resolution. Declaring them here keeps
+// the SLM app's knowledge of the autobot backend in exactly one place
+// (ADR-008 decision rule 3), as `AdvancedControlTool.vue` already does.
+// =============================================================================
+
+/** Node of the agent hierarchy returned by GET /agents/org (#1405). */
+export interface AgentOrgNode {
+  agent_id: string
+  name: string
+  org_role: string
+  title: string | null
+  capabilities: string | null
+  direct_reports_count: number
+  children: AgentOrgNode[]
+}
+
+/** Entry of GET /agents/{id}/reports (#1405). */
+export interface AgentDirectReport {
+  agent_id: string
+  name: string
+  org_role: string
+}
+
+/** Entry of GET /agents/{id}/delegations (#1405). */
+export interface AgentDelegation {
+  id: string
+  delegator_id: string
+  assignee_id: string
+  task_description: string
+  status: string
+  escalated_to: string | null
+  created_at: string | null
+}
+
+/** GET /agents/{id}/activity (#1405). */
+export interface AgentActivitySummary {
+  manager_id: string
+  total_delegated: number
+  by_status: Record<string, number>
+}
+
+/** Body of POST /agents/{id}/delegate (#1405). */
+export interface AgentDelegationRequest {
+  assignee_id: string
+  task_description: string
+}
+
+/** Row of GET /agents/{id}/processes (#1406). */
+export interface ProcessRun {
+  id: string
+  agent_id: string
+  task_id: string | null
+  command: string
+  args: string[]
+  status: string
+  exit_code: number | null
+  signal: string | null
+  log_excerpt: string | null
+  log_path: string | null
+  timeout_seconds: number
+  started_at: string | null
+  completed_at: string | null
+  created_at: string | null
+}
+
+/** Body of POST /processes/spawn (#1406). */
+export interface ProcessSpawnRequest {
+  agent_id: string
+  command: string
+  args: string[]
+  timeout_seconds: number
+}
+
+/** Entry of GET /config-revisions/{entityType}/{entityId} (#1404). */
+export interface ConfigRevision {
+  id: string
+  entity_type: string
+  entity_id: string
+  before_config: Record<string, unknown> | null
+  after_config: Record<string, unknown>
+  changed_keys: string[]
+  source: string
+  created_by: string
+  created_at: string | null
+}
+
+/** GET /redis-service/status (#3381). */
+export interface RedisServiceStatus {
+  status: 'running' | 'stopped' | 'unknown'
+  uptime_seconds: number | null
+  memory_used_bytes: number | null
+  memory_peak_bytes: number | null
+  connected_clients: number | null
+  last_checked: string | null
+  error?: string
+}
+
+/** Lifecycle verbs accepted by POST /redis-service/{action} (#3381). */
+export type RedisServiceAction = 'start' | 'stop' | 'restart'
+
+/** GET /settings/rbac/status. */
+export interface RbacStatus {
+  initialized: boolean
+  message: string
+}
+
+/** Body of POST /settings/rbac/initialize. */
+export interface RbacInitializeRequest {
+  create_admin: boolean
+  admin_username: string
+}
+
+/** Outcome of the GET /health reachability probe behind "Test connection". */
+export interface BackendHealthProbe {
+  ok: boolean
+  status: number
+}
+
+/**
+ * Unwrap the FastAPI `{ "detail": "..." }` error body (#13079).
+ *
+ * The raw-`fetch` call sites this client replaced read `detail` off the parsed
+ * body and showed it to the operator. Axios rejects with a generic
+ * "Request failed with status code 500" message instead, so the detail has to
+ * be pulled off `error.response.data` explicitly to keep the same error shape.
+ */
+export function autobotApiErrorMessage(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (typeof detail === 'string' && detail.length > 0) return detail
+  if (err instanceof Error && err.message.length > 0) return err.message
+  return fallback
+}
+
 export function useAutobotApi() {
   const authStore = useAuthStore()
 
@@ -1186,6 +1328,170 @@ export function useAutobotApi() {
     return response.data
   }
 
+  // =============================================================================
+  // Agent Org Chart (#1405 / #13079)
+  // =============================================================================
+
+  async function getAgentOrgTree(): Promise<AgentOrgNode[]> {
+    const response = await client.get<AgentOrgNode[]>('/agents/org')
+    return response.data ?? []
+  }
+
+  async function getAgentDirectReports(agentId: string): Promise<AgentDirectReport[]> {
+    const response = await client.get<AgentDirectReport[]>(
+      `/agents/${encodeURIComponent(agentId)}/reports`
+    )
+    return response.data ?? []
+  }
+
+  async function getAgentActivity(agentId: string): Promise<AgentActivitySummary> {
+    const response = await client.get<AgentActivitySummary>(
+      `/agents/${encodeURIComponent(agentId)}/activity`
+    )
+    return response.data
+  }
+
+  async function getAgentDelegations(
+    agentId: string,
+    options?: { role?: string; limit?: number }
+  ): Promise<AgentDelegation[]> {
+    const params = new URLSearchParams()
+    if (options?.role) params.append('role', options.role)
+    if (options?.limit !== undefined) params.append('limit', String(options.limit))
+    const query = params.toString()
+    const response = await client.get<AgentDelegation[]>(
+      `/agents/${encodeURIComponent(agentId)}/delegations${query ? `?${query}` : ''}`
+    )
+    return response.data ?? []
+  }
+
+  async function delegateAgentTask(
+    agentId: string,
+    request: AgentDelegationRequest
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`/agents/${encodeURIComponent(agentId)}/delegate`, request)
+    return response.data
+  }
+
+  // =============================================================================
+  // Agent Processes (#1406 / #13079)
+  // =============================================================================
+
+  async function getAgentProcesses(
+    agentId: string,
+    options?: { limit?: number; status?: string }
+  ): Promise<ProcessRun[]> {
+    const params = new URLSearchParams()
+    params.append('limit', String(options?.limit ?? 50))
+    if (options?.status) params.append('status', options.status)
+    const response = await client.get<{ processes: ProcessRun[] }>(
+      `/agents/${encodeURIComponent(agentId)}/processes?${params}`
+    )
+    return response.data?.processes ?? []
+  }
+
+  /**
+   * Process logs are served as plain text, not JSON. `responseType: 'text'`
+   * disables axios' default JSON parsing so the body arrives verbatim — the
+   * raw `fetch` this replaced used `response.text()` for the same reason.
+   */
+  async function getProcessLogs(processId: string): Promise<string> {
+    const response = await client.get<string>(
+      `/processes/${encodeURIComponent(processId)}/logs`,
+      { responseType: 'text' }
+    )
+    return response.data
+  }
+
+  async function signalProcess(
+    processId: string,
+    signal: string
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`/processes/${encodeURIComponent(processId)}/signal`, {
+      signal,
+    })
+    return response.data
+  }
+
+  async function spawnProcess(request: ProcessSpawnRequest): Promise<Record<string, unknown>> {
+    const response = await client.post('/processes/spawn', request)
+    return response.data
+  }
+
+  // =============================================================================
+  // Config Revisions (#1404 / #13079)
+  // =============================================================================
+
+  async function getConfigRevisions(
+    entityType: string,
+    entityId: string,
+    limit: number = 50
+  ): Promise<ConfigRevision[]> {
+    const response = await client.get<ConfigRevision[]>(
+      `/config-revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}?limit=${limit}`
+    )
+    return response.data ?? []
+  }
+
+  async function rollbackConfigRevision(
+    entityType: string,
+    entityId: string,
+    revisionId: string
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/config-revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/${encodeURIComponent(revisionId)}/rollback`
+    )
+    return response.data
+  }
+
+  // =============================================================================
+  // Redis Service control (#3381 / #13079)
+  // =============================================================================
+
+  async function getRedisServiceStatus(): Promise<RedisServiceStatus> {
+    const response = await client.get<RedisServiceStatus>('/redis-service/status')
+    return response.data
+  }
+
+  async function performRedisServiceAction(
+    action: RedisServiceAction
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(`/redis-service/${action}`)
+    return response.data
+  }
+
+  // =============================================================================
+  // RBAC bootstrap + Redis cache admin (#13079)
+  // =============================================================================
+
+  async function getRbacStatus(): Promise<RbacStatus> {
+    const response = await client.get<RbacStatus>('/settings/rbac/status')
+    return response.data
+  }
+
+  async function initializeRbac(request: RbacInitializeRequest): Promise<{ message?: string }> {
+    const response = await client.post<{ message?: string }>('/settings/rbac/initialize', request)
+    return response.data
+  }
+
+  async function clearRedisDatabase(database: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/cache/redis/clear/${encodeURIComponent(database)}`)
+    return response.data
+  }
+
+  /**
+   * Reachability probe behind the "Test connection" control (#13079).
+   *
+   * `validateStatus` accepts every status code so the probe reports
+   * "reachable but rejected" rather than throwing, and — critically — never
+   * trips the response interceptor that clears `autobot_access_token`: a
+   * connectivity diagnostic must not be able to log the operator out.
+   */
+  async function probeBackendHealth(): Promise<BackendHealthProbe> {
+    const response = await client.get('/health', { validateStatus: () => true })
+    return { ok: response.status >= 200 && response.status < 300, status: response.status }
+  }
+
   return {
     // Settings
     getSettings,
@@ -1317,6 +1623,28 @@ export function useAutobotApi() {
     requestTakeover,
     approveTakeover,
     takeoverSessionAction,
+    // Agent Org Chart (#1405 / #13079)
+    getAgentOrgTree,
+    getAgentDirectReports,
+    getAgentActivity,
+    getAgentDelegations,
+    delegateAgentTask,
+    // Agent Processes (#1406 / #13079)
+    getAgentProcesses,
+    getProcessLogs,
+    signalProcess,
+    spawnProcess,
+    // Config Revisions (#1404 / #13079)
+    getConfigRevisions,
+    rollbackConfigRevision,
+    // Redis Service control (#3381 / #13079)
+    getRedisServiceStatus,
+    performRedisServiceAction,
+    // RBAC bootstrap + Redis cache admin + health probe (#13079)
+    getRbacStatus,
+    initializeRbac,
+    clearRedisDatabase,
+    probeBackendHealth,
     // Log Forwarding Control (Issue #729)
     getLogForwardingStatus,
     startLogForwarding,
