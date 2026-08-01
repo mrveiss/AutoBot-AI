@@ -15,12 +15,20 @@ This conftest runs after autobot-backend/conftest.py (parent-first order)
 and loads the real modules into sys.modules before any test in this
 directory imports them.
 
+Issue #13111 generalised that repair: every code_intelligence submodule that the
+top-level conftest stubs AND that owns a colocated ``<name>_test.py`` is real-loaded
+here, because otherwise the test file's own ``from code_intelligence.<name> import ...``
+resolves to the MagicMock stub and the whole file asserts against mock attributes.
+
 NOTE (session-global side-effect): the sys.modules mutations below affect the
 entire pytest session, not just tests inside code_intelligence/.  Any test
-outside this directory that lazily imports a code_intelligence.security
-submodule will exec the real (heavy) file rather than the top-level stub.
-This is safe today because no such test exists, but be aware when adding new
-test files that import code_intelligence.security indirectly.
+outside this directory that lazily imports one of the real-loaded submodules
+will exec the real file rather than the top-level stub.  This is safe today
+because the only module-level importers outside code_intelligence/ are api/*.py,
+and pytest collects api/ BEFORE code_intelligence/ — those modules have already
+bound the stub by the time this conftest runs.  That ordering is also why
+merge_conflict_resolver (which api/merge_conflict_resolution.py binds at import
+time) is real-loaded in the TOP-LEVEL conftest instead of here.
 """
 
 import importlib
@@ -108,17 +116,25 @@ for _key in list(sys.modules.keys()):
 
 importlib.import_module("code_intelligence.security")
 
-# Replace the stub for the shim module with the real one.
-_load_real(
-    "code_intelligence.security_analyzer",
-    _backend_root / "code_intelligence" / "security_analyzer.py",
-)
 
-# Expose the real security_analyzer on the code_intelligence namespace so that
-# `from code_intelligence.security_analyzer import X` finds the real symbols.
-_real_sa = sys.modules.get("code_intelligence.security_analyzer")
-if _real_sa is not None:
-    setattr(sys.modules["code_intelligence"], "security_analyzer", _real_sa)
+def _load_real_submodule(leaf: str) -> None:
+    """Real-load ``code_intelligence.<leaf>`` over the top-level conftest's stub.
+
+    The namespace bind is load-bearing: ``from code_intelligence.X import Y`` and
+    ``patch("code_intelligence.X.Y")`` both resolve through
+    ``getattr(sys.modules["code_intelligence"], "X")``, and the stubbed parent's
+    catch-all ``__getattr__`` hands back a MagicMock singleton without it — so the
+    real module would load but every consumer would still see mocks.
+    """
+    name = f"code_intelligence.{leaf}"
+    _load_real(name, _backend_root / "code_intelligence" / f"{leaf}.py")
+    real = sys.modules.get(name)
+    if real is not None:
+        setattr(sys.modules["code_intelligence"], leaf, real)
+
+
+# Replace the stub for the shim module with the real one.
+_load_real_submodule("security_analyzer")
 
 # Replace the code_intelligence.performance_analyzer stub with the real module
 # (#12362). The top-level conftest stubs it as a MagicMock (heavy __init__
@@ -127,17 +143,7 @@ if _real_sa is not None:
 # performance_analyzer_test.py silently exercised MagicMock attributes
 # instead of the real PerformanceAnalyzer. Mirrors the security_analyzer
 # real-load above.
-_load_real(
-    "code_intelligence.performance_analyzer",
-    _backend_root / "code_intelligence" / "performance_analyzer.py",
-)
-
-# Expose the real performance_analyzer on the code_intelligence namespace so
-# that `from code_intelligence.performance_analyzer import X` and
-# `patch("code_intelligence.performance_analyzer.Y")` resolve the real module.
-_real_pa = sys.modules.get("code_intelligence.performance_analyzer")
-if _real_pa is not None:
-    setattr(sys.modules["code_intelligence"], "performance_analyzer", _real_pa)
+_load_real_submodule("performance_analyzer")
 
 # Replace the code_intelligence.bug_predictor stub with the real module (#12421).
 # The top-level conftest stubs it as a MagicMock (heavy __init__ chain avoidance),
@@ -149,14 +155,64 @@ if _real_pa is not None:
 # `from code_intelligence.analytics_infrastructure import SemanticAnalysisMixin`
 # resolves the real (import-light) module and BugPredictor inherits the mixin.
 # Mirrors the security_analyzer real-load above.
-_load_real(
-    "code_intelligence.bug_predictor",
-    _backend_root / "code_intelligence" / "bug_predictor.py",
-)
+_load_real_submodule("bug_predictor")
 
-# Expose the real bug_predictor on the code_intelligence namespace so that
-# `from code_intelligence.bug_predictor import X` and `patch("code_intelligence.
-# bug_predictor.Y")` resolve the real module (getattr(parent, child)).
-_real_bp = sys.modules.get("code_intelligence.bug_predictor")
-if _real_bp is not None:
-    setattr(sys.modules["code_intelligence"], "bug_predictor", _real_bp)
+# code_intelligence.code_generation real package (#13111) — llm_code_generator.py is a
+# pure facade that re-exports this package's entire public API, so while the top-level
+# conftest's leaf-only stub (empty __path__) is bound, every symbol
+# llm_code_generator_test.py imports is a MagicMock. Drop the package stub so the real
+# __init__.py loads (its submodules resolve now that code_intelligence.__path__ is
+# repaired above); the package is import-light — stdlib plus a try/except-guarded
+# `from services.llm_service import get_llm_service`, and services.llm_service is itself
+# stubbed by the top-level conftest.
+#
+# The already-real code_intelligence.code_generation.diff entry is deliberately LEFT in
+# sys.modules: __init__.py's `from .diff import DiffGenerator` short-circuits on it, so
+# tools/parallel/executor.py — which imported that module object back at top-level-conftest
+# time — keeps referencing the SAME DiffGenerator class object. Re-executing diff.py would
+# mint a second class and break isinstance identity for the earlier importer (#12839).
+_cg_pkg = sys.modules.get("code_intelligence.code_generation")
+if _cg_pkg is not None and getattr(_cg_pkg, "__file__", None) is None:
+    del sys.modules["code_intelligence.code_generation"]
+_cg_diff = sys.modules.get("code_intelligence.code_generation.diff")
+if _cg_diff is not None and getattr(_cg_diff, "__file__", None) is None:
+    del sys.modules["code_intelligence.code_generation.diff"]
+_real_cg = importlib.import_module("code_intelligence.code_generation")
+setattr(sys.modules["code_intelligence"], "code_generation", _real_cg)
+if "code_intelligence.code_generation.diff" in sys.modules:
+    setattr(_real_cg, "diff", sys.modules["code_intelligence.code_generation.diff"])
+
+# Remaining self-poisoned submodules (#13111). Each of these is stubbed as a MagicMock
+# package by the top-level conftest so that api/*.py can import it without dragging in
+# code_intelligence/__init__.py — but each ALSO owns a colocated <name>_test.py, and that
+# test file's `from code_intelligence.<name> import ...` resolved to the stub, so the
+# whole file asserted against MagicMock attributes rather than real behaviour.
+#
+# Order is load-bearing: anti_pattern_detector must precede code_evolution_miner, whose
+# module-level `from code_intelligence.anti_pattern_detector import AntiPatternDetector`
+# would otherwise capture the stub and leave CodeEvolutionMiner.__init__ holding a mock
+# detector. All of these are import-light in the test environment (verified statically:
+# stdlib + autobot_shared.logging_manager — patched to a stdlib logger by the top-level
+# conftest — plus in-repo code_intelligence subpackages, utils.line_index and
+# constants.threshold_constants; no chromadb/torch/network imports on any path).
+for _leaf in [
+    "anti_pattern_detector",
+    "code_evolution_miner",
+    "code_fingerprinting",
+    "code_review_engine",
+    "conversation_flow_analyzer",
+    "llm_code_generator",
+    "llm_pattern_analyzer",
+    "log_pattern_miner",
+    "precommit_analyzer",
+    "redis_optimizer",
+]:
+    _load_real_submodule(_leaf)
+
+# merge_conflict_resolver is NOT in the list above: it is real-loaded by the TOP-LEVEL
+# conftest instead, because api/merge_conflict_resolution.py binds its symbols at import
+# time and api/ is collected before code_intelligence/ (#13111). Bind it onto the
+# namespace here anyway so patch("code_intelligence.merge_conflict_resolver.X") resolves.
+_real_mcr = sys.modules.get("code_intelligence.merge_conflict_resolver")
+if _real_mcr is not None:
+    setattr(sys.modules["code_intelligence"], "merge_conflict_resolver", _real_mcr)

@@ -757,15 +757,36 @@ _ci_anti_stub.AntiPatternSeverity = MagicMock()  # type: ignore[attr-defined]
 _ci_anti_stub.AntiPatternResult = MagicMock()  # type: ignore[attr-defined]
 sys.modules["code_intelligence.anti_pattern_detector"] = _ci_anti_stub
 
-_ci_merge_stub = _make_pkg_stub("code_intelligence.merge_conflict_resolver")
-_ci_merge_stub.ConflictBlock = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.ConflictParser = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.ConflictSeverity = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.MergeConflictResolver = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.ResolutionStrategy = MagicMock()  # type: ignore[attr-defined]
-_ci_merge_stub.analyze_repository = MagicMock()  # type: ignore[attr-defined]
-sys.modules["code_intelligence.merge_conflict_resolver"] = _ci_merge_stub
+# code_intelligence.merge_conflict_resolver real-load (#13111) — this module used
+# to be a MagicMock package stub here, which poisoned TWO test files:
+#   * code_intelligence/merge_conflict_resolver_test.py (its own unit tests), and
+#   * api/merge_conflict_resolution_test.py — api/merge_conflict_resolution.py binds
+#     ConflictBlock/ConflictParser/MergeConflictResolver/... into its module globals
+#     at import time, so every TestClient endpoint test dispatched into mocked types.
+# The api/ consumer is why this real-load lives HERE and not in
+# code_intelligence/conftest.py: pytest collects api/ before code_intelligence/, so a
+# subdirectory-conftest fix would land after api/merge_conflict_resolution.py has
+# already bound the stub's mocks.
+# Safe to real-load: merge_conflict_resolver.py is self-contained (stdlib ast/re/
+# dataclasses/enum/pathlib/typing plus autobot_shared.logging_manager, which is
+# patched to a stdlib logger above). Same pattern as code_intelligence.code_generation.diff
+# and code_intelligence.shared.scoring — it bypasses code_intelligence/__init__.py, which
+# stays stubbed. _real_load_and_bind falls back to a package stub if the load ever fails,
+# so import-time behaviour for api/*.py is never worse than the old hand-written stub.
+_real_load_and_bind(
+    "code_intelligence.merge_conflict_resolver",
+    backend_root / "code_intelligence" / "merge_conflict_resolver.py",
+)
 
+# NOTE (#13111): every entry below that also owns a colocated ``<name>_test.py`` is
+# real-loaded again by code_intelligence/conftest.py, which runs after this file and
+# repairs code_intelligence.__path__ so the real submodules resolve. The stubs here
+# must stay: api/*.py imports several of these at module level and is collected
+# BEFORE code_intelligence/, so removing an entry would turn an api-side import into
+# a collection error. Add a matching _load_real_submodule() call over there whenever a
+# new colocated test file is added for a stubbed submodule — otherwise that test
+# silently asserts against MagicMock attributes instead of real behaviour.
+#
 # NOTE: "code_intelligence.test_pattern_analyzer" is intentionally NOT in this
 # list (#12437). Stubbing it here would poison sys.modules before pytest ever
 # collects code_intelligence/test_pattern_analyzer.py itself: with
