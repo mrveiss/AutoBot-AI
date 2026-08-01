@@ -24,7 +24,7 @@ def validate_workflow():
         return False
 
     try:
-        with open(workflow_path, "r") as f:
+        with open(workflow_path, "r", encoding="utf-8") as f:
             workflow = yaml.safe_load(f)
 
         print("✅ YAML syntax is valid")

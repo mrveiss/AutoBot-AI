@@ -711,14 +711,14 @@ class AutoBotSystemValidator:
             ],
         }
 
-        with open(json_file, "w") as f:
+        with open(json_file, "w", encoding="utf-8") as f:
             json.dump(full_report, f, indent=2)
 
         print(f"\n💾 Detailed results saved to: {json_file}")  # noqa: print
 
         # Save summary report
         summary_file = results_dir / f"validation_summary_{timestamp}.txt"
-        with open(summary_file, "w") as f:
+        with open(summary_file, "w", encoding="utf-8") as f:
             f.write("AutoBot Phase 9 System Validation Summary\n")
             f.write("=" * 50 + "\n\n")
             f.write(f"Timestamp: {summary['execution_info']['timestamp']}\n")

@@ -294,7 +294,7 @@ class KnowledgeConsistencyVerifier:
             }
 
             os.makedirs(os.path.dirname(lock_file), exist_ok=True)
-            with open(lock_file, "w") as f:
+            with open(lock_file, "w", encoding="utf-8") as f:
                 json.dump(lock_data, f, indent=2)
 
             logger.info("🔒 Configuration locked at: %s", lock_file)
@@ -359,7 +359,7 @@ class KnowledgeConsistencyVerifier:
         # Save report
         report_file = f"data/knowledge_consistency_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         os.makedirs(os.path.dirname(report_file), exist_ok=True)
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         logger.info("📊 Report saved: %s", report_file)

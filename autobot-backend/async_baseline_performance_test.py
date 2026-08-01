@@ -308,7 +308,7 @@ class AsyncBaselineTest:
                 file_path = test_dir / f"test_file_{op_id}.json"
                 test_data = {"op_id": op_id, "timestamp": datetime.now().isoformat()}
 
-                async with aiofiles.open(file_path, "w") as f:
+                async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(test_data))
 
                 # Redis cache operation
@@ -316,7 +316,7 @@ class AsyncBaselineTest:
                 await redis_client.set(cache_key, json.dumps(test_data), ex=60)
 
                 # Verify both operations
-                async with aiofiles.open(file_path, "r") as f:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                     file_content = await f.read()
 
                 cached_content = await redis_client.get(cache_key)
@@ -554,7 +554,7 @@ class AsyncBaselineTest:
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_file = output_dir / f"async_baseline_{timestamp_str}.json"
 
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         logger.info(f"📊 Baseline report saved: {report_file}")

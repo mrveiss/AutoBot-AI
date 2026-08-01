@@ -546,7 +546,7 @@ async def main():
             output_data = {"current_status": status, "report": report}
 
             if args.output:
-                with open(args.output, "w") as f:
+                with open(args.output, "w", encoding="utf-8") as f:
                     json.dump(output_data, f, indent=2)
                 logger.info("Report saved to: %s", args.output)
             else:

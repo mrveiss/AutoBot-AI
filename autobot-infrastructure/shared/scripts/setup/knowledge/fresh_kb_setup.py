@@ -72,7 +72,7 @@ def _create_test_document() -> str:
     Helper for fresh_setup (Issue #825).
     """
     test_file = "/tmp/test_kb_doc.md"
-    with open(test_file, "w") as f:
+    with open(test_file, "w", encoding="utf-8") as f:
         f.write("""
 # AutoBot Documentation Test
 

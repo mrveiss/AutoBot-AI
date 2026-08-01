@@ -178,7 +178,7 @@ class StartupCoordinator:
         try:
             state_data = {name: asdict(comp) for name, comp in self.components.items()}
             self.startup_state_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.startup_state_file, "w") as f:
+            with open(self.startup_state_file, "w", encoding="utf-8") as f:
                 json.dump(state_data, f, indent=2, default=str)
         except Exception as e:
             logger.error("Failed to save startup state: %s", e)
@@ -189,7 +189,7 @@ class StartupCoordinator:
             return
 
         try:
-            with open(self.startup_state_file, "r") as f:
+            with open(self.startup_state_file, "r", encoding="utf-8") as f:
                 state_data = json.load(f)
 
             for name, data in state_data.items():

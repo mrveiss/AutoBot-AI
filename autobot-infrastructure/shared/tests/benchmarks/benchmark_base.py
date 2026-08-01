@@ -304,7 +304,7 @@ class BenchmarkRunner:
         }
 
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     def load_baselines(self, filepath: Path):
@@ -312,7 +312,7 @@ class BenchmarkRunner:
         if not filepath.exists():
             return
 
-        with open(filepath) as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
 
         for result_data in data.get("results", []):

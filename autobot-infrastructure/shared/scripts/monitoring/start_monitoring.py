@@ -363,7 +363,7 @@ class PerformanceMonitoringManager:
             reports_dir.mkdir(parents=True, exist_ok=True)
 
             benchmark_file = reports_dir / f"performance_benchmark_{int(time.time())}.json"
-            with open(benchmark_file, "w") as f:
+            with open(benchmark_file, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, default=str)
 
             logger.info("Benchmark suite completed. Results saved to: %s", benchmark_file)
@@ -470,7 +470,7 @@ async def main():
     # Load configuration if provided
     if args.config and os.path.exists(args.config):
         try:
-            with open(args.config, "r") as f:
+            with open(args.config, "r", encoding="utf-8") as f:
                 manager.config.update(json.load(f))
                 logger.info("Configuration loaded from %s", args.config)
         except Exception as e:

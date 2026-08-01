@@ -374,12 +374,12 @@ def quick_microservice_analysis():
 
     # Save JSON
     json_file = reports_dir / f"quick_microservice_analysis_{timestamp}.json"
-    with open(json_file, "w") as f:
+    with open(json_file, "w", encoding="utf-8") as f:
         json.dump(analysis, f, indent=2)
 
     # Save Markdown
     md_file = reports_dir / f"microservice_analysis_summary_{timestamp}.md"
-    with open(md_file, "w") as f:
+    with open(md_file, "w", encoding="utf-8") as f:
         f.write(_generate_markdown_report(analysis))
 
     # Print summary
