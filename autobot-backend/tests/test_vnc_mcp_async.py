@@ -78,7 +78,29 @@ def _install_stubs() -> dict:
 
         post = get = put = delete = patch = _identity_decorator
 
-    _stub("fastapi", APIRouter=_IdentityRouter, Depends=MagicMock, HTTPException=Exception)
+    # #13198: Depends must NOT be the bare ``MagicMock`` class. vnc_mcp.py line 60
+    # evaluates ``Depends(check_admin_permission)`` at import time, and
+    # ``check_admin_permission`` is itself a MagicMock instance (stubbed below).
+    # ``MagicMock(<mock>)`` binds that mock to Mock's first positional parameter,
+    # which is ``spec`` — and Python >= 3.12 rejects speccing against a Mock with
+    # ``InvalidSpecError: Cannot spec a Mock object``, so the module never loaded.
+    # A minimal stand-in mirroring fastapi.params.Depends keeps the dependency
+    # object inspectable without going through Mock's constructor at all.
+    class _FakeDepends:
+        def __init__(self, dependency=None, *, use_cache=True):
+            self.dependency = dependency
+            self.use_cache = use_cache
+
+    # HTTPException is raised keyword-style in vnc_mcp.py (status_code=/detail=),
+    # which bare ``Exception`` cannot accept — mirror the real signature instead.
+    class _FakeHTTPException(Exception):
+        def __init__(self, status_code=500, detail=None, headers=None):
+            super().__init__(detail)
+            self.status_code = status_code
+            self.detail = detail
+            self.headers = headers
+
+    _stub("fastapi", APIRouter=_IdentityRouter, Depends=_FakeDepends, HTTPException=_FakeHTTPException)
 
     # services (top-level package only — prevent __init__ from running)
     _stub("services")
