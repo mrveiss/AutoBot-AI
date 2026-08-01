@@ -425,6 +425,10 @@ class TestScalabilityBenchmarks:
         import gc
 
         config_manager = ConfigManager()
+        # #13199: pin the sync cache — get_nested() would otherwise reload from disk
+        # after CACHE_DURATION (30s) and discard the keys written below, making the
+        # loop measure an empty config instead of a populated one.
+        config_manager.CACHE_DURATION = float("inf")
         process = psutil.Process()
 
         # Get baseline memory

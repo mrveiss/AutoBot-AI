@@ -37,6 +37,12 @@ class TestUnifiedMultiModalSystem:
         the ``multimodal`` defaults from config/defaults.py.
         """
         config = ConfigManager()
+        # #13199: get_nested() refreshes from disk once CACHE_DURATION (30s) elapses,
+        # and _reload_config() replaces _config wholesale — which would silently drop
+        # every override below. VisionProcessor.__init__ imports torch before it reads
+        # the config, so that window is reachable on a cold runner. Pin the cache so
+        # the overrides survive to the assertion that depends on them.
+        config.CACHE_DURATION = float("inf")
         config.set_nested("multimodal.vision.enabled", True)
         config.set_nested("multimodal.vision.confidence_threshold", 0.8)
         config.set_nested("multimodal.vision.processing_timeout", 30)
