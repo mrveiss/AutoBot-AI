@@ -21,6 +21,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
@@ -54,12 +55,13 @@ async def _fetch_one(ip_address: str) -> Dict[str, Any] | None:
         ssl_ctx.verify_mode = ssl.CERT_NONE
     try:
         timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, ssl=ssl_ctx) as resp:
-                if resp.status == 200:
-                    return await resp.json(content_type=None)
-                logger.debug("A2A card HTTP %s from %s", resp.status, ip_address)
-                return None
+        # #13134: pooled client instead of a per-call ClientSession. ssl= and
+        # timeout= are per-request kwargs the pooled session forwards as-is.
+        async with get_http_client().tracked_request("GET", url, ssl=ssl_ctx, timeout=timeout) as resp:
+            if resp.status == 200:
+                return await resp.json(content_type=None)
+            logger.debug("A2A card HTTP %s from %s", resp.status, ip_address)
+            return None
     except Exception as exc:
         logger.debug("A2A card fetch failed for %s: %s", ip_address, exc)
         return None
@@ -158,12 +160,12 @@ async def _fetch_external_agent_card(url: str, ssl_ctx, headers: Dict[str, str],
     error_msg = None
     try:
         timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, ssl=ssl_ctx, headers=headers) as resp:
-                if resp.status == 200:
-                    card = await resp.json(content_type=None)
-                else:
-                    error_msg = f"HTTP {resp.status}"
+        # #13134: pooled client instead of a per-call ClientSession.
+        async with get_http_client().tracked_request("GET", url, ssl=ssl_ctx, headers=headers, timeout=timeout) as resp:
+            if resp.status == 200:
+                card = await resp.json(content_type=None)
+            else:
+                error_msg = f"HTTP {resp.status}"
     except Exception as exc:
         error_msg = str(exc)
         logger.debug("External agent %s card fetch failed: %s", agent_id, exc)
