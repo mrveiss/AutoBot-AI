@@ -15,7 +15,6 @@ Includes:
 import aiofiles
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     AuditLogData,
     CommandApprovalRequest,
@@ -94,7 +93,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/pending-approvals", response_model=DataResponse[PendingApprovalsData])
+@router.get("/pending-approvals", response_model=PendingApprovalsData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_pending_approvals",
@@ -116,7 +115,7 @@ async def get_pending_approvals(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/command-history", response_model=DataResponse[CommandHistoryData])
+@router.get("/command-history", response_model=CommandHistoryData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_command_history",
@@ -159,13 +158,18 @@ async def _read_audit_log_file(log_file: str, limit: int) -> list:
             lines = await f.readlines()
         return _parse_audit_log_lines(lines, limit)
     except FileNotFoundError:
+        # No audit log has been written yet — an empty log is the correct answer.
         return []
     except OSError as e:
+        # Any other read failure (permissions, I/O error) must NOT be reported as
+        # an empty audit log: that silently hides a security artifact the caller
+        # asked for. #288 stated the pattern as "HTTPException with 500 status for
+        # API endpoints" but landed `audit_entries = []` here; #13258 restores it.
         logger.error("Failed to read audit log file: %s", e)
-        return []
+        raise
 
 
-@router.get("/audit-log", response_model=DataResponse[AuditLogData])
+@router.get("/audit-log", response_model=AuditLogData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_audit_log",
