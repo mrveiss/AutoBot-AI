@@ -66299,21 +66299,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AuditLogData] */
-        DataResponse_AuditLogData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditLogData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[AuditOperationsData] */
         DataResponse_AuditOperationsData_: {
             /**
@@ -66937,21 +66922,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["CodeSearchStatusResultResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[CommandHistoryData] */
-        DataResponse_CommandHistoryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["CommandHistoryData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68368,21 +68338,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["ParseToolOutputData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[PendingApprovalsData] */
-        DataResponse_PendingApprovalsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["PendingApprovalsData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -149730,7 +149685,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_PendingApprovalsData_"];
+                    "application/json": components["schemas"]["PendingApprovalsData"];
                 };
             };
         };
@@ -149753,7 +149708,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_CommandHistoryData_"];
+                    "application/json": components["schemas"]["CommandHistoryData"];
                 };
             };
             /** @description Validation Error */
@@ -149784,7 +149739,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditLogData_"];
+                    "application/json": components["schemas"]["AuditLogData"];
                 };
             };
             /** @description Validation Error */
