@@ -24,8 +24,19 @@ from mcp.autobot_server import AutoBotMCPServer
 # Helpers
 # ---------------------------------------------------------------------------
 
-VALID_TOKEN = "dev:kb,memory,agents"
-KB_TOKEN = "dev:kb"
+# #13263: these tests configure their own secret rather than relying on a
+# shipped default. AUTOBOT_MCP_TOKEN now defaults to "" (unconfigured, fails
+# closed) because any non-empty default is itself a working credential.
+TEST_SECRET = "test-mcp-secret"
+VALID_TOKEN = f"{TEST_SECRET}:kb,memory,agents"
+KB_TOKEN = f"{TEST_SECRET}:kb"
+
+
+@pytest.fixture(autouse=True)
+def _configure_mcp_secret():
+    """Give every test in this module a configured secret to authenticate against."""
+    with patch.object(config.misc, "mcp_token", TEST_SECRET):
+        yield
 
 
 def make_server() -> AutoBotMCPServer:

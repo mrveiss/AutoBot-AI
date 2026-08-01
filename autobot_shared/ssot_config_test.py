@@ -385,13 +385,19 @@ class TestMCPAuthDefaults:
     default is the effective value everywhere.
     """
 
-    def test_mcp_token_default_is_dev(self) -> None:
-        """Empty default would accept ``":<scopes>"`` from any caller."""
+    def test_mcp_token_has_no_working_default(self) -> None:
+        """#13263: a non-empty default is itself a working credential.
+
+        The pre-#7437 value was ``dev``, but the secret *is* the whole check and
+        that string is published in this repo — restoring it would let any caller
+        present ``dev:<scopes>`` and choose their own privileges. Empty means
+        unconfigured, and ``_validate_token`` fails closed on it.
+        """
         from autobot_shared.ssot_config import MiscConfig
 
         # _env_file=None so the true field default is asserted, not a local .env.
         with patch.dict(os.environ, {}, clear=True):
-            assert MiscConfig(_env_file=None).mcp_token == "dev"
+            assert MiscConfig(_env_file=None).mcp_token == ""
 
     def test_mcp_run_jwt_enforce_default_documents_the_regression(self) -> None:
         """#13263: enforcement shipped ON ("1"); #7437 dropped it to "".
