@@ -1701,6 +1701,7 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
         logger.info("CommunityClusterer: mesh_db not available, skipping periodic loop")
         return
 
+    from llc.scheduler.base import honour_pending_cancellation
     from services.mesh_brain.community_clusterer import CommunityClusterer
 
     _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
@@ -1717,6 +1718,10 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
                 )
             except Exception as exc:
                 logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
+                # #13085: run() drives DB work that can mask the CancelledError
+                # cleanup_services() sent. Without this the loop would start a
+                # fresh 6-hour sleep and cleanup's gather() would never return.
+                honour_pending_cancellation()
             await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
 
     app.state.community_cluster_task = asyncio.create_task(_loop())
@@ -2132,12 +2137,17 @@ async def cleanup_services(app: FastAPI):
         pass  # SLM reconciler now in slm-server
 
         # GH#9028: Stop LLC liveness monitor
+        # #13085: aclose() — stop() only *requests* cancellation and returns, so
+        # the poll task could still be mid-tick (holding an AsyncSession) when
+        # close_database() disposes the engine further down, and its interval
+        # wait was left for whoever tore the event loop down. aclose() drains it
+        # here, where shutdown can observe it.
         if hasattr(app.state, "llc_liveness_monitor") and app.state.llc_liveness_monitor:
-            app.state.llc_liveness_monitor.stop()
+            await app.state.llc_liveness_monitor.aclose()
             logger.info("✅ LLC liveness monitor stopped")
         # GH#9029: Stop LLC budget watchdog
         if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
-            app.state.llc_budget_watchdog.stop()
+            await app.state.llc_budget_watchdog.aclose()
             logger.info("✅ LLC budget watchdog stopped")
         # #12816: Stop MeshBrainScheduler — stop() cancels every per-job task
         # start() spawned, so none survive shutdown.
@@ -2153,9 +2163,9 @@ async def cleanup_services(app: FastAPI):
                 logger.info("✅ MeshBrainScheduler stopped")
             except Exception as mesh_stop_error:
                 logger.warning("MeshBrainScheduler stop failed (non-fatal): %s", mesh_stop_error)
-        # GH#9026: Stop LLC session checkpointer
+        # GH#9026: Stop LLC session checkpointer (#13085: drained, see above)
         if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
-            app.state.llc_session_checkpointer.stop()
+            await app.state.llc_session_checkpointer.aclose()
             logger.info("✅ LLC session checkpointer stopped")
 
         # GH#8257: Stop LLC outbound sync service

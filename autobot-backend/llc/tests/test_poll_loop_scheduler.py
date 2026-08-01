@@ -49,6 +49,31 @@ class _ErrorScheduler(PollLoopScheduler):
         raise RuntimeError("tick exploded")
 
 
+class _MaskingCancelScheduler(PollLoopScheduler):
+    """Subclass whose tick masks CancelledError behind a driver-style error.
+
+    Models what SQLAlchemy/asyncpg/redis-py do: they catch BaseException while
+    unwinding and surface their own exception type, so the cancellation lands in
+    ``_loop``'s ``except Exception`` arm instead of its ``except CancelledError``
+    arm (#13085).
+    """
+
+    _task_name = "test-masking-cancel-scheduler"
+
+    def __init__(self, poll_interval: float = 9999.0) -> None:
+        super().__init__(poll_interval)
+        self.tick_count = 0
+        self.tick_entered = asyncio.Event()
+
+    async def _tick(self) -> None:
+        self.tick_count += 1
+        self.tick_entered.set()
+        try:
+            await asyncio.sleep(9999.0)
+        except asyncio.CancelledError:
+            raise RuntimeError("driver masked the cancellation") from None
+
+
 # ---------------------------------------------------------------------------
 # Lifecycle: start / stop idempotency
 # ---------------------------------------------------------------------------
@@ -206,6 +231,113 @@ async def test_cancellation_breaks_loop_cleanly() -> None:
     sched._task.cancel()
     # Must not raise — CancelledError is caught inside _loop
     await asyncio.gather(sched._task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_cancellation_marks_the_task_cancelled() -> None:
+    """_loop re-raises CancelledError so the task ends in the cancelled state.
+
+    Swallowing it made the task finish "successfully", which hides a shutdown
+    that never actually completed from anything inspecting the task (#13085).
+    """
+    sched = _CountingScheduler(poll_interval=9999.0)
+    sched.start()
+    assert sched._task is not None
+    await asyncio.sleep(0)  # let the loop reach its inter-poll wait
+    sched._task.cancel()
+    await asyncio.gather(sched._task, return_exceptions=True)
+
+    assert sched._task.cancelled()
+
+
+# ---------------------------------------------------------------------------
+# Shutdown latency (#13085) — stop() must not cost a whole poll interval
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stop_event_ends_the_interval_wait_immediately() -> None:
+    """stop() releases an in-flight inter-poll wait without task cancellation.
+
+    Isolated from cancel() on purpose: no task is started, so the only thing
+    that can end the wait is the stop event.  A bare asyncio.sleep() would keep
+    the waiter pending for the full 9999 s interval.
+    """
+    sched = _CountingScheduler(poll_interval=9999.0)
+    waiter = asyncio.create_task(sched._wait_between_polls())
+    await asyncio.sleep(0)  # let the waiter register on the event
+
+    sched.stop()  # no task exists → only the stop event can release the waiter
+
+    await asyncio.wait_for(waiter, timeout=1.0)
+
+
+@pytest.mark.asyncio
+async def test_masked_cancellation_does_not_start_another_interval() -> None:
+    """A tick that masks CancelledError must not buy the loop a fresh interval.
+
+    Real drivers (SQLAlchemy/asyncpg/redis-py) catch BaseException and re-raise
+    their own error type, so the cancellation reaches ``except Exception``.
+    Before #13085 the loop then slept out a whole poll interval — 300 s for
+    BudgetWatchdog — keeping the event loop alive long after shutdown.
+    """
+    sched = _MaskingCancelScheduler(poll_interval=9999.0)
+    sched.start()
+    assert sched._task is not None
+    await asyncio.wait_for(sched.tick_entered.wait(), timeout=1.0)
+
+    sched._task.cancel()
+
+    # Must settle promptly; a re-armed 9999 s wait would blow the timeout.
+    await asyncio.wait_for(asyncio.gather(sched._task, return_exceptions=True), timeout=1.0)
+    assert sched._task.done()
+    assert sched.tick_count == 1, "the loop must not have started a second tick"
+
+
+# ---------------------------------------------------------------------------
+# aclose() — the awaitable shutdown drain (#13085)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_aclose_awaits_the_task_to_completion() -> None:
+    """aclose() returns only once the poll task has actually finished."""
+    sched = _CountingScheduler(poll_interval=9999.0)
+    sched.start()
+    task = sched._task
+    assert task is not None
+
+    await asyncio.wait_for(sched.aclose(), timeout=1.0)
+
+    assert task.done()
+    assert not sched.is_running
+
+
+@pytest.mark.asyncio
+async def test_aclose_is_safe_before_start_and_idempotent() -> None:
+    """aclose() on a never-started scheduler is a no-op, and repeats are safe."""
+    sched = _CountingScheduler(poll_interval=9999.0)
+    await sched.aclose()  # never started — must not raise
+
+    sched.start()
+    await sched.aclose()
+    await sched.aclose()  # second drain — must not raise
+    assert not sched.is_running
+
+
+@pytest.mark.asyncio
+async def test_restart_after_aclose_clears_the_stop_event() -> None:
+    """start() re-arms the stop event so a restarted loop is not born stopped."""
+    sched = _CountingScheduler(poll_interval=0.0)
+    sched.start()
+    await sched.aclose()
+
+    sched.start()
+    await asyncio.sleep(0.05)
+    ticks_after_restart = sched.tick_count
+    await sched.aclose()
+
+    assert ticks_after_restart >= 2, "restarted loop must keep ticking"
 
 
 # ---------------------------------------------------------------------------
