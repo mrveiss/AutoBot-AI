@@ -15,38 +15,32 @@
 
 import { ref, onMounted, onUnmounted } from 'vue'
 import { formatBytes } from '@/utils/formatHelpers'
-import { getBackendUrl } from '@/config/ssot-config'
 import i18n from '@/i18n'
-import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
+import {
+  useAutobotApi,
+  autobotApiErrorMessage,
+  type RedisServiceAction,
+  type RedisServiceStatus,
+} from '@/composables/useAutobotApi'
 
 const t = i18n.global.t.bind(i18n.global)
 
 const logger = createLogger('RedisServicePanel')
-const authStore = useAuthStore()
+const api = useAutobotApi()
 
 // -----------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------
 
-interface RedisStatus {
-  status: 'running' | 'stopped' | 'unknown'
-  uptime_seconds: number | null
-  memory_used_bytes: number | null
-  memory_peak_bytes: number | null
-  connected_clients: number | null
-  last_checked: string | null
-  error?: string
-}
-
 // -----------------------------------------------------------------------
 // State
 // -----------------------------------------------------------------------
 
-const redisStatus = ref<RedisStatus | null>(null)
+const redisStatus = ref<RedisServiceStatus | null>(null)
 const isLoading = ref(true)
 const isActionInProgress = ref(false)
-const currentAction = ref<'start' | 'stop' | 'restart' | null>(null)
+const currentAction = ref<RedisServiceAction | null>(null)
 const errorMessage = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const showStopConfirm = ref(false)
@@ -56,10 +50,6 @@ let pollInterval: ReturnType<typeof setInterval> | null = null
 // -----------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------
-
-function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${authStore.token}` }
-}
 
 function formatUptime(seconds: number | null): string {
   if (seconds === null || seconds === undefined) return '-'
@@ -92,13 +82,7 @@ function statusTextClass(status: string | undefined): string {
 
 async function fetchStatus(): Promise<void> {
   try {
-    const response = await fetch(`${getBackendUrl()}/redis-service/status`, {
-      headers: authHeaders(),
-    })
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    redisStatus.value = await response.json()
+    redisStatus.value = await api.getRedisServiceStatus()
     errorMessage.value = null
   } catch (err) {
     logger.error('Failed to fetch Redis status:', err)
@@ -108,7 +92,7 @@ async function fetchStatus(): Promise<void> {
   }
 }
 
-async function performAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
+async function performAction(action: RedisServiceAction): Promise<void> {
   if (isActionInProgress.value) return
   isActionInProgress.value = true
   currentAction.value = action
@@ -116,21 +100,14 @@ async function performAction(action: 'start' | 'stop' | 'restart'): Promise<void
   successMessage.value = null
 
   try {
-    const response = await fetch(`${getBackendUrl()}/redis-service/${action}`, {
-      method: 'POST',
-      headers: authHeaders(),
-    })
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}))
-      throw new Error(body.detail ?? `HTTP ${response.status}`)
-    }
+    await api.performRedisServiceAction(action)
     successMessage.value = t('redisServicePanel.actionSucceeded', { action })
     // Refresh status after action
     await fetchStatus()
     setTimeout(() => { successMessage.value = null }, 4000)
   } catch (err) {
     logger.error(`Failed to ${action} Redis service:`, err)
-    errorMessage.value = err instanceof Error ? err.message : t('redisServicePanel.actionFailed', { action })
+    errorMessage.value = autobotApiErrorMessage(err, t('redisServicePanel.actionFailed', { action }))
   } finally {
     isActionInProgress.value = false
     currentAction.value = null
