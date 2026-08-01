@@ -43,7 +43,7 @@ Correctness → Speed → Maintainability. No wasted motion. No speculative work
 |---|---|
 | Redis | `from autobot_shared.redis_client import get_redis_client` |
 | Config | `from autobot_shared.ssot_config import config` / `import { getBackendUrl } from '@/config/ssot-config'` |
-| Logging | `logging.getLogger(__name__)` / `createLogger('Name')` — no `print()` or `console.*` |
+| Logging | `from autobot_shared.logging_manager import get_logger` → `get_logger(__name__)` / `createLogger('Name')` — no `print()` or `console.*`; stdlib `logging` only where a config-mocking test harness forbids it (see `autobot_shared/user_management/password_epoch.py`) |
 | Encoding | Always `encoding='utf-8'` explicitly |
 | Cache TTL | Never hard-code — use module-level constant from env var (see `chat_history/cache.py`) |
 | LEDGER/EXECUTOR | Coordination tools complete instantly — do NOT wait; continue immediately with execution tools |
