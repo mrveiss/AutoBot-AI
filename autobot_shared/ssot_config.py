@@ -1544,7 +1544,9 @@ class MiscConfig(BaseSettings):
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
-    mcp_token: str = Field(default="", alias="AUTOBOT_MCP_TOKEN")
+    # #13263: restore pre-#7437 default ("dev") — "" made the MCP server compare
+    # an incoming token's secret segment against "", accepting ":<scopes>" from anyone.
+    mcp_token: str = Field(default="dev", alias="AUTOBOT_MCP_TOKEN")
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
     voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
@@ -1770,7 +1772,9 @@ class MiscConfig(BaseSettings):
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
-    mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
+    # #13263: restore pre-#7437 default ("1") — "" turned run-scoped JWT
+    # enforcement off in every bridge worker that does not set the var.
+    mcp_run_jwt_enforce: str = Field(default="1", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
     mcp_worker_mem_mb: int = Field(default=0, alias="MCP_WORKER_MEM_MB")

@@ -310,6 +310,9 @@ class AutoBotMCPServer:
         For production use, set ``AUTOBOT_MCP_TOKEN`` to the shared secret;
         scopes are always taken from the token string itself so that the
         issuer controls access.
+
+        Fails closed (#13263): an empty configured secret rejects every token
+        rather than matching the empty secret segment of ``":<scopes>"``.
         """
         if not token:
             return None
@@ -318,7 +321,10 @@ class AutoBotMCPServer:
         except ValueError:
             return None
         expected = config.mcp_token
-        if secret_part != expected:
+        # #13263: never authenticate against an unset secret — without this a
+        # blank AUTOBOT_MCP_TOKEN would accept ":kb,memory,agents" from anyone,
+        # with the scopes chosen by the caller.
+        if not expected or secret_part != expected:
             return None
         scopes = [s.strip() for s in scopes_part.split(",") if s.strip()]
         return scopes if scopes else None

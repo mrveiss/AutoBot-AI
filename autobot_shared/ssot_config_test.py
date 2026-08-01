@@ -375,6 +375,32 @@ class TestProjectRoot:
         assert PROJECT_ROOT.is_dir()
 
 
+class TestMCPAuthDefaults:
+    """#13263: the #7437 migration dropped both MCP authentication defaults.
+
+    ``AUTOBOT_MCP_TOKEN`` shipped as ``dev`` and ``MCP_RUN_JWT_ENFORCE`` as ``1``.
+    Declaring them ``""`` made the MCP server compare an incoming token's secret
+    segment against the empty string, and turned run-scoped JWT enforcement off in
+    every bridge worker. Neither var is set by any env template, so the shipped
+    default is the effective value everywhere.
+    """
+
+    def test_mcp_token_default_is_dev(self) -> None:
+        """Empty default would accept ``":<scopes>"`` from any caller."""
+        from autobot_shared.ssot_config import MiscConfig
+
+        # _env_file=None so the true field default is asserted, not a local .env.
+        with patch.dict(os.environ, {}, clear=True):
+            assert MiscConfig(_env_file=None).mcp_token == "dev"
+
+    def test_mcp_run_jwt_enforce_default_is_on(self) -> None:
+        """Workers must opt out of run-JWT enforcement deliberately, never by default."""
+        from autobot_shared.ssot_config import MiscConfig
+
+        with patch.dict(os.environ, {}, clear=True):
+            assert MiscConfig(_env_file=None).mcp_run_jwt_enforce == "1"
+
+
 class TestChatCitationInstructionAliasChoices:
     """#10736: Both env vars set chat_citation_instruction_enabled correctly."""
 
