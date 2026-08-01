@@ -61,14 +61,29 @@ function jsonResponse(body: unknown, status = 200): Response {
 let fetchMock: ReturnType<typeof vi.fn>
 let originalLocation: Location
 
-function lastInit(): RequestInit {
+/**
+ * The last call that reached the stubbed `fetch`.
+ *
+ * A private `axios.create()` instance issues XHR and never touches `fetch`, so
+ * an unmigrated composable records nothing here. Asserting that explicitly
+ * keeps the pre-change failure legible ("never reached slmApiClient") instead
+ * of an incidental TypeError on an empty mock.
+ */
+function lastFetchCall(): [string, RequestInit] {
   const calls = fetchMock.mock.calls
-  return calls[calls.length - 1][1] as RequestInit
+  expect(
+    calls.length,
+    'the composable never reached slmApiClient — no fetch was issued'
+  ).toBeGreaterThan(0)
+  return calls[calls.length - 1] as [string, RequestInit]
+}
+
+function lastInit(): RequestInit {
+  return lastFetchCall()[1]
 }
 
 function lastUrl(): string {
-  const calls = fetchMock.mock.calls
-  return calls[calls.length - 1][0] as string
+  return lastFetchCall()[0]
 }
 
 function authHeader(): unknown {
