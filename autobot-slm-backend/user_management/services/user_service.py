@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from autobot_shared.auth.jwt_core import hash_password, verify_password
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.password_epoch import set_password_epoch
 from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
@@ -470,11 +471,17 @@ class UserService(BaseService):
         user.updated_at = now_utc()
         await self.session.flush()
 
+        # #12924: revoke every session opened with the old password. The jti
+        # denylist this backend already honours can only revoke one token at a
+        # time and there is no user->jti index, so the epoch is what expresses
+        # "all of them". Checked in services/auth.decode_token_async.
+        epoch = await set_password_epoch(user.username)
+
         await self._audit_log(
             action=AuditAction.PASSWORD_CHANGED,
             resource_type=AuditResourceType.USER,
             resource_id=user_id,
-            details={"method": "user_initiated"},
+            details={"method": "user_initiated", "sessions_revoked_from": epoch},
         )
 
         return True
