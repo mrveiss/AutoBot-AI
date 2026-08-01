@@ -46,12 +46,23 @@ import pytest
 _BACKEND_ROOT = Path(__file__).parent.parent  # autobot-backend/
 
 
-def _simple_stub(name: str) -> MagicMock:
-    """Register a plain MagicMock as *name* if not already present."""
-    if name not in sys.modules:
-        mod = MagicMock()
-        sys.modules[name] = mod
-    return sys.modules[name]  # type: ignore[return-value]
+def _simple_stub(name: str, **attrs: object) -> MagicMock:
+    """Register a plain MagicMock as *name* if not already present.
+
+    ``attrs`` are applied ONLY to a stub this call creates.  When *name* is
+    already in ``sys.modules`` it is very likely the real module — imported by
+    an earlier test on the same xdist worker — and rebinding attributes on it
+    would leak permanently into every test that runs afterwards (#13223).
+    Such a module is therefore returned untouched.
+    """
+    existing = sys.modules.get(name)
+    if existing is not None:
+        return existing  # type: ignore[return-value]
+    mod = MagicMock()
+    for attr, value in attrs.items():
+        setattr(mod, attr, value)
+    sys.modules[name] = mod
+    return mod
 
 
 def _pkg_stub(name: str) -> types.ModuleType:
@@ -84,32 +95,43 @@ if "async_chat_workflow" not in sys.modules:
     _wf_mod.AsyncChatWorkflow = MagicMock  # type: ignore[attr-defined]
     sys.modules["async_chat_workflow"] = _wf_mod
 
-# utils.errors
-_ue = _simple_stub("utils.errors")
-_ue.RepairableException = Exception  # type: ignore[attr-defined]
+# utils.errors is deliberately NOT stubbed (#13223).  utils/errors.py has no
+# imports of its own and utils/__init__.py is a bare docstring, so the real
+# module always loads — there is no import cost or cycle to avoid.  The former
+# stub rebound RepairableException to builtin Exception on the *real* module
+# object and never restored it, which broke every later test on the same worker
+# that constructed RepairableException with keyword arguments.
 
 # chat_workflow package stub — must exist before chat_workflow.llm_handler /
 # chat_workflow.session_handler sub-stubs are registered.  We use a real
 # ModuleType with __path__ so Python treats it as a package.
 _cw_pkg = _pkg_stub("chat_workflow")
-_cw_pkg.__path__ = [str(_BACKEND_ROOT / "chat_workflow")]  # type: ignore[attr-defined]
+if not getattr(_cw_pkg, "__path__", None):
+    # Only a stub we just created has an empty __path__; if the real package is
+    # already imported its __path__ is correct and must not be overwritten.
+    _cw_pkg.__path__ = [str(_BACKEND_ROOT / "chat_workflow")]  # type: ignore[attr-defined]
 
 # Sub-module stubs for the two imports tool_handler pulls in at module level.
-_lh = _simple_stub("chat_workflow.llm_handler")
-_lh._emit_before_tool_execute = AsyncMock(return_value=True)  # type: ignore[attr-defined]
-_lh._emit_after_tool_execute = AsyncMock(side_effect=lambda t, r, s, m: r)  # type: ignore[attr-defined]
-_lh._emit_tool_error = AsyncMock(return_value=None)  # type: ignore[attr-defined]
-
-_sh = _simple_stub("chat_workflow.session_handler")
-_sh._emit_approval_received = AsyncMock(return_value=None)  # type: ignore[attr-defined]
-_sh._emit_approval_required = AsyncMock(return_value=None)  # type: ignore[attr-defined]
+# The emitter mocks are attached by _simple_stub only when it creates the stub —
+# if the real handler modules are already imported they keep their real emitters,
+# which the tests that exercise them patch on chat_workflow.tool_handler anyway.
+_simple_stub(
+    "chat_workflow.llm_handler",
+    _emit_before_tool_execute=AsyncMock(return_value=True),
+    _emit_after_tool_execute=AsyncMock(side_effect=lambda t, r, s, m: r),
+    _emit_tool_error=AsyncMock(return_value=None),
+)
+_simple_stub(
+    "chat_workflow.session_handler",
+    _emit_approval_received=AsyncMock(return_value=None),
+    _emit_approval_required=AsyncMock(return_value=None),
+)
 
 # services.mcp_dispatch is imported lazily (local import) inside
 # _try_mcp_dispatch.  Pre-register a stub package + module so patch() can
 # resolve "services.mcp_dispatch.get_mcp_dispatcher" correctly.
 _svc_pkg = _pkg_stub("services")
-_mcp_stub = _simple_stub("services.mcp_dispatch")
-_mcp_stub.get_mcp_dispatcher = MagicMock()  # type: ignore[attr-defined]
+_mcp_stub = _simple_stub("services.mcp_dispatch", get_mcp_dispatcher=MagicMock())
 _svc_pkg.mcp_dispatch = _mcp_stub  # type: ignore[attr-defined]
 
 # Load tool_handler directly from its source file, bypassing __init__.py.
