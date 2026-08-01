@@ -145,7 +145,13 @@ def _parse_audit_log_lines(lines: list, limit: int) -> list:
     for line in lines[-limit:]:
         try:
             entry = json.loads(line.strip())
-            entries.append(entry)
+            # #13258: response_model=AuditLogData declares List[Dict[str, Any]], and a
+            # non-object line (null / 123 / [...]) would fail response validation AFTER
+            # this handler returns — past its own try/except — and 500 the whole
+            # endpoint. Only the writer at security_layer.py:585 should ever produce
+            # lines here, so a non-object is corruption; skip it like a malformed line.
+            if isinstance(entry, dict):
+                entries.append(entry)
         except json.JSONDecodeError:
             continue
     return entries
