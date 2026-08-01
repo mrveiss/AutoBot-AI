@@ -6,7 +6,11 @@ on:
   push:
     branches: [ main, Dev_new_gui ]
   pull_request:
-    branches: [ main ]
+    # Dev_new_gui is the integration branch every PR targets; without it the
+    # backend suite below only ran post-merge on the push trigger, so backend
+    # regressions were only discovered once already on the shared branch
+    # (#10691). main kept for promotion PRs.
+    branches: [ main, Dev_new_gui ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
