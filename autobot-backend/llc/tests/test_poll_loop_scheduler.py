@@ -74,6 +74,38 @@ class _MaskingCancelScheduler(PollLoopScheduler):
             raise RuntimeError("driver masked the cancellation") from None
 
 
+class _SwallowingCancelScheduler(PollLoopScheduler):
+    """Subclass whose tick masks a CancelledError and then returns *normally*.
+
+    This is the dominant shape in production and the one #13085's first fix
+    missed (#13203): every concrete scheduler wraps its own work in
+    ``except Exception`` — ``liveness_monitor._check_once``,
+    ``liveness_monitor._cancel_adapter``, ``session_checkpointer._check_once``,
+    ``budget_watchdog._hard_stop_agent`` — so a cancellation the driver
+    surfaced as its own error type is consumed *inside* ``_tick`` and never
+    reaches ``_loop``'s ``except Exception`` arm at all.  A guard placed only
+    in that arm therefore never fires, and the loop re-arms a full interval.
+
+    ``_MaskingCancelScheduler`` above re-raises, so it only ever exercised the
+    already-covered path.
+    """
+
+    _task_name = "test-swallowing-cancel-scheduler"
+
+    def __init__(self, poll_interval: float = 9999.0) -> None:
+        super().__init__(poll_interval)
+        self.tick_count = 0
+        self.tick_entered = asyncio.Event()
+
+    async def _tick(self) -> None:
+        self.tick_count += 1
+        self.tick_entered.set()
+        try:
+            await asyncio.sleep(9999.0)
+        except asyncio.CancelledError:
+            pass  # driver consumed it; the tick reports success to _loop
+
+
 # ---------------------------------------------------------------------------
 # Lifecycle: start / stop idempotency
 # ---------------------------------------------------------------------------
@@ -224,13 +256,35 @@ async def test_tick_exception_logs_class_name(caplog: pytest.LogCaptureFixture) 
 
 @pytest.mark.asyncio
 async def test_cancellation_breaks_loop_cleanly() -> None:
-    """Cancelling the task does not produce an unhandled CancelledError."""
+    """A bare cancel ends the loop and leaves the scheduler restartable (#13203).
+
+    ``_loop`` re-raises ``CancelledError`` rather than catching it, so the
+    cancellation is delivered to whoever collects the task instead of vanishing.
+    Its ``finally`` then clears ``_running``: before #13203 a bare
+    ``task.cancel()`` left ``_running=True`` on a finished task, which made
+    ``is_running`` False *and* made ``start()`` refuse to create a replacement —
+    the scheduler was silently un-restartable.
+
+    The yield before the cancel is required, not incidental: a coroutine
+    cancelled before its first step never enters its body, so no ``finally``
+    can run.  ``stop()``/``aclose()`` clear ``_running`` themselves, so the only
+    path that depends on the ``finally`` is a bare cancel of a loop that is
+    already running — which is the case exercised here.
+    """
     sched = _CountingScheduler(poll_interval=9999.0)
     sched.start()
     assert sched._task is not None
-    sched._task.cancel()
-    # Must not raise — CancelledError is caught inside _loop
-    await asyncio.gather(sched._task, return_exceptions=True)
+    task = sched._task
+    await asyncio.sleep(0)  # let _loop enter its body and reach the inter-poll wait
+    task.cancel()
+    # Collected by the caller — must not surface as an unhandled exception.
+    results = await asyncio.gather(task, return_exceptions=True)
+
+    assert isinstance(results[0], asyncio.CancelledError)
+    assert task.cancelled()
+    assert sched._running is False, "_loop must clear _running on exit"
+    assert sched.start() is True, "a cancelled scheduler must be restartable"
+    await sched.aclose()
 
 
 @pytest.mark.asyncio
@@ -294,6 +348,30 @@ async def test_masked_cancellation_does_not_start_another_interval() -> None:
     assert sched.tick_count == 1, "the loop must not have started a second tick"
 
 
+@pytest.mark.asyncio
+async def test_swallowed_cancellation_does_not_start_another_interval() -> None:
+    """A tick that *swallows* the masked cancel must not buy a fresh interval.
+
+    #13085's first fix ran the guard only in ``_loop``'s ``except Exception``
+    arm, so it fired only when the masked error escaped ``_tick()``.  Every
+    concrete scheduler consumes its own errors and returns normally, so on the
+    real path the guard never ran and the loop re-armed a whole poll interval —
+    60 s (LivenessMonitor), 300 s (BudgetWatchdog), 30 s (SessionCheckpointer).
+    Running it once per iteration is what closes that gap (#13203).
+    """
+    sched = _SwallowingCancelScheduler(poll_interval=9999.0)
+    sched.start()
+    assert sched._task is not None
+    await asyncio.wait_for(sched.tick_entered.wait(), timeout=1.0)
+
+    sched._task.cancel()  # not via stop(): _stop_event stays clear, _running stays True
+
+    # A re-armed 9999 s inter-poll wait would blow this timeout.
+    await asyncio.wait_for(asyncio.gather(sched._task, return_exceptions=True), timeout=1.0)
+    assert sched._task.cancelled(), "the honoured cancel must end the task as cancelled"
+    assert sched.tick_count == 1, "the loop must not have started a second tick"
+
+
 # ---------------------------------------------------------------------------
 # aclose() — the awaitable shutdown drain (#13085)
 # ---------------------------------------------------------------------------
@@ -323,6 +401,67 @@ async def test_aclose_is_safe_before_start_and_idempotent() -> None:
     await sched.aclose()
     await sched.aclose()  # second drain — must not raise
     assert not sched.is_running
+
+
+class _UncancellableScheduler(PollLoopScheduler):
+    """Tick that masks *every* cancellation, so the task can never be drained.
+
+    Models the concrete hang in #13203: a cancel surfaces as an ``InterfaceError``
+    and the handler awaits ``session.rollback()`` on a dead connection with no
+    command timeout, which never returns.
+    """
+
+    _task_name = "test-uncancellable-scheduler"
+
+    def __init__(self, poll_interval: float = 9999.0) -> None:
+        super().__init__(poll_interval)
+        self.tick_entered = asyncio.Event()
+        # Cleared by the test once it has its evidence, so the task is always
+        # reapable — a permanently uncancellable task would wedge the suite's
+        # own loop teardown, which is the very failure mode under test.
+        self.mask_cancellation = True
+
+    async def _tick(self) -> None:
+        self.tick_entered.set()
+        while True:
+            try:
+                await asyncio.sleep(9999.0)
+            except asyncio.CancelledError:
+                if not self.mask_cancellation:
+                    raise
+                continue  # driver consumed it and retried on the dead connection
+
+
+@pytest.mark.asyncio
+async def test_aclose_is_bounded_when_the_task_cannot_be_drained(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """aclose() must give up rather than wedge graceful shutdown forever (#13203).
+
+    cleanup_services() is awaited straight from the lifespan generator and
+    uvicorn awaits that with no timeout of its own, so an unbounded drain here
+    skips every remaining teardown step (database close, Redis close) and turns
+    a clean restart into a kill.  Timing out degrades to how the fire-and-forget
+    stop() behaved before the drain existed.
+    """
+    sched = _UncancellableScheduler(poll_interval=9999.0)
+    sched.start()
+    task = sched._task
+    assert task is not None
+    await asyncio.wait_for(sched.tick_entered.wait(), timeout=1.0)
+
+    with caplog.at_level(logging.WARNING, logger=PollLoopScheduler.__module__):
+        # Bounded by aclose()'s own timeout; the outer guard only proves the
+        # test itself cannot hang the suite if that bound ever regresses.
+        await asyncio.wait_for(sched.aclose(timeout=0.2), timeout=3.0)
+
+    assert not task.done(), "the stuck task is deliberately left behind"
+    assert any("did not drain" in r.message for r in caplog.records), "the give-up must be logged"
+
+    # Reap it now that the evidence is collected.
+    sched.mask_cancellation = False
+    task.cancel()
+    await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), timeout=1.0)
 
 
 @pytest.mark.asyncio

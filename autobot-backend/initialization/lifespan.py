@@ -2142,13 +2142,24 @@ async def cleanup_services(app: FastAPI):
         # close_database() disposes the engine further down, and its interval
         # wait was left for whoever tore the event loop down. aclose() drains it
         # here, where shutdown can observe it.
+        #
+        # #13203: each drain is guarded individually, for the same reason the
+        # MeshBrainScheduler stop below is — see the comment there. stop() was
+        # synchronous and could neither raise nor suspend; await …aclose() can
+        # do both, so an unguarded drain would abort the rest of the teardown.
         if hasattr(app.state, "llc_liveness_monitor") and app.state.llc_liveness_monitor:
-            await app.state.llc_liveness_monitor.aclose()
-            logger.info("✅ LLC liveness monitor stopped")
+            try:
+                await app.state.llc_liveness_monitor.aclose()
+                logger.info("✅ LLC liveness monitor stopped")
+            except Exception as liveness_stop_error:
+                logger.warning("LLC liveness monitor stop failed (non-fatal): %s", liveness_stop_error)
         # GH#9029: Stop LLC budget watchdog
         if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
-            await app.state.llc_budget_watchdog.aclose()
-            logger.info("✅ LLC budget watchdog stopped")
+            try:
+                await app.state.llc_budget_watchdog.aclose()
+                logger.info("✅ LLC budget watchdog stopped")
+            except Exception as budget_stop_error:
+                logger.warning("LLC budget watchdog stop failed (non-fatal): %s", budget_stop_error)
         # #12816: Stop MeshBrainScheduler — stop() cancels every per-job task
         # start() spawned, so none survive shutdown.
         #
@@ -2165,8 +2176,11 @@ async def cleanup_services(app: FastAPI):
                 logger.warning("MeshBrainScheduler stop failed (non-fatal): %s", mesh_stop_error)
         # GH#9026: Stop LLC session checkpointer (#13085: drained, see above)
         if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
-            await app.state.llc_session_checkpointer.aclose()
-            logger.info("✅ LLC session checkpointer stopped")
+            try:
+                await app.state.llc_session_checkpointer.aclose()
+                logger.info("✅ LLC session checkpointer stopped")
+            except Exception as checkpointer_stop_error:
+                logger.warning("LLC session checkpointer stop failed (non-fatal): %s", checkpointer_stop_error)
 
         # GH#8257: Stop LLC outbound sync service
         if hasattr(app.state, "llc_outbound_sync") and app.state.llc_outbound_sync:

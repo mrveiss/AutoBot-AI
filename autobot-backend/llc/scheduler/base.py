@@ -29,6 +29,9 @@ Shutdown contract (#13085):
     honours the pending cancellation instead of starting another poll interval.
   - ``stop()`` stays synchronous (fire-and-forget) for existing callers;
     ``aclose()`` is the awaitable drain that shutdown paths must use.
+  - That drain is bounded (#13203).  A tick can absorb the cancellation and
+    park again, so an unbounded drain would trade a re-armed poll interval for
+    a graceful shutdown that never finishes at all.
 
 stop() semantics:
   - Sets ``_running = False`` and signals the stop event first.
@@ -56,8 +59,11 @@ def honour_pending_cancellation() -> None:
     event loop alive for a whole interval (300 s, or 6 h for the community
     clusterer) after shutdown had already asked it to stop.
 
-    Call this from the ``except Exception`` arm of any ``while``-loop that
-    sleeps between iterations.  It is a no-op when no cancel is pending.
+    Call this once per iteration of any ``while``-loop that sleeps between
+    iterations — not only from its ``except Exception`` arm (#13203).  A tick
+    that catches the driver's error itself returns *normally*, so a guard
+    reached only on failure never runs on that path.  It is a no-op when no
+    cancel is pending.
     """
     current = asyncio.current_task()
     if current is not None and current.cancelling():
@@ -127,7 +133,7 @@ class PollLoopScheduler:
         if self._task and not self._task.done():
             self._task.cancel()
 
-    async def aclose(self) -> None:
+    async def aclose(self, timeout: float = 5.0) -> None:
         """Stop the loop and await the task's exit — the shutdown drain (#13085).
 
         ``stop()`` only *requests* cancellation.  Without this drain the poll
@@ -135,11 +141,36 @@ class PollLoopScheduler:
         the caller tears down the database engine and the event loop, which
         leaves the interval sleep to be paid by whoever closes the loop.
         Idempotent, and safe on a scheduler that was never started.
+
+        The drain is bounded (#13203).  ``_tick()`` drives drivers that catch
+        ``BaseException`` while unwinding, so a tick can consume the
+        cancellation and park again — a cancel surfacing as an ``InterfaceError``
+        whose handler then awaits ``session.rollback()`` on a dead connection
+        never returns.  Shutdown awaits ``cleanup_services()`` straight from
+        the lifespan generator, so an unbounded drain there skips every later
+        teardown step and turns a clean restart into a kill.  On timeout the
+        stuck task is left behind and shutdown proceeds, which is exactly how
+        the fire-and-forget ``stop()`` behaved before the drain existed.
+
+        ``asyncio.shield`` is load-bearing, not decorative: ``wait_for``
+        cancels the awaitable it is waiting on, and cancelling a bare
+        ``gather()`` merely re-cancels the child and keeps waiting for it — so
+        an unshielded drain still blocks forever on a tick that masks every
+        cancellation.  Shielding lets the timeout fire regardless.
         """
         self.stop()
         task = self._task
-        if task is not None:
-            await asyncio.gather(task, return_exceptions=True)
+        if task is None:
+            return
+        drain = asyncio.gather(task, return_exceptions=True)
+        try:
+            await asyncio.wait_for(asyncio.shield(drain), timeout)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "%s: poll task did not drain within %.1fs; continuing shutdown without it",
+                type(self).__name__,
+                timeout,
+            )
 
     # ------------------------------------------------------------------
     # Internal loop
@@ -152,20 +183,45 @@ class PollLoopScheduler:
         failing tick does not kill the loop.  ``asyncio.CancelledError`` is
         re-raised so the task ends as cancelled.  The inter-poll wait always
         runs after a tick (or after an exception) and ends early on ``stop()``.
+
+        ``honour_pending_cancellation()`` runs once per iteration rather than
+        only after a tick failure (#13203).  Every concrete ``_tick()`` catches
+        its own errors and returns normally, so on the dominant path a masked
+        cancellation never reaches the ``except Exception`` arm below — a guard
+        placed only there never fires and the loop re-arms a whole interval.
+
+        A failure in the inter-poll wait ends the loop instead of escaping the
+        task unretrieved (#13203).  The wait is the loop's only pacing and such
+        a failure is permanent for the instance — an ``asyncio.Event`` reused
+        under a second event loop raises ``RuntimeError`` on every ``wait()`` —
+        so continuing would spin the CPU with no delay between ticks.
         """
-        while self._running:
-            try:
-                await self._tick()
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                # Attribute tick failures to the subclass's module logger so
-                # per-module log-level filtering keeps working as it did
-                # before the extraction; the base logger only carries
-                # lifecycle events.
-                logging.getLogger(type(self).__module__).exception("%s._tick() failed", type(self).__name__)
+        try:
+            while self._running:
+                try:
+                    await self._tick()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    # Attribute tick failures to the subclass's module logger so
+                    # per-module log-level filtering keeps working as it did
+                    # before the extraction; the base logger only carries
+                    # lifecycle events.
+                    logging.getLogger(type(self).__module__).exception("%s._tick() failed", type(self).__name__)
                 honour_pending_cancellation()
-            await self._wait_between_polls()
+                try:
+                    await self._wait_between_polls()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("%s: inter-poll wait failed, stopping the loop", type(self).__name__)
+                    break
+        finally:
+            # Identity-guarded so an outgoing task that has not yet processed
+            # its cancellation cannot clear the flag of a loop that stop()/
+            # start() has already replaced in the meantime (#13203).
+            if self._task is asyncio.current_task():
+                self._running = False
 
     async def _wait_between_polls(self) -> None:
         """Wait one poll interval, returning as soon as ``stop()`` is signalled."""
