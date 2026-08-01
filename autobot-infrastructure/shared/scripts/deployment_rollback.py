@@ -269,7 +269,7 @@ class RollbackManager:
 
         if config_file.exists():
             try:
-                with open(config_file, "r") as f:
+                with open(config_file, "r", encoding="utf-8") as f:
                     file_config = yaml.safe_load(f) or {}
                 default_config.update(file_config)
             except Exception as e:
@@ -281,7 +281,7 @@ class RollbackManager:
         """Get current deployment information."""
         if self.deployment_info_file.exists():
             try:
-                with open(self.deployment_info_file, "r") as f:
+                with open(self.deployment_info_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception:
                 logger.debug("Suppressed exception in try block", exc_info=True)
@@ -624,7 +624,7 @@ class RollbackManager:
         plan_file = self.rollback_dir / f"rollback_plan_{rollback_id}.json"
 
         def _write_plan():
-            with open(plan_file, "w") as f:
+            with open(plan_file, "w", encoding="utf-8") as f:
                 json.dump(plan, f, indent=2)
 
         await asyncio.to_thread(_write_plan)
@@ -816,7 +816,7 @@ class RollbackManager:
             "services": list(self.service_registry.list_services()),
         }
 
-        with open(self.deployment_info_file, "w") as f:
+        with open(self.deployment_info_file, "w", encoding="utf-8") as f:
             json.dump(deployment_info, f, indent=2)
 
     def _log_rollback_event(
@@ -834,7 +834,7 @@ class RollbackManager:
         history = []
         if log_file.exists():
             try:
-                with open(log_file, "r") as f:
+                with open(log_file, "r", encoding="utf-8") as f:
                     history = json.load(f)
             except Exception:
                 history = []
@@ -859,7 +859,7 @@ class RollbackManager:
             history = history[-50:]
 
         # Save history
-        with open(log_file, "w") as f:
+        with open(log_file, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2)
 
     async def _recover_from_failed_rollback(self) -> bool:

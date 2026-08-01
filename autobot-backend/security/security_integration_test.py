@@ -158,7 +158,7 @@ class TestSecuritySystemIntegration:
         )
 
         # Verify log entry was written
-        with open(security_layer.audit_log_file, "r") as f:
+        with open(security_layer.audit_log_file, "r", encoding="utf-8") as f:
             content = f.read()
             assert "integration_test" in content
             assert "test_user" in content

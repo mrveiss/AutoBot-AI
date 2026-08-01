@@ -66,7 +66,7 @@ class RedisToChromaDBMigration:
 
         # Load ChromaDB config from central location
         config_path = PROJECT_ROOT / "config" / "config.yaml"
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         chromadb_config = config.get("memory", {}).get("chromadb", {})
@@ -529,7 +529,7 @@ class RedisToChromaDBMigration:
             "log": self.migration_log,
         }
 
-        with open(log_file, "w") as f:
+        with open(log_file, "w", encoding="utf-8") as f:
             json.dump(log_data, f, indent=2)
 
         logger.info("Migration log saved: %s", log_file)

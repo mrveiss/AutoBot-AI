@@ -289,7 +289,7 @@ class TestClaudeCliResolution:
             # State file must exist after invoke
             state_file = _state_path(td, run_id)
             assert os.path.exists(state_file)
-            with open(state_file) as fh:
+            with open(state_file, encoding="utf-8") as fh:
                 state = json.load(fh)
             assert state["pid"] == 77
             assert "session_id" in state
@@ -322,7 +322,7 @@ class TestClaudeCliResolution:
             assert captured["stderr"] is not asyncio.subprocess.PIPE
             assert hasattr(captured["stderr"], "write")
             # The sidecar path is recorded in state and exists on disk.
-            with open(_state_path(td, run_id)) as fh:
+            with open(_state_path(td, run_id), encoding="utf-8") as fh:
                 state = json.load(fh)
             assert state["stderr_file"].endswith(".stderr.log")
             assert os.path.exists(state["stderr_file"])

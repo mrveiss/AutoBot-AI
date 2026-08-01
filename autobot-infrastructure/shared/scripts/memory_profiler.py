@@ -368,12 +368,12 @@ class MemoryProfiler:
 
         # Save JSON report
         json_report_path = self.reports_dir / f"memory_profile_{timestamp}.json"
-        with open(json_report_path, "w") as f:
+        with open(json_report_path, "w", encoding="utf-8") as f:
             json.dump(self.profile_results, f, indent=2)
 
         # Save markdown summary
         md_report_path = self.reports_dir / f"memory_summary_{timestamp}.md"
-        with open(md_report_path, "w") as f:
+        with open(md_report_path, "w", encoding="utf-8") as f:
             f.write(self.generate_markdown_report())
 
         logger.info("📄 Memory profiling reports saved:")

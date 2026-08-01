@@ -346,7 +346,7 @@ class TestSecurityLayer:
         )
 
         # Check that log entry was written
-        with open(self.temp_audit_file.name, "r") as f:
+        with open(self.temp_audit_file.name, "r", encoding="utf-8") as f:
             log_entry = json.loads(f.read().strip())
 
         assert log_entry["action"] == "test_action"
@@ -392,7 +392,7 @@ class TestSecurityLayer:
             },
         ]
 
-        with open(self.temp_audit_file.name, "w") as f:
+        with open(self.temp_audit_file.name, "w", encoding="utf-8") as f:
             for entry in test_entries:
                 f.write(json.dumps(entry) + "\n")
 
@@ -413,7 +413,7 @@ class TestSecurityLayer:
     def test_get_command_history_malformed_json(self):
         """Test getting command history with malformed JSON"""
         # Write malformed JSON
-        with open(self.temp_audit_file.name, "w") as f:
+        with open(self.temp_audit_file.name, "w", encoding="utf-8") as f:
             f.write('{"valid": "json"}\n')
             f.write("invalid json line\n")
             f.write('{"action": "command_execution_attempt", "user": "test"}\n')

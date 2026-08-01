@@ -25,12 +25,18 @@ Movers so far:
   `from __future__ import annotations`); no schema or behavior changed. See
   each module's docstring for the specific diff it resolved.
 
-Still forked and out of scope for this package: `models.user` and
-`models.organization` carry genuine per-backend features (backend-only
-activity relationships and LLC/PM-sync columns) and cannot fully merge.
+- `models.user` / `models.organization` (#12647) — the two files that could
+  not move wholesale: backend genuinely carries more than SLM (activity
+  relationships #871; LLC/PM-sync columns #8211/#8257/#8241/#4451). Per the
+  owner's decision these landed as **abstract cores** (`UserCore`,
+  `OrganizationCore`) holding everything both backends share, with each
+  backend keeping a thin concrete subclass for its own extras. No column
+  changed on either side — see `models/core_test.py`, which pins both
+  concrete schemas against their pre-move shape.
 
-Each fork keeps a re-export shim so existing importers are untouched — the
-fork is removed, not the callers.
+Each fork keeps a re-export shim (or, for `user`/`organization`, a concrete
+subclass) so existing importers are untouched — the fork is removed, not the
+callers.
 
 #12647 (follow-up): the re-exports below are lazy (PEP 562 module
 ``__getattr__``, mirroring ``autobot_shared/__init__.py``'s own pattern) —

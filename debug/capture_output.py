@@ -56,7 +56,7 @@ class OutputCapture:
 
     def log_output(self):
         """Write queued output to log file."""
-        with open(self.log_file, "a") as f:
+        with open(self.log_file, "a", encoding="utf-8") as f:
             while True:
                 try:
                     line = self.output_queue.get(timeout=0.1)

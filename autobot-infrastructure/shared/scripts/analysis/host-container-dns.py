@@ -92,7 +92,7 @@ class HostContainerDNS:
         """Update /etc/hosts with new entries"""
         try:
             # Read current hosts file
-            with open(self.hosts_file, "r") as f:
+            with open(self.hosts_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Remove old AutoBot entries

@@ -396,7 +396,7 @@ class AutoBotDeployer:
             self.print_step(f"Distributed config file not found: {self.config_file}", "error")
             return False
 
-        with open(self.config_file, "r") as f:
+        with open(self.config_file, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         services = config.get("services", {})
@@ -480,7 +480,7 @@ spec:
   type: ClusterIP
 """
 
-            with open(k8s_dir / "autobot-deployment.yml", "w") as f:
+            with open(k8s_dir / "autobot-deployment.yml", "w", encoding="utf-8") as f:
                 f.write(namespace_manifest)
 
             self.print_step("Kubernetes manifests created", "success")
@@ -548,7 +548,7 @@ spec:
         """Save deployment information to file."""
         info_file = self.project_root / "deployment_info.json"
 
-        with open(info_file, "w") as f:
+        with open(info_file, "w", encoding="utf-8") as f:
             json.dump(info, f, indent=2, default=str)
 
         self.print_step(f"Deployment info saved to: {info_file}", "success")

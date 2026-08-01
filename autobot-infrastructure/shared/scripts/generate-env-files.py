@@ -16,7 +16,7 @@ import yaml
 def load_config():
     """Load the complete.yaml configuration"""
     config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -531,7 +531,7 @@ def main():
             content = generator_func(config)
 
             # Write file
-            with open(full_path, "w") as f:
+            with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
             print(f"✓ Generated {file_path}")
