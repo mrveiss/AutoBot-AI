@@ -9,10 +9,8 @@ Business logic for user management operations including CRUD,
 authentication, and role assignment.
 """
 
-import logging
 import secrets
 import uuid
-from datetime import datetime, timezone
 from typing import List
 
 from sqlalchemy import func, or_, select
@@ -20,11 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from autobot_shared.auth.jwt_core import hash_password, verify_password
+from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import now_utc
 from user_management.models import Role, User, UserRole
 from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
 from user_management.services.base_service import BaseService, TenantContext
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UserServiceError(Exception):
@@ -296,7 +296,18 @@ class UserService(BaseService):
         include_inactive: bool = False,
         search: str | None = None,
     ) -> tuple[List[User], int]:
-        """List users with pagination and optional search filtering."""
+        """
+        List users with pagination.
+
+        Args:
+            limit: Maximum number of users to return
+            offset: Number of users to skip
+            include_inactive: Include deactivated users
+            search: Search term for email, username, or display_name
+
+        Returns:
+            Tuple of (users list, total count)
+        """
         base_query = self._build_user_list_base_query(include_inactive, search)
 
         # Get total count
@@ -371,7 +382,7 @@ class UserService(BaseService):
 
     async def _finalize_user_update(self, user: User, user_id: uuid.UUID, changes: dict) -> None:
         """Finalize user update with timestamp and audit logging. Issue #620."""
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         if changes:
@@ -456,7 +467,7 @@ class UserService(BaseService):
                 raise InvalidCredentialsError("Current password is incorrect")
 
         user.password_hash = self.hash_password(new_password)
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -486,7 +497,7 @@ class UserService(BaseService):
             raise UserNotFoundError(f"User {user_id} not found")
 
         user.is_active = False
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -517,7 +528,7 @@ class UserService(BaseService):
             raise UserNotFoundError(f"User {user_id} not found")
 
         user.is_active = True
-        user.updated_at = datetime.now(timezone.utc)
+        user.updated_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
@@ -551,7 +562,7 @@ class UserService(BaseService):
         if hard_delete:
             await self.session.delete(user)
         else:
-            user.deleted_at = datetime.now(timezone.utc)
+            user.deleted_at = now_utc()
             user.is_active = False
 
         await self.session.flush()
@@ -634,7 +645,7 @@ class UserService(BaseService):
             return None
 
         # Update last login
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = now_utc()
         await self.session.flush()
 
         await self._audit_log(
