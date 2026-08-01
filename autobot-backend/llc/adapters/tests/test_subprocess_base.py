@@ -275,7 +275,7 @@ class TestSharedStatus:
                 "started_at": time.time() - 9999,
                 "timeout_seconds": 10,
             }
-            with open(state_file, "w") as fh:
+            with open(state_file, "w", encoding="utf-8") as fh:
                 json.dump(state, fh)
 
             cancel_called = []
@@ -347,7 +347,7 @@ class TestSharedGracefulTimeout:
         with tempfile.TemporaryDirectory() as td:
             state_file = _state_path(td, "123/session-x")
             os.makedirs(os.path.dirname(state_file), exist_ok=True)
-            with open(state_file, "w") as f:
+            with open(state_file, "w", encoding="utf-8") as f:
                 json.dump({"pid": 123, "session_id": "session-x"}, f)
 
             with (

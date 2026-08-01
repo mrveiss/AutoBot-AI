@@ -575,14 +575,14 @@ class MetricsCollector:
             existing_data = []
             if output_file.exists():
                 try:
-                    with open(output_file, "r") as f:
+                    with open(output_file, "r", encoding="utf-8") as f:
                         existing_data = json.load(f)
                 except Exception:
                     existing_data = []
 
             # Combine and save
             all_data = existing_data + metrics_data
-            with open(output_file, "w") as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(all_data, f)
 
         # Clean old files
@@ -606,7 +606,7 @@ class MetricsCollector:
     def load_alerts(self, config_file: str) -> None:
         """Load alert configurations from file."""
         try:
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 alert_config = yaml.safe_load(f)
 
             self.alerts = []
@@ -690,7 +690,7 @@ class MetricsCollector:
             alerts = []
             if alert_file.exists():
                 try:
-                    with open(alert_file, "r") as f:
+                    with open(alert_file, "r", encoding="utf-8") as f:
                         alerts = json.load(f)
                 except Exception:
                     alerts = []
@@ -701,7 +701,7 @@ class MetricsCollector:
             if len(alerts) > 1000:
                 alerts = alerts[-1000:]
 
-            with open(alert_file, "w") as f:
+            with open(alert_file, "w", encoding="utf-8") as f:
                 json.dump(alerts, f, indent=2)
 
         # Execute action
@@ -794,7 +794,7 @@ class MetricsCollector:
             if not hour_file.exists():
                 continue
             try:
-                with open(hour_file, "r") as f:
+                with open(hour_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 for metric_data in data:
                     if metric_data["timestamp"] >= cutoff_time:
@@ -911,7 +911,7 @@ async def _handle_export_command(collector, args) -> int:
     output = collector.export_metrics(args.format, args.last_hours)
 
     if args.output:
-        with open(args.output, "w") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             f.write(output)
         logger.info(f"✅ Metrics exported to: {args.output}")
     else:
@@ -924,7 +924,7 @@ async def _handle_analyze_command(collector, args) -> int:
     analysis = collector.analyze_metrics(args.metric, args.last_hours)
 
     if args.output:
-        with open(args.output, "w") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             json.dump(analysis, f, indent=2)
         logger.info(f"✅ Analysis saved to: {args.output}")
         return 0
@@ -980,7 +980,7 @@ async def _handle_setup_alerts_command(collector, args) -> int:
     config_file = "config/alerts.yml"
     Path(config_file).parent.mkdir(exist_ok=True)
 
-    with open(config_file, "w") as f:
+    with open(config_file, "w", encoding="utf-8") as f:
         yaml.dump(sample_config, f)
 
     logger.info(f"✅ Sample alert configuration created: {config_file}")
@@ -992,7 +992,7 @@ async def _handle_dashboard_command(collector, args) -> int:
     dashboard = collector.create_grafana_dashboard()
 
     if args.output:
-        with open(args.output, "w") as f:
+        with open(args.output, "w", encoding="utf-8") as f:
             json.dump(dashboard, f, indent=2)
         logger.info(f"✅ Grafana dashboard saved to: {args.output}")
     else:

@@ -703,7 +703,7 @@ def main():
             f"${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results/distributed_system_test_{timestamp}.json"
         )
 
-        with open(results_file, "w") as f:
+        with open(results_file, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)
 
         print(f"\n💾 Results saved to: {results_file}")

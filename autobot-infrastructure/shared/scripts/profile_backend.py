@@ -83,7 +83,7 @@ def profile_backend_startup():
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     profile_file = reports_dir / "backend_profile.txt"
-    with open(profile_file, "w") as f:
+    with open(profile_file, "w", encoding="utf-8") as f:
         f.write(stats_output)
     print(f"📄 Text stats saved to: {profile_file}")
 

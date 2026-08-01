@@ -711,7 +711,7 @@ class AutomatedTestingSuite:
 
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-        with open(output_file, "w") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(self.results, f, indent=2, default=str)
 
         logger.info(f"\n📁 Test results saved to: {output_file}")

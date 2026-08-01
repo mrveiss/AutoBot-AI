@@ -334,7 +334,7 @@ class WebResearchSecurityTester:
             # Test 2: Settings validation
             settings_file = Path("config/settings.json")
             if settings_file.exists():
-                with open(settings_file) as f:
+                with open(settings_file, encoding="utf-8") as f:
                     settings = json.load(f)
 
                 if settings.get("web_research", {}).get("enabled"):
@@ -561,7 +561,7 @@ async def main():
 
     # Save results to file
     results_file = Path("test_results_web_research_security.json")
-    with open(results_file, "w") as f:
+    with open(results_file, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
     logger.info(f"\nDetailed results saved to: {results_file}")

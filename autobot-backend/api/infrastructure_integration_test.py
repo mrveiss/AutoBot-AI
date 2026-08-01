@@ -123,6 +123,7 @@ def test_celery_worker_status():
         with open(
             "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/celery-worker.log",
             "r",
+            encoding="utf-8",
         ) as f:
             logs = f.read()
             if "ready" in logs and "autobot-worker" in logs:

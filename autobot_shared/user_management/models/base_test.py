@@ -27,7 +27,11 @@ from autobot_shared.user_management.models.base import (
     TimestampMixin,
 )
 
-_ROOT = pathlib.Path(__file__).resolve().parents[2]
+# parents: [0] models, [1] user_management, [2] autobot_shared, [3] repo root.
+# This said parents[2] until #12647's core extraction ran the file — every
+# shim assertion below silently resolved to a path under autobot_shared/ that
+# does not exist, so they failed on sight rather than testing anything.
+_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _SHIMS = {
     "backend": _ROOT / "autobot-backend/user_management/models/base.py",
     "slm": _ROOT / "autobot-slm-backend/user_management/models/base.py",

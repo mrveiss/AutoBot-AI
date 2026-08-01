@@ -327,6 +327,7 @@ if __name__ == "__main__":
     with open(
         "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/NPU_WORKER_ARCHITECTURE.json",
         "w",
+        encoding="utf-8",
     ) as f:
         f.write(architecture.generate_architecture_file())
 
