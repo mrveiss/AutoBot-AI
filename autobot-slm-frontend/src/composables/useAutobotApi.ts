@@ -386,6 +386,121 @@ export interface BackendHealthProbe {
   status: number
 }
 
+// =============================================================================
+// Skills + skill governance (#731 / #951 / #13079)
+//
+// These shapes and the `/skills/...` paths below used to live in
+// `useSkills.ts`, which drove them through TWO private `axios.create`
+// instances (one with `baseURL: getBackendUrl() + '/skills/'`, one bare) whose
+// interceptors attached only `Bearer ${authStore.token}` — no
+// `autobot_access_token` fallback, no 401 cleanup. Declaring them beside the
+// canonical client keeps the SLM app's knowledge of the autobot backend in one
+// place (ADR-008 decision rule 3).
+//
+// `useSkills.ts` re-exports every type below so its existing consumers
+// (`SkillsView.vue`, `ReposTab.vue`, `ApprovalsTab.vue`) import unchanged.
+// =============================================================================
+
+/** One field of a skill's `config_schema` (GET /skills/{name}). */
+export interface SkillConfigField {
+  type: string
+  default: unknown
+  description: string
+  required: boolean
+  choices: string[] | null
+}
+
+/** Row of GET /skills/. */
+export interface SkillInfo {
+  name: string
+  version: string
+  description: string
+  author: string
+  category: string
+  status: string
+  enabled: boolean
+  tools: readonly string[]
+  triggers: readonly string[]
+  dependencies: readonly string[]
+  tags: readonly string[]
+}
+
+/** Health block carried by GET /skills/{name}. */
+export interface SkillHealth {
+  name: string
+  status: string
+  version: string
+  message: string | null
+  last_checked: string
+  config_valid: boolean
+  dependencies_met: boolean
+  details: Record<string, unknown>
+}
+
+/** GET /skills/{name}. */
+export interface SkillDetail extends SkillInfo {
+  config_schema: Record<string, SkillConfigField>
+  current_config: Record<string, unknown>
+  health: SkillHealth
+}
+
+/** GET /skills/. */
+export interface SkillListResponse {
+  skills: SkillInfo[]
+  total: number
+  categories: string[]
+}
+
+/** GET /skills/categories. */
+export interface CategoryCounts {
+  categories: Record<string, number>
+}
+
+/** Optional filters accepted by GET /skills/. */
+export interface SkillListQuery {
+  category?: string
+  search?: string
+}
+
+/** Row of GET /skills/repos. */
+export interface SkillRepo {
+  id: string
+  name: string
+  url: string
+  repo_type: 'git' | 'local' | 'http' | 'mcp'
+  skill_count: number
+  status: string
+  last_synced: string | null
+}
+
+/** Body of POST /skills/repos. */
+export type SkillRepoCreate = Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_synced'>
+
+/** Row of GET /skills/governance/approvals. */
+export interface SkillApproval {
+  id: string
+  skill_id: string
+  requested_by: string
+  requested_at: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  notes: string | null
+}
+
+/** Body of POST /skills/governance/approvals/{id}. */
+export interface SkillApprovalDecision {
+  approved: boolean
+  notes: string
+  trust_level: string
+}
+
+/** GET/PUT /skills/governance/. */
+export interface GovernanceConfig {
+  mode: 'full_auto' | 'semi_auto' | 'locked'
+  gap_detection_enabled: boolean
+  default_trust_level: string
+}
+
 /**
  * Unwrap the FastAPI `{ "detail": "..." }` error body (#13079).
  *
@@ -1492,7 +1607,158 @@ export function useAutobotApi() {
     return { ok: response.status >= 200 && response.status < 300, status: response.status }
   }
 
+
+  // =============================================================================
+  // Skills + skill governance (#731 / #951 / #13079)
+  //
+  // Paths keep their exact trailing slashes: `useSkills.ts` reached `/skills/`
+  // and `/skills/governance/` through an axios `baseURL` that preserved them,
+  // and FastAPI answers the slash-less form with a 307 redirect that drops the
+  // Authorization header on a cross-origin hop.
+  // =============================================================================
+
+  async function getSkills(query: SkillListQuery = {}): Promise<SkillListResponse> {
+    const params = new URLSearchParams()
+    if (query.category) params.append('category', query.category)
+    if (query.search) params.append('search', query.search)
+    const qs = params.toString()
+    const response = await client.get<SkillListResponse>(`/skills/${qs ? `?${qs}` : ''}`)
+    return response.data
+  }
+
+  async function getSkillCategories(): Promise<CategoryCounts> {
+    const response = await client.get<CategoryCounts>('/skills/categories')
+    return response.data
+  }
+
+  async function getSkillDetail(name: string): Promise<SkillDetail> {
+    const response = await client.get<SkillDetail>(`/skills/${encodeURIComponent(name)}`)
+    return response.data
+  }
+
+  async function enableSkill(name: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/skills/${encodeURIComponent(name)}/enable`)
+    return response.data
+  }
+
+  async function disableSkill(name: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/skills/${encodeURIComponent(name)}/disable`)
+    return response.data
+  }
+
+  async function updateSkillConfig(
+    name: string,
+    config: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const response = await client.put(`/skills/${encodeURIComponent(name)}/config`, { config })
+    return response.data
+  }
+
+  async function initializeSkills(): Promise<Record<string, unknown>> {
+    const response = await client.post('/skills/initialize')
+    return response.data
+  }
+
+  async function getSkillRepos(): Promise<SkillRepo[]> {
+    const response = await client.get<SkillRepo[]>('/skills/repos')
+    return response.data ?? []
+  }
+
+  async function addSkillRepo(payload: SkillRepoCreate): Promise<Record<string, unknown>> {
+    const response = await client.post('/skills/repos', payload)
+    return response.data
+  }
+
+  /**
+   * POST /skills/repos/{id}/sync.
+   *
+   * `autobot-backend/api/skills_repos.py:117` awaits `GitRepoSync` inline, so a
+   * cold clone runs for as long as the clone takes. The private instance this
+   * replaced capped it at 15s (see `SKILL_APPROVAL_POLL_TIMEOUT_MS` for why
+   * that number carried no intent), which aborted the very operation it was
+   * meant to cover; the client's 30s default applies instead.
+   */
+  async function syncSkillRepo(repoId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(`/skills/repos/${encodeURIComponent(repoId)}/sync`)
+    return response.data
+  }
+
+  /**
+   * GET /skills/governance/approvals.
+   *
+   * `timeoutMs` exists for the 30s approval poll in `useSkillGovernance`: a tick
+   * that outlived its own interval would overlap the next one, so the polled
+   * read is given a sub-interval budget rather than the client's 30s default.
+   */
+  async function getSkillApprovals(timeoutMs?: number): Promise<SkillApproval[]> {
+    const response = await client.get<SkillApproval[]>(
+      '/skills/governance/approvals',
+      timeoutMs === undefined ? undefined : { timeout: timeoutMs }
+    )
+    return response.data ?? []
+  }
+
+  async function decideSkillApproval(
+    approvalId: string,
+    decision: SkillApprovalDecision
+  ): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/skills/governance/approvals/${encodeURIComponent(approvalId)}`,
+      decision
+    )
+    return response.data
+  }
+
+  async function getSkillDrafts(): Promise<Record<string, unknown>[]> {
+    const response = await client.get<Record<string, unknown>[]>('/skills/governance/drafts')
+    return response.data ?? []
+  }
+
+  async function testSkillDraft(skillId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/skills/governance/drafts/${encodeURIComponent(skillId)}/test`
+    )
+    return response.data
+  }
+
+  async function promoteSkillDraft(skillId: string): Promise<Record<string, unknown>> {
+    const response = await client.post(
+      `/skills/governance/drafts/${encodeURIComponent(skillId)}/promote`
+    )
+    return response.data
+  }
+
+  async function getSkillGovernance(): Promise<GovernanceConfig> {
+    const response = await client.get<GovernanceConfig>('/skills/governance/')
+    return response.data
+  }
+
+  async function updateSkillGovernanceMode(
+    mode: GovernanceConfig['mode']
+  ): Promise<Record<string, unknown>> {
+    const response = await client.put('/skills/governance/', { mode })
+    return response.data
+  }
+
   return {
+    // Skills + governance (#731 / #951 / #13079)
+    getSkills,
+    getSkillCategories,
+    getSkillDetail,
+    enableSkill,
+    disableSkill,
+    updateSkillConfig,
+    initializeSkills,
+    getSkillRepos,
+    addSkillRepo,
+    syncSkillRepo,
+    getSkillApprovals,
+    decideSkillApproval,
+    getSkillDrafts,
+    testSkillDraft,
+    promoteSkillDraft,
+    getSkillGovernance,
+    updateSkillGovernanceMode,
     // Settings
     getSettings,
     updateSettings,
