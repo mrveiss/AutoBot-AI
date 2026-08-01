@@ -11,61 +11,42 @@
  */
 
 import { ref, computed, readonly, onUnmounted } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import { useAutobotApi, autobotApiErrorMessage } from '@/composables/useAutobotApi'
+import { SKILL_APPROVAL_POLL_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 // =============================================================================
 // Type Definitions
 // =============================================================================
+//
+// The shapes below now live beside the canonical autobot-backend client
+// (`useAutobotApi.ts`) per ADR-008 decision rule 3, together with the
+// `/skills/...` paths that produce them. They are re-exported here unchanged so
+// every existing consumer (`SkillsView.vue`, `ReposTab.vue`, `ApprovalsTab.vue`)
+// keeps importing them from this module.
+// =============================================================================
 
-export interface SkillConfigField {
-  type: string
-  default: unknown
-  description: string
-  required: boolean
-  choices: string[] | null
-}
+import type {
+  SkillConfigField,
+  SkillInfo,
+  SkillDetail,
+  SkillHealth,
+  SkillListResponse,
+  CategoryCounts,
+  SkillRepo,
+  SkillApproval,
+  GovernanceConfig,
+} from '@/composables/useAutobotApi'
 
-export interface SkillInfo {
-  name: string
-  version: string
-  description: string
-  author: string
-  category: string
-  status: string
-  enabled: boolean
-  tools: readonly string[]
-  triggers: readonly string[]
-  dependencies: readonly string[]
-  tags: readonly string[]
-}
-
-export interface SkillDetail extends SkillInfo {
-  config_schema: Record<string, SkillConfigField>
-  current_config: Record<string, unknown>
-  health: SkillHealth
-}
-
-export interface SkillHealth {
-  name: string
-  status: string
-  version: string
-  message: string | null
-  last_checked: string
-  config_valid: boolean
-  dependencies_met: boolean
-  details: Record<string, unknown>
-}
-
-export interface SkillListResponse {
-  skills: SkillInfo[]
-  total: number
-  categories: string[]
-}
-
-export interface CategoryCounts {
-  categories: Record<string, number>
+export type {
+  SkillConfigField,
+  SkillInfo,
+  SkillDetail,
+  SkillHealth,
+  SkillListResponse,
+  CategoryCounts,
+  SkillRepo,
+  SkillApproval,
+  GovernanceConfig,
 }
 
 // =============================================================================
@@ -73,7 +54,14 @@ export interface CategoryCounts {
 // =============================================================================
 
 export function useSkills() {
-  const authStore = useAuthStore()
+  // Transport: the canonical autobot-backend client (#13079). This composable
+  // used to own `axios.create({ baseURL: getBackendUrl() + '/skills/', timeout:
+  // 15000 })` with an interceptor that attached only `Bearer
+  // ${authStore.token}` — so with an autobot-issued token and no SLM token it
+  // 401'd where every tool on `useAutobotApi` worked. The client supplies the
+  // `autobot_access_token` fallback (useAutobotApi.ts:418), the 401 cleanup
+  // (:429-432), a 30s timeout (:412) and shared base-URL resolution (:408).
+  const api = useAutobotApi()
   const skills = ref<SkillInfo[]>([])
   const categories = ref<string[]>([])
   const categoryCounts = ref<Record<string, number>>({})
@@ -81,19 +69,6 @@ export function useSkills() {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const initialized = ref(false)
-
-  const api = axios.create({
-    baseURL: `${getBackendUrl()}/skills/`,
-    timeout: 15000,
-  })
-
-  api.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
 
   // --- Computed ---
 
@@ -124,10 +99,7 @@ export function useSkills() {
     loading.value = true
     error.value = null
     try {
-      const params: Record<string, string> = {}
-      if (category) params.category = category
-      if (search) params.search = search
-      const { data } = await api.get<SkillListResponse>('/', { params })
+      const data = await api.getSkills({ category, search })
       skills.value = data.skills
       categories.value = data.categories
     } catch (err: unknown) {
@@ -139,7 +111,7 @@ export function useSkills() {
 
   async function fetchCategories(): Promise<void> {
     try {
-      const { data } = await api.get<CategoryCounts>('/categories')
+      const data = await api.getSkillCategories()
       categoryCounts.value = data.categories
     } catch (err: unknown) {
       error.value = _extractError(err)
@@ -150,8 +122,7 @@ export function useSkills() {
     loading.value = true
     error.value = null
     try {
-      const { data } = await api.get<SkillDetail>(`/${name}`)
-      selectedSkill.value = data
+      selectedSkill.value = await api.getSkillDetail(name)
     } catch (err: unknown) {
       error.value = _extractError(err)
     } finally {
@@ -161,7 +132,7 @@ export function useSkills() {
 
   async function enableSkill(name: string): Promise<boolean> {
     try {
-      await api.post(`/${name}/enable`)
+      await api.enableSkill(name)
       await fetchSkills()
       return true
     } catch (err: unknown) {
@@ -172,7 +143,7 @@ export function useSkills() {
 
   async function disableSkill(name: string): Promise<boolean> {
     try {
-      await api.post(`/${name}/disable`)
+      await api.disableSkill(name)
       await fetchSkills()
       return true
     } catch (err: unknown) {
@@ -186,7 +157,7 @@ export function useSkills() {
     config: Record<string, unknown>
   ): Promise<boolean> {
     try {
-      await api.put(`/${name}/config`, { config })
+      await api.updateSkillConfig(name, config)
       if (selectedSkill.value?.name === name) {
         await fetchSkillDetail(name)
       }
@@ -201,7 +172,7 @@ export function useSkills() {
     loading.value = true
     error.value = null
     try {
-      await api.post('/initialize')
+      await api.initializeSkills()
       initialized.value = true
       await fetchSkills()
       await fetchCategories()
@@ -244,40 +215,10 @@ export function useSkills() {
 // =============================================================================
 
 function _extractError(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    return err.response?.data?.detail || err.message
-  }
-  return String(err)
-}
-
-// =============================================================================
-// Skill Governance Types
-// =============================================================================
-
-export interface SkillRepo {
-  id: string
-  name: string
-  url: string
-  repo_type: 'git' | 'local' | 'http' | 'mcp'
-  skill_count: number
-  status: string
-  last_synced: string | null
-}
-
-export interface SkillApproval {
-  id: string
-  skill_id: string
-  requested_by: string
-  requested_at: string
-  reason: string
-  status: 'pending' | 'approved' | 'rejected'
-  notes: string | null
-}
-
-export interface GovernanceConfig {
-  mode: 'full_auto' | 'semi_auto' | 'locked'
-  gap_detection_enabled: boolean
-  default_trust_level: string
+  // `autobotApiErrorMessage` is the one implementation of the FastAPI
+  // `{ detail }` unwrap this used to hand-roll via `axios.isAxiosError`. Its
+  // fallback chain is identical: `response.data.detail`, then `err.message`.
+  return autobotApiErrorMessage(err, String(err))
 }
 
 // =============================================================================
@@ -285,7 +226,11 @@ export interface GovernanceConfig {
 // =============================================================================
 
 export function useSkillGovernance() {
-  const authStore = useAuthStore()
+  // Transport: the canonical autobot-backend client (#13079). This composable
+  // used to own a second, bare `axios.create({ timeout: 15000 })` — no baseURL
+  // (every call site pasted `getBackendUrl()` in), an `authStore.token`-only
+  // interceptor and no 401 cleanup.
+  const api = useAutobotApi()
   const repos = ref<SkillRepo[]>([])
   const approvals = ref<SkillApproval[]>([])
   const drafts = ref<Record<string, unknown>[]>([])
@@ -295,22 +240,12 @@ export function useSkillGovernance() {
   const newDraftNotification = ref<string | null>(null)
   let _pollTimer: ReturnType<typeof setInterval> | null = null
 
-  const api = axios.create({ timeout: 15000 })
-  api.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   async function fetchRepos(): Promise<void> {
     loading.value = true
     try {
-      const { data } = await api.get<SkillRepo[]>(`${getBackendUrl()}/skills/repos`)
-      repos.value = data
+      repos.value = await api.getSkillRepos()
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to fetch repos'
+      error.value = autobotApiErrorMessage(e, 'Failed to fetch repos')
     } finally {
       loading.value = false
     }
@@ -320,32 +255,39 @@ export function useSkillGovernance() {
     payload: Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_synced'>,
   ): Promise<unknown> {
     try {
-      const { data } = await api.post(`${getBackendUrl()}/skills/repos`, payload)
+      const data = await api.addSkillRepo(payload)
       await fetchRepos()
       return data
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to add repo'
+      error.value = autobotApiErrorMessage(e, 'Failed to add repo')
       throw e
     }
   }
 
   async function syncRepo(repoId: string): Promise<unknown> {
     try {
-      const { data } = await api.post(`${getBackendUrl()}/skills/repos/${repoId}/sync`)
+      const data = await api.syncSkillRepo(repoId)
       await fetchRepos()
       return data
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to sync repo'
+      error.value = autobotApiErrorMessage(e, 'Failed to sync repo')
       throw e
     }
   }
 
-  async function fetchApprovals(): Promise<void> {
+  /**
+   * GET /skills/governance/approvals.
+   *
+   * `timeoutMs` is passed only by `startApprovalPolling`, which runs on a 30s
+   * interval — the same length as the client's default budget, so a tick that
+   * ran to its timeout would still be in flight when its successor fired.
+   * Interactive callers keep the default.
+   */
+  async function fetchApprovals(timeoutMs?: number): Promise<void> {
     try {
-      const { data } = await api.get<SkillApproval[]>(`${getBackendUrl()}/skills/governance/approvals`)
-      approvals.value = data
+      approvals.value = await api.getSkillApprovals(timeoutMs)
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to fetch approvals'
+      error.value = autobotApiErrorMessage(e, 'Failed to fetch approvals')
     }
   }
 
@@ -356,62 +298,60 @@ export function useSkillGovernance() {
     notes = '',
   ): Promise<void> {
     try {
-      await api.post(`${getBackendUrl()}/skills/governance/approvals/${approvalId}`, {
+      await api.decideSkillApproval(approvalId, {
         approved,
         notes,
         trust_level: trustLevel,
       })
       await fetchApprovals()
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to process approval'
+      error.value = autobotApiErrorMessage(e, 'Failed to process approval')
     }
   }
 
   async function fetchDrafts(): Promise<void> {
     try {
-      const { data } = await api.get<Record<string, unknown>[]>(`${getBackendUrl()}/skills/governance/drafts`)
+      const data = await api.getSkillDrafts()
       drafts.value = Array.isArray(data) ? data : []
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to fetch drafts'
+      error.value = autobotApiErrorMessage(e, 'Failed to fetch drafts')
     }
   }
 
   async function testDraft(skillId: string): Promise<unknown> {
     try {
-      const { data } = await api.post(`${getBackendUrl()}/skills/governance/drafts/${skillId}/test`)
-      return data
+      return await api.testSkillDraft(skillId)
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Test draft failed'
+      error.value = autobotApiErrorMessage(e, 'Test draft failed')
       throw e
     }
   }
 
   async function promoteDraft(skillId: string): Promise<unknown> {
     try {
-      const { data } = await api.post(`${getBackendUrl()}/skills/governance/drafts/${skillId}/promote`)
+      const data = await api.promoteSkillDraft(skillId)
       await fetchDrafts()
       return data
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to promote draft'
+      error.value = autobotApiErrorMessage(e, 'Failed to promote draft')
       throw e
     }
   }
 
   async function fetchGovernance(): Promise<void> {
     try {
-      const { data } = await api.get<GovernanceConfig>(`${getBackendUrl()}/skills/governance/`)
-      governanceConfig.value = data
+      governanceConfig.value = await api.getSkillGovernance()
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to fetch governance config'
+      error.value = autobotApiErrorMessage(e, 'Failed to fetch governance config')
     }
   }
 
   async function setGovernanceMode(mode: GovernanceConfig['mode']): Promise<void> {
     try {
-      await api.put(`${getBackendUrl()}/skills/governance/`, { mode })
+      await api.updateSkillGovernanceMode(mode)
       await fetchGovernance()
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Failed to update governance mode'
+      error.value = autobotApiErrorMessage(e, 'Failed to update governance mode')
     }
   }
 
@@ -420,7 +360,7 @@ export function useSkillGovernance() {
     if (_pollTimer !== null) return
     _pollTimer = setInterval(async () => {
       const prev = approvals.value.length
-      await fetchApprovals()
+      await fetchApprovals(SKILL_APPROVAL_POLL_TIMEOUT_MS)
       const curr = approvals.value.length
       if (curr > prev) {
         const newest = approvals.value[approvals.value.length - 1]

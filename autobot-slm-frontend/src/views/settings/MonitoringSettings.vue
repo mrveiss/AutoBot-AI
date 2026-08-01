@@ -75,6 +75,10 @@ async function deployMonitoringRole(): Promise<void> {
 
 async function testPrometheusConnection(): Promise<void> {
   try {
+    // Prometheus is a separate service, not the SLM or autobot backend: it has
+    // its own origin, no SLM bearer token applies, and its liveness endpoint is
+    // deliberately unauthenticated. Neither canonical client can address it.
+    // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getPrometheusUrl()}/-/healthy`)
     if (response.ok) {
       success.value = 'Prometheus connection successful'
@@ -89,6 +93,9 @@ async function testPrometheusConnection(): Promise<void> {
 
 async function testGrafanaConnection(): Promise<void> {
   try {
+    // Grafana, same reasoning as the Prometheus probe above: a different
+    // service on a different origin, outside both canonical clients' scope.
+    // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getGrafanaUrl()}/api/health`)
     if (response.ok) {
       success.value = 'Grafana connection successful'
