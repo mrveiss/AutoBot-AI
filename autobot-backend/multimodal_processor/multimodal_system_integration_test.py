@@ -28,14 +28,27 @@ class TestUnifiedMultiModalSystem:
 
     @pytest.fixture
     def mock_config(self):
-        """Create mock configuration for testing"""
+        """Build a real ConfigManager carrying test-specific multimodal overrides.
+
+        #13199: ``set()`` writes a *literal flat key* into the config dict, while the
+        section readers (``get_config_section`` -> ``get_nested``) do dot-path
+        traversal — so flat writes were invisible to the reader the processors use.
+        ``set_nested()`` is the matching writer and overlays these values on top of
+        the ``multimodal`` defaults from config/defaults.py.
+        """
         config = ConfigManager()
-        config.set("multimodal.vision.enabled", True)
-        config.set("multimodal.vision.confidence_threshold", 0.8)
-        config.set("multimodal.vision.processing_timeout", 30)
-        config.set("multimodal.voice.enabled", True)
-        config.set("multimodal.voice.confidence_threshold", 0.7)
-        config.set("multimodal.context.enabled", True)
+        # #13199: get_nested() refreshes from disk once CACHE_DURATION (30s) elapses,
+        # and _reload_config() replaces _config wholesale — which would silently drop
+        # every override below. VisionProcessor.__init__ imports torch before it reads
+        # the config, so that window is reachable on a cold runner. Pin the cache so
+        # the overrides survive to the assertion that depends on them.
+        config.CACHE_DURATION = float("inf")
+        config.set_nested("multimodal.vision.enabled", True)
+        config.set_nested("multimodal.vision.confidence_threshold", 0.8)
+        config.set_nested("multimodal.vision.processing_timeout", 30)
+        config.set_nested("multimodal.voice.enabled", True)
+        config.set_nested("multimodal.voice.confidence_threshold", 0.7)
+        config.set_nested("multimodal.context.enabled", True)
         return config
 
     @pytest.fixture
@@ -43,7 +56,7 @@ class TestUnifiedMultiModalSystem:
         """Create unified processor with mocked config"""
         with patch(
             "multimodal_processor.processors.vision.get_config_section",
-            lambda section: mock_config.get_section(section),
+            lambda section: mock_config.get_config_section(section),
         ):
             return MultiModalProcessor()
 
@@ -295,7 +308,7 @@ class TestUnifiedMultiModalSystem:
         """Test vision processor uses configuration correctly"""
         with patch(
             "multimodal_processor.processors.vision.get_config_section",
-            lambda section: mock_config.get_section(section),
+            lambda section: mock_config.get_config_section(section),
         ):
             vision_proc = VisionProcessor()
 
@@ -309,7 +322,7 @@ class TestUnifiedMultiModalSystem:
         """Test vision processor image processing"""
         with patch(
             "multimodal_processor.processors.vision.get_config_section",
-            lambda section: mock_config.get_section(section),
+            lambda section: mock_config.get_config_section(section),
         ):
             vision_proc = VisionProcessor()
 
