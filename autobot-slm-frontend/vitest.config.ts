@@ -18,6 +18,9 @@ export default mergeConfig(
       preserveSymlinks: true,
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
+        // Mirror vite.config.ts (#13079): without this, any test that mounts a
+        // component importing from '@shared' fails to resolve at transform time.
+        '@shared': fileURLToPath(new URL('../autobot_shared', import.meta.url)),
       },
     },
   }),

@@ -11,13 +11,14 @@
 
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import { useAutobotApi } from '@/composables/useAutobotApi'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 
 // `authStore.getApiUrl()` is retained for DISPLAY only (the "API endpoint"
 // field and the summary row): it reports the SLM host origin the operator is
 // pointed at. Every transport call goes through the canonical client (#13140).
 const authStore = useAuthStore()
+const autobotApi = useAutobotApi()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
@@ -76,16 +77,15 @@ async function testConnection(): Promise<void> {
 
   try {
     const startTime = Date.now()
-    const response = await fetch(`${getBackendUrl()}/health`)
+    // #13079: `probeBackendHealth` accepts every status code, so an
+    // unauthorised backend still reports as reachable and the probe cannot
+    // trip the 401 interceptor that clears `autobot_access_token` — a
+    // connectivity diagnostic must never log the operator out.
+    const probe = await autobotApi.probeBackendHealth()
 
     responseTime.value = Date.now() - startTime
-
-    if (response.ok) {
-      connectionStatus.value = 'connected'
-    } else {
-      connectionStatus.value = 'failed'
-    }
-  } catch (e) {
+    connectionStatus.value = probe.ok ? 'connected' : 'failed'
+  } catch {
     connectionStatus.value = 'failed'
   } finally {
     testingConnection.value = false
