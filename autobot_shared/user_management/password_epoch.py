@@ -58,7 +58,9 @@ from autobot_shared.ssot_constants import TTL_24_HOURS
 logger = logging.getLogger(__name__)
 
 #: Redis key prefix for the per-subject password-change epoch.
-PASSWORD_EPOCH_PREFIX = "auth:pwd_epoch:"
+#: nosec B105 — this is a Redis key namespace, not a credential. bandit flags
+#: it only because the constant name contains "PASSWORD".
+PASSWORD_EPOCH_PREFIX = "auth:pwd_epoch:"  # nosec B105
 
 #: How long an epoch marker is kept. It only has to outlive the longest-lived
 #: token that could predate it; after that every such token has expired on its
