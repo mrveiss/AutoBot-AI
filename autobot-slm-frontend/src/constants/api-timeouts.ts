@@ -4,7 +4,8 @@
 // Author: mrveiss
 
 /**
- * Request timeouts for SLM endpoints that outlive the client default (#13140).
+ * Named request timeouts for endpoints whose budget differs from the client
+ * default (#13140 for the SLM backend, #13079 for the autobot backend).
  *
  * `slmApiClient` applies `VITE_SLM_API_TIMEOUT_MS` (30s default) to every
  * request. That budget is right for a CRUD read, but the raw `fetch` sites this
@@ -54,3 +55,24 @@ export const HEALTH_PROBE_TIMEOUT_MS = timeoutFromEnv('VITE_SLM_HEALTH_PROBE_TIM
  * the next tick is the retry.
  */
 export const POLLED_READ_MAX_RETRIES = 1
+
+/**
+ * `GET /skills/governance/approvals` when issued from `useSkillGovernance`'s
+ * approval poll (#951), which runs on a **30-second** `setInterval`.
+ *
+ * `useAutobotApi`'s default budget is also 30s, so a tick that ran to its
+ * timeout would still be in flight as the next tick fired. The polled read gets
+ * a sub-interval budget instead, so a tick is always resolved before its
+ * successor starts and the next tick is the retry.
+ *
+ * This is NOT a preservation of the 15s that the private `axios.create` in
+ * `useSkills.ts` applied to every skills call. That 15s predates the poll
+ * (introduced in #731, the poll added later in #951), carries no comment, and
+ * was demonstrably wrong for at least one endpoint it covered —
+ * `POST /skills/repos/{id}/sync` awaits a git clone inline. Only the poll has a
+ * reason for a shorter budget, so only the poll gets one.
+ */
+export const SKILL_APPROVAL_POLL_TIMEOUT_MS = timeoutFromEnv(
+  'VITE_SKILL_APPROVAL_POLL_TIMEOUT_MS',
+  10_000
+)
