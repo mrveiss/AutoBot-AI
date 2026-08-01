@@ -6,31 +6,24 @@
  * Process Monitor Tab (#1406)
  *
  * Table of background processes with status, logs, and signal controls.
- * Uses /autobot-api proxy to main backend.
+ *
+ * #13079: the REST calls reach the autobot backend through `useAutobotApi`,
+ * the SLM app's single client for that backend, instead of a private `fetch`
+ * that sent only `Bearer ${authStore.token}` (no `autobot_access_token`
+ * fallback, no 401 cleanup, no timeout). The live-log WebSocket below stays on
+ * the native transport — `useAutobotApi` is HTTP-only and a socket has no
+ * equivalent there.
  */
 
-import { computed, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
+import {
+  useAutobotApi,
+  autobotApiErrorMessage,
+  type ProcessRun,
+} from '@/composables/useAutobotApi'
 
-interface ProcessRun {
-  id: string
-  agent_id: string
-  task_id: string | null
-  command: string
-  args: string[]
-  status: string
-  exit_code: number | null
-  signal: string | null
-  log_excerpt: string | null
-  log_path: string | null
-  timeout_seconds: number
-  started_at: string | null
-  completed_at: string | null
-  created_at: string | null
-}
-
-const authStore = useAuthStore()
+const api = useAutobotApi()
 const processes = ref<ProcessRun[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -51,11 +44,6 @@ const spawnForm = ref({
   timeout_seconds: 300,
 })
 
-const headers = computed(() => ({
-  Authorization: `Bearer ${authStore.token}`,
-  'Content-Type': 'application/json',
-}))
-
 async function fetchProcesses() {
   if (!agentId.value) return
   loading.value = true
@@ -63,14 +51,12 @@ async function fetchProcesses() {
   selectedProcess.value = null
   fullLog.value = null
   try {
-    let url = `${getBackendUrl()}/agents/${agentId.value}/processes?limit=50`
-    if (statusFilter.value) url += `&status=${statusFilter.value}`
-    const res = await fetch(url, { headers: headers.value })
-    if (!res.ok) throw new Error(`Failed to load processes: ${res.status}`)
-    const data = await res.json()
-    processes.value = data.processes || []
+    processes.value = await api.getAgentProcesses(agentId.value, {
+      limit: 50,
+      status: statusFilter.value || undefined,
+    })
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load processes'
+    error.value = autobotApiErrorMessage(err, 'Failed to load processes')
     processes.value = []
   } finally {
     loading.value = false
@@ -80,10 +66,7 @@ async function fetchProcesses() {
 async function fetchFullLog(processId: string) {
   fullLogLoading.value = true
   try {
-    const res = await fetch(`${getBackendUrl()}/processes/${processId}/logs`, {
-      headers: headers.value,
-    })
-    fullLog.value = res.ok ? await res.text() : 'Failed to load log'
+    fullLog.value = await api.getProcessLogs(processId)
   } catch {
     fullLog.value = 'Failed to load log'
   } finally {
@@ -138,47 +121,28 @@ function streamLogs(processId: string) {
 
 async function signalProcess(processId: string, sig: string) {
   try {
-    const res = await fetch(`${getBackendUrl()}/processes/${processId}/signal`, {
-      method: 'POST',
-      headers: headers.value,
-      body: JSON.stringify({ signal: sig }),
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.detail || `Signal failed: ${res.status}`)
-    }
+    await api.signalProcess(processId, sig)
     showKillConfirm.value = null
     await fetchProcesses()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Signal failed'
+    error.value = autobotApiErrorMessage(err, 'Signal failed')
   }
 }
 
 async function spawnProcess() {
   error.value = null
   try {
-    const payload = {
+    await api.spawnProcess({
       agent_id: spawnForm.value.agent_id || agentId.value,
       command: spawnForm.value.command,
-      args: spawnForm.value.args
-        ? spawnForm.value.args.split(' ').filter(Boolean)
-        : [],
+      args: spawnForm.value.args ? spawnForm.value.args.split(' ').filter(Boolean) : [],
       timeout_seconds: spawnForm.value.timeout_seconds,
-    }
-    const res = await fetch(`${getBackendUrl()}/processes/spawn`, {
-      method: 'POST',
-      headers: headers.value,
-      body: JSON.stringify(payload),
     })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.detail || `Spawn failed: ${res.status}`)
-    }
     showSpawnForm.value = false
     spawnForm.value = { agent_id: '', command: '', args: '', timeout_seconds: 300 }
     await fetchProcesses()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Spawn failed'
+    error.value = autobotApiErrorMessage(err, 'Spawn failed')
   }
 }
 
