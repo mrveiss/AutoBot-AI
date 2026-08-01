@@ -22,21 +22,41 @@ from unittest.mock import MagicMock
 import pytest
 
 
+def _require_real_tracing_service() -> None:
+    """Skip when OpenTelemetry is absent; fail when TracingService is a stub.
+
+    #11681: the guarded import had rotted to ``pass`` (autoflake-era), so
+    missing otel instrumentation FAILED these tests instead of skipping them.
+
+    #13094: skipping on ``ImportError`` alone was not enough. conftest's
+    ``_real_load_light_services`` replaces any ``services/*.py`` whose exec
+    raises with a MagicMock package stub, so ``import services.tracing_service``
+    SUCCEEDED while ``TracingService`` resolved to a Mock — two tests failed
+    against the Mock's internals and two passed vacuously (a Mock class returns
+    the same ``return_value`` every call, so the singleton assertions held for
+    the wrong reason). A stub is a defect to surface, not a reason to skip.
+    """
+    try:
+        import opentelemetry  # noqa: F401
+    except ImportError as e:  # pragma: no cover - depends on the environment
+        pytest.skip(f"OpenTelemetry unavailable: {e}")
+    try:
+        from services.tracing_service import TracingService
+    except ImportError as e:  # pragma: no cover - depends on the environment
+        pytest.skip(f"TracingService unavailable: {e}")
+    assert isinstance(TracingService, type), (
+        "services.tracing_service resolved to a conftest MagicMock stub, not the real module — "
+        "the assertions in this file would be vacuous (#13094)"
+    )
+
+
 class TestTracingServiceSingleton:
     """Test thread-safe singleton for TracingService (Issue #481)"""
 
     @pytest.fixture(autouse=True)
     def skip_if_opentelemetry_unavailable(self):
-        """Skip tests if OpenTelemetry has import issues.
-
-        #11681: the guarded import had rotted to ``pass`` (autoflake-era),
-        so missing otel instrumentation FAILED these tests instead of
-        skipping them.
-        """
-        try:
-            import services.tracing_service  # noqa: F401
-        except ImportError as e:
-            pytest.skip(f"TracingService unavailable: {e}")
+        """Guard: real TracingService or skip — never a Mock (#11681, #13094)."""
+        _require_real_tracing_service()
 
     def test_singleton_returns_same_instance(self):
         """Test that TracingService returns same instance on multiple calls"""
@@ -304,16 +324,8 @@ class TestDoubleCheckedLocking:
 
     @pytest.fixture(autouse=True)
     def skip_if_opentelemetry_unavailable(self):
-        """Skip tests if OpenTelemetry has import issues.
-
-        #11681: the guarded import had rotted to ``pass`` (autoflake-era),
-        so missing otel instrumentation FAILED these tests instead of
-        skipping them.
-        """
-        try:
-            import services.tracing_service  # noqa: F401
-        except ImportError as e:
-            pytest.skip(f"TracingService unavailable: {e}")
+        """Guard: real TracingService or skip — never a Mock (#11681, #13094)."""
+        _require_real_tracing_service()
 
     def test_tracing_service_double_check(self):
         """Test TracingService uses double-checked locking"""
