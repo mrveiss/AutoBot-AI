@@ -9,6 +9,7 @@ mixin so Orchestrator maintains API compatibility without inflating its line
 count.
 """
 
+import asyncio
 import time
 import uuid
 import warnings
@@ -30,6 +31,11 @@ class _DeprecatedRequestMixin:
     """
 
     def _start_request_tracking(self, task_id, user_message, priority, context) -> None:
+        """Sync helper wrapping the sync task-tracker API (Issue #12101).
+
+        Called from ``process_user_request`` via ``asyncio.to_thread`` — do
+        NOT call this directly from a running event loop.
+        """
         get_task_tracker().start_task(
             task_id=task_id,
             task_type=TaskType.USER_REQUEST,
@@ -74,7 +80,8 @@ class _DeprecatedRequestMixin:
         logger.info("Processing user request %s: %s...", task_id, user_message[:100])
 
         try:
-            self._start_request_tracking(task_id, user_message, priority, context)
+            # Issue #12101: offload sync SQLite MemoryManager write.
+            await asyncio.to_thread(self._start_request_tracking, task_id, user_message, priority, context)
             classification_result = await self._classify_task(user_message)
             target_llm_model = self._select_model_for_task(classification_result)
 
@@ -85,7 +92,8 @@ class _DeprecatedRequestMixin:
 
             processing_time = time.time() - start_time
             self._update_success_metrics(processing_time)
-            get_task_tracker().complete_task(task_id, result)
+            # Issue #12101: offload sync SQLite MemoryManager write.
+            await asyncio.to_thread(get_task_tracker().complete_task, task_id, result)
             logger.info("✅ Request %s completed in %.2fs", task_id, processing_time)
             return {
                 "task_id": task_id,
@@ -99,7 +107,8 @@ class _DeprecatedRequestMixin:
         except Exception as e:
             processing_time = time.time() - start_time
             self.metrics["tasks_failed"] += 1
-            get_task_tracker().fail_task(task_id, str(e))
+            # Issue #12101: offload sync SQLite MemoryManager write.
+            await asyncio.to_thread(get_task_tracker().fail_task, task_id, str(e))
             logger.error("❌ Request %s failed after %.2fs: %s", task_id, processing_time, e)
             return {
                 "task_id": task_id,

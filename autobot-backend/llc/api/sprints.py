@@ -28,6 +28,9 @@ Routes:
   GET /llc/sprints/{sprint_id}/capacity         — assigned story-point totals
   GET /llc/projects/{project_id}/velocity       — velocity history for N closed sprints
   GET /llc/sprints/{sprint_id}/burndown         — day-by-day burndown series
+
+  Agent scorecard (GH#12619):
+  GET /llc/sprints/{sprint_id}/agent-scorecard  — per-agent success rate/throughput/spend
 """
 
 import uuid
@@ -42,12 +45,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from llc.deps import get_session
+from llc.deps import load_owned_project as _load_owned_project
 from user_management.services import TenantContext
 
 from ..kb.collections import KbCollectionManager
 from ..models.enums import ApprovalType, SprintStatus, WorkItemRelationType, WorkItemStatus
 from ..models.sprint import LLCPortfolio, LLCProgram, LLCProject, LLCSprint
 from ..models.work_item import LLCWorkItem, LLCWorkItemRelation
+from ..services.agent_scorecard import AgentScorecardService
 from ..services.approval import ApprovalNotFoundError, ApprovalService, ApprovalStateError
 from ..services.disposal_policy import get_disposal_policy
 from ..services.project_disposal import dispose
@@ -697,15 +702,6 @@ async def update_project(
     return project
 
 
-async def _load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
-    """Load project by id; 404 when missing or owned by a different org (IDOR guard)."""
-    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
-    project = result.scalar_one_or_none()
-    if project is None or str(project.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
-
-
 @router.post("/projects/{project_id}/archive", response_model=ProjectResponse)
 async def archive_project(
     project_id: uuid.UUID,
@@ -1160,3 +1156,61 @@ async def get_sprint_summary(
         status=sprint.status,
         kb_summary=sprint.kb_summary,
     )
+
+
+# ------------------------------------------------------------------ Agent scorecard (GH#12619)
+
+_scorecard_svc = AgentScorecardService()
+
+
+class AgentScoreResponse(BaseModel):
+    org_node_id: str
+    agent_id: Optional[str]
+    agent_name: str
+    work_items_total: int
+    work_items_done: int
+    throughput: int
+    runs_total: Optional[int]
+    runs_terminal: Optional[int]
+    runs_completed: Optional[int]
+    success_rate: Optional[float]
+    reliability_score: Optional[float]
+    low_sample: Optional[bool]
+    spend_lifetime_usd: Optional[float]
+    tokens_spent_lifetime: Optional[int]
+    spend_window: str
+
+
+class SprintScorecardResponse(BaseModel):
+    sprint_id: str
+    sprint_name: str
+    run_window_available: bool
+    run_window_start: Optional[str]
+    run_window_end: Optional[str]
+    scores: List[AgentScoreResponse]
+
+
+@router.get("/sprints/{sprint_id}/agent-scorecard", response_model=SprintScorecardResponse)
+async def get_sprint_agent_scorecard(
+    sprint_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> SprintScorecardResponse:
+    """Return the per-agent success-rate/throughput/spend scorecard for a sprint (GH#12619).
+
+    Success rate is time-windowed against the sprint's dates (heartbeat runs
+    have no sprint FK — see ``AgentScorecardService`` docstring) and spend is
+    a lifetime total, not sprint-scoped (GH#13067) — both are labeled
+    explicitly in the response rather than implied to be exact.
+    """
+    sprint = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
+    # IDOR guard (#10148).
+    if sprint is None or str(sprint.company_id) != str(ctx.org_id):
+        raise HTTPException(status_code=404, detail="Sprint not found")
+    try:
+        scorecard = await _scorecard_svc.build(session, sprint_id)
+    except SprintNotFound as exc:
+        logger.error("Exception in API handler: %s", exc, exc_info=True)
+        raise HTTPException(status_code=404, detail="Internal server error") from exc
+    return SprintScorecardResponse(**scorecard.to_dict())

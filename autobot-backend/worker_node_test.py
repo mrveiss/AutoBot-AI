@@ -9,6 +9,8 @@ Verifies that the refactored execute_task method maintains
 all original functionality while reducing nesting depth.
 """
 
+import sys
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -213,6 +215,78 @@ class TestWorkerNodeRefactored:
 
         # Allow some buffer, but should be dramatically reduced
         assert len(lines) < 100, f"execute_task method still too long: {len(lines)} lines"
+
+
+class TestGUIControllerPlatformGate:
+    """Issue #11970: the GUIController platform gate must select the real
+    (pyautogui/Xvfb) controller on Linux and the no-op dummy elsewhere --
+    NOT the previously-inverted opposite.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _restore_real_worker_node_module(self):
+        """Reload the real worker_node module after each test in this class.
+
+        Tests here mutate sys.modules['worker_node'] via reload-under-mock;
+        leaving a mocked-platform copy cached in sys.modules could leak into
+        any other code in the same session that does `import worker_node`.
+        """
+        yield
+        sys.modules.pop("worker_node", None)
+        import worker_node  # noqa: F401 - re-import restores the real module state
+
+    def _reload_worker_node(self, monkeypatch, platform: str, fake_gui_controller=None):
+        """Reload worker_node with a mocked platform + gui_controller import."""
+        monkeypatch.setattr(sys, "platform", platform)
+        if fake_gui_controller is not None:
+            monkeypatch.setitem(sys.modules, "gui_controller", fake_gui_controller)
+        else:
+            # Force `from gui_controller import GUIController` to raise ImportError.
+            monkeypatch.setitem(sys.modules, "gui_controller", None)
+        sys.modules.pop("worker_node", None)
+        import worker_node as reloaded
+
+        return reloaded
+
+    def _make_fake_gui_controller_module(self):
+        """Build a minimal fake gui_controller module exposing GUIController."""
+        mod = types.ModuleType("gui_controller")
+
+        class FakeGUIController:
+            pass
+
+        mod.GUIController = FakeGUIController
+        return mod
+
+    def test_linux_with_display_uses_real_controller(self, monkeypatch):
+        """Linux + a reachable display must select gui_controller (real)."""
+        fake_module = self._make_fake_gui_controller_module()
+
+        reloaded = self._reload_worker_node(monkeypatch, "linux", fake_gui_controller=fake_module)
+
+        assert reloaded.GUIController is fake_module.GUIController
+        assert reloaded.GUI_AUTOMATION_SUPPORTED is True
+
+    def test_linux_headless_falls_back_to_dummy(self, monkeypatch):
+        """Linux with no display available (import failure) must fall back
+        to gui_controller_dummy rather than crashing worker startup.
+        """
+        import gui_controller_dummy
+
+        reloaded = self._reload_worker_node(monkeypatch, "linux", fake_gui_controller=None)
+
+        assert reloaded.GUIController is gui_controller_dummy.GUIController
+        assert reloaded.GUI_AUTOMATION_SUPPORTED is False
+
+    def test_non_linux_uses_dummy_controller(self, monkeypatch):
+        """Non-Linux platforms must always use the no-op dummy controller."""
+        import gui_controller_dummy
+
+        fake_module = self._make_fake_gui_controller_module()
+        reloaded = self._reload_worker_node(monkeypatch, "win32", fake_gui_controller=fake_module)
+
+        assert reloaded.GUIController is gui_controller_dummy.GUIController
+        assert reloaded.GUI_AUTOMATION_SUPPORTED is False
 
 
 if __name__ == "__main__":

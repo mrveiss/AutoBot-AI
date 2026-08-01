@@ -31,7 +31,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import shutil
 import time
 import uuid
 from dataclasses import replace
@@ -40,12 +39,14 @@ from typing import Optional
 from autobot_shared.cli_tool_flags import sanitize_tool_names
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config as _ssot_config
 
 from ..models.enums import LLCRunStatus
 from .base import AdapterRunStatus
 from .subprocess_base import DEFAULT_OUTPUT_DIR as _DEFAULT_OUTPUT_DIR
 from .subprocess_base import SIGTERM_GRACE_SECONDS as _SIGTERM_GRACE_SECONDS
 from .subprocess_base import SubprocessLifecycleAdapter
+from .subprocess_base import resolve_cli_binary as _resolve_cli_binary
 from .subprocess_base import resolve_timeout as _resolve_timeout
 from .subprocess_support import (
     extract_usage,
@@ -87,15 +88,39 @@ def _state_path(output_dir: str, run_id: str) -> str:
     return os.path.join(output_dir, f"llc_state_{safe_run}.json")
 
 
+def _is_unresumable_session_output(text: str) -> bool:
+    """True when CLI output says the resume session id does not exist (#12683).
+
+    Matched on the CLI's own wording. Kept deliberately narrow: a broader match
+    would clear a valid session on unrelated errors, forcing agents to lose
+    conversation continuity for no reason.
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    return "no conversation found with session id" in lowered
+
+
 def _stderr_path(output_file: str) -> str:
     """Sidecar stderr capture next to the stdout .jsonl (GH#9992)."""
     return f"{output_file}.stderr.log"
 
 
+# GH#12478: `claude` often lands off the service account's PATH (e.g. a
+# per-user npm/curl install into ~/.local/bin). Resolution order: the
+# AUTOBOT_CLAUDE_CLI_PATH override, then PATH, then common per-user install
+# locations — see resolve_cli_binary(). Kept as the exact message the
+# heartbeat-skip path surfaces (CLAUDE_CLI_NOT_FOUND_MESSAGE) for consistency
+# between the invoke-time RuntimeError and the pre-dispatch skip reason.
+CLAUDE_CLI_NOT_FOUND_MESSAGE = (
+    "claude CLI not found on PATH or configured location; install it or set AUTOBOT_CLAUDE_CLI_PATH"
+)
+
+
 def _resolve_claude_cli() -> str:
-    path = shutil.which("claude")
+    path = _resolve_cli_binary("claude", _ssot_config.path.claude_cli_path or None)
     if path is None:
-        raise RuntimeError("claude CLI not found on PATH. " "Install Claude Code and ensure 'claude' is on PATH.")
+        raise RuntimeError(CLAUDE_CLI_NOT_FOUND_MESSAGE)
     return path
 
 
@@ -105,6 +130,14 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
     _LOG_NAME = "ClaudeCodeAdapter"
     _state_path = staticmethod(_state_path)
     _required_cli = "claude"  # GH#9793: CLI-availability gate in heartbeat dispatch
+
+    def _configured_cli_path(self) -> Optional[str]:
+        """AUTOBOT_CLAUDE_CLI_PATH override, if set (GH#12478)."""
+        return _ssot_config.path.claude_cli_path or None
+
+    def cli_not_found_message(self) -> str:
+        """Actionable, config-aware message when `claude` cannot be resolved (GH#12478)."""
+        return CLAUDE_CLI_NOT_FOUND_MESSAGE
 
     @staticmethod
     def _tool_permission_args(cfg: dict) -> list[str]:
@@ -124,7 +157,14 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         return args
 
     @staticmethod
-    def _build_command(cli: str, resume_session_id: Optional[str], cfg: dict, prompt: str) -> list[str]:
+    def _build_command(
+        cli: str,
+        resume_session_id: Optional[str],
+        cfg: dict,
+        prompt: str,
+        *,
+        session_id: str,
+    ) -> list[str]:
         """Build the claude CLI argv (GH#11186). Pure and unit-testable.
 
         Tool-permission flags (``--allowedTools``/``--disallowedTools``) apply on
@@ -133,11 +173,27 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         ``--model``/``--max-turns`` are session-establishment options (fresh only).
         The prompt is passed positionally after ``--`` so a prompt starting with
         ``-`` can never be parsed as an option (matches the execution backend).
+
+        ``session_id`` is keyword-only and required so a caller cannot silently
+        omit it and reintroduce #12848 — a fresh run that does not claim an id
+        stores one the CLI never saw, and every later resume fails.
         """
-        cmd: list[str] = [cli, "--output-format", "stream-json", "--print"]
+        # #12683: Claude Code rejects `--print --output-format stream-json`
+        # unless --verbose is also present ("Error: When using --print,
+        # --output-format=stream-json requires --verbose"), so every fresh run
+        # died before doing any work. --verbose does not change the stream-json
+        # payload we parse; it only satisfies that CLI precondition.
+        cmd: list[str] = [cli, "--output-format", "stream-json", "--print", "--verbose"]
         if resume_session_id:
             cmd += ["--resume", resume_session_id]
         else:
+            # #12848: claim the id we generated instead of letting the CLI mint
+            # its own. Without this the id stored for a later --resume is one the
+            # CLI has never heard of, so EVERY resume fails with "No conversation
+            # found with session ID" and agents never carry context between runs.
+            # Verified against Claude Code 2.1.220: --session-id is adopted
+            # verbatim and --resume with that id replays the conversation.
+            cmd += ["--session-id", session_id]
             model = cfg.get("model")
             if model:
                 cmd += ["--model", str(model)]
@@ -172,7 +228,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             session_id = resume_session_id
             logger.info("ClaudeCodeAdapter: resuming session %s for agent %s", session_id, agent_id)
 
-        cmd = self._build_command(cli, resume_session_id, cfg, prompt)
+        cmd = self._build_command(cli, resume_session_id, cfg, prompt, session_id=session_id)
 
         workspace_dir: str | None = context.get("workspace_dir")
         env = {**os.environ, "LLC_INVOKE_CONTEXT": serialize_invoke_context(context)}
@@ -313,6 +369,20 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
                 status=LLCRunStatus.RATE_LIMITED,
                 error="provider rate-limited (detected in CLI output)",
             )
+
+        # #12683: a stored session id the CLI cannot resume ("No conversation
+        # found with session ID: ...") otherwise fails EVERY subsequent
+        # heartbeat — the same bad id is replayed forever with no way out.
+        # Dropping it degrades the next run to a fresh session instead.
+        if _is_unresumable_session_output(stderr_tail) or _is_unresumable_session_output(tail):
+            agent_id_for_clear: str = agent_config.get("agent_id", "")
+            logger.warning(
+                "ClaudeCodeAdapter: session for agent %s is not resumable — clearing stored id "
+                "so the next heartbeat starts a fresh session (run %s)",
+                agent_id_for_clear,
+                run_id,
+            )
+            await self._clear_session(agent_id_for_clear)
 
         # Surface non-rate-limit stderr so a failed/killed run is diagnosable
         # instead of silent (the PIPE was previously never drained).

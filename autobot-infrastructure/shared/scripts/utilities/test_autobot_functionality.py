@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Functionality Test Suite
@@ -18,7 +19,7 @@ import requests
 # Import centralized Redis client
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from constants.network_constants import NetworkConstants, ServiceURLs
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -146,7 +147,7 @@ class AutoBotFunctionalityTest:
             logger.info("📊 Testing Redis Connectivity...")
 
             async def test_redis():
-                redis_client = await get_redis_client("main")
+                redis_client = await get_async_redis_client(database="main")
                 if not redis_client:
                     return False
 

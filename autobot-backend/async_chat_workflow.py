@@ -19,6 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANTINE_FILTER
 from knowledge.search import map_kb_result_to_dict
 from knowledge_base_factory import get_knowledge_base
 from llm_shared.models import ChatMessage, LLMResponse  # Phase 2D #3185
@@ -224,7 +225,7 @@ class AsyncChatWorkflow:
             if kb is None:
                 logger.warning("Knowledge base unavailable; skipping search for query: %.80s", query)
                 return KnowledgeStatus.MISSING, []
-            raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=5)
+            raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=5, filters=_RESEARCH_QUARANTINE_FILTER)
             if not raw:
                 return KnowledgeStatus.MISSING, []
             results = [map_kb_result_to_dict(r) for r in raw]  # Issue #10740

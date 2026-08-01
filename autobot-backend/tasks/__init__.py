@@ -11,7 +11,9 @@ Note: Deployment tasks removed - now managed by SLM server (#729)
 System tasks (RBAC, updates) maintained as stubs for backward compatibility.
 """
 
+from .analytics_cache_population import populate_all_caches
 from .analytics_tasks import (
+    run_anti_pattern_analysis,
     run_bug_prediction_analysis,
     run_dashboard_analysis,
     run_dependency_analysis,
@@ -21,6 +23,7 @@ from .analytics_tasks import (
     run_security_analysis,
 )
 from .audit_log_retention import cleanup_expired_audit_logs
+from .batch_job_tasks import dispatch_due_batch_schedules, run_batch_job
 from .chat_retention import cleanup_expired_chats
 from .credential_reconcile import reconcile_credentials
 from .file_retention import cleanup_expired_files
@@ -67,6 +70,9 @@ __all__ = [
     "run_bug_prediction_analysis",
     "run_security_analysis",
     "run_dashboard_analysis",
+    # anti-pattern background analysis + daily cache population (Issue #12365)
+    "run_anti_pattern_analysis",
+    "populate_all_caches",
     # workspace cleanup (GH#6471)
     "cleanup_stale_workspaces",
     # memory tasks
@@ -86,4 +92,7 @@ __all__ = [
     "cleanup_expired_snapshots",
     "cleanup_stale_mobile_devices",
     "transcribe_recording",
+    # GH#12439: batch job scheduling + execution plumbing
+    "run_batch_job",
+    "dispatch_due_batch_schedules",
 ]

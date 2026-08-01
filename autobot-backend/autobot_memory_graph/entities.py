@@ -166,7 +166,7 @@ class EntityOperationsMixin:
             entity = self._build_entity_document(entity_id, entity_type, name, observations, entity_metadata)
 
             await self._store_entity_in_redis(entity_id, entity)
-            logger.info(  # codeql[py/clear-text-logging-sensitive-data]
+            logger.info(
                 "Created entity: %s (%s) with ID %s",
                 name,
                 entity_type,

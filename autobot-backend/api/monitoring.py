@@ -62,6 +62,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
+from autobot_shared.time_utils import to_rfc3339
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
@@ -94,6 +95,13 @@ async def _query_prometheus_instant(query: str) -> float | None:
 
     Uses the singleton HTTP client for connection reuse (Issue #65).
 
+    Issue #12979: switched from ``await http_client.get(...)`` under a plain
+    ``async with`` to ``tracked_request()`` — the old form releases the
+    *connection* but leaves ``_active_requests`` permanently incremented
+    (the #12981 defect), since ``get()``/``request()`` delegate the
+    success-path decrement to the caller and this response is never
+    passed to ``decrement_active()``.
+
     Args:
         query: PromQL query string.
 
@@ -103,7 +111,8 @@ async def _query_prometheus_instant(query: str) -> float | None:
     try:
         http_client = get_http_client()
         params = {"query": query}
-        async with await http_client.get(
+        async with http_client.tracked_request(
+            "GET",
             f"{_PROMETHEUS_URL}/api/v1/query",
             params=params,
             timeout=aiohttp.ClientTimeout(total=10),
@@ -133,6 +142,10 @@ async def _query_prometheus_range(
 
     Uses the singleton HTTP client for connection reuse (Issue #65).
 
+    Issue #12979: switched from ``await http_client.get(...)`` under a plain
+    ``async with`` to ``tracked_request()`` — see ``_query_prometheus_instant``
+    for why (the #12981 counter-leak defect).
+
     Args:
         query: PromQL query string.
         start: Start of the query window.
@@ -146,11 +159,12 @@ async def _query_prometheus_range(
         http_client = get_http_client()
         params = {
             "query": query,
-            "start": start.isoformat() + "Z",
-            "end": end.isoformat() + "Z",
+            "start": to_rfc3339(start),
+            "end": to_rfc3339(end),
             "step": step,
         }
-        async with await http_client.get(
+        async with http_client.tracked_request(
+            "GET",
             f"{_PROMETHEUS_URL}/api/v1/query_range",
             params=params,
             timeout=aiohttp.ClientTimeout(total=30),
@@ -223,6 +237,12 @@ async def _fetch_alertmanager_alerts() -> List[Dict[str, Any]]:
 
     Returns:
         List of active alerts in frontend-compatible format.
+
+    Issue #12979: routed through the shared pooled client's
+    ``tracked_request()`` instead of a per-request ``aiohttp.ClientSession``.
+    ``suppress_error_log=True`` since AlertManager being unreachable is an
+    expected, already-logged (WARNING) condition on this 10s-cached poll —
+    the manager's default ERROR log would just duplicate it.
     """
     async with _alertmanager_cache_lock:
         current_time = time.time()
@@ -232,19 +252,20 @@ async def _fetch_alertmanager_alerts() -> List[Dict[str, Any]]:
             return _alertmanager_cache["alerts"]
 
         try:
-            async with aiohttp.ClientSession() as session:
-                # AlertManager v2 API for active alerts
-                url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
-                async with session.get(url, timeout=_ALERTMANAGER_TIMEOUT) as response:
-                    if response.status == 200:
-                        raw_alerts = await response.json()
-                        formatted_alerts = _format_alertmanager_alerts(raw_alerts)
-                        _alertmanager_cache["alerts"] = formatted_alerts
-                        _alertmanager_cache["timestamp"] = current_time
-                        return formatted_alerts
-                    else:
-                        logger.warning("AlertManager returned status %d", response.status)
-                        return _alertmanager_cache["alerts"]  # Return stale cache
+            # AlertManager v2 API for active alerts
+            url = f"{ServiceURLs.ALERTMANAGER_API}/api/v2/alerts"
+            async with get_http_client().tracked_request(
+                "GET", url, timeout=_ALERTMANAGER_TIMEOUT, suppress_error_log=True
+            ) as response:
+                if response.status == 200:
+                    raw_alerts = await response.json()
+                    formatted_alerts = _format_alertmanager_alerts(raw_alerts)
+                    _alertmanager_cache["alerts"] = formatted_alerts
+                    _alertmanager_cache["timestamp"] = current_time
+                    return formatted_alerts
+                else:
+                    logger.warning("AlertManager returned status %d", response.status)
+                    return _alertmanager_cache["alerts"]  # Return stale cache
         except asyncio.TimeoutError:
             logger.warning("AlertManager request timed out")
             return _alertmanager_cache["alerts"]

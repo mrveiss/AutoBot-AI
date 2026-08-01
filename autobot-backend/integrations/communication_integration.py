@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from integrations.base import (
     BaseIntegration,
@@ -157,11 +158,12 @@ class SlackIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, headers=headers, data=form_data) as resp:
-                    result = await resp.json()
-                    self._check_slack_response(url, resp.status, result)
-                    return result
+            async with get_http_client().tracked_request(
+                "POST", url, headers=headers, data=form_data, timeout=timeout
+            ) as resp:
+                result = await resp.json()
+                self._check_slack_response(url, resp.status, result)
+                return result
         except asyncio.TimeoutError:
             self.logger.warning(
                 "Slack file upload to %s timed out (channel=%s)",
@@ -250,20 +252,20 @@ class SlackIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                if method == "GET":
-                    async with session.get(url, headers=headers, params=data) as resp:
-                        result = await resp.json()
-                        self._check_slack_response(url, resp.status, result)
-                        if resp.status == 429:
-                            self._rate_limiter.apply_response_headers(self._token_key, dict(resp.headers))
-                        return result
-                async with session.post(url, headers=headers, json=data) as resp:
+            client = get_http_client()
+            if method == "GET":
+                async with client.tracked_request("GET", url, headers=headers, params=data, timeout=timeout) as resp:
                     result = await resp.json()
                     self._check_slack_response(url, resp.status, result)
                     if resp.status == 429:
                         self._rate_limiter.apply_response_headers(self._token_key, dict(resp.headers))
                     return result
+            async with client.tracked_request("POST", url, headers=headers, json=data, timeout=timeout) as resp:
+                result = await resp.json()
+                self._check_slack_response(url, resp.status, result)
+                if resp.status == 429:
+                    self._rate_limiter.apply_response_headers(self._token_key, dict(resp.headers))
+                return result
         except asyncio.TimeoutError:
             self.logger.warning("Slack request to %s timed out", url)
             return {"ok": False, "error": "timeout"}
@@ -401,10 +403,9 @@ class TeamsIntegration(BaseIntegration):
     async def _post_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Post message to Teams webhook."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(self.webhook_url, json=payload) as resp:
-                    status = resp.status
-                    return {"success": status == 200, "status_code": status}
+            async with get_http_client().tracked_request("POST", self.webhook_url, json=payload) as resp:
+                status = resp.status
+                return {"success": status == 200, "status_code": status}
         except aiohttp.ClientError as exc:
             self.logger.warning("Teams webhook failed: %s", exc)
             return {"success": False, "error": str(exc)}
@@ -418,10 +419,9 @@ class TeamsIntegration(BaseIntegration):
         """Make HTTP request to Microsoft Graph API."""
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers) as resp:
-                    body = await resp.json()
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
+                body = await resp.json()
+                return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
             self.logger.warning("Teams Graph request to %s failed: %s", url, exc)
             return {"status_code": 0, "body": {}, "error": str(exc)}
@@ -571,10 +571,11 @@ class DiscordIntegration(BaseIntegration):
         """
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers, json=data, params=query_params) as resp:
-                    body = await resp.json()
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(
+                method, url, headers=headers, json=data, params=query_params, timeout=timeout
+            ) as resp:
+                body = await resp.json()
+                return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
             self.logger.warning("Discord request to %s failed: %s", url, exc)
             return {"status_code": 0, "body": {}, "error": str(exc)}

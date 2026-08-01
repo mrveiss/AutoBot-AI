@@ -69,7 +69,7 @@ export default defineConfigWithVueTs(
       'vue/no-parsing-error': 'warn',
       'prefer-const': 'warn',
       'vue/no-undef-components': ['error', {
-        ignorePatterns: ['RouterLink', 'RouterView', 'Transition', 'TransitionGroup', 'KeepAlive', 'Teleport', 'Suspense'],
+        ignorePatterns: ['RouterLink', 'RouterView', 'Transition', 'TransitionGroup', 'KeepAlive', 'Teleport', 'Suspense', 'I18nT', 'i18n-t'],
       }],
       // Issue #6487: block new imports of deprecated useApi composable family.
       // Migrate to useFetchEndpoint (data loading) or useApiClient from @/plugins/api (mutations).
@@ -150,7 +150,9 @@ export default defineConfigWithVueTs(
         { key: 'size', value: 'small',  message: "Deprecated size token 'small' — use 'sm' (MVA-192)." },
         { key: 'size', value: 'medium', message: "Deprecated size token 'medium' — use 'md' (MVA-192)." },
         { key: 'size', value: 'large',  message: "Deprecated size token 'large' — use 'lg' (MVA-192)." },
-        { key: 'variant', value: 'danger', message: "Deprecated color token 'danger' — use 'error' (MVA-192)." },
+        // NOTE: no `variant: danger` entry — #11998 reconciled the shared SemanticVariant/BadgeVariant
+        // vocabulary TO canonical 'danger' (BaseBadge accepts 'danger', not 'error'), so forbidding it
+        // here contradicts the component type. ButtonVariant still uses 'error' (its own type enforces it).
       ],
       // Catches the same deprecated values passed as bound string literals, e.g. :size="'small'".
       // Scoped to VExpressionContainer inside VAttribute (template attribute expressions only).

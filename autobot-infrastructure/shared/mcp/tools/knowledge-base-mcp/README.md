@@ -143,4 +143,4 @@ print(f"Documents: {stats.total_documents}")
 
 ## License
 
-MIT - mrveiss 2025
+Apache-2.0 - mrveiss 2025-2026

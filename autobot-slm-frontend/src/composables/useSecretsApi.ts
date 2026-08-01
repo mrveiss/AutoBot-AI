@@ -8,109 +8,69 @@
  *
  * Provides REST API integration for encrypted system secrets
  * management via the SLM backend. Admin-only.
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()`, injects the SLM bearer token,
+ * and centrally handles 401 for these non-auth endpoints (clear session +
+ * redirect to `/login`) — matching the previous axios interceptor that called
+ * `authStore.logout()`. Call sites pass endpoints relative to the API base and
+ * receive parsed JSON directly.
+ *
+ * Contract types (#12420 Phase 3): the request/response shapes below are DERIVED
+ * from the generated OpenAPI schema (`@/types/generated/api`), which is produced
+ * from the SLM backend's own Pydantic models and CI-guarded by
+ * `verify-generated-types-slm`. Do not hand-declare them — a backend schema
+ * change must surface here as a type error, not as a silent runtime mismatch.
  */
 
-import axios, { type AxiosInstance } from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
-const SLM_API_BASE = getSlmApiBase()
+export type SecretCreate = components['schemas']['SecretCreate']
+export type SecretUpdate = components['schemas']['SecretUpdate']
+export type SecretResponse = components['schemas']['SecretResponse']
+export type ApplySecretsRequest = components['schemas']['ApplySecretsRequest']
+export type ApplySecretsResult = components['schemas']['ApplySecretsResponse']
 
-export interface SecretCreate {
-  key: string
-  value: string
-  category?: string
-  description?: string
-}
-
-export interface SecretUpdate {
-  value?: string
-  category?: string
-  description?: string
-}
-
-export interface SecretResponse {
-  id: number
-  key: string
-  category: string
-  description: string | null
-  created_at: string
-  updated_at: string
-}
-
+/**
+ * `GET /secrets/dependent-roles` returns an untyped `dict` (the backend
+ * declares no response_model), so there is no generated schema to derive from —
+ * this shape stays hand-declared until the backend types the endpoint.
+ */
 export interface DependentRolesMapping {
   mapping: Record<string, string[]>
 }
 
-export interface ApplySecretsResult {
-  success: boolean
-  key: string
-  dependent_roles: string[]
-  target_node_ids: string[]
-  output: string
-  returncode: number
-}
-
 export function useSecretsApi() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: SLM_API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000,
-  })
-
-  client.interceptors.request.use((config) => {
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
-
   async function listSecrets(): Promise<SecretResponse[]> {
-    const response = await client.get<SecretResponse[]>('/secrets')
-    return response.data
+    return slmApiClient.get<SecretResponse[]>('/secrets')
   }
 
   async function createSecret(data: SecretCreate): Promise<SecretResponse> {
-    const response = await client.post<SecretResponse>('/secrets', data)
-    return response.data
+    return slmApiClient.post<SecretResponse>('/secrets', data)
   }
 
   async function updateSecret(
     key: string,
     data: SecretUpdate
   ): Promise<SecretResponse> {
-    const response = await client.put<SecretResponse>(
+    return slmApiClient.put<SecretResponse>(
       `/secrets/${encodeURIComponent(key)}`,
       data
     )
-    return response.data
   }
 
   async function deleteSecret(key: string): Promise<void> {
-    await client.delete(`/secrets/${encodeURIComponent(key)}`)
+    await slmApiClient.delete(`/secrets/${encodeURIComponent(key)}`)
   }
 
   async function getDependentRolesMapping(): Promise<DependentRolesMapping> {
-    const response = await client.get<DependentRolesMapping>('/secrets/dependent-roles')
-    return response.data
+    return slmApiClient.get<DependentRolesMapping>('/secrets/dependent-roles')
   }
 
   async function applySecret(key: string): Promise<ApplySecretsResult> {
-    const response = await client.post<ApplySecretsResult>('/secrets/apply', { key })
-    return response.data
+    const body: ApplySecretsRequest = { key }
+    return slmApiClient.post<ApplySecretsResult>('/secrets/apply', body)
   }
 
   return {

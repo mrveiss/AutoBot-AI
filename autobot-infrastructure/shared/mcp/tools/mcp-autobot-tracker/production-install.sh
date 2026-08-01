@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Production Installation Script for MCP AutoBot Tracker
 # This script installs and configures the MCP tracker for production use

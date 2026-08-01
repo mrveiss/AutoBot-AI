@@ -8,6 +8,13 @@
 # drifted and was removed). Required vars: backend_user, backend_group,
 # backend_install_dir, backend_code_dir, backend_host, backend_port,
 # backend_workers, backend_log_dir.
+#
+# #11670: This unit is authoritative. Worker count (backend_workers), the
+# start/stop timeouts (backend_start_timeout_sec / backend_stop_timeout_sec) and
+# the graceful-shutdown flag are ALL owned here — folding in what the legacy
+# one-off deadlock scripts force via hand-placed .service.d/ drop-ins
+# (single-worker.conf, timeout.conf). The backend role removes those stale manual
+# drop-ins on every deploy so nothing can shadow this rendered unit.
 [Unit]
 Description=AutoBot Backend API
 After=network-online.target redis-stack-server.service
@@ -20,6 +27,23 @@ Group={{ backend_group }}
 WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
 Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir | dirname }}/autobot_shared:{{ backend_install_dir | dirname }}"
+# #12777: the backend SIGABRTs every ~25-55 min and leaves ZERO diagnostics.
+# Without faulthandler a fatal signal raised inside a C extension (uvloop,
+# chromadb, torch/onnx — all compiled against a very new Python 3.14) unwinds
+# without ever printing a Python stack, so backend-error.log just stops
+# mid-stream and resumes at the next boot. Core capture cannot cover for that
+# here either: this platform's core_pattern pipes to /wsl-capture-crash, which
+# does not exist, so the kernel reports code=dumped and the core is discarded.
+# With this set, the next abort writes a native + Python traceback to
+# StandardError (backend-error.log, see below) — which is the prerequisite for
+# identifying the aborting extension at all.
+Environment="PYTHONFAULTHANDLER=1"
+# #12777: systemd defaults RLIMIT_CORE to 0, so without this NO core is written
+# even once core_pattern points somewhere real — the capture opt-in
+# (backend_core_capture, roles/backend/tasks/core_capture.yml) would silently
+# produce nothing. Harmless while capture is off: the kernel still has nowhere
+# to put the core.
+LimitCORE={{ backend_core_limit | default('infinity') }}
 EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 # MVA-1633: Validate env vars before starting to prevent silent crashes
@@ -29,12 +53,22 @@ ExecStartPre={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/pyth
 # uvicorn waits indefinitely for lingering keep-alive/in-flight connections (nginx,
 # health probes), so `systemctl restart` sat in stop-sigterm for the full 15-min
 # TimeoutStopSec on every code-sync deploy — making the built-in restart look broken.
-ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }} --timeout-graceful-shutdown {{ backend_graceful_shutdown_sec | default(30) }}
+# #12488: --log-config splits uvicorn's own logger output by level (DEBUG/INFO
+# -> stdout, WARNING+ -> stderr) instead of uvicorn's default, which sends
+# everything except the access log (incl. INFO connection-lifecycle lines like
+# "WebSocket ... [accepted]") to stderr — see autobot_shared/uvicorn_log_config.json.
+ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }} --timeout-graceful-shutdown {{ backend_graceful_shutdown_sec | default(30) }} --log-config {{ backend_install_dir | dirname }}/autobot_shared/uvicorn_log_config.json
 Restart=always
 # #11668: escalate to SIGKILL promptly if uvicorn still hasn't exited, so a
 # code-sync restart never blocks on a hung shutdown. Mirrors autobot-celery.
 KillMode=mixed
 TimeoutStopSec={{ backend_stop_timeout_sec | default(45) }}
+# #11670: folds the legacy timeout.conf drop-in's TimeoutStartSec into the
+# canonical unit. First boot imports torch/sentence-transformers/chromadb which
+# take 5-6 min, so the default start window is generous. NOTE: the stale drop-in
+# also set TimeoutStopSec=900 (the 15-min stop hang) — that is intentionally NOT
+# restored; #11668's 45s stop + KillMode=mixed is the correct behavior.
+TimeoutStartSec={{ backend_start_timeout_sec | default(900) }}
 # Issue #957: nginx holds port {{ backend_nginx_port | default(8443) }}; WDF rule tied to nginx not uvicorn
 RestartSec=5
 StartLimitInterval=120

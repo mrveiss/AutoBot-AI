@@ -20,6 +20,8 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.http_client import get_http_client
+from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import (
     Deployment,
@@ -180,9 +182,17 @@ class ReconcilerService:
         await self._broadcast_node_status(node.node_id, NodeStatus.OFFLINE.value, node.hostname)
 
     async def _check_node_health(self) -> None:
-        """Check node health based on heartbeats and network reachability."""
+        """Check node health based on heartbeats and network reachability.
+
+        Issue #11963: the manager/self node is excluded from the ping-based
+        demotion below — it is heartbeated locally (compose_fleet.py) from
+        real-time metrics of this very process, so ICMP reachability (which
+        can be blocked/unreliable and races the self-heartbeat loop) must
+        never mark it degraded/offline.
+        """
         from sqlalchemy import or_
 
+        from services.compose_fleet import is_manager_node
         from services.database import db_service
 
         async with db_service.session() as db:
@@ -210,6 +220,9 @@ class ReconcilerService:
             stale_nodes = result.scalars().all()
 
             for node in stale_nodes:
+                if is_manager_node(node.node_id):
+                    continue
+
                 is_reachable = await self._ping_host(node.ip_address)
                 old_status = node.status
 
@@ -919,7 +932,7 @@ class ReconcilerService:
                 **(deployment.extra_data or {}),
                 "auto_rollback_attempted": True,
                 "auto_rollback_reason": f"Node status: {node.status}",
-                "auto_rollback_time": datetime.now(timezone.utc).isoformat(),
+                "auto_rollback_time": utc_timestamp(),
             }
 
             # Remove deployed roles from node
@@ -1420,9 +1433,9 @@ class ReconcilerService:
                 ssl_ctx.check_hostname = False
                 ssl_ctx.verify_mode = ssl.CERT_NONE
             timeout = aiohttp.ClientTimeout(total=10)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, ssl=ssl_ctx) as resp:
-                    return "healthy" if resp.status < 400 else "unhealthy"
+            # #13134: pooled client instead of a per-call ClientSession.
+            async with get_http_client().tracked_request("GET", url, ssl=ssl_ctx, timeout=timeout) as resp:
+                return "healthy" if resp.status < 400 else "unhealthy"
         except Exception as exc:
             logger.debug("Health check failed for %s: %s", url, exc)
             return "unhealthy"

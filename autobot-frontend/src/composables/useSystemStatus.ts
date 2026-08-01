@@ -10,14 +10,20 @@
  * TypeScript migration of useSystemStatus.js
  */
 
-import { ref, watch, onScopeDispose, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import apiEndpointMapper from '@/utils/ApiEndpointMapper.js'
 import { createLogger } from '@/utils/debugUtils'
+import { usePollingJob } from '@/composables/usePollingJob'
 import { getApiBase } from '@/config/ssot-config'
 
 // #10347: poll cadence while the System Status panel is open, so a transient
 // backend restart self-recovers without a manual Refresh.
 const STATUS_POLL_INTERVAL_MS = 15000
+
+// GH#12866: budget for the /api/health confirmation probe. Deliberately short —
+// it only has to distinguish "not answering" from "answering slowly", and a
+// long budget here would just re-add the delay the status probes already hit.
+const BACKEND_HEALTH_TIMEOUT_MS = 3000
 
 // ---------------------------------------------------------------------------
 // Types & Interfaces
@@ -181,6 +187,32 @@ function toHealthStatus(raw: string): ServiceHealthStatus {
  *
  * @returns Tuple of [services, hadApiError]
  */
+/**
+ * Is the backend actually reachable, independent of the status endpoints?
+ *
+ * GH#12866: the two service-monitor probes carry a 5s budget, but the backend
+ * stalls in bursts — a CPU-bound scan holds the GIL and blocks the event loop
+ * for 12s+, so 27.5% of polls exceeded the budget while /api/health kept
+ * returning 200 and the process never restarted. Treating any probe timeout as
+ * "unreachable" therefore reported a healthy backend as down roughly a quarter
+ * of the time.
+ *
+ * /api/health is cheap, so a short budget here distinguishes "not answering at
+ * all" from "answering slowly". Returns false only when the backend genuinely
+ * does not respond.
+ */
+async function isBackendReachable(): Promise<boolean> {
+  try {
+    const res = (await apiEndpointMapper.fetchWithFallback(
+      `${getApiBase()}/health`,
+      { timeout: BACKEND_HEALTH_TIMEOUT_MS },
+    )) as FallbackResponse
+    return Boolean(res?.ok) && !res?.fallback
+  } catch {
+    return false
+  }
+}
+
 async function fetchVmStatus(): Promise<[SystemService[], boolean]> {
   const services: SystemService[] = []
   let hadError = false
@@ -376,13 +408,24 @@ export function useSystemStatus(): UseSystemStatusReturn {
       const [svcServices, svcError] = await fetchServiceStatus()
       const hasApiErrors = vmError || svcError
 
+      // GH#12866: a failed status probe does not mean the backend is down.
+      // Confirm with a cheap /api/health call before declaring it unreachable,
+      // so a burst of event-loop stalls reads as "degraded" rather than "down".
+      const reachable = hasApiErrors ? await isBackendReachable() : true
+
       // #10347: NPU/Redis/Ollama/Browser are read THROUGH the backend's
       // /api/service-monitor/*. If the backend API itself is unreachable
       // (e.g. a ~20-30s restart), we don't know their state — show ONE
       // amber "backend unreachable" row, not five false red "down"s.
       if (hasApiErrors) {
         systemServices.value = [
-          { name: 'Backend API', status: 'warning', statusText: 'Unreachable — service status unknown' },
+          {
+            name: 'Backend API',
+            status: 'warning',
+            statusText: reachable
+              ? 'Degraded — status checks timed out, backend responding'
+              : 'Unreachable — service status unknown',
+          },
           { name: 'Frontend', status: 'healthy', statusText: 'Connected' },
           { name: 'WebSocket', status: 'healthy', statusText: 'Connected' },
         ]
@@ -391,7 +434,9 @@ export function useSystemStatus(): UseSystemStatusReturn {
           hasIssues: false,
           lastChecked: new Date(),
           apiErrors: true,
-          backendUnreachable: true,
+          // GH#12866: only true when /api/health also failed. Consumers gate
+          // reconnect banners on this, so a slow poll must not trigger them.
+          backendUnreachable: !reachable,
         }
         return
       }
@@ -427,21 +472,21 @@ export function useSystemStatus(): UseSystemStatusReturn {
   // #10347: auto-refresh while the panel is open so a transient backend
   // restart self-recovers without a manual Refresh. Polls only while shown
   // (no cost when closed); cleaned up on scope teardown.
-  let pollTimer: ReturnType<typeof setInterval> | null = null
-  const stopPolling = (): void => {
-    if (pollTimer !== null) {
-      clearInterval(pollTimer)
-      pollTimer = null
-    }
-  }
+  // Backed by the canonical usePollingJob (#12701): fires immediately on start
+  // then re-polls every STATUS_POLL_INTERVAL_MS, with auto scope-dispose cleanup.
+  // maxAttempts is effectively unlimited — lifecycle is driven by the panel
+  // open/close watch below, not an attempt cap. refreshSystemStatus never throws
+  // (internal try/catch → fallback state), so no error-backoff path applies.
+  const statusJob = usePollingJob<void>(
+    async () => { await refreshSystemStatus() },
+    { intervalMs: STATUS_POLL_INTERVAL_MS, maxAttempts: Number.MAX_SAFE_INTEGER },
+  )
   watch(showSystemStatus, (open) => {
-    stopPolling()
+    statusJob.stop()
     if (open) {
-      void refreshSystemStatus()
-      pollTimer = setInterval(() => void refreshSystemStatus(), STATUS_POLL_INTERVAL_MS)
+      statusJob.start('')
     }
   })
-  onScopeDispose(stopPolling)
 
   /**
    * Manually recalculate system status from the current services list

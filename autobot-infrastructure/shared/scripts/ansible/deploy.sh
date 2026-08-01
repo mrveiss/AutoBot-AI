@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Ansible Deployment Scripts
 
 cd "$(dirname "$0")/../../ansible"

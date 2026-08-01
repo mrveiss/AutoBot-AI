@@ -7,7 +7,7 @@
 // speak()/speakStreaming() must surface a user-visible toast instead of
 // failing silently.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ref } from 'vue'
 
 const mockShowToast = vi.fn()
@@ -162,5 +162,156 @@ describe('useVoiceOutput — concurrent voice checks (#11802)', () => {
     await speak('hello', true)
 
     expect(mockShowToast).not.toHaveBeenCalled()
+  })
+})
+
+
+// #12502: when the TTS WebSocket is unavailable, speakStreaming() falls back to
+// per-sentence HTTP synthesis. Previously each fallback went through speak(),
+// which aborts the in-flight utterance — so only the LAST sentence of a reply
+// was heard. The fallback must now QUEUE sentences and play them sequentially
+// without aborting each other.
+describe('useVoiceOutput — sequential fallback queue (#12502)', () => {
+  let originalAudioContext: unknown
+  let originalWebSocket: unknown
+  let bufferSourcesCreated = 0
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    _clock += 60_000
+    vi.spyOn(Date, 'now').mockImplementation(() => _clock)
+    voicesRef.value = [{ id: 'v1' }]
+    bufferSourcesCreated = 0
+
+    class FakeBufferSource {
+      buffer: unknown = null
+      onended: (() => void) | null = null
+      connect() {}
+      start() {
+        setTimeout(() => this.onended && this.onended(), 0)
+      }
+      stop() {}
+    }
+    class FakeAudioContext {
+      state = 'running'
+      currentTime = 0
+      destination = {}
+      async resume() {}
+      async decodeAudioData() {
+        return { duration: 0.05 }
+      }
+      createBufferSource() {
+        bufferSourcesCreated++
+        return new FakeBufferSource()
+      }
+      createGain() {
+        return { gain: { value: 1 }, connect() {} }
+      }
+    }
+    // A WebSocket that always fails to connect, forcing the HTTP fallback path.
+    class FailingWebSocket {
+      static OPEN = 1
+      onopen: ((e?: unknown) => void) | null = null
+      onerror: ((e?: unknown) => void) | null = null
+      onclose: ((e?: unknown) => void) | null = null
+      onmessage: ((e?: unknown) => void) | null = null
+      readyState = 0
+      constructor() {
+        setTimeout(() => this.onerror && this.onerror(new Event('error')), 0)
+      }
+      send() {}
+      close() {}
+    }
+
+    originalAudioContext = (globalThis as Record<string, unknown>).AudioContext
+    originalWebSocket = (globalThis as Record<string, unknown>).WebSocket
+    ;(globalThis as Record<string, unknown>).AudioContext = FakeAudioContext
+    ;(globalThis as Record<string, unknown>).WebSocket = FailingWebSocket
+  })
+
+  afterEach(() => {
+    ;(globalThis as Record<string, unknown>).AudioContext = originalAudioContext
+    ;(globalThis as Record<string, unknown>).WebSocket = originalWebSocket
+  })
+
+  it('queues every fallback sentence and plays them all — none aborted', async () => {
+    const signals: AbortSignal[] = []
+    const texts: string[] = []
+    ;(fetchWithAuth as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_url: string, opts: { body: FormData; signal: AbortSignal }) => {
+        signals.push(opts.signal)
+        texts.push(String(opts.body.get('text')))
+        return {
+          ok: true,
+          status: 200,
+          blob: async () => ({ arrayBuffer: async () => new ArrayBuffer(8) }),
+        }
+      },
+    )
+
+    const { speakStreaming } = useVoiceOutput()
+    const sentences = [
+      'First sentence of the streamed reply.',
+      'Second sentence of the streamed reply.',
+      'Third sentence of the streamed reply.',
+    ]
+    // Dispatch per-sentence exactly like the streaming watcher (not awaited).
+    sentences.forEach((s) => {
+      void speakStreaming(s)
+    })
+
+    // Let the WS reject, the queue drain, and every playback complete.
+    await vi.waitFor(() => {
+      expect(texts.length).toBe(sentences.length)
+      expect(bufferSourcesCreated).toBe(sentences.length)
+    })
+
+    // Every sentence was synthesized — none dropped by a self-aborting fallback.
+    expect([...texts].sort()).toEqual([...sentences].sort())
+    // All were actually played to completion (one audio buffer each).
+    expect(bufferSourcesCreated).toBe(sentences.length)
+    // Critically: NO in-flight utterance was aborted by a later fallback call
+    // (the pre-fix speak() path aborted the previous one every time).
+    expect(signals.some((s) => s.aborted)).toBe(false)
+  })
+
+  it('stopSpeaking() clears the fallback queue and aborts the in-flight utterance', async () => {
+    const signals: AbortSignal[] = []
+    let releaseFirst: () => void = () => {}
+    ;(fetchWithAuth as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_url: string, opts: { signal: AbortSignal }) => {
+        signals.push(opts.signal)
+        // Block the first synthesis so we can stop mid-flight.
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+        return {
+          ok: true,
+          status: 200,
+          blob: async () => ({ arrayBuffer: async () => new ArrayBuffer(8) }),
+        }
+      },
+    )
+
+    const { speakStreaming, stopSpeaking } = useVoiceOutput()
+    void speakStreaming('First blocked sentence of the reply.')
+    void speakStreaming('Second queued sentence of the reply.')
+    void speakStreaming('Third queued sentence of the reply.')
+
+    // Wait until the first synthesis is in-flight.
+    await vi.waitFor(() => {
+      expect(signals.length).toBe(1)
+    })
+
+    // User-initiated stop must abort the in-flight request and drop the queue.
+    stopSpeaking()
+    releaseFirst()
+
+    // Give any (incorrectly) queued follow-ups a chance to fire.
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(signals[0].aborted).toBe(true)
+    // No further synthesis started after the stop — queue was cleared.
+    expect(signals.length).toBe(1)
   })
 })

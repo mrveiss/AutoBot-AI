@@ -133,6 +133,7 @@ del _src_ast
 # the code_sync rot source above.
 _EXTRA_SERVICE_MODULES = (
     "services.blue_green",
+    "services.code_status",
     "services.deployment",
     "services.encryption",
     "services.reconciler",

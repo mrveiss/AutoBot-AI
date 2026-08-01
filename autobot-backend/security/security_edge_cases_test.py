@@ -57,8 +57,8 @@ class TestSecurityEdgeCases:
             },
         }
 
-        with patch("security_layer.global_config_manager") as mock_config:
-            mock_config.get.return_value = self.security_config
+        with patch("security_layer.get_config_manager") as mock_get_config_manager:
+            mock_get_config_manager.return_value.get.return_value = self.security_config
             self.security = SecurityLayer()
 
         # #7376: stub `command_executor.run_shell_command` so tests cannot
@@ -343,7 +343,7 @@ class TestSecurityEdgeCases:
             )
 
         # Simulate log file tampering
-        with open(self.temp_audit_file.name, "a") as f:
+        with open(self.temp_audit_file.name, "a", encoding="utf-8") as f:
             f.write("TAMPERED_DATA\n")
             f.write("{invalid_json\n")
             f.write("}")
@@ -372,11 +372,11 @@ class TestSecurityEdgeCases:
         ]
 
         for bypass_config in bypass_attempts:
-            with patch("security_layer.global_config_manager") as mock_config:
+            with patch("security_layer.get_config_manager") as mock_get_config_manager:
                 # Simulate config change during runtime
                 modified_config = original_config.copy()
                 modified_config.update(bypass_config)
-                mock_config.get.return_value = modified_config
+                mock_get_config_manager.return_value.get.return_value = modified_config
 
                 # Create new security instance
                 new_security = SecurityLayer()
@@ -557,8 +557,8 @@ class TestSecurityBoundaryConditions:
             "audit_log_file": self.temp_audit_file.name,
         }
 
-        with patch("security_layer.global_config_manager") as mock_config:
-            mock_config.get.return_value = self.minimal_config
+        with patch("security_layer.get_config_manager") as mock_get_config_manager:
+            mock_get_config_manager.return_value.get.return_value = self.minimal_config
             self.security = SecurityLayer()
 
     def teardown_method(self):

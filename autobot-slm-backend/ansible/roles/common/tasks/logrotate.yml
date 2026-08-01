@@ -1,0 +1,68 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+---
+# Unified log rotation for AutoBot logs (issues #12294, #12464).
+#
+# Covers both /var/log/autobot/*.log (#12294) and /opt/autobot/logs/*.log
+# (#12464 — native backend/slm/nginx runtime logs) from a single
+# /etc/logrotate.d/autobot config so every log directory is capped uniformly.
+#
+# Shared task file: included by the common role on every provisioned node,
+# and reused by the time_sync role via `include_role: name=common
+# tasks_from=logrotate` so standalone time-sync deploys get the same single
+# canonical config. Kept self-contained (no role-var dependencies) so it is
+# safe to include from any play.
+
+- name: "Logrotate | Ensure logrotate is installed"
+  ansible.builtin.package:
+    name: logrotate
+    state: present
+  become: true
+  tags: ['common', 'logging', 'logrotate']
+
+- name: "Logrotate | Install unified AutoBot rotation config (#12294, #12464)"
+  ansible.builtin.template:
+    src: autobot-logrotate.j2
+    dest: /etc/logrotate.d/autobot
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  tags: ['common', 'logging', 'logrotate']
+
+# The old per-file config only rotated time-sync.log. It is now superseded by
+# the unified `autobot` config above, whose `/var/log/autobot/*.log` glob also
+# covers time-sync.log. Remove it so logrotate does not report a duplicate log
+# entry for time-sync.log (which would make it exit non-zero).
+- name: "Logrotate | Remove superseded per-file time-sync config (#12294)"
+  ansible.builtin.file:
+    path: /etc/logrotate.d/autobot-time-sync
+    state: absent
+  become: true
+  tags: ['common', 'logging', 'logrotate']
+
+# #12783: the `maxsize 100M` cap above is only evaluated when logrotate RUNS,
+# and the stock timer is OnCalendar=daily — so between 00:00 ticks a log grew
+# unbounded and maxsize only decided WHETHER to rotate, never WHEN. chromadb.log
+# reached 737 MB (7.4x the cap). Running the timer hourly makes the existing cap
+# enforceable.
+- name: "Logrotate | Ensure timer drop-in directory exists (#12783)"
+  ansible.builtin.file:
+    path: /etc/systemd/system/logrotate.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  become: true
+  tags: ['common', 'logging', 'logrotate']
+
+- name: "Logrotate | Run the rotation timer hourly so maxsize is enforceable (#12783)"
+  ansible.builtin.template:
+    src: logrotate-hourly-override.conf.j2
+    dest: /etc/systemd/system/logrotate.timer.d/autobot-hourly.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify: Reload systemd and restart logrotate timer
+  tags: ['common', 'logging', 'logrotate']

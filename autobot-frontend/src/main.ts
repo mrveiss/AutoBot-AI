@@ -53,7 +53,7 @@ initializeThemeVariant()
 import '@xterm/xterm/css/xterm.css'
 
 // Import i18n
-import i18n from './i18n'
+import i18n, { initI18n } from './i18n'
 
 // Import plugins
 import rumPlugin from './plugins/rum'
@@ -133,8 +133,15 @@ app.config.warnHandler = (msg, _instance, trace) => {
   }
 }
 
-// Mount the app
-app.mount('#app')
+// Mount the app.
+// Issue #12342: the active locale (and 'en' fallback) messages are loaded
+// lazily, so await them before the first render — otherwise the initial
+// paint would flash raw i18n keys instead of translated strings.
+initI18n()
+  .catch(err => logger.error('i18n init failed; mounting with fallback', err))
+  .finally(() => {
+    app.mount('#app')
+  })
 
 // Register Service Worker for caching strategy (Issue #4015, #4041, #3275)
 // #6767: Skip registration on IP-based hosts (172.x, 10.x, 192.168.x, bare-IP) — these

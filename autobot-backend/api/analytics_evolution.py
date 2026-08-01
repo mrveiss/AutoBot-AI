@@ -298,19 +298,6 @@ def _parse_date_range(start_date: str | None, end_date: str | None) -> tuple:
     return start_ts, end_ts
 
 
-def _no_data_response(
-    message: str = "No evolution data. Redis required for timeline tracking.",
-) -> dict:
-    """Standardized no-data response (Issue #543)."""
-    return {
-        "status": "no_data",
-        "message": message,
-        "timeline": [],
-        "patterns": {},
-        "trends": {},
-    }
-
-
 def _build_timeline_response(timeline: list, start_date: str, end_date: str, granularity: str, metrics: list) -> dict:
     """Build timeline success response (Issue #398: extracted)."""
     return {
@@ -1138,12 +1125,12 @@ def _validate_evolution_repo_path(repo_path_str: str):
             status="error",
             message=f"Repository path not found: {repo_path_str}",
         )
-    if not (repo_path / ".git").exists():  # codeql[py/path-injection]
+    if not (repo_path / ".git").exists():
         return None, EvolutionAnalysisResponse(
             status="error",
             message=f"Not a git repository: {repo_path_str}",
         )
-    return repo_path, None  # codeql[py/path-injection]
+    return repo_path, None
 
 
 @router.post("/analyze", response_model=EvolutionAnalysisResponse)

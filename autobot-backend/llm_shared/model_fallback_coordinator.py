@@ -31,6 +31,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
 from .fallback_chain import get_fallback_chain_manager
+from .fallback_events import emit_fallback_event
 from .models import LLMRequest, LLMResponse
 from .optimization.rate_limiter import RateLimitError
 from .provider_degradation import get_degradation_store
@@ -114,6 +115,16 @@ class ModelFallbackCoordinator:
                         primary_model,
                         chain_tried,
                     )
+                    await emit_fallback_event(
+                        conversation_id=request.metadata.get("conversation_id"),
+                        primary_model=primary_model,
+                        fallback_model=current_model,
+                        primary_provider=primary_provider,
+                        fallback_provider=current_provider,
+                        chain_tried=chain_tried,
+                        degraded_skipped=request.metadata.get("degraded_skipped"),
+                        request_id=request.request_id,
+                    )
                 return response
 
             except RateLimitError as exc:
@@ -179,6 +190,17 @@ class ModelFallbackCoordinator:
             chain_tried=chain_tried,
             exhausted=True,
             degraded_skipped=request.metadata.get("degraded_skipped"),
+        )
+        await emit_fallback_event(
+            conversation_id=request.metadata.get("conversation_id"),
+            primary_model=primary_model,
+            fallback_model=current_model,
+            primary_provider=primary_provider,
+            fallback_provider=current_provider,
+            chain_tried=chain_tried,
+            degraded_skipped=request.metadata.get("degraded_skipped"),
+            exhausted=True,
+            request_id=request.request_id,
         )
         return last_error_response
 

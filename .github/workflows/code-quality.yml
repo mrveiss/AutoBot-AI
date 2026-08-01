@@ -75,7 +75,7 @@ jobs:
       uses: actions/checkout@v7
 
     - name: Set up Python 3.12
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: '3.14'
         cache: 'pip'
@@ -165,6 +165,9 @@ jobs:
 
     - name: Block print/console regressions (#1082, #6785)
       run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-print-console
+
+    - name: Check design-token contrast meets WCAG AA (#12730)
+      run: python3 scripts/check_token_contrast.py
 
     - name: Check for unused imports with autoflake
       run: |

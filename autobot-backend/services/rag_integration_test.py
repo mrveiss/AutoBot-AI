@@ -18,8 +18,27 @@ import pytest
 
 from advanced_rag_optimizer import RAGMetrics, SearchResult
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
-from services.rag_config import RAGConfig, get_rag_config, update_rag_config
+from services.rag_config import (
+    RAGConfig,
+    get_rag_config,
+    reset_rag_config,
+    update_rag_config,
+)
 from services.rag_service import RAGService
+
+
+@pytest.fixture(autouse=True)
+def _reset_rag_config_singleton():
+    """Isolate the module-level RAG config singleton between tests (#12539).
+
+    ``test_update_config`` mutates ``_rag_config_instance`` (e.g. sets
+    ``enable_reranking=False``) via ``update_rag_config`` and never restores it,
+    leaking the mutated instance into later suites.  Reset before and after each
+    test so ``get_rag_config()`` always rebuilds fresh defaults.
+    """
+    reset_rag_config()
+    yield
+    reset_rag_config()
 
 
 class TestKnowledgeBaseAdapter:
@@ -373,16 +392,16 @@ class TestKBSynthesisSchemaCache:
     """Tests for module-level synthesis schema caching in RAGService (#4654)."""
 
     def setup_method(self) -> None:
-        """Reset the module-level cache before each test."""
-        import services.rag_service as rag_module
+        """Reset the module-level cache before each test (#12531)."""
+        from services.rag_service import reset_synthesis_schema_cache
 
-        rag_module._SYNTHESIS_SCHEMA_CACHE = None
+        reset_synthesis_schema_cache()
 
     def teardown_method(self) -> None:
-        """Reset the module-level cache after each test."""
-        import services.rag_service as rag_module
+        """Reset the module-level cache after each test (#12531)."""
+        from services.rag_service import reset_synthesis_schema_cache
 
-        rag_module._SYNTHESIS_SCHEMA_CACHE = None
+        reset_synthesis_schema_cache()
 
     @pytest.mark.asyncio
     async def test_load_synthesis_schema_called_only_once_across_multiple_calls(self) -> None:
@@ -427,6 +446,50 @@ class TestKBSynthesisSchemaCache:
 
         assert result1 is result2
         assert result1 is mock_schema
+
+    def test_reset_synthesis_schema_cache_clears_singleton(self) -> None:
+        """reset_synthesis_schema_cache() nulls the singleton so the next call reloads (#12531)."""
+        import services.rag_service as rag_module
+        from services.rag_service import reset_synthesis_schema_cache
+
+        with patch(
+            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+            return_value=Mock(),
+        ) as loader:
+            rag_module._get_synthesis_schema()
+            assert rag_module._SYNTHESIS_SCHEMA_CACHE is not None
+            reset_synthesis_schema_cache()
+            assert rag_module._SYNTHESIS_SCHEMA_CACHE is None
+            rag_module._get_synthesis_schema()
+
+        assert loader.call_count == 2
+
+
+class TestSynthesisSchemaCacheAutouseIsolation:
+    """The autouse conftest fixture must clear the singleton between tests even when a
+    test class provides no manual setup/teardown reset (#12531).
+
+    Test methods run in definition order: ``_a_populates`` intentionally leaves the cache
+    populated; ``_b_sees_empty`` then proves the autouse fixture wiped it before entry.
+    """
+
+    def test_a_populates_cache_without_manual_reset(self) -> None:
+        import services.rag_service as rag_module
+
+        with patch(
+            "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
+            return_value=Mock(),
+        ):
+            rag_module._get_synthesis_schema()
+
+        # Deliberately no reset here — relies on the autouse fixture to clean up.
+        assert rag_module._SYNTHESIS_SCHEMA_CACHE is not None
+
+    def test_b_sees_empty_cache_thanks_to_autouse_fixture(self) -> None:
+        import services.rag_service as rag_module
+
+        # If the autouse fixture did not run, the previous test's cache would leak here.
+        assert rag_module._SYNTHESIS_SCHEMA_CACHE is None
 
 
 class TestAPIEndpoints:

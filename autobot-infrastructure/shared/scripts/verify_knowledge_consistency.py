@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 CRITICAL: Knowledge Base Consistency Verification Script
@@ -27,7 +28,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from config import ConfigManager
 from knowledge_base import KnowledgeBase
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 # Wire in the canonical chunker so the embedding-model consistency check
 # at `verify_embedding_model_consistency()` can actually verify the
@@ -293,7 +294,7 @@ class KnowledgeConsistencyVerifier:
             }
 
             os.makedirs(os.path.dirname(lock_file), exist_ok=True)
-            with open(lock_file, "w") as f:
+            with open(lock_file, "w", encoding="utf-8") as f:
                 json.dump(lock_data, f, indent=2)
 
             logger.info("🔒 Configuration locked at: %s", lock_file)
@@ -358,7 +359,7 @@ class KnowledgeConsistencyVerifier:
         # Save report
         report_file = f"data/knowledge_consistency_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         os.makedirs(os.path.dirname(report_file), exist_ok=True)
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         logger.info("📊 Report saved: %s", report_file)

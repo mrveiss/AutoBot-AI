@@ -5,14 +5,13 @@
 import unittest
 from datetime import timedelta
 
-from notification_suppression import (
+from autobot_shared.time_utils import now_utc
+from services.notification_suppression import (
     NotificationFilter,
     NotificationReason,
     NotificationSuppressionConfig,
     NotificationSuppressionManager,
 )
-
-from autobot_shared.time_utils import now_utc
 
 
 class TestNotificationFilter(unittest.TestCase):

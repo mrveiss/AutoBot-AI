@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Setup Model Sharing Between Windows and WSL Containers
 # This script helps configure different model sharing scenarios
 

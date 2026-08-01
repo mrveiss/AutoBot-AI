@@ -6,13 +6,22 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import { getSlmApiBase } from '@/config/ssot-config'
-import type { SLMNode, NodeRole } from '@/types/slm'
+import { slmApiClient } from '@/utils/ApiClient'
+import type { SLMNode, NodeRole, RoleInfo, RoleListResponse } from '@/types/slm'
 
-interface RoleInfo {
-  name: string
-  description: string
-  category: string
+/**
+ * The subset of `RoleInfo` this wizard renders.
+ *
+ * Replaces the hand-written `RoleInfo` copy removed in #13138. It stays a
+ * projection rather than the full derived `RoleInfo` because the offline
+ * fallback below is built from `NODE_ROLE_METADATA`, which cannot supply
+ * `ansible_role` or `required` — a full `RoleInfo` there would be a lie. The
+ * member types are derived, so a contract rename still breaks the build.
+ */
+type WizardRoleChoice = {
+  name: RoleInfo['name']
+  description: RoleInfo['description']
+  category: RoleInfo['category']
   dependencies: string[]
 }
 
@@ -33,7 +42,7 @@ const selectedNodeId = ref<string>('')
 const selectedRoles = ref<string[]>([])
 const isDeploying = ref(false)
 const deployError = ref<string | null>(null)
-const roles = ref<RoleInfo[]>([])
+const roles = ref<WizardRoleChoice[]>([])
 const isLoadingRoles = ref(false)
 
 // For manual IP input when no nodes exist
@@ -57,7 +66,7 @@ const canProceedStep2 = computed(() => selectedRoles.value.length > 0)
 
 // Group roles by category
 const rolesByCategory = computed(() => {
-  const groups: Record<string, RoleInfo[]> = {}
+  const groups: Record<string, WizardRoleChoice[]> = {}
   for (const role of roles.value) {
     if (!groups[role.category]) {
       groups[role.category] = []
@@ -95,15 +104,24 @@ async function loadData(): Promise<void> {
 async function fetchRoles(): Promise<void> {
   isLoadingRoles.value = true
   try {
-    const response = await fetch(`${getSlmApiBase()}/deployments/roles`, {
-      headers: {
-        Authorization: `Bearer ${sessionStorage.getItem('slm_access_token')}`,
-      },
-    })
-    if (response.ok) {
-      const data = await response.json()
-      roles.value = data.roles
-    }
+    // Was `Bearer ${sessionStorage.getItem(...)}` built unconditionally — the
+    // literal `Bearer null` with no session; the client omits the header when
+    // there is no token and adds the base URL, a timeout and 401 handling.
+    //
+    // BEHAVIOUR CHANGE, deliberate: a non-OK response used to be dropped by
+    // `if (response.ok)` with no else, leaving `roles` EMPTY and the wizard's
+    // role picker blank — the NODE_ROLE_METADATA fallback below only ran when
+    // `fetch` itself threw. `get()` rejects on a non-OK too, so the fallback
+    // that was written for exactly this case now actually runs (#13140).
+    const data = await slmApiClient.get<RoleListResponse>('/deployments/roles')
+    // #13138: `dependencies` is `default_factory=list` server-side and so
+    // optional in the contract — normalise it, the template reads `.length`.
+    roles.value = data.roles.map((role) => ({
+      name: role.name,
+      description: role.description,
+      category: role.category,
+      dependencies: role.dependencies ?? [],
+    }))
   } catch (e) {
     // Use default roles from node-roles constants if API fails
     const { NODE_ROLE_METADATA } = await import('@/constants/node-roles')
@@ -327,7 +345,7 @@ function getCategoryIcon(category: string): string {
                   <span
                     :class="[
                       'px-2 py-1 text-xs font-medium rounded-full',
-                      node.status === 'healthy'
+                      node.status === 'online'
                         ? 'bg-green-100 text-green-800'
                         : node.status === 'offline'
                           ? 'bg-gray-100 text-gray-800'

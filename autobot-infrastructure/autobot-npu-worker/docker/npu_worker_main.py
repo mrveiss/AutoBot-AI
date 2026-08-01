@@ -1,3 +1,5 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 NPU Worker Main Entry Point
 Starts the NPU inference server with proper initialization

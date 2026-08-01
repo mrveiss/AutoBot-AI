@@ -102,10 +102,10 @@
 - name: "Common | Configure SSH key authentication"
   authorized_key:
     user: autobot
-    key: "{{ lookup('file', '/etc/autobot/ssh/autobot_key.pub') }}"
+    key: "{{ lookup('file', autobot_ssh_key_path ~ '.pub') }}"
     state: present
   become: true
-  when: lookup('file', '/etc/autobot/ssh/autobot_key.pub', errors='ignore') is not none
+  when: lookup('file', autobot_ssh_key_path ~ '.pub', errors='ignore') is not none
   tags: ['common', 'ssh']
 
 - name: "Common | Reset UFW to clean state (Issue #895)"
@@ -244,14 +244,31 @@
   tags: ['common', 'python']
 
 - name: "Common | Create log directory"
+  # #12425: shared by every autobot-* service role that logs to
+  # /var/log/autobot (backend, ai-stack, tts-worker, npu-worker, ...), not
+  # just the `autobot` user. 02775 (setgid + group-write) lets any service
+  # user that is a MEMBER of the `autobot` group create/write log files here
+  # without needing to own the directory outright — so a role whose own
+  # service account differs from `autobot` (tts-worker -> autobot-tts,
+  # npu-worker -> autobot-npu) never needs to re-chown the shared top-level
+  # dir to itself, which previously clobbered this ownership on every run of
+  # that role and left the `autobot` service user (autobot-slm-backend) with
+  # no permission to create its own self-update-ansible.log here.
   file:
     path: /var/log/autobot
     state: directory
     owner: autobot
     group: autobot
-    mode: '0755'
+    mode: '02775'
   become: true
   tags: ['common', 'logging']
+
+# #12294: Rotate ALL /var/log/autobot/*.log, not just time-sync.log. Without
+# this, backend-error.log / chromadb.log / ai-stack / tts / npu logs grow
+# unbounded and can fill /var, taking down every service at once.
+- name: "Common | Configure unified /var/log/autobot log rotation (#12294)"
+  ansible.builtin.include_tasks: logrotate.yml
+  tags: ['common', 'logging', 'logrotate']
 
 - name: "Common | Display configuration summary"
   debug:

@@ -117,6 +117,34 @@ class Role(str, Enum):
     READONLY = "readonly"
 
 
+# ``require_role(*roles: Role | str)`` accepts raw strings, so 17 call sites
+# pass ``require_role("admin", "superadmin")`` even though ``superadmin`` is not
+# a member of Role above. Every such guard admits a superadmin, while any
+# hand-rolled ``role == "admin"`` check rejects one -- so a superadmin could
+# perform the write but not the read (#12704, #12717).
+#
+# This set is the single place that answers "is this role administrative?".
+# It lives here rather than in autobot-backend's auth_rbac because that module
+# imports auth_middleware, which needs this answer too -- importing it back the
+# other way closes a cycle (#12786).
+#
+# Making superadmin a first-class Role member is the deeper fix and is still
+# open: this enum drives ROLE_PERMISSIONS for BOTH backends.
+ADMIN_ROLES: frozenset = frozenset({"admin", "superadmin"})
+
+
+def is_admin_role(role) -> bool:
+    """Return True when *role* is administrative (admin or superadmin).
+
+    Use this instead of ``role == "admin"`` for imperative checks that cannot
+    use the require_role() dependency -- e.g. helpers that must also permit
+    self-access, or that pass an ``is_admin`` flag further down.
+
+    Case-insensitive, matching require_role(), which lowercases both sides.
+    """
+    return str(role or "").lower() in ADMIN_ROLES
+
+
 # Canonical role-to-permission mappings.
 # Both autobot-backend (auth_rbac.py) and autobot-slm-backend import this dict
 # so that a permission added here is enforced by both services automatically.

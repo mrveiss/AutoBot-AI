@@ -37,6 +37,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.ssot_config import config
 from models.database import EventSeverity, EventType, Node, NodeEvent, NodeStatus
 from services.auth import require_permission
 from services.database import get_db
@@ -491,7 +492,7 @@ async def _audit_execute_event(
     await db.commit()
 
 
-_SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 _SSH_KNOWN_HOSTS_PATH = os.environ.get("SLM_SSH_KNOWN_HOSTS", "/home/autobot/.ssh/known_hosts")  # noqa: ssot-path
 # System-wide known_hosts populated by Ansible — used as fallback when the
 # per-user file is absent.  Defined at module level so tests can patch it.
@@ -636,7 +637,8 @@ async def execute_on_node(
     Permission admin.system is required (require_permission dependency).
 
     Local nodes (manager host) execute via subprocess with shell=False;
-    remote nodes execute via SSH using the SLM key (SLM_SSH_KEY env var)
+    remote nodes execute via SSH using the canonical fleet key
+    (ssot_config.path.ssh_key_path; env AUTOBOT_SSH_KEY_PATH / legacy SLM_SSH_KEY)
     and known_hosts verification (SLM_SSH_KNOWN_HOSTS env var). Default
     paths are documented at the module-level constants ``_SSH_KEY_PATH``
     and ``_SSH_KNOWN_HOSTS_PATH``.

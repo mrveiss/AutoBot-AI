@@ -36,6 +36,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"  # ssot-config-exempt: runtime en
 
 from app_factory import create_app
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.stream_logging import load_uvicorn_log_config
 
 # Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
 logger = get_logger(__name__, "backend")
@@ -80,7 +81,7 @@ if __name__ == "__main__":
         port = config.tls.backend_tls_port
         logger.info("🔒 TLS enabled - using HTTPS on port %s", port)
         logger.info("🔒 TLS cert: %s", ssl_certfile)
-        logger.info("🔒 TLS key: %s", ssl_keyfile)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("🔒 TLS key: %s", ssl_keyfile)
 
     # Log configuration
     logger.info("📡 Host: %s", host)
@@ -98,6 +99,12 @@ if __name__ == "__main__":
             "reload": reload,
             "log_level": "info",
             "access_log": True,
+            # #12488: split stdout (DEBUG/INFO)/stderr (WARNING+) so systemd's
+            # StandardOutput/StandardError append: split lands each line in
+            # the right log file (only used in standalone `python main.py`
+            # mode — the production `uvicorn main:app` CLI gets the same
+            # config via --log-config in the systemd unit).
+            "log_config": load_uvicorn_log_config(),
             "workers": 1 if reload else None,  # Single worker in dev mode
             "loop": "auto",  # Use best available event loop
             "http": "auto",  # Use best available HTTP implementation

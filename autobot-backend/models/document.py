@@ -14,15 +14,11 @@ of ``autobot:ai_document:{document_id}``.  An index set at
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
-
-def _utcnow_iso() -> str:
-    """Return current UTC time as ISO-8601 string."""
-    return datetime.now(tz=timezone.utc).isoformat()
+from autobot_shared.time_utils import utc_timestamp
 
 
 class AIDocument(BaseModel):
@@ -50,8 +46,8 @@ class AIDocument(BaseModel):
     user_id: str = Field(..., description="Owning user's ID from the JWT")
     tags: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=_utcnow_iso)
-    updated_at: str = Field(default_factory=_utcnow_iso)
+    created_at: str = Field(default_factory=utc_timestamp)
+    updated_at: str = Field(default_factory=utc_timestamp)
 
     # ------------------------------------------------------------------ #
     # Redis serialisation helpers
@@ -63,4 +59,4 @@ class AIDocument(BaseModel):
 
     def touch(self) -> None:
         """Update the ``updated_at`` timestamp in-place."""
-        self.updated_at = _utcnow_iso()
+        self.updated_at = utc_timestamp()

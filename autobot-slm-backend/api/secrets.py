@@ -29,8 +29,9 @@ from models.schemas import (
 from services.ansible_secrets import _SECRET_TO_DEPENDENT_ROLES
 from services.auth import require_permission
 from services.database import get_db
-from services.encryption import decrypt_data, encrypt_data
+from services.encryption import encrypt_data
 from services.hf_token_validator import probe_hf_token
+from services.system_secrets_vault import delete_vault_copy, retrieve_secret
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/secrets", tags=["secrets"])
@@ -141,15 +142,19 @@ async def get_secret_value(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> dict:
-    """Get a decrypted secret value (admin only, for fleet provisioning)."""
-    result = await db.execute(select(SystemSecret).where(SystemSecret.key == key))
-    secret = result.scalar_one_or_none()
-    if not secret:
+    """Get a decrypted secret value (admin only, for fleet provisioning).
+
+    Legacy ``system_secrets`` first, unified System vault fallback (#10088
+    Task 6a) — a key imported by the vault migration and later pruned from
+    ``system_secrets`` stays reachable here.
+    """
+    value = await retrieve_secret(db, key)
+    if value is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Secret not found",
         )
-    return {"key": secret.key, "value": decrypt_data(secret.encrypted_value)}
+    return {"key": key, "value": value}
 
 
 @router.put("/{key}", response_model=SecretResponse)
@@ -192,7 +197,11 @@ async def delete_secret(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(require_permission(Permission.SECURITY_MANAGE))],
 ) -> None:
-    """Delete a system secret (admin only)."""
+    """Delete a system secret (admin only).
+
+    Also deletes any imported vault copy (#10088 Task 6a) so a deleted
+    secret can never resurrect through the vault-fallback read path.
+    """
     result = await db.execute(select(SystemSecret).where(SystemSecret.key == key))
     secret = result.scalar_one_or_none()
     if not secret:
@@ -203,6 +212,7 @@ async def delete_secret(
 
     await db.delete(secret)
     await db.commit()
+    await delete_vault_copy(key)
     logger.info("System secret deleted: %s", key)
 
 
@@ -238,7 +248,7 @@ async def apply_secret(
             ),
         )
 
-    return await _run_apply_secrets(payload.key, dependent_roles, target_node_ids)  # codeql[py/stack-trace-exposure]
+    return await _run_apply_secrets(payload.key, dependent_roles, target_node_ids)
 
 
 async def _find_node_ids_for_roles(db: AsyncSession, role_names: List[str]) -> List[str]:

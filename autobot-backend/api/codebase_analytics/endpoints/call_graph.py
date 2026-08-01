@@ -22,7 +22,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor
 
-from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, get_project_root
+from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -724,14 +724,17 @@ def _build_call_graph_response(
 )
 async def get_call_graph(
     refresh: bool = Query(False, description="Force refresh, bypass cache"),
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#12330: scope call graph to the selected code source"),
 ):
     """Get function call graph.
 
     Issue #281/#665/#711: Refactored with caching.
     Issue #713: Enhanced with import-aware cross-module resolution.
+    Issue #12330: Scope the scan to the requested source's clone path so one
+    project cannot see another's call graph. The cache key is derived from the
+    resolved root (path-hashed) so each source keeps a distinct cache entry.
     """
-    project_root = get_project_root()
+    project_root = await resolve_scan_root(source_id)
 
     if not refresh:
         cached_data = await _get_cached_call_graph(str(project_root))

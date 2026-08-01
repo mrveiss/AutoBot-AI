@@ -15,6 +15,7 @@ implementation, so it removes the stub from sys.modules before importing.
 """
 
 import importlib
+import subprocess as _subprocess
 import sys
 
 # ---------------------------------------------------------------------------
@@ -141,8 +142,8 @@ def test_postgres_role_present():
     assert role["systemd_service"] == "postgresql"
     assert role["required"] is True
     assert role["auto_restart"] is True
-    # No AutoBot playbook owns postgres provisioning; api/roles.py returns 422.
-    assert role["ansible_playbook"] is None
+    # #12170: postgres now has a dedicated deploy playbook (was None → 422).
+    assert role["ansible_playbook"] == "playbooks/deploy-postgres-role.yml"
     assert role["sync_type"] is None
     # Non-empty target_path ensures role_detector activates path + systemd checks.
     assert role["target_path"] == "/var/lib/postgresql"
@@ -167,7 +168,11 @@ def test_scheduler_role_present():
     assert role["systemd_service"] == "autobot-celery-beat"
     assert role["required"] is True
     assert role["auto_restart"] is True
-    assert role["ansible_playbook"] == "deploy-backend.yml"
+    # #12083: "deploy-backend.yml" never existed under ansible/ (FileNotFoundError
+    # on every Migrate); scheduler now shares the generic role dispatcher
+    # (playbooks/deploy_role.yml), which include_role: backend for
+    # deploy_role in ['backend', 'celery', 'scheduler'].
+    assert role["ansible_playbook"] == "playbooks/deploy_role.yml"
 
 
 def test_scheduler_in_backend_ansible_group():
@@ -316,16 +321,74 @@ def test_seed_default_roles_no_write_when_existing_rows_match_registry():
     db.add.assert_not_called()
 
 
-def test_backend_post_sync_rewrites_root_requirements_not_strips_it():
-    """The backend post_sync_cmd must REWRITE `-r ../requirements.txt` to the
-    code_source path (so the root runtime deps install on deploy), not strip it
-    like the old `grep -Ev '...|^-r'` did — #11135."""
+def test_backend_post_sync_delegates_to_canonical_filter_script():
+    """The backend post_sync_cmd must delegate the filter+rewrite to the
+    canonical scripts/build-filtered-requirements.sh (#11134) — not re-inline
+    its own grep|sed copy, which is what let it drift from the ansible role's
+    copy (that dropped `-r` lines entirely instead of rewriting them — #11135)."""
     backend = next(r for r in DEFAULT_ROLES if r["name"] == "backend")
     cmd = backend["post_sync_cmd"]
-    # rewrite present (sed maps the sibling include to code_source)
-    assert "s|^-r \\.\\./requirements.txt|-r " in cmd
-    assert "/code_source/requirements.txt|" in cmd
-    # and the grep no longer drops -r lines
-    assert "^-r" not in cmd.split("| sed")[0]
-    # the -c constraints rewrite (#11117) is preserved
-    assert "s|^-c \\.\\./constraints/|-c " in cmd
+    assert "scripts/build-filtered-requirements.sh" in cmd
+    assert "requirements.txt" in cmd
+    assert "/code_source" in cmd
+    # no re-inlined grep|sed pipeline duplicating the script's logic
+    assert "grep -Ev" not in cmd
+    assert "sed 's|" not in cmd
+
+
+def test_build_filtered_requirements_script_rewrites_root_requirements_not_strips_it(tmp_path):
+    """Behavioral-equivalence check for scripts/build-filtered-requirements.sh
+    (#11134): must REWRITE `-r ../requirements.txt` and `-c ../constraints/...`
+    to the code_source path, not strip `-r` like the old ansible-role copy did
+    — #11135, #11117."""
+    script = _Path(__file__).parent.parent.parent.parent / "scripts" / "build-filtered-requirements.sh"
+    assert script.is_file(), f"canonical script missing: {script}"
+
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text(
+        "-e ../autobot_shared\n"
+        "-c ../constraints/shared.txt  # comment\n"
+        "fastapi>=0.139.2\n"
+        "-r ../requirements.txt\n",
+        encoding="utf-8",
+    )
+
+    result = _subprocess.run(
+        ["bash", str(script), str(requirements), "/opt/autobot/code_source"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    output = result.stdout
+
+    assert "-e ../autobot_shared" not in output
+    assert "-c /opt/autobot/code_source/constraints/shared.txt" in output
+    assert "-r /opt/autobot/code_source/requirements.txt" in output
+    assert "fastapi>=0.139.2" in output
+
+
+# ---------------------------------------------------------------------------
+# Ansible playbook resolution (#12170 gave postgres a real playbook; guards the
+# #12083/#12095 bug class where an ansible_playbook points at a non-existent
+# file, making per-role Migrate raise FileNotFoundError / return HTTP 422).
+# ---------------------------------------------------------------------------
+
+_ANSIBLE_DIR = _Path(__file__).parent.parent.parent / "ansible"
+
+
+def test_postgres_has_deploy_playbook():
+    """#12170: postgres must have a real deploy playbook (was None -> HTTP 422)."""
+    assert _role("postgres")["ansible_playbook"] == "playbooks/deploy-postgres-role.yml"
+
+
+def test_all_role_ansible_playbooks_resolve():
+    """Every configured ansible_playbook resolves to a real file under ansible/,
+    so per-role Migrate/Redeploy can never FileNotFoundError."""
+    missing = []
+    for role in DEFAULT_ROLES:
+        pb = role.get("ansible_playbook")
+        if not pb:
+            continue
+        if not (_ANSIBLE_DIR / pb).is_file():
+            missing.append(f"{role['name']} -> {pb}")
+    assert not missing, f"role ansible_playbook(s) missing under {_ANSIBLE_DIR}: {missing}"

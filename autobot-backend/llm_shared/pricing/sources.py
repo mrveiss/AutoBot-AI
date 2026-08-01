@@ -16,6 +16,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass
 class ModelPricing:
@@ -78,3 +82,33 @@ class PricingSource(ABC):
 
     def _now(self) -> datetime:
         return datetime.now(tz=timezone.utc)
+
+
+class BaselinePricingSource(PricingSource):
+    """Base for providers with no live pricing API — returns a hardcoded baseline.
+
+    Concrete subclasses set two class attributes:
+        _PROVIDER: str — provider name (also assigned to `provider`).
+        _BASELINE: list of (model_id, input_per_1m, output_per_1m[, cache_read_per_1m])
+                   tuples. The optional 4th element defaults to 0.0 when omitted.
+    """
+
+    _PROVIDER: str = ""
+    _BASELINE: list[tuple] = []
+
+    async def fetch(self) -> dict[str, ModelPricing]:
+        now = self._now()
+        result: dict[str, ModelPricing] = {}
+        for entry in self._BASELINE:
+            model_id, inp, out = entry[0], entry[1], entry[2]
+            cache_read = entry[3] if len(entry) > 3 else 0.0
+            result[model_id] = ModelPricing(
+                provider=self._PROVIDER,
+                model_id=model_id,
+                input_per_1m=inp,
+                output_per_1m=out,
+                cache_read_per_1m=cache_read,
+                updated_at=now,
+            )
+        logger.debug("%s.fetch returned %d models", type(self).__name__, len(result))
+        return result

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 System Knowledge Management CLI Tool
@@ -148,7 +149,7 @@ def _validate_tools_category(yaml_file: Path, data: dict, errors: list) -> None:
 def _validate_yaml_file(yaml_file: Path, category_name: str, runtime_dir: Path, errors: list, warnings: list) -> bool:
     """Validate single YAML file (Issue #315: extracted helper)."""
     try:
-        with open(yaml_file, "r") as f:
+        with open(yaml_file, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if not data:
@@ -334,7 +335,7 @@ def create_template(category: str, name: str):
     }
     template = builders[category](name)
 
-    with open(template_file, "w") as f:
+    with open(template_file, "w", encoding="utf-8") as f:
         yaml.dump(template, f, default_flow_style=False, indent=2)
 
     logger.info("Created template: %s", template_file)

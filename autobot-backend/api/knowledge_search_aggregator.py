@@ -36,6 +36,7 @@ from api.schemas_knowledge import (
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -257,7 +258,8 @@ async def _search_facts(kb, query: str, top_k: int, result: dict) -> None:
         result: Result dict to populate
     """
     try:
-        fact_results = await kb.search(query, top_k=top_k)
+        # Issue #13009: exclude quarantined research facts (#12622).
+        fact_results = await kb.search(query, top_k=top_k, filters=RESEARCH_QUARANTINE_FILTER)
         if fact_results.get("results"):
             for fact in fact_results["results"]:
                 fact["source"] = "knowledge_base"
@@ -455,7 +457,8 @@ async def get_llm_context(req: Request, body: ContextRequest):
     # Search facts (Issue #315: use extracted helper)
     if kb is not None:
         try:
-            fact_results = await kb.search(body.query, top_k=5)
+            # Issue #13009: exclude quarantined research facts (#12622).
+            fact_results = await kb.search(body.query, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             total_length = _process_fact_results(
                 fact_results,
                 body.max_context_length,
@@ -681,7 +684,8 @@ async def _get_facts_for_graph(kb: Any, category_filter: str | None, max_facts: 
         return result.get("facts", []) if result.get("success") else []
     else:
         # Search for recent facts
-        result = await kb.search("*", top_k=max_facts)
+        # Issue #13009: exclude quarantined research facts (#12622).
+        result = await kb.search("*", top_k=max_facts, filters=RESEARCH_QUARANTINE_FILTER)
         return result.get("results", [])
 
 

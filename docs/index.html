@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="AutoBot — autonomous AI workspace for your infrastructure. Self-hosted, privacy-first, hardware-accelerated.">
+  <meta name="description" content="Self-hosted, agentic AI you own — voice & chat, browser and computer control, visual workflows, RBAC, and a knowledge graph on your infrastructure. Your data. Your AI.">
   <meta name="theme-color" content="#c4651a">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Ccircle cx='24' cy='9' r='3.5' fill='%23c4651a'/%3E%3Ccircle cx='39' cy='24' r='3.5' fill='%23c4651a'/%3E%3Ccircle cx='24' cy='39' r='3.5' fill='%23c4651a'/%3E%3Ccircle cx='9' cy='24' r='3.5' fill='%23c4651a'/%3E%3Ccircle cx='24' cy='24' r='4.5' fill='%23c4651a'/%3E%3Cpath d='M24 13v6.5M32 24h5.5M24 28.5v6.5M12.5 24H19' stroke='%23c4651a' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
-  <title>AutoBot — Autonomous AI Workspace</title>
+  <title>AutoBot — Your data. Your AI.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Consent Mode v2: defaults MUST be set before gtag.js loads -->
@@ -728,6 +728,7 @@
         AutoBot
       </a>
       <div class="nav-links">
+        <a href="#capabilities" class="nav-link">Capabilities</a>
         <a href="#features" class="nav-link">Features</a>
         <a href="#scale" class="nav-link">Scale</a>
         <a href="#knowledge" class="nav-link">Knowledge</a>
@@ -824,6 +825,64 @@
           <div class="feature-icon"><svg class="icon"><use href="#i-mesh"/></svg></div>
           <h3>It scales with you</h3>
           <p>Start single-node; split frontend, databases, and workers across a distributed fleet — no re-architecture.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Capabilities -->
+  <section id="capabilities">
+    <div class="container">
+      <div class="features-header">
+        <span class="section-label">The cloud is just someone else's computer</span>
+        <h2 class="section-title">An agentic AI that runs on your machines</h2>
+        <p class="section-sub">Talk to it, let it drive a browser and desktop, approve what it does, and build agents that work together — all self-hosted. Your data. Your AI.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-chat"/></svg></div>
+          <h3>Talk to it</h3>
+          <p>Hands-free voice conversations alongside chat — a full-duplex voice panel and overlay run against your own models, so nothing you say leaves your infrastructure.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-scope"/></svg></div>
+          <h3>Let it drive a browser</h3>
+          <p>Vision-in-the-loop browser automation: the agent sees the page, works with indexed on-screen elements, and researches in a live panel — Playwright under your control.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-sliders"/></svg></div>
+          <h3>Give it the desktop</h3>
+          <p>Computer/desktop control via a GUI controller with computer-vision template matching and interactive screenshots, streamed over VNC with human takeover.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-spark"/></svg></div>
+          <h3>Approve what it does</h3>
+          <p>Human-in-the-loop approval interrupts pause the agent on a proposed plan and resume only after you confirm — opt in per session with <code>AUTOBOT_CHAT_APPROVAL_GATE</code>.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-layers"/></svg></div>
+          <h3>Build workflows visually</h3>
+          <p>A drag-and-drop visual workflow builder canvas — compose multi-step agent workflows on a graph, or drop to code when you need it.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-blocks"/></svg></div>
+          <h3>Bring your whole team</h3>
+          <p>Multi-user accounts with role-based access control (RBAC). Single-user mode is retired — AutoBot is built for teams from the start.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-mesh"/></svg></div>
+          <h3>It remembers your system</h3>
+          <p>A knowledge graph of institutional memory grows from every conversation, document, and node — queryable context the agent uses to act.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-blocks"/></svg></div>
+          <h3>Extend it with modules</h3>
+          <p>Install modules on the core: AutoBot LLC (agents that work together as a company), Transcriber, and Codebase Analytics <em>(work in progress)</em>.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><svg class="icon"><use href="#i-cpu"/></svg></div>
+          <h3>Point it at any brain</h3>
+          <p>The LLM gateway routes and falls back across providers — local models plus hosted gateways like the Claude API and OpenRouter — per agent, without losing memory.</p>
         </div>
       </div>
     </div>
@@ -1065,7 +1124,7 @@
               <div class="icon-wrap"><svg class="icon"><use href="#i-sliders"/></svg></div>
               <div>
                 <strong>Setup wizard</strong>
-                <p>Open the web interface at <code style="font-family:var(--font-mono);font-size:.85em">https://autobot.local</code> and follow the fleet configuration wizard.</p>
+                <p>Open the SLM at <code style="font-family:var(--font-mono);font-size:.85em">https://&lt;server-ip&gt;/slm/</code> and log in with the admin credentials the installer prints, then follow the fleet configuration wizard.</p>
               </div>
             </div>
             <div class="deploy-point">
@@ -1099,8 +1158,9 @@
 <span class="c-dim"># 2. Bootstrap control plane (~10 min)</span>
 <span class="c-cmd">sudo</span> ./install.sh
 
-<span class="c-dim"># 3. Open setup wizard</span>
-<span class="c-dim">#    https://&lt;your-server-ip&gt;</span>
+<span class="c-dim"># 3. Open the SLM setup wizard (URL + admin</span>
+<span class="c-dim">#    login are printed by the installer)</span>
+<span class="c-dim">#    https://&lt;your-server-ip&gt;/slm/</span>
 
 <span class="c-dim"># 4. Add fleet VMs in the wizard</span>
 <span class="c-dim">#    NPU worker · Redis · AI stack · Browser</span>

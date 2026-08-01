@@ -168,6 +168,10 @@
               <span class="lines">{{ contrib.lines.toLocaleString() }} lines</span>
               <span class="score">{{ contrib.score.toFixed(0) }} pts</span>
             </div>
+            <TruncationNotice
+              :shown="Math.min(5, analysis.metrics.top_contributors.length)"
+              :total="analysis.metrics.top_contributors.length"
+            />
           </div>
         </div>
 
@@ -266,6 +270,10 @@
                 <span class="dir-lines">{{ dir.total_lines.toLocaleString() }} lines</span>
               </div>
             </div>
+            <TruncationNotice
+              :shown="Math.min(15, analysis.directory_ownership.length)"
+              :total="analysis.directory_ownership.length"
+            />
           </div>
         </div>
 
@@ -291,6 +299,10 @@
                 <span class="file-lines">{{ file.total_lines }} lines</span>
               </div>
             </div>
+            <TruncationNotice
+              :shown="Math.min(30, analysis.file_ownership.length)"
+              :total="analysis.file_ownership.length"
+            />
           </div>
         </div>
       </div>
@@ -341,6 +353,7 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { ref } from 'vue'
+import TruncationNotice from '../TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface OwnershipContributor {
@@ -565,7 +578,7 @@ function formatFactorName(factor: string): string {
 }
 
 .ownership-metrics .metric-bar {
-  height: 8px;
+  height: var(--spacing-2);
   background: rgba(71, 85, 105, 0.4);
   border-radius: var(--radius-default);
   overflow: hidden;
@@ -776,7 +789,7 @@ function formatFactorName(factor: string): string {
 }
 
 .score-track {
-  height: 6px;
+  height: var(--spacing-1-5);
   background: rgba(71, 85, 105, 0.4);
   border-radius: var(--radius-default);
   overflow: hidden;
@@ -809,7 +822,7 @@ function formatFactorName(factor: string): string {
 }
 
 .area-tag {
-  padding: 3px 8px;
+  padding: 3px var(--spacing-2);
   background: rgba(71, 85, 105, 0.4);
   border-radius: var(--radius-default);
   font-size: 0.75em;
@@ -942,7 +955,7 @@ function formatFactorName(factor: string): string {
 }
 
 .gap-risk-badge {
-  padding: 3px 8px;
+  padding: 3px var(--spacing-2);
   border-radius: var(--radius-default);
   font-size: 0.75em;
   font-weight: 700;

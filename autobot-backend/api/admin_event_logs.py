@@ -20,24 +20,13 @@ Access: admin role required.
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from auth_middleware import get_auth_middleware
+from auth_rbac import require_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.audit.audit import EventType, query_events  # GH#8290 Phase 2
-from utils.catalog_http_exceptions import raise_auth_error
 
 router = APIRouter(prefix="/admin", tags=["admin", "compliance"])
 logger = get_logger(__name__)
-
-
-def _require_admin(request: Request) -> bool:
-    """Dependency: reject non-admin callers."""
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
-    if user_data.get("role") != "admin":
-        raise_auth_error("AUTH_0003", "Admin permission required")
-    return True
 
 
 @router.get("/event-logs")
@@ -54,7 +43,7 @@ async def list_event_logs(
     to_ts: float | None = Query(None, description="Unix timestamp upper bound"),
     limit: int = Query(default=100, ge=1, le=1000, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
-    _admin: bool = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> dict:
     """Return compliance events with optional filters.
 

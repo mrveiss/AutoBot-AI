@@ -23,7 +23,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 # Issue #380: Module-level constants to avoid repeated Path computation
-_SRC_ROOT = Path(__file__).parent.parent  # src/
+_SRC_ROOT = Path(__file__).parent.parent  # the backend root (historically src/)
 _PROJECT_ROOT = _SRC_ROOT.parent  # project root
 
 # Issue #380: Module-level frozenset for valid source root directories
@@ -76,10 +76,16 @@ class HotReloadManager:
         self.watched_paths: Set[Path] = set()
         self.reload_lock = asyncio.Lock()
 
-        # Chat workflow specific modules to watch
-        # Note: Obsolete modules removed in Issue #567 archive cleanup
+        # Chat workflow specific modules to watch.
+        # Note: Obsolete modules removed in Issue #567 archive cleanup.
+        # These names are passed to importlib.import_module()/sys.modules, so
+        # they must be real importable paths. "src.async_chat_workflow" was a
+        # leftover from the old src/ layout -- src/async_chat_workflow.py does
+        # not exist, so the entry never matched and this module has silently
+        # never been hot-reloadable. The failure surfaces only as a
+        # "Module ... not registered" warning at reload time, never at startup.
         self.chat_workflow_modules = [
-            "src.async_chat_workflow",
+            "async_chat_workflow",
         ]
 
     async def start(self) -> None:

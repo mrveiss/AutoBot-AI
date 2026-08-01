@@ -165,12 +165,12 @@ class TestReassignWorkingMemory:
         payload = {"user_id": "user-A", "content": "hello"}
         redis = self._make_redis_stub([key], {key: payload})
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_working_memory("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 1
         redis.set.assert_called_once()
@@ -188,12 +188,12 @@ class TestReassignWorkingMemory:
         payload = {"user_id": "user-C", "content": "other"}
         redis = self._make_redis_stub([key], {key: payload})
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_working_memory("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 0
         redis.set.assert_not_called()
@@ -208,12 +208,12 @@ class TestReassignWorkingMemory:
         payload = {"user_id": "user-A"}
         redis = self._make_redis_stub([bad_key], {bad_key: payload})
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_working_memory("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 0
         redis.set.assert_not_called()
@@ -241,12 +241,12 @@ class TestReassignWorkingMemory:
         redis.get = AsyncMock(side_effect=_get)
         redis.set = AsyncMock()
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_working_memory("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 1
         assert redis.set.call_count == 1
@@ -285,12 +285,12 @@ class TestReassignGraphEntities:
         entity = {"id": "e1", "name": "Alice", "metadata": {"user_id": "user-A"}}
         redis, json_client = self._make_graph_redis([key], {key: entity})
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_graph_entities("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 1
         json_client.set.assert_called_once()
@@ -307,12 +307,12 @@ class TestReassignGraphEntities:
         entity = {"id": "e2", "metadata": {"owner_id": "user-A"}}
         redis, json_client = self._make_graph_redis([key], {key: entity})
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_graph_entities("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 1
         assert json_client.set.call_args[0][2]["owner_id"] == "user-B"
@@ -325,12 +325,12 @@ class TestReassignGraphEntities:
         entity = {"id": "e3", "metadata": {"user_id": "user-A", "owner_id": "user-A"}}
         redis, json_client = self._make_graph_redis([key], {key: entity})
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_graph_entities("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 1
         saved_meta = json_client.set.call_args[0][2]
@@ -345,12 +345,12 @@ class TestReassignGraphEntities:
         entity = {"id": "e4", "metadata": {"user_id": "user-C"}}
         redis, json_client = self._make_graph_redis([key], {key: entity})
 
-        orig = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             count = await mr._reassign_graph_entities("user-A", "user-B")
         finally:
-            mr.get_redis_client = orig
+            mr.get_async_redis_client = orig
 
         assert count == 0
         json_client.set.assert_not_called()
@@ -476,13 +476,13 @@ class TestReassignKbFactsChroma:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=_make_kb_redis())
         try:
             count = await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         assert count == 2
         # update must have been called for the owner_id pass
@@ -507,13 +507,13 @@ class TestReassignKbFactsChroma:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=_make_kb_redis())
         try:
             count = await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         assert count == 1
         # update called for user_id pass
@@ -533,13 +533,13 @@ class TestReassignKbFactsChroma:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=_make_kb_redis())
         try:
             count = await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         assert count == 0
         col.update.assert_not_called()
@@ -555,13 +555,13 @@ class TestReassignKbFactsChroma:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=_make_kb_redis())
         try:
             count = await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         # 1 from owner_id pass + 1 from user_id pass
         assert count == 2
@@ -576,13 +576,13 @@ class TestReassignKbFactsChroma:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=_make_kb_redis())
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=_make_kb_redis())
         try:
             count = await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         assert count == 0
 
@@ -611,13 +611,13 @@ class TestReassignKbFactsReduxIndex:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         # SUNIONSTORE called with canonical new key, old key, new key (idempotent merge)
         redis.sunionstore.assert_any_call("user:kb:facts:user-B", "user:kb:facts:user-A", "user:kb:facts:user-B")
@@ -637,13 +637,13 @@ class TestReassignKbFactsReduxIndex:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         # Legacy index sunionstore'd and old key deleted
         redis.sunionstore.assert_any_call("user:facts:user-B", "user:facts:user-A", "user:facts:user-B")
@@ -664,14 +664,14 @@ class TestReassignKbFactsReduxIndex:
 
         orig = mr.get_knowledge_base_fn
         mr.get_knowledge_base_fn = AsyncMock(return_value=kb_mock)
-        orig_redis = mr.get_redis_client
-        mr.get_redis_client = AsyncMock(return_value=redis)
+        orig_redis = mr.get_async_redis_client
+        mr.get_async_redis_client = AsyncMock(return_value=redis)
         try:
             # Must not raise even when Redis is broken
             result = await mr._reassign_kb_facts("user-A", "user-B")
         finally:
             mr.get_knowledge_base_fn = orig
-            mr.get_redis_client = orig_redis
+            mr.get_async_redis_client = orig_redis
 
         assert isinstance(result, int)
 

@@ -117,7 +117,7 @@ def test_build_authorize_url_custom_scopes_override_defaults():
 async def test_exchange_code_posts_expected_payload(monkeypatch):
     captured = {}
 
-    async def _fake_post(token_url, payload):
+    async def _fake_post(token_url, payload, *, connector=None):
         captured["url"] = token_url
         captured["payload"] = payload
         return {"access_token": "at", "refresh_token": "rt", "expires_in": 3600}
@@ -138,7 +138,7 @@ async def test_exchange_code_posts_expected_payload(monkeypatch):
 async def test_refresh_access_token_posts_expected_payload(monkeypatch):
     captured = {}
 
-    async def _fake_post(token_url, payload):
+    async def _fake_post(token_url, payload, *, connector=None):
         captured["payload"] = payload
         return {"access_token": "fresh", "expires_in": 3600}
 

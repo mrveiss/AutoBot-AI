@@ -148,7 +148,7 @@ async function loadMemories() {
   loading.value = true
   loaded.value = false
   try {
-    const data = await apiClient.get<{ memories: MemoryItem[] }>('/memory/privacy/list')
+    const data = await apiClient.get<{ memories: MemoryItem[] }>('/api/memory/privacy/list')
     memories.value = data.memories || []
     loaded.value = true
     logger.debug('MemoryPrivacyPanel: loaded %d items', memories.value.length)
@@ -169,7 +169,7 @@ async function forgetItem(item: MemoryItem) {
   if (!ok) return
   deletingIds.value = new Set([...deletingIds.value, item.memory_id])
   try {
-    await apiClient.delete(`/memory/privacy/${item.store}/${encodeURIComponent(item.memory_id)}`)
+    await apiClient.delete(`/api/memory/privacy/${item.store}/${encodeURIComponent(item.memory_id)}`)
     memories.value = memories.value.filter(m => m.memory_id !== item.memory_id)
     showToast(t('settings.memoryPrivacy.forgotten'), 'success')
     logger.info('MemoryPrivacyPanel: forgot %s from %s', item.memory_id, item.store)
@@ -261,7 +261,7 @@ onMounted(loadMemories)
 
 .panel-desc {
   font-size: 0.875rem;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -277,16 +277,16 @@ onMounted(loadMemories)
   gap: 0.4rem;
   padding: 0.45rem 0.9rem;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
   font-size: 0.875rem;
   cursor: pointer;
   transition: opacity 0.15s;
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--color-primary, #4f8ef7); color: #fff; }
-.btn-secondary { background: var(--surface-secondary, #333); color: var(--text-primary, #eee); }
-.btn-danger { background: var(--color-danger, #e24848); color: #fff; }
-.btn-ghost { background: transparent; color: var(--text-secondary, #aaa); border-color: var(--border-color, #444); }
+.btn-primary { background: var(--color-primary); color: var(--mempriv-on-accent); }
+.btn-secondary { background: var(--surface-secondary, var(--mempriv-surface-secondary)); color: var(--text-primary); }
+.btn-danger { background: var(--color-danger); color: var(--mempriv-on-accent); }
+.btn-ghost { background: transparent; color: var(--text-secondary); border-color: var(--border-color); }
 .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
 
 .summary-bar {
@@ -295,19 +295,19 @@ onMounted(loadMemories)
   gap: 0.4rem;
   font-size: 0.8rem;
 }
-.total-badge { font-weight: 600; color: var(--text-primary, #eee); }
+.total-badge { font-weight: 600; color: var(--text-primary); }
 .store-badge {
   padding: 0.15rem 0.5rem;
-  background: var(--surface-secondary, #333);
+  background: var(--surface-secondary, var(--mempriv-surface-secondary));
   border-radius: 999px;
-  color: var(--text-secondary, #aaa);
+  color: var(--text-secondary);
 }
 
 .empty-state {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   font-size: 0.9rem;
   padding: 1rem 0;
 }
@@ -323,9 +323,9 @@ onMounted(loadMemories)
 
 .memory-item {
   padding: 0.75rem 1rem;
-  background: var(--surface-secondary, #2a2a2a);
-  border: 1px solid var(--border-color, #3a3a3a);
-  border-radius: var(--radius-md, 6px);
+  background: var(--surface-secondary, var(--mempriv-item-surface));
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   transition: opacity 0.2s;
 }
 .memory-item.is-deleting { opacity: 0.4; pointer-events: none; }
@@ -343,19 +343,19 @@ onMounted(loadMemories)
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  background: var(--color-primary-muted, #1e3a5f);
-  color: var(--color-primary, #4f8ef7);
+  background: var(--color-primary-muted, var(--mempriv-primary-muted));
+  color: var(--color-primary);
 }
 
 .item-ts {
   font-size: 0.75rem;
-  color: var(--text-muted, #666);
+  color: var(--text-muted);
   margin-left: auto;
 }
 
 .item-content {
   font-size: 0.875rem;
-  color: var(--text-primary, #ddd);
+  color: var(--text-primary);
   margin: 0 0 0.5rem;
   word-break: break-word;
   white-space: pre-wrap;
@@ -364,12 +364,12 @@ onMounted(loadMemories)
 }
 
 .provenance { margin-bottom: 0.5rem; }
-.provenance summary { font-size: 0.8rem; cursor: pointer; color: var(--text-secondary, #888); }
+.provenance summary { font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); }
 .provenance-data {
   font-size: 0.75rem;
-  background: var(--surface-tertiary, #1a1a1a);
+  background: var(--surface-tertiary, var(--mempriv-surface-tertiary));
   padding: 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-default);
   overflow-x: auto;
   margin-top: 0.25rem;
 }

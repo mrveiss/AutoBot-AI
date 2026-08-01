@@ -17,8 +17,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from autobot_shared.time_utils import now_utc, utc_timestamp
-from security.enterprise.threat_detection.learner import (
+# Optional ML dependency: importing the threat_detection package pulls in
+# engine.py, which imports scikit-learn. Skip cleanly when sklearn is absent.
+pytest.importorskip("sklearn", reason="scikit-learn not installed — optional ML dep")
+
+from autobot_shared.time_utils import now_utc, utc_timestamp  # noqa: E402
+from security.enterprise.threat_detection.learner import (  # noqa: E402
     _EMA_ALPHA,
     _INACTIVE_DAYS,
     _MITIGATION_KEY_PREFIX,

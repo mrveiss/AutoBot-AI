@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Fix knowledge base dimension mismatch by recreating with correct settings.
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import centralized Redis client
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_redis_client
 
 
 async def fix_dimensions():

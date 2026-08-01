@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.ttl_constants import TTL_5_MINUTES
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_components.bm25 import BM25Scorer
 from knowledge.search_components.reranking import (
     RerankWeights,
@@ -153,6 +154,28 @@ class AdvancedRAGOptimizer:
         self._init_query_patterns()
         self._init_performance_tracking()
         logger.info("AdvancedRAGOptimizer initialized")
+
+    def _apply_seed_priority_boost(self, result: "SearchResult") -> float:
+        """Return *result*'s hybrid score lifted by its seed priority (#4679, #12742).
+
+        CognitionSeeder stamps every seeded document with ``seeded: "true"`` and
+        ``seed_priority: high|medium|low`` (services/knowledge/cognition_seeder.py
+        :219-220) precisely so retrieval can favour them during cold start — when
+        the corpus is otherwise empty and an unseeded document would win on noise.
+
+        That producer has been live while this consumer was missing, so the
+        metadata was written and never read: the boost #4679 exists for was
+        silently inert. Non-seeded results are returned unchanged, and the score
+        is capped at 1.0 so a boost can never push it out of range.
+        """
+        from services.knowledge.cognition_seeder import SEED_PRIORITY_BOOST
+
+        metadata = getattr(result, "metadata", None) or {}
+        if str(metadata.get("seeded", "")).lower() != "true":
+            return result.hybrid_score
+
+        boost = SEED_PRIORITY_BOOST.get(str(metadata.get("seed_priority", "")).lower(), 0.0)
+        return min(1.0, result.hybrid_score + boost)
 
     def _init_search_config(self) -> None:
         """Initialize search configuration parameters. Issue #620."""
@@ -370,7 +393,9 @@ class AdvancedRAGOptimizer:
             # Use knowledge base's search method for semantic search
             # Issue #429: Fixed - was incorrectly calling get_fact(query=query)
             # get_fact() only accepts fact_id, not query. Use search() instead.
-            facts = await self.kb.search(query, top_k=limit)
+            # Issue #13009: reachable via RAGService -> ChatWorkflowManager on every
+            # chat turn -- must exclude quarantined research facts (#12622).
+            facts = await self.kb.search(query, top_k=limit, filters=RESEARCH_QUARANTINE_FILTER)
 
             semantic_results = []
             for i, fact in enumerate(facts[:limit]):

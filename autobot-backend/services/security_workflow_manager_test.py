@@ -15,7 +15,7 @@ Tests the security assessment workflow functionality including:
 Issue: #260
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -220,11 +220,16 @@ class TestSecurityWorkflowManager:
     def manager(self, mock_redis):
         """Create manager with mocked Redis."""
         mgr = SecurityWorkflowManager()
-        mgr._redis_client = mock_redis
+        # Issue #12442: the mixin's lazy-init client attribute is `_redis`
+        # (see AsyncRedisClientMixin), not `_redis_client`. This fixture was
+        # stale after the migration to AsyncRedisClientMixin (#5946/#6061)
+        # and silently injected the mock into an attribute nobody read,
+        # which conftest previously masked (#12441).
+        mgr._redis = mock_redis
         return mgr
 
     @pytest.mark.asyncio
-    async def test_create_assessment(self, manager) -> None:
+    async def test_create_assessment(self, manager, mock_redis) -> None:
         """Test assessment creation."""
         assessment = await manager.create_assessment(
             name="Test Scan",
@@ -238,6 +243,7 @@ class TestSecurityWorkflowManager:
         assert assessment.target == "192.168.1.0/24"
         assert assessment.phase == AssessmentPhase.INIT
         assert len(assessment.id) == 36  # UUID format
+        mock_redis.set.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_create_training_assessment(self, manager) -> None:
@@ -389,6 +395,37 @@ class TestSecurityWorkflowManager:
         assert summary["stats"]["ports"] == 1
         assert summary["stats"]["services"] == 1
         assert summary["stats"]["vulnerabilities"] == 1
+
+
+class TestSecurityWorkflowManagerRedisUnavailable:
+    """Issue #12442: redis unavailable (circuit breaker open) must raise a
+    clear RuntimeError, not crash with AttributeError on a None client.
+
+    ``_get_redis()`` is patched directly (rather than left to fall through
+    to the real connection manager) so these tests stay fast and don't
+    trigger the 5-attempt retry/circuit-breaker backoff.
+    """
+
+    @pytest.fixture
+    def manager_no_redis(self):
+        """Create a manager whose ``_get_redis()`` always returns None."""
+        mgr = SecurityWorkflowManager()
+        mgr._redis = None
+        return mgr
+
+    @pytest.mark.asyncio
+    async def test_create_assessment_raises_when_redis_none(self, manager_no_redis) -> None:
+        """Write path: create_assessment -> _save_assessment must raise, not crash."""
+        with patch.object(manager_no_redis, "_get_redis", AsyncMock(return_value=None)):
+            with pytest.raises(RuntimeError, match="Redis unavailable"):
+                await manager_no_redis.create_assessment(name="Test", target="192.168.1.1")
+
+    @pytest.mark.asyncio
+    async def test_get_assessment_raises_when_redis_none(self, manager_no_redis) -> None:
+        """Read path: get_assessment must raise, not crash."""
+        with patch.object(manager_no_redis, "_get_redis", AsyncMock(return_value=None)):
+            with pytest.raises(RuntimeError, match="Redis unavailable"):
+                await manager_no_redis.get_assessment("some-assessment-id")
 
 
 class TestPhaseDescriptions:

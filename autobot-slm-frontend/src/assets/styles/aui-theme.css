@@ -1,0 +1,100 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0
+
+   @autobot/ui token adapter — SLM control-plane identity.
+
+   Maps every semantic token in the kit's contract (libs/autobot-ui/src/tokens/
+   contract.css, all `--aui-*`) onto the SLM control plane's OWN design tokens
+   (defined in ./main.css: the theme-adaptive `--a11y-*` set + the `--color-*`
+   scale + the sizing scales from #11515). Same contract NAMES, SLM's VALUES →
+   the shared components (BaseModal, BaseButton, BaseBadge, …) render in the SLM
+   control plane's distinct sky/slate identity, NOT the main GUI's palette
+   (colors are deliberately NOT shared across the two frontends — see #10860).
+
+   Every value is a var() reference to an SLM token — no hardcoded colors — so
+   this adapter auto-adapts across the SLM light / dark / high-contrast themes at
+   runtime (the `--a11y-*` and status vars are redefined per :root[data-theme]).
+
+   Load order (see main.ts): import '@autobot/ui/tokens' (neutral fallbacks)
+   BEFORE this file (SLM overrides win), and this file AFTER main.css so the SLM
+   tokens it references are already declared. */
+
+:root {
+  /* ---- Color: brand / interactive ------------------------------------
+     SLM's brand is the sky ramp (--color-primary-*), distinct from the main
+     GUI. Hover/active step down the same ramp. */
+  --aui-color-primary: var(--color-primary-500);
+  --aui-color-primary-hover: var(--color-primary-600);
+  --aui-color-primary-active: var(--color-primary-700);
+  --aui-color-primary-contrast: var(--color-white);
+
+  /* ---- Color: neutrals / chrome (theme-adaptive via --a11y-*) --------- */
+  --aui-color-surface: var(--a11y-bg);
+  --aui-color-surface-raised: var(--a11y-bg-surface);
+  --aui-color-surface-sunken: var(--a11y-bg-muted);
+  --aui-color-border: var(--a11y-border);
+  /* No dedicated "strong border" token in SLM; the muted-text shade reads as a
+     stronger, still theme-adaptive divider. */
+  --aui-color-border-strong: var(--a11y-text-muted);
+  --aui-color-text: var(--a11y-text);
+  --aui-color-text-muted: var(--a11y-text-muted);
+  /* Light chrome text (as used on the SLM dark sidebar) for inverse surfaces. */
+  --aui-color-text-inverse: var(--a11y-sidebar-text);
+
+  /* ---- Color: status ------------------------------------------------- */
+  --aui-color-success: var(--color-success-500);
+  --aui-color-success-contrast: var(--color-white);
+  --aui-color-warning: var(--color-warning-500);
+  --aui-color-warning-contrast: var(--color-white);
+  --aui-color-danger: var(--color-danger-500);
+  --aui-color-danger-contrast: var(--color-white);
+  /* SLM maps "info" onto its sky brand (see main.css --color-info alias). */
+  --aui-color-info: var(--color-primary-500);
+  --aui-color-info-contrast: var(--color-white);
+
+  /* ---- Overlay (modal/dialog backdrop scrim) -------------------------
+     SLM has no overlay token; use the canonical dark scrim (matches the kit
+     fallback). */
+  --aui-color-overlay: rgb(0 0 0 / 0.5);
+
+  /* ---- Focus (theme-adaptive) ---------------------------------------- */
+  --aui-color-focus-ring: var(--a11y-focus-ring);
+  --aui-focus-ring-width: var(--a11y-focus-width);
+
+  /* ---- Radius (map onto SLM's scale by pixel intent) -----------------
+     contract sm/md/lg = 0.25/0.5/0.75rem = SLM default/lg/xl. */
+  --aui-radius-sm: var(--radius-default);
+  --aui-radius-md: var(--radius-lg);
+  --aui-radius-lg: var(--radius-xl);
+  --aui-radius-full: var(--radius-full);
+
+  /* ---- Elevation ----------------------------------------------------- */
+  --aui-shadow-sm: var(--shadow-sm);
+  --aui-shadow-md: var(--shadow-md);
+  --aui-shadow-lg: var(--shadow-lg);
+  /* SLM has no xl elevation; reuse lg (its largest defined shadow). */
+  --aui-shadow-xl: var(--shadow-lg);
+
+  /* ---- Typography (sizes; SLM defines no font-family / weight tokens,
+     so those keep the kit's neutral fallbacks) ------------------------- */
+  --aui-text-xs: var(--text-xs);
+  --aui-text-sm: var(--text-sm);
+  --aui-text-base: var(--text-base);
+  --aui-text-lg: var(--text-lg);
+  --aui-text-xl: var(--text-xl);
+
+  /* ---- Spacing (control padding scale) ------------------------------- */
+  --aui-space-1: var(--spacing-1);
+  --aui-space-2: var(--spacing-2);
+  --aui-space-3: var(--spacing-3);
+  --aui-space-4: var(--spacing-4);
+  --aui-space-5: var(--spacing-5);
+  --aui-space-6: var(--spacing-6);
+
+  /* ---- Layering ------------------------------------------------------ */
+  --aui-z-modal: var(--z-modal);
+
+  /* ---- Motion -------------------------------------------------------
+     SLM defines no transition-duration tokens; the kit's neutral fallbacks
+     (which already honor prefers-reduced-motion) are left in place. */
+}

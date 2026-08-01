@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Optimize GPU usage for AutoBot multi-agent system.
@@ -90,7 +91,7 @@ def optimize_ollama_gpu_config():
 
         # Write environment config
         config_file = Path(__file__).parent / "gpu_env_config.sh"
-        with open(config_file, "w") as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             f.write("#!/bin/bash\n")
             f.write("# GPU Environment Configuration for AutoBot\n\n")
             for key, value in gpu_env_vars.items():
@@ -112,7 +113,7 @@ def update_autobot_config():
 
         # Load existing config or create new one
         if config_file.exists():
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f) or {}
         else:
             config = {}
@@ -162,7 +163,7 @@ def update_autobot_config():
         )
 
         # Write updated config
-        with open(config_file, "w") as f:
+        with open(config_file, "w", encoding="utf-8") as f:
             yaml.dump(config, f, default_flow_style=False, indent=2)
 
         logger.info("✅ AutoBot configuration updated in %s", config_file)
@@ -219,7 +220,7 @@ def create_model_recommendations():
 
         # Write recommendations to file
         recommendations_file = Path(__file__).parent / "gpu_model_recommendations.json"
-        with open(recommendations_file, "w") as f:
+        with open(recommendations_file, "w", encoding="utf-8") as f:
             json.dump(
                 {
                     "gpu_memory_mb": total_memory,

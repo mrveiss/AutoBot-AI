@@ -582,9 +582,13 @@ async def websocket_test_endpoint(websocket: WebSocket):
     """Simple test WebSocket endpoint without event manager integration."""
     if not await enforce_ws_origin(websocket):
         return
-    # Issue #2818: Authenticate before accepting connection
+    # Issue #2818: Authenticate before accepting connection.
+    # Issue #12366: accept-then-close on rejection so the client gets a real
+    # close frame (code + reason) instead of an HTTP 403 indistinguishable
+    # from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
         return
 
@@ -683,9 +687,13 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     if not await enforce_ws_origin(websocket):
         return
-    # Issue #2818: Authenticate before accepting connection
+    # Issue #2818: Authenticate before accepting connection.
+    # Issue #12366: accept-then-close on rejection so the client gets a real
+    # close frame (code + reason) instead of an HTTP 403 indistinguishable
+    # from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
         return
 
@@ -746,9 +754,13 @@ async def npu_workers_websocket_endpoint(websocket: WebSocket):
     """
     if not await enforce_ws_origin(websocket):
         return
-    # Issue #2818: Authenticate before accepting connection
+    # Issue #2818: Authenticate before accepting connection.
+    # Issue #12366: accept-then-close on rejection so the client gets a real
+    # close frame (code + reason) instead of an HTTP 403 indistinguishable
+    # from a missing route.
     user = await authenticate_websocket(websocket)
     if user is None:
+        await websocket.accept()
         await websocket.close(code=4001, reason="Authentication required")
         return
 

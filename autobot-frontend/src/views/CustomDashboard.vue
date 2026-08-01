@@ -126,21 +126,17 @@
     </div>
 
     <!-- Widget Configuration Modal -->
-    <div v-if="showConfigModal" class="modal-overlay" @click.self="showConfigModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4><Icon name="cog" class="modal-icon" /> {{ $t('views.customDashboard.configureWidget') }}</h4>
-          <button
-            @click="showConfigModal = false"
-            class="close-btn"
-            :aria-label="$t('common.close')"
-            :title="$t('common.close')"
-            type="button"
-          >
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body" v-if="configWidget">
+    <BaseModal
+      :model-value="showConfigModal"
+      :title="$t('views.customDashboard.configureWidget')"
+      :close-label="$t('common.close')"
+      :width="480"
+      @close="showConfigModal = false"
+    >
+      <template #title>
+        <Icon name="cog" class="modal-icon" /> {{ $t('views.customDashboard.configureWidget') }}
+      </template>
+      <div class="modal-body" v-if="configWidget">
           <div class="form-group">
             <label>{{ $t('views.customDashboard.widgetTitle') }}</label>
             <input v-model="configWidget.title" type="text" />
@@ -172,29 +168,24 @@
             </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button @click="showConfigModal = false" class="action-btn">{{ $t('views.customDashboard.cancel') }}</button>
-          <button @click="saveWidgetConfig" class="action-btn primary">{{ $t('views.customDashboard.saveChanges') }}</button>
-        </div>
-      </div>
-    </div>
+      <template #actions>
+        <button @click="showConfigModal = false" class="action-btn">{{ $t('views.customDashboard.cancel') }}</button>
+        <button @click="saveWidgetConfig" class="action-btn primary">{{ $t('views.customDashboard.saveChanges') }}</button>
+      </template>
+    </BaseModal>
 
     <!-- New Dashboard Modal -->
-    <div v-if="showNewDashboardModal" class="modal-overlay" @click.self="showNewDashboardModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h4><Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.createDashboard') }}</h4>
-          <button
-            @click="showNewDashboardModal = false"
-            class="close-btn"
-            :aria-label="$t('common.close')"
-            :title="$t('common.close')"
-            type="button"
-          >
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :model-value="showNewDashboardModal"
+      :title="$t('views.customDashboard.createDashboard')"
+      :close-label="$t('common.close')"
+      :width="480"
+      @close="showNewDashboardModal = false"
+    >
+      <template #title>
+        <Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.createDashboard') }}
+      </template>
+      <div class="modal-body">
           <div class="form-group">
             <label>{{ $t('views.customDashboard.dashboardName') }}</label>
             <input v-model="newDashboardName" type="text" :placeholder="$t('views.customDashboard.myDashboard')" />
@@ -209,29 +200,24 @@
             </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button @click="showNewDashboardModal = false" class="action-btn">{{ $t('views.customDashboard.cancel') }}</button>
-          <button @click="confirmCreateDashboard" class="action-btn primary">{{ $t('views.customDashboard.create') }}</button>
-        </div>
-      </div>
-    </div>
+      <template #actions>
+        <button @click="showNewDashboardModal = false" class="action-btn">{{ $t('views.customDashboard.cancel') }}</button>
+        <button @click="confirmCreateDashboard" class="action-btn primary">{{ $t('views.customDashboard.create') }}</button>
+      </template>
+    </BaseModal>
 
     <!-- Add Widget Modal -->
-    <div v-if="showAddWidgetModal" class="modal-overlay" @click.self="showAddWidgetModal = false">
-      <div class="modal-content wide">
-        <div class="modal-header">
-          <h4><Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.addWidgetTitle') }}</h4>
-          <button
-            @click="showAddWidgetModal = false"
-            class="close-btn"
-            :aria-label="$t('common.close')"
-            :title="$t('common.close')"
-            type="button"
-          >
-            <Icon name="times" />
-          </button>
-        </div>
-        <div class="modal-body">
+    <BaseModal
+      :model-value="showAddWidgetModal"
+      :title="$t('views.customDashboard.addWidgetTitle')"
+      :close-label="$t('common.close')"
+      :width="800"
+      @close="showAddWidgetModal = false"
+    >
+      <template #title>
+        <Icon name="plus-circle" class="modal-icon" /> {{ $t('views.customDashboard.addWidgetTitle') }}
+      </template>
+      <div class="modal-body">
           <div class="widget-gallery">
             <div
               v-for="widget in availableWidgetDefs"
@@ -247,8 +233,7 @@
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -264,6 +249,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useToast } from '@/composables/useToast'
 import Icon, { type IconName } from '@/components/ui/Icon.vue'
+import { BaseModal } from '@autobot/ui'
 
 // Import visualization components
 import ResourceHeatmap from '@/components/visualizations/ResourceHeatmap.vue'
@@ -985,72 +971,9 @@ defineExpose({ stopDashboardPolling })
 }
 
 /* Modals */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--bg-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal);
-}
-
-.modal-content {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border-default);
-  width: 90%;
-  max-width: 480px;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-content.wide {
-  max-width: 800px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-4) var(--spacing-6);
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.modal-header h4 {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
+/* #10882: overlay/header/footer chrome now provided by @autobot/ui BaseModal. */
 .modal-icon {
   color: var(--color-primary);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: var(--spacing-1);
-}
-
-.close-btn:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--spacing-6);
-  overflow-y: auto;
-  flex: 1;
-  /* #10750 C2: allow the flex child to shrink so overflow actually scrolls */
-  min-height: 0;
 }
 
 .form-group {
@@ -1085,15 +1008,6 @@ defineExpose({ stopDashboardPolling })
 .form-group select:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-3);
-  padding: var(--spacing-4) var(--spacing-6);
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-default);
 }
 
 /* Widget Gallery */

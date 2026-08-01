@@ -4,17 +4,45 @@
 """
 Quick test to verify Command Execution Queue integration works end-to-end.
 This demonstrates the complete lifecycle: create → approve → execute → complete.
+
+Issue #12443: CommandExecutionQueue talks to a real (sync) Redis client via
+autobot_shared.redis_client.get_redis_client(). This test was previously
+masked by the blanket ``services.*`` MagicMock stub (removed in #12441); it
+now needs its own fakeredis-backed seam to run without live Redis.
 """
 
 import asyncio
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+import services.command_execution_queue as command_execution_queue_module
 from models.command_execution import CommandExecution, CommandState, RiskLevel
 from services.command_execution_queue import get_command_queue
+
+try:
+    import fakeredis
+
+    _FAKEREDIS_AVAILABLE = True
+except ImportError:
+    _FAKEREDIS_AVAILABLE = False
+
+
+@pytest.fixture(autouse=True)
+def _fake_redis_queue(monkeypatch):
+    """Patch the queue's Redis seam with an in-memory fakeredis client."""
+    if not _FAKEREDIS_AVAILABLE:
+        pytest.skip("fakeredis not installed — skipping Redis-backed tests")
+
+    client = fakeredis.FakeStrictRedis()
+    monkeypatch.setattr(command_execution_queue_module, "get_redis_client", lambda **_kw: client)
+    command_execution_queue_module.get_command_queue.reset()
+    yield
+    command_execution_queue_module.get_command_queue.reset()
 
 
 async def test_queue_integration() -> None:

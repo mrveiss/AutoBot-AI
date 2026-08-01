@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Canonical shared prop types for UI components
 export type { Size as ComponentSize } from '@/design-tokens/tokens'
+import type { SemanticVariant } from '@autobot/ui'
 
 export type ButtonVariant =
   | 'primary'
@@ -16,4 +17,7 @@ export type ButtonVariant =
   | 'ghost'
   | 'link'
 
-export type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info'
+// BadgeVariant is the shared presentational semantic vocabulary (#10885):
+// neutral | primary | success | warning | danger | info. The former local
+// 'default'/'error' members were reconciled to canonical 'neutral'/'danger'.
+export type BadgeVariant = SemanticVariant

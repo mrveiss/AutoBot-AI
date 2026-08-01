@@ -25,6 +25,7 @@ import xml.etree.ElementTree as ET  # nosec B405 — sitemap XML from crawled UR
 from typing import List
 from urllib.parse import urlparse
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -69,12 +70,17 @@ async def _fetch_xml(url: str) -> str | None:
         import aiohttp
 
         timeout = aiohttp.ClientTimeout(total=_SITEMAP_TIMEOUT)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=timeout, allow_redirects=True) as resp:
-                if resp.status == 200:
-                    return await resp.text(encoding="utf-8", errors="replace")
-        logger.debug("sitemap fetch HTTP %s for %s", resp.status, url)
-        return None
+        async with get_http_client().tracked_request(
+            "GET",
+            url,
+            timeout=timeout,
+            allow_redirects=True,
+            suppress_error_log=True,
+        ) as resp:
+            if resp.status == 200:
+                return await resp.text(encoding="utf-8", errors="replace")
+            logger.debug("sitemap fetch HTTP %s for %s", resp.status, url)
+            return None
     except Exception as exc:
         logger.debug("sitemap fetch error for %s: %s", url, exc)
         return None

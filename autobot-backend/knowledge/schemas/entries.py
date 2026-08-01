@@ -59,7 +59,8 @@ class FactByCategoryEntry(BaseModel):
     key: str
     title: str = "Untitled"
     content: str = Field("", description="Truncated to 500 chars + ellipsis")
-    full_content: str = ""
+    # Issue #12370: full_content intentionally omitted from the browse list —
+    # the entire document is lazy-loaded per fact via GET /fact/{fact_key}.
     category: str = ""
     type: str = "unknown"
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -70,12 +71,23 @@ class FactsByCategoryResponse(BaseModel):
 
     Grouped facts keyed by category name. ``category_filter`` echoes the
     optional ``?category=`` query param for client-side confirmation.
+
+    Issue #12394: ``limit``/``offset`` are applied per category (each
+    category's fact index is paginated independently). ``total_facts`` is
+    the count actually returned in this page (sum across categories);
+    ``total_count`` is the true sum across all matching categories,
+    independent of pagination. ``has_more`` is True when at least one
+    category has additional facts beyond this page.
     """
 
     model_config = ConfigDict(extra="allow")
 
     categories: Dict[str, List[FactByCategoryEntry]] = Field(default_factory=dict)
     total_facts: int = 0
+    total_count: int = 0
+    limit: int = 0
+    offset: int = 0
+    has_more: bool = False
     category_filter: str | None = None
     # Error branch returns this + empty categories/total_facts.
     error: str | None = None

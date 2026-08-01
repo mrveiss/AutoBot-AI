@@ -13,13 +13,9 @@
 
 import { ref, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
-import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { slmApiClient } from '@/utils/ApiClient'
 
 const logger = createLogger('usePerformanceMonitoring')
-
-// SLM Admin uses the local SLM backend API
-const API_BASE = getSlmApiBase()
 
 // ===== Type Definitions =====
 
@@ -109,8 +105,6 @@ export function usePerformanceMonitoring(options: {
 } = {}) {
   const { autoFetch = false, pollInterval = 30000 } = options
 
-  const authStore = useAuthStore()
-
   // State
   const overview = ref<PerformanceOverview | null>(null)
   const traces = ref<TraceItem[]>([])
@@ -123,31 +117,30 @@ export function usePerformanceMonitoring(options: {
   let pollingInterval: ReturnType<typeof setInterval> | null = null
 
   /**
-   * Build auth headers for API requests.
-   */
-  function getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    if (authStore.token) {
-      headers.Authorization = `Bearer ${authStore.token}`
-    }
-    return headers
-  }
-
-  /**
-   * Perform an authenticated API request and return parsed JSON.
+   * Perform one authenticated SLM request and return parsed JSON.
    *
-   * Helper for all fetch functions (Issue #752).
+   * Helper for all fetch functions (Issue #752), routed through the canonical
+   * client in #13140. It calls `slmApiClient.rawRequest` and NOT the client's
+   * `get`/`post`/... helpers, deliberately: rawRequest is the single seam that
+   * contributes the `getSlmApiBase()` origin, the bearer token (read from
+   * storage per request rather than from a reactive ref that may never have
+   * been hydrated), the request timeout and the 401 handler — while leaving
+   * this function's two behaviours that callers depend on intact:
+   *
+   *   * the `HTTP <n>: <raw body text>` error message, which every catch block
+   *     below surfaces to the user verbatim (the helpers re-shape it from the
+   *     parsed JSON, changing what the UI shows);
+   *   * single-shot dispatch. `get()` would retry a 5xx three times with
+   *     exponential backoff, and `startPolling()` re-issues `fetchOverview`
+   *     every `pollInterval` — a retried tick would overlap the next one.
+   *
+   * `endpoint` is relative to the API base, e.g. '/performance/slos'.
    */
   async function apiRequest<T>(
-    url: string,
-    options: RequestInit = {}
+    endpoint: string,
+    options: { method?: string; body?: unknown } = {}
   ): Promise<T> {
-    const response = await fetch(url, {
-      ...options,
-      headers: { ...getHeaders(), ...(options.headers as Record<string, string> || {}) },
-    })
+    const response = await slmApiClient.rawRequest(endpoint, options)
     if (!response.ok) {
       const body = await response.text().catch(() => '')
       throw new Error(`HTTP ${response.status}: ${body || response.statusText}`)
@@ -164,9 +157,7 @@ export function usePerformanceMonitoring(options: {
     loading.value = true
     error.value = null
     try {
-      const data = await apiRequest<PerformanceOverview>(
-        `${API_BASE}/performance/overview`
-      )
+      const data = await apiRequest<PerformanceOverview>('/performance/overview')
       overview.value = data
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch overview'
@@ -189,7 +180,7 @@ export function usePerformanceMonitoring(options: {
       if (params.per_page !== undefined) query.set('per_page', String(params.per_page))
 
       const queryStr = query.toString()
-      const url = `${API_BASE}/performance/traces${queryStr ? `?${queryStr}` : ''}`
+      const url = `/performance/traces${queryStr ? `?${queryStr}` : ''}`
       const data = await apiRequest<{ traces: TraceItem[]; total: number }>(url)
       traces.value = data.traces ?? []
       traceTotal.value = data.total ?? 0
@@ -204,9 +195,7 @@ export function usePerformanceMonitoring(options: {
 
   async function fetchTraceDetail(traceId: string): Promise<TraceDetail | null> {
     try {
-      return await apiRequest<TraceDetail>(
-        `${API_BASE}/performance/traces/${traceId}`
-      )
+      return await apiRequest<TraceDetail>(`/performance/traces/${traceId}`)
     } catch (err) {
       logger.error(`Failed to fetch trace ${traceId}:`, err)
       error.value = err instanceof Error ? err.message : 'Failed to fetch trace detail'
@@ -218,9 +207,7 @@ export function usePerformanceMonitoring(options: {
     loading.value = true
     error.value = null
     try {
-      const data = await apiRequest<{ slos: SLODefinition[] }>(
-        `${API_BASE}/performance/slos`
-      )
+      const data = await apiRequest<{ slos: SLODefinition[] }>('/performance/slos')
       slos.value = data.slos ?? []
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch SLOs'
@@ -235,10 +222,12 @@ export function usePerformanceMonitoring(options: {
     slo: Omit<SLODefinition, 'slo_id' | 'current_compliance'>
   ): Promise<SLODefinition | null> {
     try {
-      const created = await apiRequest<SLODefinition>(
-        `${API_BASE}/performance/slos`,
-        { method: 'POST', body: JSON.stringify(slo) }
-      )
+      // `body` is handed over unserialised: rawRequest JSON-stringifies it
+      // (and would double-encode a pre-stringified string).
+      const created = await apiRequest<SLODefinition>('/performance/slos', {
+        method: 'POST',
+        body: slo,
+      })
       await fetchSLOs()
       return created
     } catch (err) {
@@ -250,10 +239,7 @@ export function usePerformanceMonitoring(options: {
 
   async function deleteSLO(sloId: string): Promise<boolean> {
     try {
-      await apiRequest<void>(
-        `${API_BASE}/performance/slos/${sloId}`,
-        { method: 'DELETE' }
-      )
+      await apiRequest<void>(`/performance/slos/${sloId}`, { method: 'DELETE' })
       await fetchSLOs()
       return true
     } catch (err) {
@@ -267,9 +253,7 @@ export function usePerformanceMonitoring(options: {
     loading.value = true
     error.value = null
     try {
-      const data = await apiRequest<{ rules: AlertRule[] }>(
-        `${API_BASE}/performance/alerts/rules`
-      )
+      const data = await apiRequest<{ rules: AlertRule[] }>('/performance/alerts/rules')
       alertRules.value = data.rules ?? []
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch alert rules'
@@ -284,10 +268,10 @@ export function usePerformanceMonitoring(options: {
     rule: Omit<AlertRule, 'rule_id' | 'last_triggered'>
   ): Promise<AlertRule | null> {
     try {
-      const created = await apiRequest<AlertRule>(
-        `${API_BASE}/performance/alerts/rules`,
-        { method: 'POST', body: JSON.stringify(rule) }
-      )
+      const created = await apiRequest<AlertRule>('/performance/alerts/rules', {
+        method: 'POST',
+        body: rule,
+      })
       await fetchAlertRules()
       return created
     } catch (err) {
@@ -302,10 +286,10 @@ export function usePerformanceMonitoring(options: {
     updates: Partial<AlertRule>
   ): Promise<AlertRule | null> {
     try {
-      const updated = await apiRequest<AlertRule>(
-        `${API_BASE}/performance/alerts/rules/${ruleId}`,
-        { method: 'PUT', body: JSON.stringify(updates) }
-      )
+      const updated = await apiRequest<AlertRule>(`/performance/alerts/rules/${ruleId}`, {
+        method: 'PUT',
+        body: updates,
+      })
       await fetchAlertRules()
       return updated
     } catch (err) {
@@ -317,10 +301,7 @@ export function usePerformanceMonitoring(options: {
 
   async function deleteAlertRule(ruleId: string): Promise<boolean> {
     try {
-      await apiRequest<void>(
-        `${API_BASE}/performance/alerts/rules/${ruleId}`,
-        { method: 'DELETE' }
-      )
+      await apiRequest<void>(`/performance/alerts/rules/${ruleId}`, { method: 'DELETE' })
       await fetchAlertRules()
       return true
     } catch (err) {

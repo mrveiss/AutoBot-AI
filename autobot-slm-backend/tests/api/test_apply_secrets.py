@@ -38,7 +38,9 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 def _run(coro):
     """Run an async route handler synchronously in tests."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+    # running before any async test on its worker had no current loop for get_event_loop().
+    return asyncio.run(coro)
 
 
 _STUB_MODULE_NAMES = [
@@ -54,6 +56,7 @@ _STUB_MODULE_NAMES = [
     "services.encryption",
     "services.ansible_secrets",
     "services.hf_token_validator",
+    "services.system_secrets_vault",
     "services.playbook_executor",
     "autobot_shared",
     "autobot_shared.auth",

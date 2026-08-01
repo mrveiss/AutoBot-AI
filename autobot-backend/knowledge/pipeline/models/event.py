@@ -20,11 +20,6 @@ TemporalType = Literal["point", "range", "relative", "recurring"]
 EventType = Literal["action", "decision", "change", "milestone", "occurrence"]
 
 
-def _utcnow() -> datetime:
-    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return now_utc()
-
-
 class TemporalEvent(BaseModel):
     """
     Represents a temporal event extracted from document processing.
@@ -51,5 +46,5 @@ class TemporalEvent(BaseModel):
     source_chunk_ids: List[UUID] = Field(default_factory=list, description="Chunks where event was mentioned")
     source_document_id: UUID = Field(..., description="Source document ID")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
-    created_at: datetime = Field(default_factory=_utcnow, description="Event creation timestamp")
-    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=now_utc, description="Event creation timestamp")
+    updated_at: datetime = Field(default_factory=now_utc, description="Last update timestamp")

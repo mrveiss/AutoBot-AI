@@ -1176,7 +1176,6 @@ Your secret has been securely encrypted and stored.
                 content=f"❌ Failed to create secret: {e}",
             )
         except Exception as e:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to create secret: %s", e)
             return SlashCommandResult(
                 success=False,
@@ -1427,7 +1426,6 @@ class SecretsTransferSubcommand(Command):
             )
 
         except Exception as e:
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.error("Failed to transfer secret: %s", e)
             return SlashCommandResult(
                 success=False,

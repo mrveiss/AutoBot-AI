@@ -206,18 +206,18 @@ async def get_system_info(
 async def probe_intelligent_agent(
     request: Request | None = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for intelligent_agent module.
+    """Issue #3333 / #12459: probe registration for intelligent_agent module.
 
     Lightweight check: inspect the module-level lazy singleton without forcing
-    initialization. ``ok`` if already initialized; ``degraded`` if not yet
-    initialized (legitimate cold-start state).
+    initialization. ``ok`` if already initialized; ``idle`` if not yet
+    initialized — a legitimate cold-start/not-yet-used state, not a failure.
     """
     try:
         if _agent_instance is None:
             return ComponentHealth(
                 name="intelligent_agent",
-                status="degraded",
-                detail="agent not yet initialized",
+                status="idle",
+                detail="agent not yet initialized (lazy singleton, not yet used)",
             )
         return ComponentHealth(name="intelligent_agent", status="ok")
     except Exception as exc:

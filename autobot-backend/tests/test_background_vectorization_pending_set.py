@@ -21,7 +21,9 @@ from background_vectorization import FULL_SCAN_EVERY_N_CYCLES, PENDING_SET_KEY, 
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+    # running before any async test on its worker had no current loop for get_event_loop().
+    return asyncio.run(coro)
 
 
 class _FakePipe:

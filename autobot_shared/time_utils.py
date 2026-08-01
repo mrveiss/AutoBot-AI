@@ -79,6 +79,29 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def to_rfc3339(value: datetime) -> str:
+    """Render *value* as RFC3339 with a single ``Z`` suffix.
+
+    Appending ``"Z"`` to ``isoformat()`` is only correct for a NAIVE UTC
+    datetime. On an aware one the offset is already present, so the result
+    carries a doubled zone -- ``2026-07-29T13:23:29+00:00Z`` -- which strict
+    parsers reject. Prometheus answered every such range query with HTTP 400
+    (#12967), and because the caller only logged a warning the graphs simply
+    came back empty.
+
+    Naive input is treated as UTC, matching :func:`parse_utc_iso`.
+
+    Args:
+        value: Aware or naive datetime.
+
+    Returns:
+        RFC3339 string ending in exactly one ``Z``.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def parse_utc_iso(value: str) -> datetime:
     """Parse an ISO-8601 timestamp string and return a tz-aware UTC datetime.
 

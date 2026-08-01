@@ -16,11 +16,10 @@
  */
 
 import { ref, computed, readonly, reactive } from 'vue'
-import axios, { type AxiosInstance } from 'axios'
+import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
 import type {
   ServiceDefinition,
   ServiceActionRequest,
@@ -30,21 +29,27 @@ import type {
   BulkActionRequest,
   BulkActionResponse,
 } from '@/composables/useOrchestration'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useOrchestrationManagement')
-const API_BASE = getSlmApiBase()
+
+// SLM backend transport: the canonical `slmApiClient` behind the axios-shaped
+// facade (#13079/#13140). This composable used to hold its own
+// `axios.create({ baseURL: getSlmApiBase(), timeout: 30000 })` with a
+// `sessionStorage`-only bearer interceptor and no 401 handling. `slmApiClient`
+// supplies the sessionStorage->localStorage token fallback (ApiClient.ts:113),
+// an equivalent env-sourced 30s budget (:44-48) and the 401 session teardown
+// (:128-151). Endpoints stay relative to the API base, resolved by the client
+// via `getSlmApiBase()` (:104).
+const client = makeAxiosCompatClient()
 
 // =============================================================================
 // Additional Type Definitions (Fleet Services)
 // =============================================================================
 
-export interface FleetServiceNodeStatus {
-  node_id: string
-  hostname: string
-  status: string
-  ip_address?: string | null
-  port?: number | null
-}
+// GET /api/orchestration/fleet/services -> FleetServiceStatus.nodes
+// (autobot-slm-backend/api/orchestration.py:102)
+export type FleetServiceNodeStatus = components['schemas']['FleetServiceNodeStatus']
 
 export interface FleetServiceStatus {
   service_name: string
@@ -61,7 +66,18 @@ export interface FleetServicesResponse {
   total_services: number
 }
 
-export interface ServiceCategoryUpdate {
+/**
+ * PATCH /api/orchestration/services/{name}/category
+ * (autobot-slm-backend/api/orchestration.py:131).
+ *
+ * The server constrains the value with `pattern="^(autobot|system)$"`
+ * (`orchestration.py:134`), but a Pydantic `pattern` is emitted as a JSON
+ * Schema `pattern` and openapi-typescript can only render that as `string`.
+ * The narrowing therefore restates a real server-side constraint that the
+ * generated type is structurally unable to carry — sending anything else is a
+ * guaranteed 422 — so it is kept rather than widened.
+ */
+export type ServiceCategoryUpdate = components['schemas']['ServiceCategoryUpdate'] & {
   category: 'autobot' | 'system'
 }
 
@@ -73,22 +89,6 @@ export function useOrchestrationManagement() {
   // Initialize dependencies
   const fleetStore = useFleetStore()
   const { connect, subscribeAll, onServiceStatus, connected } = useSlmWebSocket()
-
-  // Create axios client with timeout to prevent infinite loading
-  const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-    timeout: 30000, // 30 second timeout
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
 
   // ===========================================================================
   // Reactive State
@@ -139,8 +139,13 @@ export function useOrchestrationManagement() {
   // ===========================================================================
 
   function extractErrorMessage(e: unknown, fallback: string): string {
-    if (axios.isAxiosError(e) && e.response?.data?.detail) {
-      return e.response.data.detail
+    // `slmApiCompat` rejects with an axios-SHAPED error (`err.response.status`
+    // / `.data`) but not an axios instance, so `axios.isAxiosError` would miss
+    // it and every backend `detail` would degrade to `HTTP <n>`. Read the shape
+    // directly instead.
+    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+    if (typeof detail === 'string' && detail.length > 0) {
+      return detail
     }
     return e instanceof Error ? e.message : fallback
   }
@@ -226,12 +231,16 @@ export function useOrchestrationManagement() {
       lastRefresh.value = new Date()
       return response.data
     } catch (e) {
-      if (axios.isAxiosError(e)) {
+      // Same reason as `extractErrorMessage`: the compat adapter's rejection is
+      // axios-shaped but not an axios instance. `statusText` is not carried on
+      // that shape (the underlying `Response` is consumed as JSON), so the HTTP
+      // status + body are logged and the text status is dropped.
+      const httpError = e as { response?: { status?: number; data?: unknown } }
+      if (httpError?.response?.status !== undefined) {
         logger.error('Fleet services API error:', {
-          status: e.response?.status,
-          statusText: e.response?.statusText,
-          data: e.response?.data,
-          message: e.message,
+          status: httpError.response.status,
+          data: httpError.response.data,
+          message: e instanceof Error ? e.message : String(e),
         })
       } else {
         logger.error('Failed to fetch fleet services:', e)

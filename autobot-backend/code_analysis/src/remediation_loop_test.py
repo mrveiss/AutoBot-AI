@@ -27,6 +27,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.time_utils import utc_timestamp
+
 # ---------------------------------------------------------------------------
 # Helpers — build lightweight stubs that match the real dataclass shapes.
 # ---------------------------------------------------------------------------
@@ -119,7 +121,7 @@ def _stub_shared(sys_mod):
     if not hasattr(tu, "now_utc"):
         tu.now_utc = lambda: datetime.now(timezone.utc)
     if not hasattr(tu, "utc_timestamp"):
-        tu.utc_timestamp = lambda: datetime.now(timezone.utc).isoformat()
+        tu.utc_timestamp = lambda: utc_timestamp()
 
     # Keep autobot_shared package-level accessible
     shared = sys_mod.modules["autobot_shared"]
@@ -218,7 +220,9 @@ class TestRecordDeltaComputation:
             with patch.object(self.mod, "_persist_delta", new=AsyncMock()):
                 return await self.loop.record_delta(before, after)
 
-        return asyncio.get_event_loop().run_until_complete(_go())
+        # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+        # running before any async test on its worker had no current loop for get_event_loop().
+        return asyncio.run(_go())
 
     def test_positive_health_delta(self):
         before = {"health_score": 60.0, "total_findings": 20}

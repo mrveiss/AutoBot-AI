@@ -19,6 +19,9 @@ from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from api.analytics_shared import (
+    no_data_response,
+)
 from api.analytics_shared import (  # noqa: F401 – used by history/metrics/summary
     resolve_source_or_404 as _resolve_source_or_404,
 )
@@ -48,6 +51,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_7_DAYS
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 
@@ -191,24 +195,6 @@ REVIEW_PATTERNS = {
 }
 
 
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-
-def _no_data_response(
-    message: str = "No code review data. Run a code review first.",
-) -> dict:
-    """Standardized no-data response (Issue #543)."""
-    return {
-        "status": "no_data",
-        "message": message,
-        "review": None,
-        "comments": [],
-        "summary": {},
-    }
-
-
 def _parse_hunk_header(line: str) -> dict[str, Any] | None:
     """Parse a diff hunk header line (Issue #315)."""
     match = _HUNK_HEADER_RE.match(line)
@@ -291,9 +277,12 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
     for pattern_id, pattern_def in REVIEW_PATTERNS.items():
         if pattern_def.get("pattern"):
             try:
+                # #12884: build the offset->line map once; the per-match
+                # `content[:start].count()` was O(n*m) and held the GIL.
+                _line_index = LineIndex(content)
                 for match in re.finditer(pattern_def["pattern"], content, re.IGNORECASE | re.MULTILINE):
                     # Calculate line number
-                    line_num = content[: match.start()].count("\n") + 1
+                    line_num = _line_index.line_of(match.start())
                     code_snippet = lines[line_num - 1] if line_num <= len(lines) else ""
 
                     comments.append(
@@ -313,8 +302,11 @@ def analyze_code(content: str, file_path: str) -> list[ReviewComment]:
                 logger.warning("Invalid regex pattern: %s", pattern_id)
 
     # Check for long functions
+    # #12884: build the offset->line map once; the per-match
+    # `content[:start].count()` was O(n*m) and held the GIL.
+    _line_index = LineIndex(content)
     for match in _FUNC_DEFINITION_RE.finditer(content):
-        func_start = content[: match.start()].count("\n") + 1
+        func_start = _line_index.line_of(match.start())
         # Find function end (simple heuristic)
         remaining = content[match.end() :]
         indent_match = _NEXT_TOPLEVEL_RE.search(remaining)
@@ -447,7 +439,12 @@ async def analyze_diff(
 
     if not diff_content:
         # Issue #543: Return no-data response instead of demo data
-        return _no_data_response("No git diff available. Make changes or specify a commit range.")
+        return no_data_response(
+            "No git diff available. Make changes or specify a commit range.",
+            review=None,
+            comments=[],
+            summary={},
+        )
 
     # Parse diff
     files = parse_diff(diff_content)
@@ -675,7 +672,7 @@ async def get_review_history(
 
         redis = get_redis_client(async_client=False, database="analytics")
         if not redis:
-            return _no_data_response("Analytics database unavailable.")
+            return no_data_response("Analytics database unavailable.", review=None, comments=[], summary={})
 
         effective_source = source_id or "default"
         raw_entries = await asyncio.to_thread(redis.lrange, f"code_review:history:{effective_source}", 0, limit - 1)
@@ -699,14 +696,22 @@ async def get_review_history(
             reviews.append(entry)
 
         if not reviews:
-            return _no_data_response(
-                "No review history available. Reviews will be stored here once you run code reviews."
+            return no_data_response(
+                "No review history available. Reviews will be stored here once you run code reviews.",
+                review=None,
+                comments=[],
+                summary={},
             )
 
         return {"status": "success", "reviews": reviews, "total": len(reviews)}
     except Exception as exc:
         logger.warning("Failed to load review history: %s", exc)
-        return _no_data_response("No review history available. Reviews will be stored here once you run code reviews.")
+        return no_data_response(
+            "No review history available. Reviews will be stored here once you run code reviews.",
+            review=None,
+            comments=[],
+            summary={},
+        )
 
 
 @router.get("/metrics", response_model=CodeReviewMetricsResponse)
@@ -730,7 +735,12 @@ async def get_review_metrics(
     """
     await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
-    return _no_data_response("No review metrics available. Metrics will accumulate as you run code reviews.")
+    return no_data_response(
+        "No review metrics available. Metrics will accumulate as you run code reviews.",
+        review=None,
+        comments=[],
+        summary={},
+    )
 
 
 @router.post("/feedback", response_model=CodeReviewFeedbackResponse)
@@ -800,8 +810,11 @@ async def get_review_summary(
     """
     await _resolve_source_or_404(source_id)
     # Issue #543: Return no-data response instead of demo data
-    return _no_data_response(
-        "No review summary available. Summary statistics will be generated after running code reviews."
+    return no_data_response(
+        "No review summary available. Summary statistics will be generated after running code reviews.",
+        review=None,
+        comments=[],
+        summary={},
     )
 
 

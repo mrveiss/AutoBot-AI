@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Timeout Configuration Standardization Script
@@ -478,7 +479,7 @@ class TimeoutConfigurationAnalyzer:
         full_path = self.project_root / file_path
 
         try:
-            with open(full_path, "r") as f:
+            with open(full_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Apply fixes
@@ -510,11 +511,11 @@ class TimeoutConfigurationAnalyzer:
             if modified and not dry_run:
                 # Backup original file
                 backup_path = f"{full_path}.timeout_fix_backup"
-                with open(backup_path, "w") as f:
+                with open(backup_path, "w", encoding="utf-8") as f:
                     f.writelines(lines)
 
                 # Write fixed file
-                with open(full_path, "w") as f:
+                with open(full_path, "w", encoding="utf-8") as f:
                     f.writelines(lines)
 
                 logger.info("Fixed Redis timeouts in %s (backup: %s)", file_path, backup_path)
@@ -660,7 +661,7 @@ async def main():
     report_path = Path(args.project_root) / "reports" / "performance" / "timeout_configuration_analysis.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
     # Print summary

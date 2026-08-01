@@ -36,9 +36,9 @@ from services.docker_task_workspace import (
     _serialize_info,
     _snapshot_image_tag,
     _validate_checkpoint_name,
-    _validate_task_id,
     validate_exec_command,
 )
+from services.task_workspace_common import validate_task_id
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -153,22 +153,22 @@ def _store_info(redis, info: WorkspaceInfo) -> None:
 
 
 def test_validate_task_id_accepts_uuid():
-    _validate_task_id("task-1234-abcd")  # must not raise
+    validate_task_id("task-1234-abcd")  # must not raise
 
 
 def test_validate_task_id_rejects_traversal():
     with pytest.raises(ValueError):
-        _validate_task_id("../../etc/passwd")
+        validate_task_id("../../etc/passwd")
 
 
 def test_validate_task_id_rejects_empty():
     with pytest.raises(ValueError):
-        _validate_task_id("")
+        validate_task_id("")
 
 
 def test_validate_task_id_rejects_too_long():
     with pytest.raises(ValueError):
-        _validate_task_id("a" * 129)
+        validate_task_id("a" * 129)
 
 
 # ---------------------------------------------------------------------------
@@ -543,7 +543,12 @@ def test_checkpoint_name_rejects_slash():
 
 
 def test_authenticate_ws_admin_denies_unauthenticated():
-    """Fail-closed: no user + no internal key → deny (no shell)."""
+    """Fail-closed: no user + no internal key → deny (no shell).
+
+    ``_authenticate_ws_admin`` delegates to the shared ``ws_security`` helper
+    (#12178), which lazy-imports its auth deps from ``auth_middleware`` — so the
+    patch targets are the source module, not this one.
+    """
     from types import SimpleNamespace
     from unittest.mock import patch
 
@@ -552,8 +557,8 @@ def test_authenticate_ws_admin_denies_unauthenticated():
     ws = SimpleNamespace(headers={})
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch.object(mod, "get_auth_middleware") as gam,
-        patch.object(mod, "verify_internal_api_key", return_value=False),
+        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.verify_internal_api_key", return_value=False),
     ):
         gam.return_value.get_user_from_request.return_value = None
         assert mod._authenticate_ws_admin(ws) is False
@@ -569,8 +574,8 @@ def test_authenticate_ws_admin_denies_non_admin():
     ws = SimpleNamespace(headers={})
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch.object(mod, "get_auth_middleware") as gam,
-        patch.object(mod, "verify_internal_api_key", return_value=False),
+        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.verify_internal_api_key", return_value=False),
     ):
         gam.return_value.get_user_from_request.return_value = {"role": "user"}
         assert mod._authenticate_ws_admin(ws) is False
@@ -587,8 +592,8 @@ def test_authenticate_ws_admin_allows_admin_and_internal_key():
 
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch.object(mod, "get_auth_middleware") as gam,
-        patch.object(mod, "verify_internal_api_key", side_effect=lambda key: key == "k"),
+        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.verify_internal_api_key", side_effect=lambda key: key == "k"),
     ):
         gam.return_value.get_user_from_request.return_value = {"role": "admin"}
         # cookie/JWT-resolved admin, NO Authorization header

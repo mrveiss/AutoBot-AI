@@ -141,3 +141,45 @@ describe('BaseModal focus trap (#5016)', () => {
     outside.remove()
   })
 })
+
+
+describe('BaseModal custom width prop (#10882)', () => {
+  const mountWithProps = (props: Record<string, unknown>) =>
+    mount(BaseModal, {
+      props: { modelValue: true, title: 'Test', ...props },
+      slots: { default: '<div>body</div>' },
+      global: {
+        plugins: [i18n],
+        stubs: { Teleport: true, Transition: false, Icon: true },
+      },
+      attachTo: document.body,
+    })
+
+  it('applies a numeric width as an inline pixel max-width, overriding size', async () => {
+    const wrapper = mountWithProps({ size: 'sm', width: 640 })
+    await flushPromises()
+    const dialog = wrapper.find('.aui-dialog')
+    // size class stays (default preset behaviour preserved) ...
+    expect(dialog.classes()).toContain('aui-dialog-sm')
+    // ... but the explicit width wins via inline style
+    expect(dialog.attributes('style') || '').toContain('max-width: 640px')
+    wrapper.unmount()
+  })
+
+  it('passes a string width through unchanged', async () => {
+    const wrapper = mountWithProps({ width: '42rem' })
+    await flushPromises()
+    const dialog = wrapper.find('.aui-dialog')
+    expect(dialog.attributes('style') || '').toContain('max-width: 42rem')
+    wrapper.unmount()
+  })
+
+  it('adds no inline max-width when width is absent (size preset governs)', async () => {
+    const wrapper = mountWithProps({ size: 'lg' })
+    await flushPromises()
+    const dialog = wrapper.find('.aui-dialog')
+    expect(dialog.classes()).toContain('aui-dialog-lg')
+    expect(dialog.attributes('style') || '').not.toContain('max-width')
+    wrapper.unmount()
+  })
+})

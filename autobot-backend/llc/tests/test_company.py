@@ -141,12 +141,142 @@ class TestCompanyStatusTransitions:
         assert result.llc_status == LLCCompanyStatus.ARCHIVED.value
 
     @pytest.mark.asyncio
+    async def test_offboard_from_active(self):
+        # Issue #12234: OFFBOARDING was in _ARCHIVE_FROM but no transition ever
+        # set it, making the state unreachable.
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc.offboard(org.id)
+
+        assert result.llc_status == LLCCompanyStatus.OFFBOARDING.value
+
+    @pytest.mark.asyncio
+    async def test_offboard_rejects_invalid_state(self):
+        org = _make_org(llc_status="paused")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        with pytest.raises(ValueError):
+            await svc.offboard(org.id)
+
+    @pytest.mark.asyncio
+    async def test_archive_reachable_via_offboard(self):
+        # Full lifecycle leg #12234 completes: ACTIVE -> OFFBOARDING -> ARCHIVED.
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        offboarded = await svc.offboard(org.id)
+        assert offboarded.llc_status == LLCCompanyStatus.OFFBOARDING.value
+
+        archived = await svc.archive(org.id)
+        assert archived.llc_status == LLCCompanyStatus.ARCHIVED.value
+
+    @pytest.mark.asyncio
+    async def test_activate_from_onboarding(self):
+        # Issue #12211: onboarding -> active is the transition that was missing.
+        org = _make_org(llc_status="onboarding")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc.activate(org.id)
+
+        assert result.llc_status == LLCCompanyStatus.ACTIVE.value
+
+    @pytest.mark.asyncio
+    async def test_activate_from_paused_clears_pause_state(self):
+        org = _make_org(llc_status="paused")
+        org.pause_reason = "was paused"
+        org.paused_at = datetime_now()
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc.activate(org.id)
+
+        assert result.llc_status == LLCCompanyStatus.ACTIVE.value
+        assert result.pause_reason is None
+        assert result.paused_at is None
+
+    @pytest.mark.asyncio
+    async def test_activate_rejects_invalid_state(self):
+        org = _make_org(llc_status="archived")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        with pytest.raises(ValueError):
+            await svc.activate(org.id)
+
+    @pytest.mark.asyncio
     async def test_not_found_raises(self):
         svc = _make_service()
         svc._get_or_404 = AsyncMock(side_effect=CompanyNotFoundError("not found"))
 
         with pytest.raises(CompanyNotFoundError):
             await svc.suspend(uuid.uuid4())
+
+
+class TestTransitionHelper:
+    """Focused tests for the shared ``_transition`` primitive (#12238).
+
+    The activate/suspend/offboard/archive wrappers are covered above; these
+    exercise the extracted helper directly to lock its behavior: in-range ->
+    applies target + field updates + flush; out-of-range -> canonical
+    ``Cannot <verb>`` ValueError; missing -> CompanyNotFoundError.
+    """
+
+    @pytest.mark.asyncio
+    async def test_in_range_applies_target_field_updates_and_flushes(self):
+        org = _make_org(llc_status="active")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        result = await svc._transition(
+            org.id,
+            verb="suspend",
+            allowed_from=svc._SUSPEND_FROM,
+            target=LLCCompanyStatus.PAUSED,
+            log_msg="LLC company suspended: %s (id=%s)",
+            pause_reason="cause",
+            paused_at=None,
+        )
+
+        assert result.llc_status == LLCCompanyStatus.PAUSED.value
+        assert result.pause_reason == "cause"
+        svc.session.flush.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_out_of_range_raises_canonical_value_error(self):
+        org = _make_org(llc_status="archived")
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(return_value=org)
+
+        with pytest.raises(ValueError) as exc:
+            await svc._transition(
+                org.id,
+                verb="activate",
+                allowed_from=svc._ACTIVATE_FROM,
+                target=LLCCompanyStatus.ACTIVE,
+                log_msg="LLC company activated: %s (id=%s)",
+            )
+
+        assert "Cannot activate company in 'archived' state" in str(exc.value)
+        svc.session.flush.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_missing_company_raises_not_found(self):
+        svc = _make_service()
+        svc._get_or_404 = AsyncMock(side_effect=CompanyNotFoundError("not found"))
+
+        with pytest.raises(CompanyNotFoundError):
+            await svc._transition(
+                uuid.uuid4(),
+                verb="archive",
+                allowed_from=svc._ARCHIVE_FROM,
+                target=LLCCompanyStatus.ARCHIVED,
+                log_msg="LLC company archived: %s (id=%s)",
+            )
 
 
 class TestSubCompanyTree:
@@ -325,3 +455,39 @@ class TestDeleteOrphanFix:
         await svc.delete(org.id)
 
         org.soft_delete.assert_called_once()
+
+
+class TestListRootCompaniesArchiveFilter:
+    """#12212: ARCHIVED root companies are hidden from the default list but are
+    surfaced again when ``include_archived=True`` (recovery / "show archived")."""
+
+    def _capture_service(self):
+        """Return (svc, captured) where captured['stmt'] is the executed query."""
+        captured: dict = {}
+
+        async def _execute(stmt):
+            captured["stmt"] = stmt
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=_execute)
+        return _make_service(session=session), captured
+
+    @pytest.mark.asyncio
+    async def test_default_excludes_archived(self):
+        svc, captured = self._capture_service()
+        await svc.list_root_companies()
+        sql = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+        # An llc_status != 'archived' predicate must be present by default.
+        assert "llc_status" in sql
+        assert "archived" in sql
+
+    @pytest.mark.asyncio
+    async def test_include_archived_drops_status_filter(self):
+        svc, captured = self._capture_service()
+        await svc.list_root_companies(include_archived=True)
+        sql = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+        # With include_archived the status predicate is gone (archived rows returned).
+        assert "'archived'" not in sql

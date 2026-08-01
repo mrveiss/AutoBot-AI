@@ -308,9 +308,9 @@ onMounted(async () => {
 
 .kanban-column {
   flex: 0 0 240px;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   border-radius: 0.5rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   /* #10750 C2: bounded by .board-layout height, not the viewport */
@@ -325,19 +325,19 @@ onMounted(async () => {
   padding: 0.625rem 0.875rem;
   font-weight: 600;
   font-size: 0.875rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
   border-radius: 0.5rem 0.5rem 0 0;
   transition: background 0.15s;
 }
 
 .column-header.wip-warn {
-  background: #fef9c3;
-  color: #713f12;
+  background: var(--kanban-wip-warn-bg);
+  color: var(--kanban-wip-warn-text);
 }
 
 .column-header.wip-exceeded {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--kanban-wip-exceeded-bg);
+  color: var(--kanban-wip-exceeded-text);
 }
 
 .column-meta {
@@ -353,7 +353,7 @@ onMounted(async () => {
 
 .wip-limit {
   font-size: 0.7rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .column-cards {
@@ -367,7 +367,7 @@ onMounted(async () => {
 }
 
 .swimlane {
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
   padding: 0.5rem;
 }
 
@@ -381,7 +381,7 @@ onMounted(async () => {
   gap: 0.375rem;
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.375rem;
@@ -400,7 +400,7 @@ onMounted(async () => {
 
 .lane-empty {
   font-size: 0.75rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   text-align: center;
   padding: 0.5rem;
 }
@@ -414,8 +414,8 @@ onMounted(async () => {
 }
 
 .kanban-card-inner {
-  background: var(--bg-surface, #fff);
-  border: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   padding: 0.5rem 0.625rem;
   display: flex;
@@ -437,7 +437,7 @@ onMounted(async () => {
 .card-id {
   font-family: monospace;
   font-size: 0.65rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .pr-badge {
@@ -466,7 +466,7 @@ onMounted(async () => {
 .card-pts {
   font-size: 0.65rem;
   font-weight: 600;
-  background: var(--bg-elevated, #f3f4f6);
+  background: var(--bg-elevated);
   padding: 0.1rem 0.35rem;
   border-radius: 0.2rem;
 }
@@ -479,7 +479,7 @@ onMounted(async () => {
   width: 1.4rem;
   height: 1.4rem;
   border-radius: 50%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   font-size: 0.55rem;
   font-weight: 600;
@@ -489,8 +489,8 @@ onMounted(async () => {
   text-align: center;
   padding: 1.5rem 0.5rem;
   font-size: 0.75rem;
-  color: var(--text-secondary, #9ca3af);
-  border: 2px dashed var(--border-default, #e5e7eb);
+  color: var(--text-secondary);
+  border: 2px dashed var(--border-default);
   border-radius: 0.375rem;
   margin: 0.5rem;
 }

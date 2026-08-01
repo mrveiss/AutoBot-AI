@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import urllib.parse
 from pathlib import Path
 from typing import Sequence
 
@@ -25,6 +26,20 @@ _DEFAULT_ALLOWED_ROOTS: tuple[str, ...] = (
     "/opt/autobot",
     "/tmp",  # nosec B108 - test/controlled code uses tmpdir intentionally
 )
+
+# Characters rejected outright in sandbox-relative user paths (Issue #326).
+# Single source of truth for the sandbox resolver shared by files.py and
+# sandbox_files.py (#11844).
+SANDBOX_INVALID_PATH_CHARACTERS: frozenset[str] = frozenset({"<", ">", ":", '"', "|", "?", "*"})
+
+
+class SandboxPathError(ValueError):
+    """A sandbox-relative path failed validation (#11844).
+
+    Carries the exact user-facing message so callers can surface it
+    verbatim (e.g. as a FastAPI ``HTTPException`` detail) without
+    re-deriving wording.
+    """
 
 
 def validate_path(
@@ -71,7 +86,7 @@ def validate_path(
         except ValueError:
             continue
         # Path is within this root — check existence if required
-        if must_exist and not resolved.exists():  # codeql[py/path-injection]
+        if must_exist and not resolved.exists():
             raise ValueError("Path does not exist")
         return resolved
 
@@ -120,7 +135,64 @@ def validate_relative_path(
     except ValueError:
         raise ValueError("Path traversal detected: segment escapes base directory")
 
-    if must_exist and not resolved.exists():  # codeql[py/path-injection]
+    if must_exist and not resolved.exists():
         raise ValueError(f"Path does not exist: {resolved}")
 
     return resolved
+
+
+def resolve_within_sandbox(path: str, root: Path) -> Path:
+    """Strip, reject traversal, and resolve *path* under *root* (#11844).
+
+    Single shared sandbox resolver for the file-management APIs. ``''`` and
+    ``'/'`` (and ``'//'``) address the sandbox root itself and return *root*
+    unchanged: historically these stripped to an empty segment that
+    :func:`validate_relative_path` rejected, surfacing a misleading "outside
+    sandbox" error and making the root unlistable for every endpoint (#11823).
+    All other input is checked for traversal (``..``, leading ``/``, ``~``,
+    invalid characters, and URL-encoded traversal) before resolution.
+
+    Parameters
+    ----------
+    path:
+        Raw, user-supplied sandbox-relative path.
+    root:
+        Trusted sandbox root the result must remain within.
+
+    Returns
+    -------
+    pathlib.Path
+        The resolved path (``root`` for the root-addressing cases).
+
+    Raises
+    ------
+    SandboxPathError
+        On any traversal / escape attempt. The message is safe to surface
+        verbatim to the caller.
+    """
+    if not path:
+        return root
+
+    clean_path = path.strip("/")
+
+    # "/" (and "//") address the sandbox root; after stripping they collapse
+    # to "", which validate_relative_path rejects as an empty segment (#11823).
+    if not clean_path:
+        return root
+
+    if (
+        ".." in clean_path
+        or clean_path.startswith("/")
+        or "~" in clean_path
+        or any(char in clean_path for char in SANDBOX_INVALID_PATH_CHARACTERS)
+    ):
+        raise SandboxPathError("Invalid path: path traversal not allowed")
+
+    decoded_path = urllib.parse.unquote(clean_path)
+    if ".." in decoded_path or decoded_path.startswith("/"):
+        raise SandboxPathError("Invalid path: encoded traversal not allowed")
+
+    try:
+        return validate_relative_path(clean_path, root)
+    except ValueError:
+        raise SandboxPathError("Path outside sandbox not allowed")

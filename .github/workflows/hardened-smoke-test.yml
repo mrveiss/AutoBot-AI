@@ -197,6 +197,32 @@ jobs:
           echo ""
           curl -v http://localhost/slm/api/health 2>&1 | head -20 || true
 
+      - name: Dump autobot-slm diagnostics on failure
+        # #11516: the hardened overlay fails with "container autobot-slm is
+        # unhealthy", but the crash cause lives in the SLM container's own
+        # logs + healthcheck probe output — print them INLINE (not just the
+        # uploaded artifact) so the failure is diagnosable from the run page.
+        if: failure()
+        run: |
+          echo "=== autobot-slm container state ==="
+          docker inspect autobot-slm \
+            --format 'Status={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+            2>&1 || echo "(autobot-slm container not found)"
+          echo ""
+          echo "=== autobot-slm healthcheck probe log (each attempt: ExitCode + Output) ==="
+          docker inspect autobot-slm --format '{{json .State.Health}}' 2>/dev/null \
+            | python3 -m json.tool 2>/dev/null \
+            || echo "(no healthcheck state on autobot-slm)"
+          echo ""
+          echo "=== autobot-slm logs (last 300 lines) ==="
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.hardened.yml \
+            --env-file docker/.env.docker \
+            logs --no-color --tail 300 autobot-slm 2>&1 \
+            || docker logs --tail 300 autobot-slm 2>&1 \
+            || echo "(no autobot-slm logs available)"
+
       - name: Collect logs on failure
         if: failure()
         run: |

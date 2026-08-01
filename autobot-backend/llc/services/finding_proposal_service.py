@@ -11,6 +11,7 @@ Helpers used in tests (patchable wrappers over lazy-imported services):
     _work_item_service_create(session, company_id, type, title, **kwargs)
     _approval_service_request(session, *, company_id, gate_type, payload, requested_by)
     _get_clone_path(project) -> str
+    _requires_cross_vendor_review(session, company_id, item_type) -> bool  (#12618)
 """
 
 import logging
@@ -72,6 +73,13 @@ async def _get_clone_path(project) -> str:
     if source is None:
         raise ValueError(f"CodeSource {project.code_source_id!r} not found for project {project.id!r}")
     return getattr(source, "clone_path", "") or ""
+
+
+async def _requires_cross_vendor_review(session: AsyncSession, company_id, item_type: WorkItemType) -> bool:
+    """Thin wrapper around ReviewGatePolicyService so tests can patch at module level (#12618)."""
+    from llc.services.review_gate import ReviewGatePolicyService  # noqa: PLC0415
+
+    return await ReviewGatePolicyService().requires_cross_vendor_review(session, str(company_id), item_type)
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +209,9 @@ async def scan(project, session: AsyncSession) -> dict:
                 logger.debug("scan: skip key=%s (status=%s)", key, existing.status)
                 continue
 
-            verdict = await verify_finding(finding, clone_path)
+            item_type = _type_for(finding.get("type", ""))
+            cross_vendor = await _requires_cross_vendor_review(session, project.company_id, item_type)
+            verdict = await verify_finding(finding, clone_path, cross_vendor=cross_vendor)
             if not verdict.is_real:
                 logger.debug("scan: FP key=%s rationale=%s", key, verdict.rationale)
                 continue

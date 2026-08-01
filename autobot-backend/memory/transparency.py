@@ -28,6 +28,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import utc_timestamp
+from memory._redis_util import decode as _decode
+from memory._redis_util import redis_scan as _redis_scan
 from memory.working_memory import is_working_memory_key
 
 logger = get_logger(__name__)
@@ -37,17 +40,17 @@ logger = get_logger(__name__)
 # the full application stack.  Real code calls _bootstrap() on first use.
 get_verbatim_store = None  # type: ignore[assignment]
 get_trajectory_store = None  # type: ignore[assignment]
-get_redis_client = None  # type: ignore[assignment]
+get_async_redis_client = None  # type: ignore[assignment]
 
 
 def _bootstrap() -> None:
     """Lazily import heavy dependencies so tests can patch before first call.
 
     Each reference is guarded independently so a test can pre-assign any one
-    of them (e.g. ``mt.get_redis_client = AsyncMock(…)``) and that assignment
+    of them (e.g. ``mt.get_async_redis_client = AsyncMock(…)``) and that assignment
     is preserved even if the other two have not been set yet.
     """
-    global get_verbatim_store, get_trajectory_store, get_redis_client
+    global get_verbatim_store, get_trajectory_store, get_async_redis_client
     if get_verbatim_store is None:
         from memory.verbatim_store import get_verbatim_store as _gvs
 
@@ -56,10 +59,10 @@ def _bootstrap() -> None:
         from memory.trajectory_store import get_trajectory_store as _gts
 
         get_trajectory_store = _gts
-    if get_redis_client is None:
-        from autobot_shared.redis_client import get_redis_client as _grc
+    if get_async_redis_client is None:
+        from autobot_shared.redis_client import get_async_redis_client as _grc
 
-        get_redis_client = _grc
+        get_async_redis_client = _grc
 
 
 _GRAPH_ENTITY_PATTERN = "memory:entity:*"
@@ -78,31 +81,6 @@ async def _safe(coro, fallback=None):
     except Exception as exc:
         logger.warning("memory_transparency: store error: %s", exc)
         return fallback
-
-
-def _now_iso() -> str:
-    return datetime.now(tz=timezone.utc).isoformat()
-
-
-def _decode(v) -> str:
-    return v.decode("utf-8") if isinstance(v, bytes) else str(v)
-
-
-async def _redis_scan(redis, match: str) -> List[str]:
-    """SCAN for all keys matching *match* without blocking the event loop."""
-    keys: List[str] = []
-    cursor = 0
-    while True:
-        try:
-            cursor, batch = await redis.scan(cursor, match=match, count=200)
-        except Exception as exc:
-            logger.warning("memory_transparency: redis scan failed: %s", exc)
-            break
-        for k in batch:
-            keys.append(_decode(k))
-        if cursor == 0:
-            break
-    return keys
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +169,7 @@ async def _list_working_memory(user_id: str) -> List[Dict[str, Any]]:
     """
     try:
         _bootstrap()
-        redis = await get_redis_client(async_client=True, database="knowledge")
+        redis = await get_async_redis_client(database="knowledge")
         all_keys = await _redis_scan(redis, "autobot:session:*:memory:*")
     except Exception as exc:
         logger.warning("_list_working_memory scan failed: %s", exc)
@@ -230,7 +208,7 @@ async def _list_graph_entities(user_id: str) -> List[Dict[str, Any]]:
     """Return memory-graph entities whose metadata.user_id matches *user_id*."""
     try:
         _bootstrap()
-        redis = await get_redis_client(async_client=True, database="main")
+        redis = await get_async_redis_client(database="main")
         all_keys = await _redis_scan(redis, _GRAPH_ENTITY_PATTERN)
     except Exception as exc:
         logger.warning("_list_graph_entities scan failed: %s", exc)
@@ -266,7 +244,7 @@ async def _list_rl_patterns(user_id: str) -> List[Dict[str, Any]]:
     """Return retrieval-learner patterns scoped to *user_id*."""
     try:
         _bootstrap()
-        redis = await get_redis_client(async_client=True, database="analytics")
+        redis = await get_async_redis_client(database="analytics")
         prefix = f"{_RL_PATTERN_PREFIX}{user_id}:"
         all_keys = await _redis_scan(redis, f"{prefix}*")
     except Exception as exc:
@@ -381,7 +359,7 @@ async def export_user_memory(user_id: str) -> Dict[str, Any]:
     memories = await list_user_memories(user_id)
     return {
         "export_version": "1.0",
-        "exported_at": _now_iso(),
+        "exported_at": utc_timestamp(),
         "user_id": user_id,
         "total_items": len(memories),
         "stores": sorted({m["store"] for m in memories}),
@@ -443,7 +421,7 @@ async def _forget_working_memory(user_id: str, memory_id: str) -> bool:
     if not is_working_memory_key(memory_id):
         logger.warning("forget_working_memory: rejected non-working-memory key %s", memory_id)
         return False
-    redis = await get_redis_client(async_client=True, database="knowledge")
+    redis = await get_async_redis_client(database="knowledge")
     raw = await redis.get(memory_id)
     if not raw:
         return False
@@ -461,7 +439,7 @@ async def _forget_working_memory(user_id: str, memory_id: str) -> bool:
 async def _forget_graph_entity(user_id: str, entity_id: str) -> bool:
     """Delete a graph entity (by id) and its relations after verifying ownership."""
     _bootstrap()
-    redis = await get_redis_client(async_client=True, database="main")
+    redis = await get_async_redis_client(database="main")
     entity_key = f"memory:entity:{entity_id}"
     raw = await redis.json().get(entity_key)
     if not raw:
@@ -488,7 +466,7 @@ async def _forget_rl_pattern(user_id: str, redis_key: str) -> bool:
     if not redis_key.startswith(expected_prefix):
         logger.warning("forget_rl_pattern: tenant mismatch key=%s user=%s", redis_key, user_id)
         return False
-    redis = await get_redis_client(async_client=True, database="analytics")
+    redis = await get_async_redis_client(database="analytics")
     deleted = await redis.delete(redis_key)
     logger.info("forget_rl_pattern: deleted key %s", redis_key)
     return deleted > 0

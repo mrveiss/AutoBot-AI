@@ -9,8 +9,9 @@ GH#7911
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from autobot_shared.http_client import get_http_client
 from llm_shared.models import LLMRequest, LLMSettings, ToolCall, ToolDefinition
 from llm_shared.providers.ollama import OllamaProvider, _model_supports_tools
 
@@ -273,3 +274,30 @@ class TestPrepareCharRequestToolAwareness:
 
         assert data["format"] == "json"
         assert "tools" not in data
+
+
+# ---------------------------------------------------------------------------
+# Session tracking — _get_session() must delegate to tracked_session() (#12119)
+# ---------------------------------------------------------------------------
+
+
+class TestSessionTracking:
+    """OllamaProvider._get_session() participates in HTTPClientManager
+    active-request tracking so a concurrent pool resize cannot close the shared
+    session mid-stream (#12119). Uses the real singleton (only ``get_session``
+    patched) so the true ``tracked_session()`` increment/decrement path runs.
+    """
+
+    async def test_get_session_delegates_to_tracked_session(self):
+        provider = _make_provider()
+        manager = get_http_client()
+        provider._http_client = manager
+        sentinel = MagicMock(closed=False)
+        baseline = manager._active_requests
+
+        with patch.object(manager, "get_session", new=AsyncMock(return_value=sentinel)):
+            async with provider._get_session() as session:
+                assert session is sentinel
+                assert manager._active_requests == baseline + 1
+
+        assert manager._active_requests == baseline, "counter must return to baseline after the CM exits"

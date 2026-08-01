@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Environment File Validator
@@ -17,7 +18,7 @@ import yaml
 def load_config():
     """Load the complete.yaml configuration"""
     config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -28,7 +29,7 @@ def parse_env_file(file_path: Path) -> Dict[str, str]:
     if not file_path.exists():
         return env_vars
 
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:

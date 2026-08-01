@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 AutoBot Secrets Management System
@@ -160,7 +161,7 @@ class SecretsManager:
         """Load secrets index."""
         if self.secrets_index_file.exists():
             try:
-                with open(self.secrets_index_file, "r") as f:
+                with open(self.secrets_index_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
                 self.print_step(f"Warning: Could not load secrets index: {e}", "warning")
@@ -171,7 +172,7 @@ class SecretsManager:
         """Save secrets index (thread-safe)."""
         with self._index_lock:
             try:
-                with open(self.secrets_index_file, "w") as f:
+                with open(self.secrets_index_file, "w", encoding="utf-8") as f:
                     json.dump(self.secrets_index, f, indent=2)
                 os.chmod(self.secrets_index_file, 0o600)
             except Exception as e:
@@ -202,7 +203,7 @@ class SecretsManager:
             audit_log = []
             if self.audit_log_file.exists():
                 try:
-                    with open(self.audit_log_file, "r") as f:
+                    with open(self.audit_log_file, "r", encoding="utf-8") as f:
                         audit_log = json.load(f)
                 except Exception:
                     audit_log = []
@@ -214,7 +215,7 @@ class SecretsManager:
                 audit_log = audit_log[-1000:]
 
             # Save audit log
-            with open(self.audit_log_file, "w") as f:
+            with open(self.audit_log_file, "w", encoding="utf-8") as f:
                 json.dump(audit_log, f, indent=2)
             os.chmod(self.audit_log_file, 0o600)
 
@@ -679,7 +680,7 @@ class SecretsManager:
         with self._audit_lock:
             if self.audit_log_file.exists():
                 try:
-                    with open(self.audit_log_file, "r") as f:
+                    with open(self.audit_log_file, "r", encoding="utf-8") as f:
                         audit_log = json.load(f)
 
                     # Get last 10 events

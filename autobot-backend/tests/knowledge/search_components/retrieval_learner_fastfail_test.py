@@ -57,7 +57,7 @@ class TestGetRedisFastFail:
             await asyncio.sleep(10)
 
         with patch(
-            "knowledge.search_components.retrieval_learner.get_redis_client",
+            "knowledge.search_components.retrieval_learner.get_async_redis_client",
             new=_hang,
         ):
             # Allow up to (timeout + 0.5 s) for the call to complete.
@@ -77,7 +77,7 @@ class TestGetRedisFastFail:
             await asyncio.sleep(10)
 
         with patch(
-            "knowledge.search_components.retrieval_learner.get_redis_client",
+            "knowledge.search_components.retrieval_learner.get_async_redis_client",
             new=_hang,
         ):
             await asyncio.wait_for(
@@ -96,7 +96,7 @@ class TestGetRedisFastFail:
             raise ConnectionRefusedError("Redis is down")
 
         with patch(
-            "knowledge.search_components.retrieval_learner.get_redis_client",
+            "knowledge.search_components.retrieval_learner.get_async_redis_client",
             new=_raise,
         ):
             result = await learner._get_redis()
@@ -112,7 +112,7 @@ class TestGetRedisFastFail:
         learner = RetrievalLearner(redis=mock_redis)
 
         with patch(
-            "knowledge.search_components.retrieval_learner.get_redis_client",
+            "knowledge.search_components.retrieval_learner.get_async_redis_client",
             side_effect=AssertionError("should not be called"),
         ):
             result = await learner._get_redis()
@@ -204,7 +204,7 @@ class TestUnavailableCaching:
             raise ConnectionRefusedError("Redis is down")
 
         with patch(
-            "knowledge.search_components.retrieval_learner.get_redis_client",
+            "knowledge.search_components.retrieval_learner.get_async_redis_client",
             new=_raise,
         ):
             # First call: triggers the factory, sets flag, returns None.
@@ -224,7 +224,7 @@ class TestUnavailableCaching:
         learner._redis_unavailable = True
 
         with patch(
-            "knowledge.search_components.retrieval_learner.get_redis_client",
+            "knowledge.search_components.retrieval_learner.get_async_redis_client",
             side_effect=AssertionError("should not be called"),
         ):
             result = await learner._get_redis()

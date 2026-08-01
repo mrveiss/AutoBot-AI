@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 from agents.web_researcher import WebResearcher as WebResearchAssistant
 from autobot_shared.logging_manager import get_logger
 from events.bus import PersistStrategy, publish_event
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 
 from .formatters import ToolInfoFormatter
@@ -233,7 +234,9 @@ class KBLibrarian:
 
         all_results = []
         for query in search_queries:
-            results = await self.knowledge_base.search(query, n_results=5)
+            # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
+            # Issue #13009: exclude quarantined research facts (#12622).
+            results = await self.knowledge_base.search(query, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
             all_results.extend(results)
 
         unique_results = ResultProcessor.deduplicate_results(all_results)
@@ -355,7 +358,11 @@ class KBLibrarian:
 
     async def get_tool_instructions(self, tool_name: str) -> Dict[str, Any]:
         """Get installation and usage instructions for a specific tool."""
-        search_results = await self.knowledge_base.search(f"{tool_name} installation usage", n_results=3)
+        # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
+        # Issue #13009: exclude quarantined research facts (#12622).
+        search_results = await self.knowledge_base.search(
+            f"{tool_name} installation usage", top_k=3, filters=RESEARCH_QUARANTINE_FILTER
+        )
 
         if search_results:
             instructions = InstructionParser.extract_instructions(search_results, tool_name)

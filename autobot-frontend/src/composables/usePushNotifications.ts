@@ -53,6 +53,14 @@ if (_getPushSupported()) {
     .catch(() => {})
 }
 
+/** Test-only: reset module-level state to its initial values. */
+export function _resetForTests(): void {
+  _subscribed.value = false
+  _permissionState.value = 'default'
+  _loading.value = false
+  _error.value = null
+}
+
 /**
  * Composable for Web Push Notification lifecycle (GH#4459).
  *

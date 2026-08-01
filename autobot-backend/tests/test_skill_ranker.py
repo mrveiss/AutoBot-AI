@@ -10,11 +10,29 @@ Issue #4337: Tests for skill relevance ranking and LRU caching.
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from services.skill_management.skill_ranker import SkillRanker, get_skill_ranker
+
+
+def _fake_http_client(response=None, side_effect=None):
+    """Build a mock pooled HTTP client whose ``tracked_request()`` returns
+    *response* (or raises *side_effect*).
+
+    #12979: SkillRanker now issues requests via
+    ``get_http_client().tracked_request(...)`` instead of a raw
+    ``aiohttp.ClientSession()`` — patching ``aiohttp.ClientSession.get``/
+    ``.post`` no longer intercepts anything, since the shared client calls
+    ``session.request()`` internally.
+    """
+    client = MagicMock()
+    if side_effect is not None:
+        client.tracked_request = MagicMock(side_effect=side_effect)
+    else:
+        client.tracked_request = MagicMock(return_value=response)
+    return client
 
 
 class TestSkillRanker:
@@ -133,12 +151,12 @@ class TestSkillRanker:
     @pytest.mark.asyncio
     async def test_fetch_active_skills_success(self, ranker, sample_skills):
         """Test successful skill fetch from SLM."""
-        with patch("aiohttp.ClientSession.get") as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status = 200
-            mock_resp.json = AsyncMock(return_value={"skills": sample_skills})
-            mock_get.return_value.__aenter__.return_value = mock_resp
-
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.json = AsyncMock(return_value={"skills": sample_skills})
+        mock_resp.__aenter__.return_value = mock_resp
+        client = _fake_http_client(response=mock_resp)
+        with patch("services.skill_management.skill_ranker.get_http_client", return_value=client):
             skills = await ranker._fetch_active_skills()
             assert len(skills) == 3
             assert skills[0]["name"] == "WebSearch"
@@ -146,18 +164,16 @@ class TestSkillRanker:
     @pytest.mark.asyncio
     async def test_fetch_active_skills_timeout(self, ranker):
         """Test skill fetch timeout."""
-        with patch("aiohttp.ClientSession.get") as mock_get:
-            mock_get.side_effect = asyncio.TimeoutError()
-
+        client = _fake_http_client(side_effect=asyncio.TimeoutError())
+        with patch("services.skill_management.skill_ranker.get_http_client", return_value=client):
             skills = await ranker._fetch_active_skills()
             assert skills == []
 
     @pytest.mark.asyncio
     async def test_fetch_active_skills_error(self, ranker):
         """Test skill fetch with error."""
-        with patch("aiohttp.ClientSession.get") as mock_get:
-            mock_get.side_effect = Exception("Connection error")
-
+        client = _fake_http_client(side_effect=Exception("Connection error"))
+        with patch("services.skill_management.skill_ranker.get_http_client", return_value=client):
             skills = await ranker._fetch_active_skills()
             assert skills == []
 
@@ -165,12 +181,12 @@ class TestSkillRanker:
     async def test_get_embedding_success(self, ranker):
         """Test successful embedding fetch."""
         expected_embedding = [0.1, 0.2, 0.3]
-        with patch("aiohttp.ClientSession.post") as mock_post:
-            mock_resp = AsyncMock()
-            mock_resp.status = 200
-            mock_resp.json = AsyncMock(return_value={"data": [{"embedding": expected_embedding}]})
-            mock_post.return_value.__aenter__.return_value = mock_resp
-
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.json = AsyncMock(return_value={"data": [{"embedding": expected_embedding}]})
+        mock_resp.__aenter__.return_value = mock_resp
+        client = _fake_http_client(response=mock_resp)
+        with patch("services.skill_management.skill_ranker.get_http_client", return_value=client):
             embedding = await ranker._get_embedding("test query")
             assert embedding == expected_embedding
 
@@ -183,9 +199,8 @@ class TestSkillRanker:
     @pytest.mark.asyncio
     async def test_get_embedding_timeout(self, ranker):
         """Test embedding fetch timeout."""
-        with patch("aiohttp.ClientSession.post") as mock_post:
-            mock_post.side_effect = asyncio.TimeoutError()
-
+        client = _fake_http_client(side_effect=asyncio.TimeoutError())
+        with patch("services.skill_management.skill_ranker.get_http_client", return_value=client):
             embedding = await ranker._get_embedding("test query")
             assert embedding is None
 
@@ -336,3 +351,51 @@ class TestSkillContextBuilding:
 
         assert "WebSearch" in context
         assert "1." in context
+
+
+class TestSkillClauseWiring:
+    """#12810: SkillRanker and _build_skill_context are actually connected."""
+
+    @pytest.mark.asyncio
+    async def test_build_skill_clause_renders_ranked_skills(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from prompt_manager import build_skill_clause
+
+        ranker = MagicMock()
+        ranker.rank_skills = AsyncMock(return_value=[{"name": "deploy", "description": "Deploy a service"}])
+        with patch("services.skill_management.skill_ranker.get_skill_ranker", return_value=ranker):
+            clause = await build_skill_clause("deploy the API to staging")
+
+        assert clause is not None
+        assert "deploy" in clause
+        ranker.rank_skills.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_build_skill_clause_returns_none_when_nothing_ranks(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from prompt_manager import build_skill_clause
+
+        ranker = MagicMock()
+        ranker.rank_skills = AsyncMock(return_value=[])
+        with patch("services.skill_management.skill_ranker.get_skill_ranker", return_value=ranker):
+            assert await build_skill_clause("anything") is None
+
+    @pytest.mark.asyncio
+    async def test_build_skill_clause_never_breaks_prompt_assembly(self):
+        """A ranking failure must degrade to no skill context, not raise."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from prompt_manager import build_skill_clause
+
+        ranker = MagicMock()
+        ranker.rank_skills = AsyncMock(side_effect=RuntimeError("embedding backend down"))
+        with patch("services.skill_management.skill_ranker.get_skill_ranker", return_value=ranker):
+            assert await build_skill_clause("anything") is None
+
+    @pytest.mark.asyncio
+    async def test_empty_context_skips_ranking_entirely(self):
+        from prompt_manager import build_skill_clause
+
+        assert await build_skill_clause("   ") is None

@@ -97,23 +97,10 @@
         mode: "0644"
       failed_when: false
 
-    - name: "Certs [slm] | Generate new self-signed cert"
-      ansible.builtin.command:
-        cmd: >-
-          openssl req -x509 -nodes
-          -days {{ _cert_days }}
-          -newkey rsa:2048
-          -keyout {{ _key_file }}
-          -out {{ _cert_file }}
-          -subj '{{ _cert_subject }}'
-      changed_when: true
-
-    - name: "Certs [slm] | Set key permissions"
-      ansible.builtin.file:
-        path: "{{ _key_file }}"
-        mode: "0600"
-        owner: root
-        group: root
+    - name: "Certs [slm] | Generate self-signed cert + lock key (shared, #12181)"
+      ansible.builtin.include_tasks: ../_shared/tasks/generate_self_signed_cert.yml
+      vars:
+        cert_label: slm
 
     - name: "Certs [slm] | Test nginx config"
       ansible.builtin.command:
@@ -187,23 +174,10 @@
         mode: "0644"
       failed_when: false
 
-    - name: "Certs [backend] | Generate new self-signed cert"
-      ansible.builtin.command:
-        cmd: >-
-          openssl req -x509 -nodes
-          -days {{ _cert_days }}
-          -newkey rsa:2048
-          -keyout {{ _key_file }}
-          -out {{ _cert_file }}
-          -subj '{{ _cert_subject }}'
-      changed_when: true
-
-    - name: "Certs [backend] | Set key permissions"
-      ansible.builtin.file:
-        path: "{{ _key_file }}"
-        mode: "0600"
-        owner: root
-        group: root
+    - name: "Certs [backend] | Generate self-signed cert + lock key (shared, #12181)"
+      ansible.builtin.include_tasks: ../_shared/tasks/generate_self_signed_cert.yml
+      vars:
+        cert_label: backend
 
     - name: "Certs [backend] | Restart backend service"
       ansible.builtin.systemd:
@@ -265,23 +239,10 @@
         mode: "0644"
       failed_when: false
 
-    - name: "Certs [frontend] | Generate new self-signed cert"
-      ansible.builtin.command:
-        cmd: >-
-          openssl req -x509 -nodes
-          -days {{ _cert_days }}
-          -newkey rsa:2048
-          -keyout {{ _key_file }}
-          -out {{ _cert_file }}
-          -subj '{{ _cert_subject }}'
-      changed_when: true
-
-    - name: "Certs [frontend] | Set key permissions"
-      ansible.builtin.file:
-        path: "{{ _key_file }}"
-        mode: "0600"
-        owner: root
-        group: root
+    - name: "Certs [frontend] | Generate self-signed cert + lock key (shared, #12181)"
+      ansible.builtin.include_tasks: ../_shared/tasks/generate_self_signed_cert.yml
+      vars:
+        cert_label: frontend
 
     - name: "Certs [frontend] | Test nginx config"
       ansible.builtin.command:

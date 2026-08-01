@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Script to reset and recreate the knowledge base index with correct dimensions.
@@ -15,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import global_config_manager
-from utils.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 async def reset_knowledge_base_index():
     """Reset the knowledge base Redis index to use correct embedding dimensions."""
 
-    redis_client = await get_redis_client(async_client=True)
+    redis_client = await get_async_redis_client(database="main")
     if not redis_client:
         logger.error("Redis client not available")
         return

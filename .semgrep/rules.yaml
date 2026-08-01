@@ -70,14 +70,31 @@ rules:
       - pattern-not: $VAR = "changeme"
       - pattern-not: $VAR = "your-secret-here"
       - pattern-not: $VAR = "placeholder"
+      # Exclude enum member definitions regardless of other base classes
+      # (e.g. `class Foo(str, Enum):`, `class Foo(SomeMixin, Enum):`). The
+      # ellipsis variants match `Enum` anywhere in the base list.
       - pattern-not-inside: |
           class $CLASS(Enum):
+            ...
+      - pattern-not-inside: |
+          class $CLASS(..., Enum):
+            ...
+      - pattern-not-inside: |
+          class $CLASS(..., Enum, ...):
             ...
     message: >
       Potential hardcoded secret. Use environment variables or a secrets
       manager (e.g. os.environ, Vault) instead.
     languages: [python]
     severity: ERROR
+    paths:
+      # Test fixtures legitimately contain dummy secrets / JWTs; excluding
+      # test files prevents recurring false positives without weakening
+      # detection in production code.
+      exclude:
+        - "**/*_test.py"
+        - "**/test_*.py"
+        - "**/tests/**"
     metadata:
       category: security
       cwe: CWE-798

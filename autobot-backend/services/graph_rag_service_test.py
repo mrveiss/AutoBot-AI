@@ -71,6 +71,8 @@ def mock_rag_service():
             ),
         )
     )
+    # get_metrics is awaited by GraphRAGService.get_metrics(); must be AsyncMock
+    rag.get_metrics = AsyncMock(return_value={"searches": 0})
     return rag
 
 
@@ -192,13 +194,92 @@ async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_
         max_results=5,
     )
 
-    # Verify graph traversal was called
+    # Issue #12389: start_entity="Redis Config" and every extracted entity
+    # match also resolves to "Redis Config" (fixture returns a fixed entity),
+    # so after starting-point dedup, get_related_entities is called exactly
+    # once for the single distinct entity name.
     mock_memory_graph.get_related_entities.assert_called_once()
+    assert mock_memory_graph.get_related_entities.call_args.kwargs["entity_name"] == "Redis Config"
 
     # Verify graph metrics
     assert metrics.graph_expansion_enabled is True
     assert metrics.graph_traversal_time > 0
     assert metrics.entities_explored >= 0
+
+
+@pytest.mark.asyncio
+async def test_graph_starting_points_dedup_by_entity_name(graph_rag_service, mock_memory_graph) -> None:
+    """Issue #12389: duplicate entity names collapse to a single starting point.
+
+    When start_entity coincides with an extracted entity, or the same entity
+    is extracted from multiple result chunks, get_related_entities must be
+    invoked at most once per distinct entity name.
+    """
+    entity_matches = [
+        EntityMatch(
+            entity={"name": "Redis Config", "id": "e1"},
+            relevance_score=0.9,
+            graph_distance=0,
+            relationship_path=[],
+        ),
+        EntityMatch(
+            entity={"name": "Redis Config", "id": "e1"},
+            relevance_score=0.8,
+            graph_distance=0,
+            relationship_path=[],
+        ),
+        EntityMatch(
+            entity={"name": "Other Entity", "id": "e2"},
+            relevance_score=0.7,
+            graph_distance=0,
+            relationship_path=[],
+        ),
+    ]
+
+    start_points = graph_rag_service._get_graph_starting_points(
+        start_entity="Redis Config",
+        entity_matches=entity_matches,
+    )
+
+    # "Redis Config" appears as start_entity + twice in entity_matches, but
+    # must collapse to a single starting point (first occurrence wins).
+    assert start_points == [("Redis Config", 1.0), ("Other Entity", 0.7)]
+
+    await graph_rag_service._fetch_related_entities_parallel(start_points, max_depth=2)
+
+    assert mock_memory_graph.get_related_entities.call_count == 2
+    called_names = {call.kwargs["entity_name"] for call in mock_memory_graph.get_related_entities.call_args_list}
+    assert called_names == {"Redis Config", "Other Entity"}
+
+
+@pytest.mark.asyncio
+async def test_graph_starting_points_dedup_is_case_insensitive(graph_rag_service) -> None:
+    """Issue #12389: dedup keys on the case-folded name to match the downstream
+    case-insensitive node resolution, so 'Redis Config' and 'redis config'
+    collapse to a single starting point (no redundant traversal)."""
+    entity_matches = [
+        EntityMatch(
+            entity={"name": "redis config", "id": "e1"},
+            relevance_score=0.9,
+            graph_distance=0,
+            relationship_path=[],
+        ),
+        EntityMatch(
+            entity={"name": "Other Entity", "id": "e2"},
+            relevance_score=0.7,
+            graph_distance=0,
+            relationship_path=[],
+        ),
+    ]
+
+    start_points = graph_rag_service._get_graph_starting_points(
+        start_entity="Redis Config",
+        entity_matches=entity_matches,
+    )
+
+    # "Redis Config" (start) and "redis config" (match) differ only in case →
+    # collapse to one; the original-cased start_entity is kept.
+    assert start_points == [("Redis Config", 1.0), ("Other Entity", 0.7)]
 
 
 @pytest.mark.asyncio

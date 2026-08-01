@@ -22,7 +22,7 @@ Endpoints:
 - GET /graph-rag/metrics - Performance metrics
 """
 
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -114,16 +114,32 @@ def _serialize_search_results(results) -> List[Metadata]:
     ]
 
 
+def _probe_component(name: str, check: Callable[[], bool]) -> str:
+    """Run a single component readiness probe, never raising.
+
+    A health probe must degrade gracefully (#12316): any exception is logged
+    and reported as ``"unavailable"`` rather than propagated as a 500.
+    """
+    try:
+        return "healthy" if check() else "unavailable"
+    except Exception:  # noqa: BLE001 — a health probe must never raise
+        logger.warning("Graph-RAG health probe failed for %s", name, exc_info=True)
+        return "unavailable"
+
+
 def _check_component_health(service: GraphRAGService) -> Dict[str, str]:
     """
     Check health status of service components.
 
     Issue #398: Extracted from graph_rag_health to reduce method length.
+    Issue #12316: each probe is guarded so a missing/failing dependency yields
+    ``"unavailable"`` instead of raising (memory_graph readiness lives on the
+    public ``AutoBotMemoryGraph.initialized`` property).
     """
     return {
         "graph_rag_service": "healthy",
-        "rag_service": "healthy" if service.rag else "unavailable",
-        "memory_graph": ("healthy" if service.graph and service.graph.initialized else "unavailable"),
+        "rag_service": _probe_component("rag_service", lambda: bool(service.rag)),
+        "memory_graph": _probe_component("memory_graph", lambda: bool(service.graph) and service.graph.initialized),
     }
 
 

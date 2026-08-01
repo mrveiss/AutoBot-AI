@@ -21,6 +21,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.time_utils import utc_timestamp
+
 # Directory of the autobot-slm-backend package root
 _BACKEND = Path(__file__).parent.parent.parent
 
@@ -40,7 +42,10 @@ if "aiohttp" not in sys.modules:
     sys.modules["aiohttp.ClientTimeout"] = MagicMock()
     sys.modules["aiohttp.ClientSession"] = MagicMock()
 
-# Pre-stub autobot_shared.http_client with the real sign_request signature
+# Pre-stub autobot_shared.http_client with the real sign_request signature.
+# get_http_client is a placeholder here (#13134: vault_client._request() now
+# routes through it) — individual tests replace it via
+# patch.object(_vault_client_mod, "get_http_client", ...) for real behavior.
 _hs_mod = types.ModuleType("autobot_shared.http_client")
 
 
@@ -53,6 +58,7 @@ def _sign_stub(service_id, service_key, method, path, timestamp):
 
 
 _hs_mod.sign_request = _sign_stub  # type: ignore[attr-defined]
+_hs_mod.get_http_client = MagicMock()  # type: ignore[attr-defined]
 sys.modules["autobot_shared.http_client"] = _hs_mod
 if "autobot_shared" not in sys.modules:
     sys.modules["autobot_shared"] = types.ModuleType("autobot_shared")
@@ -105,6 +111,21 @@ def _mock_provider(provider_id: uuid.UUID, config: dict) -> MagicMock:
     p.id = provider_id
     p.config = config
     return p
+
+
+def _fake_http_client(resp_mock: AsyncMock) -> MagicMock:
+    """Build a get_http_client() stand-in whose tracked_request() yields resp_mock.
+
+    Mirrors HTTPClientManager.tracked_request()'s async-context-manager shape
+    (#13134: vault_client._request() no longer opens its own ClientSession).
+    """
+    tracked_cm = AsyncMock()
+    tracked_cm.__aenter__ = AsyncMock(return_value=resp_mock)
+    tracked_cm.__aexit__ = AsyncMock(return_value=False)
+
+    client_mock = MagicMock()
+    client_mock.tracked_request = MagicMock(return_value=tracked_cm)
+    return client_mock
 
 
 # ---------------------------------------------------------------------------
@@ -175,23 +196,12 @@ class TestUnifiedVaultClientConfig:
     async def test_request_raises_secret_not_found_on_404(self, monkeypatch):
         monkeypatch.setattr(_vault_client_mod, "_SERVICE_KEY", "aabbcc" * 10)
 
-        # Simulate a 404 response from aiohttp
+        # Simulate a 404 response via the pooled client's tracked_request() (#13134)
         resp_mock = AsyncMock()
         resp_mock.status = 404
         resp_mock.ok = False
-        resp_mock.__aenter__ = AsyncMock(return_value=resp_mock)
-        resp_mock.__aexit__ = AsyncMock(return_value=False)
 
-        session_mock = AsyncMock()
-        session_mock.request = MagicMock(return_value=resp_mock)
-        session_mock.__aenter__ = AsyncMock(return_value=session_mock)
-        session_mock.__aexit__ = AsyncMock(return_value=False)
-
-        with patch.object(
-            sys.modules["aiohttp"],
-            "ClientSession",
-            return_value=session_mock,
-        ):
+        with patch.object(_vault_client_mod, "get_http_client", return_value=_fake_http_client(resp_mock)):
             with pytest.raises(_vault_client_mod.VaultSecretNotFound):
                 await _vault_client_mod._request("GET", "/api/v2/secrets/system/some-id")
 
@@ -203,15 +213,8 @@ class TestUnifiedVaultClientConfig:
         resp_mock.status = 500
         resp_mock.ok = False
         resp_mock.text = AsyncMock(return_value="internal error")
-        resp_mock.__aenter__ = AsyncMock(return_value=resp_mock)
-        resp_mock.__aexit__ = AsyncMock(return_value=False)
 
-        session_mock = AsyncMock()
-        session_mock.request = MagicMock(return_value=resp_mock)
-        session_mock.__aenter__ = AsyncMock(return_value=session_mock)
-        session_mock.__aexit__ = AsyncMock(return_value=False)
-
-        with patch.object(sys.modules["aiohttp"], "ClientSession", return_value=session_mock):
+        with patch.object(_vault_client_mod, "get_http_client", return_value=_fake_http_client(resp_mock)):
             with pytest.raises(_vault_client_mod.VaultClientError):
                 await _vault_client_mod._request("GET", "/api/v2/secrets/system/some-id")
 
@@ -266,7 +269,7 @@ class TestSSORotationStaleness:
 
     def test_check_staleness_fresh_not_stale(self):
         pid = uuid.uuid4()
-        fresh = datetime.now(timezone.utc).isoformat()
+        fresh = utc_timestamp()
         config = {"client_secret_rotated_at": fresh}
         report = _sso_rotation_mod.check_staleness(pid, config, fields=["client_secret"])
         assert report["client_secret"]["stale"] is False

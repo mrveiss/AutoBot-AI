@@ -8,6 +8,7 @@ Feedback API Router (Issue #905)
 Endpoints for completion feedback tracking and model improvement.
 """
 
+import asyncio
 from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -151,7 +152,10 @@ async def record_feedback(request: FeedbackRequest):
         )
 
     try:
-        feedback = _get_feedback_tracker().record_feedback(
+        # #10601: FeedbackTracker uses a blocking (sync) SQLAlchemy session, so
+        # offload it to a worker thread instead of stalling the event loop.
+        feedback = await asyncio.to_thread(
+            _get_feedback_tracker().record_feedback,
             context=request.context,
             suggestion=request.suggestion,
             action=request.action,
@@ -197,7 +201,9 @@ async def get_acceptance_metrics(
     - **time_window_days**: Time window for metrics (1-90 days)
     """
     try:
-        metrics = _get_feedback_tracker().get_acceptance_metrics(
+        # #10601: offload the blocking sync-DB query off the event loop.
+        metrics = await asyncio.to_thread(
+            _get_feedback_tracker().get_acceptance_metrics,
             language=language,
             pattern_type=pattern_type,
             time_window_days=time_window_days,
@@ -231,7 +237,8 @@ async def get_recent_feedback(
         )
 
     try:
-        events = _get_feedback_tracker().get_recent_feedback(limit=limit, action=action)
+        # #10601: offload the blocking sync-DB query off the event loop.
+        events = await asyncio.to_thread(_get_feedback_tracker().get_recent_feedback, limit=limit, action=action)
 
         return {
             "events": events,
@@ -307,8 +314,9 @@ async def get_feedback_statistics():
     """
     try:
         # Get 7-day and 30-day metrics
-        metrics_7d = _get_feedback_tracker().get_acceptance_metrics(time_window_days=7)
-        metrics_30d = _get_feedback_tracker().get_acceptance_metrics(time_window_days=30)
+        # #10601: offload the blocking sync-DB queries off the event loop.
+        metrics_7d = await asyncio.to_thread(_get_feedback_tracker().get_acceptance_metrics, time_window_days=7)
+        metrics_30d = await asyncio.to_thread(_get_feedback_tracker().get_acceptance_metrics, time_window_days=30)
 
         return {
             "last_7_days": {

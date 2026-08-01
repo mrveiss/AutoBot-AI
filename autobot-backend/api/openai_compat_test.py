@@ -31,6 +31,8 @@ from api import openai_compat
 from autobot_shared.rate_limit import IPRateLimiter
 
 
+# #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+# running before any async test on its worker had no current loop for get_event_loop().
 class TestGetUserAsync:
     """MVA-169: _get_user must be async and await get_current_user."""
 
@@ -49,7 +51,7 @@ class TestGetUserAsync:
                 mock_gcu.assert_awaited_once_with(fake_request)
                 assert result == fake_user
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
 
     def test_get_user_propagates_http_exception(self):
         fake_request = MagicMock()
@@ -64,7 +66,7 @@ class TestGetUserAsync:
                     await openai_compat._get_user(fake_request)
                 assert exc_info.value.status_code == 401
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
 
     def test_get_user_converts_unexpected_exception_to_401(self):
         fake_request = MagicMock()
@@ -80,7 +82,7 @@ class TestGetUserAsync:
                 assert exc_info.value.status_code == 401
                 assert exc_info.value.detail == "Unauthorized"
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
 
 
 class TestOAIRateLimitWiring:

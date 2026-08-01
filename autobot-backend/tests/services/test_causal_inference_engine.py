@@ -35,6 +35,23 @@ from services.causal_inference_engine import (
 from services.root_cause_analyzer import CausalEvent, RootCauseReport
 
 
+@pytest.fixture(autouse=True)
+def _mock_engine_redis(monkeypatch):
+    """Keep ``analyze_failure`` off real Redis.
+
+    ``CausalInferenceEngine._ensure_initialized()`` opens an async Redis
+    client (database ``knowledge``) and runs a readiness check. When run
+    scoped against an unreachable Redis it retries for ~30s per call,
+    making the suite pathologically slow / appear to hang. These tests
+    mock the root-cause analyzer, so a stub client keeps them fast and
+    deterministic without touching resolution logic.
+    """
+    monkeypatch.setattr(
+        "services.causal_inference_engine.get_async_redis_client",
+        AsyncMock(return_value=AsyncMock()),
+    )
+
+
 class TestInterventionGeneration:
     """Tests for intervention generation from causal events."""
 

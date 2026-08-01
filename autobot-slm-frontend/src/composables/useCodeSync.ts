@@ -8,17 +8,25 @@
  *
  * Provides reactive state and methods for code version tracking
  * and sync operations across the SLM fleet.
+ *
+ * #12420 Phase 2 (batch 6): migrated off a per-composable axios instance onto
+ * the canonical `slmApiClient`. The client injects the SLM bearer token and
+ * handles 401 (session clear + redirect to /login), replacing the former
+ * request/response interceptors — including #10369's expired-token logout.
+ *
+ * LOAD-BEARING for #12593: `getUpdateAllStatus()` and `getResolveDriftStatus()`
+ * MUST return `undefined` on connection-refused/network/5xx (so the code-sync
+ * page keeps polling through the SLM self-restart window) and `null` only on a
+ * true 404. `slmApiClient`'s convenience methods THROW on non-2xx, which would
+ * collapse that distinction, so those two pollers (and any specific-status
+ * handling) use `rawRequest` to inspect `response.status` directly.
  */
 
 import { ref, computed, readonly, toRef } from 'vue'
-import axios, { type AxiosInstance } from 'axios'
 import { useRoles, type Role, type SyncResult } from './useRoles'
 import { formatCommitHash } from '@/utils/commitHashUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
-import { useAuthStore } from '@/stores/auth'
-
-// SLM Admin uses the local SLM backend API
-const API_BASE = getSlmApiBase()
+import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
 // =============================================================================
 // Type Definitions
@@ -38,19 +46,13 @@ export interface CodeSyncStatus {
   total_nodes: number
 }
 
-export interface PendingNode {
-  node_id: string
-  hostname: string
-  ip_address: string
-  current_version: string | null
-  code_status: string
-}
+// GET /api/code-sync/pending (autobot-slm-backend/models/schemas.py:1715).
+// The wire name is `PendingNodeResponse`; the local `PendingNode` alias is kept
+// so existing importers do not churn.
+export type PendingNode = components['schemas']['PendingNodeResponse']
 
-export interface PendingNodesResponse {
-  nodes: PendingNode[]
-  total: number
-  latest_version: string | null
-}
+// GET /api/code-sync/pending (autobot-slm-backend/models/schemas.py:1725)
+export type PendingNodesResponse = components['schemas']['PendingNodesResponse']
 
 export interface SyncResponse {
   success: boolean
@@ -59,33 +61,35 @@ export interface SyncResponse {
   job_id?: string
 }
 
-export interface FleetSyncResponse {
-  success: boolean
-  message: string
-  job_id: string
-  nodes_queued: number
+// POST /api/code-sync/fleet/sync (autobot-slm-backend/models/schemas.py:1766)
+export type FleetSyncResponse = components['schemas']['FleetSyncResponse']
+
+// Issue #741 Phase 8: Fleet sync job tracking types.
+//
+// Both `status` fields are plain `str` in the contract
+// (`autobot-slm-backend/models/schemas.py:1780`, `:1790` — the value sets live
+// only in a trailing comment), so the generated schema widens them to `string`.
+// The narrowings below restate the enumerable assignment sites in
+// `autobot-slm-backend/api/code_sync.py`: node states at `:3156`/`:3180`
+// (syncing), `:3225`/`:3320` (success), `:3325` (failed) plus the `pending`
+// initial value; job states at `:3239` (running), `:3268` (completed/failed),
+// `:3272` (failed).
+export type FleetSyncNodeState = 'pending' | 'syncing' | 'success' | 'failed'
+export type FleetSyncJobState = 'pending' | 'running' | 'completed' | 'failed'
+
+// GET /api/code-sync/fleet/jobs/{job_id} -> nodes[]
+// (autobot-slm-backend/models/schemas.py:1775)
+export type FleetSyncNodeStatus = components['schemas']['FleetSyncNodeStatus'] & {
+  status: FleetSyncNodeState
 }
 
-// Issue #741 Phase 8: Fleet sync job tracking types
-export interface FleetSyncNodeStatus {
-  node_id: string
-  hostname: string
-  status: 'pending' | 'syncing' | 'success' | 'failed'
-  message: string | null
-  started_at: string | null
-  completed_at: string | null
-}
-
-export interface FleetSyncJobStatus {
-  job_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  strategy: string
-  total_nodes: number
-  completed_nodes: number
-  failed_nodes: number
+// GET /api/code-sync/fleet/jobs/{job_id}
+// (autobot-slm-backend/models/schemas.py:1786). Derived: the hand-written copy
+// omitted `failure_reason`, which the backend populates on every job failure
+// (`autobot-slm-backend/api/code_sync.py:386,401-402`).
+export type FleetSyncJobStatus = components['schemas']['FleetSyncJobStatus'] & {
+  status: FleetSyncJobState
   nodes: FleetSyncNodeStatus[]
-  created_at: string
-  completed_at: string | null
 }
 
 export interface RefreshResponse {
@@ -147,66 +151,159 @@ export interface ScheduleUpdateRequest {
   restart_after_sync?: boolean
 }
 
-export interface ScheduleRunResponse {
-  success: boolean
-  message: string
-  schedule_id: number
-  job_id: string | null
-}
+// POST /api/code-sync/schedules/{id}/run
+// (autobot-slm-backend/models/schemas.py:1880)
+export type ScheduleRunResponse = components['schemas']['ScheduleRunResponse']
 
-// Issue #2834: Drift detection types
-export interface DriftedFile {
-  path: string
-  source_checksum: string | null
-  deployed_checksum: string | null
-  status: 'modified' | 'source_only' | 'deployed_only'
-}
+// Issue #2834: Drift detection types.
+// GET /api/code-sync/drift (autobot-slm-backend/models/schemas.py:1655, :1664).
+// `status` is a real `Literal` server-side, so the contract already carries the
+// union and no narrowing is needed.
+export type DriftedFile = components['schemas']['DriftedFile']
+export type FileDriftReport = components['schemas']['FileDriftReport']
 
-export interface FileDriftReport {
-  source_dir: string
-  deployed_dir: string
-  drifted_files: DriftedFile[]
-  total_compared: number
-  drift_detected: boolean
-  checked_at: string
-}
+// Issue #7149: Drift resolution types.
+// POST /api/code-sync/drift/resolve (autobot-slm-backend/models/schemas.py:1681).
+// Derived: the hand-written copy omitted `deps_changed` and `post_steps`
+// (`schemas.py:1689-1690`), so the caller could not tell whether the resync
+// changed dependencies or what post-steps ran.
+export type DriftResolveResponse = components['schemas']['DriftResolveResponse']
 
-// Issue #7149: Drift resolution types
-export interface DriftResolveResponse {
-  success: boolean
-  component: string
-  message: string
-  source_dir: string
-  deployed_dir: string
+// Issue #11303: Async per-component drift/resolve job types.
+// POST /api/code-sync/drift/resolve-async
+// (autobot-slm-backend/models/schemas.py:1693)
+export type DriftResolveJobResponse = components['schemas']['DriftResolveJobResponse']
+
+/**
+ * The four states a component-resolve job row can hold.
+ *
+ * `ComponentSyncJobStatus.status` is `str` in the contract
+ * (`autobot-slm-backend/models/schemas.py:1706`); the assignment sites are
+ * enumerable — `code_sync.py:945` (running), `:191` (queued, the #11437
+ * requeue path), `:298` (completed/failed) and `:182`/`:230`/`:265`/`:280`
+ * (failed). `CodeSyncView.vue:566,605` branches on these literals.
+ */
+export type ComponentSyncJobState = 'queued' | 'running' | 'completed' | 'failed'
+
+// GET /api/code-sync/drift/resolve/status/{job_id}
+// (autobot-slm-backend/models/schemas.py:1701)
+export type ComponentSyncJobStatus = components['schemas']['ComponentSyncJobStatus'] & {
+  status: ComponentSyncJobState
 }
 
 // Re-export role types for consumers (Issue #779)
 export type { Role, SyncResult }
 
-// Issue #9971: One-click update-all types
-export type StageStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
+// Issue #9971: One-click update-all types.
 
-export interface UpdateAllStage {
-  name: string
+/**
+ * Pipeline stage status — mirrors `_StageStatus`
+ * (`autobot-slm-backend/api/code_sync.py:4239-4245`).
+ *
+ * `'current'` ("already at target commit", C4) was missing from the previous
+ * hand-written union even though `CodeSyncView.vue:127` and `:145` already map
+ * it, so the type contradicted the view's own rendering.
+ */
+export type StageStatus =
+  | 'pending'
+  | 'running'
+  | 'success'
+  | 'failed'
+  | 'skipped'
+  | 'current'
+
+/**
+ * Update-all job status — mirrors every `job.status = …` site in
+ * `autobot-slm-backend/api/code_sync.py`: `:5053` (running), `:5033`
+ * (already_current), `:5036`/`:5176` (completed), `:4940`
+ * (partial | completed), `:5144`/`:5184`/`:5294` (failed), plus the `pending`
+ * default at `:4266`.
+ *
+ * `'partial'` was missing from the previous hand-written union. The backend has
+ * emitted it since #11511, whenever a non-operational fleet node is skipped.
+ */
+export type UpdateAllJobStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'partial'
+  | 'failed'
+  | 'already_current'
+
+// GET /api/code-sync/update-all/status -> stages[]
+// (autobot-slm-backend/api/code_sync.py:4248)
+export type UpdateAllStage = components['schemas']['UpdateAllStage'] & {
   status: StageStatus
-  message: string | null
-  sha: string | null
-  deps_changed: boolean
-  log_lines: string[]
-  started_at: string | null
-  completed_at: string | null
 }
 
-export interface UpdateAllJob {
-  job_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'already_current'
+// POST /api/code-sync/update-all, GET /api/code-sync/update-all/status
+// (autobot-slm-backend/api/code_sync.py:4261). Derived: the hand-written copy
+// omitted `skipped_fleet_nodes` (`code_sync.py:4270`), the #11511 counter for
+// nodes skipped as non-operational.
+export type UpdateAllJob = components['schemas']['UpdateAllJob'] & {
+  status: UpdateAllJobStatus
   stages: UpdateAllStage[]
-  total_fleet_nodes: number
-  completed_fleet_nodes: number
-  failed_fleet_nodes: number
-  created_at: string
-  completed_at: string | null
-  failure_reason: string | null
+}
+
+// =============================================================================
+// Update-All poll helpers (#9971 F1, #12593) — pure functions, unit-tested.
+// =============================================================================
+
+// Pipeline stage (index 3) that restarts the SLM control plane the code-sync
+// page itself polls; ~1min of transient poll failures follow (issue #12593).
+export const SLM_SELF_UPDATE_STAGE = 'slm_self_update'
+
+/**
+ * True when the pipeline is mid stage-3 self-restart AND at least one poll has
+ * failed transiently — i.e. the control plane is bouncing, so the UI should
+ * show a "reconnecting" affordance immediately (#12593) instead of a bare
+ * "updating..." spinner. `transientErrors` resets to 0 on the next successful
+ * poll, so this flips back to false automatically once contact is restored.
+ */
+export function isSelfUpdateReconnecting(
+  job: UpdateAllJob | null,
+  transientErrors: number,
+): boolean {
+  if (!job || transientErrors < 1) return false
+  const running = job.stages.find((s) => s.status === 'running')
+  return running?.name === SLM_SELF_UPDATE_STAGE
+}
+
+export type UpdateAllPollDecision = 'continue' | 'lost-contact' | 'giveup'
+
+/**
+ * Classify a run of consecutive transient poll errors (#9971 F1). Show the
+ * "lost contact" banner at `lostContactThreshold`; hard give-up (stop polling)
+ * at `maxThreshold`. Thresholds are unchanged by #12593.
+ */
+export function classifyUpdateAllPollError(
+  transientErrors: number,
+  lostContactThreshold: number,
+  maxThreshold: number,
+): UpdateAllPollDecision {
+  if (transientErrors >= maxThreshold) return 'giveup'
+  if (transientErrors >= lostContactThreshold) return 'lost-contact'
+  return 'continue'
+}
+
+// =============================================================================
+// Internal helpers
+// =============================================================================
+
+/**
+ * Best-effort read of a FastAPI `{ detail }` error body from a raw Response.
+ * Returns null when the body is absent/non-JSON so callers can fall back to a
+ * generic message. Used by the `rawRequest`-based methods that must preserve
+ * the exact detail-derived error strings the axios implementation produced.
+ */
+async function readDetail(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { detail?: unknown } | null
+    const detail = body?.detail
+    return typeof detail === 'string' ? detail : null
+  } catch {
+    return null
+  }
 }
 
 // =============================================================================
@@ -214,36 +311,9 @@ export interface UpdateAllJob {
 // =============================================================================
 
 export function useCodeSync() {
-  const authStore = useAuthStore()
-
-  // Create axios client
-  const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  // #10369 — without a 401 handler an expired/invalid token makes the status
-  // poller spam 401s forever; log out so the UI redirects to login instead.
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        authStore.logout()
-      }
-      return Promise.reject(error)
-    }
-  )
+  // #10369 / auth: token injection and 401 handling (session clear + redirect
+  // to /login) are now performed by `slmApiClient`, replacing the former axios
+  // request/response interceptors — no per-composable client needed.
 
   // Initialize roles composable (Issue #779)
   const rolesComposable = useRoles()
@@ -302,15 +372,12 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.get<CodeSyncStatus>('/code-sync/status')
-      status.value = response.data
+      const data = await slmApiClient.get<CodeSyncStatus>('/code-sync/status')
+      status.value = data
       lastRefresh.value = new Date()
-      return response.data
+      return data
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch code sync status'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return null
     } finally {
       loading.value = false
@@ -326,19 +393,16 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.post<RefreshResponse>('/code-sync/refresh')
+      const data = await slmApiClient.post<RefreshResponse>('/code-sync/refresh')
 
-      if (response.data.success) {
+      if (data.success) {
         // Refresh status after manual refresh to get updated data
         await fetchStatus()
       }
 
-      return response.data.success
+      return data.success
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to refresh version'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return false
     } finally {
       loading.value = false
@@ -354,14 +418,11 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.get<PendingNodesResponse>('/code-sync/pending')
-      pendingNodes.value = response.data.nodes
-      return response.data.nodes
+      const data = await slmApiClient.get<PendingNodesResponse>('/code-sync/pending')
+      pendingNodes.value = data.nodes
+      return data.nodes
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch pending nodes'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return []
     } finally {
       loading.value = false
@@ -387,32 +448,16 @@ export function useCodeSync() {
     }
 
     try {
-      const response = await client.post<SyncResponse>(
+      // rawRequest (single-shot, raw status): the SLM Manager self-restart path
+      // returns a 502 that must be interpreted as success, not surfaced as an
+      // error — the convenience `post` would throw and lose the status code.
+      const response = await slmApiClient.rawRequest(
         `/code-sync/nodes/${nodeId}/sync`,
-        payload
+        { method: 'POST', body: payload }
       )
 
-      // Set error if sync failed
-      if (!response.data.success) {
-        error.value = response.data.message
-      } else {
-        // Issue #1231: SLM self-sync is fire-and-forget — the backend
-        // returns immediately before the background task completes.
-        // Refreshing now would return stale data (node still outdated).
-        // Skip refresh and let the caller handle the delayed update.
-        const isSLMSelfSync = response.data.message?.includes(
-          'SLM update queued'
-        )
-        if (!isSLMSelfSync) {
-          await fetchPendingNodes()
-          await fetchStatus()
-        }
-      }
-
-      return response.data
-    } catch (e) {
       // Special handling for SLM Manager self-restart (502 errors expected)
-      if (axios.isAxiosError(e) && e.response?.status === 502) {
+      if (response.status === 502) {
         // #9956: Identify the SLM server by its detected SLM roles, not by a
         // hardcoded/substring node name — operators may rename the node.
         const nodeRoles = await rolesComposable
@@ -432,11 +477,33 @@ export function useCodeSync() {
         }
       }
 
+      if (!response.ok) {
+        const detail = await readDetail(response)
+        error.value = detail || 'Sync failed'
+        return { success: false, message: error.value, node_id: nodeId }
+      }
+
+      const data = (await response.json()) as SyncResponse
+
+      // Set error if sync failed
+      if (!data.success) {
+        error.value = data.message
+      } else {
+        // Issue #1231: SLM self-sync is fire-and-forget — the backend
+        // returns immediately before the background task completes.
+        // Refreshing now would return stale data (node still outdated).
+        // Skip refresh and let the caller handle the delayed update.
+        const isSLMSelfSync = data.message?.includes('SLM update queued')
+        if (!isSLMSelfSync) {
+          await fetchPendingNodes()
+          await fetchStatus()
+        }
+      }
+
+      return data
+    } catch (e) {
       const message = e instanceof Error ? e.message : 'Sync failed'
       error.value = message
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return { success: false, message: error.value || message, node_id: nodeId }
     } finally {
       loading.value = false
@@ -460,26 +527,23 @@ export function useCodeSync() {
     }
 
     try {
-      const response = await client.post<FleetSyncResponse>(
+      const data = await slmApiClient.post<FleetSyncResponse>(
         '/code-sync/fleet/sync',
         payload
       )
 
       // Set error if fleet sync failed
-      if (!response.data.success) {
-        error.value = response.data.message
+      if (!data.success) {
+        error.value = data.message
       } else {
         // Refresh status after fleet sync is queued
         await fetchStatus()
       }
 
-      return response.data
+      return data
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Fleet sync failed'
       error.value = message
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return { success: false, message: error.value || message, job_id: '', nodes_queued: 0 }
     } finally {
       loading.value = false
@@ -493,14 +557,13 @@ export function useCodeSync() {
    */
   async function getJobStatus(jobId: string): Promise<FleetSyncJobStatus | null> {
     try {
-      const response = await client.get<FleetSyncJobStatus>(
-        `/code-sync/fleet/jobs/${jobId}`
+      // Single-shot poll — no retry/backoff (matches the former axios call).
+      return await slmApiClient.get<FleetSyncJobStatus>(
+        `/code-sync/fleet/jobs/${jobId}`,
+        { maxRetries: 1 }
       )
-      return response.data
     } catch (e) {
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
+      error.value = e instanceof Error ? e.message : 'Failed to fetch job status'
       return null
     }
   }
@@ -512,15 +575,13 @@ export function useCodeSync() {
    */
   async function getRecentJobs(limit = 10): Promise<FleetSyncJobStatus[]> {
     try {
-      const response = await client.get<FleetSyncJobStatus[]>(
-        '/code-sync/fleet/jobs',
-        { params: { limit } }
+      // Single-shot poll — no retry/backoff (matches the former axios call).
+      return await slmApiClient.get<FleetSyncJobStatus[]>(
+        `/code-sync/fleet/jobs?limit=${limit}`,
+        { maxRetries: 1 }
       )
-      return response.data
     } catch (e) {
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
+      error.value = e instanceof Error ? e.message : 'Failed to fetch recent jobs'
       return []
     }
   }
@@ -560,14 +621,11 @@ export function useCodeSync() {
    */
   async function fetchSchedules(): Promise<UpdateSchedule[]> {
     try {
-      const response = await client.get<UpdateSchedule[]>('/code-sync/schedules')
-      schedules.value = response.data
-      return response.data
+      const data = await slmApiClient.get<UpdateSchedule[]>('/code-sync/schedules')
+      schedules.value = data
+      return data
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch schedules'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return []
     }
   }
@@ -582,17 +640,14 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.post<UpdateSchedule>(
+      const data = await slmApiClient.post<UpdateSchedule>(
         '/code-sync/schedules',
         schedule
       )
       await fetchSchedules()
-      return response.data
+      return data
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to create schedule'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return null
     } finally {
       loading.value = false
@@ -610,17 +665,14 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.put<UpdateSchedule>(
+      const data = await slmApiClient.put<UpdateSchedule>(
         `/code-sync/schedules/${id}`,
         update
       )
       await fetchSchedules()
-      return response.data
+      return data
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to update schedule'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return null
     } finally {
       loading.value = false
@@ -635,14 +687,11 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      await client.delete(`/code-sync/schedules/${id}`)
+      await slmApiClient.delete(`/code-sync/schedules/${id}`)
       await fetchSchedules()
       return true
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to delete schedule'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return false
     } finally {
       loading.value = false
@@ -665,16 +714,13 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.post<ScheduleRunResponse>(
+      const data = await slmApiClient.post<ScheduleRunResponse>(
         `/code-sync/schedules/${id}/run`
       )
       await fetchSchedules()
-      return response.data
+      return data
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to run schedule'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return null
     } finally {
       loading.value = false
@@ -695,16 +741,13 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.get<FileDriftReport>('/code-sync/drift', {
-        params: { component },
-      })
-      driftReport.value = response.data
-      return response.data
+      const data = await slmApiClient.get<FileDriftReport>(
+        `/code-sync/drift?component=${encodeURIComponent(component)}`
+      )
+      driftReport.value = data
+      return data
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch drift report'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return null
     } finally {
       loading.value = false
@@ -725,21 +768,74 @@ export function useCodeSync() {
     error.value = null
 
     try {
-      const response = await client.post<DriftResolveResponse>('/code-sync/drift/resolve', {
+      const data = await slmApiClient.post<DriftResolveResponse>('/code-sync/drift/resolve', {
         component,
       })
-      if (!response.data.success) {
-        error.value = response.data.message
+      if (!data.success) {
+        error.value = data.message
       }
-      return response.data
+      return data
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to resolve drift'
-      if (axios.isAxiosError(e) && e.response?.data?.detail) {
-        error.value = e.response.data.detail
-      }
       return null
     } finally {
       loading.value = false
+    }
+  }
+
+  /**
+   * Start an async per-component drift/resolve job (#11303).
+   *
+   * Returns immediately with a job_id instead of awaiting the full rsync +
+   * post-sync steps inline, so the GUI never blocks on a slow resync or the
+   * component's own service restart. Poll getResolveDriftStatus() for progress.
+   *
+   * Uses rawRequest so the 409 (restart in flight) detail is surfaced verbatim
+   * in `error.value` (the convenience `post` would prefix "HTTP 409: ").
+   */
+  async function startResolveDriftAsync(component: string): Promise<DriftResolveJobResponse | null> {
+    error.value = null
+    try {
+      const response = await slmApiClient.rawRequest('/code-sync/drift/resolve-async', {
+        method: 'POST',
+        body: { component },
+      })
+      if (!response.ok) {
+        const detail = await readDetail(response)
+        error.value = detail || 'Failed to start drift resolve job'
+        return null
+      }
+      return (await response.json()) as DriftResolveJobResponse
+    } catch {
+      error.value = 'Failed to start drift resolve job'
+      return null
+    }
+  }
+
+  /**
+   * Poll the status of an async drift/resolve job (#11303).
+   *
+   * Returns null ONLY on a true 404 (unknown job_id) so the caller stops
+   * polling. Returns undefined on transient errors (network refused / 5xx
+   * during the component's own restart) so the caller keeps polling instead
+   * of treating a self-restart as job failure. rawRequest gives the raw status
+   * needed to keep this 404-vs-transient distinction intact.
+   */
+  async function getResolveDriftStatus(jobId: string): Promise<ComponentSyncJobStatus | null | undefined> {
+    try {
+      const response = await slmApiClient.rawRequest(
+        `/code-sync/drift/resolve/status/${jobId}`,
+        { method: 'GET' }
+      )
+      if (response.status === 404) {
+        return null
+      }
+      if (!response.ok) {
+        return undefined
+      }
+      return (await response.json()) as ComponentSyncJobStatus
+    } catch {
+      return undefined
     }
   }
 
@@ -794,9 +890,11 @@ export function useCodeSync() {
     syncRole: rolesComposable.syncRole,
     pullFromSource: rolesComposable.pullFromSource,
 
-    // Drift detection (Issue #2834) + resolution (#7149)
+    // Drift detection (Issue #2834) + resolution (#7149) + async job (#11303)
     fetchDrift,
     resolveDrift,
+    startResolveDriftAsync,
+    getResolveDriftStatus,
 
     // SLM self-update (#9073)
     selfUpdate,
@@ -814,18 +912,27 @@ export function useCodeSync() {
    * Start the one-click update-all orchestration pipeline.
    * Returns the initial UpdateAllJob or null on 409 (already running).
    * F1: distinguishes 404 (no job) from transient errors (network/5xx).
+   *
+   * rawRequest preserves the exact 409-vs-other detail-derived error strings
+   * the axios implementation surfaced in `error.value`.
    */
   async function startUpdateAll(): Promise<UpdateAllJob | null> {
     try {
-      const response = await client.post<UpdateAllJob>('/code-sync/update-all')
-      return response.data
-    } catch (e: unknown) {
-      const axiosErr = e as { response?: { status?: number; data?: { detail?: string } } }
-      if (axiosErr?.response?.status === 409) {
-        error.value = axiosErr.response?.data?.detail || 'Update already running'
-      } else {
-        error.value = axiosErr?.response?.data?.detail || 'Failed to start update'
+      const response = await slmApiClient.rawRequest('/code-sync/update-all', {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        const detail = await readDetail(response)
+        if (response.status === 409) {
+          error.value = detail || 'Update already running'
+        } else {
+          error.value = detail || 'Failed to start update'
+        }
+        return null
       }
+      return (await response.json()) as UpdateAllJob
+    } catch {
+      error.value = 'Failed to start update'
       return null
     }
   }
@@ -833,36 +940,52 @@ export function useCodeSync() {
   /**
    * Poll the status of the current update-all job.
    *
-   * F1: Returns null ONLY on true 404 (no job ever started).
-   *     Returns undefined on transient errors (network refused / 5xx during
-   *     SLM restart) so the caller can distinguish "stop polling" from "keep polling".
+   * F1 / #12593: Returns null ONLY on a true 404 (no job ever started) so the
+   * caller stops polling. Returns undefined on transient errors (connection
+   * refused / network / 5xx during the SLM self-restart window) so the caller
+   * keeps polling instead of treating the control-plane bounce as a hard stop.
+   *
+   * MUST use rawRequest: `slmApiClient.get` throws a generic `Error('HTTP <n>:
+   * …')` on non-2xx and retries transient failures, which would erase the
+   * 404-vs-transient distinction this #12593 contract depends on.
    */
   async function getUpdateAllStatus(): Promise<UpdateAllJob | null | undefined> {
     try {
-      const response = await client.get<UpdateAllJob>('/code-sync/update-all/status')
-      return response.data
-    } catch (e: unknown) {
-      const axiosErr = e as { response?: { status?: number }; code?: string; message?: string }
+      const response = await slmApiClient.rawRequest('/code-sync/update-all/status', {
+        method: 'GET',
+      })
       // True 404 = no job started yet → stop polling
-      if (axiosErr?.response?.status === 404) {
+      if (response.status === 404) {
         return null
       }
-      // Network error or 5xx during SLM restart → transient, keep polling
+      // 5xx (or any other non-2xx) during SLM restart → transient, keep polling
+      if (!response.ok) {
+        return undefined
+      }
+      return (await response.json()) as UpdateAllJob
+    } catch {
+      // Network error / connection refused / timeout → transient, keep polling
       return undefined
     }
   }
 
   async function selfUpdate(): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await client.post<{ success: boolean; message: string; node_id?: string }>(
-        '/code-sync/self-update'
-      )
-      return { success: response.data.success, message: response.data.message }
-    } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Self-update request failed'
-      return { success: false, message: msg }
+      const response = await slmApiClient.rawRequest('/code-sync/self-update', {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        const detail = await readDetail(response)
+        return { success: false, message: detail || 'Self-update request failed' }
+      }
+      const data = (await response.json()) as {
+        success: boolean
+        message: string
+        node_id?: string
+      }
+      return { success: data.success, message: data.message }
+    } catch {
+      return { success: false, message: 'Self-update request failed' }
     }
   }
 }

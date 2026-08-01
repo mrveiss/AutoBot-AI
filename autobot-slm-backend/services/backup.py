@@ -333,7 +333,6 @@ class BackupService:
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
-            "-o",
             "ConnectTimeout=15",
             "-o",
             "BatchMode=yes",

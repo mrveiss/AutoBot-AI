@@ -28,11 +28,6 @@ EntityType = Literal[
 ]
 
 
-def _utcnow() -> datetime:
-    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
-    return now_utc()
-
-
 class Entity(BaseModel):
     """
     Represents an extracted entity from document processing.
@@ -58,5 +53,5 @@ class Entity(BaseModel):
     source_document_id: UUID = Field(..., description="Primary source document ID")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Extraction confidence score")
     extraction_count: int = Field(default=1, description="Number of times entity was extracted")
-    created_at: datetime = Field(default_factory=_utcnow, description="Entity creation timestamp")
-    updated_at: datetime = Field(default_factory=_utcnow, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=now_utc, description="Entity creation timestamp")
+    updated_at: datetime = Field(default_factory=now_utc, description="Last update timestamp")

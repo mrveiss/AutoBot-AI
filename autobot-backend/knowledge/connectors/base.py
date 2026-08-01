@@ -25,6 +25,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Set, TypeVar
 
 from autobot_shared.datetime_utils import datetime_now
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.time_utils import parse_utc_iso
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -44,6 +45,11 @@ _CHECKPOINT_TTL_SECONDS = 86400
 
 _JOB_KEY_SUFFIX = ":job:current"
 _JOB_TTL_S = 86400  # 24 h
+
+# Issue #12659: TTL for per-source last-modified timestamps written by
+# _store_ts()/read by _load_ts() — shared by connectors doing Redis-backed
+# incremental sync (confluence, gitlab, jira, slack, gdrive, nextcloud, ...).
+_TS_REDIS_TTL_SECONDS = 86400 * 30  # 30 days
 
 
 class RetryableError(Exception):
@@ -78,6 +84,16 @@ class AbstractConnector(ABC):
     connector_type: str = ""
     tier: int = 0
     config_version: int = 1
+
+    # Issue #12659: Redis key prefix used by _load_ts()/_store_ts(). Defaults
+    # to "connector:<connector_type>:ts:"; override when a connector's Redis
+    # namespace differs from its connector_type (e.g. GiteaConnector shares
+    # GitLabConnector's "connector:gitlab:ts:" prefix).
+    _ts_redis_prefix: str | None = None
+
+    # Issue #12659: API field name holding a file's last-modified timestamp,
+    # used by the shared _detect_changes_via_file_listing() helper.
+    _modified_time_field: str = "modifiedTime"
 
     @classmethod
     def migrate_config(cls, stored_version: int, config: dict) -> dict:
@@ -244,6 +260,109 @@ class AbstractConnector(ABC):
             await redis.delete(key)
         except Exception as exc:
             self.logger.warning("checkpoint clear failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Issue #12659 — Per-source last-modified timestamp (incremental sync)
+    # ------------------------------------------------------------------
+
+    def _ts_redis_key(self, source_id: str) -> str:
+        prefix = self._ts_redis_prefix or ("connector:%s:ts:" % self.connector_type)
+        return "%s%s:%s" % (prefix, self.config.connector_id, source_id)
+
+    async def _load_ts(self, source_id: str) -> str | None:
+        """Load the stored last-modified timestamp for *source_id* from Redis.
+
+        Extracted from 6 byte-identical per-connector copies (Issue #12659):
+        confluence, gitlab (+ gitea), jira, slack, gdrive, nextcloud.
+        """
+        try:
+            from autobot_shared.redis_client import get_redis_client
+
+            redis = get_redis_client(database="knowledge")
+            key = self._ts_redis_key(source_id)
+            value = redis.get(key)
+            if hasattr(value, "__await__"):
+                value = await value
+            if isinstance(value, bytes):
+                return value.decode("utf-8")
+            return value
+        except Exception as exc:
+            self.logger.warning("Redis load_ts failed for %s: %s", source_id, exc)
+            return None
+
+    async def _store_ts(self, source_id: str, ts: str) -> None:
+        """Persist the last-modified timestamp for *source_id* in Redis.
+
+        Extracted alongside _load_ts() (Issue #12659) — same duplication,
+        mirrored write path.
+        """
+        try:
+            from autobot_shared.redis_client import get_redis_client
+
+            redis = get_redis_client(database="knowledge")
+            key = self._ts_redis_key(source_id)
+            result = redis.set(key, ts, ex=_TS_REDIS_TTL_SECONDS)
+            if hasattr(result, "__await__"):
+                await result
+        except Exception as exc:
+            self.logger.warning("Redis store_ts failed for %s: %s", source_id, exc)
+
+    # ------------------------------------------------------------------
+    # Issue #12659 — Shared file-listing change detection (gdrive/onedrive)
+    # ------------------------------------------------------------------
+
+    async def _classify_change(
+        self,
+        source_id: str,
+        last_modified: str,
+        since: datetime | None,
+    ) -> ChangeInfo | None:
+        """Return ChangeInfo when a file is new or was modified after *since*.
+
+        Extracted from gdrive.py/onedrive.py (Issue #12659: byte-identical).
+        """
+        if since is None:
+            return ChangeInfo(
+                source_id=source_id,
+                change_type="added",
+                timestamp=datetime_now(),
+                details={"last_modified": last_modified},
+            )
+
+        stored_ts = await self._load_ts(source_id)
+        if stored_ts is None or last_modified > stored_ts:
+            change_type = "added" if stored_ts is None else "modified"
+            return ChangeInfo(
+                source_id=source_id,
+                change_type=change_type,
+                timestamp=parse_utc_iso(last_modified) if last_modified else datetime_now(),
+                details={"last_modified": last_modified},
+            )
+
+        return None
+
+    async def _detect_changes_via_file_listing(self, since: datetime | None) -> List[ChangeInfo]:
+        """Shared detect_changes() body for connectors that list files then
+        classify each via _classify_change() (Issue #12659: gdrive/onedrive).
+
+        Requires the connector to implement ``_list_all_files()`` returning
+        dicts with an ``id`` key, and to set ``_modified_time_field`` to the
+        API's per-file last-modified key (e.g. "modifiedTime" for Google
+        Drive, "lastModifiedDateTime" for OneDrive/Graph).
+        """
+        files = await self._list_all_files()
+        changes: List[ChangeInfo] = []
+
+        for file_item in files:
+            file_id = file_item.get("id", "")
+            source_id = "%s:%s:file:%s" % (self.connector_type, self.config.connector_id, file_id)
+            last_modified = file_item.get(self._modified_time_field, "")
+
+            change = await self._classify_change(source_id, last_modified, since)
+            if change:
+                changes.append(change)
+
+        return changes
 
     # ------------------------------------------------------------------
     # Default implementations — connectors may override

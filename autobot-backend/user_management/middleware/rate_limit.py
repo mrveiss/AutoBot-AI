@@ -84,5 +84,4 @@ class PasswordChangeRateLimiter:
             # Increment failed attempts
             await redis_client.incr(key)
             await redis_client.expire(key, self.WINDOW_SECONDS)
-            # codeql[py/clear-text-logging-sensitive-data]
             logger.warning("Failed password change attempt for user %s", user_id)

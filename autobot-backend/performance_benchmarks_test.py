@@ -183,23 +183,14 @@ class TestKnowledgeBasePerformance:
         """Set up test environment"""
         self.benchmark = PerformanceBenchmark()
 
-        # Mock configuration for testing
-        with patch("knowledge_base.global_config_manager") as mock_config:
-            mock_config.get_redis_config.return_value = {"enabled": False}  # Use in-memory for testing
-            mock_config.get_llm_config.return_value = {
-                "unified": {
-                    "embedding": {
-                        "provider": "ollama",
-                        "providers": {
-                            "ollama": {
-                                "host": "http://localhost:11434",  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
-                                "selected_model": "nomic-embed-text",
-                            }
-                        },
-                    }
-                }
-            }
-            self.kb = KnowledgeBase()
+        # #13112: `KnowledgeBase()` takes no config args and no longer exposes
+        # a `global_config_manager` symbol to patch. `__init__` reads from the
+        # module-level `knowledge.base.config` singleton via plain
+        # `config.get("dotted.key", default)` calls (never `get_redis_config`/
+        # `get_llm_config`, which this fixture used to mock) with safe
+        # defaults, so bare construction is sufficient — same pattern already
+        # exercised by `dependency_injection_test.py::test_knowledge_base_backward_compatibility`.
+        self.kb = KnowledgeBase()
 
     async def test_knowledge_base_search_performance(self):
         """Benchmark knowledge base search operations"""

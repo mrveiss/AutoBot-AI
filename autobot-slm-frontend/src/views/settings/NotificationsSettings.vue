@@ -10,9 +10,8 @@
  */
 
 import { ref, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 
-const authStore = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
@@ -34,23 +33,20 @@ async function fetchSettings(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch(`${authStore.getApiUrl()}/api/settings`, {
-      headers: authStore.getAuthHeaders(),
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      data.forEach((s: { key: string; value: string | null }) => {
-        if (s.value !== null && s.key in notifications.value) {
-          const key = s.key as keyof typeof notifications.value
-          if (typeof notifications.value[key] === 'boolean') {
-            (notifications.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
-          } else {
-            (notifications.value as Record<string, string | number | boolean>)[key] = s.value
-          }
+    // #13140: canonical SLM client. A rejected session now surfaces as an
+    // error (and clears the session) instead of being swallowed and leaving
+    // the panel showing its hard-coded defaults.
+    const data = await listSettings()
+    data.forEach((s) => {
+      if (s.value !== null && s.value !== undefined && s.key in notifications.value) {
+        const key = s.key as keyof typeof notifications.value
+        if (typeof notifications.value[key] === 'boolean') {
+          (notifications.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
+        } else {
+          (notifications.value as Record<string, string | number | boolean>)[key] = s.value
         }
-      })
-    }
+      }
+    })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load settings'
   } finally {
@@ -64,15 +60,16 @@ async function saveSettings(): Promise<void> {
   success.value = null
 
   try {
+    // #13140: the previous copy discarded every response, so a rejected write
+    // still reported "Notification settings saved successfully".
+    const failed: string[] = []
     for (const [key, value] of Object.entries(notifications.value)) {
-      await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-        method: 'PUT',
-        headers: {
-          ...authStore.getAuthHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value: String(value) }),
-      })
+      if (!(await upsertSetting(key, { value: String(value) }))) {
+        failed.push(key)
+      }
+    }
+    if (failed.length > 0) {
+      throw new Error(`Failed to save setting(s): ${failed.join(', ')}`)
     }
     success.value = 'Notification settings saved successfully'
     setTimeout(() => { success.value = null }, 3000)

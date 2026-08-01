@@ -5,7 +5,7 @@
 """
 Unit Tests — NotionIntegration (Issue #4099)
 
-Tests are isolated: all aiohttp calls are patched so no real network traffic occurs.
+Tests are isolated: all HTTP calls are patched so no real network traffic occurs.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -27,23 +27,25 @@ def _make_config(**kwargs) -> IntegrationConfig:
     return IntegrationConfig(**defaults)
 
 
-def _mock_session(status: int, body: dict):
-    """Build a nested mock that mimics aiohttp.ClientSession context manager."""
+def _mock_client(status: int, body: dict):
+    """Build a mock ``HTTPClientManager`` whose ``tracked_request()`` yields a
+    response mimicking the given status/body.
+
+    Issue #12979: ``_notion_request`` routes through the shared pool's
+    ``get_http_client().tracked_request(method, url, **kwargs)`` rather than
+    constructing its own ``aiohttp.ClientSession``.
+    """
     resp = AsyncMock()
     resp.status = status
     resp.json = AsyncMock(return_value=body)
 
-    cm_inner = AsyncMock()
-    cm_inner.__aenter__ = AsyncMock(return_value=resp)
-    cm_inner.__aexit__ = AsyncMock(return_value=False)
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=resp)
+    cm.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session = MagicMock()
-    mock_session.request = MagicMock(return_value=cm_inner)
-
-    cm_outer = MagicMock()
-    cm_outer.__aenter__ = AsyncMock(return_value=mock_session)
-    cm_outer.__aexit__ = AsyncMock(return_value=False)
-    return cm_outer
+    mock_client = MagicMock()
+    mock_client.tracked_request = MagicMock(return_value=cm)
+    return mock_client
 
 
 @pytest.mark.asyncio
@@ -54,10 +56,10 @@ class TestNotionIntegration:
     # test_connection
     # ------------------------------------------------------------------
 
-    @patch("aiohttp.ClientSession")
-    async def test_test_connection_success(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_test_connection_success(self, mock_get_client):
         """Returns CONNECTED status on HTTP 200 from /users/me."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "id": "bot-uuid",
@@ -73,20 +75,20 @@ class TestNotionIntegration:
         assert health.details["bot_id"] == "bot-uuid"
         assert health.details["workspace_name"] == "My Workspace"
 
-    @patch("aiohttp.ClientSession")
-    async def test_test_connection_unauthorized(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_test_connection_unauthorized(self, mock_get_client):
         """Returns UNAUTHORIZED status on HTTP 401."""
-        mock_session_cls.return_value = _mock_session(401, {"object": "error"})
+        mock_get_client.return_value = _mock_client(401, {"object": "error"})
         integration = NotionIntegration(_make_config())
         health = await integration.test_connection()
 
         assert health.status == IntegrationStatus.UNAUTHORIZED
         assert integration.status == IntegrationStatus.UNAUTHORIZED
 
-    @patch("aiohttp.ClientSession")
-    async def test_test_connection_error(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_test_connection_error(self, mock_get_client):
         """Returns ERROR status on unexpected HTTP codes."""
-        mock_session_cls.return_value = _mock_session(500, {})
+        mock_get_client.return_value = _mock_client(500, {})
         integration = NotionIntegration(_make_config())
         health = await integration.test_connection()
 
@@ -106,10 +108,10 @@ class TestNotionIntegration:
     # list_databases
     # ------------------------------------------------------------------
 
-    @patch("aiohttp.ClientSession")
-    async def test_list_databases_success(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_list_databases_success(self, mock_get_client):
         """Parses database objects from /search response."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "results": [
@@ -132,10 +134,10 @@ class TestNotionIntegration:
         assert result["databases"][0]["id"] == "db-1"
         assert result["databases"][0]["title"] == "Tasks"
 
-    @patch("aiohttp.ClientSession")
-    async def test_list_databases_http_error(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_list_databases_http_error(self, mock_get_client):
         """Returns error dict on non-200 response."""
-        mock_session_cls.return_value = _mock_session(403, {})
+        mock_get_client.return_value = _mock_client(403, {})
         integration = NotionIntegration(_make_config())
         result = await integration.execute_action("list_databases", {})
         assert "error" in result
@@ -150,10 +152,10 @@ class TestNotionIntegration:
         result = await integration.execute_action("query_database", {})
         assert "error" in result
 
-    @patch("aiohttp.ClientSession")
-    async def test_query_database_success(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_query_database_success(self, mock_get_client):
         """Parses rows and has_more from database query response."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "results": [
@@ -186,8 +188,8 @@ class TestNotionIntegration:
         result = await integration.execute_action("get_page", {})
         assert "error" in result
 
-    @patch("aiohttp.ClientSession")
-    async def test_get_page_success(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_get_page_success(self, mock_get_client):
         """Returns page metadata and block list on success."""
         page_body = {
             "id": "page-xyz",
@@ -216,18 +218,13 @@ class TestNotionIntegration:
         resp.status = 200
         resp.json = fake_json
 
-        cm_inner = AsyncMock()
-        cm_inner.__aenter__ = AsyncMock(return_value=resp)
-        cm_inner.__aexit__ = AsyncMock(return_value=False)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=False)
 
-        mock_session = MagicMock()
-        mock_session.request = MagicMock(return_value=cm_inner)
-
-        cm_outer = MagicMock()
-        cm_outer.__aenter__ = AsyncMock(return_value=mock_session)
-        cm_outer.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session_cls.return_value = cm_outer
+        mock_client = MagicMock()
+        mock_client.tracked_request = MagicMock(return_value=cm)
+        mock_get_client.return_value = mock_client
 
         integration = NotionIntegration(_make_config())
         result = await integration.execute_action("get_page", {"page_id": "page-xyz"})
@@ -246,10 +243,10 @@ class TestNotionIntegration:
         result = await integration.execute_action("create_page", {"database_id": "db-1"})
         assert "error" in result
 
-    @patch("aiohttp.ClientSession")
-    async def test_create_page_success(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_create_page_success(self, mock_get_client):
         """Returns page id, url and created_time on 200."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "id": "new-page-id",
@@ -285,10 +282,10 @@ class TestNotionIntegration:
         result = await integration.execute_action("update_page", {"page_id": "page-1"})
         assert "error" in result
 
-    @patch("aiohttp.ClientSession")
-    async def test_update_page_archive(self, mock_session_cls):
+    @patch("integrations.notion_integration.get_http_client")
+    async def test_update_page_archive(self, mock_get_client):
         """Sends archived=True and returns page id on 200."""
-        mock_session_cls.return_value = _mock_session(
+        mock_get_client.return_value = _mock_client(
             200,
             {
                 "id": "page-1",

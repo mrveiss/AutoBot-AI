@@ -17,6 +17,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from integrations.base import (
@@ -278,6 +279,11 @@ class GitHubIntegration(BaseIntegration):
         - Handles HTTP 403 (secondary rate limit) and 429 with Retry-After.
         - Retries on transient 5xx errors (exponential back-off, max 3×).
         - Never raises on HTTP errors; returns structured dict instead.
+
+        Issue #12979: routed through the shared pooled client's
+        ``tracked_request()`` — never raises on HTTP status, so
+        ``get_json()``/``post_json()`` (which raise via ``raise_for_status()``)
+        would change this method's error-path contract.
         """
         url = f"{self.base_url}{path}"
 
@@ -300,67 +306,67 @@ class GitHubIntegration(BaseIntegration):
         for attempt in range(self._MAX_RETRIES + 1):
             try:
                 timeout = aiohttp.ClientTimeout(total=30.0)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.request(
-                        method,
-                        url,
-                        headers=self._auth_headers,
-                        params=query_params,
-                        json=json_data,
-                    ) as resp:
-                        resp_headers = dict(resp.headers)
-                        body = await resp.json(content_type=None)
-                        last_result = {
-                            "status_code": resp.status,
-                            "body": body,
-                            "headers": resp_headers,
-                        }
+                async with get_http_client().tracked_request(
+                    method,
+                    url,
+                    headers=self._auth_headers,
+                    params=query_params,
+                    json=json_data,
+                    timeout=timeout,
+                ) as resp:
+                    resp_headers = dict(resp.headers)
+                    body = await resp.json(content_type=None)
+                    last_result = {
+                        "status_code": resp.status,
+                        "body": body,
+                        "headers": resp_headers,
+                    }
 
-                        # Always update rate limit state from headers
-                        self._rate_limiter.apply_response_headers(self._token_key, resp_headers, service="github")
+                    # Always update rate limit state from headers
+                    self._rate_limiter.apply_response_headers(self._token_key, resp_headers, service="github")
 
-                        if resp.status == 403:
-                            retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after")
-                            if retry_after:
-                                self._rate_limiter.apply_response_headers(
-                                    self._token_key,
-                                    {"Retry-After": retry_after},
-                                    service="github",
-                                )
-                            msg = body.get("message", "")
-                            logger.warning("GitHub 403 for %s %s: %s", method, path, msg)
-                            return last_result
-
-                        if resp.status == 429:
-                            retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after", "60")
-                            wait = float(retry_after)
-                            logger.warning("GitHub 429 for %s %s — waiting %.1fs", method, path, wait)
+                    if resp.status == 403:
+                        retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after")
+                        if retry_after:
                             self._rate_limiter.apply_response_headers(
                                 self._token_key,
-                                {"Retry-After": str(wait)},
+                                {"Retry-After": retry_after},
                                 service="github",
                             )
-                            if attempt < self._MAX_RETRIES:
-                                await asyncio.sleep(min(wait, 120.0))
-                                continue
-                            return last_result
-
-                        if resp.status in self._RETRY_STATUS_CODES:
-                            if attempt < self._MAX_RETRIES:
-                                backoff = 2.0**attempt
-                                logger.warning(
-                                    "GitHub %d for %s %s — retrying in %.1fs (attempt %d/%d)",
-                                    resp.status,
-                                    method,
-                                    path,
-                                    backoff,
-                                    attempt + 1,
-                                    self._MAX_RETRIES,
-                                )
-                                await asyncio.sleep(backoff)
-                                continue
-
+                        msg = body.get("message", "")
+                        logger.warning("GitHub 403 for %s %s: %s", method, path, msg)
                         return last_result
+
+                    if resp.status == 429:
+                        retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after", "60")
+                        wait = float(retry_after)
+                        logger.warning("GitHub 429 for %s %s — waiting %.1fs", method, path, wait)
+                        self._rate_limiter.apply_response_headers(
+                            self._token_key,
+                            {"Retry-After": str(wait)},
+                            service="github",
+                        )
+                        if attempt < self._MAX_RETRIES:
+                            await asyncio.sleep(min(wait, 120.0))
+                            continue
+                        return last_result
+
+                    if resp.status in self._RETRY_STATUS_CODES:
+                        if attempt < self._MAX_RETRIES:
+                            backoff = 2.0**attempt
+                            logger.warning(
+                                "GitHub %d for %s %s — retrying in %.1fs (attempt %d/%d)",
+                                resp.status,
+                                method,
+                                path,
+                                backoff,
+                                attempt + 1,
+                                self._MAX_RETRIES,
+                            )
+                            await asyncio.sleep(backoff)
+                            continue
+
+                    return last_result
 
             except asyncio.TimeoutError:
                 logger.warning("GitHub request timed out: %s %s", method, path)

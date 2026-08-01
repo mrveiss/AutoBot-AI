@@ -36,16 +36,22 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_code import MCPTool
 from api.schemas_system import (
+    BrowserClickIndexRequest,
+    BrowserClickIndexResponse,
     BrowserClickRequest,
     BrowserClickResponse,
     BrowserEvaluateRequest,
     BrowserEvaluateResponse,
+    BrowserFillIndexRequest,
+    BrowserFillIndexResponse,
     BrowserFillRequest,
     BrowserFillResponse,
     BrowserGetAttributeRequest,
     BrowserGetAttributeResponse,
     BrowserGetTextRequest,
     BrowserGetTextResponse,
+    BrowserHoverIndexRequest,
+    BrowserHoverIndexResponse,
     BrowserHoverRequest,
     BrowserHoverResponse,
     BrowserInterceptApiRequest,
@@ -57,8 +63,12 @@ from api.schemas_system import (
     BrowserPageSnapshotResponse,
     BrowserScreenshotRequest,
     BrowserScreenshotResponse,
+    BrowserSelectIndexRequest,
+    BrowserSelectIndexResponse,
     BrowserSelectRequest,
     BrowserSelectResponse,
+    BrowserStateRequest,
+    BrowserStateResponse,
     BrowserWaitForSelectorRequest,
     BrowserWaitForSelectorResponse,
 )
@@ -93,6 +103,12 @@ ALLOWED_URL_SCHEMES = {"http", "https"}
 
 # Security Configuration
 BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BROWSER_SERVICE_PORT}"
+
+# #11539: the browser-worker keys one isolated BrowserContext per session_id
+# (cookies/localStorage/auth state never cross conversations). Every call
+# without an explicit session_id maps to this bucket, preserving prior
+# single-session behavior for a lone conversation.
+DEFAULT_BROWSER_SESSION_ID = "default"
 
 # URL Whitelist - Only these domains are allowed
 ALLOWED_URL_PATTERNS = [
@@ -387,6 +403,80 @@ def _get_browser_interaction_tools() -> List[MCPTool]:
     ]
 
 
+def _get_indexed_interaction_tools() -> List[MCPTool]:
+    """MCP tools for indexed interactive-element actions (#11537).
+
+    OpenManus numbers every interactive element on the page so the model
+    clicks/fills by index instead of inventing a CSS selector; the index is
+    resolved to a concrete element server-side in the browser worker.
+    """
+    index_field = {"type": "integer", "description": "Element index from the numbered element menu."}
+    # Stale-index guard (#11538 review MINOR 3): echo browser_state's element_count
+    # back so the worker rejects the call if the page changed shape since then.
+    expected_count_field = {
+        "type": "integer",
+        "description": "Optional: element_count from the browser_state call this index was chosen against.",
+    }
+    return [
+        MCPTool(
+            name="browser_state",
+            description=(
+                "Get the current page state: URL, title, scroll info, and a numbered " "menu of interactive elements."
+            ),
+            input_schema={"type": "object", "properties": {}},
+        ),
+        MCPTool(
+            name="click_index",
+            description="Click an interactive element by its numbered index from the page's element menu",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "index": index_field,
+                    "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+                    "expected_element_count": expected_count_field,
+                },
+                "required": ["index"],
+            },
+        ),
+        MCPTool(
+            name="fill_index",
+            description="Fill an interactive element by its numbered index from the page's element menu",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "index": index_field,
+                    "value": {"type": "string", "description": "Value to fill into the element"},
+                    "timeout": {"type": "integer", "description": "Timeout in milliseconds", "default": 10000},
+                    "expected_element_count": expected_count_field,
+                },
+                "required": ["index", "value"],
+            },
+        ),
+        MCPTool(
+            name="select_index",
+            description="Select a dropdown option on an element identified by its numbered index",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "index": index_field,
+                    "value": {"type": "string", "description": "Value to select"},
+                    "expected_element_count": expected_count_field,
+                },
+                "required": ["index", "value"],
+            },
+        ),
+        MCPTool(
+            name="hover_index",
+            description="Hover over an interactive element by its numbered index",
+            input_schema={
+                "type": "object",
+                "properties": {"index": index_field, "expected_element_count": expected_count_field},
+                "required": ["index"],
+            },
+        ),
+    ]
+
+
 def _create_screenshot_tool() -> MCPTool:
     """Helper for _get_browser_extraction_tools. Build screenshot MCPTool. Ref: #1088."""
     return MCPTool(
@@ -532,6 +622,7 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
     tools = []
     tools.extend(_get_browser_navigation_tools())
     tools.extend(_get_browser_interaction_tools())
+    tools.extend(_get_indexed_interaction_tools())  # #11537
     tools.extend(_get_browser_extraction_tools())
     tools.extend(_get_web_pipeline_tools())  # #5136 Phase 1
     return tools
@@ -540,16 +631,28 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
-async def send_to_browser_vm(action: str, params: Metadata) -> Metadata:
+async def send_to_browser_vm(
+    action: str,
+    params: Metadata,
+    session_id: str = DEFAULT_BROWSER_SESSION_ID,
+) -> Metadata:
     """
     Send automation command to Browser VM
 
     This is the core communication layer with the Playwright server
     running on the Browser VM (NetworkConstants.BROWSER_VM_IP)
+
+    Issue #11539: ``session_id`` is threaded on every call so the worker
+    routes to the BrowserContext dedicated to that conversation instead of a
+    single context shared (and its cookies leaked) across every caller.
     """
     try:
         http_client = get_http_client()
-        payload = {"action": action, "params": params}
+        payload = {
+            "action": action,
+            "params": params,
+            "session_id": session_id or DEFAULT_BROWSER_SESSION_ID,
+        }
         async with await http_client.post(
             f"{BROWSER_VM_URL}/automation",
             json=payload,
@@ -609,6 +712,7 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
             "wait_until": request.wait_until,
             "timeout": request.timeout,
         },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -636,6 +740,7 @@ async def click_mcp(request: BrowserClickRequest) -> Metadata:
     result = await send_to_browser_vm(
         "click",
         {"selector": request.selector, "timeout": request.timeout},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -667,6 +772,7 @@ async def fill_mcp(request: BrowserFillRequest) -> Metadata:
             "value": request.value,
             "timeout": request.timeout,
         },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -695,6 +801,7 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
     result = await send_to_browser_vm(
         "screenshot",
         {"selector": request.selector, "full_page": request.full_page},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -727,7 +834,11 @@ async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
 
     logger.info("Browser evaluate: %s...", request.script[:100])
 
-    result = await send_to_browser_vm("evaluate", {"script": request.script})
+    result = await send_to_browser_vm(
+        "evaluate",
+        {"script": request.script},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
 
     return {
         "success": True,
@@ -758,6 +869,7 @@ async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metad
             "timeout": request.timeout,
             "state": request.state,
         },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -783,7 +895,11 @@ async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
 
     logger.info("Browser get_text: %s", request.selector)
 
-    result = await send_to_browser_vm("get_text", {"selector": request.selector})
+    result = await send_to_browser_vm(
+        "get_text",
+        {"selector": request.selector},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
 
     return {
         "success": True,
@@ -810,6 +926,7 @@ async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
     result = await send_to_browser_vm(
         "get_attribute",
         {"selector": request.selector, "attribute": request.attribute},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -838,6 +955,7 @@ async def select_mcp(request: BrowserSelectRequest) -> Metadata:
     result = await send_to_browser_vm(
         "select",
         {"selector": request.selector, "value": request.value},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
     )
 
     return {
@@ -863,7 +981,11 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
 
     logger.info("Browser hover: %s", request.selector)
 
-    result = await send_to_browser_vm("hover", {"selector": request.selector})
+    result = await send_to_browser_vm(
+        "hover",
+        {"selector": request.selector},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
 
     return {
         "success": True,
@@ -872,6 +994,164 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
         "result": result,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
+
+
+# --- Indexed interactive-element endpoints (#11537) ---
+
+
+@router.post("/mcp/state", response_model=BrowserStateResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="browser_state_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def browser_state_mcp(request: BrowserStateRequest) -> Metadata:
+    """Get the current page state: URL, title, scroll info, numbered elements."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    result = await send_to_browser_vm(
+        "browser_state",
+        {},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "browser_state",
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/click_index", response_model=BrowserClickIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="click_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def click_index_mcp(request: BrowserClickIndexRequest) -> Metadata:
+    """Click an element by its numbered index, resolved server-side."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser click_index: %s", request.index)
+
+    result = await send_to_browser_vm(
+        "click_index",
+        {
+            "index": request.index,
+            "timeout": request.timeout,
+            "expected_element_count": request.expected_element_count,
+        },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "click_index",
+        "index": request.index,
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/fill_index", response_model=BrowserFillIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="fill_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def fill_index_mcp(request: BrowserFillIndexRequest) -> Metadata:
+    """Fill an element by its numbered index, resolved server-side."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser fill_index: %s", request.index)
+
+    result = await send_to_browser_vm(
+        "fill_index",
+        {
+            "index": request.index,
+            "value": request.value,
+            "timeout": request.timeout,
+            "expected_element_count": request.expected_element_count,
+        },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "fill_index",
+        "index": request.index,
+        "value_length": len(request.value),
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/select_index", response_model=BrowserSelectIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="select_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def select_index_mcp(request: BrowserSelectIndexRequest) -> Metadata:
+    """Select a dropdown option on an element by its numbered index."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser select_index: %s -> %s", request.index, request.value)
+
+    result = await send_to_browser_vm(
+        "select_index",
+        {
+            "index": request.index,
+            "value": request.value,
+            "expected_element_count": request.expected_element_count,
+        },
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "select_index",
+        "index": request.index,
+        "value": request.value,
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+@router.post("/mcp/hover_index", response_model=BrowserHoverIndexResponse)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="hover_index_mcp",
+    error_code_prefix="BROWSER_MCP",
+)
+async def hover_index_mcp(request: BrowserHoverIndexRequest) -> Metadata:
+    """Hover over an element by its numbered index, resolved server-side."""
+    if not await check_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    logger.info("Browser hover_index: %s", request.index)
+
+    result = await send_to_browser_vm(
+        "hover_index",
+        {"index": request.index, "expected_element_count": request.expected_element_count},
+        session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+    )
+
+    return {
+        "success": True,
+        "action": "hover_index",
+        "index": request.index,
+        "result": result,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
+
+# --- End indexed interactive-element endpoints (#11537) ---
 
 
 @router.get("/mcp/status", response_model=BrowserMcpStatusResponse)
@@ -919,7 +1199,7 @@ async def get_browser_mcp_status() -> Metadata:
             "max_per_minute": MAX_REQUESTS_PER_MINUTE,
             "reset_time": reset_time_iso,
         },
-        "tools_available": 12,  # updated for page_snapshot + intercept_api (#5136)
+        "tools_available": 17,  # #5136 page_snapshot+intercept_api, #11537 +5 indexed-element tools
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 

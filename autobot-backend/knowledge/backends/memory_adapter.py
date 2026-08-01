@@ -43,8 +43,26 @@ def _cosine_distance(a: Sequence[float], b: Sequence[float]) -> float:
     return 1.0 - (num / (da * db))
 
 
+def _match_field(actual: Any, expected: Any) -> bool:
+    """Match one metadata field against a plain value or a single-key operator dict.
+
+    Issue #12623: extended from bare equality to also support ``$ne`` (the
+    operator the chat-RAG quarantine filter — #12622 — and this repo's
+    knowledge base use to exclude the ``research`` collection). Missing
+    metadata (``actual is None``) matches ``$ne`` — same "absent field passes"
+    semantics verified empirically against real ChromaDB in #13010.
+    """
+    if isinstance(expected, dict):
+        if "$ne" in expected:
+            return actual != expected["$ne"]
+        if "$eq" in expected:
+            return actual == expected["$eq"]
+        return False  # unsupported operator -> fail-safe: no match
+    return actual == expected
+
+
 def _match_where(meta: Metadata | None, where: Where | None) -> bool:
-    """Minimal ``where`` filter: equality on top-level keys only.
+    """Minimal ``where`` filter: equality plus ``$ne``/``$eq`` on top-level keys.
 
     Full ChromaDB where syntax (``$and``, ``$or``, ``$in`` ...) is out of
     scope for the in-memory fake — tests that need it should use ChromaDB
@@ -52,10 +70,9 @@ def _match_where(meta: Metadata | None, where: Where | None) -> bool:
     """
     if not where:
         return True
-    if meta is None:
-        return False
     for key, expected in where.items():
-        if meta.get(key) != expected:
+        actual = meta.get(key) if meta is not None else None
+        if not _match_field(actual, expected):
             return False
     return True
 

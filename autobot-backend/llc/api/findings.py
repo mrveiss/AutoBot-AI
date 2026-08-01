@@ -3,6 +3,7 @@
 """LLC findings API — scan / proposals / promote / dismiss (#11271).
 
 Routes (all served under /api/llc via the parent router):
+  GET  /findings/policy
   POST /projects/{project_id}/findings/scan
   GET  /projects/{project_id}/findings/proposals
   POST /findings/proposals/{proposal_id}/promote
@@ -20,8 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from llc.deps import get_session
+from llc.deps import load_owned_project as _load_owned_project
 from llc.models.finding_proposal import LLCFindingProposal
-from llc.models.sprint import LLCProject
 from llc.services.finding_proposal_service import (
     FindingsDisabledError,
     ProposalStateError,
@@ -72,15 +73,6 @@ class DismissRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def _load_owned_project(project_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCProject:
-    """Load project by id; 404 when missing or owned by a different org."""
-    result = await session.execute(select(LLCProject).where(LLCProject.id == project_id))
-    project = result.scalar_one_or_none()
-    if project is None or str(project.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
-
-
 async def _load_owned_proposal(proposal_id: uuid.UUID, session: AsyncSession, ctx: TenantContext) -> LLCFindingProposal:
     """Load proposal by id; 404 when missing or owned by a different org."""
     result = await session.execute(select(LLCFindingProposal).where(LLCFindingProposal.id == proposal_id))
@@ -93,6 +85,40 @@ async def _load_owned_proposal(proposal_id: uuid.UUID, session: AsyncSession, ct
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+class FindingsPolicyResponse(BaseModel):
+    """Client-visible findings policy (#12734).
+
+    Only the fields a caller needs to decide whether, and how, to offer the
+    scan action. Deliberately excludes operational tuning (verify_batch_size,
+    run_on_index) — those are SLM-side concerns and exposing them would invite
+    the UI to depend on values it has no business reacting to.
+    """
+
+    enabled: bool
+    min_severity: str
+    require_approval_to_promote: bool
+
+
+@router.get("/findings/policy", response_model=FindingsPolicyResponse)
+async def get_policy(
+    _current_user: dict = Depends(get_current_user),
+    _ctx: TenantContext = Depends(require_org_context),
+) -> FindingsPolicyResponse:
+    """Return the findings policy so clients can gate the scan action (#12734).
+
+    The feature is OFF by default, and the policy was previously readable only
+    inside the backend — so the UI rendered a prominent "Scan for findings"
+    button that could only ever return 403. A client cannot gate on a value it
+    has no way to read.
+    """
+    policy = await get_findings_policy()
+    return FindingsPolicyResponse(
+        enabled=policy.enabled,
+        min_severity=policy.min_severity,
+        require_approval_to_promote=policy.require_approval_to_promote,
+    )
 
 
 @router.post("/projects/{project_id}/findings/scan")

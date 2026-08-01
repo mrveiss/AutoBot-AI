@@ -13,14 +13,21 @@
  */
 
 import { ref, computed, readonly } from 'vue'
-import axios, { type AxiosInstance } from 'axios'
+import { makeAxiosCompatClient } from '@/utils/slmApiCompat'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useOrchestration')
 
-// SLM Admin uses the local SLM backend API
-const API_BASE = getSlmApiBase()
+// SLM backend transport: the canonical `slmApiClient` behind the axios-shaped
+// facade (#13079/#13140). This composable used to hold its own
+// `axios.create({ baseURL: getSlmApiBase() })` with a `sessionStorage`-only
+// bearer interceptor, NO timeout and no 401 handling. `slmApiClient` supplies
+// the sessionStorage->localStorage token fallback (ApiClient.ts:113), the
+// `VITE_SLM_API_TIMEOUT_MS` budget (:44-48) and the 401 session teardown
+// (:128-151). Endpoints below stay relative to the API base, which the client
+// resolves via `getSlmApiBase()` (:104).
+const client = makeAxiosCompatClient()
 
 // =============================================================================
 // Type Definitions
@@ -36,15 +43,23 @@ export interface ServiceDefinition {
   health_check_type: string
 }
 
-export interface ServiceActionRequest {
-  node_id?: string | null
-  force?: boolean
-}
+// POST /api/orchestration/services/{name}/{start,stop,restart}
+// (autobot-slm-backend/models/schemas.py:841).
+//
+// `Partial<>` rather than a bare alias: `force` carries a server-side default
+// (`default=False`), and openapi-typescript emits defaulted fields as REQUIRED
+// because the *response* always has them. On a request body that is backwards —
+// every field of this model is optional to send. `Omit`/`Pick` cannot be used
+// here: the generated types are intersected with an `additionalProperties`
+// index signature, so `keyof` is `string | number` and those helpers collapse
+// the named members away. `Partial` is homomorphic and preserves them.
+export type ServiceActionRequest = Partial<
+  components['schemas']['ServiceActionRequest']
+>
 
-export interface ServiceMigrateRequest {
-  source_node_id: string
-  target_node_id: string
-}
+// POST /api/orchestration/services/{name}/migrate
+// (autobot-slm-backend/models/schemas.py, ServiceMigrateRequest)
+export type ServiceMigrateRequest = components['schemas']['ServiceMigrateRequest']
 
 export interface ServiceActionResponse {
   service_name: string
@@ -62,16 +77,24 @@ export interface FleetServiceEntry {
   message: string
 }
 
-export interface FleetStatusResponse {
-  timestamp: string
+/**
+ * GET /api/orchestration/status (autobot-slm-backend/api/orchestration.py:75).
+ *
+ * The backend declares `services: dict` (`orchestration.py:79`) with no value
+ * model, so the contract can only say `{ [key: string]: unknown }`. Deriving
+ * that verbatim would delete a real, load-bearing guarantee — every consumer
+ * reads `.status`/`.host`/`.port` off the entries. The intersection keeps the
+ * derivation for the scalar fields (so a renamed/added count is caught) while
+ * pinning the element shape the endpoint actually builds.
+ */
+export type FleetStatusResponse = components['schemas']['FleetStatusResponse'] & {
   services: Record<string, FleetServiceEntry>
-  healthy_count: number
-  unhealthy_count: number
 }
 
-export interface BulkActionRequest {
-  exclude?: string[]
-}
+// POST /api/orchestration/{start,stop,restart}-all
+// (autobot-slm-backend/api/orchestration.py:84). `exclude` has a
+// `default_factory=list`, so it is optional to send — see ServiceActionRequest.
+export type BulkActionRequest = Partial<components['schemas']['BulkActionRequest']>
 
 export interface BulkActionResult {
   success: boolean
@@ -82,11 +105,11 @@ export interface BulkActionResult {
   start_message?: string
 }
 
-export interface BulkActionResponse {
-  action: string
+// POST /api/orchestration/{start,stop,restart}-all
+// (autobot-slm-backend/api/orchestration.py:93). `results` is a bare `dict`
+// server-side (`orchestration.py:97`) — same reasoning as FleetStatusResponse.
+export type BulkActionResponse = components['schemas']['BulkActionResponse'] & {
   results: Record<string, BulkActionResult>
-  success_count: number
-  failure_count: number
 }
 
 // =============================================================================
@@ -94,21 +117,6 @@ export interface BulkActionResponse {
 // =============================================================================
 
 export function useOrchestration() {
-  // Create axios client
-  const client: AxiosInstance = axios.create({
-    baseURL: API_BASE,
-    headers: { 'Content-Type': 'application/json' },
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    const token = sessionStorage.getItem('slm_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
   // ===========================================================================
   // Reactive State
   // ===========================================================================
@@ -142,8 +150,13 @@ export function useOrchestration() {
     e: unknown,
     fallback: string
   ): string {
-    if (axios.isAxiosError(e) && e.response?.data?.detail) {
-      return e.response.data.detail
+    // `slmApiCompat` rejects with an axios-SHAPED error (`err.response.status`
+    // / `.data`) but not an axios instance, so `axios.isAxiosError` would miss
+    // it and every backend `detail` would degrade to `HTTP <n>`. Read the shape
+    // directly instead.
+    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+    if (typeof detail === 'string' && detail.length > 0) {
+      return detail
     }
     return e instanceof Error ? e.message : fallback
   }

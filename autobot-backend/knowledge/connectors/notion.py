@@ -25,7 +25,9 @@ from typing import Any, Dict, List
 import aiohttp
 
 from autobot_shared.auth import BearerAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.notion_utils import extract_title as _extract_title
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -266,10 +268,11 @@ class NotionConnector(AbstractConnector):
         }
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers, json=json_data) as resp:
-                    body = await resp.json(content_type=None)
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(
+                method, url, headers=headers, json=json_data, timeout=timeout, suppress_error_log=True
+            ) as resp:
+                body = await resp.json(content_type=None)
+                return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
             self.logger.warning("Notion request to %s failed: %s", url, exc)
             return {"status_code": 0, "error": str(exc)}
@@ -316,17 +319,6 @@ def _blocks_to_text(blocks: List[Dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
-def _extract_title(obj: Dict[str, Any]) -> str:
-    """Extract the plain-text title from a Notion page or database object."""
-    title_array = obj.get("title", [])
-    if title_array and isinstance(title_array, list):
-        return "".join(t.get("plain_text", "") for t in title_array)
-
-    props = obj.get("properties", {})
-    for prop_name in ("Name", "Title", "title"):
-        prop = props.get(prop_name, {})
-        title_values = prop.get("title", [])
-        if title_values:
-            return "".join(t.get("plain_text", "") for t in title_values)
-
-    return ""
+# Issue #12659: _extract_title() single-sourced in autobot_shared/notion_utils.py
+# (was byte-identical to integrations/notion_integration.py's copy) —
+# imported at the top of this module as `extract_title as _extract_title`.

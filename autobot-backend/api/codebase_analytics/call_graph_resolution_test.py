@@ -148,7 +148,8 @@ class TestExtractImportContext:
 
         assert ctx.resolve_name("Dict") == "typing.Dict"
         assert ctx.resolve_name("List") == "typing.List"
-        assert ctx.resolve_name("Optional") == "typing.Optional"
+        # Optional is not part of this import statement, so it stays unresolved
+        assert ctx.resolve_name("Optional") is None
 
     def test_skip_star_import(self):
         """Test that star imports are skipped."""

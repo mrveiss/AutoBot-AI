@@ -35,6 +35,7 @@ from constants.threshold_constants import (
     TimingConstants,
 )
 from knowledge.search import map_kb_result_to_dict  # Issue #10740 shared mapper
+from llm_shared.torch_loader import lazy_torch
 
 if TYPE_CHECKING:
     import torch as _torch_type  # noqa: F401
@@ -52,19 +53,14 @@ except (ImportError, RuntimeError):
 logger = get_llm_logger("ai_hardware_accelerator")
 
 # Issue #3016: lazy module-level imports for torch, torch.nn.functional, PIL
-_torch = None
+# Issue #12714: torch loader unified onto the shared thread-safe llm_shared.torch_loader.
 _torch_F = None
 _PILImage = None
 
 
 def _get_torch():
     """Lazy-load torch on first use. Issue #3016."""
-    global _torch  # noqa: PLW0603
-    if _torch is None:
-        import torch
-
-        _torch = torch
-    return _torch
+    return lazy_torch()
 
 
 def _get_torch_F():

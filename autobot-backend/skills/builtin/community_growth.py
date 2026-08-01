@@ -14,8 +14,7 @@ import asyncio
 import json
 from typing import Any, Dict, List, Tuple
 
-import aiohttp
-
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_ollama_url
 from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
@@ -290,15 +289,14 @@ class CommunityGrowthSkill(BaseSkill):
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json={"text": content}) as resp:
-                data = await resp.json()
-                if resp.status == 201:
-                    tweet_id = data.get("data", {}).get("id", "")
-                    tweet_url = f"https://twitter.com/i/web/status/{tweet_id}"
-                    return {"success": True, "tweet_url": tweet_url}
-                error_msg = data.get("detail", f"HTTP {resp.status}")
-                return {"success": False, "error": error_msg}
+        async with get_http_client().tracked_request("POST", url, headers=headers, json={"text": content}) as resp:
+            data = await resp.json()
+            if resp.status == 201:
+                tweet_id = data.get("data", {}).get("id", "")
+                tweet_url = f"https://twitter.com/i/web/status/{tweet_id}"
+                return {"success": True, "tweet_url": tweet_url}
+            error_msg = data.get("detail", f"HTTP {resp.status}")
+            return {"success": False, "error": error_msg}
 
     async def _discord_notify(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Send a notification to a Discord webhook. Issue #1161."""
@@ -319,12 +317,11 @@ class CommunityGrowthSkill(BaseSkill):
         if embed_title:
             payload["embeds"] = [{"title": embed_title, "url": embed_url or ""}]
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload) as resp:
-                if resp.status in (200, 204):
-                    return {"success": True}
-                text = await resp.text()
-                return {"success": False, "error": f"HTTP {resp.status}: {text[:200]}"}
+        async with get_http_client().tracked_request("POST", webhook_url, json=payload) as resp:
+            if resp.status in (200, 204):
+                return {"success": True}
+            text = await resp.text()
+            return {"success": False, "error": f"HTTP {resp.status}: {text[:200]}"}
 
     async def _github_get_releases(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch releases from a GitHub repository. Issue #1161."""
@@ -343,26 +340,25 @@ class CommunityGrowthSkill(BaseSkill):
             headers["Authorization"] = f"Bearer {token}"
 
         url = f"https://api.github.com/repos/{repo}/releases"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, params={"per_page": limit}) as resp:
-                if resp.status != 200:
-                    text = await resp.text()
-                    return {
-                        "success": False,
-                        "error": f"HTTP {resp.status}: {text[:200]}",
-                    }
-                data = await resp.json()
-                releases = [
-                    {
-                        "tag": r["tag_name"],
-                        "name": r["name"],
-                        "body": r.get("body", ""),
-                        "published_at": r["published_at"],
-                        "url": r["html_url"],
-                    }
-                    for r in data[:limit]
-                ]
-                return {"success": True, "releases": releases}
+        async with get_http_client().tracked_request("GET", url, headers=headers, params={"per_page": limit}) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                return {
+                    "success": False,
+                    "error": f"HTTP {resp.status}: {text[:200]}",
+                }
+            data = await resp.json()
+            releases = [
+                {
+                    "tag": r["tag_name"],
+                    "name": r["name"],
+                    "body": r.get("body", ""),
+                    "published_at": r["published_at"],
+                    "url": r["html_url"],
+                }
+                for r in data[:limit]
+            ]
+            return {"success": True, "releases": releases}
 
     # ------------------------------------------------------------------
     # LLM / template content generation
@@ -400,16 +396,15 @@ class CommunityGrowthSkill(BaseSkill):
             "options": {"num_predict": max_tokens},
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(ollama_url, json=payload) as resp:
-                if resp.status != 200:
-                    return {"success": False, "error": f"Ollama HTTP {resp.status}"}
-                data = await resp.json()
-                return {
-                    "success": True,
-                    "content": data.get("response", ""),
-                    "tokens_used": data.get("eval_count", 0),
-                }
+        async with get_http_client().tracked_request("POST", ollama_url, json=payload) as resp:
+            if resp.status != 200:
+                return {"success": False, "error": f"Ollama HTTP {resp.status}"}
+            data = await resp.json()
+            return {
+                "success": True,
+                "content": data.get("response", ""),
+                "tokens_used": data.get("eval_count", 0),
+            }
 
     async def _fill_template(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Substitute variables into a template string. Issue #1161."""

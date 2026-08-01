@@ -20,7 +20,7 @@ from api.schemas_common import DataResponse
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
 
 logger = get_logger(__name__)
 
@@ -90,7 +90,7 @@ async def _get_user_preferences_from_redis(user_id: str) -> UserPreferences:
         UserPreferences object with stored or default values
     """
     try:
-        redis_client = await get_redis_client(async_client=True, database=RedisDatabase.MAIN)
+        redis_client = await get_async_redis_client(database=RedisDatabase.MAIN)
 
         async def _read(field: str) -> str | None:
             raw = await redis_client.get(f"user:{user_id}:preferences:{field}")
@@ -123,7 +123,7 @@ async def _store_user_preferences_to_redis(user_id: str, preferences: UserPrefer
     Raises:
         RedisError: If Redis operation fails
     """
-    redis_client = await get_redis_client(async_client=True, database=RedisDatabase.MAIN)
+    redis_client = await get_async_redis_client(database=RedisDatabase.MAIN)
 
     # Store each preference under its own key (no expiration - permanent preference)
     for field in ("reasoning_effort", *_APPEARANCE_FIELDS):

@@ -26,9 +26,11 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Tuple
+from urllib.parse import urlparse
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
 from services.knowledge_grounding_models import (
     Claim,
@@ -46,6 +48,17 @@ _CACHE_KEY_PREFIX = "verified_claim"
 _RESEARCH_AGENT_TIMEOUT = 30.0  # seconds
 _RAG_CONFIDENCE_THRESHOLD = 0.7
 _MIN_RAG_CONFIDENCE = 0.5
+
+# ---------------------------------------------------------------------------
+# N-source corroboration (#12623) — every tunable sourced from ssot_config,
+# never hardcoded. K = minimum independent agreeing sources before a claim
+# can ever be marked verified; single-source claims are never promoted.
+# ---------------------------------------------------------------------------
+_CORROBORATION_MIN_SOURCES: int = config.research_corroboration_min_sources
+_CORROBORATION_CONFIDENCE_BASE: float = config.research_corroboration_confidence_base
+_CORROBORATION_CONFIDENCE_PER_SOURCE: float = config.research_corroboration_confidence_per_source
+_CORROBORATION_CONFIDENCE_CAP: float = config.research_corroboration_confidence_cap
+_CORROBORATION_CLASSIFY_TIMEOUT_SECONDS: float = config.research_corroboration_classify_timeout_seconds
 
 
 class VerificationStatus(str, Enum):
@@ -118,6 +131,110 @@ class VerifiedClaim:
         }
 
 
+class SourceAgreement(str, Enum):
+    """Verdict from adversarial agreement classification of one candidate source."""
+
+    AGREE = "agree"
+    CONTRADICT = "contradict"
+    UNRELATED = "unrelated"
+
+
+@dataclass
+class CorroborationResult:
+    """Outcome of N-source corroboration for one material claim (#12623)."""
+
+    claim_text: str
+    independent_agree_count: int
+    contradicting_sources: List[KBSource] = field(default_factory=list)
+    confidence: float = 0.0
+    verified: bool = False
+    requires_human_review: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization / API response shaping."""
+        return {
+            "claim_text": self.claim_text,
+            "independent_agree_count": self.independent_agree_count,
+            "contradicting_sources": [s.source_id for s in self.contradicting_sources],
+            "confidence": self.confidence,
+            "verified": self.verified,
+            "requires_human_review": self.requires_human_review,
+        }
+
+
+# Adversarial refutation-prompt pattern (ported from the second-model
+# devil's-advocate check in agent_loop/pre_action_verifier.py — no
+# "deep-research" skill with this pattern exists in the codebase; verified
+# during #12623 premise-check). Framed as "what evidence would contradict
+# this claim?" per the design doc, applied to a candidate source instead of
+# a proposed action.
+_CORROBORATION_SYSTEM_PROMPT = (
+    "You are an adversarial fact-checker. Your ONLY job is to find whether the "
+    "candidate source text CONTRADICTS the claim below. Actively look for "
+    "evidence against the claim rather than assuming agreement — do not be "
+    "swayed by superficial phrasing similarity."
+)
+
+_CORROBORATION_USER_TMPL = """\
+## Claim
+{claim_text}
+
+## Candidate source text
+{source_text}
+
+## Your task
+What evidence in the source above would contradict this claim, if any? \
+Respond with EXACTLY this format (no extra text):
+
+AGREEMENT: <AGREE|CONTRADICT|UNRELATED>
+RATIONALE: <one sentence>
+"""
+
+
+def _build_corroboration_prompt(claim_text: str, source_text: str) -> tuple[str, str]:
+    """Return (system_prompt, user_prompt) for one agreement-classification call."""
+    user = _CORROBORATION_USER_TMPL.format(claim_text=claim_text, source_text=source_text[:2000])
+    return _CORROBORATION_SYSTEM_PROMPT, user
+
+
+def _parse_agreement(raw: str) -> SourceAgreement:
+    """Extract the AGREEMENT verdict from the LLM response, defaulting to UNRELATED."""
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped.upper().startswith("AGREEMENT:"):
+            value = stripped[len("AGREEMENT:") :].strip().upper()
+            try:
+                return SourceAgreement(value.lower())
+            except ValueError:
+                return SourceAgreement.UNRELATED
+    return SourceAgreement.UNRELATED
+
+
+def _source_domain(url: str | None) -> str | None:
+    """Return the netloc of *url*, or None if unusable (treated as non-independent)."""
+    if not url:
+        return None
+    try:
+        netloc = urlparse(url).netloc
+        return netloc or None
+    except ValueError:
+        return None
+
+
+def _dedupe_independent_sources(claim_url: str | None, candidates: List[KBSource]) -> List[KBSource]:
+    """Keep at most one source per distinct domain, excluding the claim's own domain."""
+    claim_domain = _source_domain(claim_url)
+    seen: set[str] = set()
+    independent: List[KBSource] = []
+    for src in candidates:
+        domain = _source_domain(src.url)
+        if domain is None or domain == claim_domain or domain in seen:
+            continue
+        seen.add(domain)
+        independent.append(src)
+    return independent
+
+
 class ClaimVerifier:
     """
     Verifies claims using KB RAG search and research agent escalation.
@@ -130,21 +247,129 @@ class ClaimVerifier:
        c) Otherwise, escalate to research agent
        d) Return whichever source has higher confidence
     3. CONTRADICTS claims return to ConflictResolver (not handled here)
+
+    #12623: also provides N-source corroboration (``corroborate``) for
+    material claims produced by the research orchestrator — a distinct
+    workflow from single-claim ``verify()`` above, extending this same
+    class per the issue's "extend, do not fork" requirement.
     """
 
-    def __init__(self, knowledge_base: Any, research_agent_service: Any | None = None) -> None:
+    def __init__(
+        self,
+        knowledge_base: Any,
+        research_agent_service: Any | None = None,
+        llm_service: Any | None = None,
+    ) -> None:
         """
         Initialize claim verifier.
 
         Args:
             knowledge_base: KnowledgeBase instance for RAG searches
             research_agent_service: Optional research agent service for escalation
+            llm_service: Optional LLM service for N-source corroboration (#12623);
+                lazily resolved via ``services.llm_service.get_llm_service`` when absent.
         """
         self.kb = knowledge_base
         self.research_agent_service = research_agent_service
+        self._llm_service = llm_service
         self._cache: Dict[str, Tuple[VerifiedClaim, float]] = {}
         self._cache_lock = asyncio.Lock()
         logger.info("ClaimVerifier initialized")
+
+    async def _llm(self) -> Any:
+        """Lazily resolve the LLM service used for corroboration classification."""
+        if self._llm_service is None:
+            from services.llm_service import get_llm_service
+
+            self._llm_service = get_llm_service()
+        return self._llm_service
+
+    async def classify_agreement(self, claim_text: str, source_text: str) -> SourceAgreement:
+        """Adversarially classify whether *source_text* agrees with or contradicts *claim_text*.
+
+        Fails conservatively (UNRELATED — no corroboration credit, no contradiction
+        flag either) on any LLM error or timeout, so a broken verifier can never
+        wrongly promote or wrongly block a claim.
+        """
+        llm = await self._llm()
+        system_prompt, user_prompt = _build_corroboration_prompt(claim_text, source_text)
+        try:
+            response = await asyncio.wait_for(
+                llm.chat(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.0,
+                ),
+                timeout=_CORROBORATION_CLASSIFY_TIMEOUT_SECONDS,
+            )
+        except Exception as exc:
+            logger.warning("classify_agreement: LLM call failed (%s) — treating as UNRELATED", exc)
+            return SourceAgreement.UNRELATED
+        if getattr(response, "error", None):
+            logger.warning("classify_agreement: LLM error: %s — treating as UNRELATED", response.error)
+            return SourceAgreement.UNRELATED
+        return _parse_agreement(response.content or "")
+
+    async def _classify_all(self, claim_text: str, sources: List[KBSource]) -> tuple[int, List[KBSource]]:
+        """Classify every independent source; return (agree_count, contradicting_sources)."""
+        verdicts = await asyncio.gather(*(self.classify_agreement(claim_text, s.text) for s in sources))
+        agree_count = sum(1 for v in verdicts if v == SourceAgreement.AGREE)
+        contradicting = [s for s, v in zip(sources, verdicts) if v == SourceAgreement.CONTRADICT]
+        return agree_count, contradicting
+
+    def _score_corroboration(self, claim_text: str, agree_count: int) -> CorroborationResult:
+        """Build the verified-and-scored result once contradictions are ruled out."""
+        if agree_count < _CORROBORATION_MIN_SOURCES:
+            return CorroborationResult(claim_text=claim_text, independent_agree_count=agree_count)
+        extra_sources = agree_count - _CORROBORATION_MIN_SOURCES
+        confidence = min(
+            _CORROBORATION_CONFIDENCE_CAP,
+            _CORROBORATION_CONFIDENCE_BASE + _CORROBORATION_CONFIDENCE_PER_SOURCE * extra_sources,
+        )
+        return CorroborationResult(
+            claim_text=claim_text,
+            independent_agree_count=agree_count,
+            confidence=confidence,
+            verified=True,
+        )
+
+    async def corroborate(
+        self,
+        claim_text: str,
+        candidate_sources: List[KBSource],
+        claim_url: str | None = None,
+    ) -> CorroborationResult:
+        """N-source corroboration for one material claim (#12623).
+
+        Gathers independent (distinct-domain) candidate sources, adversarially
+        classifies each against the claim, and either raises confidence on
+        agreement (never below the configured K-source floor — single-source
+        claims are never verified) or flags a contradiction for human review.
+        """
+        independent = _dedupe_independent_sources(claim_url, candidate_sources)
+        if len(independent) < _CORROBORATION_MIN_SOURCES:
+            logger.debug(
+                "corroborate: only %d independent source(s) for claim (K=%d) — staying quarantined",
+                len(independent),
+                _CORROBORATION_MIN_SOURCES,
+            )
+            return CorroborationResult(claim_text=claim_text, independent_agree_count=len(independent))
+
+        agree_count, contradicting = await self._classify_all(claim_text, independent)
+        if contradicting:
+            logger.warning(
+                "corroborate: %d contradicting source(s) found for claim — flagging for human review",
+                len(contradicting),
+            )
+            return CorroborationResult(
+                claim_text=claim_text,
+                independent_agree_count=agree_count,
+                contradicting_sources=contradicting,
+                requires_human_review=True,
+            )
+        return self._score_corroboration(claim_text, agree_count)
 
     def _build_cache_key(self, claim: Claim) -> str:
         """Build cache key for a claim (based on claim text hash)."""

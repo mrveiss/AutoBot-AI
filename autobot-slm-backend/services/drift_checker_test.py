@@ -62,6 +62,9 @@ build_drift_report = _dc.build_drift_report
 get_default_source_dir = _dc.get_default_source_dir
 get_default_deployed_dir = _dc.get_default_deployed_dir
 ALLOWED_COMPONENTS = _dc.ALLOWED_COMPONENTS
+EXTRA_VISIBILITY_COMPONENTS = _dc.EXTRA_VISIBILITY_COMPONENTS
+VISIBILITY_COMPONENTS = _dc.VISIBILITY_COMPONENTS
+_NONSTANDARD_COMPONENT_PATHS = _dc._NONSTANDARD_COMPONENT_PATHS
 _SKIP_DIRS = _dc._SKIP_DIRS
 _INCLUDE_EXTENSIONS = _dc._INCLUDE_EXTENSIONS
 _BACKEND_EXTENSIONS = _dc._BACKEND_EXTENSIONS
@@ -431,10 +434,14 @@ class TestGetDefaultDeployedDir:
         assert result == str(Path(custom_root) / "autobot-slm-backend")
 
     def test_component_appended(self, tmp_path):
-        """The component name is appended as a sub-directory of the root."""
+        """The component name is appended as a sub-directory of the root,
+        except for the #12450 nonstandard-path components which are
+        deliberately excluded from this generic convention — see
+        _NONSTANDARD_COMPONENT_PATHS and
+        TestNonstandardComponentPathMap.test_allowed_components_with_overrides_are_the_two_verified_exceptions."""
         root = str(tmp_path)
         with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": root}):
-            for component in ALLOWED_COMPONENTS:
+            for component in ALLOWED_COMPONENTS - set(_NONSTANDARD_COMPONENT_PATHS):
                 result = get_default_deployed_dir(component)
                 assert result == str(Path(root) / component)
 
@@ -485,6 +492,13 @@ class TestAllowedComponents:
             "autobot-frontend",
             # #10248: the shared library is its own syncable component.
             "autobot_shared",
+            # #12450 phase 2: promoted from EXTRA_VISIBILITY_COMPONENTS once
+            # each had a verified post-sync definition in api/code_sync.py
+            # (_WORKER_COMPONENTS / _WORKER_COMPONENT_PIP / _COMPONENT_SERVICES).
+            "autobot-ai-stack",
+            "autobot-npu-worker",
+            "autobot-browser-worker",
+            "autobot-slm-agent",
         }
         assert expected == set(ALLOWED_COMPONENTS)
 
@@ -818,3 +832,131 @@ class TestComputeDriftPerComponent:
         drifted, total = compute_drift(str(src), str(dep), "autobot-frontend")
         assert total == 1
         assert drifted == []
+
+
+# ===========================================================================
+# #12450: read-only visibility for extra deployed components
+# ===========================================================================
+
+
+class TestExtraVisibilityComponents:
+    """VISIBILITY_COMPONENTS extends drift REPORTING to components with no
+    resolve/restart wiring. #12450 phase 2 promoted ai-stack, npu-worker,
+    browser-worker, and slm-agent out of this set into ALLOWED_COMPONENTS
+    once each had a verified post-sync definition — only `plugins` (no
+    single canonical deployed target, see drift_checker.py:116-119) and
+    `autobot-tts-worker` (templated deploy, not a 1:1 sync, see
+    drift_checker.py:106-112) remain here. Must never be merged into
+    ALLOWED_COMPONENTS (the resolve gate)."""
+
+    def test_extra_components_are_exactly_the_expected_two(self):
+        assert set(EXTRA_VISIBILITY_COMPONENTS) == {
+            "plugins",
+            "autobot-tts-worker",
+        }
+
+    def test_extra_components_disjoint_from_resolve_allowlist(self):
+        """The read-only extras must never overlap ALLOWED_COMPONENTS — that
+        would silently grant them a resolve/restart path with no wiring."""
+        assert EXTRA_VISIBILITY_COMPONENTS.isdisjoint(ALLOWED_COMPONENTS)
+
+    def test_visibility_components_is_the_union(self):
+        assert VISIBILITY_COMPONENTS == ALLOWED_COMPONENTS | EXTRA_VISIBILITY_COMPONENTS
+
+    def test_visibility_components_is_frozenset(self):
+        assert isinstance(VISIBILITY_COMPONENTS, frozenset)
+
+
+class TestNonstandardComponentPathMap:
+    """Verify the source/deployed path override for each nonstandard
+    component (#12450) resolves to the paths confirmed against the live
+    ansible deploy tasks."""
+
+    def test_ai_stack_source_path_is_infrastructure_subtree(self, monkeypatch, tmp_path):
+        """ai-stack has no top-level code_source/autobot-ai-stack dir; its
+        source is autobot-infrastructure/shared/docker/ai-stack (playbook
+        Play 0 archive task, ~135-141)."""
+        fake_repo = tmp_path / "repo"
+        (fake_repo / "autobot-infrastructure" / "shared" / "docker" / "ai-stack").mkdir(parents=True)
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(fake_repo))
+        result = get_default_source_dir("autobot-ai-stack")
+        assert result == str(fake_repo / "autobot-infrastructure" / "shared" / "docker" / "ai-stack")
+
+    def test_ai_stack_deployed_path_strips_to_flat_dir(self):
+        """--strip-components=4 (Play 2, ~1060-1064) lands ai-stack's contents
+        flat under /opt/autobot/autobot-ai-stack, not a nested path."""
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": "/opt/autobot"}):
+            result = get_default_deployed_dir("autobot-ai-stack")
+        assert result == "/opt/autobot/autobot-ai-stack"
+
+    def test_slm_agent_source_path_is_role_files_subtree(self, monkeypatch, tmp_path):
+        """slm-agent's source of truth is the per-file copy: tasks in the
+        slm_agent role (files/slm/agent/*.py), not a top-level
+        code_source/autobot-slm-agent dir."""
+        fake_repo = tmp_path / "repo"
+        nested = fake_repo / "autobot-slm-backend" / "ansible" / "roles" / "slm_agent" / "files" / "slm" / "agent"
+        nested.mkdir(parents=True)
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(fake_repo))
+        result = get_default_source_dir("autobot-slm-agent")
+        assert result == str(nested)
+
+    def test_slm_agent_deployed_path_is_agent_subtree(self):
+        """Deployed target is <slm_agent_dir>/slm/agent (role tasks ~132-213),
+        not the top-level /opt/autobot/autobot-slm-agent dir (which also
+        holds config.yaml/role.json/version.json — templated, not raw source)."""
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": "/opt/autobot"}):
+            result = get_default_deployed_dir("autobot-slm-agent")
+        assert result == "/opt/autobot/autobot-slm-agent/slm/agent"
+
+    def test_plugins_source_path_is_repo_root_sibling(self, monkeypatch, tmp_path):
+        """plugins/ ships at the repo root, a SIBLING of autobot-backend/, not
+        nested inside it."""
+        fake_repo = tmp_path / "repo"
+        (fake_repo / "plugins").mkdir(parents=True)
+        monkeypatch.setattr(_dc, "DEFAULT_REPO_PATH", str(fake_repo))
+        result = get_default_source_dir("plugins")
+        assert result == str(fake_repo / "plugins")
+
+    def test_plugins_deployed_path_is_inside_backend(self):
+        """plugins/ is rsynced into the backend's own plugins/ subdirectory
+        (backend role #10294), not a top-level /opt/autobot/plugins tree."""
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": "/opt/autobot"}):
+            result = get_default_deployed_dir("plugins")
+        assert result == "/opt/autobot/autobot-backend/plugins"
+
+    def test_standard_components_are_unaffected_by_the_override_map(self, tmp_path):
+        """npu-worker and browser-worker follow the standard
+        code_source/<name> -> <root>/<name> convention — no override needed,
+        so they must NOT appear in _NONSTANDARD_COMPONENT_PATHS."""
+        assert "autobot-npu-worker" not in _NONSTANDARD_COMPONENT_PATHS
+        assert "autobot-browser-worker" not in _NONSTANDARD_COMPONENT_PATHS
+        with patch.dict(os.environ, {"SLM_DEPLOYED_ROOT": str(tmp_path)}):
+            assert get_default_deployed_dir("autobot-npu-worker") == str(tmp_path / "autobot-npu-worker")
+            assert get_default_deployed_dir("autobot-browser-worker") == str(tmp_path / "autobot-browser-worker")
+
+    def test_allowed_components_with_overrides_are_the_two_verified_exceptions(self):
+        """#12450 phase 2 intentionally violates the original "no allowed
+        component needs a path override" invariant for exactly two
+        components — autobot-ai-stack and autobot-slm-agent, both promoted
+        into ALLOWED_COMPONENTS *and* path-overridden (see the
+        test_ai_stack_*/test_slm_agent_* cases above for the verified
+        ansible task references each override traces to). Asserting the
+        overlap is EXACTLY those two still catches an unverified third
+        override silently added to both sets."""
+        assert set(_NONSTANDARD_COMPONENT_PATHS) & ALLOWED_COMPONENTS == {
+            "autobot-ai-stack",
+            "autobot-slm-agent",
+        }
+
+    def test_compute_drift_reports_drift_for_ai_stack_style_deployed_path(self, tmp_path):
+        """End-to-end: a mocked ai-stack-shaped deployed dir (flat, post
+        --strip-components=4) compared against its infrastructure-nested
+        source dir surfaces drift exactly like any other component."""
+        src = tmp_path / "repo" / "autobot-infrastructure" / "shared" / "docker" / "ai-stack"
+        dep = tmp_path / "opt" / "autobot" / "autobot-ai-stack"
+        _write(src / "ai_api_server.py", b"source version")
+        _write(dep / "ai_api_server.py", b"stale deployed version")
+        drifted, total = compute_drift(str(src), str(dep), "autobot-ai-stack")
+        assert total == 1
+        assert drifted[0]["path"] == "ai_api_server.py"
+        assert drifted[0]["status"] == "modified"

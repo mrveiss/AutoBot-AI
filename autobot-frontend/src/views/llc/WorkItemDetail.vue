@@ -18,6 +18,9 @@
         </button>
       </div>
 
+      <!-- Save-failure banner (#12348): an optimistic edit could not be persisted. -->
+      <div v-if="saveError" class="save-error" role="alert">{{ saveError }}</div>
+
       <!-- Goal ancestry breadcrumb -->
       <div v-if="goalAncestry.length > 0" class="goal-breadcrumb">
         <template v-for="(g, i) in goalAncestry" :key="g.id">
@@ -303,6 +306,8 @@ const titleInput = ref<HTMLInputElement | null>(null)
 const descInput = ref<HTMLTextAreaElement | null>(null)
 const origTitle = ref('')
 const origDesc = ref('')
+// #12348: message shown when an optimistic edit could not be persisted.
+const saveError = ref<string | null>(null)
 
 const comments = ref<Comment[]>([])
 const artifacts = ref<Artifact[]>([])
@@ -403,7 +408,10 @@ function cancelTitle() {
 async function saveTitle() {
   editingTitle.value = false
   if (localItem.value.title === origTitle.value) return
-  await patchItem({ title: localItem.value.title })
+  const prev = origTitle.value
+  await patchItem({ title: localItem.value.title }, () => {
+    localItem.value.title = prev
+  })
 }
 
 function startEditDesc() {
@@ -415,23 +423,37 @@ function startEditDesc() {
 async function saveDesc() {
   editingDesc.value = false
   if (localItem.value.description === origDesc.value) return
-  await patchItem({ description: localItem.value.description })
+  const prev = origDesc.value
+  await patchItem({ description: localItem.value.description }, () => {
+    localItem.value.description = prev
+  })
 }
 
 async function saveAC() {
   // GH#10852: persist per-criterion completion (parallel-indexed to
   // acceptance_criteria) so checkbox state survives reload.
+  // #12348: snapshot the last-persisted completion so a rejected save rolls the
+  // checkbox back rather than leaving it visually toggled.
+  const prevDone = localItem.value.acceptance_criteria_done ?? []
   const done = (localItem.value.acceptance_criteria ?? []).map((_, i) => checkedAC.value[i] ?? false)
-  await patchItem({ acceptance_criteria_done: done })
+  await patchItem({ acceptance_criteria_done: done }, () => {
+    checkedAC.value = (localItem.value.acceptance_criteria ?? []).map((_, i) => prevDone[i] ?? false)
+  })
 }
 
-async function patchItem(patch: Partial<WorkItem>) {
+async function patchItem(patch: Partial<WorkItem>, rollback?: () => void) {
   try {
     const updated = await api.patch<WorkItem>(`/api/llc/work-items/${props.item.id}`, patch)
     Object.assign(localItem.value, updated)
+    saveError.value = null
     emit('updated', localItem.value)
   } catch (err) {
+    // #12348: the edit was applied optimistically via v-model before this call.
+    // The backend rejected it, so roll the local state back to its last-persisted
+    // value and surface the failure instead of showing a change that never saved.
     logger.error('Failed to patch item', err)
+    rollback?.()
+    saveError.value = t('llc.workItem.errors.saveFailed')
   }
 }
 
@@ -550,6 +572,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.save-error {
+  margin: 0.5rem 1.25rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 0.8rem;
+}
+
 .work-item-detail-overlay {
   position: fixed;
   inset: 0;
@@ -563,8 +594,8 @@ onMounted(() => {
   width: 640px;
   max-width: 90vw;
   height: 100%;
-  background: var(--bg-surface, #fff);
-  border-left: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -575,7 +606,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -588,7 +619,7 @@ onMounted(() => {
 .item-identifier {
   font-family: monospace;
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .close-btn {
@@ -596,13 +627,13 @@ onMounted(() => {
   border: none;
   cursor: pointer;
   padding: 0.25rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   border-radius: 0.25rem;
   transition: background 0.15s;
 }
 
 .close-btn:hover {
-  background: var(--bg-hover, #f3f4f6);
+  background: var(--bg-hover);
 }
 
 .close-icon {
@@ -615,15 +646,15 @@ onMounted(() => {
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1.25rem;
-  background: var(--bg-elevated, #f9fafb);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
   font-size: 0.75rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
 .breadcrumb-sep {
-  color: var(--border-default, #d1d5db);
+  color: var(--border-default);
 }
 
 .title-row {
@@ -643,10 +674,10 @@ onMounted(() => {
   width: 100%;
   font-size: 1.125rem;
   font-weight: 600;
-  border: 1px solid var(--color-primary, #3b82f6);
+  border: 1px solid var(--color-primary);
   border-radius: 0.25rem;
   padding: 0.25rem 0.5rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
 }
 
@@ -655,7 +686,7 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 1rem;
   padding: 0.5rem 1.25rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -667,7 +698,7 @@ onMounted(() => {
 
 .meta-label {
   font-size: 0.7rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -675,8 +706,8 @@ onMounted(() => {
 .assignee-chip {
   font-size: 0.8rem;
   padding: 0.1rem 0.5rem;
-  background: var(--bg-elevated, #f3f4f6);
-  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
 }
 
 .assignee-row {
@@ -687,7 +718,7 @@ onMounted(() => {
 
 .assignee-edit {
   font-size: 0.75rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -701,18 +732,18 @@ onMounted(() => {
 .assignee-select {
   font-size: 0.8rem;
   padding: 0.25rem;
-  border: 1px solid var(--border-default, #e5e7eb);
-  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
 }
 
 .assignee-cancel {
   font-size: 0.75rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .meta-empty {
   font-size: 0.8rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -725,15 +756,15 @@ onMounted(() => {
 .label-chip {
   font-size: 0.7rem;
   padding: 0.1rem 0.45rem;
-  background: var(--bg-elevated, #f3f4f6);
-  border-radius: 9999px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
 }
 
 .action-bar {
   display: flex;
   gap: 0.5rem;
   padding: 0.625rem 1.25rem;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
   flex-wrap: wrap;
   flex-shrink: 0;
 }
@@ -742,15 +773,15 @@ onMounted(() => {
   font-size: 0.8rem;
   padding: 0.35rem 0.75rem;
   border-radius: 0.375rem;
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .action-btn:hover:not(:disabled) {
-  background: var(--bg-hover, #f3f4f6);
+  background: var(--bg-hover);
 }
 
 .action-btn:disabled {
@@ -759,18 +790,18 @@ onMounted(() => {
 }
 
 .action-done, .action-ready {
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary);
 }
 
 .action-done:hover:not(:disabled), .action-ready:hover:not(:disabled) {
-  background: var(--color-primary-hover, #2563eb);
+  background: var(--color-primary-hover);
 }
 
 .tab-bar {
   display: flex;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -780,15 +811,15 @@ onMounted(() => {
   font-weight: 500;
   border: none;
   background: none;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: color 0.15s, border-color 0.15s;
 }
 
 .tab-btn.active {
-  color: var(--color-primary, #3b82f6);
-  border-bottom-color: var(--color-primary, #3b82f6);
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .tab-btn:hover:not(.active) {
@@ -813,7 +844,7 @@ onMounted(() => {
 .section-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -828,9 +859,9 @@ onMounted(() => {
 .desc-textarea {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid var(--color-primary, #3b82f6);
+  border: 1px solid var(--color-primary);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
   resize: vertical;
@@ -852,7 +883,7 @@ onMounted(() => {
 
 .ac-done {
   text-decoration: line-through;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .comments-list {
@@ -881,7 +912,7 @@ onMounted(() => {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   font-size: 0.65rem;
   font-weight: 600;
@@ -901,15 +932,15 @@ onMounted(() => {
 
 .comment-time {
   font-size: 0.7rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .agent-chip {
   font-size: 0.65rem;
   padding: 0.05rem 0.35rem;
-  background: #ddd6fe;
-  color: #5b21b6;
-  border-radius: 9999px;
+  background: var(--workitem-agent-chip-bg);
+  color: var(--workitem-agent-chip-text);
+  border-radius: var(--radius-full);
 }
 
 .comment-body {
@@ -924,15 +955,15 @@ onMounted(() => {
   align-items: flex-end;
   flex-shrink: 0;
   padding-top: 0.5rem;
-  border-top: 1px solid var(--border-default, #e5e7eb);
+  border-top: 1px solid var(--border-default);
 }
 
 .comment-textarea {
   flex: 1;
   padding: 0.5rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
   resize: none;
@@ -950,9 +981,9 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.75rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   border-radius: 0.375rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
 }
 
 .artifact-type-icon {
@@ -973,13 +1004,13 @@ onMounted(() => {
 
 .artifact-type-label {
   font-size: 0.7rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   text-transform: capitalize;
 }
 
 .artifact-link {
   font-size: 0.8rem;
-  color: var(--color-primary, #3b82f6);
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -995,7 +1026,7 @@ onMounted(() => {
 }
 
 .activity-time {
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   flex-shrink: 0;
   font-size: 0.7rem;
 }
@@ -1016,7 +1047,7 @@ onMounted(() => {
 
 .btn-primary {
   padding: 0.5rem 1rem;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 0.375rem;
@@ -1028,7 +1059,7 @@ onMounted(() => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #2563eb);
+  background: var(--color-primary-hover);
 }
 
 .btn-primary:disabled {

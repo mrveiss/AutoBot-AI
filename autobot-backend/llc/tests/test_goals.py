@@ -133,12 +133,18 @@ async def test_update_goal(svc: GoalService) -> None:
     goal = _make_goal(title="Old Title")
     session = AsyncMock()
     session.flush = AsyncMock()
+    session.refresh = AsyncMock()
 
     with patch.object(svc, "get", new=AsyncMock(return_value=goal)), patch.object(svc, "_schedule_post_commit_index"):
         updated = await svc.update(session, goal.id, title="New Title")
 
     assert updated is goal
     assert goal.title == "New Title"
+    # #12322: `updated_at` is now populated inline by the UPDATE RETURNING
+    # (Base's ``eager_defaults=True``), so the service no longer issues a
+    # per-call ``session.refresh``. Freshness on a real engine is asserted by
+    # ``test_update_goal_response_survives_sync_serialization`` below.
+    session.refresh.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -195,6 +201,53 @@ async def test_update_goal_invalid_level_hierarchy(svc: GoalService) -> None:
             await svc.update(session, goal.id, level=GoalLevel.KEY_RESULT)
 
     assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_goal_response_survives_sync_serialization() -> None:
+    """GH#12209 regression: PATCH /llc/goals/{id} must not 500 with
+    MissingGreenlet when the returned ORM object is synchronously serialized
+    by ``GoalResponse.model_validate`` right after ``GoalService.update()``
+    — the exact sequence in ``llc/api/goals.py::update_goal``.
+
+    Uses a real in-memory SQLite (aiosqlite) AsyncSession rather than mocks
+    so SQLAlchemy's actual attribute-expiry/RETURNING behavior on UPDATE is
+    exercised: with Base's ``eager_defaults=True`` (#12322) the onupdate
+    ``updated_at`` is fetched via RETURNING inline with the UPDATE, so it is
+    fresh post-flush and the synchronous ``GoalResponse.model_validate`` never
+    trips MissingGreenlet — without that setting this test would fail.
+    """
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from llc.api.goals import GoalResponse
+    from user_management.models.base import Base
+
+    engine = create_async_engine("sqlite+aiosqlite://")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all, tables=[LLCGoal.__table__])
+
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+    svc = GoalService()
+
+    async with session_factory() as session:
+        with patch.object(svc, "_schedule_post_commit_index"):
+            goal = await svc.create(session, company_id="co1", title="Vision", level=GoalLevel.VISION)
+            await session.commit()
+            goal_id = goal.id
+
+    async with session_factory() as session:
+        with patch.object(svc, "_schedule_post_commit_index"):
+            updated = await svc.update(session, goal_id, status=GoalStatus.ACTIVE)
+        await session.commit()
+
+        # This is the exact call `update_goal` makes right after `svc.update()`
+        # (llc/api/goals.py:180) — no MissingGreenlet, correct field values.
+        response = GoalResponse.model_validate(updated)
+
+    await engine.dispose()
+
+    assert response.status == GoalStatus.ACTIVE.value
+    assert response.updated_at is not None
 
 
 @pytest.mark.asyncio

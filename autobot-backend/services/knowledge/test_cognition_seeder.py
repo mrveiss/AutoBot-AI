@@ -23,9 +23,15 @@ from services.knowledge.cognition_seeder import (
     SEED_PRIORITY_BOOST,
     CognitionSeeder,
     _chunk_id,
-    _chunk_text,
     _load_manifest,
 )
+from utils.text_chunking import chunk_text
+
+
+def _chunk_text(content: str, max_chars: int = 1500):
+    """Test helper reproducing cognition_seeder's chunk_text() call site params."""
+    return chunk_text(content, max_chars=max_chars, separator_len=2, split_oversized=False, fallback_to_original=True)
+
 
 # ---------------------------------------------------------------------------
 # Helper factories

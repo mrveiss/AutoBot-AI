@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Microservice Architecture Evaluator for AutoBot
@@ -1207,12 +1208,12 @@ class MicroserviceArchitectureEvaluator:
 
         # Save JSON report
         json_report_path = self.reports_dir / f"microservice_analysis_{timestamp}.json"
-        with open(json_report_path, "w") as f:
+        with open(json_report_path, "w", encoding="utf-8") as f:
             json.dump(self.analysis_results, f, indent=2)
 
         # Save markdown summary
         md_report_path = self.reports_dir / f"microservice_evaluation_summary_{timestamp}.md"
-        with open(md_report_path, "w") as f:
+        with open(md_report_path, "w", encoding="utf-8") as f:
             f.write(self._generate_markdown_report())
 
         logger.info("📄 Microservice analysis reports saved:")

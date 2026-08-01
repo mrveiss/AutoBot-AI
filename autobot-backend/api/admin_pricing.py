@@ -12,22 +12,12 @@ Endpoints:
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from auth_middleware import get_auth_middleware
-from utils.catalog_http_exceptions import raise_auth_error
+from auth_rbac import require_role
 
 router = APIRouter(prefix="/admin")
-
-
-def _require_admin(request: Request) -> bool:
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        raise_auth_error("AUTH_0002", "Authentication required")
-    if user_data.get("role") != "admin":
-        raise_auth_error("AUTH_0003", "Admin permission required")
-    return True
 
 
 class PricingOverrideRequest(BaseModel):
@@ -42,7 +32,7 @@ async def override_model_pricing(
     provider: str,
     model: str,
     body: PricingOverrideRequest,
-    _admin: bool = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> dict:
     """Write an emergency pricing override directly to Redis."""
     from autobot_shared.logging_manager import get_logger
@@ -82,7 +72,7 @@ async def override_model_pricing(
 async def delete_model_pricing_override(
     provider: str,
     model: str,
-    _admin: bool = Depends(_require_admin),
+    _admin: bool = Depends(require_role("admin", "superadmin")),
 ) -> dict:
     """Remove a pricing override from Redis (next refresh will re-populate)."""
     from llm_shared.pricing.redis_store import PricingRedisStore
@@ -93,7 +83,7 @@ async def delete_model_pricing_override(
 
 
 @router.get("/pricing/status")
-async def get_pricing_refresh_status(_admin: bool = Depends(_require_admin)) -> dict:
+async def get_pricing_refresh_status(_admin: bool = Depends(require_role("admin", "superadmin"))) -> dict:
     """Return the last refresh timestamp and success/failure per provider."""
     from llm_shared.pricing.redis_store import PricingRedisStore
 

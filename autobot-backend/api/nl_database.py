@@ -81,7 +81,7 @@ async def _resolve_db_url(db_secret_id: str | None, request: Request) -> str | N
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Failed to resolve database secret: %s", exc)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.error("Failed to resolve database secret: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve database credentials",

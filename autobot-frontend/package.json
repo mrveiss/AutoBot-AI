@@ -36,9 +36,12 @@
     "check:i18n": "node scripts/check-i18n-keys.mjs",
     "check:locales": "python3 scripts/check-locale-completeness.py",
     "check-ts-delta": "bash scripts/check-ts-delta.sh",
-    "lint:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore --ignore-pattern 'src/types/_generated/**'",
-    "lint:eslint": "eslint . --fix",
-    "lint": "run-s lint:*",
+    "lint:oxlint": "oxlint . -D correctness --ignore-path .gitignore --ignore-pattern 'src/types/_generated/**'",
+    "lint:eslint": "eslint .",
+    "lint": "run-s lint:oxlint lint:eslint",
+    "lint:fix:oxlint": "oxlint . --fix -D correctness --ignore-path .gitignore --ignore-pattern 'src/types/_generated/**'",
+    "lint:fix:eslint": "eslint . --fix",
+    "lint:fix": "run-s lint:fix:oxlint lint:fix:eslint",
     "format": "prettier --write src/",
     "gen:types": "openapi-typescript http://127.0.0.1:8001/openapi.json -o src/types/generated/api.ts --additional-properties",
     "verify:types": "git diff --exit-code src/types/generated/api.ts",
@@ -82,6 +85,7 @@
     "wavesurfer.js": "^7.12.10"
   },
   "overrides": {
+    "js-yaml": "4.3.0",
     "minimatch": ">=9.0.7",
     "uuid": "^14.0.0",
     "qs": ">=6.15.2",

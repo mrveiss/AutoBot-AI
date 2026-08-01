@@ -13,6 +13,7 @@
  */
 
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { formatUptime } from '@/utils/formatHelpers'
 import type { NPUFleetMetrics, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
@@ -38,15 +39,6 @@ const nodeMetrics = computed<NPUWorkerMetrics[]>(
 
 // -- Helpers --
 
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400)
-  const hrs = Math.floor((seconds % 86400) / 3600)
-  const mins = Math.floor((seconds % 3600) / 60)
-  if (days > 0) return `${days}d ${hrs}h`
-  if (hrs > 0) return `${hrs}h ${mins}m`
-  return `${mins}m`
-}
-
 function utilizationBarColor(pct: number): string {
   if (pct > 80) return 'bg-red-500'
   if (pct >= 60) return 'bg-yellow-500'
@@ -59,15 +51,19 @@ function utilizationTextColor(pct: number): string {
   return 'text-green-600'
 }
 
-function temperatureColor(temp: number | null): string {
-  if (temp === null) return 'text-gray-400'
+// #13138: `temperature_celsius` is optional AND nullable in the contract
+// (`temperature_celsius?: float | None`), so an absent reading arrives as
+// `undefined`, not `null` — a `=== null` test alone let it fall through to the
+// "cool" branch and render `undefined°C`.
+function temperatureColor(temp: number | null | undefined): string {
+  if (temp === null || temp === undefined) return 'text-gray-400'
   if (temp > 75) return 'text-red-600'
   if (temp >= 60) return 'text-yellow-600'
   return 'text-green-600'
 }
 
-function temperatureDisplay(temp: number | null): string {
-  if (temp === null) return 'N/A'
+function temperatureDisplay(temp: number | null | undefined): string {
+  if (temp === null || temp === undefined) return 'N/A'
   return `${temp.toFixed(1)}\u00B0C`
 }
 

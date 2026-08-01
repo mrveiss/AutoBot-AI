@@ -10,19 +10,26 @@
  * Provides reactive state for profile list, active profile, and enabled flag.
  *
  * Related Issue: #964 - Multi-profile personality system
+ *
+ * Migrated onto the canonical `slmApiClient` (#12420 Phase 2). The client
+ * resolves the base URL via `getSlmApiBase()` and injects the SLM bearer token
+ * (the `slm_access_token` the auth store reads), so endpoints are passed
+ * relative to the SLM API base under the `/personality` prefix and callers
+ * receive parsed JSON directly (no axios `.data`). Requests still route through
+ * the SLM backend proxy (issue #1145) which validates the SLM JWT and forwards
+ * to the main backend, so the SLM token is the correct credential.
  */
 
-import axios from 'axios'
 import { ref, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
+import slmApiClient from '@/utils/ApiClient'
 
 const logger = createLogger('usePersonality')
 
 // Issue #1145: Route through SLM backend proxy (validates SLM JWT + forwards to main backend).
 // Using /autobot-api/personality caused JWT mismatch since SLM tokens are unknown to main backend.
-const API_BASE = `${getSlmApiBase()}/personality`
+// Endpoints below are relative to getSlmApiBase() (resolved by slmApiClient) under this prefix.
+const API_PREFIX = '/personality'
 
 export interface ProfileSummary {
   id: string
@@ -80,8 +87,6 @@ export const TONE_OPTIONS = [
 ] as const
 
 export function usePersonality() {
-  const authStore = useAuthStore()
-
   const profiles = ref<ProfileSummary[]>([])
   const activeProfile = ref<PersonalityProfile | null>(null)
   const enabled = ref(true)
@@ -90,26 +95,13 @@ export function usePersonality() {
 
   const activeId = computed(() => profiles.value.find((p) => p.active)?.id ?? null)
 
-  function _client() {
-    const token = authStore.token || localStorage.getItem('autobot_access_token')
-    return axios.create({
-      baseURL: API_BASE,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      timeout: 15000,
-    })
-  }
-
   async function _call<T>(fn: () => Promise<T>): Promise<T | null> {
     error.value = null
     loading.value = true
     try {
       return await fn()
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } }; message?: string })
-        ?.response?.data?.detail ?? (err as { message?: string })?.message ?? 'Request failed'
+      const msg = (err as { message?: string })?.message ?? 'Request failed'
       error.value = msg
       logger.error('Personality API error:', msg)
       return null
@@ -121,10 +113,12 @@ export function usePersonality() {
   async function fetchProfiles(): Promise<void> {
     const result = await _call(async () => {
       const [summaries, status] = await Promise.all([
-        _client().get<ProfileSummary[]>('/profiles'),
-        _client().get<{ enabled: boolean; active_id: string | null }>('/status'),
+        slmApiClient.get<ProfileSummary[]>(`${API_PREFIX}/profiles`),
+        slmApiClient.get<{ enabled: boolean; active_id: string | null }>(
+          `${API_PREFIX}/status`
+        ),
       ])
-      return { summaries: summaries.data, status: status.data }
+      return { summaries, status }
     })
     if (result) {
       profiles.value = result.summaries
@@ -133,39 +127,46 @@ export function usePersonality() {
   }
 
   async function fetchProfile(id: string): Promise<PersonalityProfile | null> {
-    const result = await _call(() => _client().get<PersonalityProfile>(`/profiles/${id}`))
-    return result?.data ?? null
+    return _call(() =>
+      slmApiClient.get<PersonalityProfile>(`${API_PREFIX}/profiles/${id}`)
+    )
   }
 
   async function fetchActive(): Promise<void> {
     const result = await _call(() =>
-      _client().get<PersonalityProfile | null>('/active')
+      slmApiClient.get<PersonalityProfile | null>(`${API_PREFIX}/active`)
     )
-    activeProfile.value = result?.data ?? null
+    activeProfile.value = result ?? null
   }
 
   async function createProfile(data: ProfileCreate): Promise<PersonalityProfile | null> {
-    const result = await _call(() => _client().post<PersonalityProfile>('/profiles', data))
-    if (result?.data) {
+    const result = await _call(() =>
+      slmApiClient.post<PersonalityProfile>(`${API_PREFIX}/profiles`, data)
+    )
+    if (result) {
       await fetchProfiles()
-      return result.data
+      return result
     }
     return null
   }
 
   async function updateProfile(id: string, data: ProfileUpdate): Promise<PersonalityProfile | null> {
-    const result = await _call(() => _client().put<PersonalityProfile>(`/profiles/${id}`, data))
-    if (result?.data) {
+    const result = await _call(() =>
+      slmApiClient.put<PersonalityProfile>(`${API_PREFIX}/profiles/${id}`, data)
+    )
+    if (result) {
       if (activeProfile.value?.id === id) {
-        activeProfile.value = result.data
+        activeProfile.value = result
       }
-      return result.data
+      return result
     }
     return null
   }
 
   async function deleteProfile(id: string): Promise<boolean> {
-    const result = await _call(() => _client().delete(`/profiles/${id}`))
+    const result = await _call(() =>
+      slmApiClient.delete(`${API_PREFIX}/profiles/${id}`)
+    )
     if (result !== null) {
       profiles.value = profiles.value.filter((p) => p.id !== id)
       if (activeProfile.value?.id === id) {
@@ -177,7 +178,9 @@ export function usePersonality() {
   }
 
   async function activateProfile(id: string): Promise<boolean> {
-    const result = await _call(() => _client().post(`/profiles/${id}/activate`))
+    const result = await _call(() =>
+      slmApiClient.post(`${API_PREFIX}/profiles/${id}/activate`)
+    )
     if (result !== null) {
       profiles.value = profiles.value.map((p) => ({ ...p, active: p.id === id }))
       await fetchActive()
@@ -187,19 +190,21 @@ export function usePersonality() {
   }
 
   async function resetProfile(id: string): Promise<PersonalityProfile | null> {
-    const result = await _call(() => _client().post<PersonalityProfile>(`/profiles/${id}/reset`))
-    if (result?.data) {
+    const result = await _call(() =>
+      slmApiClient.post<PersonalityProfile>(`${API_PREFIX}/profiles/${id}/reset`)
+    )
+    if (result) {
       if (activeProfile.value?.id === id) {
-        activeProfile.value = result.data
+        activeProfile.value = result
       }
-      return result.data
+      return result
     }
     return null
   }
 
   async function toggleEnabled(value: boolean): Promise<boolean> {
     const result = await _call(() =>
-      _client().post('/toggle', { enabled: value })
+      slmApiClient.post(`${API_PREFIX}/toggle`, { enabled: value })
     )
     if (result !== null) {
       enabled.value = value

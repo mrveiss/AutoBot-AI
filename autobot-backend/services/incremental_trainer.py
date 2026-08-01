@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, utc_timestamp
+from llm_shared.torch_loader import lazy_torch
 from models.completion_feedback import CompletionFeedback
 from training.completion_trainer import CompletionTrainer
 from user_management.database import get_async_engine
@@ -21,17 +22,12 @@ from user_management.database import get_async_engine
 logger = get_logger(__name__)
 
 # Issue #3016: lazy module-level import for torch
-_torch = None
+# Issue #12714: torch loader unified onto the shared thread-safe llm_shared.torch_loader.
 
 
 def _get_torch():
     """Lazy-load torch on first use. Issue #3016."""
-    global _torch  # noqa: PLW0603
-    if _torch is None:
-        import torch
-
-        _torch = torch
-    return _torch
+    return lazy_torch()
 
 
 class IncrementalTrainer:

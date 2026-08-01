@@ -36,8 +36,8 @@
           />
           <div class="file-info">
             <span class="filename">{{ selectedFile.name }}</span>
-            <span class="filesize">{{ formatFileSize(selectedFile.size) }}</span>
-            <span class="duration" v-if="videoDuration">{{ formatDuration(videoDuration) }}</span>
+            <span class="filesize">{{ formatFileSize(selectedFile.size, { units: ['B', 'KB', 'MB'], decimals: 1, keepTrailingZeros: true, integerBase: true }) }}</span>
+            <span class="duration" v-if="videoDuration">{{ formatDuration(videoDuration, { style: 'clock', rounding: 'floor' }) }}</span>
           </div>
           <button @click.stop="clearFile" class="btn-clear">
             <Icon name="times" />
@@ -133,7 +133,7 @@
           <div class="frame-index">#{{ idx + 1 }}</div>
           <div class="frame-info">
             <span class="confidence">{{ (frame.confidence * 100).toFixed(0) }}%</span>
-            <span class="time" v-if="frame.timestamp">{{ formatDuration(frame.timestamp) }}</span>
+            <span class="time" v-if="frame.timestamp">{{ formatDuration(frame.timestamp, { style: 'clock', rounding: 'floor' }) }}</span>
           </div>
         </div>
       </div>
@@ -192,6 +192,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { formatFileSize, formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
@@ -314,18 +315,6 @@ const clearFile = () => {
   if (fileInput.value) {
     fileInput.value.value = '';
   }
-};
-
-const formatFileSize = (bytes: number): string => {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-};
-
-const formatDuration = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
 const processVideo = async () => {

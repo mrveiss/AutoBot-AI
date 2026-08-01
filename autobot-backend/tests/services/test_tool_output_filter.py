@@ -28,6 +28,11 @@ from services.tool_output_filter import (
     short_circuit_git,
 )
 
+# #13113: these sync tests drive coroutines with asyncio.run(). The legacy
+# asyncio.get_event_loop().run_until_complete() raised "There is no current event
+# loop" whenever the test ran before any async test on its xdist worker, because
+# pytest-asyncio's auto mode owns the loop lifecycle and leaves none set.
+
 
 def _make_filter(rules: dict) -> ToolOutputFilter:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as fh:
@@ -696,25 +701,27 @@ def test_get_tool_output_filter_same_object_on_repeated_calls():
 
 
 # ---------------------------------------------------------------------------
-# record_filter_savings uses pre-hint bytes (#5895)
+# record_filter_savings: content-level savings excludes the tee hint (#5895),
+# but the terminal hard cap's own delta must still be counted in full (#12239)
 # ---------------------------------------------------------------------------
 
 
 def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
+    """The tee-hint pointer text isn't counted against the savings metric."""
+    import asyncio
+
     import services.tool_output_filter as mod
+    from services.tool_output_filter import _tail_lines
 
     # Override tee dir to tmp so tee_and_hint actually writes
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    saved_args: list = []
+    saved: list[int] = []
 
-    import asyncio
-
-    async def _capture(command, original, filtered):
-        saved_args.append((len(original), len(filtered)))
+    async def _capture(command, savings):
+        saved.append(savings)
 
     monkeypatch.setattr(mod, "record_filter_savings", _capture)
 
-    ToolOutputFilter()
     # Build output that will trigger savings > 200 so tee_and_hint fires.
     # Use a rule with max_lines=1 to compress heavily.
     big_output = "\n".join(["x" * 40] * 30)  # ~1200 bytes
@@ -724,73 +731,162 @@ def test_filter_savings_not_inflated_by_tee_hint(tmp_path, monkeypatch):
     async def _run():
         return f2.filter("cmd", big_output)
 
-    result = asyncio.get_event_loop().run_until_complete(_run())
-    # If savings were tracked, verify filtered length does NOT include tee hint
-    if saved_args:
-        orig_len, filt_len = saved_args[0]
-        # filt_len must NOT include "[full output saved: ...]" line
-        assert "[full output saved:" not in result[:filt_len] or filt_len < len(result)
+    result = asyncio.run(_run())
+
+    assert "[full output saved:" in result  # tee hint fired
+    expected_pre_hint = _tail_lines(big_output, 1)
+    assert saved == [len(big_output) - len(expected_pre_hint)]
 
 
-# ---------------------------------------------------------------------------
-# cap_unmatched_output — terminal hard-size cap (#11543)
-# ---------------------------------------------------------------------------
+def test_filter_savings_includes_hard_cap_delta_on_matched_rule(tmp_path, monkeypatch):
+    """#12239: a rule that barely reduces output still leaves the hard cap's
+    truncation uncounted unless the cap's own delta is added to savings."""
+    import asyncio
 
-
-def test_cap_unmatched_output_under_cap_untouched():
-    pass
-
-    small_output = "just a normal short unmatched output\n"
-    result = cap_unmatched_output("some-unknown-tool", small_output, exit_code=0)
-    assert result == small_output
-
-
-def test_cap_unmatched_output_multi_mb_is_truncated(tmp_path, monkeypatch):
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    huge_output = "x" * (3 * 1024 * 1024)  # 3 MB
+    monkeypatch.setattr(mod, "_MAX_UNMATCHED_OUTPUT_CHARS", 100)
+    monkeypatch.setattr(mod, "tee_and_hint", lambda *a, **k: None)  # isolate byte math
+    saved: list[int] = []
 
-    result = cap_unmatched_output("totally-unknown-tool-xyz", huge_output, exit_code=0)
+    async def _capture(command, savings):
+        saved.append(savings)
 
-    assert len(result) < len(huge_output)
+    monkeypatch.setattr(mod, "record_filter_savings", _capture)
+
+    # strip_ansi on ansi-free text: zero content-level savings, so the OLD
+    # code recorded nothing even though the hard cap trims ~4900 bytes.
+    rule_cfg = {"r": {"match_command": "^huge", "strip_ansi": True}}
+    filt = _make_filter(rule_cfg)
+    output = "y" * 5000
+
+    async def _run():
+        return filt.filter("huge", output)
+
+    result = asyncio.run(_run())
+
+    assert "chars omitted" in result  # hard cap fired
+    assert saved == [len(output) - len(result)]
+    assert saved[0] > 4000
+
+
+def test_filter_savings_combines_soft_and_hard_reductions(tmp_path, monkeypatch):
+    """#12239: soft-filter AND hard-cap reductions must both land in the
+    recorded total for a single call — neither dropped nor double-counted."""
+    import asyncio
+
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    monkeypatch.setattr(mod, "_MAX_UNMATCHED_OUTPUT_CHARS", 500)
+    monkeypatch.setattr(mod, "tee_and_hint", lambda *a, **k: None)  # isolate byte math
+    saved: list[int] = []
+
+    async def _capture(command, savings):
+        saved.append(savings)
+
+    monkeypatch.setattr(mod, "record_filter_savings", _capture)
+
+    lines = [f"line-{n:04d} some noisy repeated diagnostic text" for n in range(400)]
+    output = "\n".join(lines)  # ~18KB, far above the 500-char test cap
+    rule_cfg = {"r": {"match_command": "^huge", "max_lines": 300}}
+    filt = _make_filter(rule_cfg)
+
+    async def _run():
+        return filt.filter("huge", output)
+
+    result = asyncio.run(_run())
+
+    assert "lines omitted" in result  # soft filter (max_lines) trimmed content
+    assert "chars omitted" in result  # hard cap trimmed further
+    assert saved == [len(output) - len(result)]
+
+
+def test_filter_savings_recorded_for_unmatched_hard_cap(tmp_path, monkeypatch):
+    """#12239: unmatched output that only hits the hard cap previously
+    recorded no savings at all; it must now record the actual bytes trimmed."""
+    import asyncio
+
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    saved: list[int] = []
+
+    async def _capture(command, savings):
+        saved.append(savings)
+
+    monkeypatch.setattr(mod, "record_filter_savings", _capture)
+
+    filt = _make_filter({})  # no rules → always unmatched
+    output = "z" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 3)
+
+    async def _run():
+        return filt.filter("no-such-command", output)
+
+    result = asyncio.run(_run())
+
+    assert saved == [len(output) - len(result)]
+    assert saved[0] > 0
+
+
+# ---------------------------------------------------------------------------
+# cap_unmatched_output — last-resort ceiling for rule-less output (#11543)
+# ---------------------------------------------------------------------------
+
+
+def test_cap_returns_short_output_verbatim():
+    text = "a brief line of unmatched output\n"
+    assert cap_unmatched_output("mystery-cmd", text, exit_code=0) == text
+
+
+def test_cap_truncates_output_above_ceiling(tmp_path, monkeypatch):
+    import services.tool_output_filter as mod
+
+    monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
+    oversized = "a" * (mod._MAX_UNMATCHED_OUTPUT_CHARS + 10_000)
+
+    result = cap_unmatched_output("mystery-cmd", oversized, exit_code=0)
+
+    assert len(result) < len(oversized)
     assert "chars omitted" in result
+    assert result.startswith("aaaa")  # head slice preserved
 
 
-def test_cap_unmatched_output_hint_points_at_real_teed_file(tmp_path, monkeypatch):
+def test_cap_tees_full_copy_and_links_it(tmp_path, monkeypatch):
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    huge_output = "y" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 3)
+    oversized = "b" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 4)
 
-    result = cap_unmatched_output("another-unknown-tool", huge_output, exit_code=0)
+    result = cap_unmatched_output("mystery-cmd", oversized, exit_code=0)
 
-    saved_files = list(tmp_path.glob("*.txt"))
-    assert len(saved_files) == 1
-    assert saved_files[0].read_text(encoding="utf-8") == huge_output
-    assert str(saved_files[0]) in result
+    teed = list(tmp_path.glob("*.txt"))
+    assert len(teed) == 1
+    assert teed[0].read_text(encoding="utf-8") == oversized
+    assert str(teed[0]) in result
 
 
-def test_filter_wires_unmatched_output_through_cap(tmp_path, monkeypatch):
+def test_filter_applies_cap_when_no_rule_matches(tmp_path, monkeypatch):
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    f = _make_filter({})  # no rules → _match_rule always returns None
-    huge_output = "z" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 3)
+    filt = _make_filter({})  # empty ruleset → _match_rule always returns None
+    oversized = "c" * (mod._MAX_UNMATCHED_OUTPUT_CHARS * 4)
 
-    result = f.filter("totally-unmatched-command --xyz", huge_output, exit_code=0)
+    result = filt.filter("no-such-command", oversized, exit_code=0)
 
-    assert len(result) < len(huge_output)
+    assert len(result) < len(oversized)
     assert "chars omitted" in result
     assert "full output saved" in result
 
 
-def test_filter_matched_rule_output_unaffected_by_cap(tmp_path, monkeypatch):
-    """Existing rule-based filters (below the cap) must be unaffected."""
+def test_matched_rule_path_bypasses_the_cap(tmp_path, monkeypatch):
+    """A matched rule trims its own output; the unmatched cap must not fire."""
     import services.tool_output_filter as mod
 
     monkeypatch.setattr(mod, "_TEE_DIR", tmp_path)
-    f = _make_filter({"r": {"match_command": "^cmd", "max_lines": 3}})
-    result = f.filter("cmd", "\n".join(str(i) for i in range(10)))
-    assert "7\n8\n9" in result
-    assert "7 lines omitted" in result
+    filt = _make_filter({"only": {"match_command": "^run", "max_lines": 2}})
+    result = filt.filter("run", "\n".join(str(n) for n in range(6)))
+    assert "4\n5" in result
+    assert "lines omitted" in result

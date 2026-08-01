@@ -40,6 +40,7 @@ from urllib.parse import quote
 import aiohttp
 
 from autobot_shared.auth import ApiKeyAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector, RetryableError
@@ -53,8 +54,11 @@ from knowledge.connectors.registry import ConnectorRegistry
 
 logger = get_logger(__name__)
 
+# Issue #12659: Redis prefix shared by _load_ts()/_store_ts() (base class).
+# GiteaConnector deliberately reuses this same "gitlab" namespace (both
+# classes live in this module) rather than deriving from its own
+# connector_type ("gitea") — preserved via _ts_redis_prefix overrides below.
 _REDIS_TS_PREFIX = "connector:gitlab:ts:"
-_REDIS_TS_TTL = 86400 * 30  # 30 days
 
 
 # ---------------------------------------------------------------------------
@@ -96,36 +100,6 @@ def _file_to_text(path: str, raw_content: str) -> str:
     return "File: %s\n\n%s" % (path, raw_content)
 
 
-async def _load_ts(connector_id: str, source_id: str) -> Optional[str]:
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, source_id)
-        value = redis.get(key)
-        if hasattr(value, "__await__"):
-            value = await value
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        return value
-    except Exception as exc:
-        logger.warning("Redis load_ts failed for %s: %s", source_id, exc)
-        return None
-
-
-async def _store_ts(connector_id: str, source_id: str, ts: str) -> None:
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        key = "%s%s:%s" % (_REDIS_TS_PREFIX, connector_id, source_id)
-        result = redis.set(key, ts, ex=_REDIS_TS_TTL)
-        if hasattr(result, "__await__"):
-            await result
-    except Exception as exc:
-        logger.warning("Redis store_ts failed for %s: %s", source_id, exc)
-
-
 # ---------------------------------------------------------------------------
 # GitLab connector
 # ---------------------------------------------------------------------------
@@ -147,6 +121,7 @@ class GitLabConnector(AbstractConnector):
     connector_type = "gitlab"
     tier = 1
     max_concurrency = 4
+    _ts_redis_prefix = _REDIS_TS_PREFIX
 
     @classmethod
     def auth_schema(cls) -> type:
@@ -317,7 +292,7 @@ class GitLabConnector(AbstractConnector):
             if not _is_text_file(path):
                 continue
             sid = self._source_id(project_id, "file", path)
-            stored_ts = await _load_ts(self.config.connector_id, sid)
+            stored_ts = await self._load_ts(sid)
             change_type = "added" if stored_ts is None else "modified"
             changes.append(
                 ChangeInfo(
@@ -337,10 +312,10 @@ class GitLabConnector(AbstractConnector):
                 timestamp=now_utc(),
                 details={"updated_at": updated_at},
             )
-        stored = await _load_ts(self.config.connector_id, source_id)
+        stored = await self._load_ts(source_id)
         if stored is None or updated_at > stored:
             change_type = "added" if stored is None else "modified"
-            await _store_ts(self.config.connector_id, source_id, updated_at)
+            await self._store_ts(source_id, updated_at)
             return ChangeInfo(
                 source_id=source_id,
                 change_type=change_type,
@@ -362,7 +337,7 @@ class GitLabConnector(AbstractConnector):
         text = _issue_to_text(item)
         updated_at = item.get("updated_at", "")
         if updated_at:
-            await _store_ts(self.config.connector_id, source_id, updated_at)
+            await self._store_ts(source_id, updated_at)
         return ContentResult(
             source_id=source_id,
             content=text,
@@ -387,7 +362,7 @@ class GitLabConnector(AbstractConnector):
         text = _issue_to_text(item, is_pr=True)
         updated_at = item.get("updated_at", "")
         if updated_at:
-            await _store_ts(self.config.connector_id, source_id, updated_at)
+            await self._store_ts(source_id, updated_at)
         return ContentResult(
             source_id=source_id,
             content=text,
@@ -411,7 +386,7 @@ class GitLabConnector(AbstractConnector):
             return None
         raw = result.get("body_text", "")
         text = _file_to_text(file_path, raw)
-        await _store_ts(self.config.connector_id, source_id, now_utc().isoformat())
+        await self._store_ts(source_id, now_utc().isoformat())
         return ContentResult(
             source_id=source_id,
             content=text,
@@ -432,18 +407,19 @@ class GitLabConnector(AbstractConnector):
         headers = {"PRIVATE-TOKEN": self._token}
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 429:
-                        raise RetryableError("GitLab rate-limited", status_code=429)
-                    if resp.status >= 500:
-                        raise RetryableError("GitLab server error %d" % resp.status, status_code=resp.status)
-                    content_type = resp.content_type or ""
-                    if "json" in content_type:
-                        body = await resp.json(content_type=None)
-                        return {"status_code": resp.status, "body": body}
-                    text = await resp.text(encoding="utf-8")
-                    return {"status_code": resp.status, "body_text": text}
+            async with get_http_client().tracked_request(
+                "GET", url, headers=headers, timeout=timeout, suppress_error_log=True
+            ) as resp:
+                if resp.status == 429:
+                    raise RetryableError("GitLab rate-limited", status_code=429)
+                if resp.status >= 500:
+                    raise RetryableError("GitLab server error %d" % resp.status, status_code=resp.status)
+                content_type = resp.content_type or ""
+                if "json" in content_type:
+                    body = await resp.json(content_type=None)
+                    return {"status_code": resp.status, "body": body}
+                text = await resp.text(encoding="utf-8")
+                return {"status_code": resp.status, "body_text": text}
         except RetryableError:
             raise
         except aiohttp.ClientError as exc:
@@ -493,6 +469,10 @@ class GiteaConnector(AbstractConnector):
 
     connector_type = "gitea"
     tier = 1
+    # Issue #12659: shares GitLabConnector's "connector:gitlab:ts:" Redis
+    # namespace (pre-existing behavior, preserved — not derived from
+    # connector_type since that would change the key prefix to "gitea").
+    _ts_redis_prefix = _REDIS_TS_PREFIX
     max_concurrency = 4
 
     @classmethod
@@ -671,7 +651,7 @@ class GiteaConnector(AbstractConnector):
             if not _is_text_file(path):
                 continue
             sid = self._source_id(owner, repo, "file", path)
-            stored = await _load_ts(self.config.connector_id, sid)
+            stored = await self._load_ts(sid)
             change_type = "added" if stored is None else "modified"
             changes.append(
                 ChangeInfo(
@@ -691,10 +671,10 @@ class GiteaConnector(AbstractConnector):
                 timestamp=now_utc(),
                 details={"updated_at": updated_at},
             )
-        stored = await _load_ts(self.config.connector_id, source_id)
+        stored = await self._load_ts(source_id)
         if stored is None or updated_at > stored:
             change_type = "added" if stored is None else "modified"
-            await _store_ts(self.config.connector_id, source_id, updated_at)
+            await self._store_ts(source_id, updated_at)
             return ChangeInfo(
                 source_id=source_id,
                 change_type=change_type,
@@ -716,7 +696,7 @@ class GiteaConnector(AbstractConnector):
         text = _issue_to_text(item)
         updated_at = item.get("updated_at", "")
         if updated_at:
-            await _store_ts(self.config.connector_id, source_id, updated_at)
+            await self._store_ts(source_id, updated_at)
         return ContentResult(
             source_id=source_id,
             content=text,
@@ -742,7 +722,7 @@ class GiteaConnector(AbstractConnector):
         text = _issue_to_text(item, is_pr=True)
         updated_at = item.get("updated_at", "")
         if updated_at:
-            await _store_ts(self.config.connector_id, source_id, updated_at)
+            await self._store_ts(source_id, updated_at)
         return ContentResult(
             source_id=source_id,
             content=text,
@@ -766,7 +746,7 @@ class GiteaConnector(AbstractConnector):
             return None
         raw = result.get("body_text", "")
         text = _file_to_text(file_path, raw)
-        await _store_ts(self.config.connector_id, source_id, now_utc().isoformat())
+        await self._store_ts(source_id, now_utc().isoformat())
         return ContentResult(
             source_id=source_id,
             content=text,
@@ -788,18 +768,19 @@ class GiteaConnector(AbstractConnector):
         headers = {"Authorization": "token %s" % self._token}
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, headers=headers) as resp:
-                    if resp.status == 429:
-                        raise RetryableError("Gitea rate-limited", status_code=429)
-                    if resp.status >= 500:
-                        raise RetryableError("Gitea server error %d" % resp.status, status_code=resp.status)
-                    content_type = resp.content_type or ""
-                    if "json" in content_type:
-                        body = await resp.json(content_type=None)
-                        return {"status_code": resp.status, "body": body}
-                    text = await resp.text(encoding="utf-8")
-                    return {"status_code": resp.status, "body_text": text}
+            async with get_http_client().tracked_request(
+                "GET", url, headers=headers, timeout=timeout, suppress_error_log=True
+            ) as resp:
+                if resp.status == 429:
+                    raise RetryableError("Gitea rate-limited", status_code=429)
+                if resp.status >= 500:
+                    raise RetryableError("Gitea server error %d" % resp.status, status_code=resp.status)
+                content_type = resp.content_type or ""
+                if "json" in content_type:
+                    body = await resp.json(content_type=None)
+                    return {"status_code": resp.status, "body": body}
+                text = await resp.text(encoding="utf-8")
+                return {"status_code": resp.status, "body_text": text}
         except RetryableError:
             raise
         except aiohttp.ClientError as exc:

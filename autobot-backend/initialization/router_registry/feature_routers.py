@@ -541,6 +541,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["admin", "feature-flags"],
         "feature_flags",
     ),
+    # Issue #12820: Operator toggles for background schedulers
+    (
+        "api.scheduler_toggles",
+        "/admin",
+        ["admin", "schedulers"],
+        "scheduler_toggles",
+    ),
     # Issue #6590: Virtual LLM API keys with per-key budgets
     (
         "api.llm_keys",
@@ -591,6 +598,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "/autoresearch",
         ["autoresearch"],
         "autoresearch",
+    ),
+    # Issue #12622: Research agent P0 — findings -> KB facts + grounded /research synthesis
+    (
+        "services.research.routes",
+        "/research",
+        ["research"],
+        "research",
     ),
     # Issue #2165: Workflow export/import/sharing
     (

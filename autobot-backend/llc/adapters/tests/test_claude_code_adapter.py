@@ -23,6 +23,7 @@ import pytest
 from llc.adapters.base import LLCAdapter
 from llc.adapters.claude_code_adapter import (
     ClaudeCodeAdapter,
+    _resolve_claude_cli,
     _state_path,
 )
 
@@ -142,7 +143,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -156,10 +157,116 @@ class TestInvoke:
         assert len(parts[1]) == 36  # UUID
 
     async def test_invoke_raises_when_claude_missing(self) -> None:
+        # GH#12478: also neutralize the configured-path and common-install-dir
+        # fallbacks — otherwise a dev machine with a real `claude` install (e.g.
+        # ~/.local/bin/claude) resolves the binary and this test's premise
+        # ("claude is genuinely absent") no longer holds.
         adapter = ClaudeCodeAdapter()
-        with patch("llc.adapters.claude_code_adapter.shutil.which", return_value=None):
+        with (
+            patch("llc.adapters.claude_code_adapter._ssot_config.path.claude_cli_path", ""),
+            patch("llc.adapters.subprocess_base.shutil.which", return_value=None),
+            patch(
+                "llc.adapters.subprocess_base._common_cli_search_dirs",
+                return_value=["/nonexistent/gh12478/dir"],
+            ),
+        ):
             with pytest.raises(RuntimeError, match="claude CLI not found"):
                 await adapter.invoke(_agent_cfg(), {})
+
+
+# ---------------------------------------------------------------------------
+# GH#12478: robust CLI resolution — AUTOBOT_CLAUDE_CLI_PATH override + gate
+# ---------------------------------------------------------------------------
+
+
+class TestClaudeCliResolution:
+    """AUTOBOT_CLAUDE_CLI_PATH (config path) > PATH > common install dirs > error."""
+
+    def test_configured_path_used_when_set_and_executable(self, tmp_path) -> None:
+        configured = tmp_path / "claude"
+        configured.write_text("#!/bin/sh\n")
+        configured.chmod(0o755)
+
+        with (
+            patch("llc.adapters.claude_code_adapter._ssot_config.path.claude_cli_path", str(configured)),
+            patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
+        ):
+            resolved = ClaudeCodeAdapter()._configured_cli_path()
+            assert resolved == str(configured)
+
+    def test_no_configured_path_returns_none(self) -> None:
+        with patch("llc.adapters.claude_code_adapter._ssot_config.path.claude_cli_path", ""):
+            assert ClaudeCodeAdapter()._configured_cli_path() is None
+
+    def test_is_cli_available_honors_configured_path(self, tmp_path) -> None:
+        configured = tmp_path / "claude"
+        configured.write_text("#!/bin/sh\n")
+        configured.chmod(0o755)
+
+        with (
+            patch("llc.adapters.claude_code_adapter._ssot_config.path.claude_cli_path", str(configured)),
+            patch("llc.adapters.subprocess_base.shutil.which", return_value=None),
+        ):
+            assert ClaudeCodeAdapter().is_cli_available() is True
+
+    def test_is_cli_available_false_when_nowhere_found(self, monkeypatch) -> None:
+        with (
+            patch("llc.adapters.claude_code_adapter._ssot_config.path.claude_cli_path", ""),
+            patch("llc.adapters.subprocess_base.shutil.which", return_value=None),
+            patch(
+                "llc.adapters.subprocess_base._common_cli_search_dirs",
+                return_value=["/nonexistent/gh12478/dir"],
+            ),
+        ):
+            assert ClaudeCodeAdapter().is_cli_available() is False
+
+    @pytest.mark.asyncio
+    async def test_invoke_uses_configured_path_over_path(self, tmp_path) -> None:
+        """A configured override resolves even when a different `claude` is on PATH."""
+        configured = tmp_path / "claude"
+        configured.write_text("#!/bin/sh\n")
+        configured.chmod(0o755)
+
+        adapter = ClaudeCodeAdapter()
+        fake_proc = _make_fake_proc(101)
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = _agent_cfg(output_dir=td)
+            with (
+                patch("llc.adapters.claude_code_adapter._ssot_config.path.claude_cli_path", str(configured)),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
+                patch(
+                    "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
+                ),
+                patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=fake_proc) as mock_exec,
+                patch("builtins.open", MagicMock(return_value=MagicMock())),
+            ):
+                await adapter.invoke(cfg, {"task_id": "t1"})
+
+        assert mock_exec.call_args.args[0] == str(configured)
+
+    def test_cli_not_found_message_is_actionable_and_config_aware(self) -> None:
+        message = ClaudeCodeAdapter().cli_not_found_message()
+        assert "claude CLI not found" in message
+        assert "AUTOBOT_CLAUDE_CLI_PATH" in message
+
+    def test_invoke_error_matches_scheduler_skip_message(self) -> None:
+        """RuntimeError text matches cli_not_found_message() so ops sees one consistent reason
+        whether the run was gated pre-dispatch (heartbeat scheduler) or slipped through to invoke().
+        """
+        adapter = ClaudeCodeAdapter()
+        with (
+            patch("llc.adapters.claude_code_adapter._ssot_config.path.claude_cli_path", ""),
+            patch("llc.adapters.subprocess_base.shutil.which", return_value=None),
+            patch(
+                "llc.adapters.subprocess_base._common_cli_search_dirs",
+                return_value=["/nonexistent/gh12478/dir"],
+            ),
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                _resolve_claude_cli()
+
+        assert str(exc_info.value) == adapter.cli_not_found_message()
 
     async def test_invoke_writes_state_file(self) -> None:
         adapter = ClaudeCodeAdapter()
@@ -171,7 +278,7 @@ class TestInvoke:
             # written for real to the temp dir so the os.path.exists assertion
             # below is meaningful. Only the subprocess + redis are mocked.
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -182,7 +289,7 @@ class TestInvoke:
             # State file must exist after invoke
             state_file = _state_path(td, run_id)
             assert os.path.exists(state_file)
-            with open(state_file) as fh:
+            with open(state_file, encoding="utf-8") as fh:
                 state = json.load(fh)
             assert state["pid"] == 77
             assert "session_id" in state
@@ -201,7 +308,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client",
                     new_callable=AsyncMock,
@@ -215,7 +322,7 @@ class TestInvoke:
             assert captured["stderr"] is not asyncio.subprocess.PIPE
             assert hasattr(captured["stderr"], "write")
             # The sidecar path is recorded in state and exists on disk.
-            with open(_state_path(td, run_id)) as fh:
+            with open(_state_path(td, run_id), encoding="utf-8") as fh:
                 state = json.load(fh)
             assert state["stderr_file"].endswith(".stderr.log")
             assert os.path.exists(state["stderr_file"])
@@ -238,7 +345,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client",
                     new_callable=AsyncMock,
@@ -265,7 +372,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td, allowed_tools=["Bash", "Read"])
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -291,7 +398,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -320,7 +427,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -339,7 +446,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -361,7 +468,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -395,7 +502,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),
@@ -421,7 +528,7 @@ class TestInvoke:
         with tempfile.TemporaryDirectory() as td:
             cfg = _agent_cfg(output_dir=td)
             with (
-                patch("llc.adapters.claude_code_adapter.shutil.which", return_value="/usr/bin/claude"),
+                patch("llc.adapters.subprocess_base.shutil.which", return_value="/usr/bin/claude"),
                 patch(
                     "llc.adapters.claude_code_adapter.get_async_redis_client", new_callable=AsyncMock, return_value=None
                 ),

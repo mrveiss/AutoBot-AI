@@ -1,6 +1,7 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * AutoBot Code Intelligence - VSCode Extension
- * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  *
  * Real-time code pattern detection, security analysis, and quick fixes

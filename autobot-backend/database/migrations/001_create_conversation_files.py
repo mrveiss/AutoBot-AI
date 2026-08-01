@@ -20,6 +20,17 @@ from constants.threshold_constants import TimingConstants
 logger = get_logger(__name__)
 
 
+def _quote_sqlite_identifier(name: str) -> str:
+    """Return a safely double-quoted SQLite identifier.
+
+    SQL identifiers (table/view names) cannot be passed as bind parameters, so
+    any dynamic identifier is wrapped in double quotes with embedded quotes
+    doubled per the SQLite grammar. This makes metacharacters inert, preventing
+    SQL injection via identifier interpolation. (#12284)
+    """
+    return '"' + name.replace('"', '""') + '"'
+
+
 class ConversationFilesMigration:
     """
     Migration to create and initialize conversation files database.
@@ -442,7 +453,10 @@ class ConversationFilesMigration:
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='view'")
                 views = [row[0] for row in cursor.fetchall()]
                 for view in views:
-                    cursor.execute(f"DROP VIEW IF EXISTS {view}")  # nosemgrep: autobot-sql-string-format  # nosemgrep
+                    # Identifier can't be a bind param; quote it (SQLite rules)
+                    # so any metacharacter is treated as a name, not SQL. (#12284)
+                    stmt = f"DROP VIEW IF EXISTS {_quote_sqlite_identifier(view)}"
+                    cursor.execute(stmt)  # nosec B608 - identifier safely quoted
                     logger.info(f"Dropped view: {view}")
 
                 # Drop tables (in reverse dependency order)
@@ -456,7 +470,10 @@ class ConversationFilesMigration:
                 ]
 
                 for table in tables_to_drop:
-                    cursor.execute(f"DROP TABLE IF EXISTS {table}")  # nosemgrep: autobot-sql-string-format  # nosemgrep
+                    # Names come from the hardcoded allowlist above; quote them
+                    # (SQLite rules) as defence-in-depth against injection. (#12284)
+                    stmt = f"DROP TABLE IF EXISTS {_quote_sqlite_identifier(table)}"
+                    cursor.execute(stmt)  # nosec B608 - identifier safely quoted
                     logger.info(f"Dropped table: {table}")
 
                 self.connection.commit()

@@ -72,9 +72,14 @@ class OllamaProvider:
 
     @asynccontextmanager
     async def _get_session(self) -> AsyncGenerator[aiohttp.ClientSession, None]:
-        """Get HTTP session using singleton HTTPClient."""
-        session = await self._http_client.get_session()
-        yield session
+        """Get HTTP session using singleton HTTPClient.
+
+        Issue #12119: delegates to ``tracked_session()`` so hot LLM streaming
+        requests count as in-flight and a concurrent pool resize cannot close
+        the shared session mid-stream.
+        """
+        async with self._http_client.tracked_session() as session:
+            yield session
 
     def get_host_from_env(self) -> str:
         """

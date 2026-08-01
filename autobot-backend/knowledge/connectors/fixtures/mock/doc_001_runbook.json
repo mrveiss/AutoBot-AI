@@ -1,0 +1,8 @@
+{
+  "id": "doc-001",
+  "title": "Runbook: Restarting the Redis Cluster",
+  "category": "engineering",
+  "author": "sre-team",
+  "updated_at": "2026-01-10T09:00:00+00:00",
+  "content": "To restart the Redis cluster safely: 1) drain traffic from the affected node via the load balancer, 2) run `redis-cli -h <node> shutdown nosave`, 3) wait for the systemd unit to relaunch the process, 4) confirm replication has resynced with `INFO replication` before re-adding the node to the pool."
+}

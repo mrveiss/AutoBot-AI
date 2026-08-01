@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 
 # Bulletproof Frontend Deployment System
 # Eliminates all deployment failure points with atomic updates and verification

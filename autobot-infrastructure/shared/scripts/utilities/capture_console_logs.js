@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Console log capture script for Browser VM
  * Captures browser console warnings and errors from chat view

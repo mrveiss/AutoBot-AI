@@ -449,3 +449,79 @@ class TestAccessibilityNodeToDict:
         node = AccessibilityNode(role="button", name="OK", properties={})
         d = node.to_dict()
         assert "properties" not in d
+
+
+class TestIndexInteractive:
+    """AccessibilitySnapshot.index_interactive() — numbered element menu (#11537)."""
+
+    def test_none_tree_returns_empty_list(self) -> None:
+        assert AccessibilitySnapshot().index_interactive(None) == []
+
+    def test_only_interactive_roles_are_indexed(self) -> None:
+        root = AccessibilityNode(
+            role="WebArea",
+            name="",
+            children=[
+                AccessibilityNode(role="button", name="Submit"),
+                AccessibilityNode(role="paragraph", name="Some text"),
+                AccessibilityNode(role="textbox", name="Email"),
+            ],
+        )
+        elements = AccessibilitySnapshot().index_interactive(root)
+        assert [el["role"] for el in elements] == ["button", "textbox"]
+
+    def test_index_is_sequential_and_stable_in_document_order(self) -> None:
+        root = AccessibilityNode(
+            role="WebArea",
+            name="",
+            children=[
+                AccessibilityNode(role="link", name="Home"),
+                AccessibilityNode(role="link", name="About"),
+                AccessibilityNode(role="button", name="Go"),
+            ],
+        )
+        elements = AccessibilitySnapshot().index_interactive(root)
+        assert [el["index"] for el in elements] == [0, 1, 2]
+        assert [el["name"] for el in elements] == ["Home", "About", "Go"]
+
+    def test_role_matching_is_case_insensitive(self) -> None:
+        root = AccessibilityNode(role="BUTTON", name="Submit")
+        elements = AccessibilitySnapshot().index_interactive(root)
+        assert len(elements) == 1
+
+    def test_no_interactive_nodes_returns_empty_list(self) -> None:
+        root = AccessibilityNode(role="WebArea", name="", children=[AccessibilityNode(role="paragraph", name="x")])
+        assert AccessibilitySnapshot().index_interactive(root) == []
+
+
+class TestToIndexedText:
+    """AccessibilitySnapshot.to_indexed_text() — plain-text numbered menu (#11537)."""
+
+    def test_none_tree_returns_empty_string(self) -> None:
+        assert AccessibilitySnapshot().to_indexed_text(None) == ""
+
+    def test_no_interactive_elements_returns_empty_string(self) -> None:
+        root = AccessibilityNode(role="paragraph", name="just text")
+        assert AccessibilitySnapshot().to_indexed_text(root) == ""
+
+    def test_renders_index_role_and_name(self) -> None:
+        root = AccessibilityNode(role="button", name="Submit")
+        text = AccessibilitySnapshot().to_indexed_text(root)
+        assert text == '[0] button "Submit"'
+
+    def test_renders_multiple_elements_one_per_line(self) -> None:
+        root = AccessibilityNode(
+            role="WebArea",
+            name="",
+            children=[
+                AccessibilityNode(role="link", name="Home"),
+                AccessibilityNode(role="button", name="Submit"),
+            ],
+        )
+        text = AccessibilitySnapshot().to_indexed_text(root)
+        assert text.splitlines() == ['[0] link "Home"', '[1] button "Submit"']
+
+    def test_element_without_name_omits_quoted_name(self) -> None:
+        root = AccessibilityNode(role="button", name="")
+        text = AccessibilitySnapshot().to_indexed_text(root)
+        assert text == "[0] button"

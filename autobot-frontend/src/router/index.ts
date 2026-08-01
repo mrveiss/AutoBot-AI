@@ -838,6 +838,19 @@ export const routes: RouteRecordRaw[] = [
       hideInNav: true,
     },
   },
+  // Issue #12162 (#12102/#11506 T1 Stage 1): Advanced Control — takeover approval queue
+  {
+    path: '/admin/advanced-control',
+    name: 'admin-advanced-control',
+    component: () => import('@/views/AdvancedControlView.vue'),
+    meta: {
+      title: 'Advanced Control',
+      description: 'Takeover approval queue, streaming, and monitoring',
+      requiresAuth: true,
+      admin: true,
+      hideInNav: true,
+    },
+  },
   // GH#6470: Budget policy management (admin-only)
   {
     path: '/admin/budget-policies',
@@ -858,6 +871,18 @@ export const routes: RouteRecordRaw[] = [
     component: () => import('@/views/SystemHealthView.vue'),
     meta: {
       title: 'System Health',
+      hideInNav: true,
+      requiresAuth: true,
+      admin: true,
+    },
+  },
+  // Issue #11996 (#11994): Always-on provider-fallback observability panel
+  {
+    path: '/admin/provider-fallback',
+    name: 'admin-provider-fallback',
+    component: () => import('@/views/ProviderFallbackView.vue'),
+    meta: {
+      title: 'Provider Fallback',
       hideInNav: true,
       requiresAuth: true,
       admin: true,

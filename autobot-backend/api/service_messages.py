@@ -22,6 +22,7 @@ from api.schemas_system import (
     SingleMessageResponse,
 )
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.message_bus import get_message_bus
@@ -54,7 +55,7 @@ def _check_admin(request: Request) -> bool:
         user_role = user_data.get("role")
         if not user_role:
             raise_auth_error("AUTH_0002", "User role not assigned - access denied")
-        if user_role != "admin":
+        if not is_admin_role(user_role):
             raise_auth_error(
                 "AUTH_0003",
                 "Admin permission required for service message access",

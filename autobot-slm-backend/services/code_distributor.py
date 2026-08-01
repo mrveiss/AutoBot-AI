@@ -14,12 +14,13 @@ import io
 import logging
 import os
 import tarfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
 
 from sqlalchemy import select
 
+from autobot_shared.ssot_config import config
+from autobot_shared.time_utils import utc_timestamp
 from models.database import Setting
 from services.database import db_service
 from services.ssh_utils import _ssh_key_usable
@@ -33,7 +34,7 @@ DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 # Remote agent installation path on managed nodes
 REMOTE_AGENT_PATH = "/opt/slm-agent"
 # SSH key for connecting to managed nodes
-SSH_KEY_PATH = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+SSH_KEY_PATH = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
 
 class CodeDistributor:
@@ -102,7 +103,7 @@ class CodeDistributor:
                 tar.add(agent_path, arcname="agent")
 
                 # Create and add version.json
-                built_at = datetime.now(timezone.utc).isoformat()
+                built_at = utc_timestamp()
                 version_content = f'{{"commit": "{commit_hash}", "built_at": "{built_at}"}}'
                 version_bytes = version_content.encode("utf-8")
                 version_info = tarfile.TarInfo(name="version.json")
@@ -298,9 +299,7 @@ class CodeDistributor:
             commit_hash: Current commit hash
         """
         version_json = (
-            f'{{"commit": "{commit_hash}", '
-            f'"synced_at": "{datetime.now(timezone.utc).isoformat()}", '
-            f'"source": "fleet-sync"}}'
+            f'{{"commit": "{commit_hash}", ' f'"synced_at": "{utc_timestamp()}", ' f'"source": "fleet-sync"}}'
         )
         version_cmd = self._build_ssh_command(ssh_port)
         version_cmd.extend(

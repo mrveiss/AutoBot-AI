@@ -53,6 +53,15 @@ export interface BrowserAction {
   params: Record<string, unknown>
 }
 
+/** Wire shape returned by POST /api/browser/mcp/screenshot (#12894). */
+interface BrowserScreenshotResponse {
+  success: boolean
+  action: string
+  base64_image?: string
+  mime_type: string
+  timestamp: string
+}
+
 export interface ScreenshotResult {
   session_id: string
   image_data: string
@@ -235,7 +244,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function navigate(sessionId: string, url: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<unknown>(`${getApiBase()}/browser/navigate`, { session_id: sessionId, url })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/mcp/navigate`, { session_id: sessionId, url })
       logger.debug('Navigated to:', url)
       await fetchSessions()
       return true
@@ -250,7 +259,7 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function click(sessionId: string, selector: string): Promise<boolean> {
     error.value = null
     return wrap(async () => {
-      await ApiClient.post<unknown>(`${getApiBase()}/browser/click`, { session_id: sessionId, selector })
+      await ApiClient.post<unknown>(`${getApiBase()}/browser/mcp/click`, { session_id: sessionId, selector })
       logger.debug('Clicked element:', selector)
       return true
     }).catch((err) => {
@@ -278,7 +287,20 @@ export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) 
   async function takeScreenshot(sessionId: string): Promise<ScreenshotResult | null> {
     error.value = null
     return wrap(async () => {
-      const data = await ApiClient.post<ScreenshotResult>(`${getApiBase()}/browser/screenshot`, { session_id: sessionId })
+      // #12894: the route moved to /browser/mcp/screenshot AND its response
+      // shape differs from the old one — it returns base64_image/mime_type
+      // where callers here consume image_data/format. Rewiring the URL alone
+      // would have left every consumer reading undefined, so map it.
+      const raw = await ApiClient.post<BrowserScreenshotResponse>(
+        `${getApiBase()}/browser/mcp/screenshot`,
+        { session_id: sessionId },
+      )
+      const data: ScreenshotResult = {
+        session_id: sessionId,
+        image_data: raw.base64_image ?? '',
+        timestamp: raw.timestamp,
+        format: raw.mime_type === 'image/jpeg' ? 'jpeg' : 'png',
+      }
       screenshots.value.unshift(data)
       logger.debug('Captured screenshot')
       return data

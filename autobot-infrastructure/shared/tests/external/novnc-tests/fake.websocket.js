@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 import Base64 from '../core/base64.js';
 
 export default class FakeWebSocket {

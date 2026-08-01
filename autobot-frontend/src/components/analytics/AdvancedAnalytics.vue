@@ -152,7 +152,7 @@
               <td class="text-right" :class="getErrorClass(agent.error_rate)">
                 {{ agent.error_rate?.toFixed(1) }}%
               </td>
-              <td class="text-right">{{ formatDuration(agent.avg_duration_ms) }}</td>
+              <td class="text-right">{{ formatDuration(agent.avg_duration_ms, { style: 'msSeconds2dp', nullText: '0ms' }) }}</td>
             </tr>
           </tbody>
         </table>
@@ -215,7 +215,7 @@
             <h4><Icon name="clock" /> {{ $t('analytics.advanced.avgSessionDuration') }}</h4>
           </template>
           <div class="metric-value">
-            {{ formatDuration(engagementMetrics?.metrics?.avg_session_duration_ms || 0) }}
+            {{ formatDuration(engagementMetrics?.metrics?.avg_session_duration_ms || 0, { style: 'msSeconds2dp', nullText: '0ms' }) }}
           </div>
         </BasePanel>
 
@@ -321,6 +321,7 @@
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -481,12 +482,6 @@ const trendIcon = computed(() => {
 const formatNumber = (num: number): string => {
   if (!num) return '0'
   return num.toLocaleString()
-}
-
-const formatDuration = (ms: number): string => {
-  if (!ms) return '0ms'
-  if (ms < 1000) return `${ms.toFixed(0)}ms`
-  return `${(ms / 1000).toFixed(2)}s`
 }
 
 const getSuccessClass = (rate: number): string => {

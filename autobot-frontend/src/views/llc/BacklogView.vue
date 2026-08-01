@@ -122,9 +122,14 @@
     </div>
 
     <!-- AC Suggester create form -->
-    <div v-if="showCreateForm" class="modal-overlay" @click.self="showCreateForm = false">
-      <div class="modal-panel">
-        <h3>{{ t('llc.backlog.createTitle') }}</h3>
+    <BaseModal
+      :model-value="showCreateForm"
+      :title="t('llc.backlog.createTitle')"
+      :close-label="t('ui.modal.closeDialog')"
+      :width="560"
+      @close="showCreateForm = false"
+    >
+      <div class="modal-form-body">
         <div class="form-field">
           <label>{{ t('llc.backlog.fieldTitle') }}</label>
           <input v-model="newItem.title" type="text" class="form-input" :placeholder="t('llc.backlog.titlePlaceholder')" />
@@ -179,19 +184,25 @@
 
         <p v-if="createError" class="create-error" role="alert">{{ createError }}</p>
 
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
-          <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
-            {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
-          </button>
-        </div>
       </div>
-    </div>
+
+      <template #actions>
+        <button class="btn-secondary" @click="showCreateForm = false">{{ t('common.cancel') }}</button>
+        <button class="btn-primary" :disabled="!newItem.title || isCreating" @click="createItem">
+          {{ isCreating ? t('llc.backlog.creating') : t('common.create') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Bulk sprint assign drawer -->
-    <div v-if="showBulkAssign" class="modal-overlay" @click.self="showBulkAssign = false">
-      <div class="modal-panel">
-        <h3>{{ t('llc.backlog.assignToSprint') }}</h3>
+    <BaseModal
+      :model-value="showBulkAssign"
+      :title="t('llc.backlog.assignToSprint')"
+      :close-label="t('ui.modal.closeDialog')"
+      :width="560"
+      @close="showBulkAssign = false"
+    >
+      <div class="modal-form-body">
         <p>{{ t('llc.backlog.itemsSelected', { count: selectedIds.size }) }}</p>
         <div class="form-field">
           <label>{{ t('llc.backlog.project') }}</label>
@@ -211,14 +222,15 @@
             {{ t('llc.backlog.noSprints') }}
           </p>
         </div>
-        <div class="modal-actions">
-          <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
-          <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
-            {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
-          </button>
-        </div>
       </div>
-    </div>
+
+      <template #actions>
+        <button class="btn-secondary" @click="showBulkAssign = false">{{ t('common.cancel') }}</button>
+        <button class="btn-primary" :disabled="!bulkSprintId || isBulkAssigning" @click="bulkAssign">
+          {{ isBulkAssigning ? t('llc.backlog.assigning') : t('llc.backlog.assign') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <WorkItemDetail
       v-if="detailItem"
@@ -238,6 +250,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
+import { BaseModal } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
@@ -531,7 +544,7 @@ onMounted(fetchBacklog)
 
 .item-count {
   font-size: 0.875rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .header-actions {
@@ -548,9 +561,9 @@ onMounted(fetchBacklog)
 .filter-select,
 .filter-search {
   padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
 }
@@ -563,7 +576,7 @@ onMounted(fetchBacklog)
 .backlog-table-wrapper {
   flex: 1;
   overflow: auto;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
 }
 
@@ -577,23 +590,23 @@ onMounted(fetchBacklog)
   padding: 0.625rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  background: var(--bg-elevated, #f9fafb);
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
   white-space: nowrap;
 }
 
 .backlog-row {
-  border-bottom: 1px solid var(--border-default, #f3f4f6);
+  border-bottom: 1px solid var(--border-default);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .backlog-row:hover {
-  background: var(--bg-hover, #f9fafb);
+  background: var(--bg-hover);
 }
 
 .backlog-row.selected {
-  background: var(--color-primary-subtle, #eff6ff);
+  background: var(--color-primary-subtle, var(--backlogview-selected-row-bg));
 }
 
 .backlog-table td {
@@ -611,7 +624,7 @@ onMounted(fetchBacklog)
 .item-identifier {
   font-family: monospace;
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .assignee-avatar {
@@ -621,7 +634,7 @@ onMounted(fetchBacklog)
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   font-size: 0.65rem;
   font-weight: 600;
@@ -631,8 +644,8 @@ onMounted(fetchBacklog)
 .sprint-tag {
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--backlogview-sprint-tag-bg);
+  color: var(--backlogview-sprint-tag-text);
   border-radius: 0.25rem;
 }
 
@@ -640,36 +653,15 @@ onMounted(fetchBacklog)
 .loading-state {
   text-align: center;
   padding: 2rem;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal-panel {
-  background: var(--bg-surface, #fff);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 560px;
+/* #10882: overlay/panel/header/footer chrome now provided by @autobot/ui
+   BaseModal; only the body field stack keeps its 1rem gap here. */
+.modal-form-body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-panel h3 {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
 }
 
 .form-field {
@@ -681,7 +673,7 @@ onMounted(fetchBacklog)
 .form-field label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .form-row {
@@ -697,9 +689,9 @@ onMounted(fetchBacklog)
 .form-select,
 .form-textarea {
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.875rem;
   width: 100%;
@@ -724,15 +716,15 @@ onMounted(fetchBacklog)
 .ac-header label {
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .btn-suggest {
   font-size: 0.8rem;
   padding: 0.25rem 0.75rem;
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
   cursor: pointer;
 }
 
@@ -746,9 +738,9 @@ onMounted(fetchBacklog)
   flex-direction: column;
   gap: 0.375rem;
   padding: 0.5rem;
-  border: 1px solid var(--border-default, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background: var(--bg-elevated, #f9fafb);
+  background: var(--bg-elevated);
 }
 
 .ac-item {
@@ -759,22 +751,16 @@ onMounted(fetchBacklog)
   cursor: pointer;
 }
 
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
 .create-error {
   margin: 0 0 0.5rem;
   font-size: 0.8125rem;
-  color: var(--color-danger, #b91c1c);
+  color: var(--color-danger);
 }
 
 .form-hint {
   margin: 0.25rem 0 0;
   font-size: 0.75rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .btn-primary {
@@ -782,7 +768,7 @@ onMounted(fetchBacklog)
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   border: none;
   border-radius: 0.375rem;
@@ -793,7 +779,7 @@ onMounted(fetchBacklog)
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #2563eb);
+  background: var(--color-primary-hover);
 }
 
 .btn-primary:disabled {
@@ -806,9 +792,9 @@ onMounted(fetchBacklog)
   align-items: center;
   gap: 0.375rem;
   padding: 0.5rem 1rem;
-  background: var(--bg-surface, #fff);
+  background: var(--bg-surface);
   color: var(--text-primary);
-  border: 1px solid var(--border-default, #d1d5db);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -817,7 +803,7 @@ onMounted(fetchBacklog)
 }
 
 .btn-secondary:hover {
-  background: var(--bg-hover, #f9fafb);
+  background: var(--bg-hover);
 }
 
 .btn-icon {

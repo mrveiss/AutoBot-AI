@@ -184,7 +184,7 @@
                 :y="nodeHeight / 2 + 35"
                 text-anchor="middle"
               >
-                {{ formatDuration(node.duration) }}
+                {{ formatDuration(node.duration, { style: 'msMinutes' }) }}
               </text>
             </g>
           </g>
@@ -237,7 +237,7 @@
           </div>
           <div class="detail-row" v-if="selectedNode.duration">
             <span class="label">{{ t('visualizations.workflowViz.duration') }}</span>
-            <span class="value">{{ formatDuration(selectedNode.duration) }}</span>
+            <span class="value">{{ formatDuration(selectedNode.duration, { style: 'msMinutes' }) }}</span>
           </div>
           <div class="detail-row" v-if="selectedNode.startTime">
             <span class="label">{{ t('visualizations.workflowViz.started') }}</span>
@@ -263,6 +263,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
@@ -495,12 +496,6 @@ function formatStatus(status?: string): string {
     failed: t('visualizations.workflowViz.failed')
   }
   return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1)
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.round(ms / 60000)}m`
 }
 
 function formatTime(timestamp: number): string {
@@ -802,8 +797,8 @@ defineExpose({
 /* Zoom controls */
 .zoom-controls {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: var(--spacing-4);
+  right: var(--spacing-4);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -814,8 +809,8 @@ defineExpose({
 }
 
 .zoom-controls button {
-  width: 28px;
-  height: 28px;
+  width: var(--spacing-7);
+  height: var(--spacing-7);
   border: 1px solid var(--border-subtle);
   background: transparent;
   border-radius: var(--radius-default);
@@ -835,17 +830,17 @@ defineExpose({
 .zoom-level {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-  min-width: 40px;
+  min-width: var(--spacing-10);
   text-align: center;
 }
 
 /* Progress bar */
 .progress-bar {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
+  bottom: var(--spacing-4);
+  left: var(--spacing-4);
   width: 200px;
-  height: 24px;
+  height: var(--spacing-6);
   background: rgba(30, 41, 59, 0.9);
   border-radius: var(--radius-xl);
   border: 1px solid var(--border-subtle);
@@ -872,8 +867,8 @@ defineExpose({
 /* Node details panel */
 .node-details {
   position: absolute;
-  top: 80px;
-  right: 20px;
+  top: var(--spacing-20);
+  right: var(--spacing-5);
   width: 280px;
   background: var(--bg-secondary);
   border-radius: var(--radius-xl);
@@ -892,8 +887,8 @@ defineExpose({
 }
 
 .details-icon {
-  width: 40px;
-  height: 40px;
+  width: var(--spacing-10);
+  height: var(--spacing-10);
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
@@ -995,7 +990,7 @@ defineExpose({
 .slide-enter-from,
 .slide-leave-to {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateX(var(--spacing-5));
 }
 
 /* Responsive */
@@ -1017,7 +1012,7 @@ defineExpose({
     left: 0;
     right: 0;
     width: 100%;
-    border-radius: var(--radius-xl) 12px 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     max-height: 50vh;
     overflow-y: auto;
   }

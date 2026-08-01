@@ -44,12 +44,9 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
 
+from api.ws_security import authenticate_ws_admin
 from api.ws_security import validate_ws_origin as _validate_ws_origin
-from auth_middleware import (
-    check_admin_permission,
-    get_auth_middleware,
-    verify_internal_api_key,
-)
+from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
 from services.docker_task_workspace import (
     WorkspaceInfo,
@@ -392,26 +389,10 @@ async def _ws_error(websocket: WebSocket, content: str) -> None:
 
 
 def _authenticate_ws_admin(websocket: WebSocket) -> bool:
-    """Fail-closed auth+authz for the shell WS: a valid user (JWT/session/cookie)
-    or the internal-service key, AND admin role — matching the REST endpoints.
-
-    A WebSocket exposes the same ``headers``/``cookies`` interface as a Request,
-    so the standard auth middleware resolves the caller. Any error → deny.
+    """Fail-closed auth+authz for the shell WS — delegates to the shared,
+    audited implementation in :mod:`api.ws_security` (#12178).
     """
-    # Dev/test escape hatch: when WS auth is explicitly disabled, allow the
-    # connection. Production defaults to "1", so full auth is required.
-    if os.environ.get("AUTOBOT_REQUIRE_WS_AUTH", "1") != "1":
-        return True
-    try:
-        if verify_internal_api_key(websocket.headers.get("X-Internal-API-Key")):
-            return True
-        user = get_auth_middleware().get_user_from_request(websocket)  # type: ignore[arg-type]
-        if not user:
-            return False
-        return user.get("role") == "admin"
-    except Exception:
-        logger.warning("workspace_shell: WS auth error — denying", exc_info=True)
-        return False
+    return authenticate_ws_admin(websocket)
 
 
 def _info_to_response(info: WorkspaceInfo) -> WorkspaceInfoResponse:

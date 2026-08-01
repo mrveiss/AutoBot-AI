@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+from autobot_shared.time_utils import utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class LLCWebSocketPublisher:
             "entity_id": entity_id,
             "payload": payload,
             "actor_id": actor_id,
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": utc_timestamp(),
         }
         try:
             if get_live_event_manager is not None:

@@ -19,7 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from llc.deps import get_session, service_dep
+from api.user_management.dependencies import get_current_user, require_org_context
+from llc.deps import assert_company_access, get_session, service_dep
+from user_management.services import TenantContext
 
 from ..models.enums import WorkItemType
 from ..services.review_gate import (
@@ -33,6 +35,37 @@ _service = service_dep(ReviewGatePolicyService)
 
 
 # ------------------------------------------------------------------
+# Auth / tenant isolation (GH#12148)
+# ------------------------------------------------------------------
+
+
+async def _get_authorized_policy(
+    session: AsyncSession,
+    svc: ReviewGatePolicyService,
+    company_id: uuid.UUID,
+    policy_id: uuid.UUID,
+    ctx: TenantContext,
+):
+    """Enforce tenant isolation and policy<->company ownership (IDOR fix).
+
+    The service mutators key on ``policy_id`` alone, so a caller could pass
+    their own ``company_id`` in the path (passing the tenant check) while
+    targeting a ``policy_id`` owned by a different company. Load the policy and
+    verify it belongs to the path company before mutating (GH#12148). This
+    path-consistency check is intentionally NOT admin-exempt (unlike
+    ``assert_company_access``): even a platform admin navigating
+    /companies/{company_id}/review-gate-policies/{policy_id} must have the two
+    path segments agree, so it stays local rather than folding into the
+    generic loader.
+    """
+    assert_company_access(ctx, company_id)
+    policy = await svc.get_policy_by_id(session, str(policy_id))
+    if policy is None or str(policy.company_id) != str(company_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Policy {policy_id} not found")
+    return policy
+
+
+# ------------------------------------------------------------------
 # Schemas
 # ------------------------------------------------------------------
 
@@ -41,11 +74,15 @@ class ReviewGatePolicyCreate(BaseModel):
     item_type: WorkItemType
     requires_human_review: bool = False
     reviewer_role: Optional[str] = None
+    # #12618: cross-vendor second-opinion verifier tier; off by default. Also
+    # requires the global AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED switch.
+    requires_cross_vendor_review: bool = False
 
 
 class ReviewGatePolicyUpdate(BaseModel):
     requires_human_review: Optional[bool] = None
     reviewer_role: Optional[str] = None
+    requires_cross_vendor_review: Optional[bool] = None
 
 
 class ReviewGatePolicyRead(BaseModel):
@@ -56,6 +93,7 @@ class ReviewGatePolicyRead(BaseModel):
     item_type: WorkItemType
     requires_human_review: bool
     reviewer_role: Optional[str]
+    requires_cross_vendor_review: bool
     created_at: datetime
     updated_at: datetime
 
@@ -73,7 +111,10 @@ async def list_review_gate_policies(
     company_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> List[ReviewGatePolicyRead]:
+    assert_company_access(ctx, company_id)
     policies = await svc.list_policies(session, str(company_id))
     return [ReviewGatePolicyRead.model_validate(p) for p in policies]
 
@@ -88,7 +129,10 @@ async def create_review_gate_policy(
     body: ReviewGatePolicyCreate,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ReviewGatePolicyRead:
+    assert_company_access(ctx, company_id)
     try:
         policy = await svc.create_policy(
             session,
@@ -96,6 +140,7 @@ async def create_review_gate_policy(
             body.item_type,
             requires_human_review=body.requires_human_review,
             reviewer_role=body.reviewer_role,
+            requires_cross_vendor_review=body.requires_cross_vendor_review,
         )
         await session.commit()
     except ReviewGatePolicyConflictError:
@@ -113,13 +158,17 @@ async def update_review_gate_policy(
     body: ReviewGatePolicyUpdate,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> ReviewGatePolicyRead:
+    await _get_authorized_policy(session, svc, company_id, policy_id, ctx)
     try:
         policy = await svc.update_policy(
             session,
             str(policy_id),
             requires_human_review=body.requires_human_review,
             reviewer_role=body.reviewer_role,
+            requires_cross_vendor_review=body.requires_cross_vendor_review,
         )
         await session.commit()
     except ReviewGatePolicyNotFoundError:
@@ -136,7 +185,10 @@ async def delete_review_gate_policy(
     policy_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
     svc: ReviewGatePolicyService = Depends(_service),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
 ) -> None:
+    await _get_authorized_policy(session, svc, company_id, policy_id, ctx)
     deleted = await svc.delete_policy(session, str(policy_id))
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Policy {policy_id} not found")

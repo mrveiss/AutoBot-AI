@@ -11,15 +11,9 @@ Keys produced:
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-
-def _slugify(text: str) -> str:
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_-]+", "_", text)
-    return text[:80]
+from agent_loop.text_utils import slugify
 
 
 def _has_answer(tool_output: dict) -> bool:
@@ -56,7 +50,7 @@ class WebSearchExtractor:
         if not query:
             return []
 
-        slug = _slugify(str(query))
+        slug = slugify(str(query))
         results: list[tuple[str, Any, float]] = []
 
         answered = _has_answer(tool_output)

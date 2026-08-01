@@ -120,6 +120,18 @@ updates:
           - "vite"
           - "@vitejs/*"
           - "typescript"
+      # #12798: eslint-plugin-oxlint declares a peer on its OWN matching oxlint
+      # minor (plugin 1.75.0 -> peer oxlint ~1.75.0). Under all-dependencies
+      # nothing kept the pair in lockstep, so a run advanced the plugin while
+      # leaving oxlint at ~1.73.0 — npm ci then died on ERESOLVE and took four
+      # required checks down with it (#12792). Their own group forces them to
+      # move together. A version cap (the @pinia/testing remedy below) is wrong
+      # here: both SHOULD keep advancing, just never apart.
+      # Must stay ABOVE all-dependencies — first matching group wins.
+      oxlint:
+        patterns:
+          - "oxlint"
+          - "eslint-plugin-oxlint"
       all-dependencies:
         patterns:
           - "*"
@@ -132,6 +144,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vega-embed"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "vega-functions"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "vega-lite"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@pinia/testing"
@@ -140,12 +154,6 @@ updates:
         # (ERESOLVE on every PR, see #11746). Same pattern as the protobuf/
         # websockets caps above. Unblock when the pinia 4 major is taken.
         versions: [">=2.0.0"]
-      - dependency-name: "oxlint"
-        # #11786: eslint-plugin-oxlint peer-pins oxlint@~1.73 (lockstep minor)
-        # and has no 1.74 release — grouped oxlint bump alone is unsatisfiable
-        # (ERESOLVE on every PR, see #11771). Unblock when eslint-plugin-oxlint
-        # ships the matching minor, then bump both together.
-        versions: [">=1.74.0"]
 
   - package-ecosystem: "npm"
     directory: "/autobot-slm-frontend"
@@ -470,3 +478,20 @@ updates:
       - dependency-name: "websockets"
         # #10474: cap <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16.
         update-types: ["version-update:semver-major"]
+
+  # #11829: knowledge-base-mcp is a uv project (uv.lock); without a "uv"
+  # ecosystem entry dependabot cannot rebase/raise grouped lock updates for it.
+  - package-ecosystem: "uv"
+    directory: "/autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp"
+    target-branch: "Dev_new_gui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      all-dependencies:
+        patterns:
+          - "*"

@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from autobot_shared.ssot_config import database_pool_settings
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
@@ -47,25 +48,14 @@ _autobot_session_maker_lock = threading.Lock()
 
 
 def _get_pool_config() -> dict:
-    """Get database pool settings from SSOT config (#2860)."""
-    try:
-        from autobot_shared.ssot_config import get_config
+    """Database pool settings from SSOT config (#2860).
 
-        pool_cfg = get_config().database_pool
-        return {
-            "pool_size": pool_cfg.pool_size,
-            "max_overflow": pool_cfg.max_overflow,
-            "pool_recycle": pool_cfg.pool_recycle,
-            "pool_timeout": pool_cfg.pool_timeout,
-        }
-    except Exception:
-        logger.warning("Could not load SSOT database pool config, using defaults")
-        return {
-            "pool_size": 10,
-            "max_overflow": 10,
-            "pool_recycle": 3600,
-            "pool_timeout": 30,
-        }
+    Thin alias over the canonical ``autobot_shared.ssot_config`` helper: this
+    body was byte-identical here and in the sibling backend (#12645), so a
+    tuning change had to be made twice or it silently applied to one engine.
+    Kept as a named function because callers reference it.
+    """
+    return database_pool_settings()
 
 
 def get_slm_engine() -> AsyncEngine:

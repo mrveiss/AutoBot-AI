@@ -213,8 +213,8 @@
   gather_facts: false
 
   vars:
-    # Issue #2828: Read old key from shared location
-    _old_key_path: "/etc/autobot/ssh/autobot_key"
+    # Issue #2828 / #12429: canonical shared location, single var
+    _old_key_path: "{{ autobot_ssh_key_path | default('/etc/autobot/ssh/autobot_key') }}"
 
   tasks:
     - name: "SSH K4 | Read current old public key"
@@ -245,8 +245,8 @@
   vars:
     _keys_dir: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation"
     _new_key_path: "{{ _keys_dir }}/autobot_key_new"
-    # Issue #2828: Install to shared location accessible by any operator
-    _final_key_path: "/etc/autobot/ssh/autobot_key"
+    # Issue #2828 / #12429: canonical shared location, single var
+    _final_key_path: "{{ autobot_ssh_key_path | default('/etc/autobot/ssh/autobot_key') }}"
 
   tasks:
     - name: "SSH K5 | Back up old private key"
@@ -274,22 +274,27 @@
         mode: "0644"
       become: true
 
-    - name: "SSH K5 | Also update autobot user home copy"
-      ansible.builtin.copy:
-        src: "{{ _new_key_path }}"
+    # #12429: previously stored a SECOND real key in the home dir that could
+    # drift from the canonical /etc copy. Link instead so any tool still
+    # referencing the home path resolves the one canonical file.
+    - name: "SSH K5 | Link autobot home key to canonical (#12429)"
+      ansible.builtin.file:
+        src: "{{ _final_key_path }}"
         dest: "/home/autobot/.ssh/autobot_key"
+        state: link
+        force: true
         owner: autobot
         group: autobot
-        mode: "0600"
       become: true
 
-    - name: "SSH K5 | Also update autobot user home public key"
-      ansible.builtin.copy:
-        src: "{{ _new_key_path }}.pub"
+    - name: "SSH K5 | Link autobot home public key to canonical (#12429)"
+      ansible.builtin.file:
+        src: "{{ _final_key_path }}.pub"
         dest: "/home/autobot/.ssh/autobot_key.pub"
+        state: link
+        force: true
         owner: autobot
         group: autobot
-        mode: "0644"
       become: true
 
     - name: "SSH K5 | Confirm installed"

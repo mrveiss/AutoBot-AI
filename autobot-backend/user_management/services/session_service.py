@@ -14,7 +14,7 @@ import uuid
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
-from constants.ttl_constants import TTL_24_HOURS
+from autobot_shared.ssot_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)
 
@@ -51,7 +51,7 @@ class SessionService:
         await redis_client.sadd(key, token_hash)
         await redis_client.expire(key, ttl)
 
-        logger.info("Added token to blacklist for user %s", user_id)  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("Added token to blacklist for user %s", user_id)
 
     async def is_token_blacklisted(self, user_id: uuid.UUID, token: str) -> bool:
         """

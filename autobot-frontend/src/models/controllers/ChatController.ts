@@ -7,6 +7,7 @@ import apiClient from '@/utils/ApiClient'
 import type { ChatSession } from '@/stores/useChatStore'
 import { createLogger } from '@/utils/debugUtils'
 import { extractErrorMessage } from '@/utils/errorExtract'
+import i18n from '@/i18n'
 import type { ChatMessage, ChatMessageDisplayType } from '@/types/api'
 import { requestQueue } from '@/composables/useRequestQueue'
 
@@ -16,6 +17,10 @@ const logger = createLogger('ChatController')
 interface ChatJsonResponseData {
   response?: string
   content?: string
+  // #11843: stable backend message id — reused so a later poll / live-event
+  // echo of the same reply dedups instead of rendering a second bubble.
+  message_id?: string
+  id?: string
   model?: string
   tokens_used?: number
   response_time?: number
@@ -100,7 +105,7 @@ export class ChatController {
       // general /chat send is unchanged.
       const activeCtx = this.chatStore.activeChatContext
       if (activeCtx && Object.keys(activeCtx).length > 0) {
-        options = { ...activeCtx, ...(options || {}) }
+        options = { ...activeCtx, ...options }
       }
 
       // Validate message content
@@ -180,7 +185,10 @@ export class ChatController {
 
       // Add helpful error message for user
       this.chatStore.addMessage({
-        content: `Failed to send message after ${this.retryAttempts} attempts: ${lastError?.message || 'Unknown error'}. Please check your connection and try again.`,
+        content: i18n.global.t('chat.errors.sendFailedAfterRetries', {
+          attempts: this.retryAttempts,
+          error: lastError?.message || 'Unknown error'
+        }),
         sender: 'system',
         type: 'utility'
       })
@@ -219,14 +227,27 @@ export class ChatController {
 
       // If it's a 422 validation error, don't retry
       if (errStatus === 422) {
-        throw new Error(`Invalid message format: ${errMsg}. Please check your input and try again.`)
+        // #12401: keep .status on the re-wrapped error so the outer
+        // getUserFriendlyErrorMessage() categorizes it as invalidFormat instead
+        // of falling through to the generic sendFailed (which would double-wrap
+        // this detail message).
+        throw Object.assign(
+          new Error(i18n.global.t('chat.errors.invalidFormatDetail', { error: errMsg })),
+          { status: 422 }
+        )
       }
 
       // If it's a network error, add context
       const errName = (error as { name?: string }).name
       const errCode = (error as { code?: string }).code
       if (errName === 'NetworkError' || errCode === 'NETWORK_ERROR') {
-        throw new Error(`Network connection failed. Please check your internet connection and try again.`)
+        // #12401: keep name==='NetworkError' on the re-wrapped error so the outer
+        // getUserFriendlyErrorMessage() surfaces networkFailed instead of the
+        // generic sendFailed.
+        throw Object.assign(
+          new Error(i18n.global.t('chat.errors.networkFailedRetry')),
+          { name: 'NetworkError' }
+        )
       }
 
       throw error
@@ -239,22 +260,22 @@ export class ChatController {
     const message = extractErrorMessage(error, 'Unknown error')
 
     if (status === 422) {
-      return 'Invalid message format. Please check your input and try again.'
+      return i18n.global.t('chat.errors.invalidFormat')
     }
     if (status === 404) {
-      return 'Chat service not available. Please refresh the page and try again.'
+      return i18n.global.t('chat.errors.serviceUnavailable')
     }
     if (status === 500) {
-      return 'Server error occurred. Please try again in a moment.'
+      return i18n.global.t('chat.errors.serverError')
     }
     if (name === 'NetworkError') {
-      return 'Network connection failed. Please check your internet connection.'
+      return i18n.global.t('chat.errors.networkFailed')
     }
     if (message.includes('timeout')) {
-      return 'Request timed out. Please try again with a shorter message.'
+      return i18n.global.t('chat.errors.timeout')
     }
 
-    return `Failed to send message: ${message}`
+    return i18n.global.t('chat.errors.sendFailed', { error: message })
   }
 
   /**
@@ -426,7 +447,10 @@ export class ChatController {
         frontendMessageId = this.chatStore.addMessage({
           content: '',
           sender,
-          type: messageType
+          type: messageType,
+          // #11843: persist the backend message id so a later poll / live-event
+          // echo of this reply dedups against it instead of double-rendering.
+          ...(backendMessageId ? { message_id: backendMessageId } : {})
         }) as string
         if (backendMessageId) {
           messageIdMap.set(backendMessageId, frontendMessageId)
@@ -603,9 +627,15 @@ export class ChatController {
     // Legacy format was: { response: "..." }
     const responseContent = data.response || data.content
 
-    // Add final response with enhanced metadata
+    // Add final response with enhanced metadata.
+    // #11843: route through addOrUpdateMessage keyed on the backend message id so
+    // a later re-hydration / poll / live-event echo of the SAME reply reconciles
+    // into this bubble instead of appending a duplicate. When the backend supplies
+    // no id this behaves exactly like addMessage (a fresh id per distinct reply).
     if (responseContent) {
-      this.chatStore.addMessage({
+      const backendId = data.message_id || data.id
+      this.chatStore.addOrUpdateMessage({
+        ...(backendId ? { id: backendId, message_id: backendId } : {}),
         content: responseContent,
         sender: 'assistant',
         type: 'response', // Mark as final response
@@ -631,7 +661,7 @@ export class ChatController {
     } catch (error) {
       // Backend create failed - don't create local session if backend fails
       logger.error('Failed to create chat session on backend:', error)
-      this.getAppStore()?.setGlobalError(`Failed to create chat: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.createFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
     }
 
@@ -676,7 +706,7 @@ export class ChatController {
     } catch (error: unknown) {
       logger.error('Failed to load chat sessions:', error)
       // Don't throw error, allow app to continue with local sessions
-      this.getAppStore()?.setGlobalError(`Failed to load chat sessions: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadSessionsFailed', { error: extractErrorMessage(error, 'Unknown error') }))
     } finally {
     }
   }
@@ -739,7 +769,7 @@ export class ChatController {
 
     } catch (error: unknown) {
       logger.error('Failed to load messages:', error)
-      this.getAppStore()?.setGlobalError(`Failed to load messages: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.loadMessagesFailed', { error: extractErrorMessage(error, 'Unknown error') }))
     } finally {
     }
   }
@@ -763,7 +793,7 @@ export class ChatController {
 
     } catch (error: unknown) {
       logger.error('Failed to save chat session:', error)
-      this.getAppStore()?.setGlobalError(`Failed to save chat: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.saveFailed', { error: extractErrorMessage(error, 'Unknown error') }))
     }
   }
 
@@ -802,93 +832,71 @@ export class ChatController {
     fileAction?: 'delete' | 'transfer_kb' | 'transfer_shared',
     fileOptions?: Record<string, unknown>
   ): Promise<void> {
+    // Step 1: Delete from the backend FIRST. Removing the chat locally is only safe
+    // once the server confirms the delete — otherwise the client and server diverge
+    // and the "deleted" chat reappears on reload (#12327).
     try {
-
-      // CRITICAL FIX: Enhanced deletion with proper error handling and persistence
-      let backendDeleteSucceeded = false
-      let storeDeleteSucceeded = false
-
-      // Step 1: Try to delete from backend
-      try {
-        await chatRepository.deleteChat(sessionId, fileAction, fileOptions)
-        if (fileAction) {
-          logger.debug(`File action executed: ${fileAction}`, fileOptions)
-        }
-        backendDeleteSucceeded = true
-        logger.debug('Chat successfully deleted from backend:', sessionId)
-      } catch (error: unknown) {
-        logger.error('Backend deletion failed:', error)
-        // Don't throw yet - we'll handle this based on error type
-
-        // If it's a 404 (chat not found), still proceed with local deletion
-        const errStatus = (error as { status?: number }).status
-        if (errStatus === 404) {
-          logger.warn('Chat not found on backend, proceeding with local deletion')
-          backendDeleteSucceeded = true // Treat as success since it's already gone
-        } else {
-          // For other errors, show user error but still try local deletion
-          logger.warn('Backend deletion failed, but proceeding with local deletion to maintain consistency')
-          this.getAppStore()?.setGlobalError(`Backend deletion failed: ${extractErrorMessage(error, 'Unknown error')}. Chat removed locally.`)
-        }
+      await chatRepository.deleteChat(sessionId, fileAction, fileOptions)
+      if (fileAction) {
+        logger.debug(`File action executed: ${fileAction}`, fileOptions)
       }
-
-      // Step 2: Always try to remove from store for consistency
-      try {
-        // Store current sessions count for verification
-        const beforeCount = this.chatStore.sessions.length
-
-        // Delete from store
-        this.chatStore.deleteSession(sessionId)
-
-        // Verify deletion occurred
-        const afterCount = this.chatStore.sessions.length
-        if (afterCount < beforeCount) {
-          storeDeleteSucceeded = true
-          logger.debug('Chat successfully deleted from store:', sessionId)
-
-          // CRITICAL FIX: Force persistence to ensure localStorage is updated immediately
-          // Since Pinia persistence is automatic, we'll add a small delay to ensure it completes
-          await new Promise(resolve => setTimeout(resolve, 100))
-
-          // Verify persistence by checking localStorage directly
-          try {
-            const persistedData = localStorage.getItem('autobot-chat-store')
-            if (persistedData) {
-              const parsed = JSON.parse(persistedData)
-              const persistedSession = parsed.sessions?.find(
-                (s: { id?: string }) => s.id === sessionId
-              )
-              if (!persistedSession) {
-                logger.debug('Chat deletion confirmed in localStorage')
-              } else {
-                logger.warn('Chat still exists in localStorage - persistence may have failed')
-              }
-            }
-          } catch (persistError) {
-            logger.warn('Could not verify localStorage persistence:', persistError)
-          }
-
-        } else {
-          logger.warn('Store deletion did not reduce session count - session may not have existed')
-          storeDeleteSucceeded = true // If it wasn't there, consider it a success
-        }
-      } catch (error: unknown) {
-        logger.error('Store deletion failed:', error)
-        throw new Error(`Failed to delete chat from local storage: ${extractErrorMessage(error, 'Unknown error')}`)
-      }
-
-      // Step 3: Report final status
-      if (storeDeleteSucceeded) {
-        logger.debug(`Chat session ${sessionId} successfully deleted (Backend: ${backendDeleteSucceeded ? 'Success' : 'Failed'}, Store: Success)`)
-      } else {
-        throw new Error('Failed to delete chat from local storage')
-      }
-
+      logger.debug('Chat successfully deleted from backend:', sessionId)
     } catch (error: unknown) {
-      logger.error('Failed to delete chat session:', error)
-      this.getAppStore()?.setGlobalError(`Failed to delete chat: ${extractErrorMessage(error, 'Unknown error')}`)
-      throw error // Re-throw to let caller handle
-    } finally {
+      const errStatus = (error as { status?: number }).status
+      if (errStatus !== 404) {
+        // #12327: the backend rejected or never received the delete. Do NOT remove
+        // the chat locally — keep it in place and surface an unambiguous failure so
+        // the user can retry, instead of reporting a success that never happened.
+        logger.error('Backend deletion failed; keeping chat locally:', error)
+        this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.deleteFailed'))
+        throw error
+      }
+      // 404 → the chat is already gone on the backend, so reconciling local state is
+      // correct. Fall through to the local removal below.
+      logger.warn('Chat not found on backend, reconciling local deletion:', sessionId)
+    }
+
+    // Step 2: Backend delete confirmed (or the chat was already gone) — remove it from
+    // the local store and persisted state.
+    try {
+      const beforeCount = this.chatStore.sessions.length
+
+      this.chatStore.deleteSession(sessionId)
+
+      const afterCount = this.chatStore.sessions.length
+      if (afterCount < beforeCount) {
+        logger.debug('Chat successfully deleted from store:', sessionId)
+
+        // Pinia persistence is automatic; give it a tick to flush to localStorage
+        // before verifying below.
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        // Verify persistence by checking localStorage directly
+        try {
+          const persistedData = localStorage.getItem('autobot-chat-store')
+          if (persistedData) {
+            const parsed = JSON.parse(persistedData)
+            const persistedSession = parsed.sessions?.find(
+              (s: { id?: string }) => s.id === sessionId
+            )
+            if (!persistedSession) {
+              logger.debug('Chat deletion confirmed in localStorage')
+            } else {
+              logger.warn('Chat still exists in localStorage - persistence may have failed')
+            }
+          }
+        } catch (persistError) {
+          logger.warn('Could not verify localStorage persistence:', persistError)
+        }
+      } else {
+        logger.warn('Store deletion did not reduce session count - session may not have existed')
+      }
+
+      logger.debug(`Chat session ${sessionId} successfully deleted`)
+    } catch (error: unknown) {
+      logger.error('Store deletion failed:', error)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.deleteFailed'))
+      throw new Error(`Failed to delete chat from local storage: ${extractErrorMessage(error, 'Unknown error')}`)
     }
   }
 
@@ -927,7 +935,7 @@ export class ChatController {
       }
 
     } catch (error: unknown) {
-      this.getAppStore()?.setGlobalError(`Failed to reset chat: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.resetFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
     }
   }
@@ -960,7 +968,7 @@ export class ChatController {
       logger.debug('All chats cleared successfully')
 
     } catch (error: unknown) {
-      this.getAppStore()?.setGlobalError(`Failed to clear chats: ${extractErrorMessage(error, 'Unknown error')}`)
+      this.getAppStore()?.setGlobalError(i18n.global.t('chat.errors.clearFailed', { error: extractErrorMessage(error, 'Unknown error') }))
       throw error
     } finally {
     }

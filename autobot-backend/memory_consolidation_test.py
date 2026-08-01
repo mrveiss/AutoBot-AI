@@ -7,6 +7,7 @@ Validates core functionality without requiring full backend restart
 """
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from markdown_reference_system import MarkdownReferenceSystem
-from memory import MemoryManager, TaskPriority
+from memory import MemoryCategory, MemoryManager, TaskPriority
 from task_execution_tracker import TaskExecutionTracker
 
 
@@ -47,10 +48,10 @@ async def test_memory_consolidation_system():
     print(f"✅ Completed task: {task_id}")  # noqa: print
 
     # Get task statistics
-    stats = memory_manager.get_task_statistics(days_back=1)
-    print(  # noqa: print
-        f"✅ Task statistics: {stats['total_tasks']} tasks, {stats['success_rate_percent']}% success rate"
-    )
+    stats = await memory_manager.get_task_statistics(days_back=1)
+    completed_count = stats["by_status"].get("completed", 0)
+    success_rate_percent = round((completed_count / stats["total_tasks"]) * 100, 2) if stats["total_tasks"] else 0.0
+    print(f"✅ Task statistics: {stats['total_tasks']} tasks, {success_rate_percent}% success rate")  # noqa: print
 
     # Test 2: Task Execution Tracker
     print("\n2. Testing Task Execution Tracker...")  # noqa: print
@@ -110,7 +111,7 @@ async def test_memory_consolidation_system():
     memory_manager.complete_task(integration_task_id)
 
     # Get updated statistics
-    final_stats = memory_manager.get_task_statistics(days_back=1)
+    final_stats = await memory_manager.get_task_statistics(days_back=1)
     print(f"✅ Final statistics: {final_stats['total_tasks']} total tasks")  # noqa: print  # noqa: print
 
     # Test 5: Performance Analysis
@@ -149,8 +150,19 @@ async def test_embedding_system():
     if success:
         print("✅ Embedding stored successfully")  # noqa: print
 
-        # Retrieve embedding
-        retrieved = memory_manager.get_embedding(test_content, "test_model")
+        # Retrieve embedding (store_embedding persists it as a FACT-category memory entry)
+        entries = await memory_manager.retrieve_memories(MemoryCategory.FACT, limit=10)
+        stored_entry = next(
+            (
+                entry
+                for entry in entries
+                if entry.content == test_content and entry.metadata.get("embedding_model") == "test_model"
+            ),
+            None,
+        )
+        retrieved = (
+            json.loads(stored_entry.embedding.decode("utf-8")) if stored_entry and stored_entry.embedding else None
+        )
 
         if retrieved and len(retrieved) == len(test_embedding):
             print("✅ Embedding retrieved successfully")  # noqa: print

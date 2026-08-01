@@ -9,132 +9,60 @@ Issue #712: Extracted from security_analyzer.py for modularity.
 Issue #554: Includes semantic analysis via ChromaDB/Redis/LLM infrastructure.
 """
 
-import ast
 import re
-import time
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.shared.analysis_base import (
+    HAS_ANALYTICS_INFRASTRUCTURE,
+    SIMILARITY_MEDIUM,
+    BaseCodeAnalyzer,
+)
 
+from ..shared.line_index import LineIndex
 from .ast_visitor import SecurityASTVisitor
 from .constants import (
     OWASP_MAPPING,
     PLACEHOLDER_PATTERNS,
+    WEAK_ENCRYPTION,
     SecuritySeverity,
     VulnerabilityType,
 )
 from .finding import SecurityFinding
 from .patterns import SECRET_PATTERNS, SQL_INJECTION_PATTERNS
 
-# Issue #554: Import analytics infrastructure for semantic analysis
-try:
-    from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
-
-    HAS_ANALYTICS_INFRASTRUCTURE = True
-except ImportError:
-    HAS_ANALYTICS_INFRASTRUCTURE = False
-    SemanticAnalysisMixin = object
-    SIMILARITY_MEDIUM = 0.7
-
-# Issue #607: Import shared caches for performance optimization
-try:
-    from code_intelligence.shared.ast_cache import get_ast_with_content
-
-    HAS_SHARED_CACHE = True
-except ImportError:
-    HAS_SHARED_CACHE = False
-
 logger = get_logger(__name__)
 
 
-class SecurityAnalyzer(SemanticAnalysisMixin):
+class SecurityAnalyzer(BaseCodeAnalyzer):
     """
     Main security pattern analyzer.
 
     Issue #554: Now includes optional semantic analysis via ChromaDB/Redis/LLM
     infrastructure for detecting semantically similar security vulnerabilities.
+    Issue #12660: The scan/cache skeleton (``__init__``, ``analyze_file``,
+    ``analyze_directory``, ``analyze_directory_async``, ``_regex_analysis``,
+    ``_should_exclude``, ``cache_analysis_results``, ``get_cached_analysis``)
+    now lives in ``BaseCodeAnalyzer``; this class only provides the AST
+    visitor, the security-specific ``_check_*`` regex checkers, and the
+    security-shaped summary/report methods.
     """
 
-    def __init__(
-        self,
-        project_root: str | None = None,
-        exclude_patterns: List[str] | None = None,
-        use_semantic_analysis: bool = False,
-        use_cache: bool = True,
-        use_shared_cache: bool = True,
-    ):
-        """Initialize security analyzer."""
-        self.project_root = Path(project_root) if project_root else Path.cwd()
-        self.exclude_patterns = exclude_patterns or [
-            "venv",
-            "node_modules",
-            ".git",
-            "__pycache__",
-            "*.pyc",
-            "test_*",
-            "*_test.py",
-            "archives",
-            "migrations",
-        ]
-        self.results: List[SecurityFinding] = []
-        self.total_files_scanned: int = 0
-        self.use_semantic_analysis = use_semantic_analysis and HAS_ANALYTICS_INFRASTRUCTURE
-        self.use_shared_cache = use_shared_cache and HAS_SHARED_CACHE
-
-        if self.use_semantic_analysis:
-            self._init_infrastructure(
-                collection_name="security_analysis_vectors",
-                use_llm=True,
-                use_cache=use_cache,
-                redis_database="analytics",
-            )
-
-    def analyze_file(self, file_path: str) -> List[SecurityFinding]:
-        """Analyze a single file for security vulnerabilities."""
-        findings: List[SecurityFinding] = []
-        path = Path(file_path)
-
-        if not path.exists() or not path.suffix == ".py":
-            return findings
-
-        try:
-            if self.use_shared_cache:
-                tree, content = get_ast_with_content(file_path)
-                lines = content.split("\n") if content else []
-            else:
-                content = path.read_text(encoding="utf-8")
-                lines = content.split("\n")
-                try:
-                    tree = ast.parse(content)
-                except SyntaxError:
-                    tree = None
-
-            if tree is not None:
-                visitor = SecurityASTVisitor(str(path), lines)
-                visitor.visit(tree)
-                findings.extend(visitor.findings)
-            else:
-                logger.warning("Syntax error in %s, skipping AST analysis", file_path)
-
-            if content:
-                findings.extend(self._regex_analysis(str(path), content, lines))
-
-        except Exception as e:
-            logger.error("Error analyzing %s: %s", file_path, e)
-
-        return findings
+    AST_VISITOR_CLASS = SecurityASTVisitor
+    SEMANTIC_COLLECTION_NAME = "security_analysis_vectors"
+    CACHE_PREFIX = "security_analysis"
 
     def _check_hardcoded_secrets(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for hardcoded secrets."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
 
         for pattern, vuln_type, cwe_id in SECRET_PATTERNS:
             for match in re.finditer(pattern, content):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 code = lines[line_num - 1] if line_num <= len(lines) else ""
 
                 if "os.getenv" in code or "os.environ" in code:
@@ -164,11 +92,15 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
     def _check_sql_injection(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for SQL injection patterns."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
 
         for pattern, description in SQL_INJECTION_PATTERNS:
             for match in re.finditer(pattern, content, re.IGNORECASE):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 code = lines[line_num - 1] if line_num <= len(lines) else ""
 
                 findings.append(
@@ -192,11 +124,15 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
     def _check_path_traversal(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
         """Check for path traversal vulnerabilities."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
         path_traversal_pattern = r'open\s*\(\s*[^)]*\+[^)]*\)|open\s*\(\s*f["\']'
 
         for match in re.finditer(path_traversal_pattern, content):
-            line_num = content[: match.start()].count("\n") + 1
+            line_num = _line_index.line_of(match.start())
             code = lines[line_num - 1] if line_num <= len(lines) else ""
 
             context_start = max(0, line_num - 3)
@@ -225,39 +161,65 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
 
         return findings
 
-    def _regex_analysis(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
-        """Perform regex-based security analysis."""
+    # Issue #12362: Map import-statement module names to the WEAK_ENCRYPTION
+    # constants.py key. WEAK_ENCRYPTION was already defined (des/3des/rc4/
+    # blowfish -> message/CWE) but never wired to a check — mirrors the
+    # legacy code_analysis.src.security_analyzer's "insecure_crypto" category
+    # (that analyzer's regex flagged bare `DES|RC4|MD4` substrings; this
+    # scopes detection to actual cipher-module imports for lower noise).
+    _WEAK_ENCRYPTION_IMPORT_PATTERN = re.compile(
+        r"(?:from\s+Crypto\.Cipher\s+import\s+(?P<from_name>DES3|DES|ARC4|Blowfish)\b"
+        r"|Crypto\.Cipher\.(?P<attr_name>DES3|DES|ARC4|Blowfish)\b)"
+    )
+    _WEAK_ENCRYPTION_MODULE_TO_KEY = {
+        "DES3": "3des",
+        "DES": "des",
+        "ARC4": "rc4",
+        "Blowfish": "blowfish",
+    }
+
+    def _check_weak_encryption(self, file_path: str, content: str, lines: List[str]) -> List[SecurityFinding]:
+        """Check for weak/broken symmetric encryption algorithm usage."""
+        # #12866: build the offset->line map ONCE per file. The previous
+        # per-match `content[:start].count("\n")` was O(n*m) and held the
+        # GIL in C for the whole scan.
+        _line_index = LineIndex(content)
         findings: List[SecurityFinding] = []
-        findings.extend(self._check_hardcoded_secrets(file_path, content, lines))
-        findings.extend(self._check_sql_injection(file_path, content, lines))
-        findings.extend(self._check_path_traversal(file_path, content, lines))
+
+        for match in self._WEAK_ENCRYPTION_IMPORT_PATTERN.finditer(content):
+            module_name = match.group("from_name") or match.group("attr_name")
+            key = self._WEAK_ENCRYPTION_MODULE_TO_KEY[module_name]
+            msg, cwe_id = WEAK_ENCRYPTION[key]
+            line_num = _line_index.line_of(match.start())
+            code = lines[line_num - 1] if line_num <= len(lines) else ""
+
+            findings.append(
+                SecurityFinding(
+                    vulnerability_type=VulnerabilityType.WEAK_ENCRYPTION,
+                    severity=SecuritySeverity.HIGH,
+                    file_path=file_path,
+                    line_start=line_num,
+                    line_end=line_num,
+                    description=f"Weak encryption algorithm: {module_name}. {msg}",
+                    recommendation="Use AES-256-GCM via cryptography.hazmat.primitives.ciphers",
+                    owasp_category=OWASP_MAPPING[VulnerabilityType.WEAK_ENCRYPTION],
+                    cwe_id=cwe_id,
+                    current_code=code.strip(),
+                    secure_alternative="from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes",
+                    confidence=0.85,
+                )
+            )
+
         return findings
 
-    def analyze_directory(self, directory: str | None = None) -> List[SecurityFinding]:
-        """Analyze all Python files in a directory."""
-        target = Path(directory) if directory else self.project_root
-        self.results = []
-        self.total_files_scanned = 0
-
-        for py_file in target.rglob("*.py"):
-            if self._should_exclude(py_file):
-                continue
-            self.total_files_scanned += 1
-            findings = self.analyze_file(str(py_file))
-            self.results.extend(findings)
-
-        return self.results
-
-    def _should_exclude(self, path: Path) -> bool:
-        """Check if path should be excluded."""
-        path_str = str(path)
-        for pattern in self.exclude_patterns:
-            if pattern.startswith("*"):
-                if path_str.endswith(pattern[1:]):
-                    return True
-            elif pattern in path_str:
-                return True
-        return False
+    def _get_checkers(self) -> List[Callable[[str, str, List[str]], List[SecurityFinding]]]:
+        """Ordered regex checkers run by ``BaseCodeAnalyzer._regex_analysis``."""
+        return [
+            self._check_hardcoded_secrets,
+            self._check_sql_injection,
+            self._check_path_traversal,
+            self._check_weak_encryption,
+        ]
 
     def get_summary(self) -> Dict[str, Any]:
         """Get summary of security findings."""
@@ -374,39 +336,18 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         return "".join(md)
 
     # Issue #554: Async semantic analysis methods
+    # Issue #12660: analyze_directory_async/cache_analysis_results/
+    # get_cached_analysis now live on BaseCodeAnalyzer; only the
+    # domain-specific metadata_keys below remain here.
 
-    async def analyze_directory_async(
+    async def _find_semantic_duplicates(
         self,
-        directory: str | None = None,
-        find_semantic_duplicates: bool = True,
-    ) -> Dict[str, Any]:
-        """Analyze a directory with optional semantic analysis."""
-        start_time = time.time()
-        results = self.analyze_directory(directory)
-
-        result = {
-            "results": [r.to_dict() for r in results],
-            "summary": self.get_summary(),
-            "semantic_duplicates": [],
-            "infrastructure_metrics": {},
-        }
-
-        if self.use_semantic_analysis and find_semantic_duplicates:
-            semantic_dups = await self._find_semantic_security_duplicates(results)
-            result["semantic_duplicates"] = semantic_dups
-            result["infrastructure_metrics"] = self._get_infrastructure_metrics()
-
-        result["analysis_time_ms"] = (time.time() - start_time) * 1000
-        return result
-
-    async def _find_semantic_security_duplicates(
-        self,
-        findings: List[SecurityFinding],
+        items: List[SecurityFinding],
     ) -> List[Dict[str, Any]]:
         """Find semantically similar security vulnerabilities using LLM embeddings."""
         try:
             return await self._find_semantic_duplicates_with_extraction(
-                items=findings,
+                items=items,
                 code_extractors=["current_code"],
                 metadata_keys={
                     "vulnerability_type": "vulnerability_type",
@@ -420,35 +361,3 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
             return []
-
-    async def cache_analysis_results(
-        self,
-        directory: str,
-        results: List[SecurityFinding],
-    ) -> bool:
-        """Cache analysis results in Redis for faster retrieval."""
-        if not self.use_semantic_analysis:
-            return False
-
-        cache_key = self._generate_content_hash(directory)
-        results_dict = {
-            "results": [r.to_dict() for r in results],
-            "summary": self.get_summary(),
-        }
-
-        return await self._cache_result(
-            key=cache_key,
-            result=results_dict,
-            prefix="security_analysis",
-        )
-
-    async def get_cached_analysis(self, directory: str) -> Dict[str, Any] | None:
-        """Get cached analysis results from Redis."""
-        if not self.use_semantic_analysis:
-            return None
-
-        cache_key = self._generate_content_hash(directory)
-        return await self._get_cached_result(
-            key=cache_key,
-            prefix="security_analysis",
-        )

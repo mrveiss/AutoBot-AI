@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Migration Validation Script
@@ -27,7 +28,7 @@ from typing import Dict, List
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-user-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.time_utils import utc_timestamp
 
 # Configure logging
@@ -78,7 +79,7 @@ class MigrationValidator:
     async def connect_redis(self) -> None:
         """Connect to Redis database"""
         try:
-            self.redis_client = await get_redis_client(async_client=True, database="main")
+            self.redis_client = await get_async_redis_client(database="main")
             await self.redis_client.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:
@@ -545,7 +546,9 @@ class MigrationValidator:
         logger.info("\n%s", report)
 
         # Save to file
-        report_file = Path("/tmp/migration_validation_report.txt")
+        # FP: report contains only counts, secret IDs and validation
+        # messages — never secret values (see generate_report / issues[]).
+        report_file = Path("/tmp/migration_validation_report.txt")  # codeql[py/clear-text-storage-sensitive-data]
         report_file.write_text(report)
         logger.info("\nReport saved to: %s", report_file)
 

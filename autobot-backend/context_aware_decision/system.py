@@ -97,42 +97,53 @@ class ContextAwareDecisionSystem:
         if len(self.decision_history) > self.max_history:
             self.decision_history = self.decision_history[-self.max_history :]
 
+    async def _record_decision_in_memory(self, decision: Decision, context: DecisionContext) -> None:
+        """Create, start, and complete the decision's task record.
+
+        Issue #12101: extracted so ``_store_decision_in_memory`` records the
+        create->start->complete sequence off the event loop.
+        Issue #12185: uses the MemoryManager async task-write variants, which own
+        the sync-SQLite offload internally (no inline asyncio.to_thread needed).
+        """
+        task_id = await self.memory_manager.acreate_task_record(
+            task_name=f"Decision: {decision.decision_type.value}",
+            description=(f"Contextual decision making: " f"{decision.chosen_action.get('action', 'unknown')}"),
+            priority=TaskPriority.MEDIUM,
+            agent_type="context_aware_decision_system",
+            inputs={
+                "decision_type": decision.decision_type.value,
+                "primary_goal": context.primary_goal,
+                "context_elements_count": len(context.context_elements),
+            },
+            metadata={
+                "decision_data": asdict(decision),
+                "context_summary": {
+                    "elements_count": len(context.context_elements),
+                    "constraints_count": len(context.constraints),
+                    "actions_count": len(context.available_actions),
+                    "risk_factors_count": len(context.risk_factors),
+                },
+            },
+        )
+
+        await self.memory_manager.astart_task(task_id)
+        await self.memory_manager.acomplete_task(
+            task_id,
+            outputs={
+                "chosen_action": decision.chosen_action,
+                "confidence": decision.confidence,
+                "requires_approval": decision.requires_approval,
+            },
+        )
+
     async def _store_decision_in_memory(self, decision: Decision, context: DecisionContext) -> None:
-        """Store decision and context in enhanced memory system."""
+        """Store decision and context in enhanced memory system.
+
+        Issue #12185: the create->start->complete sequence uses the MemoryManager
+        async task-write variants, which own the sync-SQLite offload.
+        """
         try:
-            # Create memory task record for the decision
-            task_id = self.memory_manager.create_task_record(
-                task_name=f"Decision: {decision.decision_type.value}",
-                description=(f"Contextual decision making: " f"{decision.chosen_action.get('action', 'unknown')}"),
-                priority=TaskPriority.MEDIUM,
-                agent_type="context_aware_decision_system",
-                inputs={
-                    "decision_type": decision.decision_type.value,
-                    "primary_goal": context.primary_goal,
-                    "context_elements_count": len(context.context_elements),
-                },
-                metadata={
-                    "decision_data": asdict(decision),
-                    "context_summary": {
-                        "elements_count": len(context.context_elements),
-                        "constraints_count": len(context.constraints),
-                        "actions_count": len(context.available_actions),
-                        "risk_factors_count": len(context.risk_factors),
-                    },
-                },
-            )
-
-            # Mark task as started and completed
-            self.memory_manager.start_task(task_id)
-            self.memory_manager.complete_task(
-                task_id,
-                outputs={
-                    "chosen_action": decision.chosen_action,
-                    "confidence": decision.confidence,
-                    "requires_approval": decision.requires_approval,
-                },
-            )
-
+            await self._record_decision_in_memory(decision, context)
         except Exception as e:
             logger.error("Failed to store decision in memory: %s", e)
 

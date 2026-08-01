@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Startup Performance Profiler
@@ -58,7 +59,7 @@ def profile_startup():
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     profile_file = reports_dir / "startup_profile.txt"
-    with open(profile_file, "w") as f:
+    with open(profile_file, "w", encoding="utf-8") as f:
         stats.print_stats(file=f)
 
     print(f"\nDetailed profile saved to {profile_file}")

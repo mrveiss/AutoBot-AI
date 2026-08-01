@@ -16,7 +16,7 @@ import inspect
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as _ssot_config
 
@@ -127,6 +127,16 @@ class AutoBotMemoryGraphCore:
         self._lock: asyncio.Lock = asyncio.Lock()
         self.index_name: str = f"{config.index_prefix}:idx"
 
+    @property
+    def initialized(self) -> bool:
+        """Public readiness flag — True once ``initialize()`` has completed.
+
+        Exposes the private ``_initialized`` state so callers (e.g. the
+        Graph-RAG health probe, #12316) can read readiness without touching a
+        private attribute or triggering ``AttributeError``.
+        """
+        return self._initialized
+
     def ensure_initialized(self) -> None:
         """Sync guard — raise if ``initialize()`` has not been awaited.
 
@@ -138,16 +148,27 @@ class AutoBotMemoryGraphCore:
         if not self._initialized:
             raise RuntimeError("AutoBotMemoryGraph not initialized — call await initialize() first")
 
-    async def initialize(self) -> None:
+    async def initialize(self) -> bool:
         """
         Initialize Redis connection and search indexes.
 
         This method is idempotent and thread-safe.
+
+        Returns:
+            True once the graph is usable.
+
+        #12873: this used to be declared ``-> None`` and returned nothing, but
+        ``chat_history/base.py`` does ``initialized = await
+        memory_graph.initialize()`` and then ``if initialized:``. A SUCCESSFUL
+        init therefore returned None, which is falsy, so conversation entity
+        tracking was disabled on every boot while the graph itself was fine —
+        and nothing logged an error, because nothing had failed. That is why
+        #12780's fix removed the visible errors without recovering the feature.
         """
         async with self._lock:
             if self._initialized:
                 logger.debug("AutoBotMemoryGraph already initialized")
-                return
+                return True
 
             try:
                 # Initialize Redis client
@@ -157,13 +178,14 @@ class AutoBotMemoryGraphCore:
                 # the same DB.  The "memory" alias maps to DB 0 for exactly this
                 # purpose — see autobot_shared/redis_management/types.py _ALIASES.
                 # Fixed by #9943 (same root cause as #9904).
-                self.redis_client = get_redis_client(async_client=True, database="memory")
+                self.redis_client = await get_async_redis_client(database="memory")
 
                 # Create search indexes if they don't exist
                 await self._create_search_indexes()
 
                 self._initialized = True
                 logger.info("AutoBotMemoryGraph initialized successfully")
+                return True
 
             except Exception as e:
                 logger.error(f"Failed to initialize AutoBotMemoryGraph: {e}")

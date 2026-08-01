@@ -381,7 +381,7 @@ async def get_system_health(
         }
 
 
-@router.get("/system/health/probes", response_model=list[str])
+@router.get("/health/probes", response_model=list[str])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_system_health_probes",
@@ -1030,7 +1030,7 @@ async def clear_cache(cache_name: str, admin_check: bool = Depends(check_admin_p
         raise HTTPException(status_code=500, detail="Error clearing cache")
 
 
-@router.get("/system/backup/status", response_model=SystemBackupStatusResponse)
+@router.get("/backup/status", response_model=SystemBackupStatusResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_backup_status",

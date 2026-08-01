@@ -221,7 +221,8 @@ export interface CategorizedFact {
   key: string
   title: string
   content: string
-  full_content?: string
+  // Issue #12370: full_content removed from the browse list — the full
+  // document is lazy-loaded per fact via GET /knowledge_base/fact/{fact_key}.
   category: string
   type: string
   metadata: Record<string, unknown>
@@ -229,10 +230,19 @@ export interface CategorizedFact {
 
 /**
  * Response from /api/knowledge_base/facts/by_category endpoint
+ *
+ * Issue #12394: `limit`/`offset` are applied per category. `total_facts` is
+ * the count returned in this page (sum across categories); `total_count` is
+ * the true sum across all matching categories. `has_more` is true when at
+ * least one category has additional facts beyond this page.
  */
 export interface CategorizedFactsResponse {
   categories: Record<string, CategorizedFact[]>
   total_facts: number
+  total_count?: number
+  limit?: number
+  offset?: number
+  has_more?: boolean
   category_filter?: string | null
 }
 

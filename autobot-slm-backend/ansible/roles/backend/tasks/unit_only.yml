@@ -1,0 +1,43 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# GH#12777 / #12959: render the backend systemd unit with the role's defaults in
+# scope, so the builtin updater can deliver unit changes.
+#
+# The unit template is role-owned, and update-all-nodes.yml never rendered it —
+# it deploys backend *code* inline and applies the role only via
+# `tasks_from: env_only`. So #12777's faulthandler fix (Environment=
+# PYTHONFAULTHANDLER=1) sat in the template, merged and closed, while every
+# deployed host kept a unit without it. Confirmed on a live node: the template
+# had the line, `systemctl cat autobot-backend` did not.
+#
+# That mattered because the fix exists to diagnose a SIGABRT crash loop: without
+# it a fatal signal in a C extension unwinds with no stack, which is the whole
+# reason #12777 was filed.
+#
+# Same shape as env_only.yml (#12871): invoked via include_role so role defaults
+# land at role-default precedence and fill the unit's vars (backend_user,
+# backend_group, backend_install_dir, backend_code_dir, backend_host,
+# backend_port, backend_workers, backend_log_dir) without overriding anything a
+# caller passes as task vars.
+#
+# Deliberately does NOT restart. update-all-nodes.yml already has an explicit
+# "[PLAY 2] Backend | Restart service" task after this; adding a second restart
+# here would bounce the backend twice per update.
+---
+- name: "Backend | Render systemd unit from template (#12777)"
+  ansible.builtin.template:
+    src: autobot-backend.service.j2
+    dest: /etc/systemd/system/autobot-backend.service
+    mode: "0644"
+    owner: root
+    group: root
+  become: true
+  register: _backend_unit_rendered
+  tags: [backend, systemd, unit]
+
+- name: "Backend | Reload systemd after unit change (#12777)"
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: _backend_unit_rendered.changed
+  tags: [backend, systemd, unit]

@@ -41,7 +41,7 @@ class ForgetWorkingMemoryTests(unittest.IsolatedAsyncioTestCase):
         redis = self._redis(raw)
         with (
             patch.object(mt, "_bootstrap", lambda: None),
-            patch.object(mt, "get_redis_client", AsyncMock(return_value=redis)),
+            patch.object(mt, "get_async_redis_client", AsyncMock(return_value=redis)),
         ):
             result = await mt._forget_working_memory(user_id, memory_id)
         return result, redis
@@ -78,7 +78,7 @@ class ForgetGraphEntityTests(unittest.IsolatedAsyncioTestCase):
         redis.delete = AsyncMock(return_value=1)
         with (
             patch.object(mt, "_bootstrap", lambda: None),
-            patch.object(mt, "get_redis_client", AsyncMock(return_value=redis)),
+            patch.object(mt, "get_async_redis_client", AsyncMock(return_value=redis)),
         ):
             result = await mt._forget_graph_entity(user_id, "ent1")
         return result, redis

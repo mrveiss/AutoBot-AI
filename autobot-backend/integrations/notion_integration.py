@@ -24,7 +24,9 @@ from typing import Any, Dict, List
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.notion_utils import extract_title as _extract_title
 from integrations.base import (
     BaseIntegration,
     IntegrationAction,
@@ -304,7 +306,13 @@ class NotionIntegration(BaseIntegration):
         endpoint: str,
         json_data: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """Make an authenticated request to the Notion API."""
+        """Make an authenticated request to the Notion API.
+
+        Issue #12979: routed through the shared pooled client's
+        ``tracked_request()`` — never raises on HTTP status; callers inspect
+        the returned ``status_code``, so ``get_json()``/``post_json()``
+        (which raise) would change this method's error-path contract.
+        """
         url = "%s%s" % (self._base_url, endpoint)
         headers = {
             "Authorization": "Bearer %s" % self.config.token,
@@ -313,10 +321,11 @@ class NotionIntegration(BaseIntegration):
         }
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(method, url, headers=headers, json=json_data) as resp:
-                    body = await resp.json(content_type=None)
-                    return {"status_code": resp.status, "body": body}
+            async with get_http_client().tracked_request(
+                method, url, headers=headers, json=json_data, timeout=timeout
+            ) as resp:
+                body = await resp.json(content_type=None)
+                return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
             self.logger.warning("Notion request to %s failed: %s", url, exc)
             return {"status_code": 0, "error": str(exc)}
@@ -325,21 +334,6 @@ class NotionIntegration(BaseIntegration):
 # ------------------------------------------------------------------
 # Utilities
 # ------------------------------------------------------------------
-
-
-def _extract_title(obj: Dict[str, Any]) -> str:
-    """Extract the plain-text title from a Notion page or database object."""
-    # Database title field
-    title_array = obj.get("title", [])
-    if title_array and isinstance(title_array, list):
-        return "".join(t.get("plain_text", "") for t in title_array)
-
-    # Page title via Name property
-    props = obj.get("properties", {})
-    for prop_name in ("Name", "Title", "title"):
-        prop = props.get(prop_name, {})
-        title_values = prop.get("title", [])
-        if title_values:
-            return "".join(t.get("plain_text", "") for t in title_values)
-
-    return ""
+# Issue #12659: _extract_title() single-sourced in autobot_shared/notion_utils.py
+# (was byte-identical to knowledge/connectors/notion.py's copy) — imported
+# above as `extract_title as _extract_title`.

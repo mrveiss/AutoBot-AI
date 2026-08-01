@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api.websocket import ws_manager
+from autobot_shared.ssot_config import config
 from models.database import Node, Service, ServiceConflict, ServiceStatus
 from models.schemas import (
     FleetServicesResponse,
@@ -60,7 +61,7 @@ def _build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
     """Build SSH command list for service action. Ref: #1088."""
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: ssot-path
+    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
     return [
         "/usr/bin/ssh",
         "-o",
@@ -139,7 +140,7 @@ async def _kill_orphan_on_port(node: Node, port: int) -> Tuple[bool, str]:
     """
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: ssot-path
+    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
     # Command to find and kill process on port
     # Using fuser which is more reliable than lsof for this purpose
@@ -196,7 +197,7 @@ async def _run_ansible_get_logs(
     # Build SSH command
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: ssot-path
+    ssh_key = config.path.ssh_key_path  # canonical inter-node key (#12429)
 
     ssh_cmd = [
         "/usr/bin/ssh",

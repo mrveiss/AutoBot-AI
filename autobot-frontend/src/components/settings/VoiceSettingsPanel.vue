@@ -261,58 +261,58 @@ async function handleDelete(voiceId: string, name: string) {
 .voice-settings {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md, 12px);
+  gap: var(--spacing-md);
 }
 
 .voice-bundle-section {
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
-  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
-  border-radius: var(--radius-md, 6px);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
 }
 
 .voice-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs, 6px);
+  gap: var(--spacing-xs);
 }
 
 .voice-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm, 8px);
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
-  border-radius: var(--radius-md, 6px);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--duration-150);
   border: 1px solid transparent;
 }
 
 .voice-item:hover {
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+  background: var(--bg-tertiary);
 }
 
 .voice-item.active {
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
-  border-color: var(--color-primary, #60a5fa);
+  background: var(--bg-tertiary);
+  border-color: var(--color-primary);
 }
 
 .voice-name {
   flex: 1;
-  color: var(--text-primary, #e2e8f0);
-  font-size: var(--text-sm, 14px);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
 }
 
 .voice-badge {
   font-size: var(--text-xs);
   padding: var(--spacing-0-5) var(--spacing-1-5);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
   font-weight: 500;
 }
 
 .voice-badge.builtin {
-  background: var(--color-primary-bg, rgba(96, 165, 250, 0.15));
-  color: var(--color-primary, #60a5fa);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .voice-badge.custom {
@@ -323,10 +323,10 @@ async function handleDelete(voiceId: string, name: string) {
 .delete-btn {
   background: none;
   border: none;
-  color: var(--text-tertiary, #64748b);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: var(--spacing-1);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
 }
 
 .delete-btn:hover {
@@ -335,37 +335,37 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .loading-indicator {
-  color: var(--text-secondary, #94a3b8);
-  padding: var(--spacing-md, 12px);
+  color: var(--text-secondary);
+  padding: var(--spacing-md);
 }
 
 .error-msg {
   color: var(--color-error);
-  font-size: var(--text-sm, 14px);
-  padding: var(--spacing-sm, 8px);
+  font-size: var(--text-sm);
+  padding: var(--spacing-sm);
 }
 
 .add-voice-section {
-  padding-top: var(--spacing-sm, 8px);
+  padding-top: var(--spacing-sm);
 }
 
 .add-voice-btn {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs, 6px);
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
-  color: var(--text-secondary, #94a3b8);
-  border: 1px dashed var(--border-default, rgba(255, 255, 255, 0.1));
-  border-radius: var(--radius-md, 6px);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: var(--text-sm, 14px);
+  font-size: var(--text-sm);
   transition: all var(--duration-150);
 }
 
 .add-voice-btn:hover {
-  color: var(--color-primary, #60a5fa);
-  border-color: var(--color-primary, #60a5fa);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 /* Dialog */
@@ -380,44 +380,44 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .dialog {
-  background: var(--bg-secondary, #1e293b);
-  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
-  border-radius: var(--radius-lg, 8px);
-  padding: var(--spacing-xl, 24px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
   width: 400px;
   max-width: 90vw;
 }
 
 .dialog h3 {
-  margin: 0 0 var(--spacing-lg, 16px);
-  color: var(--text-primary, #e2e8f0);
+  margin: 0 0 var(--spacing-lg);
+  color: var(--text-primary);
 }
 
 .form-group {
-  margin-bottom: var(--spacing-md, 12px);
+  margin-bottom: var(--spacing-md);
 }
 
 .form-group label {
   display: block;
-  font-size: var(--text-sm, 14px);
-  color: var(--text-secondary, #94a3b8);
-  margin-bottom: var(--spacing-xs, 6px);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xs);
 }
 
 .form-input {
   width: 100%;
-  padding: var(--spacing-sm, 8px);
-  background: var(--bg-primary, #0f172a);
-  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
-  border-radius: var(--radius-md, 6px);
-  color: var(--text-primary, #e2e8f0);
-  font-size: var(--text-sm, 14px);
+  padding: var(--spacing-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
   box-sizing: border-box;
 }
 
 .audio-options {
   display: flex;
-  gap: var(--spacing-sm, 8px);
+  gap: var(--spacing-sm);
 }
 
 .option-btn {
@@ -425,19 +425,19 @@ async function handleDelete(voiceId: string, name: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-xs, 6px);
-  padding: var(--spacing-sm, 8px);
-  background: var(--bg-primary, #0f172a);
-  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1));
-  border-radius: var(--radius-md, 6px);
-  color: var(--text-secondary, #94a3b8);
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: var(--text-sm, 14px);
+  font-size: var(--text-sm);
 }
 
 .option-btn:hover {
-  border-color: var(--color-primary, #60a5fa);
-  color: var(--color-primary, #60a5fa);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .option-btn.recording {
@@ -446,34 +446,34 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .audio-preview {
-  margin-top: var(--spacing-xs, 6px);
+  margin-top: var(--spacing-xs);
   font-size: var(--text-xs);
-  color: var(--text-tertiary, #64748b);
+  color: var(--text-tertiary);
 }
 
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--spacing-sm, 8px);
-  margin-top: var(--spacing-lg, 16px);
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
 }
 
 .cancel-btn,
 .submit-btn {
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
-  border-radius: var(--radius-md, 6px);
-  font-size: var(--text-sm, 14px);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   cursor: pointer;
   border: none;
 }
 
 .cancel-btn {
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
-  color: var(--text-secondary, #94a3b8);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .submit-btn {
-  background: var(--color-primary, #60a5fa);
+  background: var(--color-primary);
   color: white;
 }
 
@@ -483,15 +483,15 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .personality-voice-hint {
-  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  padding: var(--spacing-sm) var(--spacing-md);
   background: rgba(96, 165, 250, 0.1);
-  border: 1px solid var(--color-primary, #60a5fa);
-  border-radius: var(--radius-md, 6px);
-  color: var(--text-secondary, #94a3b8);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   font-size: var(--text-xs);
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs, 6px);
+  gap: var(--spacing-xs);
 }
 
 .personality-voice-details {
@@ -501,6 +501,6 @@ async function handleDelete(voiceId: string, name: string) {
 }
 
 .personality-voice-hint strong {
-  color: var(--color-primary, #60a5fa);
+  color: var(--color-primary);
 }
 </style>

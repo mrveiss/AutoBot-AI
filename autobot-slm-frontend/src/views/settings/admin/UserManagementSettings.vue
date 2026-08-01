@@ -14,8 +14,12 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { formatDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
-import { getSlmApiBase, getBackendUrl } from '@/config/ssot-config'
-import { useAutobotApi, type UserResponse } from '@/composables/useAutobotApi'
+import { getSlmApiBase } from '@/config/ssot-config'
+import {
+  useAutobotApi,
+  autobotApiErrorMessage,
+  type UserResponse,
+} from '@/composables/useAutobotApi'
 import {
   useSlmUserApi,
   type SlmUserResponse,
@@ -341,15 +345,9 @@ async function checkRbacStatus(): Promise<void> {
   if (!isAdmin.value) return
 
   try {
-    const response = await fetch(`${getBackendUrl()}/settings/rbac/status`, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-
-    if (response.ok) {
-      const data = await response.json()
-      rbacStatus.initialized = data.initialized
-      rbacStatus.message = data.message
-    }
+    const data = await autobotApi.getRbacStatus()
+    rbacStatus.initialized = data.initialized
+    rbacStatus.message = data.message
   } catch {
     rbacStatus.message = 'Failed to check RBAC status'
   }
@@ -360,29 +358,15 @@ async function initializeRbac(): Promise<void> {
   error.value = null
 
   try {
-    const response = await fetch(`${getBackendUrl()}/settings/rbac/initialize`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authStore.token}`,
-      },
-      body: JSON.stringify({
-        create_admin: rbacInitOptions.createAdmin,
-        admin_username: rbacInitOptions.adminUsername,
-      }),
+    const data = await autobotApi.initializeRbac({
+      create_admin: rbacInitOptions.createAdmin,
+      admin_username: rbacInitOptions.adminUsername,
     })
-
-    if (response.ok) {
-      const data = await response.json()
-      showSuccess(data.message || 'RBAC initialized successfully')
-      showRbacModal.value = false
-      await checkRbacStatus()
-    } else {
-      const data = await response.json()
-      throw new Error(data.detail || 'Failed to initialize RBAC')
-    }
+    showSuccess(data.message || 'RBAC initialized successfully')
+    showRbacModal.value = false
+    await checkRbacStatus()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to initialize RBAC'
+    error.value = autobotApiErrorMessage(e, 'Failed to initialize RBAC')
   } finally {
     isInitializingRbac.value = false
   }
@@ -451,6 +435,9 @@ async function createSsoProvider(): Promise<void> {
       is_active: newProviderForm.is_active,
       allow_user_creation: newProviderForm.allow_user_creation,
       default_role: newProviderForm.default_role,
+      // This form does not collect `is_social`; the contract requires it, so
+      // state the backend default explicitly rather than relying on omission.
+      is_social: false,
     }
 
     await ssoApi.createProvider(payload)
@@ -509,7 +496,7 @@ async function refreshActiveTab(): Promise<void> {
   else await loadTeams()
 }
 
-function formatDate(dateStr: string | null): string {
+function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return 'Never'
   return formatDateTime(dateStr)
 }

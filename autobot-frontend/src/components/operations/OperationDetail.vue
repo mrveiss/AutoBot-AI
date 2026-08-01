@@ -310,12 +310,12 @@ async function copyId() {
 
 .priority-high {
   background-color: var(--color-warning-bg);
-  color: var(--color-warning-dark, #92400e);
+  color: var(--color-warning-dark);
 }
 
 .priority-critical {
   background-color: var(--color-error-bg);
-  color: var(--color-error-dark, #991b1b);
+  color: var(--color-error-dark);
 }
 
 .section-title {
@@ -364,8 +364,8 @@ async function copyId() {
 
 .error-section {
   padding: var(--spacing-4);
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
+  background-color: var(--opdetail-error-bg);
+  border: 1px solid var(--opdetail-danger-soft);
   border-radius: var(--radius-md);
 }
 
@@ -373,12 +373,12 @@ async function copyId() {
   display: flex;
   align-items: center;
   gap: var(--spacing-1-5);
-  color: #991b1b;
+  color: var(--opdetail-danger-text);
 }
 
 .error-message {
   font-size: var(--text-sm);
-  color: #7f1d1d;
+  color: var(--opdetail-error-message-text);
   font-family: monospace;
   white-space: pre-wrap;
   word-break: break-word;
@@ -461,23 +461,23 @@ async function copyId() {
 }
 
 .cancel-btn {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
+  background-color: var(--opdetail-cancel-bg);
+  color: var(--opdetail-danger-text);
+  border: 1px solid var(--opdetail-danger-soft);
 }
 
 .cancel-btn:hover:not(:disabled) {
-  background-color: #fecaca;
+  background-color: var(--opdetail-danger-soft);
 }
 
 .resume-btn {
-  background-color: #dcfce7;
-  color: #166534;
-  border: 1px solid #bbf7d0;
+  background-color: var(--opdetail-resume-bg);
+  color: var(--opdetail-resume-text);
+  border: 1px solid var(--opdetail-success-soft);
 }
 
 .resume-btn:hover:not(:disabled) {
-  background-color: #bbf7d0;
+  background-color: var(--opdetail-success-soft);
 }
 
 .refresh-btn {

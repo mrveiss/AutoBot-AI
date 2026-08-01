@@ -340,3 +340,60 @@ def test_promote_conflict_when_non_pending():
     with patch("llc.api.findings.promote", AsyncMock(side_effect=ProposalStateError("already promoted"))):
         resp = client.post(f"/findings/proposals/{proposal.id}/promote")
     assert resp.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# GH#12734 — clients must be able to read the policy to gate the scan action
+# ---------------------------------------------------------------------------
+
+
+def test_policy_endpoint_reports_disabled_by_default():
+    """The feature is OFF by default; the UI needs to see that to hide the button."""
+    from llc.services.findings_policy import FindingsPolicy  # noqa: PLC0415
+
+    client, _ = _mk_client(_mk_project())
+    with patch("llc.api.findings.get_findings_policy", AsyncMock(return_value=FindingsPolicy())):
+        resp = client.get("/findings/policy")
+
+    assert resp.status_code == 200
+    assert resp.json()["enabled"] is False
+
+
+def test_policy_endpoint_reports_enabled():
+    from llc.services.findings_policy import FindingsPolicy  # noqa: PLC0415
+
+    client, _ = _mk_client(_mk_project())
+    policy = FindingsPolicy(enabled=True, min_severity="high", require_approval_to_promote=True)
+    with patch("llc.api.findings.get_findings_policy", AsyncMock(return_value=policy)):
+        resp = client.get("/findings/policy")
+
+    body = resp.json()
+    assert body["enabled"] is True
+    assert body["min_severity"] == "high"
+    assert body["require_approval_to_promote"] is True
+
+
+def test_policy_endpoint_does_not_leak_operational_tuning():
+    """verify_batch_size / run_on_index are SLM-side concerns, not client state."""
+    from llc.services.findings_policy import FindingsPolicy  # noqa: PLC0415
+
+    client, _ = _mk_client(_mk_project())
+    with patch(
+        "llc.api.findings.get_findings_policy",
+        AsyncMock(return_value=FindingsPolicy(enabled=True, verify_batch_size=99, run_on_index=True)),
+    ):
+        body = client.get("/findings/policy").json()
+
+    assert "verify_batch_size" not in body
+    assert "run_on_index" not in body
+
+
+def test_policy_endpoint_requires_auth_and_org_context():
+    """The route must carry the same dependencies as the rest of the findings API."""
+    from llc.api import findings  # noqa: PLC0415
+
+    route = next(r for r in findings.router.routes if getattr(r, "path", "") == "/findings/policy")
+    dep_names = {d.call.__name__ for d in route.dependant.dependencies}
+
+    assert "get_current_user" in dep_names
+    assert "require_org_context" in dep_names

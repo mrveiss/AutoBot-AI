@@ -446,7 +446,17 @@ class GlobalWebSocketService {
 
   /** Schedule reconnection with exponential backoff */
   scheduleReconnect(event: CloseEvent): void {
-    if (event.code === 1000 || event.code === 3000) {
+    // #12366: /ws now accepts-then-closes with 4001 on auth failure (instead
+    // of a close-before-accept HTTP 403 the browser reported as an opaque
+    // code-1006 abnormal closure) — retrying with the same bad/expired token
+    // would just hammer the backend forever, so treat 4001 as terminal like
+    // LiveEventService does for /ws/live.
+    if (event.code === 1000 || event.code === 3000 || event.code === 4001) {
+      if (event.code === 4001) {
+        this.connectionState.value = 'error'
+        this.state.lastError = 'Authentication required — please log in again'
+        logger.warn('GlobalWebSocketService: auth rejected (4001), not reconnecting')
+      }
       return
     }
 

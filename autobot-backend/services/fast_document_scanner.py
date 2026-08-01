@@ -394,10 +394,10 @@ class FastDocumentScanner:
         try:
             # Try reading file directly (handles .gz)
             if safe_path.endswith(".gz"):
-                with gzip.open(safe_path, "rt", encoding="utf-8", errors="ignore") as f:  # codeql[py/path-injection]
+                with gzip.open(safe_path, "rt", encoding="utf-8", errors="ignore") as f:
                     return f.read()
             else:
-                with open(safe_path, "r", encoding="utf-8", errors="ignore") as f:  # codeql[py/path-injection]
+                with open(safe_path, "r", encoding="utf-8", errors="ignore") as f:
                     return f.read()
 
         except Exception as file_error:

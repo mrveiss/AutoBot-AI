@@ -1,5 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 mTLS Migration Script - Issue #725
@@ -84,9 +85,11 @@ class MTLSMigration:
             f"REDIS_ADMIN_USER={username}\n"
             f"REDIS_ADMIN_PASSWORD={password}\n"  # noqa: S105
         )
-        with open(self.ADMIN_CREDS_FILE, "w", encoding="utf-8") as f:
-            # Emergency recovery credentials, secured by 0o600 perms
-            f.write(creds_content)  # lgtm[py/clear-text-storage-sensitive-data]
+        # Intentional, accepted-risk storage: emergency recovery credentials
+        # written to a gitignored file with 0o600 perms (chmod below). Not a
+        # false positive — deliberately suppressed with justification.
+        with open(self.ADMIN_CREDS_FILE, "w", encoding="utf-8") as f:  # codeql[py/clear-text-storage-sensitive-data]
+            f.write(creds_content)  # codeql[py/clear-text-storage-sensitive-data]
         # Secure file permissions (owner read/write only)
         os.chmod(self.ADMIN_CREDS_FILE, 0o600)
         logger.info(
@@ -312,7 +315,7 @@ class MTLSMigration:
         try:
             r = redis.Redis(host=redis_ip, port=6379, socket_timeout=5)
             r.ping()
-            logger.info(f"  Plain connection (6379): OK")
+            logger.info("  Plain connection (6379): OK")
             r.close()
         except Exception as e:
             logger.error(f"  Plain connection (6379): FAILED - {e}")

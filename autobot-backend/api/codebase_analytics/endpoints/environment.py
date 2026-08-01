@@ -23,23 +23,38 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import QUALITY_MODEL
 
 from ..analyzers import normalize_hardcode_record
-from .shared import resolve_project_root
+from .shared import resolve_scan_root
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Cache for environment analysis (in-memory, refreshed on demand)
-_env_analysis_cache: dict | None = None
-# Full analysis cache for export (Issue #631)
-_env_analysis_full_cache: dict | None = None
+# Cache for environment analysis (in-memory, refreshed on demand).
+# Issue #12330: Keyed by source_id (or "default") to prevent cross-project
+# leakage -- a single global cache returned one project's hardcoded-value
+# analysis for every other selected source.
+_env_analysis_cache: dict[str, dict] = {}
+# Full analysis cache for export (Issue #631), keyed by source (Issue #12330)
+_env_analysis_full_cache: dict[str, dict] = {}
 # Lock for thread-safe access to _env_analysis_cache (Issue #559)
 _env_analysis_cache_lock = asyncio.Lock()
 
 
-def _get_project_root() -> str:
-    """Get project root path — delegates to shared resolver (#10730)."""
-    return resolve_project_root()
+def _env_cache_key(source_id: str | None) -> str:
+    """Cache key for a source. Issue #12330: scope per project, not global."""
+    return source_id or "default"
+
+
+async def _resolve_env_scan_root(source_id: str | None) -> str:
+    """Resolve the filesystem root to analyze for a source (Issue #12330).
+
+    Issue #12359: Delegates to the shared ``resolve_scan_root`` used by
+    call-graph/import-tree/dependencies so a ``source_id=None`` request
+    resolves the caller's DEFAULT registered source first, instead of
+    falling straight through to AutoBot's own project root. Keeps env
+    analysis consistent with the sibling scan-root-scoped endpoints.
+    """
+    return str(await resolve_scan_root(source_id))
 
 
 def _validate_env_path_security(path: str, project_root: str) -> JSONResponse | None:
@@ -255,11 +270,14 @@ def _build_error_response(message: str, status: str = "error") -> dict:
     }
 
 
-async def _check_env_analysis_cache(use_llm_filter: bool, refresh: bool) -> JSONResponse | None:
+async def _check_env_analysis_cache(
+    use_llm_filter: bool, refresh: bool, source_id: str | None = None
+) -> JSONResponse | None:
     """
     Check if cached environment analysis is available and valid.
 
     Issue #665: Extracted from get_environment_analysis to reduce function length.
+    Issue #12330: Scoped by source_id to prevent cross-project cache leakage.
 
     Returns:
         JSONResponse with cached data if valid, None if cache miss or refresh needed.
@@ -268,12 +286,13 @@ async def _check_env_analysis_cache(use_llm_filter: bool, refresh: bool) -> JSON
     cache_valid = not use_llm_filter
 
     async with _env_analysis_cache_lock:
-        if _env_analysis_cache and not refresh and cache_valid:
+        cached = _env_analysis_cache.get(_env_cache_key(source_id))
+        if cached and not refresh and cache_valid:
             logger.info(
                 "Returning cached environment analysis (%d hardcoded values)",
-                _env_analysis_cache.get("total_hardcoded_values", 0),
+                cached.get("total_hardcoded_values", 0),
             )
-            return JSONResponse(_env_analysis_cache)
+            return JSONResponse(cached)
 
     return None
 
@@ -302,19 +321,21 @@ async def _execute_env_analysis(
         return await _run_environment_analysis(analyzer, path, pattern_list)
 
 
-async def _cache_env_analysis_results(result: dict, full_result: dict, use_llm_filter: bool) -> None:
+async def _cache_env_analysis_results(
+    result: dict, full_result: dict, use_llm_filter: bool, source_id: str | None = None
+) -> None:
     """
     Cache environment analysis results (thread-safe).
 
     Issue #665: Extracted from get_environment_analysis to reduce function length.
     Issue #633: Only cache non-LLM-filtered results (LLM filtering is dynamic).
+    Issue #12330: Scoped by source_id to prevent cross-project cache leakage.
     """
-    global _env_analysis_cache, _env_analysis_full_cache
-
     if not use_llm_filter:
+        key = _env_cache_key(source_id)
         async with _env_analysis_cache_lock:
-            _env_analysis_cache = result
-            _env_analysis_full_cache = full_result
+            _env_analysis_cache[key] = result
+            _env_analysis_full_cache[key] = full_result
 
 
 def _add_llm_filtering_metadata(result: dict, analysis: dict, use_llm_filter: bool) -> None:
@@ -334,8 +355,9 @@ async def _analyze_and_return_env_result(
     use_llm_filter: bool,
     llm_model: str,
     filter_priority: str,
+    source_id: str | None = None,
 ) -> JSONResponse:
-    """Helper for get_environment_analysis. Ref: #1088."""
+    """Helper for get_environment_analysis. Ref: #1088. Issue #12330: per-source cache."""
     analysis = await _execute_env_analysis(analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority)
     if analysis is None:
         return JSONResponse(
@@ -348,7 +370,7 @@ async def _analyze_and_return_env_result(
     full_result = _build_environment_result(analysis, path, for_display=False)
     _add_llm_filtering_metadata(result, analysis, use_llm_filter)
     _add_llm_filtering_metadata(full_result, analysis, use_llm_filter)
-    await _cache_env_analysis_results(result, full_result, use_llm_filter)
+    await _cache_env_analysis_results(result, full_result, use_llm_filter, source_id=source_id)
     logger.info(
         "Environment analysis complete: %d hardcoded values, %d recommendations%s",
         result["total_hardcoded_values"],
@@ -374,23 +396,25 @@ async def get_environment_analysis(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
     ),
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#12330: scope analysis to the selected code source"),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
     Issue #665: Refactored to use extracted helpers for cache, analysis, and result building.
+    Issue #12330: Scope the scan to the selected source's clone path so one project
+    cannot see another's hardcoded-value analysis.
     """
     # Check cache first (Issue #559: thread-safe, Issue #633: LLM filter bypass)
-    cached = await _check_env_analysis_cache(use_llm_filter, refresh)
+    cached = await _check_env_analysis_cache(use_llm_filter, refresh, source_id=source_id)
     if cached:
         return cached
 
-    # Setup path and validate security
-    project_root = _get_project_root()
+    # Setup path and validate security (Issue #12330: scoped to the source root)
+    scan_root = await _resolve_env_scan_root(source_id)
     if not path:
-        path = project_root
+        path = scan_root
 
-    error_response = _validate_env_path_security(path, project_root)
+    error_response = _validate_env_path_security(path, scan_root)
     if error_response:
         return error_response
 
@@ -401,7 +425,7 @@ async def get_environment_analysis(
         if not analyzer:
             return JSONResponse(_build_error_response("EnvironmentAnalyzer not available. Check tools installation."))
         return await _analyze_and_return_env_result(
-            analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority
+            analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority, source_id=source_id
         )
     except Exception as e:
         logger.error("Environment analysis failed: %s", e, exc_info=True)
@@ -416,13 +440,14 @@ async def get_environment_analysis(
 )
 async def get_env_recommendations(
     path: str = Query(None, description="Root path to analyze (defaults to project root)"),
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#12330: scope recommendations to the selected code source"),
 ):
     """
     Get environment variable recommendations for a codebase (Issue #538).
 
     Returns actionable recommendations for creating/updating .env files
     based on detected hardcoded values.
+    Issue #12330: Scoped to the selected source's clone path.
 
     Args:
         path: Root path to analyze
@@ -430,24 +455,25 @@ async def get_env_recommendations(
     Returns:
         JSON with prioritized recommendations
     """
-    # Check cache first (thread-safe, Issue #559)
+    # Check cache first (thread-safe, Issue #559; Issue #12330: per-source)
     async with _env_analysis_cache_lock:
-        if _env_analysis_cache and _env_analysis_cache.get("recommendations"):
+        cached = _env_analysis_cache.get(_env_cache_key(source_id))
+        if cached and cached.get("recommendations"):
             return JSONResponse(
                 {
                     "status": "success",
-                    "recommendations": _env_analysis_cache["recommendations"],
-                    "total": len(_env_analysis_cache["recommendations"]),
+                    "recommendations": cached["recommendations"],
+                    "total": len(cached["recommendations"]),
                     "source": "cache",
                 }
             )
 
-    # Run fresh analysis if no cache
-    project_root = _get_project_root()
+    # Run fresh analysis if no cache (Issue #12330: scoped to the source root)
+    scan_root = await _resolve_env_scan_root(source_id)
     if not path:
-        path = project_root
+        path = scan_root
 
-    error_response = _validate_env_path_security(path, project_root)
+    error_response = _validate_env_path_security(path, scan_root)
     if error_response:
         return error_response
 
@@ -572,15 +598,17 @@ def _build_export_response_json(
     )
 
 
-async def _load_env_analysis_cache() -> tuple:
+async def _load_env_analysis_cache(source_id: str | None = None) -> tuple:
     """Thread-safe cache read for export_env_analysis. Returns (full_data, error_response).
 
     Issue #2735: Extracted from export_env_analysis for length compliance.
     Issue #559: Thread-safe access to _env_analysis_full_cache.
+    Issue #12330: Scoped by source_id to prevent cross-project cache leakage.
     Returns (full_data, None) on success or (None, JSONResponse) when cache is empty.
     """
     async with _env_analysis_cache_lock:
-        if not _env_analysis_full_cache:
+        full_data = _env_analysis_full_cache.get(_env_cache_key(source_id))
+        if not full_data:
             return None, JSONResponse(
                 {
                     "status": "error",
@@ -591,7 +619,7 @@ async def _load_env_analysis_cache() -> tuple:
                 },
                 status_code=404,
             )
-        return _env_analysis_full_cache.copy(), None
+        return full_data.copy(), None
 
 
 def _validate_export_severity(severity: str | None) -> JSONResponse | None:
@@ -621,14 +649,15 @@ async def export_env_analysis(
     severity: str = Query(None, description="Filter by severity ('high', 'medium', 'low')"),
     limit: int = Query(None, description="Limit number of results (default: all)"),
     include_recommendations: bool = Query(True, description="Include recommendations in export"),
-    source_id: str | None = Query(None, description="#1772: source_id for API consistency"),
+    source_id: str | None = Query(None, description="#12330: export the selected code source's analysis"),
 ):
     """
     Export full environment analysis results without truncation (Issue #631).
     Issue #665: Refactored to use extracted helpers for filtering and sorting.
     Issue #2735: Cache load and severity validation extracted to helpers.
+    Issue #12330: Scoped to the selected source's cached analysis.
     """
-    full_data, cache_error = await _load_env_analysis_cache()
+    full_data, cache_error = await _load_env_analysis_cache(source_id=source_id)
     if cache_error is not None:
         return cache_error
 

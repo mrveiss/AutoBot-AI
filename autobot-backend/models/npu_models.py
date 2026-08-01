@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from autobot_shared.ssot_config import config as _ssot_config
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import now_utc, to_rfc3339
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import CategoryDefaults
 
@@ -235,7 +235,9 @@ class NPUWorkerDetails(BaseModel):
             "performance_metrics": self.metrics.model_dump() if self.metrics else {},
             "priority": self.config.priority,
             "weight": self.config.weight,
-            "last_heartbeat": (self.status.last_heartbeat.isoformat() + "Z" if self.status.last_heartbeat else ""),
+            # #12967: last_heartbeat is `datetime | None` with no naive constraint,
+            # so an aware producer would emit a doubled zone (+00:00Z) here.
+            "last_heartbeat": (to_rfc3339(self.status.last_heartbeat) if self.status.last_heartbeat else ""),
             "created_at": "",  # Not tracked in current model
         }
 

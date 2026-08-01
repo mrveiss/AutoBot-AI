@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Native NPU Worker Design for AutoBot
@@ -326,6 +327,7 @@ if __name__ == "__main__":
     with open(
         "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/NPU_WORKER_ARCHITECTURE.json",
         "w",
+        encoding="utf-8",
     ) as f:
         f.write(architecture.generate_architecture_file())
 

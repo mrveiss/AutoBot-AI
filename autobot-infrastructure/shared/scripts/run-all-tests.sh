@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # Comprehensive test suite for all fixes
 # Usage: bash scripts/run-all-tests.sh
 

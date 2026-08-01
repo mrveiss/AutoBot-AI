@@ -88,15 +88,114 @@
   become_user: postgres
   loop: "{{ databases }}"
 
-- name: Save credentials to file
-  ansible.builtin.template:
-    src: db-credentials.env.j2
-    dest: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+# #12224: db-credentials.env is SHARED between the SLM phase (SLM_*) and the
+# managed-backend phase (AUTOBOT_*). The previous `template` module rewrote the
+# WHOLE file with only the current prefix, so on a co-located box the second
+# phase erased the first phase's keys (e.g. SLM_DATABASE_URL) — the SLM control
+# plane then lost its creds and crash-looped on the next restart. Write each
+# prefix as its own marked block so both coexist and neither clobbers the other;
+# this also lets "Reuse existing database password" find the prior password, so
+# a redeploy no longer regenerates it and env/Postgres never diverge.
+#
+# #12297 (Arm 1): the SLM connects slm_app -> the autobot_users DB, but that
+# URL used to live ONLY in slm-secrets.env — a stale landmine that overrode
+# the role-managed value forever. Emit a role-managed AUTOBOT_USERS_DATABASE_URL
+# in the SLM block so db-credentials.env is the single authority for all three
+# SLM DB URLs. The host is topology-derived (slm_autobot_users_host =
+# redis_host | default('127.0.0.1')): localhost when autobot_users is
+# co-located, the DB-VM host when it is remote — never a hardcoded localhost.
+# The generic URL loop skips autobot_users for the SLM prefix so this
+# topology-aware line is the single source (no duplicate even when
+# autobot_users is in `databases`, e.g. deploy-slm-manager.yml default list).
+- name: "Save credentials to file (per-prefix block, #12224, #12297)"
+  ansible.builtin.blockinfile:
+    path: "{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}"
+    marker: "# {mark} {{ db_env_prefix }} DB CREDENTIALS (managed by postgresql role)"
+    create: true
     owner: "{{ autobot_user }}"
     group: "{{ autobot_group }}"
     mode: '0600'
+    block: |
+      {{ db_env_prefix }}_DB_HOST={{ db_host | default('127.0.0.1') }}
+      {{ db_env_prefix }}_DB_PORT={{ postgresql_port }}
+      {{ db_env_prefix }}_DB_USER={{ db_user }}
+      {{ db_env_prefix }}_DB_PASSWORD={{ db_password }}
+      {{ db_env_prefix }}_DB_NAME={{ databases | first }}
+      {% for db in databases %}
+      {{ db_env_prefix }}_DB_{{ db | upper | replace('-', '_') }}={{ db }}
+      {% endfor %}
+      {{ db_env_prefix }}_DATABASE_URL=postgresql+asyncpg://{{ db_user }}:{{ db_password }}@{{ db_host | default('127.0.0.1') }}:{{ postgresql_port }}/{{ databases | first }}
+      {% for db in databases[1:] if not (db_env_prefix == 'SLM' and db == 'autobot_users') %}
+      {{ db | upper | replace('-', '_') }}_DATABASE_URL=postgresql+asyncpg://{{ db_user }}:{{ db_password }}@{{ db_host | default('127.0.0.1') }}:{{ postgresql_port }}/{{ db }}
+      {% endfor %}
+      {% if db_env_prefix == 'SLM' %}
+      AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://{{ db_user }}:{{ db_password }}@{{ slm_autobot_users_host }}:{{ postgresql_port }}/autobot_users
+      {% endif %}
   become: true
   no_log: true
+
+# #12907 (Defect 1): hosts provisioned before #12224 still carry UNMARKED
+# assignments written by the old whole-file template (roles/postgresql/
+# templates/db-credentials.env.j2), which used the same key names. blockinfile
+# only owns the region between its markers, so those stale lines survive every
+# redeploy and sit BEFORE the managed block -- two assignments per key, the
+# first one dead. `set -a; . file` takes the last, so this is survivable; any
+# consumer that greps the first match silently reads a dead secret, which is
+# exactly how #12883 became an outage.
+#
+# Runs AFTER blockinfile, never before: the managed block must already be in
+# place, so a play that aborts here can never leave a host with no credentials.
+- name: "Strip pre-#12224 unmarked {{ db_env_prefix }} credential lines (#12907)"
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      f='{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}'
+      [ -f "$f" ] || exit 0
+      tmp="$(mktemp "${f}.XXXXXX")"
+      trap 'rm -f "$tmp"' EXIT
+      awk -v pfx='{{ db_env_prefix }}' '
+        $0 ~ "^# BEGIN " pfx " DB CREDENTIALS" { inblock = 1; print; next }
+        $0 ~ "^# END " pfx " DB CREDENTIALS"   { inblock = 0; print; next }
+        !inblock && $0 ~ "^" pfx "_[A-Z0-9_]*=" { dropped++; next }
+        { print }
+        END { exit (dropped ? 10 : 0) }
+      ' "$f" > "$tmp" && rc=0 || rc=$?
+      if [ "$rc" -eq 10 ]; then
+        chown --reference="$f" "$tmp"
+        chmod --reference="$f" "$tmp"
+        mv -f "$tmp" "$f"
+        trap - EXIT
+        echo CHANGED
+      elif [ "$rc" -ne 0 ]; then
+        exit "$rc"
+      fi
+  register: _cred_strip
+  changed_when: "'CHANGED' in _cred_strip.stdout"
+  become: true
+  no_log: true
+
+# #12907 (Defect 2): #10636 gave the backend its own autobot-db-credentials.env
+# because the whole-file template made the two prefixes clobber each other.
+# #12224's per-prefix markers removed that constraint, but the second file
+# stayed and drifted a month behind, holding a password Postgres rejects.
+# Retire it once the canonical file actually carries this prefix's block --
+# never unconditionally, so a half-applied run cannot strand a host.
+- name: "Retire the superseded {{ db_env_prefix }} credential file (#12907)"
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      canonical='{{ postgresql_credentials_dir }}/{{ postgresql_credentials_file }}'
+      legacy='{{ postgresql_credentials_dir }}/autobot-db-credentials.env'
+      [ -f "$legacy" ] || exit 0
+      [ "$legacy" != "$canonical" ] || exit 0
+      grep -q "^# BEGIN {{ db_env_prefix }} DB CREDENTIALS" "$canonical" || exit 0
+      mv -f "$legacy" "${legacy}.superseded-12907"
+      echo CHANGED
+  register: _cred_retire
+  changed_when: "'CHANGED' in _cred_retire.stdout"
+  become: true
+  no_log: true
+  when: db_env_prefix == 'AUTOBOT'
 
 - name: Display database setup completion
   ansible.builtin.debug:

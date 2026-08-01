@@ -14,7 +14,8 @@
  */
 
 import { ref, computed } from 'vue'
-import { getSLMUrl, getApiBase } from '@/config/ssot-config'
+import { getApiBase } from '@/config/ssot-config'
+import { SlmClient } from '@/utils/slmClient'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { createLogger } from '@/utils/debugUtils'
 import { useLoadingState } from './useLoadingState'
@@ -85,6 +86,11 @@ const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const authToken = ref<string | null>(null)
 
+// SLM bridge scoped to this composable's in-memory token (read live per request).
+// The base URL (getSLMUrl) and token injection are owned by the canonical bridge;
+// endpoint paths keep the getApiBase() prefix exactly as before.
+const slm = new SlmClient(() => authToken.value)
+
 // =============================================================================
 // Computed
 // =============================================================================
@@ -102,39 +108,6 @@ const expiringCredentials = computed(() =>
 const expiringSoonCount = computed(() => expiringCredentials.value.length)
 
 // =============================================================================
-// HTTP Helpers
-// =============================================================================
-
-async function slmFetch(
-  path: string,
-  options: RequestInit = {}
-): Promise<Response> {
-  const baseUrl = getSLMUrl()
-  const url = `${baseUrl}${path}`
-
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  }
-
-  if (authToken.value) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${authToken.value}`
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
-
-  if (!response.ok) {
-    const errorData = await response.json().catch((err) => { logger.warn('Failed to parse TLS error response: %s', err); return {} })
-    throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
-  }
-
-  return response
-}
-
-// =============================================================================
 // Authentication
 // =============================================================================
 
@@ -143,16 +116,15 @@ async function slmFetch(
  */
 async function authenticate(username: string, password: string): Promise<boolean> {
   try {
-    const formData = new URLSearchParams()
-    formData.append('username', username)
-    formData.append('password', password)
-
-    const response = await fetch(`${getSLMUrl()}/api/auth/token`, {
+    // Canonical SLM login (Issue #1922): JSON body to /api/auth/login.
+    // Credential-based, so skip bearer injection.
+    const response = await slm.rawRequest('/api/auth/login', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: formData,
+      body: JSON.stringify({ username, password }),
+      skipAuth: true,
     })
 
     if (!response.ok) {
@@ -160,6 +132,16 @@ async function authenticate(username: string, password: string): Promise<boolean
     }
 
     const data = await response.json()
+    // Login may return a TokenResponse (has access_token) or an
+    // MfaChallengeResponse (requires_mfa, no token). Only the token path
+    // authenticates here; an MFA challenge is surfaced as a non-fatal failure
+    // rather than crashing (full MFA flow not handled by this composable).
+    if (!data?.access_token) {
+      if (data?.requires_mfa) {
+        logger.warn('SLM login requires MFA; TLS credential flow cannot complete unattended')
+      }
+      return false
+    }
     authToken.value = data.access_token
     return true
   } catch (err: unknown) {
@@ -193,8 +175,7 @@ async function fetchNodes(): Promise<SLMNode[]> {
   error.value = null
   return wrap(async () => {
     try {
-      const response = await slmFetch(`${getApiBase()}/nodes`)
-      const data = await response.json()
+      const data = await slm.get<{ nodes?: SLMNode[] }>(`${getApiBase()}/nodes`)
       nodes.value = data.nodes || []
       return nodes.value
     } catch (err: unknown) {
@@ -218,8 +199,9 @@ async function fetchNodeCredentials(nodeId: string): Promise<TLSCredential[]> {
   error.value = null
   return wrap(async () => {
     try {
-      const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`)
-      const data = await response.json()
+      const data = await slm.get<{ credentials?: TLSCredential[] }>(
+        `${getApiBase()}/nodes/${nodeId}/tls-credentials`
+      )
       credentials.value = data.credentials || []
       return credentials.value
     } catch (err: unknown) {
@@ -242,11 +224,10 @@ async function createCredential(
   error.value = null
   return wrap(async () => {
     try {
-      const response = await slmFetch(`${getApiBase()}/nodes/${nodeId}/tls-credentials`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      })
-      const credential = await response.json()
+      const credential = await slm.post<TLSCredential>(
+        `${getApiBase()}/nodes/${nodeId}/tls-credentials`,
+        data
+      )
       credentials.value.push(credential)
       showSubtleErrorNotification('TLS Credential Created', 'Certificate uploaded successfully', 'info')
       return credential
@@ -270,11 +251,10 @@ async function updateCredential(
   error.value = null
   return wrap(async () => {
     try {
-      const response = await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      })
-      const updated = await response.json()
+      const updated = await slm.patch<TLSCredential>(
+        `${getApiBase()}/tls/credentials/${credentialId}`,
+        data
+      )
       const index = credentials.value.findIndex(c => c.credential_id === credentialId)
       if (index !== -1) {
         credentials.value[index] = updated
@@ -298,9 +278,7 @@ async function deleteCredential(credentialId: string): Promise<boolean> {
   error.value = null
   return wrap(async () => {
     try {
-      await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`, {
-        method: 'DELETE',
-      })
+      await slm.delete(`${getApiBase()}/tls/credentials/${credentialId}`)
       credentials.value = credentials.value.filter(c => c.credential_id !== credentialId)
       endpoints.value = endpoints.value.filter(e => e.credential_id !== credentialId)
       showSubtleErrorNotification('TLS Credential Deleted', 'Certificate removed successfully', 'info')
@@ -320,8 +298,7 @@ async function deleteCredential(credentialId: string): Promise<boolean> {
  */
 async function getCredential(credentialId: string): Promise<TLSCredential | null> {
   try {
-    const response = await slmFetch(`${getApiBase()}/tls/credentials/${credentialId}`)
-    return await response.json()
+    return await slm.get<TLSCredential>(`${getApiBase()}/tls/credentials/${credentialId}`)
   } catch (err: unknown) {
     logger.error('Error fetching TLS credential:', err)
     return null
@@ -339,8 +316,7 @@ async function fetchAllEndpoints(): Promise<TLSEndpoint[]> {
   error.value = null
   return wrap(async () => {
     try {
-      const response = await slmFetch(`${getApiBase()}/tls/endpoints`)
-      const data = await response.json()
+      const data = await slm.get<{ endpoints?: TLSEndpoint[] }>(`${getApiBase()}/tls/endpoints`)
       endpoints.value = data.endpoints || []
       return endpoints.value
     } catch (err: unknown) {
@@ -358,8 +334,9 @@ async function fetchAllEndpoints(): Promise<TLSEndpoint[]> {
  */
 async function fetchExpiringCertificates(days: number = 30): Promise<TLSEndpoint[]> {
   try {
-    const response = await slmFetch(`${getApiBase()}/tls/expiring?days=${days}`)
-    const data = await response.json()
+    const data = await slm.get<{ endpoints?: TLSEndpoint[] }>(
+      `${getApiBase()}/tls/expiring?days=${days}`
+    )
     return data.endpoints || []
   } catch (err: unknown) {
     logger.error('Error fetching expiring certificates:', err)

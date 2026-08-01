@@ -48,17 +48,20 @@ def _make_ctx(
         "workflow_id": workflow_id,
         "status": status,
         "success_rate": success_rate,
-        "step_results": step_results
-        or {
-            "step_1": {"success": True, "agent_id": "agent-a", "execution_time": 1.25},
-            "step_2": {
-                "success": False,
-                "agent_id": "agent-b",
-                "error": "timeout",
-                "execution_time": 5.0,
-            },
-        },
-        "agents_involved": agents_involved or ["agent-a", "agent-b"],
+        "step_results": (
+            step_results
+            if step_results is not None
+            else {
+                "step_1": {"success": True, "agent_id": "agent-a", "execution_time": 1.25},
+                "step_2": {
+                    "success": False,
+                    "agent_id": "agent-b",
+                    "error": "timeout",
+                    "execution_time": 5.0,
+                },
+            }
+        ),
+        "agents_involved": agents_involved if agents_involved is not None else ["agent-a", "agent-b"],
     }
 
 

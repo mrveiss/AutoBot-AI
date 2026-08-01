@@ -15,6 +15,21 @@ Render decision tree (RenderMode.AUTO):
 SSRF guards delegate to ``autobot_shared.url_safety.is_public_url_async``
 (extracted in #7477 to break the ``pipeline.py`` ↔ ``fetcher.py`` cycle).
 Jina circuit breaker from media.link.pipeline is reused via _try_jina / _record_*.
+
+SSRF TOCTOU (#13019): ``_fetch_bs4`` connects directly to the caller-supplied
+``url`` and previously did so via the shared pooled ``get_http_client()``
+session after only a check-then-forget ``_is_public_url`` validation — DNS
+could re-resolve to a private address between the check and the real
+connect. It now routes through
+``autobot_shared.security.ssrf_guard.pinned_request_with_redirects``, which
+independently resolves + pins EVERY hop (including redirects) so validation
+and connection can never diverge. ``_fetch_jina_impl`` and
+``_fetch_playwright`` are NOT affected: the actual TCP connection they make
+is always to a fixed, trusted proxy (``r.jina.ai`` — the caller's ``url`` is
+only embedded in the *request path*, never the connect target) or to our own
+in-cluster Playwright service, so pinning ``url`` there would be a no-op —
+the ``_is_public_url`` check on those paths remains a defense-in-depth guard
+against asking a third party to fetch on our behalf, not a TOCTOU fix.
 """
 
 from __future__ import annotations
@@ -23,7 +38,9 @@ import asyncio
 import time
 from urllib.parse import urlparse
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 from web_fetch.cache import WEB_FETCH_MAX_BYTES, get_cached_result, set_cached_result
 from web_fetch.extractors import _MIN_CONTENT_CHARS, extract_markdown, is_spa_content
 
@@ -73,7 +90,15 @@ _CIRCUIT_COOLDOWN = 60.0
 
 _JINA_BASE_URL = "https://r.jina.ai/"
 _USER_AGENT = "AutoBot/1.0 (web-fetch)"
-_MAX_REDIRECTS = 5
+
+
+def _resolve_max_redirects() -> int:
+    """Return max redirect hops for the pinned BS4 fetch from env var (default 5)."""
+    raw = config.misc.web_fetch_max_redirects
+    return raw if raw else 5
+
+
+_MAX_REDIRECTS: int = _resolve_max_redirects()
 
 
 def _get_domain_sem(netloc: str) -> asyncio.Semaphore:
@@ -141,17 +166,22 @@ async def _fetch_jina_impl(url: str, timeout: float) -> str | None:
     jina_url = f"{_JINA_BASE_URL}{url}"
     try:
         aio_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(jina_url, timeout=aio_timeout, allow_redirects=True) as resp:
-                if resp.status == 200:
-                    return await resp.text(encoding="utf-8", errors="replace")
+        async with get_http_client().tracked_request(
+            "GET",
+            jina_url,
+            timeout=aio_timeout,
+            allow_redirects=True,
+            suppress_error_log=True,
+        ) as resp:
+            if resp.status == 200:
+                return await resp.text(encoding="utf-8", errors="replace")
     except Exception as exc:
         logger.debug("Jina fetch failed for %s: %s", url, exc)
     return None
 
 
 async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
-    """Fetch raw HTML via aiohttp. Returns (html, status_code) or (None, None).
+    """Fetch raw HTML. Returns (html, status_code) or (None, None).
 
     Single round-trip (#7459): streams the response body in 64 KiB chunks,
     enforces ``WEB_FETCH_MAX_BYTES``, and returns ``("", status)`` for empty
@@ -161,34 +191,35 @@ async def _fetch_bs4(url: str, timeout: float) -> tuple[str | None, int | None]:
 
     SSRF guard is enforced inline (defense in depth) so any caller —
     including ``WebFetcher.fetch_raw_html`` which intentionally bypasses
-    the public ``fetch()`` pipeline — cannot reach private IPs.
+    the public ``fetch()`` pipeline — cannot reach private IPs. The actual
+    connect goes through ``ssrf_guard.pinned_request_with_redirects`` (#13019)
+    instead of the shared pooled client, so the resolved address validated is
+    the address connected to on every hop, including redirects.
     """
     import aiohttp
+
+    from autobot_shared.security.ssrf_guard import SSRFError, pinned_request_with_redirects
 
     if not await _is_public_url(url):
         return None, None
 
     headers = {"User-Agent": _USER_AGENT}
+    aio_timeout = aiohttp.ClientTimeout(total=timeout)
     try:
-        aio_timeout = aiohttp.ClientTimeout(total=timeout)
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(
-                url,
-                timeout=aio_timeout,
-                allow_redirects=True,
-                max_redirects=_MAX_REDIRECTS,
-            ) as resp:
-                content = b""
-                async for chunk in resp.content.iter_chunked(65536):
-                    content += chunk
-                    if len(content) > WEB_FETCH_MAX_BYTES:
-                        return None, None  # too large
-                if not content:
-                    return "", resp.status
-                html = content.decode("utf-8", errors="replace")
-                return html, resp.status
-    except aiohttp.TooManyRedirects:
-        logger.debug("Too many redirects for %s", url)
+        async with pinned_request_with_redirects(
+            "GET", url, headers=headers, timeout=aio_timeout, max_redirects=_MAX_REDIRECTS
+        ) as resp:
+            content = b""
+            async for chunk in resp.content.iter_chunked(65536):
+                content += chunk
+                if len(content) > WEB_FETCH_MAX_BYTES:
+                    return None, None  # too large
+            if not content:
+                return "", resp.status
+            html = content.decode("utf-8", errors="replace")
+            return html, resp.status
+    except SSRFError as exc:
+        logger.warning("web_fetch BS4 fetch blocked by SSRF guard for %s: %s", url, exc)
         return None, None
     except Exception as exc:
         logger.debug("BS4 fetch failed for %s: %s", url, exc)

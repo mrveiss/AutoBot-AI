@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 AutoBot Phase 9 Monitoring Startup Script
 Comprehensive performance monitoring system initialization and management.
@@ -337,7 +339,7 @@ class HardwareMonitoringManager:
 
             # Save results
             benchmark_file = f"/tmp/hardware_benchmark_{int(time.time())}.json"
-            with open(benchmark_file, "w") as f:
+            with open(benchmark_file, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, default=str)
 
             logger.info(f"Benchmark suite completed. Results saved to: {benchmark_file}")
@@ -443,7 +445,7 @@ async def main():
 
     if args.config and os.path.exists(args.config):
         try:
-            with open(args.config, "r") as f:
+            with open(args.config, "r", encoding="utf-8") as f:
                 manager.config.update(json.load(f))
                 logger.info("Configuration loaded from %s", args.config)
         except Exception as e:

@@ -1,8 +1,10 @@
 [tool.black]
 line-length = 120
-# Stays py312 (NOT py314): the NPU/OpenVINO worker runs Python 3.11, and py314
-# target makes black emit PEP 758 unparenthesized `except A, B:` which is a
-# SyntaxError on 3.11 shared code. Bump only when the worker leaves 3.11 (#10877).
+# Stays py312 (NOT py314): the backend runs Python 3.14, but the NPU/OpenVINO
+# worker runs an older Python (its requirements pin 3.12+ — OpenVINO ships no
+# 3.14 wheels). A py314 target makes black emit PEP 758 unparenthesized
+# `except A, B:`, a SyntaxError on that worker's cross-imported shared code.
+# Bump only when the worker gains 3.14 support (#10877).
 target-version = ["py312"]
 
 [tool.isort]

@@ -1,0 +1,50 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Data-driven search sources (#12625, design §4.7). Loaded by
+# agent_loop.search.config_declared_provider.load_source_definitions() and
+# registered into the shared SearchProviderRegistry alongside the built-in
+# providers — no Python code required to add one.
+#
+# Every source must:
+#   - use a fixed http(s) base_url (validated at load time; anything else is
+#     skipped with a warning — never blocks startup)
+#   - accept the runtime search text via exactly one query parameter
+#     (query_param) — it is ALWAYS passed through aiohttp's params=, never
+#     string-built into the URL, so it can never change the request's host,
+#     scheme, or port
+#   - return JSON; result_path/title_field/url_field/snippet_field are plain
+#     dotted dict/list paths into that JSON (no code execution)
+#
+# Fields:
+#   name             unique provider name (also the fallback-chain entry)
+#   category         topic this source specializes in (matched by
+#                    services.research.router.infer_topic — see
+#                    config/research_topics.yaml for the topic keyword lists)
+#   base_url         fixed http(s) endpoint fetched on every search
+#   query_param      name of the query-string parameter carrying the search text
+#   extra_params     (optional) fixed extra query-string parameters
+#   result_path      (optional) dotted path to the list of result items in the
+#                    JSON response; "" means the response body IS that list
+#   title_field      (optional, default "title") dotted path within each item
+#   url_field        (optional, default "url") dotted path within each item
+#   snippet_field    (optional) dotted path within each item
+#   timeout_seconds  (optional, default 15.0) per-request timeout
+#
+# No sources are declared by default — this file intentionally ships empty
+# so no external endpoint is fetched without an explicit, reviewed opt-in.
+# Example (illustrative only — uncomment and adapt to add a real source):
+#
+# sources:
+#   - name: example_docs
+#     category: code
+#     base_url: "https://example-docs.invalid/api/search"
+#     query_param: "q"
+#     extra_params:
+#       format: "json"
+#     result_path: "results"
+#     title_field: "title"
+#     url_field: "url"
+#     snippet_field: "summary"
+
+sources: []

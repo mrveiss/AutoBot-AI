@@ -136,6 +136,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "Über Fallback",
+        "tooltip": "Primärer Anbieter nicht verfügbar – über einen Fallback-Anbieter beantwortet ({primary} → {fallback})."
       }
     },
     "response": "Antwort",
@@ -210,7 +214,8 @@
       "deleteFailed": "Einige Chats konnten nicht gelöscht werden",
       "sharedSuccess": "Chat erfolgreich geteilt",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Fallback-Badge anzeigen"
     },
     "interface": {
       "loadFailed": "Die Chat-Oberfläche konnte nicht geladen werden",
@@ -727,7 +732,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "Der Chat konnte nicht gelöscht werden. Bitte versuchen Sie es erneut.",
+      "createFailed": "Chat konnte nicht erstellt werden: {error}",
+      "loadSessionsFailed": "Chatsitzungen konnten nicht geladen werden: {error}",
+      "loadMessagesFailed": "Nachrichten konnten nicht geladen werden: {error}",
+      "saveFailed": "Chat konnte nicht gespeichert werden: {error}",
+      "resetFailed": "Chat konnte nicht zurückgesetzt werden: {error}",
+      "clearFailed": "Chats konnten nicht gelöscht werden: {error}",
+      "invalidFormat": "Ungültiges Nachrichtenformat. Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut.",
+      "serviceUnavailable": "Chat-Dienst nicht verfügbar. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
+      "serverError": "Ein Serverfehler ist aufgetreten. Bitte versuchen Sie es in einem Moment erneut.",
+      "networkFailed": "Netzwerkverbindung fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung.",
+      "timeout": "Zeitüberschreitung der Anfrage. Bitte versuchen Sie es mit einer kürzeren Nachricht erneut.",
+      "sendFailed": "Nachricht konnte nicht gesendet werden: {error}",
+      "sendFailedAfterRetries": "Nachricht konnte nach {attempts} Versuchen nicht gesendet werden: {error}. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "invalidFormatDetail": "Ungültiges Nachrichtenformat: {error}. Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut.",
+      "networkFailedRetry": "Netzwerkverbindung fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut."
+    }
   },
   "settings": {
     "title": "Einstellungen",
@@ -876,7 +899,14 @@
       "disabledMessage": "Lokale Nutzungsmetriken deaktiviert. Es werden keine Metriken aufgezeichnet.",
       "loadFailed": "Telemetrie-Einstellungen konnten nicht geladen werden",
       "updateFailed": "Telemetrie-Einstellungen konnten nicht aktualisiert werden"
-    }
+    },
+    "subtitle": "Passen Sie Ihr AutoBot-Erlebnis mit persönlichen Einstellungen an",
+    "featureFlags": "Feature-Flags",
+    "telegram": "Telegram",
+    "notifications": "Benachrichtigungen",
+    "mobileDevices": "Mobilgeräte",
+    "privacy": "Datenschutz",
+    "providerAuthDesc": "Verbinden Sie sich mit Anbietern über Ihr bestehendes Abonnement statt über einen kostenpflichtigen API-Schlüssel. Token werden sicher im AutoBot-Secrets-Vault gespeichert."
   },
   "voice": {
     "title": "Stimme",
@@ -902,7 +932,8 @@
     "creating": "Erstellen...",
     "confirmDeleteVoice": "Stimme „{name}“ löschen?",
     "languageVoicesActive": "{count} sprachspezifische(n) Stimme(n) konfiguriert",
-    "confirmDeleteVoiceTitle": "Stimmprofil löschen"
+    "confirmDeleteVoiceTitle": "Stimmprofil löschen",
+    "tapToEnableAudio": "Tippen Sie irgendwo, um die Audiowiedergabe zu aktivieren"
   },
   "analytics": {
     "title": "Analytik",
@@ -2474,6 +2505,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "{shown} von {total} werden angezeigt"
     }
   },
   "knowledge": {
@@ -7528,6 +7562,17 @@
       "templates": "Scrape Templates",
       "exitRegionMode": "Exit region mode",
       "markRegions": "Mark regions"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "serviceMessages": {
@@ -7638,7 +7683,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Systemzustand"
+    "systemHealth": "Systemzustand",
+    "providerFallback": "Anbieter-Fallback",
+    "advancedControl": "Erweiterte Steuerung"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "Archivierte anzeigen",
+    "delete": "Löschen",
+    "confirmDeleteTitle": "Unternehmen löschen",
+    "confirmDelete": "„{name}“ löschen? Das archivierte Unternehmen und seine Daten werden entfernt. Dies kann hier nicht rückgängig gemacht werden.",
+    "deleteError": "Unternehmen konnte nicht gelöscht werden.",
+    "deleteHasChildren": "Dieses Unternehmen hat Tochterunternehmen. Entfernen oder verschieben Sie diese vor dem Löschen.",
+    "onboarding": "Einführung",
+    "active": "Aktiv",
+    "paused": "Pausiert",
+    "offboarding": "Abwicklung",
+    "archived": "Archiviert",
+    "activate": "Aktivieren",
+    "suspend": "Pausieren",
+    "offboard": "Abwickeln",
+    "archive": "Archivieren",
+    "confirmTitle": "Statusänderung bestätigen",
+    "confirmOffboard": "„{name}“ abwickeln? Damit wird das Unternehmen heruntergefahren.",
+    "confirmArchive": "„{name}“ archivieren? Dies ist ein Endzustand und kann nicht rückgängig gemacht werden.",
+    "confirm": "Bestätigen",
+    "updateError": "Der Unternehmensstatus konnte nicht geändert werden."
   },
   "llcMembers": {
     "title": "Mitglieder",
@@ -7810,22 +7879,7 @@
       "createFailed": "Unternehmen konnte nicht erstellt werden"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ Neu",
-      "selectCompany": "Wählen Sie ein Unternehmen, um Threads anzuzeigen.",
-      "loading": "Wird geladen...",
-      "noThreads": "Noch keine Threads.",
-      "emptyState": "Wählen Sie einen Thread aus oder erstellen Sie einen neuen.",
-      "loadingMessages": "Nachrichten werden geladen...",
-      "noMessages": "Noch keine Nachrichten.",
-      "messagePlaceholder": "Nachricht eingeben...",
-      "send": "Senden",
-      "newThreadTitle": "Neuer Thread",
-      "titleLabel": "Titel",
-      "titlePlaceholder": "Thread-Titel...",
-      "cancel": "Abbrechen",
-      "create": "Erstellen",
-      "creating": "Wird erstellt..."
+      "selectCompany": "Wählen Sie ein Unternehmen, um Threads anzuzeigen."
     },
     "dashboard": {
       "title": "Unternehmens-Dashboard",
@@ -7957,7 +8011,15 @@
       "count": "{count} Boards",
       "loading": "Boards werden geladen…",
       "empty": "Noch keine Boards — Boards werden pro Projekt (Kanban) und pro Sprint (Sprint) erstellt.",
-      "created": "Erstellt am {date}"
+      "created": "Erstellt am {date}",
+      "newKanban": "Neues Kanban-Board",
+      "createTitle": "Kanban-Board erstellen",
+      "project": "Projekt",
+      "selectProject": "Projekt auswählen…",
+      "loadingProjects": "Projekte werden geladen…",
+      "noProjects": "Noch keine Projekte — erstellen Sie zuerst ein Projekt.",
+      "creating": "Wird erstellt…",
+      "create": "Board erstellen"
     },
     "kanban": {
       "title": "Kanban-Board",
@@ -7996,7 +8058,9 @@
       "noProjects": "Noch keine Projekte in diesem Unternehmen.",
       "noItems": "Dieses Projekt hat keine planbaren Arbeitselemente.",
       "ariaChart": "Projekt-Zeitachsen-Gantt-Diagramm",
-      "unscheduled": "ungeplant"
+      "unscheduled": "ungeplant",
+      "scopedTo": "Eingegrenzt auf {name}",
+      "showAll": "Gesamtes Unternehmen anzeigen"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "Anzeigen",
       "noActivity": "Keine Aktivität aufgezeichnet.",
       "noHandoffBrief": "Kein Übergabe-Briefing verfügbar.",
-      "loadingBrief": "Briefing wird geladen..."
+      "loadingBrief": "Briefing wird geladen...",
+      "errors": {
+        "saveFailed": "Ihre Änderung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
+      }
     },
     "orgChart": {
       "title": "Organigramm",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Ihre Entscheidung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
     },
-    "ceoChat": {
-      "sendError": "Ihre Nachricht konnte nicht gesendet werden. Sie wurde wiederhergestellt, damit Sie es erneut versuchen können."
-    },
     "timeline": {
       "rescheduleError": "Der neue Zeitplan konnte nicht gespeichert werden. Die Änderung wurde rückgängig gemacht."
     },
@@ -8603,6 +8667,22 @@
       "error": "Systemzustand konnte nicht geladen werden",
       "refresh": "Aktualisieren",
       "noSources": "Keine Inhaltsquellen konfiguriert"
+    },
+    "providerFallback": {
+      "title": "Anbieter-Fallback",
+      "subtitle": "Live-Aktivität von LLM-Anbieter- und Modell-Fallbacks",
+      "status": "Status",
+      "stateHealthy": "Keine aktiven Fallbacks",
+      "stateDegraded": "Fallback aktiv",
+      "active": "Aktive Fallbacks",
+      "chains": "Konfigurierte Ketten",
+      "timeline": "Live-Aktivität",
+      "switched": "Umgeschaltet",
+      "exhausted": "Erschöpft",
+      "refresh": "Aktualisieren",
+      "loading": "Fallback-Status wird geladen…",
+      "noData": "Keine Anbieter-Fallback-Aktivität",
+      "none": "keine"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} wurde aktualisiert",
   "chat.modelPicker.label": "Modell",
   "chat.modelPicker.auto": "Automatisch (Standardmodell)",
-  "chat.modelPicker.title": "Modell und Anbieter für diese Unterhaltung wählen"
+  "chat.modelPicker.title": "Modell und Anbieter für diese Unterhaltung wählen",
+  "budgetPolicies": {
+    "title": "Budgetrichtlinien",
+    "subtitle": "Ausgabengrenzen und Auto-Pause-Regeln für Agenten verwalten",
+    "newPolicy": "Neue Richtlinie",
+    "scope": "Bereich",
+    "scopeAll": "Alle",
+    "scopeAgent": "Agent",
+    "scopeProject": "Projekt",
+    "scopeTask": "Aufgabe",
+    "scopeTenant": "Mandant",
+    "loading": "Richtlinien werden geladen…",
+    "empty": "Keine Budgetrichtlinien gefunden. Erstellen Sie eine, um Ausgabenlimits durchzusetzen.",
+    "colName": "Name",
+    "colScope": "Bereich",
+    "colScopeId": "Bereichs-ID",
+    "colPeriod": "Zeitraum",
+    "colThreshold": "Schwellenwert",
+    "colWarning": "Warnung",
+    "colAction": "Aktion",
+    "colStatus": "Status",
+    "colActions": "Aktionen",
+    "statusEnabled": "aktiviert",
+    "statusDisabled": "deaktiviert",
+    "checkPauseTitle": "Agenten-Pausenstatus prüfen",
+    "agentIdPlaceholder": "Agenten-ID…",
+    "checkStatus": "Status prüfen",
+    "labelAgent": "Agent:",
+    "labelPaused": "Pausiert:",
+    "labelReason": "Grund:",
+    "labelSince": "Seit:",
+    "resumeAgent": "Agent fortsetzen",
+    "modalEditTitle": "Richtlinie bearbeiten",
+    "modalNewTitle": "Neue Budgetrichtlinie",
+    "fieldName": "Name",
+    "fieldNamePlaceholder": "Meine Richtlinie",
+    "fieldDescription": "Beschreibung",
+    "fieldDescriptionPlaceholder": "Optional",
+    "fieldScope": "Bereich",
+    "fieldScopeId": "Bereichs-ID",
+    "fieldScopeIdPlaceholder": "z. B. agent-uuid",
+    "fieldPeriod": "Zeitraum",
+    "periodHour": "Stunde",
+    "periodDay": "Tag",
+    "periodMonth": "Monat",
+    "fieldThreshold": "Schwellenwert USD",
+    "fieldWarning": "Warnung % (0–100)",
+    "fieldAction": "Aktion",
+    "actionAlert": "Nur Warnung",
+    "actionPause": "Pausieren",
+    "actionAlertThenPause": "Warnen, dann pausieren",
+    "fieldEnabled": "Aktiviert",
+    "saveChanges": "Änderungen speichern",
+    "createPolicy": "Richtlinie erstellen",
+    "deleteTitle": "Richtlinie löschen",
+    "deleteConfirm": "Möchten Sie wirklich löschen",
+    "deleteUndone": "Dies kann nicht rückgängig gemacht werden."
+  },
+  "telemetryConsent": {
+    "title": "Lokale Nutzungsmetriken",
+    "intro": "AutoBot kann {metrics} lokal aufzeichnen, um Ihre eigenen Überwachungs-Dashboards zu betreiben. Diese Daten bleiben in Ihrer Infrastruktur und werden {never}.",
+    "introMetrics": "anonyme Betriebsmetriken",
+    "introNever": "niemals an Dritte gesendet",
+    "summaryTitle": "Was lokal aufgezeichnet wird:",
+    "dataApi": "API-Endpunktnutzung und Antwortzeiten",
+    "dataVoice": "Sprachsitzungsdauer und Token-Anzahl",
+    "dataFeature": "Nutzungsmuster von Funktionen",
+    "privacyLabel": "Niemals aufgezeichnet:",
+    "privacyText": "persönliche Daten, Code-Inhalte oder Chat-Nachrichten.",
+    "footer": "Sie können diese Einstellung jederzeit unter {settings} ändern.",
+    "footerSettings": "Einstellungen → Datenschutz",
+    "keepOff": "Deaktiviert lassen",
+    "enable": "Aktivieren"
+  },
+  "hireAgent": {
+    "title": "Agent einstellen",
+    "agentName": "Agentenname",
+    "agentNamePlaceholder": "z. B. Builder-1",
+    "model": "Modell",
+    "modelSonnet": "Sonnet (Standard)",
+    "modelHaiku": "Haiku (Assistent)",
+    "orgRole": "Organisationsrolle",
+    "roleWorker": "Mitarbeiter",
+    "roleSpecialist": "Spezialist",
+    "roleCoordinator": "Koordinator",
+    "roleManager": "Manager",
+    "adapter": "Adapter",
+    "hiring": "Wird eingestellt…",
+    "hire": "Einstellen"
+  },
+  "advancedControl": {
+    "title": "Erweiterte Steuerung",
+    "subtitle": "Übernahmeanfragen genehmigen und aktive Sitzungen mit menschlicher Steuerung verwalten",
+    "tabListAriaLabel": "Registerkarten der erweiterten Steuerung",
+    "loading": "Übernahmewarteschlange wird geladen…",
+    "tabs": {
+      "takeoverQueue": "Übernahme-Warteschlange",
+      "streaming": "Streaming",
+      "monitoring": "Überwachung",
+      "comingSoon": "Demnächst verfügbar",
+      "comingSoonMessage": "Diese Registerkarte ist noch nicht verfügbar.",
+      "streamingTitle": "Desktop-Streaming",
+      "monitoringTitle": "Systemüberwachung"
+    },
+    "summary": {
+      "pending": "Ausstehend",
+      "active": "Aktiv",
+      "paused": "Pausiert",
+      "completed": "Abgeschlossen",
+      "systemStatus": "Systemstatus",
+      "statusNormal": "Normal",
+      "statusTakeoverActive": "Übernahme aktiv",
+      "statusEmergency": "Notfall"
+    },
+    "pending": {
+      "title": "Ausstehende Übernahmeanfragen",
+      "colTrigger": "Auslöser",
+      "colReason": "Grund",
+      "colPriority": "Priorität",
+      "colRequestedBy": "Angefordert von",
+      "colCreatedAt": "Erstellt",
+      "colActions": "Aktionen",
+      "unknownAgent": "Unbekannter Agent",
+      "emptyTitle": "Keine ausstehenden Anfragen",
+      "emptyMessage": "Es gibt keine Übernahmeanfragen, die auf Genehmigung warten."
+    },
+    "active": {
+      "title": "Aktive Übernahmesitzungen",
+      "colOperator": "Bediener",
+      "colStatus": "Status",
+      "colStartedAt": "Gestartet",
+      "colActionsExecuted": "Ausgeführte Aktionen",
+      "emptyTitle": "Keine aktiven Sitzungen",
+      "emptyMessage": "Derzeit gibt es keine aktiven Sitzungen mit menschlicher Steuerung."
+    },
+    "actions": {
+      "approve": "Genehmigen",
+      "pause": "Pausieren",
+      "resume": "Fortsetzen",
+      "complete": "Abschließen"
+    },
+    "streaming": {
+      "title": "Streaming-Sitzungen",
+      "newSession": "Neue Sitzung",
+      "terminate": "Beenden",
+      "capVncAvailable": "VNC verfügbar",
+      "capNovncAvailable": "noVNC verfügbar",
+      "capMaxSessions": "Max. Sitzungen",
+      "formUserIdLabel": "Benutzer-ID",
+      "formUserIdPlaceholder": "z. B. user-123",
+      "formResolutionLabel": "Auflösung",
+      "formResolutionPlaceholder": "z. B. 1920x1080",
+      "formDepthLabel": "Farbtiefe",
+      "colSessionId": "Sitzungs-ID",
+      "colUser": "Benutzer",
+      "colStatus": "Status",
+      "colDisplay": "Anzeige",
+      "colCreatedAt": "Erstellt",
+      "colActions": "Aktionen",
+      "emptyTitle": "Keine aktiven Streaming-Sitzungen",
+      "emptyMessage": "Derzeit gibt es keine aktiven Desktop-Streaming-Sitzungen."
+    },
+    "monitoring": {
+      "loading": "System-Überwachungsdaten werden geladen…",
+      "healthTitle": "Systemzustand",
+      "healthStatus": "Zustand",
+      "statusHealthy": "Gesund",
+      "statusUnhealthy": "Ungesund",
+      "desktopStreamingAvailable": "Desktop-Streaming verfügbar",
+      "novncAvailable": "noVNC verfügbar",
+      "activeStreamingSessions": "Aktive Streaming-Sitzungen",
+      "pendingTakeovers": "Ausstehende Übernahmen",
+      "activeTakeovers": "Aktive Übernahmen",
+      "pausedTasks": "Pausierte Aufgaben",
+      "resourceTitle": "Ressourcennutzung",
+      "cpuUsage": "CPU-Auslastung",
+      "memoryUsage": "Speicherauslastung",
+      "diskUsage": "Festplattenauslastung",
+      "processCount": "Prozessanzahl",
+      "loadAverage": "Systemlast (1 Min / 5 Min / 15 Min)",
+      "uptime": "Betriebszeit",
+      "emergencyStopTitle": "Gefahrenzone",
+      "emergencyStop": "Notausschaltung",
+      "emergencyStopDescription": "Stoppt sofort alle autonomen Vorgänge und fordert eine automatisch genehmigte menschliche Übernahme an. Dies kann nicht rückgängig gemacht werden — nur verwenden, wenn autonomes Verhalten sofort gestoppt werden muss.",
+      "emergencyStopConfirmTitle": "Notausschaltung aktivieren?",
+      "emergencyStopConfirmMessage": "Dadurch werden sofort alle autonomen Aufgaben pausiert und eine menschliche Übernahme mit KRITISCHER Priorität gestartet. Diese Aktion kann nicht rückgängig gemacht werden. Fortfahren?",
+      "emergencyStopSuccess": "Notausschaltung aktiviert — alle autonomen Vorgänge wurden pausiert.",
+      "emptyTitle": "Keine Überwachungsdaten",
+      "emptyMessage": "Systemstatus konnte nicht geladen werden."
+    }
+  },
+  "adminUsers": {
+    "title": "Benutzerverwaltung",
+    "subtitle": "Benutzer, Rollen und Kontostatus verwalten",
+    "addUser": "Benutzer hinzufügen",
+    "searchPlaceholder": "Nach Benutzername, E-Mail oder Name suchen…",
+    "loading": "Benutzer werden geladen…",
+    "colUsername": "Benutzername",
+    "colEmail": "E-Mail",
+    "colDisplayName": "Anzeigename",
+    "colRole": "Rolle",
+    "colVoiceBundle": "Sprachpaket",
+    "colStatus": "Status",
+    "colActions": "Aktionen",
+    "roleAdmin": "Admin",
+    "roleUser": "Benutzer",
+    "roleReadonly": "schreibgeschützt",
+    "statusActive": "aktiv",
+    "statusInactive": "inaktiv",
+    "titleDeactivate": "Deaktivieren",
+    "titleActivate": "Aktivieren",
+    "titleAssignBundle": "Sprachpaket zuweisen",
+    "empty": "Keine Benutzer gefunden.",
+    "fieldEmail": "E-Mail",
+    "fieldUsername": "Benutzername",
+    "fieldPassword": "Passwort",
+    "fieldDisplayName": "Anzeigename",
+    "createUser": "Benutzer erstellen",
+    "userLabel": "Benutzer:",
+    "fieldVoiceBundle": "Sprachpaket",
+    "useRoleDefault": "— Rollenstandard verwenden —",
+    "deleteUserTitle": "Benutzer löschen",
+    "deleteConfirm": "Löschen",
+    "deleteUndone": "Dies kann nicht rückgängig gemacht werden."
+  },
+  "schedulers": {
+    "title": "Hintergrund-Planer",
+    "description": "Hintergrundaufgaben ein- oder ausschalten. Änderungen greifen im nächsten Zyklus – kein Neustart nötig.",
+    "refresh": "Aktualisieren",
+    "loading": "Planer werden geladen…",
+    "empty": "Keine Planer registriert.",
+    "overridden": "Überschrieben",
+    "defaultLabel": "Standard",
+    "runtimeLabel": "Laufzeit",
+    "on": "Ein",
+    "off": "Aus",
+    "revertToDefault": "Auf Standard zurücksetzen",
+    "enableTitle": "Diese Aufgabe aktivieren",
+    "disableTitle": "Diese Aufgabe deaktivieren",
+    "toggleAria": "{name} umschalten",
+    "loadFailed": "Planer konnten nicht geladen werden.",
+    "toggleFailed": "{name} konnte nicht geändert werden.",
+    "resetFailed": "{name} konnte nicht zurückgesetzt werden."
+  }
 }

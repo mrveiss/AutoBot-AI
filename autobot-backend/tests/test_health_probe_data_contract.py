@@ -23,12 +23,16 @@ the module-level stubs here together give a clean import environment.  The
 actual I/O paths (redis client, operation manager) are monkeypatched per-test.
 """
 
+import importlib.util
 import sys
 import types
 from enum import Enum
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 from pydantic import BaseModel
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------------------
 # Enum stubs — must mirror the real enum values so FastAPI accepts them as
@@ -145,8 +149,11 @@ _leaf_stub("autobot_shared.security.path_validator", validate_path=MagicMock())
 # import time.  Pydantic BaseModel stubs are fine for response_model, but
 # FastAPI rejects them as Query parameter types — those must be real str-enum
 # subclasses.  We provide real Enum stubs for BatchJobStatus / BatchJobType
-# and Pydantic BaseModel stubs for everything else.
-if "api.schemas_workflows" not in sys.modules:
+# and Pydantic BaseModel stubs for everything else — but only as a fallback:
+# see _real_load_schemas_workflows() below (#12463 root-cause fix).
+
+
+def _stub_schemas_workflows() -> None:
     _sw = types.ModuleType("api.schemas_workflows")
     _sw.__path__ = []
     _sw.__package__ = "api"
@@ -168,6 +175,7 @@ if "api.schemas_workflows" not in sys.modules:
         "BatchLogEntry",
         "BatchSchedule",
         "BatchScheduleDeleteResponse",
+        "BatchScheduleUpdate",
         "BatchStatusResponse",
         "BatchTemplate",
         "BatchTemplateDeleteResponse",
@@ -187,6 +195,52 @@ if "api.schemas_workflows" not in sys.modules:
     _sw_mock = MagicMock()
     _sw.__getattr__ = lambda attr: _sw_mock  # type: ignore[attr-defined]
     sys.modules["api.schemas_workflows"] = _sw
+
+
+def _real_load_schemas_workflows() -> None:
+    """Real-load api/schemas_workflows.py (#12463 root-cause fix).
+
+    ``sys.modules["api.schemas_workflows"]`` is process-global: dozens of
+    route files (approval_gates, marketplace_sources, validation_dashboard,
+    advanced_control, collaboration, ...) do
+    ``from api.schemas_workflows import <RealResponseModel>``. The previous
+    approach here hand-built a fake module with a hardcoded name allowlist
+    plus a catch-all ``__getattr__`` returning a *single shared* bare
+    ``MagicMock()`` for any name not on the list. Once this file (or its
+    api/batch_jobs_schedules_test.py sibling) was collected before the real
+    module, every unrelated route file's response_model= for a name not on
+    the list resolved to that shared MagicMock, and FastAPI rejected it at
+    route-registration time (``FastAPIError: Invalid args for response
+    field!``) — poisoning ~9 unrelated collectors in full-suite runs.
+
+    schemas_workflows.py only pulls in lightweight deps (pydantic,
+    constants.path_constants, autobot_shared time/service_message helpers,
+    models.approval — all already resolvable via conftest.py's baseline
+    stubs), so real-loading it is safe and removes the whole class of bug.
+    Falls back to the minimal hand-rolled stub above if it genuinely can't
+    load.
+    """
+    if "api.schemas_workflows" in sys.modules:
+        return
+    spec = importlib.util.spec_from_file_location(
+        "api.schemas_workflows", _BACKEND_ROOT / "api" / "schemas_workflows.py"
+    )
+    if spec is None or spec.loader is None:
+        _stub_schemas_workflows()
+        return
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["api.schemas_workflows"] = mod
+    try:
+        spec.loader.exec_module(mod)
+    except Exception:
+        del sys.modules["api.schemas_workflows"]
+        _stub_schemas_workflows()
+    else:
+        if "api" in sys.modules:
+            sys.modules["api"].schemas_workflows = mod  # type: ignore[attr-defined]
+
+
+_real_load_schemas_workflows()
 
 # --- constants.path_constants / constants.threshold_constants ----------------
 # Imported by long_running_operations at module level.

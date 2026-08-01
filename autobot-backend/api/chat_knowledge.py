@@ -72,6 +72,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from chat_history import ChatHistoryManager
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # Import existing components
 from knowledge_base import KnowledgeBase
@@ -453,7 +454,9 @@ class ChatKnowledgeManager:
         results = []
 
         # Search in permanent knowledge base
-        kb_results = await self.knowledge_base.search(query, n_results=10)
+        # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
+        # Issue #13009: exclude quarantined research facts (#12622).
+        kb_results = await self.knowledge_base.search(query, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
 
         for result in kb_results:
             # Filter by chat if specified
@@ -781,7 +784,13 @@ async def get_chat_context(chat_id: str):
 async def probe_chat_knowledge(
     request: Request | None = None,
 ) -> ComponentHealth:
-    """Issue #3333: probe registration for the chat-knowledge manager."""
+    """Issue #3333 / #12459: probe registration for the chat-knowledge manager.
+
+    ``chat_knowledge_manager`` is a lazy singleton created on first use
+    (``get_chat_knowledge_manager_instance``) — "not initialized" simply
+    means no chat has touched it yet, not a failure. Report ``idle`` so it
+    does not count toward the down/degraded rollup.
+    """
     try:
         app_manager = None
         if request is not None:
@@ -790,8 +799,8 @@ async def probe_chat_knowledge(
         if manager is None:
             return ComponentHealth(
                 name="chat_knowledge",
-                status="degraded",
-                detail="chat_knowledge_manager not initialized",
+                status="idle",
+                detail="chat_knowledge_manager not initialized (lazy singleton, not yet used)",
             )
         return ComponentHealth(name="chat_knowledge", status="ok")
     except Exception as exc:

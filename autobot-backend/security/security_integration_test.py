@@ -34,8 +34,8 @@ def temp_audit_file():
 @pytest.fixture
 def security_layer(temp_audit_file):
     """Create enhanced security layer for testing"""
-    with patch("security_layer.global_config_manager") as mock_config:
-        mock_config.get.return_value = {
+    with patch("security_layer.get_config_manager") as mock_get_config_manager:
+        mock_get_config_manager.return_value.get.return_value = {
             "enable_auth": False,
             "enable_command_security": True,
             "audit_log_file": temp_audit_file,
@@ -158,7 +158,7 @@ class TestSecuritySystemIntegration:
         )
 
         # Verify log entry was written
-        with open(security_layer.audit_log_file, "r") as f:
+        with open(security_layer.audit_log_file, "r", encoding="utf-8") as f:
             content = f.read()
             assert "integration_test" in content
             assert "test_user" in content
@@ -240,8 +240,8 @@ class TestDockerSandboxIntegration:
 
     def test_docker_sandbox_configuration(self):
         """Test Docker sandbox configuration in security system"""
-        with patch("security_layer.global_config_manager") as mock_config:
-            mock_config.get.return_value = {
+        with patch("security_layer.get_config_manager") as mock_get_config_manager:
+            mock_get_config_manager.return_value.get.return_value = {
                 "enable_command_security": True,
                 "use_docker_sandbox": True,
             }

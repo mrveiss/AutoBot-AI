@@ -36,6 +36,7 @@ from urllib.parse import quote
 import aiohttp
 
 from autobot_shared.auth import BearerAuth
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 from knowledge.connectors.base import AbstractConnector
@@ -52,7 +53,8 @@ from knowledge.connectors.registry import ConnectorRegistry
 logger = get_logger(__name__)
 
 _GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
-_REDIS_TS_PREFIX = "connector:onedrive:ts:"
+# Issue #12659: TTL for the connector-specific _load_ts()/_store_ts()
+# override below (key prefix now derives from AbstractConnector._ts_redis_key()).
 _REDIS_TS_TTL = 86400 * 30  # 30 days
 
 # Default supported extensions
@@ -102,44 +104,14 @@ def _extract_text_from_pptx(content_bytes: bytes) -> str:
         return ""
 
 
-async def _load_ts(connector_id: str, source_id: str) -> Optional[str]:
-    """Load last-modified timestamp for a source from Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        if redis is None:
-            logger.warning("Redis client unavailable for load_ts")
-            return None
-        key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
-        value = redis.get(key)
-        if hasattr(value, "__await__"):
-            value = await value
-        if isinstance(value, bytes):
-            return value.decode("utf-8")
-        if isinstance(value, str):
-            return value
-        return None
-    except Exception as exc:
-        logger.warning("Redis load_ts failed for %s: %s", source_id, exc)
-        return None
-
-
-async def _store_ts(connector_id: str, source_id: str, ts: str) -> None:
-    """Store last-modified timestamp for a source in Redis."""
-    try:
-        from autobot_shared.redis_client import get_redis_client
-
-        redis = get_redis_client(database="knowledge")
-        if redis is None:
-            logger.warning("Redis client unavailable for store_ts")
-            return
-        key = f"{_REDIS_TS_PREFIX}{connector_id}:{source_id}"
-        result = redis.set(key, ts, ex=_REDIS_TS_TTL)
-        if hasattr(result, "__await__"):
-            await result
-    except Exception as exc:
-        logger.warning("Redis store_ts failed for %s: %s", source_id, exc)
+# Issue #12659: detect_changes()/_classify_change() moved to AbstractConnector
+# (byte-identical to gdrive.py's copies — see
+# AbstractConnector._detect_changes_via_file_listing()/_classify_change()).
+# _load_ts()/_store_ts() are KEPT as connector-specific overrides below: this
+# connector's checks (explicit `redis is None` guard, strict
+# `isinstance(value, str)`) differ from the other 6 connectors' copies, so
+# folding them into the base implementation would silently drop that
+# defensive behavior.
 
 
 @ConnectorRegistry.register("onedrive")
@@ -156,6 +128,9 @@ class OneDriveConnector(AbstractConnector):
     connector_type = "onedrive"
     # Issue #4421: needs OAuth2 access token (tier 2 = credentials/OAuth)
     tier = 2
+    # Issue #12659: Graph API's per-file last-modified key (base default is
+    # "modifiedTime", which matches gdrive.py's Drive API field instead).
+    _modified_time_field = "lastModifiedDateTime"
 
     @classmethod
     def auth_schema(cls) -> type:
@@ -302,7 +277,7 @@ class OneDriveConnector(AbstractConnector):
         # Update stored timestamp
         last_modified = file_meta.get("lastModifiedDateTime", "")
         if last_modified:
-            await _store_ts(self.config.connector_id, source_id, last_modified)
+            await self._store_ts(source_id, last_modified)
 
         return ContentResult(
             source_id=source_id,
@@ -326,21 +301,54 @@ class OneDriveConnector(AbstractConnector):
         """Return ChangeInfo for files added or modified since *since*.
 
         When *since* is None all files are reported as 'added'. Otherwise
-        compares lastModifiedDateTime against stored Redis timestamp.
+        compares lastModifiedDateTime against stored Redis timestamp. Shared
+        with gdrive.py via AbstractConnector._detect_changes_via_file_listing()
+        (Issue #12659).
         """
-        files = await self._list_all_files()
-        changes: List[ChangeInfo] = []
+        return await self._detect_changes_via_file_listing(since)
 
-        for file_item in files:
-            file_id = file_item.get("id", "")
-            source_id = f"onedrive:{self.config.connector_id}:file:{file_id}"
-            last_modified = file_item.get("lastModifiedDateTime", "")
+    async def _load_ts(self, source_id: str) -> str | None:
+        """Load last-modified timestamp for a source from Redis.
 
-            change = await self._classify_change(source_id, last_modified, since)
-            if change:
-                changes.append(change)
+        Issue #12659: kept as a connector-specific override — see module
+        docstring above the class for why this isn't folded into
+        AbstractConnector._load_ts().
+        """
+        try:
+            from autobot_shared.redis_client import get_redis_client
 
-        return changes
+            redis = get_redis_client(database="knowledge")
+            if redis is None:
+                self.logger.warning("Redis client unavailable for load_ts")
+                return None
+            key = self._ts_redis_key(source_id)
+            value = redis.get(key)
+            if hasattr(value, "__await__"):
+                value = await value
+            if isinstance(value, bytes):
+                return value.decode("utf-8")
+            if isinstance(value, str):
+                return value
+            return None
+        except Exception as exc:
+            self.logger.warning("Redis load_ts failed for %s: %s", source_id, exc)
+            return None
+
+    async def _store_ts(self, source_id: str, ts: str) -> None:
+        """Store last-modified timestamp for a source in Redis (Issue #12659 override)."""
+        try:
+            from autobot_shared.redis_client import get_redis_client
+
+            redis = get_redis_client(database="knowledge")
+            if redis is None:
+                self.logger.warning("Redis client unavailable for store_ts")
+                return
+            key = self._ts_redis_key(source_id)
+            result = redis.set(key, ts, ex=_REDIS_TS_TTL)
+            if hasattr(result, "__await__"):
+                await result
+        except Exception as exc:
+            self.logger.warning("Redis store_ts failed for %s: %s", source_id, exc)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -462,33 +470,6 @@ class OneDriveConnector(AbstractConnector):
 
         return files
 
-    async def _classify_change(
-        self,
-        source_id: str,
-        last_modified: str,
-        since: datetime | None,
-    ) -> ChangeInfo | None:
-        """Return ChangeInfo when the file is new or was modified after *since*."""
-        if since is None:
-            return ChangeInfo(
-                source_id=source_id,
-                change_type="added",
-                timestamp=now_utc(),
-                details={"last_modified": last_modified},
-            )
-
-        stored_ts = await _load_ts(self.config.connector_id, source_id)
-        if stored_ts is None or last_modified > stored_ts:
-            change_type = "added" if stored_ts is None else "modified"
-            return ChangeInfo(
-                source_id=source_id,
-                change_type=change_type,
-                timestamp=parse_utc_iso(last_modified) if last_modified else now_utc(),
-                details={"last_modified": last_modified},
-            )
-
-        return None
-
     def _file_to_source_info(self, file_item: Dict[str, Any]) -> SourceInfo | None:
         """Convert a Graph API file item to SourceInfo."""
         file_id = file_item.get("id", "")
@@ -580,59 +561,49 @@ class OneDriveConnector(AbstractConnector):
 
         try:
             timeout = aiohttp.ClientTimeout(total=60.0)  # Longer timeout for file downloads
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.request(
-                    method,
-                    url,
-                    headers=headers,
-                    json=json_data,
-                    params=params,
-                ) as resp:
-                    status_code = resp.status
+            client = get_http_client()
+            async with client.tracked_request(
+                method,
+                url,
+                headers=headers,
+                json=json_data,
+                params=params,
+                timeout=timeout,
+                suppress_error_log=True,
+            ) as resp:
+                status_code = resp.status
 
-                    # Handle redirects for download URLs
-                    if status_code in (301, 302, 303, 307, 308):
-                        location = resp.headers.get("Location")
-                        if location and raw_content:
-                            # Follow redirect for file download
-                            async with session.get(location) as redirect_resp:
-                                content = await redirect_resp.read()
-                                return {
-                                    "status_code": redirect_resp.status,
-                                    "content": content,
-                                }
+                # Handle no-content responses
+                if status_code == 204:
+                    return {"status_code": 204, "body": {}}
 
-                    # Handle no-content responses
-                    if status_code == 204:
-                        return {"status_code": 204, "body": {}}
-
-                    if raw_content:
-                        content = await resp.read()
-                        return {
-                            "status_code": status_code,
-                            "content": content,
-                        }
-
-                    try:
-                        body = await resp.json()
-                    except aiohttp.ContentTypeError:
-                        body = {}
-
-                    # Log errors
-                    if status_code >= 400:
-                        error_msg = body.get("error", {}).get("message", "Unknown error")
-                        self.logger.warning(
-                            "Graph API request to %s failed: HTTP %d - %s",
-                            url,
-                            status_code,
-                            error_msg,
-                        )
-
+                if raw_content:
+                    content = await resp.read()
                     return {
                         "status_code": status_code,
-                        "body": body,
-                        "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                        "content": content,
                     }
+
+                try:
+                    body = await resp.json()
+                except aiohttp.ContentTypeError:
+                    body = {}
+
+                # Log errors
+                if status_code >= 400:
+                    error_msg = body.get("error", {}).get("message", "Unknown error")
+                    self.logger.warning(
+                        "Graph API request to %s failed: HTTP %d - %s",
+                        url,
+                        status_code,
+                        error_msg,
+                    )
+
+                return {
+                    "status_code": status_code,
+                    "body": body,
+                    "error": body.get("error", {}).get("message") if status_code >= 400 else None,
+                }
 
         except aiohttp.ClientError as exc:
             self.logger.error("Graph API request to %s failed: %s", url, exc)

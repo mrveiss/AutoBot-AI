@@ -70,6 +70,15 @@ class PipelineDispatcher:
     # ------------------------------------------------------------------
 
     async def __aenter__(self) -> "PipelineDispatcher":
+        # RAW carve-out (#12979, long-lived): this session is held for the
+        # instance's full async-with lifetime and reused across every worker
+        # in the pipeline plan, including the token-streaming leg where the
+        # connection stays open across multiple yields in run_pipeline(). It
+        # is the same "client owns its session across concurrent/sequential
+        # calls" shape as services/npu_client.py's _get_session() (batch 7)
+        # and skills/sync/mcp_transport.py's SSETransport — pooling it would
+        # not change per-call behaviour but replacing the client's private
+        # session model is a judgment call, not a mechanical per-site swap.
         self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout))
         logger.debug("PipelineDispatcher: session opened")
         return self

@@ -136,6 +136,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "Via secours",
+        "tooltip": "Fournisseur principal indisponible — réponse fournie par un fournisseur de secours ({primary} → {fallback})."
       }
     },
     "response": "réponse",
@@ -210,7 +214,8 @@
       "deleteFailed": "Échec de la suppression de certaines discussions",
       "sharedSuccess": "Chat partagé avec succès",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "Afficher le badge de secours"
     },
     "interface": {
       "loadFailed": "Échec du chargement de l'interface de discussion",
@@ -727,7 +732,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "Impossible de supprimer la conversation. Veuillez réessayer.",
+      "createFailed": "Impossible de créer la conversation : {error}",
+      "loadSessionsFailed": "Impossible de charger les sessions de conversation : {error}",
+      "loadMessagesFailed": "Impossible de charger les messages : {error}",
+      "saveFailed": "Impossible d'enregistrer la conversation : {error}",
+      "resetFailed": "Impossible de réinitialiser la conversation : {error}",
+      "clearFailed": "Impossible de supprimer les conversations : {error}",
+      "invalidFormat": "Format de message invalide. Veuillez vérifier votre saisie et réessayer.",
+      "serviceUnavailable": "Service de conversation indisponible. Veuillez actualiser la page et réessayer.",
+      "serverError": "Une erreur du serveur s'est produite. Veuillez réessayer dans un instant.",
+      "networkFailed": "Échec de la connexion réseau. Veuillez vérifier votre connexion Internet.",
+      "timeout": "La requête a expiré. Veuillez réessayer avec un message plus court.",
+      "sendFailed": "Impossible d'envoyer le message : {error}",
+      "sendFailedAfterRetries": "Impossible d'envoyer le message après {attempts} tentatives : {error}. Veuillez vérifier votre connexion et réessayer.",
+      "invalidFormatDetail": "Format de message invalide : {error}. Veuillez vérifier votre saisie et réessayer.",
+      "networkFailedRetry": "Échec de la connexion réseau. Veuillez vérifier votre connexion Internet et réessayer."
+    }
   },
   "settings": {
     "title": "Paramètres",
@@ -876,7 +899,14 @@
       "disabledMessage": "Métriques d'utilisation locales désactivées. Aucune métrique ne sera enregistrée.",
       "loadFailed": "Échec du chargement des paramètres de télémétrie",
       "updateFailed": "Échec de la mise à jour des paramètres de télémétrie"
-    }
+    },
+    "subtitle": "Personnalisez votre expérience AutoBot selon vos préférences",
+    "featureFlags": "Indicateurs de fonctionnalités",
+    "telegram": "Telegram",
+    "notifications": "Notifications",
+    "mobileDevices": "Appareils mobiles",
+    "privacy": "Confidentialité",
+    "providerAuthDesc": "Connectez-vous aux fournisseurs avec votre abonnement existant plutôt qu'avec une clé API facturée. Les jetons sont stockés en toute sécurité dans le coffre de secrets AutoBot."
   },
   "voice": {
     "title": "Voix",
@@ -902,7 +932,8 @@
     "creating": "Création...",
     "confirmDeleteVoice": "Supprimer la voix « {name} » ?",
     "languageVoicesActive": "Voix {count} spécifiques à la langue configurées",
-    "confirmDeleteVoiceTitle": "Supprimer le profil vocal"
+    "confirmDeleteVoiceTitle": "Supprimer le profil vocal",
+    "tapToEnableAudio": "Touchez n'importe où pour activer la lecture audio"
   },
   "analytics": {
     "title": "Analytique",
@@ -2474,6 +2505,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "Affichage de {shown} sur {total}"
     }
   },
   "knowledge": {
@@ -7528,6 +7562,17 @@
       "templates": "Scrape Templates",
       "exitRegionMode": "Exit region mode",
       "markRegions": "Mark regions"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "serviceMessages": {
@@ -7638,7 +7683,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "Santé du système"
+    "systemHealth": "Santé du système",
+    "providerFallback": "Basculement de fournisseur",
+    "advancedControl": "Contrôle avancé"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "Afficher les archivées",
+    "delete": "Supprimer",
+    "confirmDeleteTitle": "Supprimer l'entreprise",
+    "confirmDelete": "Supprimer « {name} » ? L'entreprise archivée et ses données seront supprimées. Cette action est irréversible ici.",
+    "deleteError": "Impossible de supprimer l'entreprise.",
+    "deleteHasChildren": "Cette entreprise a des sous-entreprises. Retirez-les ou rattachez-les avant de la supprimer.",
+    "onboarding": "Intégration",
+    "active": "Active",
+    "paused": "En pause",
+    "offboarding": "Désengagement",
+    "archived": "Archivée",
+    "activate": "Activer",
+    "suspend": "Mettre en pause",
+    "offboard": "Désengager",
+    "archive": "Archiver",
+    "confirmTitle": "Confirmer le changement de statut",
+    "confirmOffboard": "Désengager « {name} » ? Cela lance la fermeture de l'entreprise.",
+    "confirmArchive": "Archiver « {name} » ? Il s'agit d'un état final et irréversible.",
+    "confirm": "Confirmer",
+    "updateError": "Impossible de changer le statut de l'entreprise."
   },
   "llcMembers": {
     "title": "Membres",
@@ -7810,22 +7879,7 @@
       "createFailed": "Échec de la création de l'entreprise"
     },
     "ceoChat": {
-      "threads": "Fils",
-      "newThread": "+ Nouveau",
-      "selectCompany": "Sélectionnez une entreprise pour afficher les fils.",
-      "loading": "Chargement...",
-      "noThreads": "Aucun fil pour le moment.",
-      "emptyState": "Sélectionnez un fil ou créez-en un nouveau.",
-      "loadingMessages": "Chargement des messages...",
-      "noMessages": "Aucun message pour le moment.",
-      "messagePlaceholder": "Saisissez un message...",
-      "send": "Envoyer",
-      "newThreadTitle": "Nouveau fil",
-      "titleLabel": "Titre",
-      "titlePlaceholder": "Titre du fil...",
-      "cancel": "Annuler",
-      "create": "Créer",
-      "creating": "Création..."
+      "selectCompany": "Sélectionnez une entreprise pour afficher les fils."
     },
     "dashboard": {
       "title": "Tableau de bord de l'entreprise",
@@ -7957,7 +8011,15 @@
       "count": "{count} tableaux",
       "loading": "Chargement des tableaux…",
       "empty": "Aucun tableau pour le moment — les tableaux sont créés par projet (Kanban) et par sprint (Sprint).",
-      "created": "Créé le {date}"
+      "created": "Créé le {date}",
+      "newKanban": "Nouveau tableau Kanban",
+      "createTitle": "Créer un tableau Kanban",
+      "project": "Projet",
+      "selectProject": "Sélectionner un projet…",
+      "loadingProjects": "Chargement des projets…",
+      "noProjects": "Aucun projet pour le moment — créez d'abord un projet.",
+      "creating": "Création…",
+      "create": "Créer le tableau"
     },
     "kanban": {
       "title": "Tableau Kanban",
@@ -7996,7 +8058,9 @@
       "noProjects": "Aucun projet dans cette entreprise pour le moment.",
       "noItems": "Ce projet n'a aucun élément de travail à planifier.",
       "ariaChart": "Diagramme de Gantt de la chronologie du projet",
-      "unscheduled": "non planifié"
+      "unscheduled": "non planifié",
+      "scopedTo": "Limité à {name}",
+      "showAll": "Afficher toute l'entreprise"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "Voir",
       "noActivity": "Aucune activité enregistrée.",
       "noHandoffBrief": "Aucune note de transfert disponible.",
-      "loadingBrief": "Chargement de la note..."
+      "loadingBrief": "Chargement de la note...",
+      "errors": {
+        "saveFailed": "Impossible d'enregistrer votre modification. Veuillez réessayer."
+      }
     },
     "orgChart": {
       "title": "Organigramme",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Échec de l'enregistrement de votre décision. Veuillez réessayer."
     },
-    "ceoChat": {
-      "sendError": "Échec de l'envoi de votre message. Il a été restauré pour que vous puissiez réessayer."
-    },
     "timeline": {
       "rescheduleError": "Échec de l'enregistrement du nouveau planning. La modification a été annulée."
     },
@@ -8603,6 +8667,22 @@
       "error": "Échec du chargement de la santé du système",
       "refresh": "Actualiser",
       "noSources": "Aucune source de contenu configurée"
+    },
+    "providerFallback": {
+      "title": "Basculement de fournisseur",
+      "subtitle": "Activité en direct des basculements de fournisseurs et modèles LLM",
+      "status": "Statut",
+      "stateHealthy": "Aucun basculement actif",
+      "stateDegraded": "Basculement actif",
+      "active": "Basculements actifs",
+      "chains": "Chaînes configurées",
+      "timeline": "Activité en direct",
+      "switched": "Basculé",
+      "exhausted": "Épuisé",
+      "refresh": "Actualiser",
+      "loading": "Chargement de l'état de basculement…",
+      "noData": "Aucune activité de basculement de fournisseur",
+      "none": "aucun"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} a été mis à jour",
   "chat.modelPicker.label": "Modèle",
   "chat.modelPicker.auto": "Auto (modèle par défaut)",
-  "chat.modelPicker.title": "Choisir le modèle et le fournisseur pour cette conversation"
+  "chat.modelPicker.title": "Choisir le modèle et le fournisseur pour cette conversation",
+  "budgetPolicies": {
+    "title": "Politiques de budget",
+    "subtitle": "Gérez les seuils de dépenses et les règles de pause automatique des agents",
+    "newPolicy": "Nouvelle politique",
+    "scope": "Portée",
+    "scopeAll": "Tous",
+    "scopeAgent": "Agent",
+    "scopeProject": "Projet",
+    "scopeTask": "Tâche",
+    "scopeTenant": "Locataire",
+    "loading": "Chargement des politiques…",
+    "empty": "Aucune politique de budget trouvée. Créez-en une pour appliquer des limites de dépenses.",
+    "colName": "Nom",
+    "colScope": "Portée",
+    "colScopeId": "ID de portée",
+    "colPeriod": "Période",
+    "colThreshold": "Seuil",
+    "colWarning": "Avertissement",
+    "colAction": "Action",
+    "colStatus": "Statut",
+    "colActions": "Actions",
+    "statusEnabled": "activé",
+    "statusDisabled": "désactivé",
+    "checkPauseTitle": "Vérifier l'état de pause de l'agent",
+    "agentIdPlaceholder": "ID d'agent…",
+    "checkStatus": "Vérifier l'état",
+    "labelAgent": "Agent :",
+    "labelPaused": "En pause :",
+    "labelReason": "Raison :",
+    "labelSince": "Depuis :",
+    "resumeAgent": "Reprendre l'agent",
+    "modalEditTitle": "Modifier la politique",
+    "modalNewTitle": "Nouvelle politique de budget",
+    "fieldName": "Nom",
+    "fieldNamePlaceholder": "Ma politique",
+    "fieldDescription": "Description",
+    "fieldDescriptionPlaceholder": "Facultatif",
+    "fieldScope": "Portée",
+    "fieldScopeId": "ID de portée",
+    "fieldScopeIdPlaceholder": "p. ex. agent-uuid",
+    "fieldPeriod": "Période",
+    "periodHour": "Heure",
+    "periodDay": "Jour",
+    "periodMonth": "Mois",
+    "fieldThreshold": "Seuil USD",
+    "fieldWarning": "Avertissement % (0–100)",
+    "fieldAction": "Action",
+    "actionAlert": "Alerte uniquement",
+    "actionPause": "Mettre en pause",
+    "actionAlertThenPause": "Alerter puis mettre en pause",
+    "fieldEnabled": "Activé",
+    "saveChanges": "Enregistrer les modifications",
+    "createPolicy": "Créer la politique",
+    "deleteTitle": "Supprimer la politique",
+    "deleteConfirm": "Voulez-vous vraiment supprimer",
+    "deleteUndone": "Cette action est irréversible."
+  },
+  "telemetryConsent": {
+    "title": "Métriques d'utilisation locales",
+    "intro": "AutoBot peut enregistrer {metrics} localement pour alimenter vos propres tableaux de bord de surveillance. Ces données restent sur votre infrastructure et ne sont {never}.",
+    "introMetrics": "des métriques opérationnelles anonymes",
+    "introNever": "jamais envoyées à quiconque",
+    "summaryTitle": "Ce qui est enregistré localement :",
+    "dataApi": "Utilisation des points de terminaison API et temps de réponse",
+    "dataVoice": "Durée des sessions vocales et nombre de jetons",
+    "dataFeature": "Modèles d'utilisation des fonctionnalités",
+    "privacyLabel": "Jamais enregistré :",
+    "privacyText": "données personnelles, contenu de code ou messages de chat.",
+    "footer": "Vous pouvez modifier cette préférence à tout moment dans {settings}.",
+    "footerSettings": "Paramètres → Confidentialité",
+    "keepOff": "Laisser désactivé",
+    "enable": "Activer"
+  },
+  "hireAgent": {
+    "title": "Engager un agent",
+    "agentName": "Nom de l'agent",
+    "agentNamePlaceholder": "p. ex. Builder-1",
+    "model": "Modèle",
+    "modelSonnet": "Sonnet (par défaut)",
+    "modelHaiku": "Haiku (assistant)",
+    "orgRole": "Rôle dans l'organisation",
+    "roleWorker": "Travailleur",
+    "roleSpecialist": "Spécialiste",
+    "roleCoordinator": "Coordinateur",
+    "roleManager": "Responsable",
+    "adapter": "Adaptateur",
+    "hiring": "Engagement…",
+    "hire": "Engager"
+  },
+  "advancedControl": {
+    "title": "Contrôle avancé",
+    "subtitle": "Approuvez les demandes de prise de contrôle et gérez les sessions actives",
+    "tabListAriaLabel": "Onglets du contrôle avancé",
+    "loading": "Chargement de la file d'attente…",
+    "tabs": {
+      "takeoverQueue": "File de prise de contrôle",
+      "streaming": "Diffusion",
+      "monitoring": "Surveillance",
+      "comingSoon": "Bientôt disponible",
+      "comingSoonMessage": "Cet onglet n'est pas encore disponible.",
+      "streamingTitle": "Diffusion du bureau",
+      "monitoringTitle": "Surveillance du système"
+    },
+    "summary": {
+      "pending": "En attente",
+      "active": "Actives",
+      "paused": "En pause",
+      "completed": "Terminées",
+      "systemStatus": "État du système",
+      "statusNormal": "Normal",
+      "statusTakeoverActive": "Prise de contrôle active",
+      "statusEmergency": "Urgence"
+    },
+    "pending": {
+      "title": "Demandes de prise de contrôle en attente",
+      "colTrigger": "Déclencheur",
+      "colReason": "Raison",
+      "colPriority": "Priorité",
+      "colRequestedBy": "Demandé par",
+      "colCreatedAt": "Créée",
+      "colActions": "Actions",
+      "unknownAgent": "Agent inconnu",
+      "emptyTitle": "Aucune demande en attente",
+      "emptyMessage": "Aucune demande de prise de contrôle en attente d'approbation."
+    },
+    "active": {
+      "title": "Sessions de prise de contrôle actives",
+      "colOperator": "Opérateur",
+      "colStatus": "Statut",
+      "colStartedAt": "Démarrée",
+      "colActionsExecuted": "Actions exécutées",
+      "emptyTitle": "Aucune session active",
+      "emptyMessage": "Aucune session de contrôle manuel active pour le moment."
+    },
+    "actions": {
+      "approve": "Approuver",
+      "pause": "Suspendre",
+      "resume": "Reprendre",
+      "complete": "Terminer"
+    },
+    "streaming": {
+      "title": "Sessions de diffusion",
+      "newSession": "Nouvelle session",
+      "terminate": "Terminer",
+      "capVncAvailable": "VNC disponible",
+      "capNovncAvailable": "noVNC disponible",
+      "capMaxSessions": "Sessions max.",
+      "formUserIdLabel": "ID utilisateur",
+      "formUserIdPlaceholder": "ex. user-123",
+      "formResolutionLabel": "Résolution",
+      "formResolutionPlaceholder": "ex. 1920x1080",
+      "formDepthLabel": "Profondeur de couleur",
+      "colSessionId": "ID de session",
+      "colUser": "Utilisateur",
+      "colStatus": "Statut",
+      "colDisplay": "Affichage",
+      "colCreatedAt": "Créée",
+      "colActions": "Actions",
+      "emptyTitle": "Aucune session de diffusion active",
+      "emptyMessage": "Aucune session de diffusion du bureau active pour le moment."
+    },
+    "monitoring": {
+      "loading": "Chargement des données de supervision du système…",
+      "healthTitle": "État du système",
+      "healthStatus": "État de santé",
+      "statusHealthy": "Sain",
+      "statusUnhealthy": "Défaillant",
+      "desktopStreamingAvailable": "Diffusion du bureau disponible",
+      "novncAvailable": "noVNC disponible",
+      "activeStreamingSessions": "Sessions de diffusion actives",
+      "pendingTakeovers": "Prises de contrôle en attente",
+      "activeTakeovers": "Prises de contrôle actives",
+      "pausedTasks": "Tâches en pause",
+      "resourceTitle": "Utilisation des ressources",
+      "cpuUsage": "Utilisation du CPU",
+      "memoryUsage": "Utilisation de la mémoire",
+      "diskUsage": "Utilisation du disque",
+      "processCount": "Nombre de processus",
+      "loadAverage": "Charge moyenne (1 min / 5 min / 15 min)",
+      "uptime": "Disponibilité",
+      "emergencyStopTitle": "Zone de danger",
+      "emergencyStop": "Arrêt d'urgence",
+      "emergencyStopDescription": "Arrête immédiatement toutes les opérations autonomes et demande une prise de contrôle humaine approuvée automatiquement. Cette action est irréversible — à utiliser uniquement lorsque le comportement autonome doit cesser immédiatement.",
+      "emergencyStopConfirmTitle": "Activer l'arrêt d'urgence ?",
+      "emergencyStopConfirmMessage": "Cela mettra immédiatement en pause toutes les tâches autonomes et démarrera une prise de contrôle humaine de priorité CRITIQUE. Cette action est irréversible. Continuer ?",
+      "emergencyStopSuccess": "Arrêt d'urgence activé — toutes les opérations autonomes ont été mises en pause.",
+      "emptyTitle": "Aucune donnée de supervision",
+      "emptyMessage": "Impossible de charger l'état du système."
+    }
+  },
+  "adminUsers": {
+    "title": "Gestion des utilisateurs",
+    "subtitle": "Gérez les utilisateurs, les rôles et l'état des comptes",
+    "addUser": "Ajouter un utilisateur",
+    "searchPlaceholder": "Rechercher par nom d'utilisateur, e-mail ou nom…",
+    "loading": "Chargement des utilisateurs…",
+    "colUsername": "Nom d'utilisateur",
+    "colEmail": "E-mail",
+    "colDisplayName": "Nom d'affichage",
+    "colRole": "Rôle",
+    "colVoiceBundle": "Pack vocal",
+    "colStatus": "Statut",
+    "colActions": "Actions",
+    "roleAdmin": "administrateur",
+    "roleUser": "utilisateur",
+    "roleReadonly": "lecture seule",
+    "statusActive": "actif",
+    "statusInactive": "inactif",
+    "titleDeactivate": "Désactiver",
+    "titleActivate": "Activer",
+    "titleAssignBundle": "Attribuer un pack vocal",
+    "empty": "Aucun utilisateur trouvé.",
+    "fieldEmail": "E-mail",
+    "fieldUsername": "Nom d'utilisateur",
+    "fieldPassword": "Mot de passe",
+    "fieldDisplayName": "Nom d'affichage",
+    "createUser": "Créer l'utilisateur",
+    "userLabel": "Utilisateur :",
+    "fieldVoiceBundle": "Pack vocal",
+    "useRoleDefault": "— Utiliser la valeur par défaut du rôle —",
+    "deleteUserTitle": "Supprimer l'utilisateur",
+    "deleteConfirm": "Supprimer",
+    "deleteUndone": "Cette action est irréversible."
+  },
+  "schedulers": {
+    "title": "Planificateurs en arrière-plan",
+    "description": "Activez ou désactivez les tâches en arrière-plan. Les changements prennent effet au cycle suivant, sans redémarrage.",
+    "refresh": "Actualiser",
+    "loading": "Chargement des planificateurs…",
+    "empty": "Aucun planificateur enregistré.",
+    "overridden": "Remplacé",
+    "defaultLabel": "Par défaut",
+    "runtimeLabel": "Exécution",
+    "on": "Activé",
+    "off": "Désactivé",
+    "revertToDefault": "Rétablir la valeur par défaut",
+    "enableTitle": "Activer cette tâche",
+    "disableTitle": "Désactiver cette tâche",
+    "toggleAria": "Basculer {name}",
+    "loadFailed": "Impossible de charger les planificateurs.",
+    "toggleFailed": "Impossible de modifier {name}.",
+    "resetFailed": "Impossible de rétablir {name} à sa valeur par défaut."
+  }
 }

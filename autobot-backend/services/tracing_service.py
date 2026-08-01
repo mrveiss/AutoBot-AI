@@ -23,6 +23,13 @@ Features:
 - Redis auto-instrumentation (Issue #697)
 - aiohttp client auto-instrumentation (Issue #697)
 - Configurable sampling strategy (Issue #697)
+
+Optional distributions (#13094): the FastAPI instrumentor and the B3 propagator
+ship as separate pip packages that are not part of the OpenTelemetry API/SDK
+core, so they are imported lazily at their single call site — exactly like the
+Redis and aiohttp instrumentors already were. A missing optional package now
+degrades that one capability instead of making this module unimportable, which
+is what the "graceful fallback when tracing is unavailable" promise above means.
 """
 
 from __future__ import annotations
@@ -33,9 +40,7 @@ from typing import Any, Dict
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.propagate import set_global_textmap
-from opentelemetry.propagators.b3 import B3MultiFormat
 from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -212,17 +217,22 @@ class TracingService:
     def _finalize_tracer(self) -> None:
         """Helper for initialize. Ref: #1088.
 
-        Registers the provider as the global OTel tracer provider, sets up W3C
-        TraceContext + B3 composite propagator, and acquires the tracer instance.
+        Registers the provider as the global OTel tracer provider, sets up the
+        W3C TraceContext (+ B3, when opentelemetry-propagator-b3 is installed)
+        composite propagator, and acquires the tracer instance.
         """
         trace.set_tracer_provider(self._provider)
-        propagator = CompositePropagator(
-            [
-                TraceContextTextMapPropagator(),
-                B3MultiFormat(),
-            ]
-        )
-        set_global_textmap(propagator)
+        propagators = [TraceContextTextMapPropagator()]
+        try:
+            from opentelemetry.propagators.b3 import B3MultiFormat
+
+            propagators.append(B3MultiFormat())
+        except ImportError:
+            logger.warning(
+                "opentelemetry-propagator-b3 not installed — propagating W3C TraceContext only. "
+                "Run: pip install opentelemetry-propagator-b3"
+            )
+        set_global_textmap(CompositePropagator(propagators))
         self._tracer = trace.get_tracer(
             self._service_name,
             self._service_version,
@@ -290,6 +300,8 @@ class TracingService:
             return False
 
         try:
+            from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
             FastAPIInstrumentor.instrument_app(
                 app,
                 tracer_provider=self._provider,
@@ -297,6 +309,12 @@ class TracingService:
             )
             logger.info("FastAPI instrumented for distributed tracing")
             return True
+        except ImportError:
+            logger.warning(
+                "opentelemetry-instrumentation-fastapi not installed. "
+                "Run: pip install opentelemetry-instrumentation-fastapi"
+            )
+            return False
         except Exception as e:
             logger.error("Failed to instrument FastAPI: %s", e)
             return False

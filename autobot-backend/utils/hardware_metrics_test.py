@@ -673,7 +673,7 @@ class HardwareMonitoringSystemTest:
 
         # Save report
         report_file = f"hardware_monitoring_test_report_{int(time.time())}.json"
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, default=str)
 
         print(f"📄 Detailed report saved to: {report_file}")  # noqa: print

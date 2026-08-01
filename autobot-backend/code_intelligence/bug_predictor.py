@@ -298,6 +298,7 @@ class BugPredictor(_BaseClass):
         weights: dict[RiskFactor, float] | None = None,
         bug_keywords: list[str] | None = None,
         use_semantic_analysis: bool = False,
+        source_id: str | None = None,
     ):
         """
         Initialize Bug Predictor.
@@ -307,6 +308,12 @@ class BugPredictor(_BaseClass):
             weights: Custom risk factor weights (defaults to DEFAULT_WEIGHTS)
             bug_keywords: Keywords to identify bug-fix commits
             use_semantic_analysis: Enable LLM-based pattern analysis (Issue #554)
+            source_id: Code source this analysis is scoped to (Issue #12384).
+                Tagged onto every stored ``bug_pattern_vectors`` ChromaDB record
+                and folded into the query ``where`` filter so one project can
+                never read another project's (or AutoBot's own) learned bug
+                patterns when they share the same global collection -- mirrors
+                the #12356/#12374 cross-language-patterns fix.
         """
         # Issue #554: Initialize semantic analysis infrastructure if enabled
         self.use_semantic_analysis = use_semantic_analysis and SEMANTIC_ANALYSIS_AVAILABLE
@@ -319,6 +326,11 @@ class BugPredictor(_BaseClass):
                 use_cache=True,
                 redis_database="analytics",
             )
+
+        # Issue #12384: scope tag for chroma metadata/query. Set unconditionally
+        # (not just when semantic analysis is enabled) so callers can rely on it.
+        self.source_id = source_id
+        self._source_tag = source_id or "default"
 
         self.project_root = Path(project_root) if project_root else Path.cwd()
         self.weights = weights or self.DEFAULT_WEIGHTS.copy()
@@ -1026,6 +1038,12 @@ class BugPredictor(_BaseClass):
 
         Returns tuple of (valid_ids, valid_embeddings, valid_texts, valid_metadata)
         containing only successfully generated embeddings. Issue #620.
+
+        Issue #12384: Tags every stored pattern's metadata with ``source_id`` so
+        the query filter in ``_analyze_file_semantic_async`` can scope matches
+        to this project -- without it, bug patterns learned from a different
+        source sharing the global ``bug_pattern_vectors`` collection could
+        cross-match.
         """
         valid_ids = []
         valid_embeddings = []
@@ -1036,7 +1054,12 @@ class BugPredictor(_BaseClass):
                 valid_ids.append(bug_patterns[i]["id"])
                 valid_embeddings.append(emb)
                 valid_texts.append(texts[i])
-                valid_metadata.append({"file": bug_patterns[i]["file"]})
+                valid_metadata.append(
+                    {
+                        "file": bug_patterns[i]["file"],
+                        "source_id": self._source_tag,
+                    }
+                )
         return valid_ids, valid_embeddings, valid_texts, valid_metadata
 
     async def _learn_bug_patterns_async(self) -> None:
@@ -1054,7 +1077,10 @@ class BugPredictor(_BaseClass):
             and time.monotonic() - self._bug_history_cache_time > _BUG_HISTORY_CACHE_TTL
         ):
             self._bug_history_cache = None
-            self._build_bug_history_cache()
+            # Issue #12406: _build_bug_history_cache shells out to `git log`
+            # (subprocess.run) -- offload so this reachable-again async path
+            # doesn't block the event loop on cache-miss.
+            await asyncio.to_thread(self._build_bug_history_cache)
 
         bug_patterns = self._collect_bug_patterns_from_cache()
         if not bug_patterns:
@@ -1158,7 +1184,16 @@ class BugPredictor(_BaseClass):
             if not embedding:
                 return self._create_semantic_error_score("Could not generate embedding for file", score=10.0)
 
-            similar = await self._query_similar(embedding, n_results=5, min_similarity=0.6)
+            # Issue #12384: constrain matches to this project's stored bug
+            # patterns. ChromaDB equality on an ABSENT field matches nothing,
+            # so legacy patterns stored before this fix are fail-closed
+            # (invisible, never leaked) until the source is reindexed.
+            similar = await self._query_similar(
+                embedding,
+                n_results=5,
+                where={"source_id": self._source_tag},
+                min_similarity=0.6,
+            )
 
             if not similar:
                 return RiskFactorScore(
@@ -1187,8 +1222,13 @@ class BugPredictor(_BaseClass):
         Returns:
             FileRiskAssessment with complete risk analysis
         """
-        # Get base assessment using synchronous method
-        assessment = self.analyze_file(file_path)
+        # Issue #12406: was a direct sync call blocking the event loop --
+        # analyze_file() reads file contents and (on cache miss) shells out to
+        # `git log` (see _build_bug_history_cache/_build_change_frequency_cache).
+        # Offload to a thread so analyze_directory_async is genuinely safe to
+        # await directly from an async request handler (mirrors the #7467
+        # to_thread fix for path.read_text just below in this file).
+        assessment = await asyncio.to_thread(self.analyze_file, file_path)
 
         # Add semantic analysis if enabled
         if self.use_semantic_analysis:
@@ -1283,7 +1323,10 @@ class BugPredictor(_BaseClass):
 
         await self._learn_bug_patterns_async()
 
-        all_files = list(root.rglob(pattern))
+        # #12406: offload the recursive tree walk too — with an unlimited file
+        # limit rglob() traverses the whole source tree, and this runs in an
+        # async request handler, so keep it off the event loop.
+        all_files = await asyncio.to_thread(lambda: list(root.rglob(pattern)))
         total_files = len(all_files)
         files = all_files[:limit] if limit > 0 else all_files
 

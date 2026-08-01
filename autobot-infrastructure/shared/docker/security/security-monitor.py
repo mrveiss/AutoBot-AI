@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 """
 Enhanced Security Monitor for AutoBot Sandbox
 
@@ -70,7 +72,7 @@ class SecurityMonitor:
 
         try:
             if os.path.exists(self.config_path):
-                with open(self.config_path, "r") as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
                 return {**default_config, **config}
         except Exception as e:
@@ -393,7 +395,7 @@ class SecurityMonitor:
             }
 
             # Write to metrics log
-            with open("/var/log/autobot/security-metrics.jsonl", "a") as f:
+            with open("/var/log/autobot/security-metrics.jsonl", "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
 
         except Exception as e:

@@ -92,11 +92,11 @@ const customStyle = computed(() => ({
   flex-direction: column;
 }
 
-.loading-spinner.loading-xs { width: 16px; height: 16px; }
-.loading-spinner.loading-sm { width: 20px; height: 20px; }
-.loading-spinner.loading-md { width: 24px; height: 24px; }
-.loading-spinner.loading-lg { width: 32px; height: 32px; }
-.loading-spinner.loading-xl { width: 40px; height: 40px; }
+.loading-spinner.loading-xs { width: var(--spacing-4); height: var(--spacing-4); }
+.loading-spinner.loading-sm { width: var(--spacing-5); height: var(--spacing-5); }
+.loading-spinner.loading-md { width: var(--spacing-6); height: var(--spacing-6); }
+.loading-spinner.loading-lg { width: var(--spacing-8); height: var(--spacing-8); }
+.loading-spinner.loading-xl { width: var(--spacing-10); height: var(--spacing-10); }
 
 /* Circle Spinner */
 .loading-circle {
@@ -232,7 +232,7 @@ const customStyle = computed(() => ({
   width: 1px;
   height: 1px;
   padding: var(--spacing-0);
-  margin: -1px;
+  margin: var(--spacing-neg-px);
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;

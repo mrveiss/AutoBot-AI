@@ -29,7 +29,7 @@ redis_cli_version: "7.4.0"
 redis_cli_build_from_source: false  # Set true if no sudo access
 
 # SSH configuration
-ssh_key_path: "{{ ansible_facts['env'].HOME }}/.ssh/autobot_fleet"
+ssh_key_path: "{{ autobot_ssh_key_path | default('/etc/autobot/ssh/autobot_key') }}"  # canonical (#12429)
 ssh_key_type: rsa
 ssh_key_bits: 4096
 ssh_setup_required: true

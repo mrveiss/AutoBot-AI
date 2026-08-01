@@ -18,7 +18,11 @@ This package contains:
 - workflow_planner: Map capability requirements to available agents
 - workflow_planning: StrategyPlanner — multi-agent strategy & plan building
 - workflow_runner: WorkflowRunner — multi-agent execution engine (#5058)
-- workflow_executor: Execute a single workflow step by step
+- workflow_executor: Execute a single workflow step by step. DEPRECATED (#12373)
+  — no production callers since #5058; kept in place (code intact) for its
+  DAG/checkpoint/sub-workflow/parallel-group capabilities, migration tracked
+  under #12577/#6826. The canonical runtime engine is
+  services.workflow_automation.executor.WorkflowExecutor.
 - workflow_documentation: Auto-documentation and knowledge extraction
 - collaboration_coordinator: Redis pub/sub collaboration layer (#6393)
 - subagent_dispatcher: Autonomous subagent spawning for parallel workstreams

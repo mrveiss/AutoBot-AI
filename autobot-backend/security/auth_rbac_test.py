@@ -272,6 +272,48 @@ class TestPermissionIntegration:
         assert role1 != role3
 
 
+class TestIsAdminRole:
+    """#12717: the single answer to "is this role administrative?".
+
+    "superadmin" is passed as a raw string to require_role() at 17 call sites
+    but is NOT a member of the canonical Role enum, so hand-rolled
+    ``role == "admin"`` checks silently locked superadmins out of read paths
+    whose write paths already allowed them.
+    """
+
+    def test_accepts_both_administrative_roles(self):
+        from autobot_shared.auth.permissions import is_admin_role
+
+        assert is_admin_role("admin") is True
+        assert is_admin_role("superadmin") is True
+
+    def test_rejects_every_non_administrative_role(self):
+        from autobot_shared.auth.permissions import is_admin_role
+
+        for role in ("user", "readonly", "operator", "analyst", "editor"):
+            assert is_admin_role(role) is False, role
+
+    def test_handles_missing_role_without_raising(self):
+        from autobot_shared.auth.permissions import is_admin_role
+
+        assert is_admin_role(None) is False
+        assert is_admin_role("") is False
+
+    def test_is_case_insensitive_to_match_require_role(self):
+        """require_role lowercases both the user role and the allowed set, so a
+        mixed-case token must not pass one gate and fail the other."""
+        from autobot_shared.auth.permissions import is_admin_role
+
+        assert is_admin_role("SuperAdmin") is True
+        assert is_admin_role("ADMIN") is True
+
+    def test_admin_roles_superset_of_the_canonical_enum_admin(self):
+        from auth_rbac import ADMIN_ROLES
+
+        assert Role.ADMIN.value in ADMIN_ROLES
+        assert "superadmin" in ADMIN_ROLES
+
+
 # Run tests if executed directly
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

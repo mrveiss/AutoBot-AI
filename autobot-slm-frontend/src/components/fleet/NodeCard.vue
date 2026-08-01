@@ -30,14 +30,11 @@ const showMenu = ref(false)
 const statusClass = computed(() => {
   switch (props.node.status) {
     case 'online': return 'bg-green-500'
-    case 'healthy': return 'bg-green-500'
     case 'degraded': return 'bg-yellow-500'
-    case 'unhealthy': return 'bg-red-500'
     case 'offline': return 'bg-gray-400'
     case 'error': return 'bg-red-500'
     case 'enrolling': return 'bg-blue-500 animate-pulse'
     case 'pending': return 'bg-gray-400'
-    case 'registered': return 'bg-gray-400'
     case 'decommissioned': return 'bg-gray-300'
     default: return 'bg-gray-400'
   }
@@ -63,7 +60,21 @@ const lastSeen = computed(() => {
 })
 
 const canEnroll = computed(() => {
-  return props.node.status === 'registered' || props.node.status === 'pending'
+  return props.node.status === 'pending'
+})
+
+// #12477: A degraded/offline/error node has a broken connection the operator
+// must be able to re-establish. The POST /nodes/{id}/enroll endpoint has no
+// status guard and re-runs the enrollment flow (reinstalls the key via an
+// SSH password), so recovery reuses the same 'enroll' action. This is
+// distinct from the decommissioned-only 'reenroll' endpoint, which rejects any
+// non-decommissioned node.
+const canRecover = computed(() => {
+  return (
+    props.node.status === 'degraded' ||
+    props.node.status === 'offline' ||
+    props.node.status === 'error'
+  )
 })
 
 const isDecommissioned = computed(() => {
@@ -179,11 +190,11 @@ const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0
               </svg>
               {{ $t('fleet.nodeCard.manageRoles') }}
             </button>
-            <button v-if="canEnroll" @click="handleAction('enroll')" :disabled="isEnrolling" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2 disabled:opacity-50">
+            <button v-if="canEnroll || canRecover" @click="handleAction('enroll')" :disabled="isEnrolling" role="menuitem" data-test="enroll-action" :class="['w-full px-4 py-2 text-left text-sm flex items-center gap-2 disabled:opacity-50', canRecover ? 'text-green-600 hover:bg-green-50' : 'text-gray-700 hover:bg-gray-100']">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {{ isEnrolling ? $t('fleet.nodeCard.enrolling') : $t('fleet.nodeCard.enrollNode') }}
+              {{ isEnrolling ? $t('fleet.nodeCard.enrolling') : canRecover ? $t('fleet.nodeCard.recoverConnection') : $t('fleet.nodeCard.enrollNode') }}
             </button>
             <button @click="handleAction('test')" role="menuitem" class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

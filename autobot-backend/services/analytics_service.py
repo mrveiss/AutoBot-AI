@@ -27,6 +27,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.time_utils import now_utc, utc_timestamp
+from code_intelligence.shared.scoring import get_grade_from_score
 from constants.model_constants import (
     EXPENSIVE_MODEL_MARKER_GPT4,
     EXPENSIVE_MODEL_MARKER_OPUS,
@@ -240,7 +241,7 @@ class AnalyticsService(AsyncRedisClientMixin):
             "period_days": days,
             "health": {
                 "score": health_score,
-                "grade": self._get_grade(health_score),
+                "grade": get_grade_from_score(health_score),
                 "status": self._get_health_status(health_score),
             },
             "cost": {
@@ -290,18 +291,6 @@ class AnalyticsService(AsyncRedisClientMixin):
             scores.append(engagement_score)
 
         return round(statistics.mean(scores) if scores else 50, 1)
-
-    def _get_grade(self, score: float) -> str:
-        """Convert score to letter grade."""
-        if score >= 90:
-            return "A"
-        elif score >= 80:
-            return "B"
-        elif score >= 70:
-            return "C"
-        elif score >= 60:
-            return "D"
-        return "F"
 
     def _get_health_status(self, score: float) -> str:
         """Get health status from score."""

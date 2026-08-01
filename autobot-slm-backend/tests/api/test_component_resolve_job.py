@@ -91,7 +91,9 @@ del _MODELS_SNAPSHOT
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # #13113: asyncio.run() — pytest-asyncio owns the loop lifecycle, so a sync test
+    # running before any async test on its worker had no current loop for get_event_loop().
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +342,39 @@ def test_run_component_resolve_job_rsync_failure() -> None:
     assert row.status == "failed"
     assert row.success is False
     assert "rsync boom" in (row.message or "")
+    restart_mock.assert_not_called()
+
+
+def test_run_component_resolve_job_shared_sync_failure() -> None:
+    """#11611 fail-safe: a failed autobot_shared sync marks the job failed BEFORE the
+    component rsync — the component is NOT rsynced/restarted onto a stale shared tree.
+    """
+    row = _FakeRow()
+    db_mock = _make_db_service_mock(row)
+
+    rsync_mock = AsyncMock(return_value=(True, ""))
+    restart_mock = AsyncMock()
+
+    with (
+        patch("api.code_sync.get_default_source_dir", return_value="/src/autobot-slm-backend"),
+        patch("api.code_sync.get_default_deployed_dir", return_value="/opt/autobot/autobot-slm-backend"),
+        patch(
+            "api.code_sync._ensure_autobot_shared_synced",
+            AsyncMock(return_value=(False, "autobot_shared-first: resync failed before autobot-slm-backend")),
+        ),
+        patch("api.code_sync._rsync_component_local", rsync_mock),
+        patch("api.code_sync._run_post_sync_steps", AsyncMock()),
+        patch("api.code_sync._restart_component_services", restart_mock),
+        patch("api.code_sync._running_tasks", {}),
+    ):
+        with patch.dict("sys.modules", {"services.database": MagicMock(db_service=db_mock)}):
+            _run(_run_component_resolve_job("shared-fail", "autobot-slm-backend"))
+
+    assert row.status == "failed"
+    assert row.success is False
+    assert "autobot_shared" in (row.message or "")
+    # Fail-safe: neither the component rsync nor the restart runs after shared failure.
+    rsync_mock.assert_not_called()
     restart_mock.assert_not_called()
 
 

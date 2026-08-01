@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot User Frontend - Stop Script
 # Manual intervention script for stopping the frontend
 # Note: This stops nginx entirely, affecting all sites

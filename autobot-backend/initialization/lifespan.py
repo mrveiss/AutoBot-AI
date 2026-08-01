@@ -15,12 +15,13 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
+from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.tracing import (
     instrument_aiohttp,
     instrument_redis,
@@ -218,7 +219,19 @@ async def _check_env_drift() -> None:
     try:
         from autobot_shared.env_drift_detector import check_env_drift
 
-        report = check_env_drift()
+        # #12782: pass this backend's OWN .env rather than letting the detector
+        # guess. Its generic resolver walks up from autobot_shared/ looking for
+        # a sibling .env, which works in the repo but not in the deployed
+        # layout: autobot_shared lives at <root>/autobot_shared while the env
+        # lives at <root>/autobot-backend/.env. The walk found nothing, fell
+        # back to <root>/.env (absent), and reported every SSOT key as drifted —
+        # "194 drifted, (194 SSOT keys, 0 .env keys)" against a file that in
+        # fact held 93 keys. The `0 .env keys` was the tell.
+        #
+        # parents[1] is the backend root in BOTH layouts, since this module is
+        # always <backend-root>/initialization/lifespan.py.
+        backend_env = Path(__file__).resolve().parents[1] / ".env"
+        report = check_env_drift(str(backend_env))
         if report.error:
             logger.warning("env drift check skipped: %s", report.error)
         elif report.has_drift:
@@ -268,34 +281,58 @@ async def _init_security_layer(app: FastAPI) -> None:
 async def _init_database() -> None:
     """Helper for initialize_critical_services. Ref: #1088.
 
-    Issue #898: Initialize PostgreSQL async engine. Raises RuntimeError on failure.
+    Issue #898: Initialize PostgreSQL async engine.
+    Issue #12293: ``init_database()`` now distinguishes a permanent credential
+    misconfiguration (fail fast with a loud CRITICAL diagnosis) from transient
+    DB unavailability (bounded, clearly-logged retry). Both raise a clear
+    ``RuntimeError``; surface it unchanged rather than re-wrapping into a
+    generic "Database initialization failed" that would bury the root cause.
     """
     logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
-    logger.info("🔍 DEBUG: About to call get_deployment_config()")
     try:
         from user_management.config import get_deployment_config
 
         config = get_deployment_config()
         logger.info(
-            "🔍 DEBUG: Deployment config loaded - mode=%s, postgres_enabled=%s",
+            "Database: mode=%s postgres_enabled=%s target=%s:%s/%s",
             config.mode.value,
             config.postgres_enabled,
-        )
-        logger.info(
-            "🔍 DEBUG: PostgreSQL - host=%s, port=%s, db=%s",
             config.postgres_host,
             config.postgres_port,
             config.postgres_db,
         )
-        logger.info("🔍 DEBUG: About to call init_database()")
         await init_database()
         logger.info("✅ [ 16%] Database: PostgreSQL async engine initialized")
     except Exception as db_error:
-        logger.error("❌ CRITICAL: Database initialization failed: %s", db_error)
-        import traceback
+        # init_database() has already logged a CRITICAL fail-fast / bounded-retry
+        # diagnosis (#12293). Re-raise its clear RuntimeError unchanged so the
+        # root cause (e.g. stale autobot_app password) is not hidden.
+        logger.error("❌ CRITICAL: Database initialization aborted: %s", db_error)
+        raise
 
-        logger.error("❌ TRACEBACK: %s", traceback.format_exc())
-        raise RuntimeError(f"Database initialization failed: {db_error}")
+
+async def _hydrate_llm_provider_keys() -> None:
+    """Hydrate LLM provider keys from the System vault (#10088 Task 7).
+
+    Runs once, synchronously, in Phase 1 (after the DB is initialised) so
+    ``llm_shared.provider_registry``'s lazy first population -- which can be
+    triggered by the very first request -- always sees a key captured only
+    via the setup wizard (never set as an env var). Env vars always win
+    (skipped entirely when set), so an Ansible-provisioned deployment is
+    unaffected. Best-effort: no root key configured (dev/test) or a DB error
+    must never block startup.
+    """
+    logger.info("[ 17%] Provider Keys: hydrating from System vault...")
+    try:
+        from services.provider_key_vault import hydrate_provider_keys_from_vault
+        from user_management.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            hydrated = await hydrate_provider_keys_from_vault(session)
+        if hydrated:
+            logger.info("[ 17%] Provider Keys: hydrated %d key(s) from vault: %s", len(hydrated), hydrated)
+    except Exception as exc:
+        logger.debug("Provider-key vault hydration skipped (non-critical): %s", exc)
 
 
 async def _init_telemetry_and_redis() -> None:
@@ -390,7 +427,10 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     try:
         from transcriber.database import Database
 
-        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber"))
+        # Resolve to an absolute path: ``create_recording`` rejects relative
+        # filepaths, and relying on cwd is fragile across launch contexts
+        # (GH#12310 — every upload 500'd because the default was relative).
+        data_dir = _Path(os.getenv("TRANSCRIBER_DATA_DIR", "data/transcriber")).resolve()
         data_dir.mkdir(parents=True, exist_ok=True)
         (data_dir / "uploads").mkdir(exist_ok=True)
         (data_dir / "processed").mkdir(exist_ok=True)
@@ -464,6 +504,12 @@ async def initialize_critical_services(app: FastAPI):
             _init_telemetry_and_redis(),
         )
 
+        # --- Tier 1.5: LLM provider-key vault hydration (sequential, after DB) ---
+        # Must complete before Phase 1 returns -- llm_shared.provider_registry's
+        # first (lazy) population can be triggered by the very first request,
+        # so this cannot be deferred to Phase 2's background task (#10088 Task 7).
+        await _hydrate_llm_provider_keys()
+
         # --- Tier 2: chat service managers (parallel) ---
         # Issue #665: uses helpers
         await asyncio.gather(
@@ -505,7 +551,7 @@ async def initialize_critical_services(app: FastAPI):
                 json.dumps(
                     {
                         "error_type": error_type,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": utc_timestamp(),
                     }
                 ),
                 encoding="utf-8",
@@ -804,6 +850,58 @@ async def _init_llc_routine_scheduler(app: FastAPI) -> None:
         app.state.llc_routine_scheduler = None
 
 
+async def _init_skill_health_scheduler(app: FastAPI) -> None:
+    """Start the skill health check loop (GH#12810, implements GH#4339).
+
+    ``SkillHealthScheduler.start()`` is an infinite ``while self._running`` loop, so it
+    is spawned as a task and never awaited — awaiting it here would block the rest of
+    startup forever.
+
+    Startup is gated on the same resolver the loop re-checks (GH#12820), so the
+    startup decision and the running decision can never disagree.
+    """
+    try:
+        from services.scheduler_toggles import is_scheduler_enabled
+
+        if not await is_scheduler_enabled("SkillHealthScheduler"):
+            logger.info("Skill health scheduler: toggled off, not started")
+            app.state.skill_health_scheduler = None
+            app.state.skill_health_task = None
+            return
+
+        from services.skill_management.skill_health_scheduler import get_skill_health_scheduler
+
+        scheduler = get_skill_health_scheduler()
+        app.state.skill_health_scheduler = scheduler
+        app.state.skill_health_task = asyncio.create_task(scheduler.start(), name="skill-health-scheduler")
+        logger.info("Skill health scheduler: started")
+    except Exception as exc:
+        logger.warning("Skill health scheduler startup failed (non-fatal): %s", exc)
+        app.state.skill_health_scheduler = None
+        app.state.skill_health_task = None
+
+
+async def _init_skill_distillation_scheduler(app: FastAPI) -> None:
+    """Start the skill distillation pass that turns conversations into proposed skills (GH#12809).
+
+    Leader-elected and gated off by default; a worker that is not the leader — or a
+    deployment with the flag unset — costs one Redis round-trip and nothing more.
+    """
+    try:
+        from services.skill_management.skill_distillation_scheduler import (
+            get_skill_distillation_scheduler,
+        )
+
+        scheduler = get_skill_distillation_scheduler()
+        started = await scheduler.start()
+        app.state.skill_distillation_scheduler = scheduler if started else None
+        if started:
+            logger.info("Skill distillation scheduler: started")
+    except Exception as exc:
+        logger.warning("Skill distillation scheduler startup failed (non-fatal): %s", exc)
+        app.state.skill_distillation_scheduler = None
+
+
 async def _init_heartbeat_scheduler(app: FastAPI) -> None:
     """
     Start heartbeat scheduler for scheduled agent wakeups (NON-CRITICAL).
@@ -1090,6 +1188,12 @@ async def _init_slm_client():
     Falls back gracefully if SLM is unavailable.
     """
     logger.info("✅ [ 89%] SLM Client: Initializing SLM client for agent configs...")
+    # #12781: register the control-link probe BEFORE attempting to connect —
+    # the decorator only fires on import, and a node whose SLM init raises is
+    # precisely the node whose link state must be reported. Registering inside
+    # the try would omit the component on exactly the broken nodes.
+    from services import slm_link_probe  # noqa: F401
+
     try:
         # Issue #768: Get SLM URL from SSOT config, fallback to env var
         from autobot_shared.ssot_config import get_config
@@ -1529,16 +1633,23 @@ async def _start_autonomous_loop(app: FastAPI) -> None:
 
 
 async def _wire_scheduler_executor() -> None:
-    """Wire the orchestration WorkflowExecutor into the global WorkflowScheduler (#2166).
+    """Wire Orchestrator.run_workflow into the global WorkflowScheduler (#2166).
 
     Replaces the scheduler's fallback _default_template_executor with an adapter
     that delegates non-template scheduled workflows to Orchestrator, enabling
     full agent coordination, step dependency management, and auto-documentation for
     all scheduled workflows — not just template-based ones.
 
+    Correction (#12373): despite this function's name, it does NOT wire
+    ``orchestration.workflow_executor.WorkflowExecutor`` (that class has had
+    no production callers since #5058). ``orchestrator.run_workflow`` itself
+    delegates to ``orchestration.workflow_runner.WorkflowRunner``. The name
+    is kept for now to avoid an unrelated rename churn; read "orchestration
+    executor" below as "the orchestrator's run_workflow pipeline."
+
     NON-CRITICAL: template-based workflows still work if this fails.
     """
-    logger.info("[ 98%%] Scheduler: Wiring orchestration executor...")
+    logger.info("[ 98%%] Scheduler: Wiring orchestrator run_workflow pipeline...")
     try:
         from orchestrator import get_orchestrator_sync
         from workflow_scheduler import ScheduledWorkflow, get_workflow_scheduler
@@ -1590,6 +1701,7 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
         logger.info("CommunityClusterer: mesh_db not available, skipping periodic loop")
         return
 
+    from llc.scheduler.base import honour_pending_cancellation
     from services.mesh_brain.community_clusterer import CommunityClusterer
 
     _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
@@ -1606,6 +1718,10 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
                 )
             except Exception as exc:
                 logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
+                # #13085: run() drives DB work that can mask the CancelledError
+                # cleanup_services() sent. Without this the loop would start a
+                # fresh 6-hour sleep and cleanup's gather() would never return.
+                honour_pending_cancellation()
             await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
 
     app.state.community_cluster_task = asyncio.create_task(_loop())
@@ -1643,6 +1759,41 @@ async def _init_budget_watchdog(app: FastAPI) -> None:
     except Exception as exc:
         logger.warning("LLC budget watchdog startup failed (non-fatal): %s", exc)
         app.state.llc_budget_watchdog = None
+
+
+async def _init_mesh_brain_scheduler(app: FastAPI) -> None:
+    """Start MeshBrainScheduler when explicitly enabled (#12816).
+
+    The scheduler was registered, fully described, and never started — its own
+    registry entry admitted "currently inert". This wires it, but DEFAULT-OFF.
+
+    Off by default is deliberate, not timidity: of its five jobs, `mesh_pruner`
+    DELETES data on a 7-day cadence, and `node_promoter`/`edge_discoverer`
+    mutate node and edge state. Establishing what mesh_pruner removes and under
+    which retention rule is a data-retention decision, not a wiring change, so
+    it must not be switched on as a side effect of fixing the wiring.
+
+    start() returns as soon as it has spawned its own per-job tasks, and only
+    spawns jobs whose component is present, so it is safe to await directly.
+    """
+    from autobot_shared.ssot_config import config as _cfg
+
+    if not _cfg.misc.mesh_brain_scheduler_enabled:
+        logger.info("MeshBrainScheduler: disabled (AUTOBOT_MESH_BRAIN_SCHEDULER_ENABLED not set)")
+        app.state.mesh_brain_scheduler = None
+        return
+
+    logger.info("MeshBrainScheduler: Starting...")
+    try:
+        from services.mesh_brain.scheduler import MeshBrainScheduler
+
+        scheduler = MeshBrainScheduler()
+        await scheduler.start()
+        app.state.mesh_brain_scheduler = scheduler
+        logger.info("MeshBrainScheduler: Started")
+    except Exception as exc:
+        logger.warning("MeshBrainScheduler startup failed (non-fatal): %s", exc)
+        app.state.mesh_brain_scheduler = None
 
 
 async def _recover_agent_sessions(app: FastAPI) -> None:
@@ -1798,8 +1949,11 @@ async def initialize_background_services(app: FastAPI):
         await _recover_agent_sessions(app)
         await _init_heartbeat_scheduler(app)
         await _init_llc_routine_scheduler(app)
+        await _init_skill_health_scheduler(app)
+        await _init_skill_distillation_scheduler(app)
         await _init_liveness_monitor(app)
         await _init_budget_watchdog(app)
+        await _init_mesh_brain_scheduler(app)
         await _init_session_checkpointer(app)
         await _init_llc_outbound_sync(app)
         await _start_connector_scheduler()
@@ -1852,6 +2006,23 @@ async def cleanup_services(app: FastAPI):
         app: FastAPI application instance
     """
     logger.info("🛑 AutoBot Backend shutting down...")
+
+    # Issue #11679: Cancel + await the phase-2 background-init task FIRST,
+    # before any other cleanup step. Without this, a fast shutdown can race
+    # initialize_background_services() while it is still creating resources
+    # (Redis subscriptions, background loops, etc.), voiding the "Redis
+    # closed LAST" ordering guarantee below for those late-created resources.
+    bg_init_task = getattr(app.state, "background_init_task", None)
+    if bg_init_task is not None and not bg_init_task.done():
+        bg_init_task.cancel()
+        try:
+            await bg_init_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as _bg_init_err:
+            logger.warning("Background init task raised during cancellation: %s", _bg_init_err)
+        logger.info("✅ Phase-2 background init task cancelled before shutdown")
+
     try:
         # GH#9044: Close transcriber DB connection
         transcriber_db = getattr(app.state, "transcriber_db", None)
@@ -1877,6 +2048,30 @@ async def cleanup_services(app: FastAPI):
             logger.info("Connector scheduler stopped")
         except Exception as _cs_err:
             logger.warning("Connector scheduler shutdown failed: %s", _cs_err)
+
+        # Issue #12810: Stop the skill health loop and cancel the task carrying it.
+        try:
+            health = getattr(app.state, "skill_health_scheduler", None)
+            if health is not None:
+                await health.stop()
+            health_task = getattr(app.state, "skill_health_task", None)
+            if health_task is not None and not health_task.done():
+                # stop() only clears the loop flag; the task may be parked in its
+                # interval sleep, so cancel rather than wait out the interval.
+                health_task.cancel()
+            logger.info("Skill health scheduler stopped")
+        except Exception as _sh_err:
+            logger.warning("Skill health scheduler shutdown failed: %s", _sh_err)
+
+        # Issue #12809: Stop the skill distillation pass and release its leader lease
+        # so another worker can claim it without waiting out the TTL.
+        try:
+            distiller = getattr(app.state, "skill_distillation_scheduler", None)
+            if distiller is not None:
+                await distiller.stop()
+                logger.info("Skill distillation scheduler stopped")
+        except Exception as _sd_err:
+            logger.warning("Skill distillation scheduler shutdown failed: %s", _sd_err)
 
         # Issue #8391: Stop VectorWriteBuffer (flushes pending writes).
         kb = getattr(app.state, "knowledge_base", None)
@@ -1942,16 +2137,35 @@ async def cleanup_services(app: FastAPI):
         pass  # SLM reconciler now in slm-server
 
         # GH#9028: Stop LLC liveness monitor
+        # #13085: aclose() — stop() only *requests* cancellation and returns, so
+        # the poll task could still be mid-tick (holding an AsyncSession) when
+        # close_database() disposes the engine further down, and its interval
+        # wait was left for whoever tore the event loop down. aclose() drains it
+        # here, where shutdown can observe it.
         if hasattr(app.state, "llc_liveness_monitor") and app.state.llc_liveness_monitor:
-            app.state.llc_liveness_monitor.stop()
+            await app.state.llc_liveness_monitor.aclose()
             logger.info("✅ LLC liveness monitor stopped")
         # GH#9029: Stop LLC budget watchdog
         if hasattr(app.state, "llc_budget_watchdog") and app.state.llc_budget_watchdog:
-            app.state.llc_budget_watchdog.stop()
+            await app.state.llc_budget_watchdog.aclose()
             logger.info("✅ LLC budget watchdog stopped")
-        # GH#9026: Stop LLC session checkpointer
+        # #12816: Stop MeshBrainScheduler — stop() cancels every per-job task
+        # start() spawned, so none survive shutdown.
+        #
+        # Guarded independently: this whole shutdown block sits inside one broad
+        # `except Exception`, so an error raised here would jump straight to that
+        # handler and SKIP every remaining shutdown step below. Startup is
+        # already treated as non-fatal; shutdown gets the same treatment so one
+        # scheduler cannot abort the rest of the teardown.
+        if hasattr(app.state, "mesh_brain_scheduler") and app.state.mesh_brain_scheduler:
+            try:
+                await app.state.mesh_brain_scheduler.stop()
+                logger.info("✅ MeshBrainScheduler stopped")
+            except Exception as mesh_stop_error:
+                logger.warning("MeshBrainScheduler stop failed (non-fatal): %s", mesh_stop_error)
+        # GH#9026: Stop LLC session checkpointer (#13085: drained, see above)
         if hasattr(app.state, "llc_session_checkpointer") and app.state.llc_session_checkpointer:
-            app.state.llc_session_checkpointer.stop()
+            await app.state.llc_session_checkpointer.aclose()
             logger.info("✅ LLC session checkpointer stopped")
 
         # GH#8257: Stop LLC outbound sync service
@@ -2149,6 +2363,17 @@ async def cleanup_services(app: FastAPI):
         except Exception as _db_err:
             logger.warning("Database engine dispose failed: %s", _db_err)
 
+        # Issue #11679: Drain the bounded thread-pool executor BEFORE closing
+        # Redis pools. Ordering decision: queued default-executor jobs (e.g.
+        # chat_history/cache.py offloading a sync redis_client.setex call)
+        # must finish before Redis pools close — otherwise redis-py sync
+        # pools would reopen lazily post-close, leaking connections at exit.
+        # shutdown() is a blocking call, so it runs via asyncio.to_thread to
+        # avoid blocking the event loop while queued jobs finish.
+        if _executor is not None:
+            await asyncio.to_thread(_executor.shutdown, wait=True, cancel_futures=False)
+            logger.info("🧵 Thread pool executor drained")
+
         # Issue #11638: Close all Redis pools LAST — earlier shutdown steps
         # above may still publish events or flush state through Redis.
         try:
@@ -2218,18 +2443,21 @@ def create_lifespan_manager():
         await initialize_critical_services(app)
 
         # Phase 2: Background initialization (NON-BLOCKING)
+        # Issue #11679: track the task on app.state so cleanup_services() can
+        # cancel+await it FIRST on shutdown, before any resource is torn down.
+        # Without this, a fast shutdown during phase-2 init can race resource
+        # creation (e.g. Redis subscriptions, background loops), voiding the
+        # "Redis closed LAST" cleanup ordering for those late-created resources.
         logger.info("🔄 Starting background services initialization...")
-        asyncio.create_task(initialize_background_services(app))
+        app.state.background_init_task = asyncio.create_task(
+            initialize_background_services(app), name="phase2_background_init"
+        )
 
         yield  # Application starts serving requests here
 
-        # Cleanup on shutdown
+        # Cleanup on shutdown — thread pool is drained INSIDE cleanup_services,
+        # before Redis pools close (Issue #11679; see ordering comment there).
         await cleanup_services(app)
-
-        # Shutdown thread pool
-        if _executor:
-            _executor.shutdown(wait=True, cancel_futures=False)
-            logger.info("🧵 Thread pool shutdown complete")
 
     return lifespan
 

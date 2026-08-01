@@ -109,7 +109,7 @@ class TestFileWriteAtomicity:
 
             # Verify target file exists and contains correct content
             assert os.path.exists(target_file)
-            with open(target_file, "r") as f:
+            with open(target_file, "r", encoding="utf-8") as f:
                 assert f.read() == content
 
             # Verify no temp files left behind
@@ -155,7 +155,7 @@ class TestFileWriteAtomicity:
 
             # Verify file is valid JSON (not corrupted)
             assert os.path.exists(target_file)
-            with open(target_file, "r") as f:
+            with open(target_file, "r", encoding="utf-8") as f:
                 data = json.load(f)  # Should not raise JSONDecodeError
                 assert "write" in data
                 assert "timestamp" in data

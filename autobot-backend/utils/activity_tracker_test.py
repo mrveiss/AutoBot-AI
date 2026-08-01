@@ -9,7 +9,7 @@ Issue #873 - Activity Tracking Integration Hooks (#608 Phase 5)
 """
 
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -58,6 +58,7 @@ class TestTerminalActivityTracking:
     async def test_track_simple_command(self):
         """Should track simple command execution."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
 
         activity_id = await track_terminal_activity(
@@ -76,6 +77,7 @@ class TestTerminalActivityTracking:
     async def test_track_command_with_secrets(self):
         """Should track command with secret usage."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
         secret_id = uuid.uuid4()
 
@@ -99,6 +101,7 @@ class TestFileActivityTracking:
     async def test_track_file_create(self):
         """Should track file creation."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
 
         activity_id = await track_file_activity(
@@ -116,6 +119,7 @@ class TestFileActivityTracking:
     async def test_track_file_rename(self):
         """Should track file rename with new path."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
 
         activity_id = await track_file_activity(
@@ -138,6 +142,7 @@ class TestBrowserActivityTracking:
     async def test_track_browser_navigation(self):
         """Should track browser navigation."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
 
         activity_id = await track_browser_activity(
@@ -153,6 +158,7 @@ class TestBrowserActivityTracking:
     async def test_track_form_submission_with_secrets(self):
         """Should track form submission with secret usage."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
         secret_id = uuid.uuid4()
 
@@ -177,6 +183,7 @@ class TestDesktopActivityTracking:
     async def test_track_mouse_click(self):
         """Should track mouse click action."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
 
         activity_id = await track_desktop_activity(
@@ -193,6 +200,7 @@ class TestDesktopActivityTracking:
     async def test_track_keyboard_input(self):
         """Should track keyboard input."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
 
         activity_id = await track_desktop_activity(
@@ -210,6 +218,7 @@ class TestDesktopActivityTracking:
     async def test_track_screenshot(self):
         """Should track screenshot capture."""
         mock_db = AsyncMock()
+        mock_db.add = MagicMock()  # AsyncSession.add() is sync (#11954)
         user_id = uuid.uuid4()
 
         activity_id = await track_desktop_activity(

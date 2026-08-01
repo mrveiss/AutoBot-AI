@@ -22,8 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Tuple
 
-import aiohttp
-
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.threshold_constants import TimingConstants
@@ -114,7 +113,7 @@ class RedisServiceManager:
             service_name: Systemd service name (default: 'redis-stack-server')
             enable_audit_logging: Enable audit logging (default: True)
         """
-        self.slm_url = (slm_url or _DEFAULT_SLM_URL).rstrip("/")
+        self.slm_url = (slm_url if slm_url is not None else _DEFAULT_SLM_URL).rstrip("/")
         self.slm_node_id = slm_node_id or _DEFAULT_REDIS_NODE_ID
         self.service_name = service_name
         self.enable_audit_logging = enable_audit_logging
@@ -197,12 +196,11 @@ class RedisServiceManager:
             raise RedisConnectionError("SLM_URL not configured")
         url = f"{self.slm_url}/api/nodes/{self.slm_node_id}" f"/services/{self.service_name}/{action}"
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, ssl=False) as resp:
-                    data = await resp.json()
-                    success = data.get("success", resp.status < 300)
-                    message = data.get("message", "")
-                    return success, message
+            async with get_http_client().tracked_request("POST", url, ssl=False) as resp:
+                data = await resp.json()
+                success = data.get("success", resp.status < 300)
+                message = data.get("message", "")
+                return success, message
         except Exception as exc:
             logger.error("SLM service action '%s' failed: %s", action, exc)
             await self._record_error()
@@ -221,16 +219,15 @@ class RedisServiceManager:
             return "unknown"
         url = f"{self.slm_url}/api/nodes/{self.slm_node_id}/services"
         try:
-            async with aiohttp.ClientSession() as session:
-                params = {"search": self.service_name, "per_page": "1"}
-                async with session.get(url, params=params, ssl=False) as resp:
-                    if resp.status != 200:
-                        return "unknown"
-                    data = await resp.json()
-                    services = data.get("services", [])
-                    if services:
-                        return services[0].get("status", "unknown")
+            params = {"search": self.service_name, "per_page": "1"}
+            async with get_http_client().tracked_request("GET", url, params=params, ssl=False) as resp:
+                if resp.status != 200:
                     return "unknown"
+                data = await resp.json()
+                services = data.get("services", [])
+                if services:
+                    return services[0].get("status", "unknown")
+                return "unknown"
         except Exception as exc:
             logger.warning("SLM service status query failed: %s", exc)
             return "unknown"
@@ -551,15 +548,32 @@ class RedisServiceManager:
         return "critical"
 
     def _generate_health_recommendations(
-        self, service_running: bool, connectivity: bool, response_time_ms: float
+        self,
+        service_running: bool,
+        connectivity: bool,
+        response_time_ms: float,
+        service_status: str = "unknown",
     ) -> List[str]:
         """
         Generate health recommendations based on current state.
 
         (Issue #398: extracted helper)
+        Issue #12459: ``service_running`` collapses "confirmed stopped" and
+        "SLM couldn't confirm systemd state" (``service_status == "unknown"``)
+        into the same falsy value, so this used to claim the service "is not
+        running" even when direct Redis connectivity proved it clearly was.
+        Distinguish the SLM-unreachable-but-reachable case so the message is
+        accurate instead of misleading (#12459 health-probe audit).
         """
         recommendations = []
-        if not service_running:
+        if service_status == "unknown" and connectivity:
+            recommendations.append(
+                "Service manager (SLM) could not confirm systemd status for "
+                "redis-stack-server, but Redis itself responded to a direct "
+                "ping — this is a service-management visibility gap, not a "
+                "Redis outage"
+            )
+        elif not service_running:
             recommendations.append("Redis Stack service is not running - consider starting it")
         if not connectivity and service_running:
             recommendations.append("Redis Stack service running but not responding - check logs")
@@ -582,7 +596,9 @@ class RedisServiceManager:
 
             connectivity, response_time_ms = await self._check_redis_connectivity()
             overall_status = self._determine_health_status(service_running, connectivity, status.status)
-            recommendations = self._generate_health_recommendations(service_running, connectivity, response_time_ms)
+            recommendations = self._generate_health_recommendations(
+                service_running, connectivity, response_time_ms, status.status
+            )
 
             return HealthStatus(
                 overall_status=overall_status,

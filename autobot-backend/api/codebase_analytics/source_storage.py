@@ -59,6 +59,11 @@ def _is_visible(source: CodeSource, owner_id: str | None) -> bool:
     """Return True if the source should appear in the list for owner_id."""
     if owner_id is None:
         return True
+    if source.owner_id is None:
+        # Unowned/legacy or service-created source — there is no owner to gate
+        # against, so access is controlled solely by the caller's admin role
+        # (#12358). Prevents the ownership check from hiding pre-ownership sources.
+        return True
     if source.owner_id == owner_id:
         return True
     if source.access == SourceAccess.PUBLIC:

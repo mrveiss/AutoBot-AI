@@ -188,6 +188,10 @@
                 <button class="btn-fix" @click="showFixDetails(item)">{{ $t('analytics.technicalDebt.fix') }}</button>
               </div>
             </div>
+            <TruncationNotice
+              :shown="Math.min(10, roiPriorities.length)"
+              :total="roiPriorities.length"
+            />
           </div>
         </div>
       </div>
@@ -434,6 +438,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import TruncationNotice from './TruncationNotice.vue';
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils';
@@ -993,7 +998,7 @@ watch(selectedPeriod, () => {
 
 .health-bar {
   width: 100%;
-  height: 6px;
+  height: var(--spacing-1-5);
   background: var(--border-subtle);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -1186,8 +1191,8 @@ watch(selectedPeriod, () => {
 }
 
 .legend-color {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
@@ -1285,7 +1290,7 @@ watch(selectedPeriod, () => {
 }
 
 .category-bar {
-  height: 4px;
+  height: var(--spacing-1);
   background: var(--border-subtle);
   border-radius: var(--radius-xs);
   overflow: hidden;
@@ -1322,8 +1327,8 @@ watch(selectedPeriod, () => {
 }
 
 .priority-rank {
-  width: 24px;
-  height: 24px;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -240,6 +240,9 @@ class AgentAnalytics(AsyncRedisClientMixin):
         # Store running task
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot track task start for %s", task_id)
+                raise RuntimeError("Redis unavailable: cannot track task start")
             running_key = f"{self.REDIS_KEY_PREFIX}running:{task_id}"
             await redis.set(running_key, json.dumps(record.to_dict()), ex=TTL_1_HOUR)
         except Exception as e:
@@ -270,6 +273,9 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot track task completion for %s", task_id)
+                raise RuntimeError("Redis unavailable: cannot track task completion")
             running_key = f"{self.REDIS_KEY_PREFIX}running:{task_id}"
 
             # Get running task
@@ -312,6 +318,9 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """Store completed task record"""
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot store completed task %s", record.task_id)
+                raise RuntimeError("Redis unavailable: cannot store completed task")
 
             # Add to task list (keep last 50k tasks)
             await redis.lpush(self.TASK_LIST_KEY, json.dumps(record.to_dict()))
@@ -330,6 +339,9 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """Update aggregated metrics for an agent"""
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: cannot update agent metrics for %s", record.agent_id)
+                raise RuntimeError("Redis unavailable: cannot update agent metrics")
             metrics_key = f"{self.AGENT_METRICS_KEY}:{record.agent_id}"
 
             # Increment counters - use dispatch table to flatten if/elif chain (Issue #315)
@@ -360,6 +372,12 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """Get aggregated metrics for an agent"""
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error(
+                    "Redis unavailable: agent metrics for %s degraded to empty (not genuinely no data)",
+                    agent_id,
+                )
+                return None
             metrics_key = f"{self.AGENT_METRICS_KEY}:{agent_id}"
 
             data = await redis.hgetall(metrics_key)
@@ -450,6 +468,9 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """Get metrics for all agents"""
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: all-agents metrics degraded to empty list (not genuinely no data)")
+                return []
             pattern = f"{self.AGENT_METRICS_KEY}:*"
             keys = await redis.keys(pattern)
             if not keys:
@@ -476,6 +497,12 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """Get task history for an agent"""
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error(
+                    "Redis unavailable: agent history for %s degraded to empty (not genuinely no data)",
+                    agent_id,
+                )
+                return []
             agent_key = f"{self.AGENT_HISTORY_KEY}:{agent_id}"
             records = await redis.lrange(agent_key, 0, limit - 1)
 
@@ -489,6 +516,9 @@ class AgentAnalytics(AsyncRedisClientMixin):
         """Get recent tasks across all agents"""
         try:
             redis = await self.get_redis()
+            if redis is None:
+                logger.error("Redis unavailable: recent tasks degraded to empty list (not genuinely no data)")
+                return []
             records = await redis.lrange(self.TASK_LIST_KEY, 0, limit - 1)
             return [json.loads(r) for r in records]
 

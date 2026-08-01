@@ -443,18 +443,35 @@ async def _filter_user_sessions(sessions: list, username: str) -> list:
 
     Helper for list_sessions (#684).
     """
+    from api.chat_sessions_errors import OwnershipUnavailableError
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 
     try:
         redis = await get_redis_mgr(async_client=True, database="main")
         validator = _build_ownership_validator(redis)
         user_session_ids = set(await validator.get_user_sessions(username))
-        if not user_session_ids:
-            return sessions  # No ownership data yet; return all
-        return [s for s in sessions if s.get("id") in user_session_ids]
     except Exception as e:
-        logger.debug("Could not filter by user ownership: %s", e)
+        # #12685: this used to `return sessions` — the UNFILTERED list — whenever
+        # the ownership lookup failed. On a tenancy filter that is the wrong
+        # direction to fail: a Redis blip silently exposed every session on the
+        # instance, including other companies' agent conversations. Surfacing an
+        # error lets the UI say "could not load your sessions" instead of
+        # showing someone else's.
+        logger.error("Ownership lookup failed; refusing to return an unfiltered session list: %s", e)
+        raise OwnershipUnavailableError("Could not verify session ownership") from e
+
+    if not user_session_ids:
+        # No ownership records for this user. Kept as-is pending #12685's
+        # decision on pre-ownership legacy sessions: failing closed here would
+        # hide a user's own history on installs that predate ownership
+        # tracking. Logged so the exposure is visible rather than silent.
+        logger.warning(
+            "No ownership records for %s — returning the unfiltered session list (#12685)",
+            username,
+        )
         return sessions
+
+    return [s for s in sessions if s.get("id") in user_session_ids]
 
 
 def _build_ownership_validator(redis):

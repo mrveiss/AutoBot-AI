@@ -59,6 +59,12 @@ try:
 except ImportError:
     EMBEDDING_CACHE_AVAILABLE = False
 
+# Issue #12407: Real embedding model used by the canonical
+# ``services.npu_client.generate_embedding_with_fallback`` helper. Mirrors
+# ``DEFAULT_EMBEDDING_MODEL`` in analytics_infrastructure.py / the
+# ``embedding_model`` default in cross_language_patterns/detector.py.
+EMBEDDING_MODEL = "nomic-embed-text"
+
 
 class CodePatternAnalyzer:
     """Main orchestrator for code pattern detection and optimization.
@@ -149,8 +155,18 @@ class CodePatternAnalyzer:
         exclude_dirs: Set[str] | None = None,
         cc_threshold: int = 10,
         mi_threshold: float = 50,
+        source_id: str | None = None,
     ):
-        """Initialize the code pattern analyzer. Issue #620."""
+        """Initialize the code pattern analyzer. Issue #620.
+
+        Args:
+            source_id: Code source this analysis is scoped to (Issue #12384).
+                Tagged onto every stored ``code_patterns`` ChromaDB record so
+                the read-side query filter can scope matches to a single
+                project -- without it, patterns from different sources
+                sharing the global collection could cross-match. Mirrors the
+                #12356/#12374 cross-language-patterns fix.
+        """
         self._init_feature_flags(
             enable_clone_detection,
             enable_anti_pattern_detection,
@@ -161,6 +177,14 @@ class CodePatternAnalyzer:
             exclude_dirs,
         )
         self._init_sub_analyzers(cc_threshold, mi_threshold)
+        # Issue #12384: scope tag for chroma metadata written by this instance.
+        self.source_id = source_id
+        self._source_tag = source_id or "default"
+        # Issue #12407: single reused EmbeddingCache instance (mirrors
+        # SemanticAnalysisMixin / CrossLanguagePatternDetector) so repeated
+        # calls to ``_generate_embedding`` actually benefit from the cache
+        # instead of instantiating a throwaway cache every call.
+        self._embedding_cache = EmbeddingCache(maxsize=500, ttl_seconds=3600) if EMBEDDING_CACHE_AVAILABLE else None
 
     # Batch size for per-file analysis (tunable)
     BATCH_SIZE = 50
@@ -877,6 +901,10 @@ class CodePatternAnalyzer:
     async def _prepare_duplicate_pattern_for_storage(self, dup: DuplicatePattern) -> Dict[str, Any] | None:
         """Prepare a duplicate pattern for ChromaDB storage. Issue #620.
 
+        Issue #12384: Tags the pattern's metadata with ``source_id`` so the
+        read-side query filter (endpoints/pattern_analysis.py) can scope
+        matches to this project.
+
         Args:
             dup: Duplicate pattern to prepare
 
@@ -895,11 +923,16 @@ class CodePatternAnalyzer:
                 "start_line": dup.locations[0].start_line if dup.locations else 0,
                 "occurrence_count": dup.occurrence_count,
                 "severity": dup.severity.value,
+                "source_id": self._source_tag,
             },
         }
 
     async def _prepare_regex_pattern_for_storage(self, regex_opp: Any) -> Dict[str, Any] | None:
         """Prepare a regex opportunity pattern for ChromaDB storage. Issue #620.
+
+        Issue #12384: Tags the pattern's metadata with ``source_id`` so the
+        read-side query filter (endpoints/pattern_analysis.py) can scope
+        matches to this project.
 
         Args:
             regex_opp: Regex opportunity pattern to prepare
@@ -919,6 +952,7 @@ class CodePatternAnalyzer:
                 "start_line": (regex_opp.locations[0].start_line if regex_opp.locations else 0),
                 "suggested_regex": regex_opp.suggested_regex,
                 "severity": regex_opp.severity.value,
+                "source_id": self._source_tag,
             },
         }
 
@@ -952,26 +986,48 @@ class CodePatternAnalyzer:
             logger.error("Failed to store patterns: %s", e)
 
     async def _generate_embedding(self, code: str) -> List[float]:
-        """Generate embedding for code content.
+        """Generate a semantic embedding for code content.
+
+        Issue #12407: Uses the canonical NPU/Ollama fallback helper
+        (``services.npu_client.generate_embedding_with_fallback``) via the
+        reused ``self._embedding_cache`` instance, mirroring
+        ``SemanticAnalysisMixin._get_embedding``
+        (code_intelligence/analytics_infrastructure.py) and
+        ``CrossLanguagePatternDetector._get_embedding``
+        (code_intelligence/cross_language_patterns/detector.py, #12374). The
+        previous implementation called a nonexistent
+        ``EmbeddingCache.get_embedding()`` method, which raised
+        ``AttributeError`` on every call and was silently swallowed, so every
+        pattern was actually stored under a hash-based pseudo-embedding.
 
         Args:
             code: Code content to embed
 
         Returns:
-            Embedding vector
+            Embedding vector (real if embedding infra is available, hash-based
+            pseudo-embedding only as a last-resort fallback).
         """
-        # Use existing embedding infrastructure if available
-        if EMBEDDING_CACHE_AVAILABLE:
+        if EMBEDDING_CACHE_AVAILABLE and self._embedding_cache is not None:
             try:
-                cache = EmbeddingCache()
-                embedding = await cache.get_embedding(code)
-                if embedding:
-                    return embedding
-            except Exception:  # nosec B110 - cache miss handled by fallback
-                logger.debug("Suppressed exception in try block", exc_info=True)
+                cached = await self._embedding_cache.get(code, model=EMBEDDING_MODEL)
+                if cached:
+                    return cached
+            except Exception as e:
+                logger.warning("Embedding cache read failed, generating fresh: %s", e)
 
-        # Fallback: Simple hash-based pseudo-embedding for testing
-        # In production, this should use actual embeddings
+            try:
+                from services.npu_client import generate_embedding_with_fallback
+
+                embedding = await generate_embedding_with_fallback(code, model_name=EMBEDDING_MODEL)
+                if embedding:
+                    await self._embedding_cache.put(code, embedding, model=EMBEDDING_MODEL)
+                    return embedding
+                logger.warning("Embedding generation returned no vector, using hash fallback")
+            except Exception as e:
+                logger.warning("Embedding generation failed, using hash fallback: %s", e)
+
+        # Last-resort fallback: hash-based pseudo-embedding, ONLY reached when
+        # the real embedding infrastructure is genuinely unavailable/failed.
         import hashlib
 
         hash_bytes = hashlib.sha256(code.encode()).digest()

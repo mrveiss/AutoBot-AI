@@ -344,16 +344,17 @@ async def _download_direct_url(url: str, dest_dir: str) -> str:
     """Download a direct audio URL to dest_dir and return the local path."""
     import aiohttp
 
+    from autobot_shared.http_client import get_http_client
+
     filename = os.path.basename(url.split("?")[0]) or "audio.mp3"
     dest_path = os.path.join(dest_dir, filename)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=300)) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"Failed to download {url}: HTTP {resp.status}")
-            with open(dest_path, "wb", encoding=None) as fh:  # type: ignore[call-overload]
-                async for chunk in resp.content.iter_chunked(65536):
-                    fh.write(chunk)
+    async with get_http_client().tracked_request("GET", url, timeout=aiohttp.ClientTimeout(total=300)) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"Failed to download {url}: HTTP {resp.status}")
+        with open(dest_path, "wb", encoding=None) as fh:  # type: ignore[call-overload]
+            async for chunk in resp.content.iter_chunked(65536):
+                fh.write(chunk)
     return dest_path
 
 

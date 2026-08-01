@@ -80,11 +80,15 @@ const PROPOSAL = {
   dismiss_reason: null,
 }
 
-function makeGetMock(proposals: unknown[] = [PROPOSAL]) {
+function makeGetMock(proposals: unknown[] = [PROPOSAL], findingsEnabled = true) {
   return (url?: string) => {
     if (url?.endsWith('/projects')) return Promise.resolve([PROJECT_WITH_REPO])
     if (url?.includes('/velocity')) return Promise.resolve({ sprints: [] })
     if (url?.includes('/findings/proposals')) return Promise.resolve(proposals)
+    // GH#12734: the scan button is gated on the server-side findings policy,
+    // which is OFF by default. These tests exercise the scan flow, so the
+    // policy is enabled unless a test opts out.
+    if (url?.includes('/findings/policy')) return Promise.resolve({ enabled: findingsEnabled })
     return Promise.resolve([])
   }
 }
@@ -129,6 +133,32 @@ describe('ProjectBrowserView findings proposal queue (GH#11271 T8)', () => {
     // After scan, proposals list re-fetch should have been called
     const getCalls = get.mock.calls.map(c => c[0] as string)
     expect(getCalls.some(u => u?.includes('/findings/proposals'))).toBe(true)
+  })
+
+  // GH#12734: the findings feature is OFF by default, so an ungated button
+  // could only ever return 403 on a stock install.
+  it('hides the Scan button when the findings policy is disabled', async () => {
+    get.mockImplementation(makeGetMock([], false))
+
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+
+    const scanBtn = wrapper.findAll('button').find(b => b.text().includes('Scan'))
+    expect(scanBtn).toBeUndefined()
+    expect(wrapper.text()).toContain(en.llcBrowser.findings.disabled)
+  })
+
+  it('treats an unreadable findings policy as disabled', async () => {
+    // Offering an action that cannot work is worse than hiding one that might.
+    get.mockImplementation((url?: string) => {
+      if (url?.includes('/findings/policy')) return Promise.reject(new Error('boom'))
+      return makeGetMock([])(url)
+    })
+
+    const wrapper = mount(ProjectBrowserView, mountOpts)
+    await flushPromises()
+
+    expect(wrapper.findAll('button').find(b => b.text().includes('Scan'))).toBeUndefined()
   })
 
   it('Promote button calls POST /api/llc/findings/proposals/{id}/promote and refreshes', async () => {

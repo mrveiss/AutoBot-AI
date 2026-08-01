@@ -534,9 +534,7 @@ class LLMHandlerMixin:
                 if not endpoint.endswith(PATH_OLLAMA_GENERATE):
                     endpoint = endpoint.rstrip("/") + PATH_OLLAMA_GENERATE
                 return _normalize_outbound_url(endpoint)
-            logger.error(
-                "Invalid endpoint URL: %s, using config-based default", endpoint
-            )  # codeql[py/clear-text-logging-sensitive-data]
+            logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
@@ -746,19 +744,15 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
     def _get_selected_model(self, requested_model: str | None = None) -> str:
         """Get the LLM model: per-request/per-conversation override, else global config (#11585)."""
         if requested_model:
-            logger.info(
-                "Using per-request LLM model override: %s", requested_model
-            )  # codeql[py/clear-text-logging-sensitive-data]
+            logger.info("Using per-request LLM model override: %s", requested_model)
             return requested_model
         try:
             default_model = get_config().get_default_llm_model()
             selected = get_config().get_nested("backend.llm.ollama.selected_model", default_model)
             if selected and isinstance(selected, str):
-                logger.info("Using LLM model from config: %s", selected)  # codeql[py/clear-text-logging-sensitive-data]
+                logger.info("Using LLM model from config: %s", selected)
                 return selected
-            logger.error(
-                "Invalid model selection: %s, using default", selected
-            )  # codeql[py/clear-text-logging-sensitive-data]
+            logger.error("Invalid model selection: %s, using default", selected)
             return default_model
         except Exception as e:
             logger.error("Failed to load model from config: %s", e)
@@ -878,12 +872,8 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
             {"session_id": session.session_id, "message": message},
         )
 
-        logger.info(
-            "[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint
-        )  # codeql[py/clear-text-logging-sensitive-data]
-        logger.info(
-            "[ChatWorkflowManager] Using model: %s", selected_model
-        )  # codeql[py/clear-text-logging-sensitive-data]
+        logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)
+        logger.info("[ChatWorkflowManager] Using model: %s", selected_model)
 
         return {
             "endpoint": ollama_endpoint,

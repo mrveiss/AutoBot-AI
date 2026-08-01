@@ -269,10 +269,10 @@ function submitType() {
 }
 
 .loading-spinner {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: var(--color-primary, #3b82f6);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -286,7 +286,7 @@ function submitType() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
   font-size: var(--text-sm);
 }
 
@@ -294,8 +294,8 @@ function submitType() {
   display: flex;
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
-  background: var(--bg-surface, #1e1e2e);
-  border-top: 1px solid var(--border-default, #333);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-default);
 }
 
 .toolbar-btn {
@@ -307,7 +307,7 @@ function submitType() {
   border: none;
   border-radius: var(--radius-default);
   background: transparent;
-  color: var(--text-secondary, #a1a1aa);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: var(--text-xs);
   transition: background var(--duration-150), color var(--duration-150);
@@ -315,7 +315,7 @@ function submitType() {
 
 .toolbar-btn:hover:not(:disabled) {
   background: var(--color-hover, rgba(255, 255, 255, 0.1));
-  color: var(--text-primary, #e4e4e7);
+  color: var(--text-primary);
 }
 
 .toolbar-btn:disabled {
@@ -327,23 +327,23 @@ function submitType() {
   display: flex;
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
-  background: var(--bg-surface, #1e1e2e);
-  border-top: 1px solid var(--border-default, #333);
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-default);
 }
 
 .type-input {
   flex: 1;
   padding: var(--spacing-1) var(--spacing-2);
-  border: 1px solid var(--border-default, #333);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-default);
-  background: var(--color-bg, #121212);
-  color: var(--text-primary, #e4e4e7);
+  background: var(--color-bg, var(--intscreenshot-input-bg));
+  color: var(--text-primary);
   font-size: 0.8rem;
   outline: none;
 }
 
 .type-input:focus {
-  border-color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary);
 }
 .type-input:focus-visible {
   outline: 2px solid var(--color-primary);
@@ -358,7 +358,7 @@ function submitType() {
   height: 28px;
   border: none;
   border-radius: var(--radius-default);
-  background: var(--color-primary, #3b82f6);
+  background: var(--color-primary);
   color: white;
   cursor: pointer;
   font-size: var(--text-xs);
@@ -377,18 +377,18 @@ function submitType() {
 }
 
 .region-popup {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 8px;
+  background: var(--intscreenshot-popup-bg);
+  border: 1px solid var(--intscreenshot-popup-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-2);
   min-width: 200px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .region-popup-selector {
   font-size: 0.7rem;
-  color: #94a3b8;
-  margin-bottom: 6px;
+  color: var(--intscreenshot-popup-muted-text);
+  margin-bottom: var(--spacing-1-5);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -397,34 +397,34 @@ function submitType() {
 
 .region-popup-input {
   width: 100%;
-  background: #0f172a;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  padding: 4px 6px;
-  color: #e2e8f0;
+  background: var(--intscreenshot-popup-input-bg);
+  border: 1px solid var(--intscreenshot-popup-input-border);
+  border-radius: var(--radius-default);
+  padding: var(--spacing-1) var(--spacing-1-5);
+  color: var(--intscreenshot-popup-input-text);
   font-size: 0.8rem;
-  margin-bottom: 6px;
+  margin-bottom: var(--spacing-1-5);
   box-sizing: border-box;
 }
 
 .region-popup-save,
 .region-popup-cancel {
   font-size: 0.75rem;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 3px var(--spacing-2);
+  border-radius: var(--radius-default);
   cursor: pointer;
 }
 
 .region-popup-save {
-  background: #3b82f6;
+  background: var(--intscreenshot-popup-save-bg);
   color: white;
   border: none;
-  margin-right: 4px;
+  margin-right: var(--spacing-1);
 }
 
 .region-popup-cancel {
   background: transparent;
-  color: #94a3b8;
-  border: 1px solid #475569;
+  color: var(--intscreenshot-popup-muted-text);
+  border: 1px solid var(--intscreenshot-popup-input-border);
 }
 </style>

@@ -1,3 +1,5 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Corrected GUI Test for AutoBot - Properly navigates tabs
  * This test understands the tab-based structure of the application

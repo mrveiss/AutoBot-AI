@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import json
 import logging
+from urllib.parse import urlparse
 
 import httpx
 
+from autobot_shared.security.ssrf_guard import SSRFError
 from content_reach._http import http_get
 from content_reach._url_guard import ensure_public_url
 from content_reach.backends.browser import BrowserBackend
@@ -28,6 +30,17 @@ logger = logging.getLogger(__name__)
 
 # Reddit API user-agent string.
 _USER_AGENT = "autobot-content-reach/1.0"
+
+
+def _is_reddit_url(url: str) -> bool:
+    """Return True only if *url*'s parsed hostname is reddit.com or a reddit.com subdomain.
+
+    Uses urlparse so a hostname boundary is enforced: a substring check like
+    ``"reddit.com" in url`` would wrongly match ``https://reddit.com.evil.com/``
+    or ``https://evil.com/?x=reddit.com`` (CodeQL py/incomplete-url-substring-sanitization).
+    """
+    host = (urlparse(url).hostname or "").lower()
+    return host == "reddit.com" or host.endswith(".reddit.com")
 
 
 class RedditJsonBackend(ContentBackend):
@@ -54,13 +67,16 @@ class RedditJsonBackend(ContentBackend):
         """Fetch Reddit posts; raise BackendError on network, HTTP, or parse failure."""
         headers = {"User-Agent": _USER_AGENT}
 
-        if request.url and "reddit.com" in request.url:
+        if request.url and _is_reddit_url(request.url):
             await ensure_public_url(request.url)
             url = request.url if request.url.endswith(".json") else request.url + ".json"
             try:
                 response = await http_get(url, client=self._client, headers=headers)
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for %r: %s", url, exc)
+                raise BackendError(str(exc)) from exc
+            except SSRFError as exc:
+                logger.warning("RedditJsonBackend: blocked by SSRF guard at connect time for %r: %s", url, exc)
                 raise BackendError(str(exc)) from exc
         else:
             try:
@@ -72,6 +88,9 @@ class RedditJsonBackend(ContentBackend):
                 )
             except httpx.HTTPError as exc:
                 logger.debug("RedditJsonBackend: HTTP error for query %r: %s", request.query, exc)
+                raise BackendError(str(exc)) from exc
+            except SSRFError as exc:
+                logger.warning("RedditJsonBackend: blocked by SSRF guard at connect time: %s", exc)
                 raise BackendError(str(exc)) from exc
 
         if response.status_code != 200:
@@ -142,6 +161,9 @@ class HnAlgoliaBackend(ContentBackend):
             )
         except httpx.HTTPError as exc:
             logger.debug("HnAlgoliaBackend: HTTP error for query %r: %s", request.query, exc)
+            raise BackendError(str(exc)) from exc
+        except SSRFError as exc:
+            logger.warning("HnAlgoliaBackend: blocked by SSRF guard at connect time: %s", exc)
             raise BackendError(str(exc)) from exc
 
         if response.status_code != 200:

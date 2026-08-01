@@ -5,6 +5,13 @@
 PRs #3608 and #3609 introduced knowledge/memory_graph/ as a parallel package.
 This shim redirects every import to the canonical autobot_memory_graph package
 so those PRs can be merged without breaking any import sites.
+
+#12650 audit: `hybrid_scorer.py` / `query_processor.py` in this package are
+themselves re-export shims onto `autobot_memory_graph.semantic_search` — the
+#3612 reconciliation was correct at the package-API level but left the
+concrete duplicate module bodies behind instead of repointing them. Zero
+production callers of this package were found; kept per project policy
+(never delete code, wire it in) rather than removed outright.
 """
 
 from autobot_memory_graph import *  # noqa: F401, F403

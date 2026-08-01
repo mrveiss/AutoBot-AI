@@ -163,7 +163,7 @@
                 left: `${activity.startPercent}%`,
                 width: `${activity.widthPercent}%`
               }"
-              :title="`${activity.task} (${formatDuration(activity.duration)})`"
+              :title="`${activity.task} (${formatDuration(activity.duration, { style: 'msMinutes', rounding: 'floor' })})`"
             ></div>
           </div>
         </div>
@@ -198,6 +198,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { formatDuration } from '@/utils/formatHelpers'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -268,12 +269,6 @@ function formatUptime(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
   return `${Math.floor(seconds / 3600)}h`
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.floor(ms / 60000)}m`
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -366,8 +361,8 @@ defineExpose({
 }
 
 .agents-empty-state .empty-icon {
-  width: 32px;
-  height: 32px;
+  width: var(--spacing-8);
+  height: var(--spacing-8);
   opacity: 0.7;
 }
 
@@ -468,7 +463,7 @@ defineExpose({
 
 .agent-card:hover {
   border-color: rgba(59, 130, 246, 0.5);
-  transform: translateY(-2px);
+  transform: translateY(var(--spacing-neg-2px));
 }
 
 .agent-card.working {
@@ -508,7 +503,7 @@ defineExpose({
   color: var(--color-error);
   background: transparent;
   border: 1px solid var(--color-error);
-  border-radius: var(--radius-md, 6px);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--duration-150) var(--ease-in-out);
 }
@@ -518,8 +513,8 @@ defineExpose({
 }
 
 .view-logs-btn .icon {
-  width: 12px;
-  height: 12px;
+  width: var(--spacing-3);
+  height: var(--spacing-3);
 }
 
 .agent-card.paused {
@@ -527,8 +522,8 @@ defineExpose({
 }
 
 .agent-avatar {
-  width: 48px;
-  height: 48px;
+  width: var(--spacing-12);
+  height: var(--spacing-12);
   border-radius: var(--radius-xl);
   display: flex;
   align-items: center;
@@ -567,10 +562,10 @@ defineExpose({
 
 .status-ring {
   position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 14px;
-  height: 14px;
+  bottom: var(--spacing-neg-2px);
+  right: var(--spacing-neg-2px);
+  width: var(--spacing-3-5);
+  height: var(--spacing-3-5);
   border-radius: var(--radius-full);
   border: 2px solid var(--bg-primary);
 }
@@ -627,8 +622,8 @@ defineExpose({
 }
 
 .activity-pulse {
-  width: 8px;
-  height: 8px;
+  width: var(--spacing-2);
+  height: var(--spacing-2);
   border-radius: var(--radius-full);
   background: var(--color-info);
   animation: pulse 1.5s infinite;
@@ -790,7 +785,7 @@ defineExpose({
 .timeline-row {
   display: flex;
   align-items: center;
-  height: 36px;
+  height: var(--spacing-9);
 }
 
 .agent-label {
@@ -812,7 +807,7 @@ defineExpose({
 
 .activity-bars {
   flex: 1;
-  height: 24px;
+  height: var(--spacing-6);
   background: rgba(51, 65, 85, 0.3);
   border-radius: var(--radius-default);
   position: relative;
@@ -926,7 +921,7 @@ defineExpose({
 
 .feed-leave-to {
   opacity: 0;
-  transform: translateX(20px);
+  transform: translateX(var(--spacing-5));
 }
 
 /* Responsive */
@@ -958,7 +953,7 @@ defineExpose({
 
   .activity-bars {
     width: 100%;
-    height: 20px;
+    height: var(--spacing-5);
   }
 }
 </style>

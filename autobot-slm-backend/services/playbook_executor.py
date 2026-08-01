@@ -13,11 +13,14 @@ import asyncio
 import logging
 import os
 import re
+import shlex
 import shutil
+import time
 from pathlib import Path
 from typing import Callable, Dict, List
 
 from services.ansible_secrets import fetch_deploy_secrets
+from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.inventory_builder import (
     build_registry_inventory,
     validate_inventory,
@@ -35,6 +38,99 @@ logger = logging.getLogger(__name__)
 # PrivateTmp=true /tmp is namespaced anyway; the uid suffix protects runs
 # outside systemd (dev mode, manual uvicorn).
 ANSIBLE_LOCAL_TMP = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
+
+# #11492: the self-update ansible-playbook run (update-all-nodes.yml against
+# the SLM's own node) restarts autobot-slm-backend mid-run. The service is
+# KillMode=control-group, so systemd SIGTERMs the whole cgroup on restart —
+# including the ansible-playbook child — killing the run before Play 1's tail
+# and all of Play 2/3 execute. Detaching that one run into its own transient
+# systemd unit (a separate cgroup) lets it survive the restart.
+SELF_UPDATE_DETACH_UNIT_PREFIX = os.getenv("SLM_SELF_UPDATE_UNIT_PREFIX", "autobot-selfupdate")
+
+# #12596: the detached run must be a transient SERVICE in system.slice, never
+# a --scope. A scope's payload stays a descendant of the invoking process, so
+# one created from inside autobot-slm-backend is nested in that service's
+# cgroup subtree and Play 1's `systemctl restart autobot-slm-backend` tears it
+# down mid-run — the exact failure #11492/#12567 were meant to prevent (Play 2/3
+# never ran; the app tier and workers stayed stale while the run reported OK).
+# A transient service is forked by PID 1, so it is not in this backend's cgroup
+# at all. Pinning the slice explicitly keeps that true even if this service is
+# ever given cgroup delegation.
+SELF_UPDATE_DETACH_SLICE = os.getenv("SLM_SELF_UPDATE_SLICE", "system.slice")
+
+# #12803: where a DETACHED run's inventory / extra-vars files are written.
+#
+# autobot-slm-backend.service sets PrivateTmp=true, so this process's /tmp is a
+# private mount namespace. Under the old --scope the payload stayed in THIS
+# process's namespace and saw those files fine. A transient service is forked by
+# PID 1 and therefore gets the HOST /tmp — so anything written to
+# ANSIBLE_LOCAL_TMP (/tmp/...) is simply invisible to it, and ansible failed
+# instantly with "Unable to parse ... as an inventory source" / "Could not find
+# or access ...json". The files were never deleted out from under the run; they
+# were never in a namespace it could see.
+#
+# The unit's only writable non-namespaced location is ReadWritePaths=/opt/autobot
+# (ProtectSystem=strict blocks the rest), so detached runs stage these two files
+# there instead. Attached runs keep using ANSIBLE_LOCAL_TMP — same namespace, no
+# need to leave /tmp.
+SELF_UPDATE_SHARED_DIR = Path(os.getenv("SLM_SELF_UPDATE_SHARED_DIR", "/opt/autobot/.slm-self-update"))
+
+# Age after which a stray staged inventory/extra-vars file is pruned. A detached
+# run deliberately outlives this process (Play 1 restarts us), so the caller
+# cannot reliably delete these itself — see _stage_dir_for_run. Pruning on the
+# next run keeps the directory bounded without ever racing a live run.
+SELF_UPDATE_STAGE_TTL_SECONDS = float(os.getenv("SLM_SELF_UPDATE_STAGE_TTL_SECONDS", "86400"))
+
+# Env vars forwarded to the detached scope via explicit --setenv=NAME=VALUE.
+# `sudo` (env_reset, see setup-passwordless-sudo.yml) strips the environment
+# before systemd-run ever sees it, and systemd-run does not forward the
+# caller's process environment to the unit it starts — each var must be
+# passed explicitly. Only a narrow allowlist (never secrets) is forwarded;
+# ansible receives its stored secrets via `-e @file` (#11735 pattern), not env.
+SYSTEMD_RUN_ENV_ALLOWLIST_EXACT = ("PATH", "HOME", "USER", "LANG", "LC_ALL", "SSH_AUTH_SOCK")
+
+# Invariant: no ANSIBLE_* var may carry a secret (e.g. ANSIBLE_VAULT_PASSWORD)
+# through this allowlist — secrets ride via `-e @file` (#11735), never env.
+# Enumerated exactly (not a prefix match) to the keys this module itself sets
+# — _build_ansible_env's fixed set plus ANSIBLE_INVENTORY (execute_playbook)
+# — so a caller-supplied or inherited ANSIBLE_VAULT_PASSWORD/-style var can
+# never slip through just by starting with "ANSIBLE_".
+ANSIBLE_ENV_ALLOWLIST_EXACT = (
+    "ANSIBLE_FORCE_COLOR",
+    "ANSIBLE_NOCOLOR",
+    "ANSIBLE_HOST_KEY_CHECKING",
+    "ANSIBLE_SSH_RETRIES",
+    "ANSIBLE_LOCAL_TEMP",
+    "ANSIBLE_INVENTORY",
+)
+
+# File-backed output for detached self-update runs (#11492). A pipe's read
+# end is owned by this backend process, so once the Play 1 restart task kills
+# it, the pipe read side closes — a subsequent write from the (now detached,
+# still running) ansible-playbook process would raise BrokenPipeError,
+# killing Play 2/3 exactly like the cgroup-kill this fix exists to prevent.
+# The detached run's stdout/stderr are redirected to this file instead of the
+# backend's pipe (see _wrap_with_systemd_unit), so a dead backend can never
+# crash it; this backend tails the same file for live progress while it is
+# still alive. Mirrors the existing /var/log/autobot/provision-wizard.log
+# precedent (api/setup_wizard.py).
+SELF_UPDATE_LOG_PATH = Path(os.getenv("SLM_SELF_UPDATE_LOG_PATH", "/var/log/autobot/self-update-ansible.log"))
+
+# #12425: /var/log/autobot is a shared dir that any autobot-* service user
+# may have created/re-created first (observed owned by the TTS worker,
+# 0755) — the SLM's own `autobot` user then cannot create a new file there
+# and _prepare_self_update_log_file() raises OSError. Silently dropping to
+# an attached run in that case is the exact regression this constant exists
+# to prevent: #11492's own Play-1 "restart autobot-slm-backend" SIGTERMs an
+# attached run before Play 2/3 (the co-located backend/frontend deploy) ever
+# execute. Before giving up and going attached, retry under this uid-scoped
+# 0700 dir (same one execute_playbook already uses for temp inventories/
+# extra-vars, so no additional permission is required beyond what a normal
+# run already needs).
+SELF_UPDATE_LOG_FALLBACK_PATH = Path(ANSIBLE_LOCAL_TMP) / "self-update-ansible.log"
+
+# Poll interval while tailing the detached run's log file for live progress.
+SELF_UPDATE_LOG_TAIL_POLL_SEC = float(os.getenv("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", "1.0"))
 
 
 class PlaybookExecutor:
@@ -61,21 +157,11 @@ class PlaybookExecutor:
         self.inventory_path = ansible_dir / "inventory" / "slm-nodes.yml"
 
     def _find_ansible_playbook(self) -> str:
-        """Find ansible-playbook executable."""
-        ansible_path = shutil.which("ansible-playbook")
-        if ansible_path:
-            return ansible_path
+        """Find ansible-playbook executable.
 
-        # Try common paths
-        common_paths = [
-            "/usr/bin/ansible-playbook",
-            "/usr/local/bin/ansible-playbook",
-        ]
-        for path in common_paths:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-
-        raise FileNotFoundError("ansible-playbook not found. Install: apt install ansible")
+        Shared search logic lives in services.ansible_utils (Issue #12693).
+        """
+        return _resolve_ansible_playbook()
 
     @staticmethod
     def _clean_task_name(task_name: str) -> str:
@@ -182,7 +268,13 @@ class PlaybookExecutor:
         if "TASK [" in line and "[PLAY " in line:
             try:
                 task_start = line.index("TASK [")
-                task_name = line[task_start + 6 :].split("]")[0]
+                # rsplit (not split): the task's own display name embeds a
+                # "[PLAY N]" prefix, i.e. its own "]" — splitting on the FIRST
+                # "]" truncated at "[PLAY 1" and "[PLAY 1]" never matched
+                # below (#11492 discovery while adding self-update log-tail
+                # parsing tests). The trailing "] ***" padding never contains
+                # "]" itself, so the LAST "]" is always the true delimiter.
+                task_name = line[task_start + 6 :].rsplit("]", 1)[0]
 
                 if "[PLAY 1]" in task_name:
                     return self._parse_play1_task(task_name)
@@ -260,13 +352,13 @@ class PlaybookExecutor:
 
         return cmd
 
-    async def _stream_playbook_output(
+    async def _process_playbook_lines(
         self,
-        process: asyncio.subprocess.Process,
+        line_iter,
         progress_callback: Callable | None,
     ) -> List[str]:
         """
-        Stream and parse playbook output for progress (Issue #880, #3033).
+        Shared line-processing loop for playbook output (Issue #880, #3033, #11492).
 
         Fires progress_callback for each recognized Ansible output line.
         Between recognized lines — when Ansible is silent during long-running
@@ -275,8 +367,13 @@ class PlaybookExecutor:
 
         A new tracker is started each time a TASK line is detected and the
         previous one is cancelled, so heartbeats are scoped per task.
+
+        ``line_iter`` is any async iterator of decoded, rstripped text lines —
+        either live from the child's stdout pipe, or tailed from a log file
+        for a detached self-update run (#11492) — so both sources share this
+        one parsing/heartbeat implementation.
         """
-        output_lines = []
+        output_lines: List[str] = []
         current_tracker: TaskProgressTracker | None = None
 
         async def _stop_current_tracker() -> None:
@@ -292,34 +389,76 @@ class PlaybookExecutor:
                 current_tracker = TaskProgressTracker(task_name, progress_callback)
                 await current_tracker.__aenter__()
 
-        if process.stdout:
-            try:
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        break
+        try:
+            async for line_str in line_iter:
+                output_lines.append(line_str)
 
-                    line_str = line.decode("utf-8", errors="replace").rstrip()
-                    output_lines.append(line_str)
-
-                    if progress_callback:
-                        progress = self._parse_progress(line_str)
-                        if progress:
-                            stage = progress.get("stage", "")
-                            # Start a fresh tracker for every new task boundary
-                            # so heartbeats reflect the task currently executing.
-                            if stage in ("task", "heartbeat") or stage.endswith(
-                                ("_starting", "_syncing", "_restarting", "_waiting")
-                            ):
-                                await _start_tracker(progress.get("message", stage))
-                            try:
-                                await progress_callback(progress)
-                            except Exception as e:
-                                logger.debug("Progress callback error: %s", e, exc_info=False)
-            finally:
-                await _stop_current_tracker()
+                if progress_callback:
+                    progress = self._parse_progress(line_str)
+                    if progress:
+                        stage = progress.get("stage", "")
+                        # Start a fresh tracker for every new task boundary
+                        # so heartbeats reflect the task currently executing.
+                        if stage in ("task", "heartbeat") or stage.endswith(
+                            ("_starting", "_syncing", "_restarting", "_waiting")
+                        ):
+                            await _start_tracker(progress.get("message", stage))
+                        try:
+                            await progress_callback(progress)
+                        except Exception as e:
+                            logger.debug("Progress callback error: %s", e, exc_info=False)
+        finally:
+            await _stop_current_tracker()
 
         return output_lines
+
+    @staticmethod
+    async def _iter_pipe_lines(process: asyncio.subprocess.Process):
+        """Yield decoded lines from a live child stdout pipe (Issue #880, #3033)."""
+        if not process.stdout:
+            return
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+            yield line.decode("utf-8", errors="replace").rstrip()
+
+    @staticmethod
+    async def _iter_log_file_lines(log_path: Path, process: asyncio.subprocess.Process):
+        """Tail a log file for a detached run's output (#11492).
+
+        Polls for newly appended lines while ``process`` (the detaching
+        wrapper) is still running; stops once it has exited and no further
+        lines are pending. The detached ansible-playbook process itself keeps
+        writing to this same file independently after this backend restarts —
+        this generator simply stops watching, it never stops the write side.
+        """
+        with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+            while True:
+                line = await asyncio.to_thread(fh.readline)
+                if not line:
+                    if process.returncode is not None:
+                        break
+                    await asyncio.sleep(SELF_UPDATE_LOG_TAIL_POLL_SEC)
+                    continue
+                yield line.rstrip("\n")
+
+    async def _stream_playbook_output(
+        self,
+        process: asyncio.subprocess.Process,
+        progress_callback: Callable | None,
+    ) -> List[str]:
+        """Stream and parse live pipe output for progress. Helper for _run_subprocess."""
+        return await self._process_playbook_lines(self._iter_pipe_lines(process), progress_callback)
+
+    async def _tail_playbook_log(
+        self,
+        log_path: Path,
+        process: asyncio.subprocess.Process,
+        progress_callback: Callable | None,
+    ) -> List[str]:
+        """Tail a detached run's log file and parse it for progress (#11492)."""
+        return await self._process_playbook_lines(self._iter_log_file_lines(log_path, process), progress_callback)
 
     @staticmethod
     def _ensure_ansible_temp_dirs() -> None:
@@ -425,29 +564,297 @@ class PlaybookExecutor:
             "ANSIBLE_LOCAL_TEMP": ANSIBLE_LOCAL_TMP,
         }
 
+    @staticmethod
+    def _self_update_detach_available() -> bool:
+        """Whether the self-update run can be detached into its own scope (#11492).
+
+        Both must hold:
+          - ``systemd-run`` is on PATH (creates the transient service)
+          - this process is itself managed by systemd — ``INVOCATION_ID`` is set
+            only for units systemd starts, so it precisely answers "are we
+            running as a systemd service" (as opposed to `sd_booted()`-style
+            checks, which are true on any systemd host regardless of how this
+            process was launched). Without it there is no same-cgroup restart
+            to survive: dev ``uvicorn``, tests, containers without systemd as
+            PID 1 all fall back to the direct exec unchanged.
+        """
+        return shutil.which("systemd-run") is not None and "INVOCATION_ID" in os.environ
+
+    @staticmethod
+    def _write_fresh_log_file(path: Path) -> Path | None:
+        """Create/truncate a fresh 0600 log file at ``path`` (best-effort).
+
+        Shared by the canonical (#11492) and fallback (#12425) self-update
+        log paths. Truncated per run so log-tailing starts at byte 0 and a
+        stale prior run's content is never replayed as this run's progress.
+        Ansible output can contain sensitive paths/values — 0600, not the
+        world-readable default umask.
+
+        Returns None on any OSError; the caller decides whether to fall back
+        to another path or give up.
+        """
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("", encoding="utf-8")
+            os.chmod(path, 0o600)
+            return path
+        except OSError:
+            return None
+
+    @staticmethod
+    def _prepare_self_update_log_file() -> Path | None:
+        """Create/truncate a fresh log file for this detached run (#11492).
+
+        The detached ansible-playbook process's stdout/stderr are redirected
+        here (see _wrap_with_systemd_unit) instead of the backend's pipe, so
+        a dead backend can never BrokenPipe-crash Play 2/3.
+
+        Returns None on failure — the caller (#12425) falls back to a
+        writable uid-scoped path before giving up; the caller must NOT detach
+        without file-backed output in the meantime (a pipe-only detach would
+        just move the same crash risk this fix exists to close from "cgroup
+        kill" to "broken pipe"; direct-exec, though it dies with the backend,
+        is at least a deterministic, well-understood failure mode).
+        """
+        result = PlaybookExecutor._write_fresh_log_file(SELF_UPDATE_LOG_PATH)
+        if result is None:
+            logger.error("Could not prepare canonical self-update log file %s", SELF_UPDATE_LOG_PATH)
+        return result
+
+    @staticmethod
+    def _systemd_run_env_args(env: Dict[str, str]) -> List[str]:
+        """Build explicit --setenv=NAME=VALUE args for the detached scope (#11492).
+
+        Allowlist is a fixed enumeration (SYSTEMD_RUN_ENV_ALLOWLIST_EXACT +
+        ANSIBLE_ENV_ALLOWLIST_EXACT), never a prefix match — a caller-supplied
+        or inherited ANSIBLE_VAULT_PASSWORD/-style var must never forward just
+        by starting with "ANSIBLE_".
+        """
+        allowed = SYSTEMD_RUN_ENV_ALLOWLIST_EXACT + ANSIBLE_ENV_ALLOWLIST_EXACT
+        return [f"--setenv={key}={env[key]}" for key in allowed if key in env]
+
+    def _wrap_with_systemd_unit(self, cmd: List[str], env: Dict[str, str], log_path: Path) -> List[str]:
+        """Wrap an ansible-playbook cmd to run detached, file-backed (#11492, #12596).
+
+        Two layers:
+          - ``sudo -n systemd-run --collect --unit=… --slice=system.slice``: a
+            transient **service**, forked by PID 1 into its own cgroup under
+            ``system.slice``.
+
+            #12596: this was previously ``--scope``, which does NOT survive.
+            A scope keeps the payload as a descendant of the *invoking*
+            process, so a scope created from inside ``autobot-slm-backend``
+            lands in that service's cgroup subtree; Play 1's own ``systemctl
+            restart autobot-slm-backend`` (KillMode=control-group) then tore
+            the nested scope down with the service and the run died at the end
+            of Play 1 — before Play 2/3 deployed the co-located app tier and
+            workers. A transient service is owned by PID 1, not by this
+            backend, so restarting this backend cannot control-group-kill it.
+            ``--slice=system.slice`` states that placement explicitly rather
+            than relying on the default, so inherited cgroup delegation can
+            never silently re-nest the unit under the caller again.
+
+            ``--wait`` preserves the pre-#12596 blocking semantics and exit-code
+            propagation for detached runs that do NOT restart this backend. When
+            the restart does land, only this waiting client is killed — the
+            transient service keeps running to completion on its own.
+
+            ``sudo`` mirrors the existing privilege pattern already used for
+            service restarts (_restart_slm_service) — the passwordless-sudo
+            sudoers rule this service already relies on; ``-n``
+            (non-interactive) fast-fails instead of hanging on a password
+            prompt if that sudoers rule is ever misconfigured. ``--uid``/
+            ``--gid`` drop back to the caller's own identity so
+            ansible-playbook still runs as the SLM service user, not root;
+            ``--working-directory`` replaces the ``cwd=`` kwarg systemd-run
+            does not inherit.
+          - ``sh -c 'exec "$0" "$@" >> <log> 2>&1'``: reopens the FINAL exec'd
+            process's (ansible-playbook, not this shell) stdout/stderr onto
+            the log file before replacing the shell image, so its output is
+            never connected to the backend's pipe in the first place — a dead
+            backend cannot BrokenPipe it. ``exec "$0" "$@"`` keeps every
+            argument a literal positional parameter, so no argv needs shell
+            escaping beyond the already-quoted log path.
+        """
+        unit_name = f"{SELF_UPDATE_DETACH_UNIT_PREFIX}-{os.getpid()}-{int(time.time())}"
+        redirect_script = f'exec "$0" "$@" >> {shlex.quote(str(log_path))} 2>&1'
+        file_backed_cmd = ["/bin/sh", "-c", redirect_script, *cmd]
+        return [
+            "sudo",
+            "-n",
+            "systemd-run",
+            "--collect",
+            "--wait",
+            f"--unit={unit_name}",
+            f"--slice={SELF_UPDATE_DETACH_SLICE}",
+            f"--uid={os.getuid()}",
+            f"--gid={os.getgid()}",
+            f"--working-directory={self.ansible_dir}",
+            *self._systemd_run_env_args(env),
+            "--",
+            *file_backed_cmd,
+        ]
+
+    def _prepare_detached_run(self, cmd: List[str], env: Dict[str, str]) -> tuple[List[str], Path | None]:
+        """Resolve the effective argv + log path for a requested detach (#11492).
+
+        Helper for _run_subprocess. Returns (cmd, None) unchanged whenever
+        detaching isn't possible (no systemd-run/service context, or neither
+        the canonical nor fallback log file could be prepared) so the caller
+        falls back to the exact pipe-attached behavior that existed before
+        this fix.
+
+        #12425: the canonical SELF_UPDATE_LOG_PATH (/var/log/autobot/...) can
+        be unwritable by this service user (e.g. another autobot-* service
+        owns the shared dir) without systemd-run itself being unavailable.
+        Silently dropping to attached in that case is the regression this
+        fallback closes — an attached run gets SIGTERM'd by Play 1's own
+        "restart autobot-slm-backend" task before Play 2/3 (the co-located
+        backend/frontend deploy) ever execute. Try a writable uid-scoped
+        fallback path and still detach before giving up.
+        """
+        if not self._self_update_detach_available():
+            logger.warning(
+                "Self-update detach requested but systemd-run/service context "
+                "unavailable — running attached (this run will die if the "
+                "backend restarts mid-flight)"
+            )
+            return cmd, None
+
+        log_path = self._prepare_self_update_log_file()
+        if log_path is None:
+            logger.warning(
+                "Canonical self-update log path %s unwritable — retrying "
+                "under fallback path %s before giving up on detach (#12425)",
+                SELF_UPDATE_LOG_PATH,
+                SELF_UPDATE_LOG_FALLBACK_PATH,
+            )
+            log_path = self._write_fresh_log_file(SELF_UPDATE_LOG_FALLBACK_PATH)
+
+        if log_path is None:
+            logger.critical(
+                "UPDATE-ALL DEGRADED (#12425): neither the canonical (%s) nor "
+                "the fallback (%s) self-update log path is writable — running "
+                "ATTACHED as a last resort. The imminent Play-1 'restart "
+                "autobot-slm-backend' WILL SIGTERM this run before Play 2/3 "
+                "(backend/frontend deploy) execute, silently leaving the "
+                "co-located app tier stale.",
+                SELF_UPDATE_LOG_PATH,
+                SELF_UPDATE_LOG_FALLBACK_PATH,
+            )
+            return cmd, None
+
+        logger.info("Self-update run detached into transient systemd service, output -> %s", log_path)
+        return self._wrap_with_systemd_unit(cmd, env, log_path), log_path
+
     async def _run_subprocess(
         self,
         cmd: List[str],
         env: Dict[str, str],
         progress_callback: Callable | None,
+        detach: bool = False,
     ) -> Dict[str, any]:
         """
         Launch ansible-playbook subprocess and collect output. Ref: #1088.
 
         Helper for execute_playbook.
+
+        Args:
+            detach: When True AND the runtime supports it (#11492), wrap the
+                command in a ``systemd-run`` transient service with file-backed
+                stdout/stderr so it survives a same-process ``systemctl
+                restart autobot-slm-backend`` mid-run (the self-update path)
+                without a dead backend's pipe crashing it. Falls back to the
+                unchanged direct exec + pipe when systemd-run/systemd-service
+                context or the log file is unavailable (dev mode, tests,
+                containers).
         """
+        effective_cmd = cmd
+        log_path: Path | None = None
+        stdout_target: int = asyncio.subprocess.PIPE
+        stderr_target: int = asyncio.subprocess.STDOUT
+
+        if detach:
+            effective_cmd, log_path = self._prepare_detached_run(cmd, env)
+            if log_path is not None:
+                # Real output goes to the file (see _wrap_with_systemd_unit);
+                # nothing meaningful is expected on this outer pipe, and
+                # leaving it as PIPE-but-unread risks the wrapper deadlocking
+                # once the OS pipe buffer fills.
+                stdout_target = asyncio.subprocess.DEVNULL
+                stderr_target = asyncio.subprocess.DEVNULL
+
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
+            *effective_cmd,
+            stdout=stdout_target,
+            stderr=stderr_target,
             cwd=str(self.ansible_dir),
             env=env,
         )
-        output_lines = await self._stream_playbook_output(process, progress_callback)
+        if log_path is not None:
+            output_lines = await self._tail_playbook_log(log_path, process, progress_callback)
+        else:
+            output_lines = await self._stream_playbook_output(process, progress_callback)
         await process.wait()
         return {"output": "\n".join(output_lines), "returncode": process.returncode}
 
-    async def _build_dynamic_inventory(self) -> Path:
+    @staticmethod
+    def _stage_dir_for_run(detach: bool) -> str | None:
+        """Directory for this run's inventory / extra-vars files (#12803).
+
+        Returns None for attached runs, meaning "use the default
+        ANSIBLE_LOCAL_TMP" — an attached payload shares this process's mount
+        namespace, so /tmp is fine and nothing needs to change.
+
+        A DETACHED payload is forked by PID 1 and does NOT inherit this
+        service's PrivateTmp namespace, so it cannot see anything under /tmp
+        that we wrote. Stage those files under SELF_UPDATE_SHARED_DIR instead —
+        inside ReadWritePaths=/opt/autobot, the only non-namespaced location
+        this sandboxed unit may write.
+
+        Returns None (falling back to /tmp) if the directory cannot be created,
+        so a staging failure degrades to the previous behaviour rather than
+        aborting the update outright.
+        """
+        if not detach:
+            return None
+        try:
+            SELF_UPDATE_SHARED_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.error(
+                "Could not create self-update staging dir %s (%s) — falling back to %s, "
+                "which a detached run cannot read (#12803)",
+                SELF_UPDATE_SHARED_DIR,
+                exc,
+                ANSIBLE_LOCAL_TMP,
+            )
+            return None
+        PlaybookExecutor._prune_stage_dir()
+        return str(SELF_UPDATE_SHARED_DIR)
+
+    @staticmethod
+    def _prune_stage_dir() -> None:
+        """Delete staged files older than the TTL (#12803).
+
+        A detached run outlives this process by design (Play 1 restarts us
+        mid-run), so the caller cannot delete its own staged files without
+        racing the payload — that race is precisely what #12803 reported. Prune
+        on the NEXT run instead: anything older than the TTL belongs to a run
+        that has long since finished.
+        """
+        cutoff = time.time() - SELF_UPDATE_STAGE_TTL_SECONDS
+        try:
+            entries = list(SELF_UPDATE_SHARED_DIR.iterdir())
+        except OSError:
+            return
+        for stale in entries:
+            try:
+                if stale.is_file() and stale.stat().st_mtime < cutoff:
+                    stale.unlink(missing_ok=True)
+            except OSError as exc:
+                logger.debug("Could not prune staged file %s: %s", stale, exc)
+
+    async def _build_dynamic_inventory(self, stage_dir: str | None = None) -> Path:
         """Generate an Ansible inventory from the DB node registry (#10109, #10095).
 
         Queries all Node records, builds a YAML inventory where each host name
@@ -473,13 +880,39 @@ class PlaybookExecutor:
 
         inv = build_registry_inventory(nodes, is_local_ip)
         validate_inventory(inv)
-        tmp_path = write_temp_inventory(inv, uid_tmp_dir=ANSIBLE_LOCAL_TMP)
+        tmp_path = write_temp_inventory(inv, uid_tmp_dir=stage_dir or ANSIBLE_LOCAL_TMP)
+        self._link_group_vars(tmp_path)
         logger.info(
             "_build_dynamic_inventory: wrote inventory for %d node(s) to %s",
             len(nodes),
             tmp_path,
         )
         return tmp_path
+
+    def _link_group_vars(self, inventory_path: Path) -> None:
+        """Expose the static group_vars beside the dynamic inventory (#11781).
+
+        Ansible resolves ``group_vars/`` relative to the inventory SOURCE
+        directory. The dynamic inventory is written to a uid-scoped /tmp dir,
+        so none of ``inventory/group_vars/*.yml`` (24 vars in all.yml alone,
+        e.g. ``slm_manager_node_id``) loaded — playbooks referencing them hit
+        "undefined variable" (the self-update pre-flight "Notify SLM of new
+        commit" task failed exactly this way). Symlink the real group_vars dir
+        next to the temp inventory so dynamic runs get the same vars as static
+        ones. Best-effort: a link failure must not block the deploy.
+        """
+        src = self.ansible_dir / "inventory" / "group_vars"
+        if not src.is_dir():
+            return
+        link = inventory_path.parent / "group_vars"
+        try:
+            if link.is_symlink() or link.exists():
+                if link.is_symlink() and link.resolve() == src.resolve():
+                    return
+                link.unlink()
+            link.symlink_to(src, target_is_directory=True)
+        except OSError as exc:
+            logger.warning("Could not link group_vars for dynamic inventory: %s", exc)
 
     async def execute_playbook(
         self,
@@ -490,6 +923,7 @@ class PlaybookExecutor:
         check_mode: bool = False,
         progress_callback: Callable | None = None,
         inventory_path: Path | None = None,
+        detach: bool = False,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -508,6 +942,10 @@ class PlaybookExecutor:
             check_mode: Run in check mode (dry run)
             progress_callback: Async function to call with progress updates
             inventory_path: Override inventory file (Issue #1294, wizard provisioning)
+            detach: Run detached in its own systemd service (#11492, #12596). Only pass
+                True for the SLM self-update path (the run that restarts
+                autobot-slm-backend); ordinary per-role/per-node deploys leave
+                this False, since they don't kill their own process.
 
         Returns:
             Dict with keys: success (bool), output (str), returncode (int)
@@ -521,6 +959,11 @@ class PlaybookExecutor:
         # Determine which inventory to use.
         # Explicit caller-supplied path (wizard) → use as-is.
         # No path provided → generate from DB node registry (#10109, #10095).
+        # #12803: a detached payload cannot see this process's PrivateTmp /tmp,
+        # so its inventory/extra-vars must be staged somewhere both namespaces
+        # share. None => default ANSIBLE_LOCAL_TMP (attached runs).
+        stage_dir = self._stage_dir_for_run(detach)
+
         dynamic_inv_path: Path | None = None
         if inventory_path is not None:
             effective_inventory = inventory_path
@@ -528,7 +971,7 @@ class PlaybookExecutor:
                 raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
         else:
             try:
-                dynamic_inv_path = await self._build_dynamic_inventory()
+                dynamic_inv_path = await self._build_dynamic_inventory(stage_dir)
                 effective_inventory = dynamic_inv_path
             except Exception as exc:
                 logger.warning(
@@ -548,7 +991,7 @@ class PlaybookExecutor:
         # temp file (-e @file), never argv (#11735).
         extra_vars_file: Path | None = None
         if merged_extra_vars:
-            extra_vars_file = write_temp_extra_vars(merged_extra_vars)
+            extra_vars_file = write_temp_extra_vars(merged_extra_vars, uid_tmp_dir=stage_dir)
 
         cmd = self._build_ansible_command(
             playbook_path,
@@ -565,7 +1008,7 @@ class PlaybookExecutor:
             # Override ansible.cfg default inventory to prevent merging
             # with production.yml when wizard passes a temp inventory (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
-            proc_result = await self._run_subprocess(cmd, env, progress_callback)
+            proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach)
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
@@ -585,17 +1028,29 @@ class PlaybookExecutor:
                 "returncode": -1,
             }
         finally:
-            # Clean up the per-run temp inventory and extra-vars files
-            if dynamic_inv_path is not None:
-                try:
-                    dynamic_inv_path.unlink(missing_ok=True)
-                except OSError as exc:
-                    logger.debug("Could not remove temp inventory %s: %s", dynamic_inv_path, exc)
-            if extra_vars_file is not None:
-                try:
-                    extra_vars_file.unlink(missing_ok=True)
-                except OSError as exc:
-                    logger.debug("Could not remove temp extra-vars file %s: %s", extra_vars_file, exc)
+            # Clean up the per-run temp inventory and extra-vars files.
+            #
+            # #12803: NEVER for a detached run. That payload is owned by PID 1
+            # and outlives this coroutine by design — Play 1 restarts this very
+            # service mid-run — so unlinking here can pull the inventory and
+            # extra-vars out from under a playbook that is still starting. Those
+            # files live under SELF_UPDATE_SHARED_DIR and are reclaimed by
+            # _prune_stage_dir() on a later run, which cannot race a live one.
+            if detach:
+                logger.debug(
+                    "Detached run — leaving staged inventory/extra-vars for TTL pruning (#12803)",
+                )
+            else:
+                if dynamic_inv_path is not None:
+                    try:
+                        dynamic_inv_path.unlink(missing_ok=True)
+                    except OSError as exc:
+                        logger.debug("Could not remove temp inventory %s: %s", dynamic_inv_path, exc)
+                if extra_vars_file is not None:
+                    try:
+                        extra_vars_file.unlink(missing_ok=True)
+                    except OSError as exc:
+                        logger.debug("Could not remove temp extra-vars file %s: %s", extra_vars_file, exc)
 
 
 # Singleton instance

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Tuple
@@ -494,7 +495,6 @@ class ReplicationService:
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
-            "-o",
             "ConnectTimeout=10",
             "-o",
             "BatchMode=yes",
@@ -526,7 +526,11 @@ class ReplicationService:
         redis_password: str,
     ) -> bool:
         """Run Ansible playbook to configure Redis replication."""
-        # Create ad-hoc playbook for replication
+        # Create ad-hoc playbook for replication.
+        # The credential is NOT written into the playbook file; it is resolved
+        # at run time from the controller environment via Ansible's `env`
+        # lookup, so no clear-text credential is ever persisted to disk.
+        auth = "{{ lookup('env', 'AUTOBOT_REDIS_REPL_AUTH') }}"
         playbook_content = f"""---
 - name: Configure Redis Replication
   hosts: all
@@ -538,11 +542,11 @@ class ReplicationService:
         redis_replication_mode: replica
         redis_master_host: "{master_ip}"
         redis_master_port: 6379
-        redis_master_auth: "{redis_password}"
-        redis_password: "{redis_password}"
+        redis_master_auth: "{auth}"
+        redis_password: "{auth}"
 """
 
-        # Write temporary playbook
+        # Write temporary playbook (contains no secrets)
         playbook_path = self.ansible_dir / "temp_replication.yml"
         playbook_path.write_text(playbook_content, encoding="utf-8")
 
@@ -560,11 +564,14 @@ class ReplicationService:
                 "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'",
             ]
 
+            # Pass the credential via the environment (never persisted to disk).
+            playbook_env = {**os.environ, "AUTOBOT_REDIS_REPL_AUTH": redis_password}
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(self.ansible_dir),
+                env=playbook_env,
             )
 
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=300)
@@ -681,7 +688,6 @@ class ReplicationService:
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
-            "-o",
             "ConnectTimeout=10",
             "-p",
             str(ssh_port),
@@ -747,7 +753,6 @@ class ReplicationService:
             "/usr/bin/ssh",
             "-o",
             "StrictHostKeyChecking=accept-new",
-            "-o",
             "-o",
             "ConnectTimeout=10",
             "-p",

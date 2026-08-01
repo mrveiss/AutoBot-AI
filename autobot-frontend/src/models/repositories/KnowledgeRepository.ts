@@ -455,8 +455,27 @@ export class KnowledgeRepository extends ApiRepository {
    * Update document by ID
    */
   async updateDocument(documentId: string, updates: Partial<KnowledgeDocument>): Promise<KnowledgeDocument> {
-    // Use facts endpoint for consistency with backend
-    const response = await this.put<KnowledgeDocument>(`${getApiBase()}/knowledge_base/facts/${documentId}`, updates)
+    // #12326: backend serves fact update at PUT /api/knowledge-maintenance/fact/{fact_id}
+    // (autobot-backend/api/knowledge_maintenance.py:1435). The prior
+    // /knowledge_base/facts/{id} path 404'd.
+    //
+    // The backend binds UpdateFactRequest (autobot-backend/api/schemas_knowledge.py:3006)
+    // which only accepts `content`, `category`, and `metadata` (Metadata = Dict[str, Any]).
+    // Callers also send `title`, `source`, and `tags`; with pydantic `extra=ignore`
+    // those are silently dropped (200 but never persisted). Fold them into `metadata`
+    // so they persist, merging (not clobbering) any metadata the caller supplies.
+    const { content, category, metadata, title, source, tags } = updates
+    const mergedMetadata: Record<string, unknown> = { ...metadata }
+    if (title !== undefined) mergedMetadata.title = title
+    if (source !== undefined) mergedMetadata.source = source
+    if (tags !== undefined) mergedMetadata.tags = tags
+
+    const body: Record<string, unknown> = {}
+    if (content !== undefined) body.content = content
+    if (category !== undefined) body.category = category
+    if (Object.keys(mergedMetadata).length > 0) body.metadata = mergedMetadata
+
+    const response = await this.put<KnowledgeDocument>(`${getApiBase()}/knowledge-maintenance/fact/${documentId}`, body)
     return response.data
   }
 
@@ -464,8 +483,10 @@ export class KnowledgeRepository extends ApiRepository {
    * Delete document by ID
    */
   async deleteDocument(documentId: string): Promise<{ success: boolean; message: string }> {
-    // Use facts endpoint for consistency with backend
-    const response = await this.delete<{ success: boolean; message: string }>(`${getApiBase()}/knowledge_base/facts/${documentId}`)
+    // #12326: backend serves fact delete at DELETE /api/knowledge-maintenance/fact/{fact_id}
+    // (autobot-backend/api/knowledge_maintenance.py:1477). The prior
+    // /knowledge_base/facts/{id} path 404'd.
+    const response = await this.delete<{ success: boolean; message: string }>(`${getApiBase()}/knowledge-maintenance/fact/${documentId}`)
     return response.data
   }
 
@@ -522,11 +543,11 @@ export class KnowledgeRepository extends ApiRepository {
 
   /**
    * Reindex knowledge base for improved search performance
-   * Issue #552: Note - Backend uses /api/rebuild_index for global reindex
-   * Consider using vectorize_facts/background for knowledge base specific reindex
+   * #12326: backend serves the global reindex at POST /api/knowledge_base/rebuild_index
+   * (the bare /api/rebuild_index path used previously does not exist and 404'd).
    */
   async reindexKnowledgeBase(): Promise<{ success: boolean; message: string }> {
-    const response = await this.post<{ success: boolean; message: string }>(`${getApiBase()}/rebuild_index`)
+    const response = await this.post<{ success: boolean; message: string }>(`${getApiBase()}/knowledge_base/rebuild_index`)
     return response.data
   }
 
@@ -534,7 +555,9 @@ export class KnowledgeRepository extends ApiRepository {
    * Check knowledge base health status
    */
   async checkKnowledgeBaseHealth(): Promise<{ healthy: boolean; message: string }> {
-    const response = await this.get<{ healthy: boolean; message: string }>(`${getApiBase()}/knowledge_base/health`)
+    // #12326: backend serves KB health at GET /api/knowledge_base/health/status
+    // (the bare /knowledge_base/health path 404'd).
+    const response = await this.get<{ healthy: boolean; message: string }>(`${getApiBase()}/knowledge_base/health/status`)
     return response.data
   }
 

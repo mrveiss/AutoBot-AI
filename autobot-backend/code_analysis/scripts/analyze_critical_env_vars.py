@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
+from utils.line_index import LineIndex  # #12884
 
 logger = get_logger(__name__)
 
@@ -116,8 +117,11 @@ class CriticalEnvAnalyzer:
 
             # Issue #510: Handle both compiled Pattern and string
             regex = pattern if hasattr(pattern, "finditer") else re.compile(pattern)
+            # #12884: build the offset->line map once; the per-match
+            # `content[:start].count()` was O(n*m) and held the GIL.
+            _line_index = LineIndex(content)
             for match in regex.finditer(content):
-                line_num = content[: match.start()].count("\n") + 1
+                line_num = _line_index.line_of(match.start())
                 value = match.group(1) if match.groups() else match.group(0)
 
                 # Get context

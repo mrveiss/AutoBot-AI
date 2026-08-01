@@ -194,7 +194,31 @@
     "llcCreateCompany": "Create a company",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "systemHealth": "בריאות המערכת"
+    "systemHealth": "בריאות המערכת",
+    "providerFallback": "גיבוי ספק",
+    "advancedControl": "בקרה מתקדמת"
+  },
+  "llcCompanyStatus": {
+    "showArchived": "הצג בארכיון",
+    "delete": "מחיקה",
+    "confirmDeleteTitle": "מחיקת חברה",
+    "confirmDelete": "למחוק את \"{name}\"? פעולה זו תסיר את החברה שבארכיון ואת הנתונים שלה. לא ניתן לבטל זאת מכאן.",
+    "deleteError": "לא ניתן היה למחוק את החברה.",
+    "deleteHasChildren": "לחברה זו יש חברות בנות. הסר או שייך אותן מחדש לפני המחיקה.",
+    "onboarding": "קליטה",
+    "active": "פעילה",
+    "paused": "מושהית",
+    "offboarding": "סגירה",
+    "archived": "בארכיון",
+    "activate": "הפעלה",
+    "suspend": "השהיה",
+    "offboard": "סגירה",
+    "archive": "העברה לארכיון",
+    "confirmTitle": "אישור שינוי סטטוס",
+    "confirmOffboard": "לסגור את \"{name}\"? פעולה זו מתחילה את סגירת החברה.",
+    "confirmArchive": "להעביר את \"{name}\" לארכיון? זהו מצב סופי שלא ניתן לבטלו.",
+    "confirm": "אישור",
+    "updateError": "לא ניתן היה לשנות את סטטוס החברה."
   },
   "llcMembers": {
     "title": "חברים",
@@ -1881,6 +1905,9 @@
         "risk": "Risk",
         "confoundingStrength": "Confounding Strength"
       }
+    },
+    "truncation": {
+      "showingOf": "מוצגים {shown} מתוך {total}"
     }
   },
   "knowledge": {
@@ -4332,6 +4359,17 @@
       "presetHigh": "High",
       "presetMediumDesc": "Balanced quality and performance",
       "delay": "Delay:"
+    },
+    "controlLock": {
+      "title": "Desktop Control",
+      "takeControl": "Take Control",
+      "releaseControl": "Release Control",
+      "youHaveControl": "You have control",
+      "agentHasControl": "Agent has control",
+      "userHasControl": "{user} has control",
+      "unknown": "Control status unknown",
+      "acquireFailed": "Failed to take control: {error}",
+      "releaseFailed": "Failed to release control: {error}"
     }
   },
   "redis": {
@@ -4957,7 +4995,8 @@
       "deletedWithFactsRemoved": "Deleted {count} chats and removed associated facts",
       "deletedSuccess": "Deleted {count} chats",
       "searchChats": "Search chats",
-      "noSearchResults": "No chats match your search"
+      "noSearchResults": "No chats match your search",
+      "showFallbackChip": "הצג תג גיבוי"
     },
     "overseer": {
       "copyCommand": "Copy command",
@@ -5389,6 +5428,10 @@
       "thinking": {
         "badge": "🧠 Extended thinking ({count} tokens)",
         "tooltip": "This response used extended thinking mode to reason through the problem step-by-step"
+      },
+      "fallback": {
+        "badge": "דרך גיבוי",
+        "tooltip": "הספק הראשי אינו זמין — נענה על ידי ספק גיבוי ({primary} → {fallback})."
       }
     },
     "docResult": {
@@ -5518,7 +5561,25 @@
       "contentRequired": "Content is required"
     },
     "lightweightMode": "Lightweight mode",
-    "lightweightModeTooltip": "lightweight Mode tooltip"
+    "lightweightModeTooltip": "lightweight Mode tooltip",
+    "errors": {
+      "deleteFailed": "לא ניתן היה למחוק את הצ'אט. אנא נסה שוב.",
+      "createFailed": "לא ניתן היה ליצור את הצ'אט: {error}",
+      "loadSessionsFailed": "לא ניתן היה לטעון את הפעלות הצ'אט: {error}",
+      "loadMessagesFailed": "לא ניתן היה לטעון את ההודעות: {error}",
+      "saveFailed": "לא ניתן היה לשמור את הצ'אט: {error}",
+      "resetFailed": "לא ניתן היה לאפס את הצ'אט: {error}",
+      "clearFailed": "לא ניתן היה לנקות את הצ'אטים: {error}",
+      "invalidFormat": "פורמט הודעה לא חוקי. אנא בדוק את הקלט ונסה שוב.",
+      "serviceUnavailable": "שירות הצ'אט אינו זמין. אנא רענן את הדף ונסה שוב.",
+      "serverError": "אירעה שגיאת שרת. אנא נסה שוב בעוד רגע.",
+      "networkFailed": "החיבור לרשת נכשל. אנא בדוק את חיבור האינטרנט שלך.",
+      "timeout": "תם הזמן הקצוב לבקשה. אנא נסה שוב עם הודעה קצרה יותר.",
+      "sendFailed": "לא ניתן היה לשלוח את ההודעה: {error}",
+      "sendFailedAfterRetries": "לא ניתן היה לשלוח את ההודעה לאחר {attempts} ניסיונות: {error}. אנא בדוק את החיבור ונסה שוב.",
+      "invalidFormatDetail": "פורמט הודעה לא חוקי: {error}. אנא בדוק את הקלט ונסה שוב.",
+      "networkFailedRetry": "החיבור לרשת נכשל. אנא בדוק את חיבור האינטרנט שלך ונסה שוב."
+    }
   },
   "serviceMessages": {
     "metadata": "Metadata",
@@ -6652,7 +6713,14 @@
       "disabledMessage": "מדדי שימוש מקומיים הושבתו. לא יירשמו מדדים.",
       "loadFailed": "טעינת הגדרות הטלמטריה נכשלה",
       "updateFailed": "עדכון הגדרות הטלמטריה נכשל"
-    }
+    },
+    "subtitle": "התאם אישית את חוויית AutoBot שלך באמצעות העדפות אישיות",
+    "featureFlags": "דגלי תכונות",
+    "telegram": "טלגרם",
+    "notifications": "התראות",
+    "mobileDevices": "מכשירים ניידים",
+    "privacy": "פרטיות",
+    "providerAuthDesc": "התחבר לספקים באמצעות המנוי הקיים שלך במקום מפתח API בתשלום. האסימונים נשמרים באופן מאובטח בכספת הסודות של AutoBot."
   },
   "visualizations": {
     "systemArchitecture": {
@@ -7187,7 +7255,8 @@
     "custom": "custom",
     "stopListening": "Stop listening",
     "stop": "Stop",
-    "confirmDeleteVoiceTitle": "מחיקת פרופיל קול"
+    "confirmDeleteVoiceTitle": "מחיקת פרופיל קול",
+    "tapToEnableAudio": "הקש בכל מקום כדי להפעיל את השמעת האודיו"
   },
   "auth": {
     "login": {
@@ -7810,22 +7879,7 @@
       "createFailed": "Failed to create company"
     },
     "ceoChat": {
-      "threads": "Threads",
-      "newThread": "+ New",
-      "selectCompany": "Select a company to view threads.",
-      "loading": "Loading...",
-      "noThreads": "No threads yet.",
-      "emptyState": "Select a thread or create a new one.",
-      "loadingMessages": "Loading messages...",
-      "noMessages": "No messages yet.",
-      "messagePlaceholder": "Type a message...",
-      "send": "Send",
-      "newThreadTitle": "New Thread",
-      "titleLabel": "Title",
-      "titlePlaceholder": "Thread title...",
-      "cancel": "Cancel",
-      "create": "Create",
-      "creating": "Creating..."
+      "selectCompany": "Select a company to view threads."
     },
     "dashboard": {
       "title": "Company Dashboard",
@@ -7957,7 +8011,15 @@
       "count": "{count} boards",
       "loading": "Loading boards…",
       "empty": "No boards yet — boards are created per project (Kanban) and per sprint (Sprint).",
-      "created": "Created {date}"
+      "created": "Created {date}",
+      "newKanban": "New Kanban Board",
+      "createTitle": "Create Kanban Board",
+      "project": "Project",
+      "selectProject": "Select a project…",
+      "loadingProjects": "Loading projects…",
+      "noProjects": "No projects yet — create a project first.",
+      "creating": "Creating…",
+      "create": "Create Board"
     },
     "kanban": {
       "title": "Kanban Board",
@@ -7996,7 +8058,9 @@
       "noProjects": "No projects in this company yet.",
       "noItems": "This project has no work items to schedule.",
       "ariaChart": "Project timeline Gantt chart",
-      "unscheduled": "unscheduled"
+      "unscheduled": "unscheduled",
+      "scopedTo": "מוגבל אל {name}",
+      "showAll": "הצג את כל החברה"
     },
     "backlog": {
       "title": "Backlog",
@@ -8080,7 +8144,10 @@
       "viewArtifact": "View",
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
-      "loadingBrief": "Loading brief..."
+      "loadingBrief": "Loading brief...",
+      "errors": {
+        "saveFailed": "לא ניתן היה לשמור את השינוי. אנא נסה שוב."
+      }
     },
     "orgChart": {
       "title": "Org Chart",
@@ -8524,9 +8591,6 @@
     "approvals": {
       "decideError": "Failed to record your decision. Please try again."
     },
-    "ceoChat": {
-      "sendError": "Failed to send your message. It has been restored so you can retry."
-    },
     "timeline": {
       "rescheduleError": "Failed to save the new schedule. The change was reverted."
     },
@@ -8603,6 +8667,22 @@
       "error": "טעינת בריאות המערכת נכשלה",
       "refresh": "רענן",
       "noSources": "לא הוגדרו מקורות תוכן"
+    },
+    "providerFallback": {
+      "title": "גיבוי ספק",
+      "subtitle": "פעילות חיה של גיבוי ספקים ומודלים של LLM",
+      "status": "סטטוס",
+      "stateHealthy": "אין גיבויים פעילים",
+      "stateDegraded": "גיבוי פעיל",
+      "active": "גיבויים פעילים",
+      "chains": "שרשראות מוגדרות",
+      "timeline": "פעילות חיה",
+      "switched": "הוחלף",
+      "exhausted": "מוצה",
+      "refresh": "רענן",
+      "loading": "טוען את מצב הגיבוי…",
+      "noData": "אין פעילות גיבוי ספק",
+      "none": "ללא"
     }
   },
   "components": {
@@ -8621,5 +8701,248 @@
   "knowledge.health.activityUpdated": "{title} עודכן",
   "chat.modelPicker.label": "מודל",
   "chat.modelPicker.auto": "אוטומטי (מודל ברירת מחדל)",
-  "chat.modelPicker.title": "בחרו מודל וספק לשיחה זו"
+  "chat.modelPicker.title": "בחרו מודל וספק לשיחה זו",
+  "budgetPolicies": {
+    "title": "Budget Policies",
+    "subtitle": "Manage spend thresholds and auto-pause rules for agents",
+    "newPolicy": "New Policy",
+    "scope": "Scope",
+    "scopeAll": "All",
+    "scopeAgent": "Agent",
+    "scopeProject": "Project",
+    "scopeTask": "Task",
+    "scopeTenant": "Tenant",
+    "loading": "Loading policies…",
+    "empty": "No budget policies found. Create one to enforce spend limits.",
+    "colName": "Name",
+    "colScope": "Scope",
+    "colScopeId": "Scope ID",
+    "colPeriod": "Period",
+    "colThreshold": "Threshold",
+    "colWarning": "Warning",
+    "colAction": "Action",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "statusEnabled": "enabled",
+    "statusDisabled": "disabled",
+    "checkPauseTitle": "Check Agent Pause Status",
+    "agentIdPlaceholder": "Agent ID…",
+    "checkStatus": "Check Status",
+    "labelAgent": "Agent:",
+    "labelPaused": "Paused:",
+    "labelReason": "Reason:",
+    "labelSince": "Since:",
+    "resumeAgent": "Resume Agent",
+    "modalEditTitle": "Edit Policy",
+    "modalNewTitle": "New Budget Policy",
+    "fieldName": "Name",
+    "fieldNamePlaceholder": "My policy",
+    "fieldDescription": "Description",
+    "fieldDescriptionPlaceholder": "Optional",
+    "fieldScope": "Scope",
+    "fieldScopeId": "Scope ID",
+    "fieldScopeIdPlaceholder": "e.g. agent-uuid",
+    "fieldPeriod": "Period",
+    "periodHour": "Hour",
+    "periodDay": "Day",
+    "periodMonth": "Month",
+    "fieldThreshold": "Threshold USD",
+    "fieldWarning": "Warning % (0–100)",
+    "fieldAction": "Action",
+    "actionAlert": "Alert only",
+    "actionPause": "Pause",
+    "actionAlertThenPause": "Alert then Pause",
+    "fieldEnabled": "Enabled",
+    "saveChanges": "Save Changes",
+    "createPolicy": "Create Policy",
+    "deleteTitle": "Delete Policy",
+    "deleteConfirm": "Are you sure you want to delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "telemetryConsent": {
+    "title": "Local Usage Metrics",
+    "intro": "AutoBot can record {metrics} locally to power your own monitoring dashboards. This data stays on your infrastructure and is {never}.",
+    "introMetrics": "anonymous operational metrics",
+    "introNever": "never sent to anyone",
+    "summaryTitle": "What's recorded locally:",
+    "dataApi": "API endpoint usage and response times",
+    "dataVoice": "Voice session duration and token counts",
+    "dataFeature": "Feature usage patterns",
+    "privacyLabel": "Never recorded:",
+    "privacyText": "personal data, code content, or chat messages.",
+    "footer": "You can change this preference anytime in {settings}.",
+    "footerSettings": "Settings → Privacy",
+    "keepOff": "Keep Off",
+    "enable": "Enable"
+  },
+  "hireAgent": {
+    "title": "Hire Agent",
+    "agentName": "Agent name",
+    "agentNamePlaceholder": "e.g. Builder-1",
+    "model": "Model",
+    "modelSonnet": "Sonnet (default)",
+    "modelHaiku": "Haiku (assistant)",
+    "orgRole": "Org role",
+    "roleWorker": "Worker",
+    "roleSpecialist": "Specialist",
+    "roleCoordinator": "Coordinator",
+    "roleManager": "Manager",
+    "adapter": "Adapter",
+    "hiring": "Hiring…",
+    "hire": "Hire"
+  },
+  "advancedControl": {
+    "title": "בקרה מתקדמת",
+    "subtitle": "אשר בקשות השתלטות ונהל הפעלות בקרה אנושית פעילות",
+    "tabListAriaLabel": "לשוניות בקרה מתקדמת",
+    "loading": "טוען את תור ההשתלטות…",
+    "tabs": {
+      "takeoverQueue": "תור השתלטות",
+      "streaming": "הזרמה",
+      "monitoring": "ניטור",
+      "comingSoon": "בקרוב",
+      "comingSoonMessage": "לשונית זו עדיין אינה זמינה.",
+      "streamingTitle": "הזרמת שולחן עבודה",
+      "monitoringTitle": "ניטור מערכת"
+    },
+    "summary": {
+      "pending": "ממתינות",
+      "active": "פעילות",
+      "paused": "מושהות",
+      "completed": "הושלמו",
+      "systemStatus": "מצב המערכת",
+      "statusNormal": "תקין",
+      "statusTakeoverActive": "השתלטות פעילה",
+      "statusEmergency": "חירום"
+    },
+    "pending": {
+      "title": "בקשות השתלטות ממתינות",
+      "colTrigger": "טריגר",
+      "colReason": "סיבה",
+      "colPriority": "עדיפות",
+      "colRequestedBy": "התבקש על ידי",
+      "colCreatedAt": "נוצר",
+      "colActions": "פעולות",
+      "unknownAgent": "סוכן לא ידוע",
+      "emptyTitle": "אין בקשות ממתינות",
+      "emptyMessage": "אין בקשות השתלטות הממתינות לאישור."
+    },
+    "active": {
+      "title": "הפעלות השתלטות פעילות",
+      "colOperator": "מפעיל",
+      "colStatus": "סטטוס",
+      "colStartedAt": "התחילה",
+      "colActionsExecuted": "פעולות שבוצעו",
+      "emptyTitle": "אין הפעלות פעילות",
+      "emptyMessage": "אין כרגע הפעלות בקרה אנושית פעילות."
+    },
+    "actions": {
+      "approve": "אשר",
+      "pause": "השהה",
+      "resume": "המשך",
+      "complete": "השלם"
+    },
+    "streaming": {
+      "title": "הפעלות הזרמה",
+      "newSession": "הפעלה חדשה",
+      "terminate": "סיים",
+      "capVncAvailable": "VNC זמין",
+      "capNovncAvailable": "noVNC זמין",
+      "capMaxSessions": "מספר הפעלות מרבי",
+      "formUserIdLabel": "מזהה משתמש",
+      "formUserIdPlaceholder": "לדוגמה: user-123",
+      "formResolutionLabel": "רזולוציה",
+      "formResolutionPlaceholder": "לדוגמה: 1920x1080",
+      "formDepthLabel": "עומק צבע",
+      "colSessionId": "מזהה הפעלה",
+      "colUser": "משתמש",
+      "colStatus": "סטטוס",
+      "colDisplay": "תצוגה",
+      "colCreatedAt": "נוצרה",
+      "colActions": "פעולות",
+      "emptyTitle": "אין הפעלות הזרמה פעילות",
+      "emptyMessage": "אין כרגע הפעלות הזרמת שולחן עבודה פעילות."
+    },
+    "monitoring": {
+      "loading": "טוען נתוני ניטור מערכת…",
+      "healthTitle": "תקינות המערכת",
+      "healthStatus": "מצב תקינות",
+      "statusHealthy": "תקין",
+      "statusUnhealthy": "לא תקין",
+      "desktopStreamingAvailable": "זמינות הזרמת שולחן עבודה",
+      "novncAvailable": "זמינות noVNC",
+      "activeStreamingSessions": "הפעלות הזרמה פעילות",
+      "pendingTakeovers": "השתלטויות ממתינות",
+      "activeTakeovers": "השתלטויות פעילות",
+      "pausedTasks": "משימות מושהות",
+      "resourceTitle": "ניצול משאבים",
+      "cpuUsage": "ניצול מעבד",
+      "memoryUsage": "ניצול זיכרון",
+      "diskUsage": "ניצול דיסק",
+      "processCount": "מספר תהליכים",
+      "loadAverage": "עומס ממוצע (דקה / 5 דקות / 15 דקות)",
+      "uptime": "זמן פעילות",
+      "emergencyStopTitle": "אזור סכנה",
+      "emergencyStop": "עצירת חירום",
+      "emergencyStopDescription": "עוצר מיידית את כל הפעולות האוטונומיות ומבקש השתלטות אנושית שאושרה אוטומטית. לא ניתן לבטל פעולה זו — יש להשתמש בה רק כאשר יש צורך לעצור התנהגות אוטונומית באופן מיידי.",
+      "emergencyStopConfirmTitle": "להפעיל עצירת חירום?",
+      "emergencyStopConfirmMessage": "פעולה זו תשהה מיידית את כל המשימות האוטונומיות ותתחיל השתלטות אנושית בעדיפות קריטית. לא ניתן לבטל פעולה זו. להמשיך?",
+      "emergencyStopSuccess": "עצירת חירום הופעלה — כל הפעולות האוטונומיות הושהו.",
+      "emptyTitle": "אין נתוני ניטור",
+      "emptyMessage": "לא ניתן היה לטעון את מצב המערכת."
+    }
+  },
+  "adminUsers": {
+    "title": "User Management",
+    "subtitle": "Manage users, roles, and account status",
+    "addUser": "Add User",
+    "searchPlaceholder": "Search by username, email, or name…",
+    "loading": "Loading users…",
+    "colUsername": "Username",
+    "colEmail": "Email",
+    "colDisplayName": "Display Name",
+    "colRole": "Role",
+    "colVoiceBundle": "Voice Bundle",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "roleAdmin": "admin",
+    "roleUser": "user",
+    "roleReadonly": "readonly",
+    "statusActive": "active",
+    "statusInactive": "inactive",
+    "titleDeactivate": "Deactivate",
+    "titleActivate": "Activate",
+    "titleAssignBundle": "Assign Voice Bundle",
+    "empty": "No users found.",
+    "fieldEmail": "Email",
+    "fieldUsername": "Username",
+    "fieldPassword": "Password",
+    "fieldDisplayName": "Display Name",
+    "createUser": "Create User",
+    "userLabel": "User:",
+    "fieldVoiceBundle": "Voice Bundle",
+    "useRoleDefault": "— Use role default —",
+    "deleteUserTitle": "Delete User",
+    "deleteConfirm": "Delete",
+    "deleteUndone": "This cannot be undone."
+  },
+  "schedulers": {
+    "title": "מתזמני רקע",
+    "description": "הפעל או כבה משימות רקע. השינויים נכנסים לתוקף במחזור הבא — ללא הפעלה מחדש.",
+    "refresh": "רענון",
+    "loading": "טוען מתזמנים…",
+    "empty": "אין מתזמנים רשומים.",
+    "overridden": "נדרס",
+    "defaultLabel": "ברירת מחדל",
+    "runtimeLabel": "סביבת ריצה",
+    "on": "פעיל",
+    "off": "כבוי",
+    "revertToDefault": "חזרה לברירת המחדל",
+    "enableTitle": "הפעלת משימה זו",
+    "disableTitle": "כיבוי משימה זו",
+    "toggleAria": "החלף {name}",
+    "loadFailed": "טעינת המתזמנים נכשלה.",
+    "toggleFailed": "שינוי {name} נכשל.",
+    "resetFailed": "החזרת {name} לברירת המחדל נכשלה."
+  }
 }

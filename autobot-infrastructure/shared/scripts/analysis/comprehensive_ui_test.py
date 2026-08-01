@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Comprehensive UI Testing and Performance Measurement Script
@@ -536,7 +537,7 @@ class ComprehensiveUITester:
 
         # Save report to file
         report_file = Path("ui_test_report.json")
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         # Print summary to console

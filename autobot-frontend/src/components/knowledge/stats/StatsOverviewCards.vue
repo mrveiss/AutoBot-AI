@@ -8,7 +8,7 @@
         <h4 id="analytics-documents-title">{{ $t('knowledge.stats.totalDocuments') }}</h4>
         <p class="stat-value" aria-live="polite">{{ documentCount }}</p>
         <p class="stat-change">
-          {{ $t('knowledge.stats.avgDocsPerCategoryValue', { count: avgDocsPerCategory }) }}
+          {{ $t('knowledge.stats.overview.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
         </p>
       </div>
     </BasePanel>
@@ -21,7 +21,7 @@
         <h4 id="analytics-categories-title">{{ $t('knowledge.stats.categories') }}</h4>
         <p class="stat-value" aria-live="polite">{{ categoryCount }}</p>
         <p class="stat-change">
-          {{ $t('knowledge.stats.avgDocsPerCategoryValue', { count: avgDocsPerCategory }) }}
+          {{ $t('knowledge.stats.overview.avgDocsPerCategory', { count: avgDocsPerCategory }) }}
         </p>
       </div>
     </BasePanel>
@@ -34,7 +34,7 @@
         <h4>{{ $t('knowledge.stats.uniqueTags') }}</h4>
         <p class="stat-value">{{ uniqueTagsCount }}</p>
         <p class="stat-change">
-          {{ $t('knowledge.stats.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
+          {{ $t('knowledge.stats.overview.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
         </p>
       </div>
     </BasePanel>
@@ -47,7 +47,7 @@
         <h4>{{ $t('knowledge.stats.storageUsedTitle') }}</h4>
         <p class="stat-value">{{ formatFileSize(totalStorageSize) }}</p>
         <p class="stat-change">
-          {{ $t('knowledge.stats.avgPerDoc', { size: formatFileSize(avgDocSize) }) }}
+          {{ $t('knowledge.stats.overview.avgPerDoc', { size: formatFileSize(avgDocSize) }) }}
         </p>
       </div>
     </BasePanel>

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Integrate System Knowledge into Knowledge Base V2
@@ -70,7 +71,7 @@ async def integrate_cached_man_pages(kb_v2):
 
     for man_file in man_files:
         try:
-            with open(man_file, "r") as f:
+            with open(man_file, "r", encoding="utf-8") as f:
                 man_data = json.load(f)
 
             command = man_data.get("command", man_file.stem.split("_")[0])

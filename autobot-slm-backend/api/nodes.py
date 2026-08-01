@@ -24,6 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
+from autobot_shared.ssot_config import config
 from models.database import (
     Certificate,
     CodeStatus,
@@ -69,10 +70,13 @@ from models.schemas import (
     UpdatePolicyResponse,
 )
 from services.auth import get_current_user
+from services.code_status import derive_code_status as _derive_code_status
+from services.code_status import get_latest_code_version as _get_latest_code_version
+from services.code_status import reported_code_status as _reported_code_status
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from services.ssh_utils import _ssh_key_usable
+from services.ssh_utils import build_ssh_base_cmd
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -387,15 +391,18 @@ async def _get_service_counts(db: AsyncSession, node_ids: list[str]) -> dict[str
     return counts
 
 
-@router.get("", response_model=NodeListResponse)
-async def list_nodes(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-    status_filter: str | None = Query(None, alias="status"),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
-) -> NodeListResponse:
-    """List all nodes with optional status filter."""
+_NODES_LIST_TIMEOUT = 10.0  # seconds; guards against slow/stale DB conn hangs (#10913)
+
+
+async def _query_nodes_page(db: AsyncSession, status_filter: str | None, page: int, per_page: int) -> NodeListResponse:
+    """DB-bound body of list_nodes, run under a bounded timeout (#10913).
+
+    Health is read from the already-stored ``Node`` columns (populated by
+    agent heartbeats — see ``node_heartbeat``/``last_heartbeat``); this never
+    live-probes individual nodes, so a single unreachable node cannot block
+    the response — only a slow/stale DB round-trip can, and that is bounded
+    by the caller's ``asyncio.wait_for``.
+    """
     query = select(Node)
 
     if status_filter:
@@ -403,8 +410,11 @@ async def list_nodes(
 
     query = query.order_by(Node.hostname)
 
-    count_result = await db.execute(select(Node.id).where(query.whereclause or True))
-    total = len(count_result.all())
+    # Count the filtered set (the previous `query.whereclause or True`
+    # always collapsed to True, silently dropping the filter -> wrong
+    # total whenever a status filter was applied). Ref #12515.
+    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_result.scalar_one()
 
     query = query.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
@@ -414,10 +424,15 @@ async def list_nodes(
     node_ids = [n.node_id for n in nodes]
     svc_counts = await _get_service_counts(db, node_ids)
 
+    # #12428: derive code_status per-node (see get_node) so the fleet list
+    # view agrees with outdated_nodes for agentless/never-heartbeated nodes.
+    latest_version = await _get_latest_code_version(db)
+
     node_responses = []
     for n in nodes:
         resp = NodeResponse.model_validate(n)
         resp.service_summary = svc_counts.get(n.node_id)
+        resp.code_status = _reported_code_status(n, latest_version)
         node_responses.append(resp)
 
     return NodeListResponse(
@@ -426,6 +441,34 @@ async def list_nodes(
         page=page,
         per_page=per_page,
     )
+
+
+@router.get("", response_model=NodeListResponse)
+async def list_nodes(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    status_filter: str | None = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+) -> NodeListResponse:
+    """List all nodes with optional status filter.
+
+    Bounded by ``_NODES_LIST_TIMEOUT`` (#10913) so a stale/hung DB
+    connection (e.g. a silently-dropped WSL2 idle socket, #10491) can't
+    hang the whole endpoint — the request fails fast with 504 instead of
+    the client timing out with an opaque ``000``.
+    """
+    try:
+        return await asyncio.wait_for(
+            _query_nodes_page(db, status_filter, page, per_page),
+            timeout=_NODES_LIST_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("GET /nodes timed out after %.0fs (#10913)", _NODES_LIST_TIMEOUT)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Node listing timed out — DB may be under heavy load",
+        )
 
 
 @router.post("", response_model=NodeResponse, status_code=status.HTTP_201_CREATED)
@@ -515,7 +558,14 @@ async def get_node(
             detail="Node not found",
         )
 
-    return NodeResponse.model_validate(node)
+    # #12428: derive code_status from the live code_version vs latest signal
+    # rather than trusting the heartbeat-only stamp, so an agentless node
+    # (never heartbeats) can't report a stale up_to_date here while
+    # outdated_nodes (api/code_sync.py get_sync_status) counts it as behind.
+    latest_version = await _get_latest_code_version(db)
+    resp = NodeResponse.model_validate(node)
+    resp.code_status = _reported_code_status(node, latest_version)
+    return resp
 
 
 @router.patch("/{node_id}", response_model=NodeResponse)
@@ -1455,7 +1505,7 @@ async def decommission_node(
         "node_decommissioned",
         {"hostname": node.hostname, "ip_address": node.ip_address},
     )
-    return {  # codeql[py/stack-trace-exposure]
+    return {
         "success": True,
         "message": f"Node {node_id} decommissioned successfully",
         "deployment_id": deployment.deployment_id,
@@ -1704,23 +1754,16 @@ async def _update_heartbeat_code_status(db: AsyncSession, node: Node, extra_data
     Issue #1605: Also checks service health — code_current_service_failed
     when commit matches but autobot services are failed/crash-looping.
     """
-    latest_result = await db.execute(select(Setting).where(Setting.key == "slm_agent_latest_commit"))
-    latest_setting = latest_result.scalar_one_or_none()
-    latest_version = latest_setting.value if latest_setting else None
+    latest_version = await _get_latest_code_version(db)
 
     # Compare node.code_version (DB, set by mark-synced) against latest (Issue #918).
     # Do NOT use heartbeat.code_version — agents report stale values (Issue #889).
     if latest_version:
-        if node.code_version == latest_version:
-            # Issue #1605: check if autobot services are actually healthy
-            if _has_failed_autobot_service(extra_data):
-                node.code_status = CodeStatus.CODE_CURRENT_SERVICE_FAILED.value
-            else:
-                node.code_status = CodeStatus.UP_TO_DATE.value
-        elif node.code_version:
-            node.code_status = CodeStatus.OUTDATED.value
-        else:
-            node.code_status = CodeStatus.UNKNOWN.value
+        node.code_status = _derive_code_status(
+            node.code_version,
+            latest_version,
+            was_service_failed=_has_failed_autobot_service(extra_data),
+        )
 
     return latest_version
 
@@ -2149,7 +2192,6 @@ def _build_password_ssh_command(request: ConnectionTestRequest, remote_cmd: str)
         "-o",
         "StrictHostKeyChecking=accept-new",
         "-o",
-        "-o",
         "ConnectTimeout=10",
         "-o",
         "PubkeyAuthentication=no",
@@ -2170,7 +2212,6 @@ def _build_key_ssh_command(request: ConnectionTestRequest, remote_cmd: str) -> l
         "ssh",
         "-o",
         "StrictHostKeyChecking=accept-new",
-        "-o",
         "-o",
         "ConnectTimeout=10",
         "-o",
@@ -2497,15 +2538,26 @@ async def get_node_updates(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ):
-    """Get available updates for a node."""
+    """Get available updates for a node.
+
+    Includes code_update_available/code_status (#11964) computed via the
+    SAME is_code_update_available() helper the fleet update-summary badge
+    uses, so this live "Check for updates" scan can never disagree with
+    the badge shown on the node card. code_status is derived fresh via
+    _reported_code_status (#12428/#12571) instead of trusting the raw,
+    heartbeat-only node.code_status stamp, so an agentless node's frozen
+    stamp can't surface here either.
+    """
     from sqlalchemy import or_
 
+    from api.updates import is_code_update_available
     from models.database import UpdateInfo
     from models.schemas import UpdateCheckResponse, UpdateInfoResponse
 
     # Verify node exists
     node_result = await db.execute(select(Node).where(Node.node_id == node_id))
-    if not node_result.scalar_one_or_none():
+    node = node_result.scalar_one_or_none()
+    if not node:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Node not found",
@@ -2522,9 +2574,14 @@ async def get_node_updates(
     result = await db.execute(query)
     updates = result.scalars().all()
 
+    latest_version = await _get_latest_code_version(db)
+    reported_status = _reported_code_status(node, latest_version)
+
     return UpdateCheckResponse(
         updates=[UpdateInfoResponse.model_validate(u) for u in updates],
         total=len(updates),
+        code_update_available=is_code_update_available(node, latest_version),
+        code_status=reported_status or "unknown",
     )
 
 
@@ -2701,7 +2758,7 @@ async def get_node_service_order(
 # Node SSH Exec endpoint (Issue #933)
 # =============================================================================
 
-_DEFAULT_SSH_KEY = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")  # noqa: ssot-path
+_DEFAULT_SSH_KEY = config.path.ssh_key_path  # canonical inter-node key (#12429)
 _DEFAULT_SSH_USER = os.environ.get("SLM_SSH_USER", "autobot")
 
 
@@ -2723,26 +2780,6 @@ class NodeExecResponse(BaseModel):
     success: bool
 
 
-def _build_node_ssh_cmd(ip_address: str, ssh_user: str, ssh_port: int) -> list:
-    """Build base SSH command args for a node.
-
-    Helper for exec_node_command (Issue #933).
-    """
-    cmd = [
-        "ssh",
-        "-o",
-        "StrictHostKeyChecking=accept-new",
-        "-o",
-        "ConnectTimeout=10",
-        "-p",
-        str(ssh_port),
-    ]
-    if _ssh_key_usable(_DEFAULT_SSH_KEY):
-        cmd.extend(["-i", _DEFAULT_SSH_KEY])
-    cmd.append(f"{ssh_user}@{ip_address}")
-    return cmd
-
-
 @router.post("/{node_id}/exec", response_model=NodeExecResponse)
 async def exec_node_command(
     node_id: str,
@@ -2762,7 +2799,7 @@ async def exec_node_command(
 
     ssh_user = node.ssh_user or _DEFAULT_SSH_USER
     ssh_port = node.ssh_port or 22
-    cmd = _build_node_ssh_cmd(node.ip_address, ssh_user, ssh_port)
+    cmd = build_ssh_base_cmd(node.ip_address, ssh_user, ssh_port, _DEFAULT_SSH_KEY)
     cmd.append(body.command)
 
     try:

@@ -29,7 +29,7 @@ class GUIClickElementHandler(TaskHandler):
         clicks = ctx.get_payload_value("clicks", 1)
         interval = ctx.get_payload_value("interval", 0.0)
 
-        result = ctx.worker.gui_controller.click_element(image_path, confidence, button, clicks, interval)
+        result = await ctx.worker.gui_controller.click_element(image_path, confidence, button, clicks, interval)
 
         ctx.audit_log(
             "gui_click_element",
@@ -50,7 +50,7 @@ class GUIReadTextFromRegionHandler(TaskHandler):
         width = ctx.require_payload_value("width")
         height = ctx.require_payload_value("height")
 
-        result = ctx.worker.gui_controller.read_text_from_region(x, y, width, height)
+        result = await ctx.worker.gui_controller.read_text_from_region(x, y, width, height)
 
         ctx.audit_log(
             "gui_read_text_from_region",
@@ -69,7 +69,7 @@ class GUITypeTextHandler(TaskHandler):
         text = ctx.require_payload_value("text")
         interval = ctx.get_payload_value("interval", 0.0)
 
-        result = ctx.worker.gui_controller.type_text(text, interval)
+        result = await ctx.worker.gui_controller.type_text(text, interval)
 
         ctx.audit_log(
             "gui_type_text",
@@ -89,7 +89,7 @@ class GUIMoveMouseHandler(TaskHandler):
         y = ctx.require_payload_value("y")
         duration = ctx.get_payload_value("duration", 0.0)
 
-        result = ctx.worker.gui_controller.move_mouse(x, y, duration)
+        result = await ctx.worker.gui_controller.move_mouse(x, y, duration)
 
         ctx.audit_log(
             "gui_move_mouse",
@@ -107,7 +107,7 @@ class GUIBringWindowToFrontHandler(TaskHandler):
         """Execute window focus operation and log the audit result."""
         app_title = ctx.require_payload_value("app_title")
 
-        result = ctx.worker.gui_controller.bring_window_to_front(app_title)
+        result = await ctx.worker.gui_controller.bring_window_to_front(app_title)
 
         ctx.audit_log(
             "gui_bring_window_to_front",

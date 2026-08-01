@@ -17,7 +17,7 @@ from typing import Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 
-from .endpoints.shared import get_project_root
+from .endpoints.shared import resolve_project_root
 from .models import (
     APIEndpointAnalysis,
     APIEndpointItem,
@@ -109,6 +109,12 @@ _FOUR_ELEMENT_TUPLE_RE = re.compile(
     re.MULTILINE,
 )
 # Issue #552: Dynamic router loading pattern
+# #12956: names actually passed to include_router(), and the relative imports
+# that bind them to a submodule -- `from .costs import router as costs_router`.
+_INCLUDE_ROUTER_NAME_RE = re.compile(r"include_router\(\s*(\w+)")
+_RELATIVE_ROUTER_IMPORT_RE = re.compile(r"^from\s+\.(\w+)\s+import\s+router\s+as\s+(\w+)", re.MULTILINE)
+
+
 _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
     r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],' r'\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
     re.MULTILINE,
@@ -120,6 +126,59 @@ _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
 # =============================================================================
 
 
+#: Directory names that have held the FastAPI backend across layouts. Ordered
+#: most-specific-first so a repo containing both is resolved deterministically.
+_BACKEND_DIR_CANDIDATES = ("autobot-backend", "backend", ".")
+
+#: What makes a directory *the* backend rather than any directory holding an
+#: ``api`` folder — the router registry lives beside the routes it mounts.
+_ROUTER_REGISTRY_RELPATH = Path("initialization") / "router_registry"
+
+
+def _is_test_file(path: Path) -> bool:
+    """Whether *path* is a test module rather than a served route (#12953).
+
+    A route defined in a test is not an endpoint, and counting one pollutes the
+    report in both directions: it appears as a backend endpoint no frontend
+    calls (a phantom "orphaned" finding telling someone to wire or delete
+    something that does not exist), and as a scanned path absent from
+    ``app.openapi()``.
+
+    Matches the repo's two conventions (``x_test.py`` and ``test_x.py``) plus
+    anything under a ``tests`` directory.
+    """
+    return path.name.endswith("_test.py") or path.name.startswith("test_") or "tests" in path.parts
+
+
+def find_backend_dir(project_root: Path) -> Path:
+    """Locate the FastAPI backend package inside *project_root* (#12853).
+
+    Callers pass the root of the tree being analysed — a source clone, or
+    AutoBot's own checkout — and the backend sits at different depths in each.
+    Assuming ``project_root / "api"`` silently produced an empty scan for every
+    layout that nests it (this repo's ``autobot-backend/``), which reads as
+    "this backend has no routes" rather than as a failure to look in the right
+    place.
+
+    Prefers a candidate that also carries the router registry, so a directory
+    that merely happens to contain ``api/`` does not win over the real backend.
+    Falls back to *project_root* unchanged when nothing matches, preserving the
+    previous behaviour for callers that already point straight at the backend.
+    """
+    with_registry: Path | None = None
+    with_api: Path | None = None
+
+    for name in _BACKEND_DIR_CANDIDATES:
+        candidate = project_root if name == "." else project_root / name
+        if not (candidate / "api").is_dir():
+            continue
+        if (candidate / _ROUTER_REGISTRY_RELPATH).is_dir():
+            with_registry = with_registry or candidate
+        with_api = with_api or candidate
+
+    return with_registry or with_api or project_root
+
+
 class BackendEndpointScanner:
     """Scans backend Python files for FastAPI route definitions."""
 
@@ -127,11 +186,23 @@ class BackendEndpointScanner:
     API_PREFIX = "/api"
 
     def __init__(self, project_root: Path | None = None):
-        self.project_root = project_root or get_project_root()
-        self.backend_path = self.project_root / "api"
+        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # #10730) rather than get_project_root() (hardcoded parents[4], which
+        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+        # standalone rsync layout).
+        self.project_root = project_root or Path(resolve_project_root())
+        # Issue #12853: the backend is not always directly under the scan root.
+        # This repo keeps it in autobot-backend/, so `project_root / "api"` found
+        # nothing and the scan reported 0 endpoints against a ~2000-route backend
+        # -- which then made every frontend call look like it targeted a missing
+        # endpoint. Locate the backend package instead of assuming its depth.
+        self.backend_dir = find_backend_dir(self.project_root)
+        self.backend_path = self.backend_dir / "api"
         self._router_prefixes: Dict[str, str] = {}
         # Map module name to router prefix (e.g., "chat" -> "", "system" -> "/system")
         self._module_prefix_map: Dict[str, str] = {}
+        # #12945: resolved file -> prefix for registry-mounted routers outside api/
+        self._external_router_prefixes: Dict[Path, str] = {}
 
     def scan_all_endpoints(self) -> List[APIEndpointItem]:
         """
@@ -149,11 +220,18 @@ class BackendEndpointScanner:
         # First pass: collect router prefixes from registry files
         self._collect_router_prefixes()
 
+        # #12945: routers the registries mount from outside api/ are scanned too,
+        # otherwise their routes look missing to every frontend call that uses them.
+        self._external_router_prefixes = self._registry_router_files()
+
         # Second pass: scan all Python files
-        for py_file in self.backend_path.rglob("*.py"):
+        scan_targets = list(self.backend_path.rglob("*.py")) + list(self._external_router_prefixes)
+        for py_file in scan_targets:
             if py_file.name.startswith("__"):
                 continue
             if "archive" in str(py_file).lower():
+                continue
+            if _is_test_file(py_file):
                 continue
 
             try:
@@ -162,7 +240,11 @@ class BackendEndpointScanner:
             except Exception as e:
                 logger.debug("Error scanning %s: %s", py_file, e)
 
-        logger.info("Found %d backend endpoints", len(endpoints))
+        logger.info(
+            "Found %d backend endpoints (%d files outside api/)",
+            len(endpoints),
+            len(self._external_router_prefixes),
+        )
         return endpoints
 
     def _collect_router_prefixes(self) -> None:
@@ -177,7 +259,11 @@ class BackendEndpointScanner:
         - backend/initialization/router_registry/terminal_routers.py (config tuples)
         - backend/initialization/router_registry/mcp_routers.py (config tuples)
         """
-        router_registry_path = self.project_root / "backend" / "initialization" / "router_registry"
+        # Issue #12853: this was `project_root / "backend" / ...`, a path that
+        # exists in no current layout -- so no prefix was ever parsed and every
+        # endpoint was recorded without its router prefix. The registry lives
+        # beside the routes, under the resolved backend directory.
+        router_registry_path = self.backend_dir / _ROUTER_REGISTRY_RELPATH
 
         # Parse core_routers.py for module -> prefix mapping (uses tuple format)
         core_routers_file = router_registry_path / "core_routers.py"
@@ -186,13 +272,12 @@ class BackendEndpointScanner:
 
         # Issue #552: Parse all *_routers.py files that use config tuple format
         # These files use ROUTER_CONFIGS pattern: ("module_path", "router", "/prefix", [...], "name")
-        config_tuple_files = [
-            "analytics_routers.py",
-            "monitoring_routers.py",
-            "feature_routers.py",
-            "terminal_routers.py",
-            "mcp_routers.py",
-        ]
+        # Issue #12853: integration_routers.py was missing from this list, so
+        # its routers carried no prefix. Parse every *_routers.py present
+        # instead of a hand-maintained list that drifts as registries are added.
+        config_tuple_files = sorted(
+            p.name for p in router_registry_path.glob("*_routers.py") if p.name != "core_routers.py"
+        )
 
         for config_file in config_tuple_files:
             file_path = router_registry_path / config_file
@@ -464,9 +549,24 @@ class BackendEndpointScanner:
                 logger.debug("Error scanning include_router in %s: %s", py_file, e)
 
     def _parse_router_registry(self, file_path: Path) -> None:
-        """Parse a router registry file to extract module -> prefix mappings."""
+        """Parse a router registry file to extract module -> prefix mappings.
+
+        #12953: the module was derived by stripping ``_router`` from the router
+        variable. That holds for most entries, but the file states the real
+        mapping in its own imports, and where the two disagree the guess is
+        wrong twice over:
+
+            from api.vnc_manager import router as vnc_router
+            (vnc_router, "/vnc", ["vnc"], "vnc"),
+
+        ``/vnc`` was attributed to ``api.vnc`` -- a different module that also
+        exists -- while ``api.vnc_manager`` got no prefix and emitted its routes
+        unprefixed as ``/api/click``, ``/api/clipboard``. Prefer the import;
+        fall back to the guess when a router is not imported by alias.
+        """
         try:
             content = file_path.read_text(encoding="utf-8")
+            alias_modules = dict((alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content))
 
             # Pattern to match: (router_name, "/prefix", [...], "name")
             # Matches tuples like: (chat_router, "", ["chat"], "chat")
@@ -474,8 +574,8 @@ class BackendEndpointScanner:
                 router_var = match.group(1)  # e.g., "chat_router"
                 prefix = match.group(2)  # e.g., "" or "/system"
 
-                # Extract module name from router variable (chat_router -> chat)
-                module_name = router_var.replace("_router", "")
+                # Prefer the imported module; else chat_router -> chat
+                module_name = alias_modules.get(router_var, router_var.replace("_router", ""))
 
                 # Store mapping: module_name -> full API prefix
                 full_prefix = f"{self.API_PREFIX}{prefix}"
@@ -518,16 +618,32 @@ class BackendEndpointScanner:
                 self._register_module_prefix(module_path, prefix)
 
     def _apply_dynamic_router_pattern(self, content: str, dynamic_router_pattern) -> None:
-        """Helper for _parse_config_tuple_registry. Ref: #1088."""
-        # Issue #552: Also check for dynamic router patterns (terminal_routers.py)
-        # These have router variable names instead of module paths
+        """Helper for _parse_config_tuple_registry. Ref: #1088.
+
+        #12953: the module used to be *guessed* by stripping ``_router`` from the
+        variable name. That is right for most entries but wrong whenever the
+        alias does not mirror its module, and the file states the real mapping
+        two lines up:
+
+            from api.vnc_manager import router as vnc_router   # -> api.vnc_manager
+            (vnc_router, "/vnc", ["vnc"], "vnc"),              # guessed api.vnc
+
+        The guess then attributed ``/vnc`` to ``api.vnc`` -- a different module
+        that also exists -- while ``api.vnc_manager`` got no prefix at all and
+        emitted its routes as ``/api/click``, ``/api/clipboard``. So a mismatch
+        costs twice: a wrong attribution and an unprefixed module. Read the
+        import when it is present; fall back to the guess when it is not, since
+        some registries build routers without importing them by alias.
+        """
+        alias_modules = dict((alias, module) for module, alias in _ROUTER_IMPORT_RE.findall(content))
+
         for match in dynamic_router_pattern.finditer(content):
             router_var = match.group(1)  # e.g., "terminal_router"
             prefix = match.group(2)  # e.g., "/terminal"
-            # group(3) contains name (e.g., "terminal") - unused; module derived from var
+            # group(3) contains name (e.g., "terminal") - unused; module resolved below
 
             # terminal_router -> terminal, agent_terminal_router -> agent_terminal
-            module_name = router_var.replace("_router", "")
+            module_name = alias_modules.get(router_var, router_var.replace("_router", ""))
             module_path = f"api.{module_name}"
             self._register_module_prefix(module_path, prefix)
             logger.debug("Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix)
@@ -580,9 +696,111 @@ class BackendEndpointScanner:
 
         logger.debug("Registered prefix: %s -> %s", module_name, full_prefix)
 
+    def _registry_router_files(self) -> Dict[Path, str]:
+        """Map files to prefixes for registry-mounted routers outside ``api/`` (#12945).
+
+        The scan walks ``api/`` only, but the registries also mount routers from
+        sibling packages -- ``services.advanced_workflow.routes``, ``llc.api``,
+        ``routers.*``. Those routes were never discovered, so every frontend call
+        to one was reported as targeting a missing endpoint: 419 real routes,
+        95.4% of all findings.
+
+        Resolves each registry module path against the backend directory and
+        carries the registered prefix, so the routes land under the path they
+        are actually served on.
+
+        A registry entry naming a *package* needs its own ``__init__.py`` read
+        first (#12945). LLC registers as ``("llc.api", "", …)`` -- an empty
+        prefix -- while its real ``/api/llc/*`` paths come from the package
+        router declared there:
+
+            llc/api/__init__.py:  router = APIRouter(prefix="/llc")
+            llc/api/costs.py:     router = APIRouter(prefix="/costs")
+
+        so a submodule serves ``/api`` + ``/llc`` + ``/costs``. Applying the
+        registry prefix alone to each submodule yields ``/api/costs/…`` --
+        182 endpoints of which 4 were real. Inventing endpoints is worse than
+        missing them, since they resurface as phantom "orphaned" findings.
+        """
+        files: Dict[Path, str] = {}
+        for module_path, prefix in self._module_prefix_map.items():
+            # Registry entries are dotted module paths; the map also holds bare
+            # module names and "api/x.py"-style keys, which are not those.
+            if "." not in module_path or "/" in module_path or module_path.endswith(".py"):
+                continue
+            if module_path.startswith("api."):
+                continue  # already covered by the api/ walk
+
+            target = self.backend_dir.joinpath(*module_path.split("."))
+            module_file = target.with_suffix(".py")
+            if module_file.is_file():
+                files[module_file] = prefix
+            elif (target / "__init__.py").is_file():
+                files.update(self._package_router_files(target, prefix))
+        return files
+
+    def _package_router_files(self, package: Path, registry_prefix: str) -> Dict[Path, str]:
+        """Map a registry-mounted package's submodules to their served prefix.
+
+        The package's own ``APIRouter(prefix=...)`` sits between the registry
+        prefix and each submodule's router prefix, and ``_scan_file`` applies
+        the submodule's own prefix separately -- so only the package-level part
+        belongs here.
+
+        A submodule is included only when the package imports its router under
+        an alias AND mounts that exact alias via ``include_router``. #12956: the
+        previous check only confirmed the package mounted *something*, then
+        included every router-declaring module -- so a declared-but-unmounted
+        router still contributed routes, which the docstring already claimed it
+        would not.
+
+        Nested router subpackages recurse, so their modules resolve under their
+        own prefix rather than the parent's.
+        """
+        init_file = package / "__init__.py"
+        init_content = init_file.read_text(encoding="utf-8", errors="ignore")
+        package_prefix = self._get_file_router_prefix(init_content) or ""
+        if not _INCLUDE_ROUTER_RE.search(init_content):
+            return {}
+
+        served_prefix = f"{registry_prefix}{package_prefix}"
+        mounted = set(_INCLUDE_ROUTER_NAME_RE.findall(init_content))
+        if not mounted:
+            return {}
+
+        files: Dict[Path, str] = {}
+        # #12956: walk one level and recurse, rather than rglob'ing the tree.
+        # rglob descended into nested router subpackages while the "__" filter
+        # removed the very __init__.py carrying their own prefix, so their
+        # modules were emitted under the PARENT's prefix -- inventing endpoints,
+        # the failure this whole change set exists to avoid.
+        for module_name, alias in _RELATIVE_ROUTER_IMPORT_RE.findall(init_content):
+            if alias not in mounted:
+                # Declared but never mounted: it serves nothing.
+                continue
+            module_file = (package / module_name).with_suffix(".py")
+            if module_file.is_file():
+                files[module_file] = served_prefix
+                continue
+            subpackage = package / module_name
+            if (subpackage / "__init__.py").is_file():
+                files.update(self._package_router_files(subpackage, served_prefix))
+        return files
+
     def _get_module_prefix(self, file_path: Path) -> str:
         """Get the API prefix for a given file based on router registry."""
-        relative_path = str(file_path.relative_to(self.project_root))
+        # #12945: registry-mounted files outside api/ carry their prefix
+        # explicitly -- neither the relative-path nor the stem lookup below can
+        # find them (the stem of services/advanced_workflow/routes.py is
+        # "routes", which matches nothing).
+        override = self._external_router_prefixes.get(file_path)
+        if override is not None:
+            return override
+
+        try:
+            relative_path = str(file_path.relative_to(self.project_root))
+        except ValueError:
+            return self.API_PREFIX
 
         # Try direct file path match
         if relative_path in self._module_prefix_map:
@@ -750,7 +968,11 @@ class FrontendAPICallScanner:
     """Scans frontend TypeScript/Vue files for API calls."""
 
     def __init__(self, project_root: Path | None = None):
-        self.project_root = project_root or get_project_root()
+        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # #10730) rather than get_project_root() (hardcoded parents[4], which
+        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+        # standalone rsync layout).
+        self.project_root = project_root or Path(resolve_project_root())
         self.frontend_path = self.project_root / "autobot-frontend" / "src"
 
     def scan_all_calls(self) -> List[FrontendAPICallItem]:
@@ -943,10 +1165,30 @@ class EndpointMatcher:
 
         return True
 
+    @staticmethod
+    def _is_reportable_call(path: str) -> bool:
+        """Is *path* a real API call worth reporting as missing (#12745)?
+
+        The 2400-finding report was padded with strings that were never
+        endpoints: bare examples from docstrings (``/endpoint``, ``/save``) and
+        base-path fragments left over from URL concatenation
+        (``/api/adapters/``, ``/api/secrets/``, both at absurd line numbers).
+        Reporting those as drift trains people to ignore the report.
+        """
+        if not path or not path.startswith("/api"):
+            return False
+        # A base-path fragment: "/api/adapters/" is the prefix a call builds on,
+        # not a route. A real route has a segment after the resource name.
+        stripped = path.rstrip("/")
+        if path.endswith("/") and len(stripped.strip("/").split("/")) <= 2:
+            return False
+        return True
+
     def _match_calls_to_endpoints(
         self,
         used_endpoints: List[EndpointUsageItem],
         missing_endpoints: List[EndpointMismatchItem],
+        low_confidence_endpoints: List[EndpointMismatchItem],
     ) -> Set[int]:
         """
         Match API calls to backend endpoints.
@@ -987,15 +1229,28 @@ class EndpointMatcher:
                         )
                     break
 
-            if not matched and not call.is_dynamic:
-                missing_endpoints.append(
+            if not matched and not call.is_dynamic and self._is_reportable_call(call.path):
+                # #12745: method=="UNKNOWN" marks a finding from the standalone-
+                # path fallback -- the line held an "/api/..." string but matched
+                # no structured call pattern, so this may be a comment, constant
+                # or cache-key map rather than a call. Measured 89% false against
+                # app.openapi() versus 25% for pattern-matched calls, so these are
+                # reported separately instead of drowning the actionable ones.
+                # Separated, never dropped: suppression is how #12894 hid 29 real
+                # findings behind a label.
+                low_confidence = call.method == "UNKNOWN"
+                (low_confidence_endpoints if low_confidence else missing_endpoints).append(
                     EndpointMismatchItem(
-                        type="missing",
+                        type="low_confidence" if low_confidence else "missing",
                         method=call.method,
                         path=call.path,
                         file_path=call.file_path,
                         line_number=call.line_number,
-                        details="Called but no backend endpoint found",
+                        details=(
+                            "Path literal with no recognised call pattern — verify before acting"
+                            if low_confidence
+                            else "Called but no backend endpoint found"
+                        ),
                     )
                 )
 
@@ -1033,6 +1288,36 @@ class EndpointMatcher:
 
         return orphaned
 
+    def _empty_scan_analysis(self) -> APIEndpointAnalysis:
+        """Result for a backend scan that found no routes at all (#12745).
+
+        Deliberately reports zero missing rather than "every call is missing":
+        the comparison has no basis, and emitting it buried the genuine drift
+        under thousands of false positives. ``scan_error`` carries the reason so
+        the state is visible instead of looking like a clean report.
+        """
+        reason = (
+            "Backend endpoint scan found 0 routes — missing-endpoint comparison "
+            "suppressed because it would report every frontend call as missing. "
+            "Check that the analyzed source tree is indexed and reachable."
+        )
+        logger.error("api_endpoint_scanner: %s", reason)
+        return APIEndpointAnalysis(
+            backend_endpoints=0,
+            frontend_calls=len(self.calls),
+            used_endpoints=0,
+            orphaned_endpoints=0,
+            missing_endpoints=0,
+            coverage_percentage=0.0,
+            endpoints=[],
+            api_calls=self.calls,
+            orphaned=[],
+            missing=[],
+            used=[],
+            scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
+            scan_error=reason,
+        )
+
     def analyze(self) -> APIEndpointAnalysis:
         """
         Perform full endpoint analysis.
@@ -1045,9 +1330,17 @@ class EndpointMatcher:
         """
         used_endpoints: List[EndpointUsageItem] = []
         missing_endpoints: List[EndpointMismatchItem] = []
+        low_confidence_endpoints: List[EndpointMismatchItem] = []
+
+        # #12745: with an empty endpoint map every call matches nothing, so the
+        # report claimed 2400 missing endpoints of which 97.4% actually existed.
+        # A scan that found no routes cannot conclude anything about drift —
+        # report the failure instead of manufacturing findings from it.
+        if not self.endpoints:
+            return self._empty_scan_analysis()
 
         # Match calls to endpoints (Issue #665: uses helper)
-        used_endpoint_ids = self._match_calls_to_endpoints(used_endpoints, missing_endpoints)
+        used_endpoint_ids = self._match_calls_to_endpoints(used_endpoints, missing_endpoints, low_confidence_endpoints)
 
         # Find orphaned endpoints (Issue #665: uses helper)
         orphaned_endpoints = self._find_orphaned_endpoints(used_endpoint_ids)
@@ -1068,6 +1361,8 @@ class EndpointMatcher:
             api_calls=self.calls,
             orphaned=orphaned_endpoints,
             missing=missing_endpoints,
+            low_confidence=low_confidence_endpoints,
+            low_confidence_endpoints=len(low_confidence_endpoints),
             used=used_endpoints,
             scan_timestamp=datetime.now(tz=timezone.utc).isoformat(),
         )
@@ -1088,7 +1383,11 @@ class APIEndpointChecker:
     """
 
     def __init__(self, project_root: Path | None = None):
-        self.project_root = project_root or get_project_root()
+        # Issue #12404: Fall back to resolve_project_root() (deployed-layout-aware,
+        # #10730) rather than get_project_root() (hardcoded parents[4], which
+        # resolves to /opt/autobot -- not the analyzable repo -- in the deployed
+        # standalone rsync layout).
+        self.project_root = project_root or Path(resolve_project_root())
         self.backend_scanner = BackendEndpointScanner(self.project_root)
         self.frontend_scanner = FrontendAPICallScanner(self.project_root)
 

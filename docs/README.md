@@ -9,11 +9,16 @@ aliases:
 
 # AutoBot Documentation
 
-> **AutoBot: Autonomous AI-Powered Linux Administration Platform**
+> **Your data. Your AI.**
 >
-> Multi-modal AI with 20+ specialized agents, NPU hardware acceleration, and RBAC security.
+> AutoBot is a self-hosted, agentic AI platform you own: a small, solid core, a Service
+> Lifecycle Manager that runs the hard infrastructure for you, and modules you install on
+> top. Voice and chat, browser and computer control, visual workflows, human-in-the-loop
+> approvals, multi-user RBAC, and a knowledge graph — all on your infrastructure.
 
 This is the root index for all AutoBot documentation. Every section is reachable from here.
+Start with [[architecture/PLATFORM_MODEL|The AutoBot Platform Model]] for the
+core → SLM → modules picture.
 
 ---
 

@@ -134,8 +134,10 @@ const hasUnsavedChanges = computed(() => {
 })
 
 const canDelete = computed(() => {
-  // Cannot delete if has children (backend enforces this)
-  return !props.category?.has_children
+  // Only offer delete when we can positively confirm the category has no
+  // children (backend rejects deleting a parent). `has_children` is undefined
+  // for browser MainCategory objects (#11626) — treat "unknown" as "hide".
+  return props.category?.has_children === false
 })
 
 // =============================================================================

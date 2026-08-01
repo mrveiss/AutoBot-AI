@@ -26,6 +26,7 @@ import json
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 
 from ..models.enums import LLCRunStatus
@@ -50,10 +51,11 @@ class HttpAdapter:
         else:
             body = context
 
-        async with aiohttp.ClientSession(timeout=_DEFAULT_TIMEOUT) as session:
-            async with session.request(method, url, json=body, headers=headers) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
+        async with get_http_client().tracked_request(
+            method, url, json=body, headers=headers, timeout=_DEFAULT_TIMEOUT
+        ) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
 
         run_id: str = data["run_id"]
         logger.info("HttpAdapter: invoked %s %s → run_id=%s", method, url, run_id)
@@ -64,12 +66,13 @@ class HttpAdapter:
         headers: dict = agent_config.get("headers", {})
 
         status_url = f"{base_url}/status/{run_id}"
-        async with aiohttp.ClientSession(timeout=_DEFAULT_TIMEOUT) as session:
-            async with session.get(status_url, headers=headers) as resp:
-                if resp.status == 404:
-                    return AdapterRunStatus(status=LLCRunStatus.FAILED, error="run not found")
-                resp.raise_for_status()
-                data = await resp.json()
+        async with get_http_client().tracked_request(
+            "GET", status_url, headers=headers, timeout=_DEFAULT_TIMEOUT
+        ) as resp:
+            if resp.status == 404:
+                return AdapterRunStatus(status=LLCRunStatus.FAILED, error="run not found")
+            resp.raise_for_status()
+            data = await resp.json()
 
         raw_status: str = data.get("status", "failed")
         # Map remote vocabulary to LLCRunStatus; "succeeded" accepted for compat.
@@ -94,7 +97,8 @@ class HttpAdapter:
         headers: dict = agent_config.get("headers", {})
 
         cancel_url = f"{base_url}/cancel/{run_id}"
-        async with aiohttp.ClientSession(timeout=_DEFAULT_TIMEOUT) as session:
-            async with session.post(cancel_url, headers=headers) as resp:
-                resp.raise_for_status()
+        async with get_http_client().tracked_request(
+            "POST", cancel_url, headers=headers, timeout=_DEFAULT_TIMEOUT
+        ) as resp:
+            resp.raise_for_status()
         logger.info("HttpAdapter: cancelled run_id=%s at %s", run_id, cancel_url)

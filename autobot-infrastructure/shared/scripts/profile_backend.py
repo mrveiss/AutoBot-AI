@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
 Backend Performance Profiler
@@ -82,7 +83,7 @@ def profile_backend_startup():
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     profile_file = reports_dir / "backend_profile.txt"
-    with open(profile_file, "w") as f:
+    with open(profile_file, "w", encoding="utf-8") as f:
         f.write(stats_output)
     print(f"📄 Text stats saved to: {profile_file}")
 

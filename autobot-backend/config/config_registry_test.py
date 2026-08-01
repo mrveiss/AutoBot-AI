@@ -126,8 +126,10 @@ class TestConfigRegistryBasic:
 
         ConfigRegistry.clear_cache()
 
+        # "api.port" converts to AUTOBOT_API_PORT — the previous AUTOBOT_BACKEND_API_PORT
+        # never matched, so this asserted the caller default rather than the conversion.
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
-            with patch.dict(os.environ, {"AUTOBOT_BACKEND_API_PORT": "9000"}, clear=True):
+            with patch.dict(os.environ, {"AUTOBOT_API_PORT": "9000"}, clear=True):
                 result = ConfigRegistry.get("api.port", default="8001")
                 assert result == "9000"
 
@@ -318,11 +320,15 @@ class TestConfigRegistryDefaults:
 
         ConfigRegistry.clear_cache()
 
+        # Assert the contract (registry defaults are sourced from SSOT), not a
+        # deployment-specific IP literal that only matches one environment.
+        from autobot_shared.ssot_config import config as ssot
+
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
             with patch.dict(os.environ, {}, clear=True):
                 # Should get default from registry_defaults
                 result = ConfigRegistry.get("redis.host")
-                assert result == "10.0.0.4"
+                assert result == ssot.vm.redis
 
     def test_get_uses_registry_defaults_for_port(self):
         """Test that get() uses registry defaults for port values."""
@@ -374,14 +380,18 @@ class TestConfigRegistryDefaults:
 
         ConfigRegistry.clear_cache()
 
+        # Assert every vm.* default resolves from SSOT rather than pinning
+        # deployment-specific IP literals, which only match one environment.
+        from autobot_shared.ssot_config import config as ssot
+
         with patch.object(ConfigRegistry, "_fetch_from_redis", return_value=None):
             with patch.dict(os.environ, {}, clear=True):
-                assert ConfigRegistry.get("vm.main") == "10.0.0.1"
-                assert ConfigRegistry.get("vm.frontend") == "10.0.0.2"
-                assert ConfigRegistry.get("vm.npu") == "10.0.0.3"
-                assert ConfigRegistry.get("vm.redis") == "10.0.0.4"
-                assert ConfigRegistry.get("vm.aistack") == "10.0.0.5"
-                assert ConfigRegistry.get("vm.browser") == "10.0.0.6"
+                assert ConfigRegistry.get("vm.main") == ssot.vm.main
+                assert ConfigRegistry.get("vm.frontend") == ssot.vm.frontend
+                assert ConfigRegistry.get("vm.npu") == ssot.vm.npu
+                assert ConfigRegistry.get("vm.redis") == ssot.vm.redis
+                assert ConfigRegistry.get("vm.aistack") == ssot.vm.aistack
+                assert ConfigRegistry.get("vm.browser") == ssot.vm.browser
 
     def test_llm_defaults_available(self):
         """Test that LLM defaults are available."""
@@ -405,3 +415,78 @@ class TestConfigRegistryDefaults:
                 assert ConfigRegistry.get("timeout.http") == "30"
                 assert ConfigRegistry.get("timeout.redis") == "5"
                 assert ConfigRegistry.get("timeout.llm") == "120"
+
+
+class TestRedisConnectBackoff:
+    """_get_redis() failed-connect backoff (Issue #12674).
+
+    Before #12674 a failed connect was never remembered, so every config lookup
+    re-dialled Redis. Importing a module that resolves ~29 config keys with
+    Redis unreachable therefore opened 29 blocking connections and tripped the
+    'main' circuit breaker purely as an import side effect.
+    """
+
+    def test_failed_connect_is_not_retried_within_backoff_window(self):
+        """A failed connect suppresses further dial attempts for the interval."""
+        from config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch("autobot_shared.redis_client.get_redis_client", return_value=None) as dial:
+            for _ in range(10):
+                assert ConfigRegistry._get_redis() is None
+            assert dial.call_count == 1
+
+    def test_backoff_expiry_allows_a_fresh_connect_attempt(self):
+        """Once the backoff window lapses, Redis is probed again."""
+        from config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch("autobot_shared.redis_client.get_redis_client", return_value=None) as dial:
+            assert ConfigRegistry._get_redis() is None
+            assert dial.call_count == 1
+
+            ConfigRegistry._redis_retry_after = 0.0  # simulate window expiry
+            assert ConfigRegistry._get_redis() is None
+            assert dial.call_count == 2
+
+    def test_circular_import_does_not_arm_backoff(self):
+        """ImportError is transient (network_constants ↔ redis_client), not an outage.
+
+        Arming the backoff here would wrongly degrade config to
+        env/registry_defaults for the whole window on a healthy system.
+        """
+        from config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch.dict("sys.modules", {"autobot_shared.redis_client": None}):
+            assert ConfigRegistry._get_redis() is None
+        assert ConfigRegistry._redis_retry_after == 0.0
+
+    def test_successful_connect_is_cached_and_reused(self):
+        """A healthy Redis is dialled once and reused, backoff never armed."""
+        from config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+        client = MagicMock()
+
+        with patch("autobot_shared.redis_client.get_redis_client", return_value=client) as dial:
+            for _ in range(5):
+                assert ConfigRegistry._get_redis() is client
+            assert dial.call_count == 1
+        assert ConfigRegistry._redis_retry_after == 0.0
+
+    def test_clear_cache_resets_backoff(self):
+        """clear_cache() re-enables immediate probing."""
+        from config.registry import ConfigRegistry
+
+        ConfigRegistry.clear_cache()
+
+        with patch("autobot_shared.redis_client.get_redis_client", return_value=None):
+            ConfigRegistry._get_redis()
+        assert ConfigRegistry._redis_retry_after > 0.0
+
+        ConfigRegistry.clear_cache()
+        assert ConfigRegistry._redis_retry_after == 0.0

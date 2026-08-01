@@ -22,6 +22,7 @@ Moved from autobot-backend/utils/ to autobot_shared/ (Issue #2313).
 import asyncio
 import functools
 import logging
+import os
 import socket
 import time
 import weakref
@@ -195,21 +196,43 @@ class RedisConnectionManager:
         - Comprehensive statistics
 
         Refactored for Issue #620.
+
+        #12647: ``_init_configurations`` resolves the Redis host via
+        ``NetworkConstants.REDIS_VM_IP``, which — when no config-manager or env
+        value is set — goes through ``ConfigRegistry.get()``'s Redis-backed
+        cache tier, which constructs a Redis client, which constructs *this
+        same singleton* to look up its own host. ``__new__`` correctly returns
+        the same (not-yet-initialized) instance, but Python still calls
+        ``__init__`` again on it — and the OLD ``_initialized`` guard is set
+        only at the very end, so the re-entrant call saw no guard and reran
+        every init step from scratch, recursing without bound (confirmed via a
+        captured traceback: RedisConnectionManager() -> _load_redis_config ->
+        NetworkConstants.REDIS_VM_IP -> ConfigRegistry.get -> _get_redis ->
+        get_redis_client -> RedisConnectionManager() again). Marking
+        "initializing" BEFORE running any init step lets the re-entrant call
+        return immediately instead; its caller (ConfigRegistry._get_redis,
+        already wrapped in a broad except) then degrades to the env/registry-
+        defaults tier exactly as the "graceful fallback chain" docstring
+        promises, rather than blowing the stack.
         """
-        if hasattr(self, "_initialized"):
+        if hasattr(self, "_initialized") or getattr(self, "_initializing", False):
             return
+        self._initializing = True
 
-        # Initialize all subsystems using helper methods. Issue #620.
-        self._init_pool_and_client_storage()
-        self._init_circuit_breaker_state()
-        self._init_tcp_keepalive_options()
-        self._init_connection_tracking()
-        self._init_configurations()
-        self._init_statistics_tracking()
-        self._init_cleanup_configuration()
+        try:
+            # Initialize all subsystems using helper methods. Issue #620.
+            self._init_pool_and_client_storage()
+            self._init_circuit_breaker_state()
+            self._init_tcp_keepalive_options()
+            self._init_connection_tracking()
+            self._init_configurations()
+            self._init_statistics_tracking()
+            self._init_cleanup_configuration()
 
-        self._initialized = True
-        logger.info("Enhanced Redis Connection Manager initialized with consolidated features")
+            self._initialized = True
+            logger.info("Enhanced Redis Connection Manager initialized with consolidated features")
+        finally:
+            self._initializing = False
 
     def _init_pool_and_client_storage(self) -> None:
         """
@@ -318,6 +341,30 @@ class RedisConnectionManager:
         self._health_check_tasks: Dict[str, asyncio.Task] = {}
         self._cleanup_task: asyncio.Task | None = None
 
+    @staticmethod
+    def _redis_host_from_env() -> str | None:
+        """Return REDIS_HOST / AUTOBOT_REDIS_HOST if either is set (#12778).
+
+        Processes that cannot import the backend config layer — slm-agent runs
+        under the SYSTEM interpreter with only its own PYTHONPATH — get an empty
+        dict from the config manager and then fall back to
+        NetworkConstants.REDIS_VM_IP, which resolves to the EMPTY STRING in that
+        context. _validate_config_host (#11449) then correctly refuses to dial a
+        blank host, so the agent silently dropped every event it collected —
+        including the backend crash-loop transition that is the one signal that
+        would surface a crashing service in the GUI.
+
+        The slm-agent unit already sets both variables, and the resulting error
+        even tells the operator to "set REDIS_HOST" — advice that was
+        unactionable because nothing ever read it. Consulting them here makes
+        that instruction true.
+        """
+        for var in ("REDIS_HOST", "AUTOBOT_REDIS_HOST"):
+            value = (os.getenv(var) or "").strip()
+            if value:
+                return value
+        return None
+
     def _load_redis_config(self) -> Dict[str, Any]:
         """Load Redis configuration from unified config (#2477)."""
         try:
@@ -326,8 +373,12 @@ class RedisConnectionManager:
         except AttributeError:
             # ssot_config._ConfigProxy does not expose get_redis_config(); fall back to NetworkConstants
             redis_config = {}
+        # #12778: env beats the NetworkConstants fallback, but NOT an explicit
+        # config-manager value — a deployment that configures Redis centrally
+        # must still win over a stray env var.
+        host = redis_config.get("host") or self._redis_host_from_env() or NetworkConstants.REDIS_VM_IP
         return {
-            "host": redis_config.get("host", NetworkConstants.REDIS_VM_IP),
+            "host": host,
             "port": redis_config.get("port", NetworkConstants.REDIS_PORT),
             "password": redis_config.get("password"),
             "enabled": redis_config.get("enabled", True),

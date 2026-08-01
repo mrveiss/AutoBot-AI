@@ -10,6 +10,8 @@ import io
 from docx import Document
 from docx.shared import RGBColor
 
+from transcriber.util import format_timestamp as _fmt_ts
+
 _SPEAKER_COLORS = [
     RGBColor(0x1A, 0x73, 0xE8),
     RGBColor(0xD9, 0x34, 0x25),
@@ -17,12 +19,6 @@ _SPEAKER_COLORS = [
     RGBColor(0xFB, 0xBC, 0x04),
     RGBColor(0x8A, 0x2B, 0xE2),
 ]
-
-
-def _fmt_ts(seconds: float) -> str:
-    m, s = divmod(int(seconds), 60)
-    h, m = divmod(m, 60)
-    return f"{h:02d}:{m:02d}:{s:02d}"
 
 
 def build_docx(

@@ -22,7 +22,7 @@ from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from autobot_shared.time_utils import now_utc
+from autobot_shared.time_utils import utc_timestamp
 
 logger = get_logger(__name__)
 
@@ -84,7 +84,7 @@ class PersonalityProfile:
 
     def __post_init__(self) -> None:
         if not self.created_at:
-            self.created_at = _now_iso()
+            self.created_at = utc_timestamp()
         if not self.updated_at:
             self.updated_at = self.created_at
 
@@ -110,10 +110,6 @@ class PersonalityProfile:
             lang_name = SUPPORTED_LANGUAGES.get(self.language_code, self.language_code)
             lines.append(f"\n**Response Language:** Always respond in" f" {lang_name} ({self.language_code}).")
         return "\n".join(line for line in lines if line is not None)
-
-
-def _now_iso() -> str:
-    return now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _load_json(path: Path) -> dict:
@@ -272,7 +268,7 @@ class PersonalityManager:
         for key, val in updates.items():
             if key in allowed:
                 setattr(profile, key, val)
-        profile.updated_at = _now_iso()
+        profile.updated_at = utc_timestamp()
         self._save_profile(profile)
         index = self._read_index()
         self._update_index_entry(index, pid, profile.name, profile.is_system)
@@ -331,7 +327,7 @@ class PersonalityManager:
         profile.off_limits = list(default.off_limits)
         profile.custom_notes = ""
         profile.language_code = default.language_code
-        profile.updated_at = _now_iso()
+        profile.updated_at = utc_timestamp()
         self._save_profile(profile)
         logger.info("Personality profile reset to default: %s", pid)
         return profile

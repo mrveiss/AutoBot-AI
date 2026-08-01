@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
 # AutoBot Native VM - Complete Shutdown Procedure
 # Connects to all VMs and stops all services gracefully
 

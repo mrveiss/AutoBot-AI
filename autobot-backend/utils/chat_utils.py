@@ -224,7 +224,7 @@ def create_chat_response(
     }
     if request_id:
         response["request_id"] = request_id
-    return JSONResponse(status_code=status_code, content=response)  # codeql[py/stack-trace-exposure]
+    return JSONResponse(status_code=status_code, content=response)
 
 
 def create_error_response(

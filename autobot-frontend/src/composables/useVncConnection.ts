@@ -50,7 +50,7 @@ export function useVncConnection(sessionId: string = 'default') {
     errors.value = []
     try {
       const data = await wrap(() =>
-        ApiClient.get<ConnectionSettings>(`/vnc/connection/settings?session_id=${sessionId}`)
+        ApiClient.get<ConnectionSettings>(`/api/vnc/connection/settings?session_id=${sessionId}`)
       )
       settings.value = data
     } catch (err: unknown) {
@@ -63,7 +63,7 @@ export function useVncConnection(sessionId: string = 'default') {
     errors.value = []
     try {
       await wrap(() =>
-        ApiClient.post(`/vnc/connection/settings?session_id=${sessionId}`, newSettings)
+        ApiClient.post(`/api/vnc/connection/settings?session_id=${sessionId}`, newSettings)
       )
       settings.value = newSettings
       return true
@@ -76,7 +76,7 @@ export function useVncConnection(sessionId: string = 'default') {
 
   async function loadMetrics(): Promise<void> {
     try {
-      const data = await ApiClient.get<ConnectionMetrics>('/vnc/connection/quality-metrics')
+      const data = await ApiClient.get<ConnectionMetrics>('/api/vnc/connection/quality-metrics')
       metrics.value = data
     } catch (err: unknown) {
       logger.error('Failed to load connection metrics:', err)
