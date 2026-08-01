@@ -6,114 +6,75 @@
  * Agent Org Chart Tab (#1405)
  *
  * Tree visualization of agent hierarchy with delegation controls.
- * Uses /autobot-api proxy to main backend.
+ *
+ * #13079: reaches the autobot backend through `useAutobotApi`, the SLM app's
+ * single client for that backend, instead of a private `fetch` that sent only
+ * `Bearer ${authStore.token}` (no `autobot_access_token` fallback, no 401
+ * cleanup, no timeout).
  */
 
-import { computed, onMounted, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import { onMounted, ref } from 'vue'
+import {
+  useAutobotApi,
+  autobotApiErrorMessage,
+  type AgentActivitySummary,
+  type AgentDelegation,
+  type AgentDirectReport,
+  type AgentOrgNode,
+} from '@/composables/useAutobotApi'
 import OrgTreeNode from './OrgTreeNode.vue'
 
-interface OrgNode {
-  agent_id: string
-  name: string
-  org_role: string
-  title: string | null
-  capabilities: string | null
-  direct_reports_count: number
-  children: OrgNode[]
-}
-
-interface Delegation {
-  id: string
-  delegator_id: string
-  assignee_id: string
-  task_description: string
-  status: string
-  escalated_to: string | null
-  created_at: string | null
-}
-
-interface ActivitySummary {
-  manager_id: string
-  total_delegated: number
-  by_status: Record<string, number>
-}
-
-const authStore = useAuthStore()
-const tree = ref<OrgNode[]>([])
+const api = useAutobotApi()
+const tree = ref<AgentOrgNode[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
-const selectedNode = ref<OrgNode | null>(null)
-const directReports = ref<{ agent_id: string; name: string; org_role: string }[]>([])
-const activity = ref<ActivitySummary | null>(null)
-const delegations = ref<Delegation[]>([])
+const selectedNode = ref<AgentOrgNode | null>(null)
+const directReports = ref<AgentDirectReport[]>([])
+const activity = ref<AgentActivitySummary | null>(null)
+const delegations = ref<AgentDelegation[]>([])
 const showDelegateForm = ref(false)
 const delegateForm = ref({ assignee_id: '', task_description: '' })
 const delegateError = ref<string | null>(null)
-
-const headers = computed(() => ({
-  Authorization: `Bearer ${authStore.token}`,
-  'Content-Type': 'application/json',
-}))
 
 async function fetchTree() {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch(`${getBackendUrl()}/agents/org`, { headers: headers.value })
-    if (!res.ok) throw new Error(`Failed to load org tree: ${res.status}`)
-    tree.value = await res.json()
+    tree.value = await api.getAgentOrgTree()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load org tree'
+    error.value = autobotApiErrorMessage(err, 'Failed to load org tree')
   } finally {
     loading.value = false
   }
 }
 
-async function selectNode(node: OrgNode) {
+async function selectNode(node: AgentOrgNode) {
   selectedNode.value = node
   showDelegateForm.value = false
   delegateError.value = null
-  try {
-    const [reportsRes, activityRes, delegationsRes] = await Promise.all([
-      fetch(`${getBackendUrl()}/agents/${node.agent_id}/reports`, { headers: headers.value }),
-      fetch(`${getBackendUrl()}/agents/${node.agent_id}/activity`, { headers: headers.value }),
-      fetch(`${getBackendUrl()}/agents/${node.agent_id}/delegations?role=delegator&limit=10`, {
-        headers: headers.value,
-      }),
-    ])
-    directReports.value = reportsRes.ok ? await reportsRes.json() : []
-    activity.value = activityRes.ok ? await activityRes.json() : null
-    delegations.value = delegationsRes.ok ? await delegationsRes.json() : []
-  } catch {
-    directReports.value = []
-    activity.value = null
-    delegations.value = []
-  }
+  // `allSettled`, not `all`: the raw `fetch` this replaced never rejected on a
+  // non-2xx, so one failing panel left the other two populated. Keep that
+  // per-panel degradation rather than blanking the whole detail pane.
+  const [reports, summary, recent] = await Promise.allSettled([
+    api.getAgentDirectReports(node.agent_id),
+    api.getAgentActivity(node.agent_id),
+    api.getAgentDelegations(node.agent_id, { role: 'delegator', limit: 10 }),
+  ])
+  directReports.value = reports.status === 'fulfilled' ? reports.value : []
+  activity.value = summary.status === 'fulfilled' ? summary.value : null
+  delegations.value = recent.status === 'fulfilled' ? recent.value : []
 }
 
 async function submitDelegation() {
   if (!selectedNode.value) return
   delegateError.value = null
   try {
-    const res = await fetch(
-      `${getBackendUrl()}/agents/${selectedNode.value.agent_id}/delegate`,
-      {
-        method: 'POST',
-        headers: headers.value,
-        body: JSON.stringify(delegateForm.value),
-      },
-    )
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.detail || `Failed: ${res.status}`)
-    }
+    await api.delegateAgentTask(selectedNode.value.agent_id, delegateForm.value)
     delegateForm.value = { assignee_id: '', task_description: '' }
     showDelegateForm.value = false
     await selectNode(selectedNode.value)
   } catch (err) {
-    delegateError.value = err instanceof Error ? err.message : 'Delegation failed'
+    delegateError.value = autobotApiErrorMessage(err, 'Delegation failed')
   }
 }
 
