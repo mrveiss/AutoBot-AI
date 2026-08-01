@@ -285,11 +285,6 @@ class TestMCPCacheIntegration:
     """Integration tests for cache with actual endpoints"""
 
     @pytest.fixture
-    def mock_cache_enabled(self, monkeypatch):
-        """Ensure cache is enabled for tests"""
-        monkeypatch.setenv("MCP_REGISTRY_CACHE_ENABLED", "true")
-        monkeypatch.setenv("MCP_REGISTRY_CACHE_TTL", "60")
-
     def test_environment_variable_loading(self):
         """Test that environment variables are loaded correctly"""
         from api import mcp_registry
