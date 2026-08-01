@@ -106,7 +106,7 @@ if "async_chat_workflow" not in sys.modules:
 # chat_workflow.session_handler sub-stubs are registered.  We use a real
 # ModuleType with __path__ so Python treats it as a package.
 _cw_pkg = _pkg_stub("chat_workflow")
-if not getattr(_cw_pkg, "__path__", None):
+if not _cw_pkg.__dict__.get("__path__"):
     # Only a stub we just created has an empty __path__; if the real package is
     # already imported its __path__ is correct and must not be overwritten.
     _cw_pkg.__path__ = [str(_BACKEND_ROOT / "chat_workflow")]  # type: ignore[attr-defined]
