@@ -129,7 +129,7 @@ def test_frontend_config():
         # Check if the frontend is making requests to the right place
         frontend_env_file = Path("autobot-vue/.env")
         if frontend_env_file.exists():
-            with open(frontend_env_file, "r") as f:
+            with open(frontend_env_file, "r", encoding="utf-8") as f:
                 content = f.read()
                 logger.info("   Frontend .env content:")
                 for line in content.split("\n"):

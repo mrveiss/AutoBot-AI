@@ -198,7 +198,7 @@ class TestRepositoryAnalysis:
         """Test successful repository analysis."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a file with conflicts
-            with open(f"{tmpdir}/test.py", "w") as f:
+            with open(f"{tmpdir}/test.py", "w", encoding="utf-8") as f:
                 f.write("<<<<<<< HEAD\nx = 1\n=======\nx = 2\n>>>>>>> branch\n")
 
             response = client.post(
@@ -216,7 +216,7 @@ class TestRepositoryAnalysis:
         """Test repository analysis with no conflicts."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create a clean file
-            with open(f"{tmpdir}/test.py", "w") as f:
+            with open(f"{tmpdir}/test.py", "w", encoding="utf-8") as f:
                 f.write("def hello():\n    pass\n")
 
             response = client.post(
@@ -272,7 +272,7 @@ class TestApplyResolution:
         assert data["backup_path"] is not None
 
         # Verify file was updated
-        with open(conflict_file, "r") as f:
+        with open(conflict_file, "r", encoding="utf-8") as f:
             content = f.read()
             assert content == resolved_content
 

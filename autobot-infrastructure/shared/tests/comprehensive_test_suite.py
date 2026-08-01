@@ -1179,12 +1179,12 @@ class ComprehensiveTestSuite:
 
         # Save report to file
         report_file = self.results_dir / f"comprehensive_test_report_{self.timestamp}.json"
-        with open(report_file, "w") as f:
+        with open(report_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2)
 
         # Save human-readable summary
         summary_file = self.results_dir / f"comprehensive_test_summary_{self.timestamp}.txt"
-        with open(summary_file, "w") as f:
+        with open(summary_file, "w", encoding="utf-8") as f:
             f.write("AutoBot Phase 9 Comprehensive Test Report\n")
             f.write(f"{'='*50}\n\n")
             f.write(f"Test Execution: {self.timestamp}\n")
@@ -1320,7 +1320,7 @@ async def main():
     # Load custom configuration if provided
     config = TestSuiteConfig()
     if args.config:
-        with open(args.config, "r") as f:
+        with open(args.config, "r", encoding="utf-8") as f:
             config_data = json.load(f)
             for key, value in config_data.items():
                 if hasattr(config, key):

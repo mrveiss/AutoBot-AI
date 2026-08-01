@@ -73,7 +73,7 @@ class TestPresenceWSConfiguration:
             "/home/martins/AutoBot-Ai/AutoBot-AI/autobot-backend/initialization/router_registry/feature_routers.py"
         )
 
-        with open(config_file, "r") as f:
+        with open(config_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         # Verify presence_ws is in the file

@@ -95,7 +95,7 @@ async def test_knowledge_base_optimization():
     with tempfile.TemporaryDirectory() as temp_dir:
         # Write test document
         test_file = os.path.join(temp_dir, "test_document.txt")
-        with open(test_file, "w") as f:
+        with open(test_file, "w", encoding="utf-8") as f:
             f.write(TEST_DOCUMENT_CONTENT)
 
         print(f"📄 Processing test document: {test_file}")  # noqa: print

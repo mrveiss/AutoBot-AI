@@ -113,7 +113,7 @@ class TestInvoke:
 
             state_file = _state_path(td, run_id)
             assert os.path.exists(state_file)
-            with open(state_file) as fh:
+            with open(state_file, encoding="utf-8") as fh:
                 state = json.load(fh)
             assert state["pid"] == 77
             assert "session_id" in state
@@ -343,7 +343,7 @@ class TestCancel:
         with tempfile.TemporaryDirectory() as td:
             run_id = "4321/session-del"
             state_file = _state_path(td, run_id)
-            with open(state_file, "w") as fh:
+            with open(state_file, "w", encoding="utf-8") as fh:
                 json.dump({"pid": 4321}, fh)
 
             with patch("os.kill", side_effect=ProcessLookupError()):

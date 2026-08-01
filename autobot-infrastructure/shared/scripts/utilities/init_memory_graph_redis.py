@@ -492,7 +492,7 @@ class MemoryGraphInitializer:
             Entity dictionary or None if conversion fails
         """
         try:
-            with open(transcript_path, "r") as f:
+            with open(transcript_path, "r", encoding="utf-8") as f:
                 transcript = json.load(f)
 
             conv_id = transcript.get("session_id", transcript_path.stem)

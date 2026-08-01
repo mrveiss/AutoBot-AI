@@ -110,7 +110,7 @@ def test_frontend_components():
 
         for component_path in components_to_check:
             if os.path.exists(component_path):
-                with open(component_path, "r") as f:
+                with open(component_path, "r", encoding="utf-8") as f:
                     content = f.read()
                     if len(content) > 100:  # Basic content check
                         logger.info(
