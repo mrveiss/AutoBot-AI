@@ -393,12 +393,19 @@ class TestMCPAuthDefaults:
         with patch.dict(os.environ, {}, clear=True):
             assert MiscConfig(_env_file=None).mcp_token == "dev"
 
-    def test_mcp_run_jwt_enforce_default_is_on(self) -> None:
-        """Workers must opt out of run-JWT enforcement deliberately, never by default."""
+    def test_mcp_run_jwt_enforce_default_documents_the_regression(self) -> None:
+        """#13263: enforcement shipped ON ("1"); #7437 dropped it to "".
+
+        Restoring it is blocked on #13265 — mcp_dispatch does not propagate
+        run_jwt to out-of-process bridges, so switching enforcement on would
+        fail every filesystem/browser/vnc tool call with -32001. This pins the
+        current (regressed) value deliberately, so the flip is a conscious edit
+        against a passing test rather than a silent change.
+        """
         from autobot_shared.ssot_config import MiscConfig
 
         with patch.dict(os.environ, {}, clear=True):
-            assert MiscConfig(_env_file=None).mcp_run_jwt_enforce == "1"
+            assert MiscConfig(_env_file=None).mcp_run_jwt_enforce == ""
 
 
 class TestChatCitationInstructionAliasChoices:

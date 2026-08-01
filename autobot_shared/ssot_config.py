@@ -1772,9 +1772,13 @@ class MiscConfig(BaseSettings):
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
-    # #13263: restore pre-#7437 default ("1") — "" turned run-scoped JWT
-    # enforcement off in every bridge worker that does not set the var.
-    mcp_run_jwt_enforce: str = Field(default="1", alias="MCP_RUN_JWT_ENFORCE")
+    # #13263: the pre-#7437 default was "1"; #7437 dropped it to "" and turned
+    # run-scoped JWT enforcement off in every bridge worker. Restoring it is
+    # BLOCKED on #13265: services/mcp_dispatch.py:214 calls call_tool() without
+    # run_jwt and _WORKER_ENV_ALLOW excludes MCP_RUN_JWT, so filesystem_mcp,
+    # browser_mcp and vnc_mcp would return -32001 on every chat tool call.
+    # Enforcement must not be switched on before the token can be supplied.
+    mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
     mcp_worker_mem_mb: int = Field(default=0, alias="MCP_WORKER_MEM_MB")
