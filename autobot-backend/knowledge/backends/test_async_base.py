@@ -16,6 +16,7 @@ from typing import Callable
 
 import pytest
 
+from knowledge.backends._chromadb_support import require_real_chromadb
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.async_chromadb_adapter import AsyncChromaDBClient
 from knowledge.backends.async_memory_adapter import AsyncInMemoryClient
@@ -28,35 +29,12 @@ from knowledge.backends.async_memory_adapter import AsyncInMemoryClient
 # AsyncChromaClient, which itself wraps the raw PersistentClient.
 
 
-def _require_real_chromadb():
-    """Return the real ``chromadb`` module, or skip if only the stub is present.
-
-    ``autobot-backend/conftest.py`` installs a MagicMock package stub for
-    ``chromadb`` before collection (MVA-1119 — the real import hangs on hosts
-    without a local Chroma server). Because the stub is already in
-    ``sys.modules``, ``pytest.importorskip`` finds it and does NOT skip, so the
-    whole chromadb parametrization used to run against a MagicMock: every
-    attribute access returns a mock, ``count()`` answers 1, ``len()`` answers 0,
-    ``set()`` answers empty and nothing ever raises — which is exactly the
-    failure signature reported in #13239. Skipping is the honest outcome; the
-    contract itself is still enforced by the in-memory parametrization.
-
-    Detection uses the module-level ``__getattr__`` that the stub factory sets
-    and real packages do not define — the same signal ``conftest.py`` already
-    uses to recognise its own ``sqlalchemy.orm`` stub.
-    """
-    chromadb = pytest.importorskip("chromadb")
-    if "__getattr__" in vars(chromadb):
-        pytest.skip("chromadb is stubbed by autobot-backend/conftest.py (MVA-1119); real ChromaDB required (#13239)")
-    return chromadb
-
-
 def _memory_client(tmp_path) -> AsyncBaseClient:  # tmp_path unused
     return AsyncInMemoryClient()
 
 
 def _chromadb_client(tmp_path) -> AsyncBaseClient:
-    chromadb = _require_real_chromadb()
+    chromadb = require_real_chromadb()
     from utils.async_chromadb_client import AsyncChromaClient
 
     raw_sync = chromadb.PersistentClient(path=str(tmp_path))
