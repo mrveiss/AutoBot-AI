@@ -6,30 +6,25 @@
  * Config History Tab (#1404)
  *
  * Timeline of configuration revisions with diff view and rollback.
- * Uses /autobot-api proxy to main backend.
+ *
+ * #13079: reaches the autobot backend through `useAutobotApi`, the SLM app's
+ * single client for that backend, instead of a private `fetch` that sent only
+ * `Bearer ${authStore.token}` (no `autobot_access_token` fallback, no 401
+ * cleanup, no timeout).
  */
 
-import { computed, ref, watch } from 'vue'
-import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import { ref, watch } from 'vue'
+import {
+  useAutobotApi,
+  autobotApiErrorMessage,
+  type ConfigRevision,
+} from '@/composables/useAutobotApi'
 
-interface Revision {
-  id: string
-  entity_type: string
-  entity_id: string
-  before_config: Record<string, unknown> | null
-  after_config: Record<string, unknown>
-  changed_keys: string[]
-  source: string
-  created_by: string
-  created_at: string | null
-}
-
-const authStore = useAuthStore()
-const revisions = ref<Revision[]>([])
+const api = useAutobotApi()
+const revisions = ref<ConfigRevision[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
-const selectedRevision = ref<Revision | null>(null)
+const selectedRevision = ref<ConfigRevision | null>(null)
 const showRollbackConfirm = ref(false)
 const rollbackLoading = ref(false)
 
@@ -43,25 +38,15 @@ const entityTypes = [
 
 const systemEntities = ['settings', 'config', 'backend']
 
-const headers = computed(() => ({
-  Authorization: `Bearer ${authStore.token}`,
-  'Content-Type': 'application/json',
-}))
-
 async function fetchRevisions() {
   if (!entityType.value || !entityId.value) return
   loading.value = true
   error.value = null
   selectedRevision.value = null
   try {
-    const res = await fetch(
-      `${getBackendUrl()}/config-revisions/${entityType.value}/${entityId.value}?limit=50`,
-      { headers: headers.value },
-    )
-    if (!res.ok) throw new Error(`Failed to load revisions: ${res.status}`)
-    revisions.value = await res.json()
+    revisions.value = await api.getConfigRevisions(entityType.value, entityId.value, 50)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load revisions'
+    error.value = autobotApiErrorMessage(err, 'Failed to load revisions')
     revisions.value = []
   } finally {
     loading.value = false
@@ -71,25 +56,18 @@ async function fetchRevisions() {
 async function rollback(revisionId: string) {
   rollbackLoading.value = true
   try {
-    const res = await fetch(
-      `${getBackendUrl()}/config-revisions/${entityType.value}/${entityId.value}/${revisionId}/rollback`,
-      { method: 'POST', headers: headers.value },
-    )
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.detail || `Rollback failed: ${res.status}`)
-    }
+    await api.rollbackConfigRevision(entityType.value, entityId.value, revisionId)
     showRollbackConfirm.value = false
     selectedRevision.value = null
     await fetchRevisions()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Rollback failed'
+    error.value = autobotApiErrorMessage(err, 'Rollback failed')
   } finally {
     rollbackLoading.value = false
   }
 }
 
-function selectRevision(rev: Revision) {
+function selectRevision(rev: ConfigRevision) {
   selectedRevision.value = selectedRevision.value?.id === rev.id ? null : rev
   showRollbackConfirm.value = false
 }
