@@ -121,6 +121,51 @@ async def test_screenshot_url_is_guarded_too():
 
 
 @pytest.mark.asyncio
+async def test_extract_url_is_guarded_for_stateless_backends():
+    """#13236: ExtractRequest gained a url, so it needs the same guard.
+
+    A stateless backend has no current page and must be given a URL; that URL
+    reaches the network exactly like a navigate URL, so it cannot skip the
+    check.
+    """
+    backend = FakeBackend("fake", {Capability.EXTRACT})
+    register_backend(backend)
+
+    with _deny():
+        browser = await get_browser(requires={Capability.EXTRACT})
+        with pytest.raises(UnsafeUrlError):
+            await browser.extract(ExtractRequest(url="http://169.254.169.254/"))
+
+    assert backend.calls == []
+
+
+@pytest.mark.asyncio
+async def test_extract_without_a_url_is_not_blocked():
+    """Session-holding backends read their current page — nothing to validate."""
+    backend = FakeBackend("fake", {Capability.EXTRACT})
+    register_backend(backend)
+
+    with _deny():
+        browser = await get_browser(requires={Capability.EXTRACT})
+        result = await browser.extract(ExtractRequest(session_id="s1"))
+
+    assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_locality_narrows_dispatch():
+    """#13236: a caller that must stay out-of-process cannot be routed in."""
+    in_proc = FakeBackend("in_proc", {Capability.EXTRACT, Capability.IN_PROCESS})
+    out_proc = FakeBackend("out_proc", {Capability.EXTRACT, Capability.OUT_OF_PROCESS})
+    register_backend(in_proc)
+    register_backend(out_proc)
+
+    chosen = await resolve_backend({Capability.EXTRACT, Capability.OUT_OF_PROCESS})
+
+    assert chosen.name == "out_proc", "locality must pin dispatch, not just rank it"
+
+
+@pytest.mark.asyncio
 async def test_empty_url_is_rejected():
     backend = FakeBackend("fake", {Capability.NAVIGATE})
     register_backend(backend)

@@ -71,6 +71,59 @@ def test_capability_claims_match_the_audited_matrix():
     assert Capability.SCREENSHOT in worker.capabilities
 
 
+def test_locality_is_declared_and_exclusive():
+    """#13236: callers pin process locality, so every backend must declare it.
+
+    `web_fetch` uses the container deliberately to keep Playwright out of the
+    backend's process. If a backend declared neither — or both — that caller
+    could be routed into the process it is avoiding.
+    """
+    for backend in (InProcessBrowserBackend(), ContainerBrowserBackend(), WorkerBrowserBackend()):
+        locality = backend.capabilities & {Capability.IN_PROCESS, Capability.OUT_OF_PROCESS}
+        assert len(locality) == 1, f"{backend.name} declares {locality or 'no'} locality"
+
+    assert Capability.IN_PROCESS in InProcessBrowserBackend().capabilities
+    assert Capability.OUT_OF_PROCESS in ContainerBrowserBackend().capabilities
+    assert Capability.OUT_OF_PROCESS in WorkerBrowserBackend().capabilities
+
+
+@pytest.mark.asyncio
+async def test_container_extract_renders_html():
+    """#13236: phase 2 under-declared this stack — it has a `render` endpoint."""
+    service = MagicMock()
+    service._post_and_parse = AsyncMock(return_value={"html": "<html>ok</html>"})
+
+    with patch.object(ContainerBrowserBackend, "_service", staticmethod(AsyncMock(return_value=service))):
+        result = await ContainerBrowserBackend().extract(ExtractRequest(url="https://example.com/"))
+
+    assert result.success is True
+    assert result.content == "<html>ok</html>"
+    endpoint, payload = service._post_and_parse.await_args.args
+    assert endpoint == "render" and payload["url"] == "https://example.com/"
+
+
+@pytest.mark.asyncio
+async def test_in_process_navigate_can_extract_in_one_round_trip():
+    """research_url does both; asking twice would navigate twice (#13236)."""
+    manager = MagicMock()
+    manager.research_url = AsyncMock(
+        return_value={
+            "success": True,
+            "status": "completed",
+            "navigation": {"url": "https://example.com/"},
+            "content": {"text_content": "hi", "structured_data": {"h1": ["Title"]}},
+            "session_id": "s",
+        }
+    )
+
+    with patch.object(InProcessBrowserBackend, "_manager", staticmethod(lambda: manager)):
+        result = await InProcessBrowserBackend().navigate(NavigateRequest(url="https://example.com/", extract=True))
+
+    assert manager.research_url.await_args.kwargs["extract_content"] is True
+    assert result.content == "hi"
+    assert result.structured == {"h1": ["Title"]}, "structured_data had no home before #13236"
+
+
 @pytest.mark.asyncio
 async def test_unsupported_operations_refuse_rather_than_raise():
     """The registry never routes these, but they must not explode if reached."""

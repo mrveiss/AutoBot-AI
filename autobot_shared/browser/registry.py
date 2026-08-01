@@ -143,7 +143,12 @@ class Browser:
         return await self._backend.navigate(request)
 
     async def extract(self, request: ExtractRequest) -> BrowserResult:
-        """Read content from the current page."""
+        """Read content, validating the URL when the request carries one.
+
+        Stateless backends need an explicit URL because they hold no current
+        page; it is guarded exactly like a navigate URL (#13236).
+        """
+        await _guard_url(request.url)
         return await self._backend.extract(request)
 
     async def screenshot(self, request: ScreenshotRequest) -> BrowserResult:

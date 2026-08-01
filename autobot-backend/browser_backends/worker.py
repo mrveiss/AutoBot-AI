@@ -49,6 +49,7 @@ class WorkerBrowserBackend:
             Capability.INTERACT,
             Capability.ELEMENT_REFS,
             Capability.PERSISTENT_SESSION,
+            Capability.OUT_OF_PROCESS,
         }
     )
 

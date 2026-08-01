@@ -61,6 +61,21 @@ class Capability(str, Enum):
     #: A browser context that outlives a single call, keyed by session.
     PERSISTENT_SESSION = "persistent_session"
 
+    # --- Locality (#13236) -------------------------------------------------
+    # Callers are not always indifferent to *where* a browser runs, and the
+    # first two real migrations proved it: `web_fetch` uses the container
+    # deliberately so Playwright does NOT run in the backend's own process,
+    # and routing it in-process would defeat the reason that fallback exists.
+    # Declaring locality as a capability keeps callers declarative — they say
+    # what they need, not which module to call.
+
+    #: Runs inside the calling process. Fast, but shares its memory and dies
+    #: with it.
+    IN_PROCESS = "in_process"
+    #: Runs outside the calling process. Survives a backend restart and keeps
+    #: browser memory out of it.
+    OUT_OF_PROCESS = "out_of_process"
+
 
 class BrowserError(Exception):
     """Base for every error raised through the canonical browser interface."""
@@ -95,12 +110,19 @@ class NavigateRequest:
     session_id: str | None = None
     wait_for_load: bool = True
     timeout_seconds: float | None = None
+    #: Extract content as part of navigating. Some stacks do both in one
+    #: round trip (`research_url(extract_content=True)`), so asking for it
+    #: here avoids a second navigation (#13236).
+    extract: bool = False
 
 
 @dataclass(frozen=True)
 class ExtractRequest:
     """Read content from the current page of *session_id*."""
 
+    #: Required by stateless backends, which hold no current page. Validated
+    #: by the registry exactly like a navigate URL (#13236).
+    url: str | None = None
     session_id: str | None = None
     selector: str | None = None
     max_chars: int | None = None
@@ -142,6 +164,10 @@ class BrowserResult:
     url: str | None = None
     title: str | None = None
     content: str | None = None
+    #: Structured extraction (headings, links, metadata) where the backend
+    #: produces it. `content_reach` maps this onto `ContentResult.structured`,
+    #: and it had no home in this result until #13236.
+    structured: dict[str, Any] = field(default_factory=dict)
     image_path: str | None = None
     session: SessionHandle | None = None
     interaction_required: bool = False
