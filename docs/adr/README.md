@@ -37,6 +37,7 @@ Each ADR follows a consistent template (see [template.md](template.md)):
 | [ADR-006](006-skill-bound-planning.md) | Skill-Bound Planning | Accepted | 2026-05-16 |
 | [ADR-007](007-connector-oauth-token-storage.md) | Connector OAuth Token and Credential Storage | Accepted | 2026-05-30 |
 | [ADR-008](008-frontend-shared-code-boundary.md) | Frontend Shared-Code Boundary Between the Two SPAs | Accepted | 2026-07-31 |
+| [ADR-009](009-canonical-browser-interface.md) | One Canonical Browser Interface, With Execution Backends Behind It | Proposed | 2026-08-01 |
 
 ## Creating a New ADR
 
