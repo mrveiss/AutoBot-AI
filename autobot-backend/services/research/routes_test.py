@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from services.research.models import Citation, ResearchFactOut, ResearchResponse
@@ -99,20 +99,32 @@ class TestPostResearch:
     def test_route_requires_auth_dependency(self):
         """The route is wired behind ``Depends(get_current_user)`` (not open).
 
-        Exact unauthenticated status code is auth_middleware's own contract
-        (covered by its test suite); this only asserts our route does not
-        bypass the dependency — an unauthenticated call must not reach the
-        orchestrator and must not succeed with 200.
+        Asserts only that our route does not bypass the dependency: a rejected
+        caller must not reach the orchestrator and must not succeed with 200.
+
+        #13253: this installs an explicit denying override rather than relying
+        on the conftest auth stub's behaviour. It previously passed because the
+        stub was a bare ``MagicMock`` whose ``(*args, **kwargs)`` signature made
+        FastAPI demand two required query params, so every call 422'd before
+        reaching the handler — the assertion held for a reason that had nothing
+        to do with authentication. With the stub corrected to a real callable
+        the route authenticates and returns 200, so the guarantee has to be
+        pinned to a real rejection instead.
         """
+        from auth_middleware import get_current_user
         from services.research.routes import router
+
+        def _deny() -> dict:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         app = FastAPI()
         app.include_router(router, prefix="/research")
         orchestrator = _make_orchestrator(ResearchResponse(answer=""))
         app.state.research_orchestrator = orchestrator
+        app.dependency_overrides[get_current_user] = _deny
         client = TestClient(app, raise_server_exceptions=False)
 
         resp = client.post("/research", json={"question": "what is X?"})
 
-        assert resp.status_code != 200
+        assert resp.status_code == 401
         orchestrator.research.assert_not_awaited()
