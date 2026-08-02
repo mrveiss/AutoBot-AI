@@ -58,11 +58,19 @@ jobs:
 
           BODY="${PR_BODY:-}"
 
-          # (a) The body must contain at least one closing keyword, so a PR that
-          # merely mentions an issue in prose is not treated as linking it.
-          if ! printf '%s' "$BODY" | grep -iqE "(resolves|closes|fixes)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
-            echo "::error::PR body has no 'Resolves/Closes/Fixes #N' linkage."
-            echo "::error::Add 'Closes #${EXPECTED_ISSUE}' to the PR body."
+          # (a) The body must link the issue with a recognised keyword, so a PR
+          # that merely mentions an issue in prose is not treated as linking it.
+          #
+          # #13327: `Refs` counts. A PR that genuinely does not close its issue
+          # must be able to say so — partial delivery never closes (closure
+          # Gate 3), and a gate that only accepts closing keywords pressures
+          # authors into over-claiming closure to get a green check. That is the
+          # opposite of what the closure rule wants. Four PRs in one day hit
+          # this: each had to invent a scoped issue purely to satisfy the gate.
+          if ! printf '%s' "$BODY" | grep -iqE "(resolves|closes|fixes|refs|references|part of)[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then
+            echo "::error::PR body has no issue linkage."
+            echo "::error::Add 'Closes #${EXPECTED_ISSUE}' if this PR fully delivers it,"
+            echo "::error::or 'Refs #${EXPECTED_ISSUE}' if it does not."
             echo "status=failure" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -82,7 +90,7 @@ jobs:
             exit 0
           fi
 
-          echo "::error::PR closes some issue(s) but not ${EXPECTED_ISSUE} (implied by branch ${PR_BRANCH})."
-          echo "::error::Add 'Closes #${EXPECTED_ISSUE}' (or 'Closes MVA-${EXPECTED_ISSUE}') to the PR body."
+          echo "::error::PR links some issue(s) but not ${EXPECTED_ISSUE} (implied by branch ${PR_BRANCH})."
+          echo "::error::Add 'Closes #${EXPECTED_ISSUE}' or 'Refs #${EXPECTED_ISSUE}' to the PR body."
           echo "status=failure" >> "$GITHUB_OUTPUT"
           exit 1
