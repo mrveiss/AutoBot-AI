@@ -26,8 +26,8 @@ import aiohttp
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.ssot_constants import TTL_5_MINUTES
 from autobot_shared.ssot_config import config, get_config
+from autobot_shared.ssot_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
 
