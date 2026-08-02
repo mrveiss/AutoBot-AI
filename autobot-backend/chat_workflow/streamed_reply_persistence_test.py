@@ -153,7 +153,27 @@ class TestStreamedReplyIsReadableAfterReload:
 
     @pytest.mark.asyncio
     async def test_reply_appended_after_tool_output(self, store):
-        """A tool-using turn keeps its terminal output AND gains the final reply, last."""
+        """Issue #13295 (investigated, NOT fixed here): documents the CURRENT order.
+
+        A front-insertion fix was tried and reverted after code review: it
+        assumed the reply is always chronologically first, which only holds
+        for a single-iteration turn. The common case is 2+ iterations —
+        prose1 -> tool call -> terminal_output -> prose2 (the actual answer,
+        a SECOND LLM pass) — and "\n\n".join(all_llm_responses) collapses
+        both prose segments into the one string this function receives, which
+        legitimately belongs AFTER the tool output it was derived from.
+        Appending (this test) is therefore correct for the common case and
+        matches pre-PR behavior.
+
+        It is still WRONG for the single-iteration case (one prose blob
+        emitted BEFORE the only tool call, no second LLM pass) — see
+        ``test_two_iteration_turn_reload_order_matches_live_order`` below for
+        the case this DOES get right, and #13295 for the real fix (needs
+        _persist_workflow_messages to receive the per-iteration response list
+        plus an iteration marker on workflow_messages, so each prose segment
+        can be interleaved at its true position instead of collapsed to one
+        string with a single insertion point).
+        """
         wf_messages = [
             SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={}),
         ]
@@ -163,6 +183,33 @@ class TestStreamedReplyIsReadableAfterReload:
         persisted = await store.load_session(SESSION_ID)
         assert [m["sender"] for m in persisted] == ["system", "assistant"]
         assert persisted[-1]["text"] == REPLY
+
+    @pytest.mark.asyncio
+    async def test_two_iteration_turn_reload_order_matches_live_order(self, store):
+        """Baseline for #13295: a genuine 2-iteration tool turn reloads correctly.
+
+        iteration 1: model streams "Let me check." then calls a tool.
+        iteration 2 (continuation, AFTER the tool result comes back): model
+        streams "Uptime is 3 days." — the actual answer.
+        combined_response = "Let me check.\n\nUptime is 3 days." (see
+        manager.py's ``"\n\n".join(all_llm_responses)`` / graph.py's
+        equivalent). The tool output belongs BETWEEN the two prose segments
+        live, but since both collapse into one persisted string, appending
+        that string after the tool output is the closest available
+        approximation with the current signature — not a regression to fix
+        here, just documented as the target the real interleaving fix must
+        preserve.
+        """
+        combined_response = "Let me check.\n\nUptime is 3 days."
+        wf_messages = [
+            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={}),
+        ]
+
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, combined_response)
+
+        persisted = await store.load_session(SESSION_ID)
+        assert [m["sender"] for m in persisted] == ["system", "assistant"]
+        assert persisted[-1]["text"] == combined_response
 
 
 class TestNoDuplicateOrEmptyTurns:
@@ -193,3 +240,59 @@ class TestNoDuplicateOrEmptyTurns:
         persisted = await store.load_session(SESSION_ID)
         assert len(persisted) == 1
         assert persisted[0]["text"] == "The assistant could not respond."
+
+
+class TestFinalReplyCarriesModelAndCitations:
+    """Issue #13292: the persisted turn must carry the same model badge and KB
+
+    citations the (discarded) streaming chunks carried — not ``sources: []``
+    and no ``model`` regardless of what was actually used to answer.
+    """
+
+    MODEL = "claude-sonnet-5"
+    CITATIONS = [
+        {"title": "Runbook", "source": "kb/runbook.md", "score": 0.91, "id": "chunk-1"},
+    ]
+
+    @pytest.mark.asyncio
+    async def test_model_is_recorded_on_the_persisted_turn(self, store):
+        """FAILS pre-fix: metadata has no 'model' key at all."""
+        await ChatWorkflowManager._persist_workflow_messages(
+            _manager(), SESSION_ID, [], REPLY, selected_model=self.MODEL
+        )
+
+        persisted = await store.load_session(SESSION_ID)
+        assert _assistant_turns(persisted)[0]["metadata"]["model"] == self.MODEL
+
+    @pytest.mark.asyncio
+    async def test_kb_citations_become_sources_when_knowledge_was_used(self, store):
+        """FAILS pre-fix: sources is always [] no matter what rag_citations held."""
+        await ChatWorkflowManager._persist_workflow_messages(
+            _manager(),
+            SESSION_ID,
+            [],
+            REPLY,
+            selected_model=self.MODEL,
+            rag_citations=self.CITATIONS,
+            used_knowledge=True,
+        )
+
+        persisted = await store.load_session(SESSION_ID)
+        sources = _assistant_turns(persisted)[0]["sources"]
+        assert sources == [{"title": "Runbook", "path": "kb/runbook.md", "score": 0.91, "chunk_id": "chunk-1"}]
+
+    @pytest.mark.asyncio
+    async def test_citations_omitted_when_knowledge_was_not_used(self, store):
+        """used_knowledge=False must not leak stale/irrelevant citations into sources."""
+        await ChatWorkflowManager._persist_workflow_messages(
+            _manager(),
+            SESSION_ID,
+            [],
+            REPLY,
+            selected_model=self.MODEL,
+            rag_citations=self.CITATIONS,
+            used_knowledge=False,
+        )
+
+        persisted = await store.load_session(SESSION_ID)
+        assert _assistant_turns(persisted)[0]["sources"] == []
