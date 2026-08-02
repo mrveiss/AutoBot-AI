@@ -152,15 +152,27 @@ class TestStreamedReplyIsReadableAfterReload:
         assert [m["text"] for m in _assistant_turns(reloaded)] == [REPLY]
 
     @pytest.mark.asyncio
-    async def test_reply_precedes_tool_output_on_reload(self, store):
-        """Issue #13295: the reload order must match what the user watched live.
+    async def test_reply_appended_after_tool_output(self, store):
+        """Issue #13295 (investigated, NOT fixed here): documents the CURRENT order.
 
-        The completed reply streams to the user BEFORE any tool call in the same
-        turn executes (the model writes its prose, then emits a tool-call tag).
-        ``workflow_messages`` only ever holds the non-streaming tool entries
-        appended chronologically AFTER that prose — so the reply must be
-        inserted first, not appended last, or a reload inverts what was watched
-        (tool output -> reply instead of reply -> tool output).
+        A front-insertion fix was tried and reverted after code review: it
+        assumed the reply is always chronologically first, which only holds
+        for a single-iteration turn. The common case is 2+ iterations —
+        prose1 -> tool call -> terminal_output -> prose2 (the actual answer,
+        a SECOND LLM pass) — and "\n\n".join(all_llm_responses) collapses
+        both prose segments into the one string this function receives, which
+        legitimately belongs AFTER the tool output it was derived from.
+        Appending (this test) is therefore correct for the common case and
+        matches pre-PR behavior.
+
+        It is still WRONG for the single-iteration case (one prose blob
+        emitted BEFORE the only tool call, no second LLM pass) — see
+        ``test_two_iteration_turn_reload_order_matches_live_order`` below for
+        the case this DOES get right, and #13295 for the real fix (needs
+        _persist_workflow_messages to receive the per-iteration response list
+        plus an iteration marker on workflow_messages, so each prose segment
+        can be interleaved at its true position instead of collapsed to one
+        string with a single insertion point).
         """
         wf_messages = [
             SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={}),
@@ -169,8 +181,35 @@ class TestStreamedReplyIsReadableAfterReload:
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, REPLY)
 
         persisted = await store.load_session(SESSION_ID)
-        assert [m["sender"] for m in persisted] == ["assistant", "system"]
-        assert persisted[0]["text"] == REPLY
+        assert [m["sender"] for m in persisted] == ["system", "assistant"]
+        assert persisted[-1]["text"] == REPLY
+
+    @pytest.mark.asyncio
+    async def test_two_iteration_turn_reload_order_matches_live_order(self, store):
+        """Baseline for #13295: a genuine 2-iteration tool turn reloads correctly.
+
+        iteration 1: model streams "Let me check." then calls a tool.
+        iteration 2 (continuation, AFTER the tool result comes back): model
+        streams "Uptime is 3 days." — the actual answer.
+        combined_response = "Let me check.\n\nUptime is 3 days." (see
+        manager.py's ``"\n\n".join(all_llm_responses)`` / graph.py's
+        equivalent). The tool output belongs BETWEEN the two prose segments
+        live, but since both collapse into one persisted string, appending
+        that string after the tool output is the closest available
+        approximation with the current signature — not a regression to fix
+        here, just documented as the target the real interleaving fix must
+        preserve.
+        """
+        combined_response = "Let me check.\n\nUptime is 3 days."
+        wf_messages = [
+            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={}),
+        ]
+
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, combined_response)
+
+        persisted = await store.load_session(SESSION_ID)
+        assert [m["sender"] for m in persisted] == ["system", "assistant"]
+        assert persisted[-1]["text"] == combined_response
 
 
 class TestNoDuplicateOrEmptyTurns:

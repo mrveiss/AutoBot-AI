@@ -2998,6 +2998,41 @@ before summarizing.
             )
         return batch
 
+    def _build_persist_batch(
+        self,
+        chat_mgr,
+        workflow_messages: List[WorkflowMessage],
+        llm_response: str,
+        selected_model: str,
+        rag_citations: List[Dict[str, Any]] | None,
+        used_knowledge: bool,
+    ) -> List[Dict[str, Any]]:
+        """Build the full persisted batch for one turn: tool entries + completed reply.
+
+        Extracted from ``_persist_workflow_messages`` (#13296 / #13303 review).
+        Issue #13214: the completed reply is appended LAST. Issue #13295
+        (investigated, NOT fixed): that is only correct for the common
+        2+-iteration tool turn (prose1 -> tool_output -> prose2-the-answer,
+        collapsed by ``"\\n\\n".join(all_llm_responses)`` into the one string
+        received here, which legitimately follows the tool output) — it is
+        known-wrong for a single-iteration turn, where the lone prose blob
+        preceded the tool call live. See ``streamed_reply_persistence_test.py``
+        for both cases documented; fixing this needs per-iteration data this
+        signature does not carry (tracked on #13295, out of scope here).
+        """
+        batch = self._build_workflow_message_batch(chat_mgr, workflow_messages)
+        final_entry = self._build_final_response_entry(
+            chat_mgr,
+            llm_response,
+            batch,
+            selected_model=selected_model,
+            rag_citations=rag_citations,
+            used_knowledge=used_knowledge,
+        )
+        if final_entry:
+            batch.append(final_entry)
+        return batch
+
     async def _persist_workflow_messages(
         self,
         session_id: str,
@@ -3019,34 +3054,16 @@ before summarizing.
         the completed-reply entry carry the same model badge and KB citations the
         (discarded) streaming chunks carried — keyword-only and defaulted so
         existing callers (incl. the error-turn path, which never has a model to
-        report) are unaffected.
-        Issue #13295: the completed reply is chronologically the FIRST thing the
-        user watched a tool-using turn stream (prose, then any tool calls/output)
-        — it is inserted at the front of the batch, not appended after the tool
-        entries, so a reload preserves that order instead of inverting it.
+        report) are unaffected. See ``_build_persist_batch`` for turn-ordering
+        details (#13295).
         """
         from chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
-            batch = self._build_workflow_message_batch(chat_mgr, workflow_messages)
-
-            # Issue #13214: add the completed streamed reply. Without this the
-            # batch holds only non-streaming side messages (terminal output, errors)
-            # and a plain conversational turn writes nothing at all.
-            # Issue #13295: inserted FIRST — it is the reply text the user watched
-            # stream before any tool call in the same turn executed, so a reload
-            # must show it first too, not after the tool output it preceded live.
-            final_entry = self._build_final_response_entry(
-                chat_mgr,
-                llm_response,
-                batch,
-                selected_model=selected_model,
-                rag_citations=rag_citations,
-                used_knowledge=used_knowledge,
+            batch = self._build_persist_batch(
+                chat_mgr, workflow_messages, llm_response, selected_model, rag_citations, used_knowledge
             )
-            if final_entry:
-                batch.insert(0, final_entry)
 
             if batch:
                 await chat_mgr.add_messages_batch(session_id, batch)
