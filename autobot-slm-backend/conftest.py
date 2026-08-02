@@ -24,6 +24,7 @@ Issue: #3499
 """
 
 import ast
+import importlib
 import sys
 import types
 from pathlib import Path
@@ -39,6 +40,67 @@ _api_mod.__path__ = [_API_DIR]  # type: ignore[assignment]
 _api_mod.__package__ = "api"
 _api_mod.__spec__ = None  # type: ignore[assignment]
 sys.modules.setdefault("api", _api_mod)
+
+
+# ---------------------------------------------------------------------------
+# Warning modules the xdist controller must still be able to import (#13312)
+# ---------------------------------------------------------------------------
+# pytest-xdist rebuilds every worker warning in the CONTROLLER process by
+# importing the warning class's module
+# (xdist.workermanage.unserialize_warning_message).  The controller loads this
+# conftest too, so the stubs above make ``sqlalchemy`` a non-package there and
+# ``import sqlalchemy.exc`` — home of SAWarning — raises ModuleNotFoundError.
+# xdist has no guard for that: the node goes down and the whole session ends in
+# an INTERNALERROR, losing every result.
+#
+# Whether it fires is pure scheduling luck (``--dist loadscope`` hands scopes to
+# whichever worker is free), which is why it stayed latent until the code-sync
+# tests stopped spending ~780s on dead health-poll wait and changed the
+# distribution.  Keep the REAL warning module in sys.modules so the import
+# resolves, while the stub still shadows the package for the tests.
+#
+# This is a whitelist of exactly one: any other warning module under a stubbed
+# package — ``sqlalchemy.orm.exc`` is the obvious next one — still raises the
+# identical ModuleNotFoundError in the controller.  Add it here when a worker
+# starts emitting from it rather than rediscovering the INTERNALERROR.
+_REAL_WARNING_MODULES = ("sqlalchemy.exc",)
+
+
+def _import_real_module(name: str):
+    """Import *name* for real, leaving the surrounding stub tree untouched."""
+    root = name.split(".")[0]
+    saved = {m: mod for m, mod in sys.modules.items() if m == root or m.startswith(f"{root}.")}
+    for stale in saved:
+        del sys.modules[stale]
+    try:
+        return importlib.import_module(name)
+    except Exception:
+        # Deliberately broad: this runs at conftest import, so anything escaping
+        # here (a C-extension load failure, a version guard, an env assertion)
+        # takes the entire session down — strictly worse than skipping the
+        # preload and leaving the original xdist crash possible.
+        return None
+    finally:
+        for m in [m for m in sys.modules if m == root or m.startswith(f"{root}.")]:
+            del sys.modules[m]
+        sys.modules.update(saved)
+
+
+def _preserve_real_warning_modules() -> None:
+    """Re-register the real warning modules on top of the stubbed parents."""
+    for name in _REAL_WARNING_MODULES:
+        real = _import_real_module(name)
+        if real is None:
+            continue
+        sys.modules[name] = real
+        # Bind onto the stub parent too: ``from sqlalchemy.exc import X`` reads
+        # sys.modules while ``patch("sqlalchemy.exc.X")`` resolves via
+        # getattr(sys.modules["sqlalchemy"], "exc").  Without this the two see
+        # different objects — the divergence _stub()'s own docstring (#9780)
+        # exists to prevent.
+        parent, _, child = name.rpartition(".")
+        if parent in sys.modules:
+            setattr(sys.modules[parent], child, real)
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +154,8 @@ for _m in [
     "sqlalchemy.orm",
 ]:
     _stub(_m)
+
+_preserve_real_warning_modules()
 
 # ── models ────────────────────────────────────────────────────────────────────
 # Both the parent package and each submodule must be in sys.modules so that
