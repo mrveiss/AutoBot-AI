@@ -83,6 +83,27 @@ _TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
 # canonical `filter_internal_prompts` in chat_workflow.models (imported above).
 
 
+def _kb_sources_from_citations(citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Map raw knowledge-base citation dicts to the persisted sources shape.
+
+    Issue #13296: extracted from ``_persist_workflow_messages`` — was
+    duplicated inline for the per-``WorkflowMessage`` citation list (already
+    tagged ``type='knowledge_base'`` by ``_build_source_list``) and, per
+    #13292, for the completed streamed reply's citations (the raw
+    ``rag_citations`` list, which never carries the always-appended
+    ``llm_training`` placeholder in the first place).
+    """
+    return [
+        {
+            "title": c.get("title") or c.get("source", ""),
+            "path": c.get("source", ""),
+            "score": c.get("score", 0.0),
+            "chunk_id": c.get("id", ""),
+        }
+        for c in citations
+    ]
+
+
 async def _resolve_reasoning_effort(context: Dict[str, Any]) -> str:
     """Resolve reasoning effort with priority: per-request > user-default > 'auto'.
 
@@ -2897,6 +2918,9 @@ before summarizing.
         chat_mgr,
         llm_response: str,
         batch: List[Dict[str, Any]],
+        selected_model: str = "",
+        rag_citations: List[Dict[str, Any]] | None = None,
+        used_knowledge: bool = False,
     ) -> Dict[str, Any] | None:
         """Build the chat-history entry for the completed streamed reply (#13214).
 
@@ -2907,6 +2931,14 @@ before summarizing.
         reply "is persisted in _persist_workflow_messages". That was never true:
         ``llm_response`` arrived here and was dropped, so a conversational streamed
         reply persisted nothing and ``chat:session:*`` read back user-turns only.
+
+        Issue #13292: the streamed chunks carried ``metadata.model`` and KB
+        citations (built by ``_build_stream_chunk_message``/``_build_source_list``)
+        but, being streaming, were never the entries actually persisted — so the
+        persisted turn had no model badge and ``sources: []`` regardless of
+        whether the knowledge base was used. ``selected_model``/``rag_citations``
+        mirror what the discarded chunks carried, sourced from the same
+        ``LLMIterationContext``/state the caller already threads through RAG.
 
         Returns None when there is nothing to add — an empty reply, or an assistant
         entry in *batch* already carrying byte-identical text. The scan is restricted
@@ -2919,13 +2951,14 @@ before summarizing.
         assistant_texts = ((e.get("text") or "").strip() for e in batch if e.get("sender") == "assistant")
         if any(text == content for text in assistant_texts):
             return None
+        sources = _kb_sources_from_citations(rag_citations or []) if used_knowledge else []
         return chat_mgr._build_message_dict(
             "assistant",
             content,
             "response",
-            {"message_type": "llm_response", "streamed": True},
+            {"message_type": "llm_response", "streamed": True, "model": selected_model},
             None,
-            sources=[],
+            sources=sources,
         )
 
     async def _persist_workflow_messages(
@@ -2933,6 +2966,10 @@ before summarizing.
         session_id: str,
         workflow_messages: List[WorkflowMessage],
         llm_response: str,
+        *,
+        selected_model: str = "",
+        rag_citations: List[Dict[str, Any]] | None = None,
+        used_knowledge: bool = False,
     ) -> None:
         """Persist WorkflowMessages to chat history in a single batch.
 
@@ -2941,6 +2978,15 @@ before summarizing.
         of N individual add_message() calls.
         Issue #13214: also persist *llm_response* — the completed streamed reply —
         which every caller already passes but which was previously ignored.
+        Issue #13292: ``selected_model``/``rag_citations``/``used_knowledge`` let
+        the completed-reply entry carry the same model badge and KB citations the
+        (discarded) streaming chunks carried — keyword-only and defaulted so
+        existing callers (incl. the error-turn path, which never has a model to
+        report) are unaffected.
+        Issue #13295: the completed reply is chronologically the FIRST thing the
+        user watched a tool-using turn stream (prose, then any tool calls/output)
+        — it is inserted at the front of the batch, not appended after the tool
+        entries, so a reload preserves that order instead of inverting it.
         """
         from chat_history import ChatHistoryManager
 
@@ -2965,16 +3011,7 @@ before summarizing.
                 # metadata.citations includes the always-appended llm_training entry —
                 # filter it out so sources contains only knowledge-base references.
                 raw_citations = (wf_msg.metadata or {}).get("citations", [])
-                sources = [
-                    {
-                        "title": c.get("title") or c.get("source", ""),
-                        "path": c.get("source", ""),
-                        "score": c.get("score", 0.0),
-                        "chunk_id": c.get("id", ""),
-                    }
-                    for c in raw_citations
-                    if c.get("type") == "knowledge_base"
-                ]
+                kb_citations = [c for c in raw_citations if c.get("type") == "knowledge_base"]
                 batch.append(
                     chat_mgr._build_message_dict(
                         sender,
@@ -2982,16 +3019,26 @@ before summarizing.
                         wf_msg.type,
                         wf_msg.metadata,
                         None,
-                        sources=sources,
+                        sources=_kb_sources_from_citations(kb_citations),
                     )
                 )
 
-            # Issue #13214: append the completed streamed reply. Without this the
+            # Issue #13214: add the completed streamed reply. Without this the
             # batch holds only non-streaming side messages (terminal output, errors)
             # and a plain conversational turn writes nothing at all.
-            final_entry = self._build_final_response_entry(chat_mgr, llm_response, batch)
+            # Issue #13295: inserted FIRST — it is the reply text the user watched
+            # stream before any tool call in the same turn executed, so a reload
+            # must show it first too, not after the tool output it preceded live.
+            final_entry = self._build_final_response_entry(
+                chat_mgr,
+                llm_response,
+                batch,
+                selected_model=selected_model,
+                rag_citations=rag_citations,
+                used_knowledge=used_knowledge,
+            )
             if final_entry:
-                batch.append(final_entry)
+                batch.insert(0, final_entry)
 
             if batch:
                 await chat_mgr.add_messages_batch(session_id, batch)
@@ -3282,7 +3329,14 @@ before summarizing.
         # internal-prompt echo is present, so legitimate output is never altered.
         combined_response = self._filter_internal_prompts("\n\n".join(all_llm_responses))
         await self._persist_conversation(session_id, session, message, combined_response)
-        await self._persist_workflow_messages(session_id, workflow_messages, combined_response)
+        await self._persist_workflow_messages(
+            session_id,
+            workflow_messages,
+            combined_response,
+            selected_model=ctx.selected_model,
+            rag_citations=ctx.rag_citations,
+            used_knowledge=ctx.used_knowledge,
+        )
 
         # Issue #5073: fire-and-forget memory tasks via stop hook (non-blocking).
         # Replaces the direct verbatim-store asyncio.create_task from #5070 with

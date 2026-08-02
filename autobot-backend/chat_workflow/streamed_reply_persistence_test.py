@@ -152,8 +152,16 @@ class TestStreamedReplyIsReadableAfterReload:
         assert [m["text"] for m in _assistant_turns(reloaded)] == [REPLY]
 
     @pytest.mark.asyncio
-    async def test_reply_appended_after_tool_output(self, store):
-        """A tool-using turn keeps its terminal output AND gains the final reply, last."""
+    async def test_reply_precedes_tool_output_on_reload(self, store):
+        """Issue #13295: the reload order must match what the user watched live.
+
+        The completed reply streams to the user BEFORE any tool call in the same
+        turn executes (the model writes its prose, then emits a tool-call tag).
+        ``workflow_messages`` only ever holds the non-streaming tool entries
+        appended chronologically AFTER that prose — so the reply must be
+        inserted first, not appended last, or a reload inverts what was watched
+        (tool output -> reply instead of reply -> tool output).
+        """
         wf_messages = [
             SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={}),
         ]
@@ -161,8 +169,8 @@ class TestStreamedReplyIsReadableAfterReload:
         await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, REPLY)
 
         persisted = await store.load_session(SESSION_ID)
-        assert [m["sender"] for m in persisted] == ["system", "assistant"]
-        assert persisted[-1]["text"] == REPLY
+        assert [m["sender"] for m in persisted] == ["assistant", "system"]
+        assert persisted[0]["text"] == REPLY
 
 
 class TestNoDuplicateOrEmptyTurns:
@@ -193,3 +201,59 @@ class TestNoDuplicateOrEmptyTurns:
         persisted = await store.load_session(SESSION_ID)
         assert len(persisted) == 1
         assert persisted[0]["text"] == "The assistant could not respond."
+
+
+class TestFinalReplyCarriesModelAndCitations:
+    """Issue #13292: the persisted turn must carry the same model badge and KB
+
+    citations the (discarded) streaming chunks carried — not ``sources: []``
+    and no ``model`` regardless of what was actually used to answer.
+    """
+
+    MODEL = "claude-sonnet-5"
+    CITATIONS = [
+        {"title": "Runbook", "source": "kb/runbook.md", "score": 0.91, "id": "chunk-1"},
+    ]
+
+    @pytest.mark.asyncio
+    async def test_model_is_recorded_on_the_persisted_turn(self, store):
+        """FAILS pre-fix: metadata has no 'model' key at all."""
+        await ChatWorkflowManager._persist_workflow_messages(
+            _manager(), SESSION_ID, [], REPLY, selected_model=self.MODEL
+        )
+
+        persisted = await store.load_session(SESSION_ID)
+        assert _assistant_turns(persisted)[0]["metadata"]["model"] == self.MODEL
+
+    @pytest.mark.asyncio
+    async def test_kb_citations_become_sources_when_knowledge_was_used(self, store):
+        """FAILS pre-fix: sources is always [] no matter what rag_citations held."""
+        await ChatWorkflowManager._persist_workflow_messages(
+            _manager(),
+            SESSION_ID,
+            [],
+            REPLY,
+            selected_model=self.MODEL,
+            rag_citations=self.CITATIONS,
+            used_knowledge=True,
+        )
+
+        persisted = await store.load_session(SESSION_ID)
+        sources = _assistant_turns(persisted)[0]["sources"]
+        assert sources == [{"title": "Runbook", "path": "kb/runbook.md", "score": 0.91, "chunk_id": "chunk-1"}]
+
+    @pytest.mark.asyncio
+    async def test_citations_omitted_when_knowledge_was_not_used(self, store):
+        """used_knowledge=False must not leak stale/irrelevant citations into sources."""
+        await ChatWorkflowManager._persist_workflow_messages(
+            _manager(),
+            SESSION_ID,
+            [],
+            REPLY,
+            selected_model=self.MODEL,
+            rag_citations=self.CITATIONS,
+            used_knowledge=False,
+        )
+
+        persisted = await store.load_session(SESSION_ID)
+        assert _assistant_turns(persisted)[0]["sources"] == []

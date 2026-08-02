@@ -1357,6 +1357,9 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
             state["session_id"],
             wf_messages,
             combined_response,
+            selected_model=state.get("llm_params", {}).get("selected_model", ""),
+            rag_citations=state.get("rag_citations", []),
+            used_knowledge=state.get("used_knowledge", False),
         )
 
         logger.info(
