@@ -51877,11 +51877,18 @@ export interface paths {
         };
         /**
          * Costs By Agent Model
-         * @description Return normalised token usage per agent/model pair.
+         * @description Return lifetime token totals per agent for a company.
          *
-         *     Aggregates rows from ``llc_cost_events`` and normalises token field names
-         *     across Anthropic, OpenAI, and Google so callers receive a consistent schema.
-         *     ``cachedInputTokens`` is ``0`` for providers without cache hit reporting.
+         *     Originally specified against ``llc_cost_events`` (GH#8215's per-event log
+         *     with model/provider columns), a table that was never migrated — confirmed
+         *     absent from every migration tree, so this endpoint always raised
+         *     ``UndefinedTable`` and silently returned ``[]`` (GH#13067). The actual
+         *     writer, ``BudgetService.ingest_cost_event``, only maintains a lifetime
+         *     aggregate on ``llc_agent_budgets`` (no per-model dimension, no timestamp),
+         *     so each row here is one lifetime token total per agent with
+         *     ``model="unknown"`` rather than a real per-model/time-windowed breakdown.
+         *     ``llc/services/agent_scorecard.py`` hit the identical gap and made the
+         *     same sourcing choice for spend.
          */
         get: operations["costs_by_agent_model_api_llc_costs_by_agent_model_get"];
         put?: never;
