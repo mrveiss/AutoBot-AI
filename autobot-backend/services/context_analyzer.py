@@ -15,6 +15,7 @@ import uuid
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_constants import TTL_1_HOUR
 from models.completion_context import CompletionContext
 from services.dependency_tracker import DependencyTracker
@@ -275,7 +276,7 @@ class ContextAnalyzer:
         try:
             cached = self.redis_client.get(f"completion_context:{context_id}")
             if cached:
-                return CompletionContext.from_dict(json.loads(cached.decode()))
+                return CompletionContext.from_dict(json.loads(decode_redis_value(cached)))
         except Exception as e:
             logger.warning(f"Failed to get cached context: {e}")
         return None

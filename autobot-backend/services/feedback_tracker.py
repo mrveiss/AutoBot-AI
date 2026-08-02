@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
@@ -156,7 +157,7 @@ class FeedbackTracker:
             # Get feedback count since last retrain
             last_retrain_str = self.redis_client.get(self.last_retrain_key)
             if last_retrain_str:
-                last_retrain = parse_utc_iso(last_retrain_str.decode())
+                last_retrain = parse_utc_iso(decode_redis_value(last_retrain_str))
             else:
                 last_retrain = now_utc() - timedelta(days=30)
 
