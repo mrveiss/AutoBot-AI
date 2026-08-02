@@ -91,7 +91,7 @@ UNSTARTED_RUN_STATUSES = frozenset({"queued", "waiting", "pending", "requested"}
 DEFAULT_API_ROOT = "https://api.github.com"
 DEFAULT_BASE_BRANCH = "Dev_new_gui"
 DEFAULT_GRACE_MINUTES = 10
-DEFAULT_STALL_MINUTES = 30
+DEFAULT_STALL_MINUTES = 45
 DEFAULT_MAX_APPROVALS = 30
 DEFAULT_POLL_ATTEMPTS = 3
 DEFAULT_POLL_INTERVAL_SECONDS = 20
@@ -162,6 +162,22 @@ def starved_runs(runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: i
     return starved
 
 
+def pool_is_serving(runs: Sequence[Dict[str, Any]]) -> bool:
+    """
+    True when at least one run is executing, i.e. the runner pool is alive.
+
+    A long queue is ambiguous on its own: the singleton self-hosted runner is
+    routinely occupied for half an hour by the frontend suite, so "queued 45
+    minutes" during normal contention looks identical to "queued 45 minutes
+    because no runner exists". The presence of ANY in-progress run separates
+    them, and it is the one signal available to a workflow token — the
+    /actions/runners endpoint that would answer directly returns 403 for
+    GITHUB_TOKEN. This is the heuristic the previous self-hosted-runner-health
+    probe used for its desync branch, kept rather than dropped.
+    """
+    return any(run.get("status") == "in_progress" for run in runs)
+
+
 def _truncate(text: str) -> str:
     if len(text) <= MAX_STATUS_DESCRIPTION:
         return text
@@ -174,6 +190,7 @@ def classify_dispatch(
     now: datetime,
     grace_minutes: int,
     stall_minutes: int,
+    pool_serving: bool = True,
 ) -> Tuple[str, str]:
     """
     Decide the commit-status state for one PR head.
@@ -194,9 +211,16 @@ def classify_dispatch(
     starved = starved_runs(runs, now, stall_minutes)
     if starved:
         names = ", ".join(sorted({str(run.get("name", "?")) for run in starved})[:3])
+        if pool_serving:
+            # Contention, not an outage — still never green, because the head is
+            # demonstrably not verified yet.
+            return (
+                "pending",
+                _truncate(f"{len(starved)} run(s) queued over {stall_minutes}m behind a busy runner pool: {names}"),
+            )
         return (
             "failure",
-            _truncate(f"{len(starved)} run(s) queued over {stall_minutes}m with no runner: {names}"),
+            _truncate(f"{len(starved)} run(s) queued over {stall_minutes}m with no runner available: {names}"),
         )
 
     if not runs:
@@ -486,7 +510,13 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     now = datetime.now(timezone.utc)
     starved = starved_runs(runs, now, config["stall_minutes"])
     if not starved:
-        print(f"No run has been queued longer than {config['stall_minutes']}m — runner pool is serving work.")
+        print(f"No run has been queued longer than {config['stall_minutes']}m — runner pool is keeping up.")
+        return 0
+    if pool_is_serving(runs):
+        print(
+            f"{len(starved)} run(s) queued over {config['stall_minutes']}m, but the pool is executing work — "
+            "contention, not an outage."
+        )
         return 0
     print(f"::error::{len(starved)} workflow run(s) queued over {config['stall_minutes']}m with no runner available")
     for run in starved:

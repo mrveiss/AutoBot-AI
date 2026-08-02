@@ -101,16 +101,36 @@ def test_parked_run_outranks_otherwise_green_runs(watchdog):
 # --- #13045: starved runs and absent runs ----------------------------------
 
 
-def test_queued_run_past_the_stall_threshold_is_failure(watchdog):
+def test_queued_run_past_the_stall_threshold_with_an_empty_pool_is_failure(watchdog):
     runs = [_run(status="queued", conclusion=None, created_at=_ts(45), name="Unit & Integration Tests")]
-    state, description = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30)
+    state, description = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30, False)
     assert state == "failure"
-    assert "no runner" in description
+    assert "no runner available" in description
+
+
+def test_queued_run_behind_a_busy_pool_is_pending_not_failure(watchdog):
+    """Normal contention on the singleton runner must not raise a false outage."""
+    runs = [_run(status="queued", conclusion=None, created_at=_ts(45), name="Unit & Integration Tests")]
+    state, description = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30, True)
+    assert state == "pending"
+    assert "busy runner pool" in description
+
+
+def test_a_busy_queue_is_still_never_success(watchdog):
+    runs = [_run(status="queued", conclusion=None, created_at=_ts(45))]
+    state, _ = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30, True)
+    assert state != "success"
+
+
+def test_pool_is_serving_requires_an_in_progress_run(watchdog):
+    assert watchdog.pool_is_serving([_run(status="in_progress", conclusion=None)]) is True
+    assert watchdog.pool_is_serving([_run(status="queued", conclusion=None), _run()]) is False
+    assert watchdog.pool_is_serving([]) is False
 
 
 def test_queued_run_inside_the_stall_threshold_is_success(watchdog):
     runs = [_run(status="queued", conclusion=None, created_at=_ts(4))]
-    state, _ = watchdog.classify_dispatch(runs, _ts(4), NOW, 10, 30)
+    state, _ = watchdog.classify_dispatch(runs, _ts(4), NOW, 10, 30, False)
     assert state == "success"
 
 
