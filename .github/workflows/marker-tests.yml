@@ -20,8 +20,16 @@
 #     change #10691 owns and is owner-gated.
 #   * Non-blocking by construction — it is not a `pull_request` workflow, so it
 #     is not a required context and cannot block a merge. It still FAILS (red in
-#     the Actions tab) when a test fails, which is the point: a failing marked
-#     test must produce a signal somewhere.
+#     the Actions tab) when a test fails.
+#
+#     A red run here is a DEFECT TO TRIAGE, never an accepted steady state. A
+#     workflow that is expected to be red is a workflow nobody reads — that is
+#     exactly how `self-hosted-runner-health` sat red on 100% of its scheduled
+#     runs while reporting nothing, and this file must not inherit that habit.
+#     The excluded set is dominated by `integration` tests that need a real
+#     Redis, so one is provided below rather than letting the first night fail
+#     for infrastructure reasons and calling it "the point". #13286 stays open
+#     until a run is green or its remaining failures have been triaged.
 #   * No coverage gate. Coverage is measured by the PR gate; adding tracing here
 #     would roughly double the runtime for no added assertion.
 #   * Two invocations, same reason as ci.yml: autobot-backend/ and
@@ -54,6 +62,21 @@ jobs:
     name: Run slow / integration / distributed / performance tests
     runs-on: ubuntu-latest
     timeout-minutes: 180
+
+    # The marker-excluded set is mostly `integration`, and those tests talk to a
+    # real Redis rather than the `fakeredis` the PR gate installs — one module
+    # alone carries 20 of them. Without this the first scheduled run would fail
+    # on connection errors and say nothing about the tests themselves.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     env:
       # Single source for the marker expression: the schedule uses the default,

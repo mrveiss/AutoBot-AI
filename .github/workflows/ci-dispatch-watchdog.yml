@@ -22,6 +22,15 @@
 # on every open PR head. Absence of CI therefore becomes a visible, named,
 # non-green context instead of silence.
 #
+# FORK SAFETY: `POST /actions/runs/{id}/approve` is the approve-a-fork-run
+# endpoint. This repository is public, takes fork pull requests, and runs
+# `pull_request` jobs on the self-hosted runner, so approving a fork run would
+# execute contributor-supplied code on the owner's machine — the very thing the
+# `all_external_contributors` policy exists to stop. The sweep therefore
+# approves only runs whose head repository is this repository AND whose
+# triggering actor is the branch-update bot. Fork pull requests get a published
+# status; they never get an approval.
+#
 # runs-on is ubuntu-latest on every job by design: the self-hosted runner is a
 # singleton, and a watchdog that queues behind the outage it exists to report
 # is useless.
@@ -65,7 +74,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Answers "may this workflow's GITHUB_TOKEN approve a parked run?" and
+      # nothing else. It POSTs approve against a run that already succeeded,
+      # which GitHub rejects on state grounds, so it has no side effect and is
+      # safe on an unreviewed branch. It is a separate step from the sweep
+      # because --dry-run deliberately issues no approve request and so cannot
+      # answer the question — the omission that made an earlier self-test report
+      # "probe skipped" while the job passed.
+      - name: Report approval capability
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check probe
+
       - name: Sweep open PRs
+        if: ${{ !cancelled() }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -73,8 +96,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           # On a pull_request event the branch is unreviewed, so the sweep runs
-          # read-only: it still probes approval capability and still classifies
-          # every open PR, but writes no status and approves nothing.
+          # read-only: it classifies every open PR but writes no status and
+          # approves nothing.
           if [ "$EVENT_NAME" = "pull_request" ]; then
             python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch --dry-run
           else
