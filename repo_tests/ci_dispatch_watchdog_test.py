@@ -223,3 +223,38 @@ def test_head_with_a_parked_run_is_polled_again(watchdog):
 
 def test_head_with_dispatched_runs_is_settled(watchdog):
     assert watchdog.needs_another_look([_run(), _run(id=2)]) is False
+
+
+# --- probe candidate selection ---------------------------------------------
+
+
+def test_probe_reports_skipped_when_no_completed_run_exists(watchdog):
+    """A busy repository must not silently produce no verdict."""
+
+    class _NoCompletedRuns:
+        def recent_runs(self, per_page=100, run_status=""):
+            assert run_status == "completed", "the probe must filter server-side"
+            return []
+
+    permitted, explanation = watchdog.probe_approval_capability(_NoCompletedRuns())
+    assert permitted is None
+    assert "probe skipped" in explanation
+
+
+def test_probe_uses_the_first_completed_non_parked_run(watchdog):
+    class _Api:
+        approved_id = None
+
+        def recent_runs(self, per_page=100, run_status=""):
+            return [
+                {"id": 1, "status": "completed", "conclusion": "action_required"},
+                {"id": 2, "status": "completed", "conclusion": "success"},
+            ]
+
+        def approve_run(self, run_id):
+            _Api.approved_id = run_id
+            return 403, "This workflow run is not waiting for approval"
+
+    permitted, _ = watchdog.probe_approval_capability(_Api())
+    assert permitted is True
+    assert _Api.approved_id == 2

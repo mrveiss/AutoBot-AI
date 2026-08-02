@@ -255,8 +255,11 @@ class GitHubApi:
             return []
         return list(body.get("workflow_runs") or [])
 
-    def recent_runs(self, per_page: int = 100) -> List[Dict[str, Any]]:
-        query = urllib.parse.urlencode({"per_page": str(per_page)})
+    def recent_runs(self, per_page: int = 100, run_status: str = "") -> List[Dict[str, Any]]:
+        params = {"per_page": str(per_page)}
+        if run_status:
+            params["status"] = run_status
+        query = urllib.parse.urlencode(params)
         status, body = self.request("GET", f"/repos/{self.repository}/actions/runs?{query}")
         if status != 200 or not isinstance(body, dict):
             raise WatchdogConfigError(f"cannot list workflow runs (HTTP {status}): {body}")
@@ -303,12 +306,20 @@ def interpret_probe(status: int, message: str) -> Tuple[bool, str]:
 
 
 def probe_approval_capability(api: GitHubApi) -> Tuple[Optional[bool], str]:
-    """Establish whether this credential may approve runs, without side effects."""
+    """
+    Establish whether this credential may approve runs, without side effects.
+
+    The listing MUST be filtered server-side on ``status=completed``. An
+    unfiltered "most recent runs" page is dominated by the runs currently in
+    flight — on a busy repository every entry can be queued or in_progress, and
+    the probe then finds no candidate and reports nothing at all, which is
+    exactly the silent-no-signal failure this module exists to remove.
+    """
     try:
-        runs = api.recent_runs(per_page=20)
+        runs = api.recent_runs(per_page=20, run_status="completed")
     except WatchdogConfigError as exc:
         return None, f"probe skipped: {exc}"
-    candidates = [run for run in runs if run.get("status") == "completed" and not is_parked(run)]
+    candidates = [run for run in runs if not is_parked(run)]
     if not candidates:
         return None, "probe skipped: no completed run available to probe against"
     status, message = api.approve_run(int(candidates[0]["id"]))
