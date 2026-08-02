@@ -48,6 +48,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
+    # #13045: without an explicit budget this job inherits GitHub's 6-hour
+    # default, so a wedged suite reads as "still running" for most of a day and
+    # the required context never reports. 150 minutes is comfortably above the
+    # measured ~51-minute backend invocation plus the slm-backend invocation
+    # that #13300 restored, and fails visibly instead of hanging.
+    timeout-minutes: 150
 
     steps:
     - uses: actions/checkout@v7
@@ -117,11 +123,26 @@ jobs:
     # also meant four checks that finish in minutes were gated behind a
     # ~105-minute pytest run in the same job.
 
-    - name: Run unit tests with coverage gate
+    # #13300: these two invocations used to live in ONE `run:` block. GitHub's
+    # default shell is `bash -e`, so the first invocation's non-zero exit on the
+    # standing failures aborted the step and the second NEVER executed. The job
+    # log contained exactly one "test session starts" and 50m40s of pytest
+    # inside a 50m55s step. Consequences: autobot-slm-backend unit tests had
+    # never run in CI at all, `--cov-fail-under=70` on the second invocation
+    # never evaluated despite the comment claiming enforcement, and coverage.xml
+    # was never produced so the upload step had no input.
+    #
+    # Two separate steps with `!cancelled()` on the second decouple them: each
+    # reports its own conclusion in the job UI, both contribute to the job
+    # result, and neither can silently swallow the other. `!cancelled()` rather
+    # than `always()` so a cancelled job (concurrency, timeout) stops promptly
+    # instead of starting another hour of pytest.
+    - name: Run unit tests — backend, shared, tts-worker, repo_tests
       run: |
-        echo "Running unit tests with 70% coverage gate (#3285)..."
-        # Run all unit tests excluding slow/integration/distributed/performance markers.
-        # --cov-fail-under=70 enforces the minimum 70% coverage threshold.
+        echo "Running unit tests for autobot-backend / autobot_shared / autobot-tts-worker / repo_tests..."
+        # Run all unit tests excluding slow/integration/distributed/performance
+        # markers. Those markers are NOT a way to retire a test: marker-tests.yml
+        # runs exactly the excluded set on a schedule (#13286).
         # -n auto --dist loadscope parallelizes across workers (#10398); pytest-cov
         # auto-combines per-worker coverage, and loadscope keeps same-module tests
         # on one worker so shared-fixture/ordering behaviour matches serial.
@@ -134,12 +155,10 @@ jobs:
         # in sys.modules for the rest of the session, breaking the other
         # backend's own tests (~95% of a full single-session run's collection
         # errors — see #13084). A fresh interpreter per invocation eliminates
-        # the collision entirely; --cov-append merges coverage across both so
-        # the combined --cov-fail-under=70 gate still reflects the whole
-        # suite. This does NOT add a second CI job (the singleton self-hosted
-        # runner concern from #10691) — both invocations run sequentially in
-        # this same job/step, so total wall-clock is the sum of the parts,
-        # same as today's single combined run.
+        # the collision entirely; --cov-append on the second merges coverage
+        # across both. This does NOT add a second CI job (the singleton
+        # self-hosted runner concern from #10691) — both invocations run
+        # sequentially in this same ubuntu-latest job.
         python -m pytest \
           autobot-backend autobot_shared autobot-tts-worker repo_tests \
           -n auto --dist loadscope \
@@ -152,6 +171,19 @@ jobs:
           --durations-min=10.0 \
           -q
 
+    - name: Run unit tests with coverage gate — slm-backend
+      # Runs even when the invocation above failed: it is a separate interpreter
+      # testing a separate tree, and it carries the combined coverage gate and
+      # the only coverage.xml producer (#13300).
+      if: ${{ !cancelled() }}
+      run: |
+        echo "Running unit tests for autobot-slm-backend with the 70% coverage gate (#3285)..."
+        # --cov-append merges this tree's coverage onto the data written by the
+        # previous step, so --cov-fail-under=70 is evaluated against the WHOLE
+        # suite, not just slm-backend. This is the only place the gate runs; if
+        # it is ever removed, remove the claim in pytest.ini's [coverage:report]
+        # too rather than leaving a comment asserting enforcement that does not
+        # happen.
         python -m pytest \
           autobot-slm-backend \
           -n auto --dist loadscope \
@@ -167,6 +199,10 @@ jobs:
           -q
 
     - name: Run integration tests
+      # #13300: previously skipped whenever the unit steps failed, so the
+      # directory-based integration suite went unreported for as long as the
+      # unit suite was red.
+      if: ${{ !cancelled() }}
       run: |
         echo "🔄 Running integration tests..."
         # Integration tests remain in shared directory (#734)
@@ -178,6 +214,9 @@ jobs:
         fi
 
     - name: Upload coverage reports
+      # #13300: coverage.xml is produced by the slm-backend step above even when
+      # tests fail; skipping the upload on failure discarded it.
+      if: ${{ !cancelled() }}
       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
       with:
         files: ./coverage.xml

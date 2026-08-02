@@ -10944,6 +10944,9 @@ export interface paths {
         /**
          * Voice Speak Api
          * @description Converts text to speech and plays it.
+         *
+         *     ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
+         *     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
          */
         post: operations["voice_speak_api_api_voice_speak_post"];
         delete?: never;
@@ -10963,7 +10966,13 @@ export interface paths {
         put?: never;
         /**
          * Voice Synthesize Api
-         * @description Synthesize speech via Pocket TTS worker. Returns audio/wav stream.
+         * @description Synthesize speech via the Pocket TTS worker.
+         *
+         *     Returns a whole ``audio/wav`` body by default. With ``stream=true`` the
+         *     response is ``application/octet-stream`` carrying
+         *     ``[4-byte length][WAV]`` chunks emitted as the worker produces them, so
+         *     the caller hears audio after the first ~250ms instead of after the whole
+         *     utterance (#13215).
          */
         post: operations["voice_synthesize_api_api_voice_synthesize_post"];
         delete?: never;
@@ -58605,6 +58614,11 @@ export interface components {
              * @default user
              */
             user_role: string;
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -58627,6 +58641,11 @@ export interface components {
              * @default user
              */
             user_role: string;
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
         } & {
             [key: string]: unknown;
         };
