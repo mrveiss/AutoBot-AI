@@ -1749,9 +1749,7 @@ _HEALTH_POLL_CONNECT_TIMEOUT: float = float(
 # windows above so the whole poll shape is configurable from one place rather
 # than a literal buried in the loop.
 _DEFAULT_HEALTH_POLL_INTERVAL_S = "2"
-_HEALTH_POLL_INTERVAL: float = float(
-    os.environ.get("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S)
-)
+_HEALTH_POLL_INTERVAL: float = float(os.environ.get("AUTOBOT_HEALTH_POLL_INTERVAL", _DEFAULT_HEALTH_POLL_INTERVAL_S))
 # Per-component health URLs (localhost only — never egress).
 _COMPONENT_HEALTH_URLS: Dict[str, str] = {
     "autobot-backend": "http://127.0.0.1:8001/api/health",
