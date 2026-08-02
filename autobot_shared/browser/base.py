@@ -174,6 +174,11 @@ class ExtractRequest:
     #: declare the matching capability, so a caller cannot silently receive
     #: text where it asked for markup (#13236).
     format: ContentFormat = ContentFormat.TEXT
+    #: Per-call timeout. `NavigateRequest` and `ScreenshotRequest` both carry
+    #: one; this was the odd one out, and `web_fetch/_fetch_playwright`
+    #: passes a timeout to the container's render today, so omitting it would
+    #: silently fall back to the container default (#13236).
+    timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)

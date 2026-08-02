@@ -310,3 +310,36 @@ async def test_container_extract_declares_html_and_returns_it():
         )
 
     assert result.content == "<html>ok</html>"
+
+
+@pytest.mark.asyncio
+async def test_container_forwards_the_extract_timeout_in_milliseconds():
+    """web_fetch passes a timeout today; dropping it would be a silent change.
+
+    `_fetch_playwright` sends `timeout: int(timeout * 1000)` to the render
+    endpoint. `ExtractRequest` had no timeout field, so migrating would have
+    fallen back to the container default without anything failing (#13236).
+    """
+    service = MagicMock()
+    service._post_and_parse = AsyncMock(return_value={"html": "<html/>"})
+
+    with patch.object(ContainerBrowserBackend, "_service", staticmethod(AsyncMock(return_value=service))):
+        await ContainerBrowserBackend().extract(
+            ExtractRequest(url="https://example.com/", format=ContentFormat.HTML, timeout_seconds=12.5)
+        )
+
+    _, payload = service._post_and_parse.await_args.args
+    assert payload["timeout"] == 12500, "timeout must reach the render endpoint, in ms"
+
+
+@pytest.mark.asyncio
+async def test_container_omits_timeout_when_the_caller_gives_none():
+    """No timeout means the container's own default, not timeout=0."""
+    service = MagicMock()
+    service._post_and_parse = AsyncMock(return_value={"html": "<html/>"})
+
+    with patch.object(ContainerBrowserBackend, "_service", staticmethod(AsyncMock(return_value=service))):
+        await ContainerBrowserBackend().extract(ExtractRequest(url="https://example.com/", format=ContentFormat.HTML))
+
+    _, payload = service._post_and_parse.await_args.args
+    assert "timeout" not in payload

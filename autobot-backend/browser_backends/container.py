@@ -87,10 +87,12 @@ class ContainerBrowserBackend:
             )
 
         service = await self._service()
-        raw = await service._post_and_parse(
-            "render",
-            {"url": request.url, "wait": "networkidle"},
-        )
+        payload: dict = {"url": request.url, "wait": "networkidle"}
+        if request.timeout_seconds is not None:
+            # The render endpoint takes milliseconds.
+            payload["timeout"] = int(request.timeout_seconds * 1000)
+
+        raw = await service._post_and_parse("render", payload)
         html = raw.get("html") or raw.get("content")
         if request.max_chars is not None and html:
             html = html[: request.max_chars]
