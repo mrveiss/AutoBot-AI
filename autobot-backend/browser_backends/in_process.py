@@ -57,8 +57,19 @@ class InProcessBrowserBackend:
         return get_research_browser_manager()
 
     async def probe(self) -> bool:
-        """Reachable whenever the manager module imports."""
+        """Reachable when Playwright is actually available to this process.
+
+        Importability is not the signal — ``research_browser_manager`` imports
+        fine without Playwright installed and exposes ``PLAYWRIGHT_AVAILABLE``
+        to say so. Reading the flag is what `content_reach` did before it
+        moved onto this interface, and probe must not be weaker than the check
+        it replaced (#13236).
+        """
         try:
+            import research_browser_manager as rbm
+
+            if not rbm.PLAYWRIGHT_AVAILABLE:
+                return False
             self._manager()
             return True
         except Exception as exc:
@@ -154,6 +165,10 @@ class InProcessBrowserBackend:
                 "browser_url": raw.get("browser_url"),
                 "actions": raw.get("actions"),
                 "mhtml_backup": content.get("mhtml_backup"),
-                "blocked_by_guard": navigation.get("blocked_by_guard"),
+                # #13018 rejections short-circuit research_url, which returns
+                # the navigate result *directly* — so the flag sits at the top
+                # level, not under "navigation". Reading only the nested spot
+                # silently dropped it (#13236).
+                "blocked_by_guard": navigation.get("blocked_by_guard") or raw.get("blocked_by_guard"),
             },
         )

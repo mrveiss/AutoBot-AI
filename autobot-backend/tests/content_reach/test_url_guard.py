@@ -233,10 +233,9 @@ async def test_jina_reader_ssrf_block_no_fetch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch):
+async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch, stub_browser_manager):
     """BrowserBackend.fetch raises BackendError on private URL and never calls manager."""
     import content_reach._url_guard as guard_mod
-    import content_reach.backends.browser as browser_mod
     from content_reach.backends.browser import BrowserBackend
     from content_reach.base import BackendError, ContentRequest
     from source_attribution import SourceType
@@ -253,7 +252,7 @@ async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch):
             manager_calls.append(url)
             return {"success": True, "content": {"text_content": "x", "structured_data": {}}}
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: _StubManager())
+    stub_browser_manager(_StubManager())
 
     backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
     request = ContentRequest(url="http://192.168.1.1/internal")
@@ -376,10 +375,9 @@ async def test_yt_dlp_ssrf_block_caption_url_no_http(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_search_ssrf_block_ddg_url(monkeypatch):
+async def test_browser_search_ssrf_block_ddg_url(monkeypatch, stub_browser_manager):
     """BrowserSearchBackend raises BackendError when SSRF guard blocks the DDG URL."""
     import content_reach._url_guard as guard_mod
-    import content_reach.backends.browser as browser_mod
     from content_reach.backends.browser import BrowserSearchBackend
     from content_reach.base import BackendError, ContentRequest
     from source_attribution import SourceType
@@ -396,7 +394,7 @@ async def test_browser_search_ssrf_block_ddg_url(monkeypatch):
             manager_calls.append(url)
             return {"success": True, "content": {"text_content": "x", "structured_data": {}}}
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: _StubManager())
+    stub_browser_manager(_StubManager())
 
     backend = BrowserSearchBackend(source_type=SourceType.WEB_SEARCH)
     request = ContentRequest(query="test query")
