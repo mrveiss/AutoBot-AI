@@ -12015,6 +12015,10 @@ export interface paths {
          * @description Capture desktop screenshot.
          *     Issue #74: Desktop interaction controls.
          *
+         *     Issue #13208: ``temporary_file_path`` owns the temp file, so it is removed
+         *     on the success path, on capture failure and on any exception. Previously
+         *     only the success path unlinked it and each failed capture leaked a PNG.
+         *
          *     Returns:
          *         {
          *             "status": "success|error",
@@ -13429,6 +13433,11 @@ export interface paths {
          * Desktop Screenshot Mcp
          * @description MCP tool: Capture desktop screenshot.
          *     Issue #74: Agent desktop observation.
+         *
+         *     Issue #13208: the temp file is owned by ``temporary_file_path``, so it is
+         *     removed on the success path, on capture failure and on any exception.
+         *     Previously only the success path unlinked it, so production leaked one PNG
+         *     per failed capture, indefinitely.
          */
         post: operations["desktop_screenshot_mcp_api_vnc_mcp_desktop_screenshot_post"];
         delete?: never;
