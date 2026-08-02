@@ -42,8 +42,11 @@ from autobot_shared.ssot_config import config
 
 logger = get_logger("mcp_worker")
 
-# When set to "1" the worker enforces run-scoped JWT on every ``call`` request.
-# Workers spawned without JWT support can opt out by leaving this unset.
+# Run-scoped JWT is enforced on every ``call`` request when MCP_RUN_JWT_ENFORCE
+# is "1" (#6473). It shipped defaulting ON; the #7437 config migration dropped
+# the default to "" and silently turned it OFF (#13263). Restoring it is blocked
+# on #13265 — mcp_dispatch does not propagate run_jwt to out-of-process bridges,
+# so enforcement would fail every filesystem/browser/vnc tool call.
 _JWT_ENFORCE = config.mcp_run_jwt_enforce == "1"
 
 _JSONRPC = "2.0"

@@ -1544,6 +1544,14 @@ class MiscConfig(BaseSettings):
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
+    # #13263: restore pre-#7437 default ("dev") — "" made the MCP server compare
+    # an incoming token's secret segment against "", accepting ":<scopes>" from anyone.
+    # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
+    # working default credential is a vulnerability in its own right — the
+    # secret is the whole check, and "dev" is published in this repo, so any
+    # caller could present "dev:<scopes>" and pick their own privileges.
+    # Empty means unconfigured, and autobot_server._validate_token fails
+    # closed on it rather than authenticating everyone.
     mcp_token: str = Field(default="", alias="AUTOBOT_MCP_TOKEN")
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
@@ -1770,6 +1778,12 @@ class MiscConfig(BaseSettings):
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
+    # #13263: the pre-#7437 default was "1"; #7437 dropped it to "" and turned
+    # run-scoped JWT enforcement off in every bridge worker. Restoring it is
+    # BLOCKED on #13265: services/mcp_dispatch.py:214 calls call_tool() without
+    # run_jwt and _WORKER_ENV_ALLOW excludes MCP_RUN_JWT, so filesystem_mcp,
+    # browser_mcp and vnc_mcp would return -32001 on every chat tool call.
+    # Enforcement must not be switched on before the token can be supplied.
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")

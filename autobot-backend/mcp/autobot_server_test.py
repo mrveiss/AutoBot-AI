@@ -17,14 +17,26 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_shared.ssot_config import config
 from mcp.autobot_server import AutoBotMCPServer
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-VALID_TOKEN = "dev:kb,memory,agents"
-KB_TOKEN = "dev:kb"
+# #13263: these tests configure their own secret rather than relying on a
+# shipped default. AUTOBOT_MCP_TOKEN now defaults to "" (unconfigured, fails
+# closed) because any non-empty default is itself a working credential.
+TEST_SECRET = "test-mcp-secret"
+VALID_TOKEN = f"{TEST_SECRET}:kb,memory,agents"
+KB_TOKEN = f"{TEST_SECRET}:kb"
+
+
+@pytest.fixture(autouse=True)
+def _configure_mcp_secret():
+    """Give every test in this module a configured secret to authenticate against."""
+    with patch.object(config.misc, "mcp_token", TEST_SECRET):
+        yield
 
 
 def make_server() -> AutoBotMCPServer:
@@ -147,6 +159,37 @@ async def test_missing_token_returns_401():
 async def test_wrong_secret_returns_401():
     server = make_server()
     resp = await server.handle_request("tools/list", {}, "wrongsecret:kb,memory,agents")
+    assert "error" in resp
+    assert resp["error"]["code"] == -32001
+
+
+def test_empty_secret_rejected_with_configured_secret():
+    """#13263: ``":<scopes>"`` carries no secret and must never authenticate."""
+    assert AutoBotMCPServer._validate_token(":kb,memory,agents") is None
+
+
+def test_empty_secret_rejected_when_configured_secret_is_blank():
+    """#13263: the check fails closed even when AUTOBOT_MCP_TOKEN is blank.
+
+    Before the fix ``expected`` was ``""`` by default, so ``secret_part != expected``
+    was False for a token beginning with ``:`` — the caller was authenticated and
+    granted exactly the scopes it named for itself.
+    """
+    with patch.object(config.misc, "mcp_token", ""):
+        assert AutoBotMCPServer._validate_token(":kb,memory,agents") is None
+        assert AutoBotMCPServer._validate_token(":") is None
+        assert AutoBotMCPServer._validate_token("dev:kb,memory,agents") is None
+
+
+@pytest.mark.asyncio
+async def test_empty_secret_token_returns_401_end_to_end():
+    """#13263: the empty-secret token is rejected through the full request path."""
+    server = make_server()
+    with (
+        patch.object(config.misc, "mcp_token", ""),
+        patch.object(AutoBotMCPServer, "_validate_redis_token", new=AsyncMock(return_value=None)),
+    ):
+        resp = await server.handle_request("tools/list", {}, ":kb,memory,agents")
     assert "error" in resp
     assert resp["error"]["code"] == -32001
 
