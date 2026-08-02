@@ -20,6 +20,7 @@ from autobot_shared.browser.base import (
     ActionRequest,
     BrowserBackend,
     Capability,
+    ContentFormat,
     ExtractRequest,
     NavigateRequest,
     ScreenshotRequest,
@@ -248,3 +249,64 @@ def test_register_all_is_idempotent():
 
     assert first == second == ["in_process", "worker", "container"]
     clear_backends()
+
+
+def test_extract_formats_match_what_each_stack_actually_returns():
+    """#13236: capability must describe the real output shape, not "extract".
+
+    - container `render`   -> HTML
+    - worker    `get_text` -> text, markup stripped
+    - in_process `extract_content()` -> text_content + structured_data
+    """
+    in_process = InProcessBrowserBackend()
+    worker = WorkerBrowserBackend()
+    container = ContainerBrowserBackend()
+
+    assert Capability.EXTRACT_HTML in container.capabilities
+    assert Capability.EXTRACT_HTML not in worker.capabilities | in_process.capabilities
+
+    assert Capability.EXTRACT_TEXT in worker.capabilities
+    assert Capability.EXTRACT_TEXT in in_process.capabilities
+
+    assert Capability.EXTRACT_STRUCTURED in in_process.capabilities
+    assert Capability.EXTRACT_STRUCTURED not in worker.capabilities | container.capabilities
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_requirements_resolve_to_the_container():
+    """The concrete migration this unblocks (ADR-009 step 2).
+
+    `web_fetch/_fetch_playwright` needs HTML, out-of-process. Under the real
+    registration order the worker is registered BEFORE the container, so with
+    a single `EXTRACT` capability it would have won and returned text.
+    """
+    from autobot_shared.browser.registry import clear_backends, resolve_backend
+
+    clear_backends()
+    register_all(force=True)
+    # probe() reaches the real transports; this test is about capability
+    # selection under the real registration order, not reachability.
+    try:
+        with (
+            patch.object(ContainerBrowserBackend, "probe", AsyncMock(return_value=True)),
+            patch.object(WorkerBrowserBackend, "probe", AsyncMock(return_value=True)),
+            patch.object(InProcessBrowserBackend, "probe", AsyncMock(return_value=True)),
+        ):
+            chosen = await resolve_backend({Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS})
+    finally:
+        clear_backends()
+
+    assert chosen.name == "container"
+
+
+@pytest.mark.asyncio
+async def test_container_extract_declares_html_and_returns_it():
+    service = MagicMock()
+    service._post_and_parse = AsyncMock(return_value={"html": "<html>ok</html>"})
+
+    with patch.object(ContainerBrowserBackend, "_service", staticmethod(AsyncMock(return_value=service))):
+        result = await ContainerBrowserBackend().extract(
+            ExtractRequest(url="https://example.com/", format=ContentFormat.HTML)
+        )
+
+    assert result.content == "<html>ok</html>"

@@ -44,7 +44,7 @@ class ContainerBrowserBackend:
             # `web_fetch/fetcher.py::_fetch_playwright` already uses for its
             # JS-render fallback. Phase 2 wrapped only `capture_screenshot`
             # and under-declared this stack.
-            Capability.EXTRACT,
+            Capability.EXTRACT_HTML,
             Capability.OUT_OF_PROCESS,
         }
     )
@@ -74,7 +74,7 @@ class ContainerBrowserBackend:
         )
 
     async def extract(self, request: ExtractRequest) -> BrowserResult:
-        """Render *url* and return its HTML.
+        """Render *url* and return its **HTML**.
 
         Stateless: the URL is required because this backend holds no current
         page. The registry has already validated it (#13236).
