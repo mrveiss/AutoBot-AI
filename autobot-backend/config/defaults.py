@@ -119,10 +119,14 @@ def _get_multimodal_config() -> Dict[str, Any]:
             "confidence_threshold": 0.7,
             "processing_timeout": 30,
         },
+        # Issue #13207: VoiceProcessor read the non-existent "multimodal.audio"
+        # section, so these numbers never reached it — it ran on 0.7 / 30. The
+        # lookup is fixed; these are set to the values that were actually in
+        # effect so the fix does not silently retune voice confidence/timeout.
         "voice": {
             "enabled": True,
-            "confidence_threshold": 0.8,
-            "processing_timeout": 15,
+            "confidence_threshold": 0.7,
+            "processing_timeout": 30,
         },
         "context": {
             "enabled": True,

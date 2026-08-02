@@ -15,6 +15,7 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
@@ -61,6 +62,20 @@ except ImportError:
 logger = get_logger(__name__)
 
 
+# Issue #13207: fallbacks for the multimodal.voice section, env-overridable.
+#
+# These match the values VoiceProcessor was *actually* running on before the
+# key was corrected, and defaults.py was aligned to them in the same change so
+# fixing the lookup could not move a threshold as a side effect. The section
+# previously declared 0.8 / 15, but those numbers were unreachable for the
+# whole life of the code and were never validated against real audio; the
+# integration suite also configures multimodal.voice.confidence_threshold=0.7.
+# Retuning voice confidence/timeout is a deliberate change with its own
+# evidence, not a rider on a typo fix.
+VOICE_CONFIDENCE_THRESHOLD_DEFAULT = env_float("AUTOBOT_MULTIMODAL_VOICE_CONFIDENCE_THRESHOLD", 0.7)
+VOICE_PROCESSING_TIMEOUT_DEFAULT = env_int("AUTOBOT_MULTIMODAL_VOICE_PROCESSING_TIMEOUT", 30)
+
+
 class VoiceProcessor(BaseModalProcessor):
     """Voice processing component with GPU acceleration"""
 
@@ -69,9 +84,13 @@ class VoiceProcessor(BaseModalProcessor):
         torch = _get_torch()
 
         super().__init__("voice")
-        self.config = get_config_section("multimodal.audio")
-        self.confidence_threshold = self.config.get("confidence_threshold", 0.7)
-        self.processing_timeout = self.config.get("processing_timeout", 30)
+        # Issue #13207: this read "multimodal.audio", a section that has never
+        # existed under any path, so get_config_section always returned {} and
+        # every value below silently came from the literal fallbacks. The live
+        # casualty was `enabled`, which gates model loading below.
+        self.config = get_config_section("multimodal.voice")
+        self.confidence_threshold = self.config.get("confidence_threshold", VOICE_CONFIDENCE_THRESHOLD_DEFAULT)
+        self.processing_timeout = self.config.get("processing_timeout", VOICE_PROCESSING_TIMEOUT_DEFAULT)
         self.enabled = self.config.get("enabled", True)
 
         # Initialize GPU device
