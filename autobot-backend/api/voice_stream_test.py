@@ -34,7 +34,13 @@ class _FakeWebSocket:
 
 
 class _FakeTTSClient:
-    """Stand-in for TTSClient exposing only synthesize_stream (#12501)."""
+    """Stand-in for TTSClient exposing the chunk-stream entry points (#12501).
+
+    ``stream_or_synthesize`` is what ``voice_stream`` calls since #13215/#12886
+    (it degrades to the whole-utterance route on a stale worker); it shares the
+    same generator here because these tests are about the WS framing, not the
+    worker-capability fallback -- that is covered in ``voice_latency_test``.
+    """
 
     def __init__(self, chunks, cancel_event=None, cancel_after=None, closed_flag=None) -> None:
         self._chunks = chunks
@@ -43,6 +49,9 @@ class _FakeTTSClient:
         self._closed_flag = closed_flag
 
     def synthesize_stream(self, text: str, voice_id: str = "", language: str = ""):
+        return self._gen()
+
+    def stream_or_synthesize(self, text: str, voice_id: str = "", language: str = ""):
         return self._gen()
 
     async def _gen(self):
@@ -105,7 +114,7 @@ class TestStreamChunksPipelined:
     @pytest.mark.asyncio
     async def test_synthesis_error_sends_error_and_still_sends_tts_end(self):
         class _FailingClient:
-            def synthesize_stream(self, text, voice_id="", language=""):
+            def stream_or_synthesize(self, text, voice_id="", language=""):
                 async def _gen():
                     yield b"wav-1"
                     raise RuntimeError("worker exploded")
