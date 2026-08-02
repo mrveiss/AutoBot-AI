@@ -22,6 +22,14 @@ const logger = createLogger('useVoiceOutput')
 
 const STORAGE_KEY = 'autobot-voice-output-enabled'
 
+// #13215: chunked TTS wire format. The backend answers /voice/synthesize with
+// `[4-byte big-endian length][WAV]` frames when `stream=true` is sent, marked
+// by this header, so the first ~250ms can play while the rest is still being
+// synthesized. Must stay in step with api/voice.py's AUDIO_STREAM_FRAMING*.
+const FRAMING_HEADER = 'X-Audio-Framing'
+const FRAMING_VALUE = 'length-prefixed-wav'
+const FRAME_HEADER_BYTES = 4
+
 // #9999: user-visible message when a deployment has no TTS voices installed
 // (e.g. no tts-worker provisioned in small topologies). Without this, TTS
 // no-ops silently and the operator gets no feedback.
@@ -418,9 +426,51 @@ function _connectTtsWs(): Promise<WebSocket> {
 }
 
 /**
+ * Read the backend's `[4-byte big-endian length][WAV]` framing, scheduling each
+ * mini-WAV the instant it arrives (#13215).
+ *
+ * The chunks are separate, independently-decodable WAV files — concatenating
+ * them and handing the result to decodeAudioData would only ever decode the
+ * first one, so they must be split here and scheduled individually on the same
+ * gapless timeline the WebSocket path uses.
+ */
+async function _playFramedAudioStream(body: ReadableStream<Uint8Array>): Promise<void> {
+  const reader = body.getReader()
+  let buffer = new Uint8Array(0)
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (value?.length) {
+      const merged = new Uint8Array(buffer.length + value.length)
+      merged.set(buffer)
+      merged.set(value, buffer.length)
+      buffer = merged
+    }
+    // Drain every complete frame currently buffered before reading again.
+    for (;;) {
+      if (buffer.length < FRAME_HEADER_BYTES) break
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+      const size = view.getUint32(0, false)
+      if (buffer.length < FRAME_HEADER_BYTES + size) break
+      const wav = buffer.slice(FRAME_HEADER_BYTES, FRAME_HEADER_BYTES + size)
+      buffer = buffer.slice(FRAME_HEADER_BYTES + size)
+      await _scheduleGaplessChunk(wav.buffer as ArrayBuffer)
+    }
+    if (done) break
+  }
+  if (buffer.length > 0) {
+    logger.warn('TTS stream ended mid-frame; dropped', buffer.length, 'trailing bytes')
+  }
+}
+
+/**
  * Synthesize `text` via the HTTP TTS endpoint and play it to completion.
  * Shared by the one-shot speak() and the sequential fallback drainer (#12502).
  * The caller owns the AbortController so it can cancel this request.
+ *
+ * Requests the chunked variant (#13215): the backend then emits each ~250ms
+ * mini-WAV as the worker produces it instead of buffering the whole utterance,
+ * which is what made every spoken reply start after 4.7–10.1s of silence. A
+ * runtime without ReadableStream support still gets the whole-blob response.
  */
 async function _synthesizeAndPlay(text: string, signal: AbortSignal): Promise<void> {
   const { effectiveVoiceId } = useVoiceProfiles()
@@ -434,6 +484,7 @@ async function _synthesizeAndPlay(text: string, signal: AbortSignal): Promise<vo
   if (language) {
     formData.append('language', language)
   }
+  formData.append('stream', 'true')
   const response = await fetchWithAuth(`${getApiBase()}/voice/synthesize`, { // fetchWithAuth retained: binary audio blob + FormData body — exempt (#6256)
     method: 'POST',
     body: formData,
@@ -445,6 +496,14 @@ async function _synthesizeAndPlay(text: string, signal: AbortSignal): Promise<vo
     if (response.status === 404 || response.status === 503) {
       _notifyNoVoices()
     }
+    return
+  }
+  if (response.headers.get(FRAMING_HEADER) === FRAMING_VALUE && response.body) {
+    // Chunks are scheduled on the shared gapless timeline and are still
+    // sounding when this resolves, so isSpeaking is left to the per-source
+    // onended handler — clearing it here would drop the indicator (and fire
+    // watch(isSpeaking)) while audio is mid-utterance.
+    await _playFramedAudioStream(response.body)
     return
   }
   const blob = await response.blob()
