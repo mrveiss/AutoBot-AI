@@ -20,6 +20,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.ssot_constants import REDIS_KEY
 from celery_app import celery_app
 from services.audit.audit import AuditCategory, AuditEvent
 from services.audit.audit import emit as audit_emit
@@ -33,7 +34,9 @@ _CHAT_RETENTION_DAYS = ssot_config.chat_retention_days
 _RECENT_KEY = "chat:recent"
 # Prefix for individual session JSON blobs
 _SESSION_PREFIX = "chat:session:"
-_CONVERSATION_PREFIX = "chat:conversation:"
+# #13303: single source in REDIS_KEY.CHAT_CONVERSATION_PREFIX — was its own
+# duplicated module constant here.
+_CONVERSATION_PREFIX = REDIS_KEY.CHAT_CONVERSATION_PREFIX
 
 
 def _is_keep_forever(raw: bytes) -> bool:

@@ -83,6 +83,27 @@ _TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
 # canonical `filter_internal_prompts` in chat_workflow.models (imported above).
 
 
+def _kb_sources_from_citations(citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Map raw knowledge-base citation dicts to the persisted sources shape.
+
+    Issue #13296: extracted from ``_persist_workflow_messages`` — was
+    duplicated inline for the per-``WorkflowMessage`` citation list (already
+    tagged ``type='knowledge_base'`` by ``_build_source_list``) and, per
+    #13292, for the completed streamed reply's citations (the raw
+    ``rag_citations`` list, which never carries the always-appended
+    ``llm_training`` placeholder in the first place).
+    """
+    return [
+        {
+            "title": c.get("title") or c.get("source", ""),
+            "path": c.get("source", ""),
+            "score": c.get("score", 0.0),
+            "chunk_id": c.get("id", ""),
+        }
+        for c in citations
+    ]
+
+
 async def _resolve_reasoning_effort(context: Dict[str, Any]) -> str:
     """Resolve reasoning effort with priority: per-request > user-default > 'auto'.
 
@@ -2897,6 +2918,9 @@ before summarizing.
         chat_mgr,
         llm_response: str,
         batch: List[Dict[str, Any]],
+        selected_model: str = "",
+        rag_citations: List[Dict[str, Any]] | None = None,
+        used_knowledge: bool = False,
     ) -> Dict[str, Any] | None:
         """Build the chat-history entry for the completed streamed reply (#13214).
 
@@ -2907,6 +2931,14 @@ before summarizing.
         reply "is persisted in _persist_workflow_messages". That was never true:
         ``llm_response`` arrived here and was dropped, so a conversational streamed
         reply persisted nothing and ``chat:session:*`` read back user-turns only.
+
+        Issue #13292: the streamed chunks carried ``metadata.model`` and KB
+        citations (built by ``_build_stream_chunk_message``/``_build_source_list``)
+        but, being streaming, were never the entries actually persisted — so the
+        persisted turn had no model badge and ``sources: []`` regardless of
+        whether the knowledge base was used. ``selected_model``/``rag_citations``
+        mirror what the discarded chunks carried, sourced from the same
+        ``LLMIterationContext``/state the caller already threads through RAG.
 
         Returns None when there is nothing to add — an empty reply, or an assistant
         entry in *batch* already carrying byte-identical text. The scan is restricted
@@ -2919,20 +2951,97 @@ before summarizing.
         assistant_texts = ((e.get("text") or "").strip() for e in batch if e.get("sender") == "assistant")
         if any(text == content for text in assistant_texts):
             return None
+        sources = _kb_sources_from_citations(rag_citations or []) if used_knowledge else []
         return chat_mgr._build_message_dict(
             "assistant",
             content,
             "response",
-            {"message_type": "llm_response", "streamed": True},
+            {"message_type": "llm_response", "streamed": True, "model": selected_model},
             None,
-            sources=[],
+            sources=sources,
         )
+
+    def _build_workflow_message_batch(self, chat_mgr, workflow_messages: List[WorkflowMessage]) -> List[Dict[str, Any]]:
+        """Build the chat-history message dicts for one turn's WorkflowMessages.
+
+        Issue #13296: extracted from ``_persist_workflow_messages`` (Extract
+        Method, matching the rest of this module's convention for keeping
+        functions short).
+        """
+        batch = []
+        for wf_msg in workflow_messages:
+            # Skip segment_complete markers — internal stream control
+            # messages with empty content (Issue #1141).
+            if wf_msg.type == "segment_complete":
+                continue
+
+            sender = "system" if wf_msg.type == "terminal_output" else "assistant"
+            # #11545 (cosmetic): the persisted chat-history entry is the
+            # final user-visible reply — strip any <TOOL_CALL ...> tag
+            # that never matched the full grammar (genuinely unparsed)
+            # so raw markup never renders. Guarded no-op otherwise.
+            content = strip_unparsed_tool_tags(wf_msg.content)
+            # Issue #4448: Extract KB-only citations into top-level sources list.
+            # metadata.citations includes the always-appended llm_training entry —
+            # filter it out so sources contains only knowledge-base references.
+            raw_citations = (wf_msg.metadata or {}).get("citations", [])
+            kb_citations = [c for c in raw_citations if c.get("type") == "knowledge_base"]
+            batch.append(
+                chat_mgr._build_message_dict(
+                    sender,
+                    content,
+                    wf_msg.type,
+                    wf_msg.metadata,
+                    None,
+                    sources=_kb_sources_from_citations(kb_citations),
+                )
+            )
+        return batch
+
+    def _build_persist_batch(
+        self,
+        chat_mgr,
+        workflow_messages: List[WorkflowMessage],
+        llm_response: str,
+        selected_model: str,
+        rag_citations: List[Dict[str, Any]] | None,
+        used_knowledge: bool,
+    ) -> List[Dict[str, Any]]:
+        """Build the full persisted batch for one turn: tool entries + completed reply.
+
+        Extracted from ``_persist_workflow_messages`` (#13296 / #13303 review).
+        Issue #13214: the completed reply is appended LAST. Issue #13295
+        (investigated, NOT fixed): that is only correct for the common
+        2+-iteration tool turn (prose1 -> tool_output -> prose2-the-answer,
+        collapsed by ``"\\n\\n".join(all_llm_responses)`` into the one string
+        received here, which legitimately follows the tool output) — it is
+        known-wrong for a single-iteration turn, where the lone prose blob
+        preceded the tool call live. See ``streamed_reply_persistence_test.py``
+        for both cases documented; fixing this needs per-iteration data this
+        signature does not carry (tracked on #13295, out of scope here).
+        """
+        batch = self._build_workflow_message_batch(chat_mgr, workflow_messages)
+        final_entry = self._build_final_response_entry(
+            chat_mgr,
+            llm_response,
+            batch,
+            selected_model=selected_model,
+            rag_citations=rag_citations,
+            used_knowledge=used_knowledge,
+        )
+        if final_entry:
+            batch.append(final_entry)
+        return batch
 
     async def _persist_workflow_messages(
         self,
         session_id: str,
         workflow_messages: List[WorkflowMessage],
         llm_response: str,
+        *,
+        selected_model: str = "",
+        rag_citations: List[Dict[str, Any]] | None = None,
+        used_knowledge: bool = False,
     ) -> None:
         """Persist WorkflowMessages to chat history in a single batch.
 
@@ -2941,57 +3050,20 @@ before summarizing.
         of N individual add_message() calls.
         Issue #13214: also persist *llm_response* — the completed streamed reply —
         which every caller already passes but which was previously ignored.
+        Issue #13292: ``selected_model``/``rag_citations``/``used_knowledge`` let
+        the completed-reply entry carry the same model badge and KB citations the
+        (discarded) streaming chunks carried — keyword-only and defaulted so
+        existing callers (incl. the error-turn path, which never has a model to
+        report) are unaffected. See ``_build_persist_batch`` for turn-ordering
+        details (#13295).
         """
         from chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
-
-            # Build message dicts in memory, then persist in one batch
-            batch = []
-            for wf_msg in workflow_messages:
-                # Skip segment_complete markers — internal stream control
-                # messages with empty content (Issue #1141).
-                if wf_msg.type == "segment_complete":
-                    continue
-
-                sender = "system" if wf_msg.type == "terminal_output" else "assistant"
-                # #11545 (cosmetic): the persisted chat-history entry is the
-                # final user-visible reply — strip any <TOOL_CALL ...> tag
-                # that never matched the full grammar (genuinely unparsed)
-                # so raw markup never renders. Guarded no-op otherwise.
-                content = strip_unparsed_tool_tags(wf_msg.content)
-                # Issue #4448: Extract KB-only citations into top-level sources list.
-                # metadata.citations includes the always-appended llm_training entry —
-                # filter it out so sources contains only knowledge-base references.
-                raw_citations = (wf_msg.metadata or {}).get("citations", [])
-                sources = [
-                    {
-                        "title": c.get("title") or c.get("source", ""),
-                        "path": c.get("source", ""),
-                        "score": c.get("score", 0.0),
-                        "chunk_id": c.get("id", ""),
-                    }
-                    for c in raw_citations
-                    if c.get("type") == "knowledge_base"
-                ]
-                batch.append(
-                    chat_mgr._build_message_dict(
-                        sender,
-                        content,
-                        wf_msg.type,
-                        wf_msg.metadata,
-                        None,
-                        sources=sources,
-                    )
-                )
-
-            # Issue #13214: append the completed streamed reply. Without this the
-            # batch holds only non-streaming side messages (terminal output, errors)
-            # and a plain conversational turn writes nothing at all.
-            final_entry = self._build_final_response_entry(chat_mgr, llm_response, batch)
-            if final_entry:
-                batch.append(final_entry)
+            batch = self._build_persist_batch(
+                chat_mgr, workflow_messages, llm_response, selected_model, rag_citations, used_knowledge
+            )
 
             if batch:
                 await chat_mgr.add_messages_batch(session_id, batch)
@@ -3282,7 +3354,14 @@ before summarizing.
         # internal-prompt echo is present, so legitimate output is never altered.
         combined_response = self._filter_internal_prompts("\n\n".join(all_llm_responses))
         await self._persist_conversation(session_id, session, message, combined_response)
-        await self._persist_workflow_messages(session_id, workflow_messages, combined_response)
+        await self._persist_workflow_messages(
+            session_id,
+            workflow_messages,
+            combined_response,
+            selected_model=ctx.selected_model,
+            rag_citations=ctx.rag_citations,
+            used_knowledge=ctx.used_knowledge,
+        )
 
         # Issue #5073: fire-and-forget memory tasks via stop hook (non-blocking).
         # Replaces the direct verbatim-store asyncio.create_task from #5070 with
