@@ -25,6 +25,7 @@ keywords land in the fields the frontend reads.
 
 import ast
 import asyncio
+import functools
 import inspect
 import pathlib
 from typing import Any, Dict, List
@@ -36,7 +37,7 @@ from chat_history.messages import MessagesMixin
 BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # Receiver expressions that denote a ChatHistoryManager. ``add_message`` is also
-# the name of an unrelated ChannelSession method in services/gateway, so the scan
+# the name of an unrelated GatewaySession method in services/gateway, so the scan
 # is scoped by receiver rather than by method name alone.
 CHAT_HISTORY_RECEIVERS = ("chat_mgr", "chat_history", "chat_history_manager")
 
@@ -56,6 +57,7 @@ class _RecordingHistory(MessagesMixin):
         return True
 
 
+@functools.lru_cache(maxsize=1)
 def _add_message_call_sites() -> List[tuple]:
     """Collect (path, lineno, positional_count, keywords) for every add_message call."""
     call_sites = []
@@ -64,7 +66,7 @@ def _add_message_call_sites() -> List[tuple]:
             continue
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
-        except SyntaxError:  # pragma: no cover - a broken file is a different failure
+        except (SyntaxError, UnicodeDecodeError):  # pragma: no cover - unparseable file is a different failure
             continue
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
@@ -74,14 +76,22 @@ def _add_message_call_sites() -> List[tuple]:
             receiver = ast.unparse(node.func.value).split(".")[-1]
             if receiver not in CHAT_HISTORY_RECEIVERS:
                 continue
-            keywords = [kw.arg for kw in node.keywords if kw.arg]
+            # A **splat or *args site cannot be bound statically: kw.arg is None for
+            # **kwargs, and a Starred node is not one positional. Binding them anyway
+            # fails on correct code, so they are skipped rather than mis-scanned.
+            if any(kw.arg is None for kw in node.keywords) or any(isinstance(a, ast.Starred) for a in node.args):
+                continue
+            keywords = [kw.arg for kw in node.keywords]
             call_sites.append((path, node.lineno, len(node.args), keywords))
     return call_sites
 
 
 def test_add_message_call_sites_are_discoverable() -> None:
     """Guard the scan itself: if it finds nothing, the binding test is vacuous."""
-    assert _add_message_call_sites(), "no add_message call sites found — scan is broken"
+    sites = _add_message_call_sites()
+    # Floor, not an exact count: the scan is receiver-scoped, so a rename of
+    # chat_history_manager could erode 18 -> 1 and still be "non-empty".
+    assert len(sites) >= 15, f"expected >=15 add_message call sites, found {len(sites)} — scan is eroding"
 
 
 def test_every_add_message_call_site_binds() -> None:
