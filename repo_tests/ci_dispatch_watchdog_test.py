@@ -207,3 +207,19 @@ def test_missing_repository_is_rejected(watchdog, monkeypatch):
     monkeypatch.setenv("GITHUB_REPOSITORY", "not-a-repo")
     with pytest.raises(watchdog.WatchdogConfigError):
         watchdog.load_config()
+
+
+# --- sweep polling ----------------------------------------------------------
+
+
+def test_head_with_no_runs_yet_is_polled_again(watchdog):
+    """Right after update-branch returns, an empty result means "too early"."""
+    assert watchdog.needs_another_look([]) is True
+
+
+def test_head_with_a_parked_run_is_polled_again(watchdog):
+    assert watchdog.needs_another_look([_run(), _run(id=2, conclusion="action_required")]) is True
+
+
+def test_head_with_dispatched_runs_is_settled(watchdog):
+    assert watchdog.needs_another_look([_run(), _run(id=2)]) is False

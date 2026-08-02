@@ -334,6 +334,118 @@ def _run_url(repository: str, run: Dict[str, Any]) -> str:
     return str(run.get("html_url") or f"https://github.com/{repository}/actions")
 
 
+def needs_another_look(runs: Sequence[Dict[str, Any]]) -> bool:
+    """
+    True when this head warrants re-listing after a short wait.
+
+    A head with NO runs at all is the interesting case: immediately after
+    ``update-branch`` returns, the runs it triggers have not materialised yet,
+    so an empty result means "too early", not "nothing to approve". Treating it
+    as final was the whole bug — the sweep would look once, find nothing, and
+    leave the parked runs that appeared a second later untouched until the next
+    scheduled tick. A head that already has runs and no parked ones is genuinely
+    settled.
+    """
+    if not runs:
+        return True
+    return any(is_parked(run) for run in runs)
+
+
+def _approve_head(
+    api: GitHubApi, number: int, runs: Sequence[Dict[str, Any]], budget: int, dry_run: bool
+) -> Tuple[int, int, int]:
+    """Approve the parked runs of one head. Returns (approved, refused, budget)."""
+    approved = 0
+    refused = 0
+    for run in runs:
+        if not is_parked(run):
+            continue
+        if dry_run:
+            print(f"  PR #{number}: would approve '{run.get('name')}' ({run['id']})")
+            continue
+        if budget <= 0:
+            print(f"  PR #{number}: approval budget exhausted, deferring to the next sweep")
+            break
+        budget -= 1
+        status, message = api.approve_run(int(run["id"]))
+        if status in (200, 201, 204):
+            approved += 1
+            print(f"  PR #{number}: approved '{run.get('name')}' ({run['id']})")
+        else:
+            refused += 1
+            print(f"  PR #{number}: could NOT approve '{run.get('name')}' — HTTP {status}: {message}")
+    return approved, refused, budget
+
+
+def sweep_parked_runs(
+    api: GitHubApi,
+    heads: Sequence[Tuple[int, str, Optional[str], str]],
+    config: Dict[str, Any],
+    dry_run: bool,
+) -> Tuple[int, int]:
+    """
+    Approve parked runs across every head, re-listing while any head is unsettled.
+
+    The wait is per attempt, not per head, so total added latency is bounded by
+    ``poll_attempts * poll_interval_seconds`` however many PRs are open.
+    """
+    approved = 0
+    refused = 0
+    budget = config["max_approvals"]
+    for attempt in range(config["poll_attempts"]):
+        unsettled = False
+        for number, sha, _updated_at, _url in heads:
+            runs = api.runs_for_sha(sha)
+            if needs_another_look(runs):
+                unsettled = True
+            head_approved, head_refused, budget = _approve_head(api, number, runs, budget, dry_run)
+            approved += head_approved
+            refused += head_refused
+        last_attempt = attempt + 1 >= config["poll_attempts"]
+        # Stop early once nothing is outstanding, on a dry run (which changes
+        # nothing, so a second look is pointless), or once approval was refused
+        # — retrying a permission failure only delays the report.
+        if not unsettled or dry_run or refused or last_attempt:
+            break
+        time.sleep(config["poll_interval_seconds"])
+    return approved, refused
+
+
+def collect_heads(pulls: Sequence[Dict[str, Any]]) -> List[Tuple[int, str, Optional[str], str]]:
+    """Reduce the PR listing to ``(number, head_sha, updated_at, html_url)`` tuples."""
+    heads: List[Tuple[int, str, Optional[str], str]] = []
+    for pull in pulls:
+        head = pull.get("head") or {}
+        sha = str(head.get("sha") or "")
+        if not sha:
+            continue
+        heads.append((int(pull["number"]), sha, pull.get("updated_at"), str(pull.get("html_url") or "")))
+    return heads
+
+
+def publish_dispatch_states(
+    api: GitHubApi,
+    heads: Sequence[Tuple[int, str, Optional[str], str]],
+    config: Dict[str, Any],
+    dry_run: bool,
+) -> int:
+    """Write the dispatch commit status for each head. Returns the not-dispatched count."""
+    now = datetime.now(timezone.utc)
+    blocked = 0
+    for number, sha, updated_at, url in heads:
+        runs = api.runs_for_sha(sha)
+        state, description = classify_dispatch(runs, updated_at, now, config["grace_minutes"], config["stall_minutes"])
+        target = _run_url(api.repository, runs[0]) if runs else url
+        if dry_run:
+            print(f"  PR #{number}: would set {state} — {description}")
+        else:
+            code = api.set_status(sha, state, config["status_context"], description, target)
+            print(f"  PR #{number}: {state} — {description} (status API HTTP {code})")
+        if state != "success":
+            blocked += 1
+    return blocked
+
+
 def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False) -> int:
     """Approve what can be approved, then publish dispatch state on every open PR."""
     if dry_run:
@@ -344,63 +456,9 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
     permitted, explanation = probe_approval_capability(api)
     print(f"Approval capability probe: {explanation}")
 
-    approved = 0
-    refused = 0
-    budget = config["max_approvals"]
-
-    heads: List[Tuple[int, str, Optional[str], str]] = []
-    for pull in pulls:
-        head = pull.get("head") or {}
-        sha = str(head.get("sha") or "")
-        if not sha:
-            continue
-        heads.append((int(pull["number"]), sha, pull.get("updated_at"), str(pull.get("html_url") or "")))
-
-    for number, sha, _updated_at, _url in heads:
-        for attempt in range(config["poll_attempts"]):
-            runs = api.runs_for_sha(sha)
-            parked = [run for run in runs if is_parked(run)]
-            if not parked:
-                break
-            for run in parked:
-                if dry_run:
-                    print(f"  PR #{number}: would approve '{run.get('name')}' ({run['id']})")
-                    continue
-                if budget <= 0:
-                    print(f"  PR #{number}: approval budget exhausted, deferring to the next sweep")
-                    break
-                budget -= 1
-                status, message = api.approve_run(int(run["id"]))
-                if status in (200, 201, 204):
-                    approved += 1
-                    print(f"  PR #{number}: approved '{run.get('name')}' ({run['id']})")
-                else:
-                    refused += 1
-                    print(f"  PR #{number}: could NOT approve '{run.get('name')}' — HTTP {status}: {message}")
-            if dry_run:
-                break
-            if attempt + 1 < config["poll_attempts"] and refused == 0:
-                time.sleep(config["poll_interval_seconds"])
-
-    now = datetime.now(timezone.utc)
-    blocked = 0
-    for number, sha, updated_at, url in heads:
-        runs = api.runs_for_sha(sha)
-        state, description = classify_dispatch(
-            runs,
-            updated_at,
-            now,
-            config["grace_minutes"],
-            config["stall_minutes"],
-        )
-        target = _run_url(api.repository, runs[0]) if runs else url
-        if dry_run:
-            print(f"  PR #{number}: would set {state} — {description}")
-        else:
-            code = api.set_status(sha, state, config["status_context"], description, target)
-            print(f"  PR #{number}: {state} — {description} (status API HTTP {code})")
-        if state != "success":
-            blocked += 1
+    heads = collect_heads(pulls)
+    approved, refused = sweep_parked_runs(api, heads, config, dry_run)
+    blocked = publish_dispatch_states(api, heads, config, dry_run)
 
     print(f"Sweep complete: {approved} approved, {refused} refused, {blocked} PR(s) not dispatched.")
 
