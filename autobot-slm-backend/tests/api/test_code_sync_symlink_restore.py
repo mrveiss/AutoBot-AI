@@ -239,17 +239,24 @@ def test_pip_backend_emits_symlink_step(tmp_path) -> None:
             patch("api.code_sync._get_deploy_base", return_value=tmp_path),
             patch("api.code_sync._ensure_autobot_shared_symlink", side_effect=_fake_ensure),
             patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+            # #13312: _snapshot_component rsyncs the LIVE deployed dir into the
+            # snapshot base — a real subprocess writing outside the test tree.
+            patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
             # _install_pip_deps_for_component now returns bool (#11322)
             patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
             patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
             patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
-            patch("api.code_sync._ensure_venv_python", AsyncMock()),
-            patch("api.code_sync._run_alembic_migrations", AsyncMock()),
+            # #13312: unmocked this shells out to `sudo ansible-playbook` when the
+            # target interpreter is not on PATH.
+            patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
+            patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)),
+            patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
             patch("api.code_sync._restart_component_services", AsyncMock()),
             # restart=True runs the post-restart health poll; without this mock it
             # makes real httpx polls until the deadline — ~3 min of dead wait that
             # reads as a hang (#11467, same class as #11462).
             patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+            patch("api.code_sync._rollback_component", AsyncMock()),
         ):
             _, steps, _ = _run(_run_post_sync_steps(component, f"/src/{component}", f"/opt/autobot/{component}"))
             steps_collected.extend(steps)
@@ -278,6 +285,17 @@ def test_autobot_shared_component_restores_both_backends(tmp_path) -> None:
         patch("api.code_sync._ensure_autobot_shared_symlink", side_effect=_fake_ensure),
         patch("api.code_sync._restart_component_services", AsyncMock()),
         patch("api.code_sync._compute_deps_changed", AsyncMock(return_value=False)),
+        # #13312: the autobot_shared branch fans out through
+        # _restart_dependents_with_health, which health-polls EVERY dependent
+        # that has a health URL.  Unmocked that is ~180s of real httpx traffic
+        # per dependent; _is_systemd_unit_failed likewise spawns a real
+        # systemctl for the dependents that have none, and _snapshot_component
+        # rsyncs the live deployed dir.  This test asserts the symlink fan-out
+        # only.
+        patch("api.code_sync._snapshot_component", AsyncMock(return_value=None)),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
+        patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _run(
             _run_post_sync_steps(
