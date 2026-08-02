@@ -40,7 +40,8 @@ class InProcessBrowserBackend:
     capabilities = frozenset(
         {
             Capability.NAVIGATE,
-            Capability.EXTRACT,
+            Capability.EXTRACT_TEXT,
+            Capability.EXTRACT_STRUCTURED,
             Capability.MHTML,
             Capability.HUMAN_HANDOFF,
             Capability.PERSISTENT_SESSION,
