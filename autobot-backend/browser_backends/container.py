@@ -44,7 +44,7 @@ class ContainerBrowserBackend:
             # `web_fetch/fetcher.py::_fetch_playwright` already uses for its
             # JS-render fallback. Phase 2 wrapped only `capture_screenshot`
             # and under-declared this stack.
-            Capability.EXTRACT,
+            Capability.EXTRACT_HTML,
             Capability.OUT_OF_PROCESS,
         }
     )
@@ -74,7 +74,7 @@ class ContainerBrowserBackend:
         )
 
     async def extract(self, request: ExtractRequest) -> BrowserResult:
-        """Render *url* and return its HTML.
+        """Render *url* and return its **HTML**.
 
         Stateless: the URL is required because this backend holds no current
         page. The registry has already validated it (#13236).
@@ -87,10 +87,12 @@ class ContainerBrowserBackend:
             )
 
         service = await self._service()
-        raw = await service._post_and_parse(
-            "render",
-            {"url": request.url, "wait": "networkidle"},
-        )
+        payload: dict = {"url": request.url, "wait": "networkidle"}
+        if request.timeout_seconds is not None:
+            # The render endpoint takes milliseconds.
+            payload["timeout"] = int(request.timeout_seconds * 1000)
+
+        raw = await service._post_and_parse("render", payload)
         html = raw.get("html") or raw.get("content")
         if request.max_chars is not None and html:
             html = html[: request.max_chars]

@@ -119,7 +119,9 @@ Backends declare capabilities rather than implementing everything:
 ```python
 class Capability(StrEnum):
     NAVIGATE = "navigate"
-    EXTRACT = "extract"
+    EXTRACT_TEXT = "extract_text"          # amended, see below
+    EXTRACT_HTML = "extract_html"
+    EXTRACT_STRUCTURED = "extract_structured"
     SCREENSHOT = "screenshot"
     INTERACT = "interact"          # click/fill/select, needs element refs
     ELEMENT_REFS = "element_refs"
@@ -131,7 +133,7 @@ class Capability(StrEnum):
 A caller asks for capabilities, not a stack:
 
 ```python
-browser = await get_browser(requires={Capability.NAVIGATE, Capability.EXTRACT},
+browser = await get_browser(requires={Capability.NAVIGATE, Capability.EXTRACT_TEXT},
                             session_id=conversation_id)
 result = await browser.navigate(NavigateRequest(url=url))
 ```
@@ -265,11 +267,44 @@ if not result.get("success"):
 # After — the caller states requirements; dispatch and guard are the
 # interface's job.
 browser = await get_browser(
-    requires={Capability.NAVIGATE, Capability.EXTRACT},
+    requires={Capability.NAVIGATE, Capability.EXTRACT_TEXT},
     session_id=conversation_id,
 )
 page = await browser.navigate(NavigateRequest(url=search_url))
 ```
+
+## Amendments
+
+### 2026-08-02 — `EXTRACT` split by content format (#13236)
+
+Migrating the first real callers showed the single `EXTRACT` capability
+conflated three different outputs, and the three stacks each produce a
+different one:
+
+| stack | call | returns |
+|---|---|---|
+| container | `render` | HTML |
+| worker | `get_text` | text, markup stripped |
+| in-process | `extract_content()` | text + structured data |
+
+`web_fetch/_fetch_playwright` needs HTML for a parser; the worker registers
+before the container, so under one capability dispatch would have handed it
+text — a silent regression, since text is a valid result shape.
+
+Replaced with `EXTRACT_TEXT` / `EXTRACT_HTML` / `EXTRACT_STRUCTURED`, plus a
+`ContentFormat` on `ExtractRequest`. Requiring a capability and naming a
+format are two statements that can disagree, so the registry checks the
+resolved backend declares the capability for the requested format and raises
+`UnsupportedFormatError` rather than returning the wrong shape.
+
+Two earlier amendments from the same exercise are already in the code:
+locality capabilities (`IN_PROCESS` / `OUT_OF_PROCESS`) and
+`ExtractRequest.url` for stateless backends.
+
+**Step order revised.** This ADR nominated `content_reach` as the first
+migration ("smallest, already guarded"). That was wrong — it is the caller
+with the most stack-specific behaviour (structured extraction plus
+`blocked_by_guard`). `web_fetch` is the correct first migration.
 
 ## Related ADRs
 

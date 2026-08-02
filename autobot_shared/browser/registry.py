@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 
 from autobot_shared.browser.base import (
+    FORMAT_CAPABILITY,
     ActionRequest,
     BrowserBackend,
     BrowserResult,
@@ -45,6 +46,7 @@ from autobot_shared.browser.base import (
     ScreenshotRequest,
     SessionHandle,
     UnsafeUrlError,
+    UnsupportedFormatError,
 )
 from autobot_shared.url_safety import is_public_url_async
 
@@ -143,12 +145,29 @@ class Browser:
         return await self._backend.navigate(request)
 
     async def extract(self, request: ExtractRequest) -> BrowserResult:
-        """Read content, validating the URL when the request carries one.
+        """Read content in the requested format.
 
-        Stateless backends need an explicit URL because they hold no current
-        page; it is guarded exactly like a navigate URL (#13236).
+        Two checks before dispatch:
+
+        - the URL is guarded when the request carries one, because stateless
+          backends need an explicit URL and it reaches the network exactly
+          like a navigate URL;
+        - the resolved backend must declare the capability for
+          ``request.format``. Requiring a capability at ``get_browser`` time
+          and naming a format here are two statements that can disagree; this
+          ties them together so a caller cannot receive text where it asked
+          for markup (#13236).
         """
         await _guard_url(request.url)
+
+        needed = FORMAT_CAPABILITY[request.format]
+        if needed not in self._backend.capabilities:
+            raise UnsupportedFormatError(
+                f"backend {self._backend.name!r} cannot produce "
+                f"{request.format.value!r} (needs {needed.value!r}); "
+                f"require it in get_browser() so dispatch picks a backend that can"
+            )
+
         return await self._backend.extract(request)
 
     async def screenshot(self, request: ScreenshotRequest) -> BrowserResult:
