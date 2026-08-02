@@ -35,6 +35,30 @@ from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
 
+class ContentFormat(str, Enum):
+    """What shape extracted content comes back in (#13236).
+
+    `EXTRACT` used to mean "return the page's text/markup", which conflated
+    three different things the real callers need and the three stacks
+    produce:
+
+    - `web_fetch/_fetch_playwright` needs **HTML**; it feeds a parser.
+    - `content_reach` needs **text plus structured** data.
+    - `tool_handler`'s search fallback needs **text**.
+
+    Under one capability, a caller asking for `EXTRACT` could be routed to a
+    backend that returns text where it needed markup — a silent regression,
+    not an error. Format is now explicit and routable.
+    """
+
+    #: Human-readable page text, markup stripped.
+    TEXT = "text"
+    #: Raw HTML markup.
+    HTML = "html"
+    #: Parsed structure (headings, links, metadata) alongside text.
+    STRUCTURED = "structured"
+
+
 class Capability(str, Enum):
     """What a backend can do. Callers request these; backends declare them.
 
@@ -46,8 +70,12 @@ class Capability(str, Enum):
 
     #: Point the browser at a URL and report the resulting page state.
     NAVIGATE = "navigate"
-    #: Return the page's text/markup content.
-    EXTRACT = "extract"
+    #: Return page text, markup stripped.
+    EXTRACT_TEXT = "extract_text"
+    #: Return raw HTML markup.
+    EXTRACT_HTML = "extract_html"
+    #: Return parsed structure (headings, links, metadata) alongside text.
+    EXTRACT_STRUCTURED = "extract_structured"
     #: Capture a page image.
     SCREENSHOT = "screenshot"
     #: Click / fill / select. Requires ELEMENT_REFS in practice.
@@ -85,6 +113,14 @@ class NoCapableBackendError(BrowserError):
     """No registered backend both declares the capabilities and is reachable."""
 
 
+class UnsupportedFormatError(BrowserError):
+    """The resolved backend cannot produce the requested content format.
+
+    Raised rather than returning the wrong shape, which is what a single
+    `EXTRACT` capability allowed (#13236).
+    """
+
+
 class UnsafeUrlError(BrowserError):
     """The URL failed the DNS-resolving public-address guard.
 
@@ -92,6 +128,14 @@ class UnsafeUrlError(BrowserError):
     cannot forget the check — the gap #13204 records for
     ``send_to_browser_vm`` and ``services/playwright_service``.
     """
+
+
+#: Which capability a backend must declare to serve each content format.
+FORMAT_CAPABILITY: dict[ContentFormat, Capability] = {
+    ContentFormat.TEXT: Capability.EXTRACT_TEXT,
+    ContentFormat.HTML: Capability.EXTRACT_HTML,
+    ContentFormat.STRUCTURED: Capability.EXTRACT_STRUCTURED,
+}
 
 
 @dataclass(frozen=True)
@@ -126,6 +170,15 @@ class ExtractRequest:
     session_id: str | None = None
     selector: str | None = None
     max_chars: int | None = None
+    #: What shape to return. The registry refuses a backend that does not
+    #: declare the matching capability, so a caller cannot silently receive
+    #: text where it asked for markup (#13236).
+    format: ContentFormat = ContentFormat.TEXT
+    #: Per-call timeout. `NavigateRequest` and `ScreenshotRequest` both carry
+    #: one; this was the odd one out, and `web_fetch/_fetch_playwright`
+    #: passes a timeout to the container's render today, so omitting it would
+    #: silently fall back to the container default (#13236).
+    timeout_seconds: float | None = None
 
 
 @dataclass(frozen=True)
