@@ -100,6 +100,10 @@ class _FakeAsyncRedis:
         return float(bucket[field])
 
     def raw_hgetall(self, key):
+        # scan() hands back bytes keys on a non-decoding client, and redis-py
+        # accepts either form for HGETALL regardless of decode_responses.
+        if isinstance(key, bytes):
+            key = key.decode()
         bucket = self._hashes.get(key, {})
         if self._decoded:
             return dict(bucket)
