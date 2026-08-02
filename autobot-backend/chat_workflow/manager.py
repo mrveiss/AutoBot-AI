@@ -2961,6 +2961,43 @@ before summarizing.
             sources=sources,
         )
 
+    def _build_workflow_message_batch(self, chat_mgr, workflow_messages: List[WorkflowMessage]) -> List[Dict[str, Any]]:
+        """Build the chat-history message dicts for one turn's WorkflowMessages.
+
+        Issue #13296: extracted from ``_persist_workflow_messages`` (Extract
+        Method, matching the rest of this module's convention for keeping
+        functions short).
+        """
+        batch = []
+        for wf_msg in workflow_messages:
+            # Skip segment_complete markers — internal stream control
+            # messages with empty content (Issue #1141).
+            if wf_msg.type == "segment_complete":
+                continue
+
+            sender = "system" if wf_msg.type == "terminal_output" else "assistant"
+            # #11545 (cosmetic): the persisted chat-history entry is the
+            # final user-visible reply — strip any <TOOL_CALL ...> tag
+            # that never matched the full grammar (genuinely unparsed)
+            # so raw markup never renders. Guarded no-op otherwise.
+            content = strip_unparsed_tool_tags(wf_msg.content)
+            # Issue #4448: Extract KB-only citations into top-level sources list.
+            # metadata.citations includes the always-appended llm_training entry —
+            # filter it out so sources contains only knowledge-base references.
+            raw_citations = (wf_msg.metadata or {}).get("citations", [])
+            kb_citations = [c for c in raw_citations if c.get("type") == "knowledge_base"]
+            batch.append(
+                chat_mgr._build_message_dict(
+                    sender,
+                    content,
+                    wf_msg.type,
+                    wf_msg.metadata,
+                    None,
+                    sources=_kb_sources_from_citations(kb_citations),
+                )
+            )
+        return batch
+
     async def _persist_workflow_messages(
         self,
         session_id: str,
@@ -2992,36 +3029,7 @@ before summarizing.
 
         try:
             chat_mgr = ChatHistoryManager()
-
-            # Build message dicts in memory, then persist in one batch
-            batch = []
-            for wf_msg in workflow_messages:
-                # Skip segment_complete markers — internal stream control
-                # messages with empty content (Issue #1141).
-                if wf_msg.type == "segment_complete":
-                    continue
-
-                sender = "system" if wf_msg.type == "terminal_output" else "assistant"
-                # #11545 (cosmetic): the persisted chat-history entry is the
-                # final user-visible reply — strip any <TOOL_CALL ...> tag
-                # that never matched the full grammar (genuinely unparsed)
-                # so raw markup never renders. Guarded no-op otherwise.
-                content = strip_unparsed_tool_tags(wf_msg.content)
-                # Issue #4448: Extract KB-only citations into top-level sources list.
-                # metadata.citations includes the always-appended llm_training entry —
-                # filter it out so sources contains only knowledge-base references.
-                raw_citations = (wf_msg.metadata or {}).get("citations", [])
-                kb_citations = [c for c in raw_citations if c.get("type") == "knowledge_base"]
-                batch.append(
-                    chat_mgr._build_message_dict(
-                        sender,
-                        content,
-                        wf_msg.type,
-                        wf_msg.metadata,
-                        None,
-                        sources=_kb_sources_from_citations(kb_citations),
-                    )
-                )
+            batch = self._build_workflow_message_batch(chat_mgr, workflow_messages)
 
             # Issue #13214: add the completed streamed reply. Without this the
             # batch holds only non-streaming side messages (terminal output, errors)
