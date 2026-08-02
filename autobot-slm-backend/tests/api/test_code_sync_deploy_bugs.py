@@ -26,6 +26,8 @@ import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # #12572: import api.code_sync with real Pydantic schema stand-ins installed
 # then removed.  On the dev host models.schemas is a MagicMock, which makes
@@ -1833,6 +1835,29 @@ def test_wait_component_healthy_returns_false_when_unit_failed_during_poll() -> 
 
     assert result is False, "confirmed systemd failure must trigger rollback (return False)"
     assert any("failed" in s for s in steps)
+
+
+def test_unmocked_health_poll_fails_fast_instead_of_dead_waiting() -> None:
+    """#13312: an unmocked live health poll must fail immediately, not dead-wait.
+
+    _wait_component_healthy retries until _HEALTH_POLL_TIMEOUT (180s) expires and
+    swallows every per-attempt error, so a test that forgets to mock it used to
+    cost ~3 minutes of real network I/O and still pass.  The tests/api conftest
+    guard replaces httpx.AsyncClient for this module with a stand-in that calls
+    pytest.fail; this asserts the guard is armed and that it escapes the poll's
+    broad ``except Exception``.
+    """
+    steps: list[str] = []
+    started = time.monotonic()
+
+    with (
+        patch("api.code_sync._COMPONENT_HEALTH_URLS", {"autobot-backend": "http://127.0.0.1:8001/api/health"}),
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
+        pytest.raises(pytest.fail.Exception),
+    ):
+        _run(_wait_component_healthy("autobot-backend", steps, slow_start=True))
+
+    assert time.monotonic() - started < 5.0, "guard must abort the poll, not wait out the window"
 
 
 def test_is_systemd_unit_failed_returns_true_on_failed_output() -> None:
