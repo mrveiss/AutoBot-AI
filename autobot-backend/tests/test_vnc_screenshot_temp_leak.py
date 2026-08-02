@@ -44,9 +44,7 @@ class TestScreenshotTempFileCleanup:
     """Every exit path of desktop_screenshot_mcp must remove its temp file."""
 
     @pytest.mark.asyncio
-    async def test_no_leak_when_both_capture_commands_fail(
-        self, vnc_mcp_module, isolated_tempdir  # noqa: F811
-    ):
+    async def test_no_leak_when_both_capture_commands_fail(self, vnc_mcp_module, isolated_tempdir):  # noqa: F811
         """rc=1 from scrot AND import must still remove the temp PNG (#13208)."""
         fail = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="")
 
@@ -54,9 +52,7 @@ class TestScreenshotTempFileCleanup:
             response = await vnc_mcp_module.desktop_screenshot_mcp()
 
         assert response["success"] is False
-        assert _files_in(isolated_tempdir) == [], (
-            "failed capture leaked a temp file: " f"{_files_in(isolated_tempdir)}"
-        )
+        assert _files_in(isolated_tempdir) == [], "failed capture leaked a temp file: " f"{_files_in(isolated_tempdir)}"
 
     @pytest.mark.asyncio
     async def test_no_leak_when_capture_raises(self, vnc_mcp_module, isolated_tempdir):  # noqa: F811
@@ -70,9 +66,7 @@ class TestScreenshotTempFileCleanup:
         )
 
     @pytest.mark.asyncio
-    async def test_no_leak_when_reading_the_png_fails(
-        self, vnc_mcp_module, isolated_tempdir  # noqa: F811
-    ):
+    async def test_no_leak_when_reading_the_png_fails(self, vnc_mcp_module, isolated_tempdir):  # noqa: F811
         """Capture succeeds but the read raises — the temp PNG must still go (#13208)."""
         ok = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
 

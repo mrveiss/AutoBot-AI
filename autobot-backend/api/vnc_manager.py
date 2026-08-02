@@ -1131,7 +1131,6 @@ def _crop_to_region(image, region):
     return image.crop(box)
 
 
-
 @router.post("/ocr", response_model=VncOcrResponse)
 @with_error_handling(error_code_prefix="VNC_OCR")
 async def vnc_ocr_text(
