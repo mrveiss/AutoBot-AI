@@ -24,7 +24,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from autobot_shared.auth.jwt_core import JWTDecodeError
 from autobot_shared.ssot_config import config
 from services.mcp_dispatch import MCPDispatcher
 from services.run_jwt import mint_run_jwt

@@ -432,6 +432,22 @@ class AutoBotMCPServer:
             logger.warning("_validate_redis_token: unexpected error: %s", exc)
             return None
 
+    @staticmethod
+    def _pre_auth_gate(method: str, client_ip: str, req_id: Any) -> Dict[str, Any] | None:
+        """Reject *client_ip* if it has exhausted its failed-auth budget (#13268).
+
+        Runs BEFORE any validation work: ahead of _validate_redis_token so a
+        locked-out caller cannot drive a Redis GET per request, and ahead of the
+        secret comparison so guessing the secret is metered.
+
+        Returns a JSON-RPC error to send, or None to continue.
+        """
+        blocked, reason = get_pre_auth_throttle().check(client_ip)
+        if not blocked:
+            return None
+        logger.warning("mcp_auth: pre-auth throttle blocked method=%s — %s", method or "<none>", reason)
+        return _err(-32029, f"Too many failed authentication attempts: {reason}", req_id)
+
     async def _authenticate(
         self,
         params: Dict[str, Any],
@@ -521,19 +537,10 @@ class AutoBotMCPServer:
         Returns:
             JSON-RPC response dict (always includes ``jsonrpc`` and ``id``).
         """
-        # #13268: throttle BEFORE any validation work. This runs ahead of
-        # _validate_redis_token so a locked-out caller cannot drive a Redis GET
-        # per request, and ahead of the secret comparison so guessing is metered.
         ip = client_ip or UNKNOWN_IP
-        throttle = get_pre_auth_throttle()
-        blocked, reason = throttle.check(ip)
-        if blocked:
-            logger.warning(
-                "mcp_auth: pre-auth throttle blocked method=%s — %s",
-                method or "<none>",
-                reason,
-            )
-            return _err(-32029, f"Too many failed authentication attempts: {reason}", req_id)
+        throttled = self._pre_auth_gate(method, ip, req_id)
+        if throttled is not None:
+            return throttled
 
         # Bucket key is captured before _authenticate pops run_jwt out of params.
         run_jwt_preview = params.get("run_jwt") if isinstance(params, dict) else None

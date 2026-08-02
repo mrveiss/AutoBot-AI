@@ -24,10 +24,9 @@ Cache TTL and RBAC filtering added in #2598.
 """
 
 import time
+import uuid
 
 import aiohttp
-
-import uuid
 
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.http_client import get_http_client

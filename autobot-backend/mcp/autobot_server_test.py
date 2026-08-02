@@ -339,8 +339,9 @@ async def test_legacy_token_still_works_without_run_jwt():
 
 def test_stdio_bearer_is_composed_from_secret_plus_scopes():
     """#13266: stdio composes "<secret>:<scopes>" instead of reusing the secret as a bearer."""
-    with patch.object(config.misc, "mcp_token", TEST_SECRET), patch.object(
-        config.misc, "mcp_stdio_scopes", "kb,memory"
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory"),
     ):
         assert _stdio_bearer_token() == f"{TEST_SECRET}:kb,memory"
 
@@ -353,8 +354,9 @@ async def test_stdio_bearer_authenticates_end_to_end():
     every stdio request was rejected with -32001 in every configuration.
     """
     server = make_server()
-    with patch.object(config.misc, "mcp_token", TEST_SECRET), patch.object(
-        config.misc, "mcp_stdio_scopes", "kb,memory,agents"
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory,agents"),
     ):
         resp = await server.handle_request("tools/list", {}, _stdio_bearer_token(), req_id=7, client_ip="stdio")
 

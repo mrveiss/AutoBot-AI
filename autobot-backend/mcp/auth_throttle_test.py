@@ -117,9 +117,7 @@ async def test_ip_rotation_does_not_defeat_the_throttle():
     with _limits(max_failures=100, global_max=global_max):
         codes = []
         for i in range(global_max + 2):
-            resp = await server.handle_request(
-                "tools/list", {}, BAD_TOKEN, req_id=1, client_ip=f"198.51.100.{i}"
-            )
+            resp = await server.handle_request("tools/list", {}, BAD_TOKEN, req_id=1, client_ip=f"198.51.100.{i}")
             codes.append(resp["error"]["code"])
 
     assert codes[:global_max] == [-32001] * global_max, codes

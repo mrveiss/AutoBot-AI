@@ -113,8 +113,9 @@ def test_malformed_json_returns_400() -> None:
 def test_client_ip_is_forwarded_to_the_throttle() -> None:
     """#13268: the route must hand the resolved caller address to handle_request."""
     handler = AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "result": {}})
-    with patch("api.autobot_mcp_router.AutoBotMCPServer") as mock_cls, patch(
-        "api.autobot_mcp_router.get_client_ip", return_value="203.0.113.9"
+    with (
+        patch("api.autobot_mcp_router.AutoBotMCPServer") as mock_cls,
+        patch("api.autobot_mcp_router.get_client_ip", return_value="203.0.113.9"),
     ):
         mock_cls.return_value.handle_request = handler
         client.post(
