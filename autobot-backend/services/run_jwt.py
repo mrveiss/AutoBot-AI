@@ -69,6 +69,7 @@ from autobot_shared.auth.jwt_core import (
 from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 
 
@@ -131,14 +132,25 @@ def get_run_jwt_scopes(agent_type: str, task_type: str | None = None) -> list[st
 
 
 def _secret() -> str:
-    """Resolve the signing secret from environment variables, in priority order.
+    """Resolve the signing secret, environment first, then the SSOT config.
 
     ``SECRET_KEY`` is deliberately excluded from the fallback chain.  A
     general-purpose app secret that is known to multiple services would allow
     any of those services to forge run JWTs, undermining the isolation goal.
+
+    #13265: the config fallback exists because isolated MCP bridge workers are
+    spawned with a scrubbed environment (``_WORKER_ENV_ALLOW`` in
+    ``services/mcp_isolated_runtime.py``), which excludes both secret variables.
+    Without it a worker cannot verify the run JWT it is handed, so enforcement
+    could never be switched on.  ``config`` reads the ``.env`` file directly and
+    is therefore still populated inside the scrubbed child.  Environment
+    variables keep priority, so no existing deployment changes behaviour.
     """
     for var in (_ENV_SECRET, "AUTOBOT_JWT_SECRET"):
         val = os.environ.get(var, "")
+        if val:
+            return val
+    for val in (config.run_jwt_secret, config.jwt_secret):
         if val:
             return val
     raise RuntimeError("No run-JWT signing secret configured.  Set RUN_JWT_SECRET (or AUTOBOT_JWT_SECRET).")

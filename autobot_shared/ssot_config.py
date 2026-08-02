@@ -1812,11 +1812,11 @@ class MiscConfig(BaseSettings):
     # the token they are handed and enforcement can never be switched on.
     run_jwt_secret: str = Field(default="", alias="RUN_JWT_SECRET")
     # #13263: the pre-#7437 default was "1"; #7437 dropped it to "" and turned
-    # run-scoped JWT enforcement off in every bridge worker. Restoring it is
-    # BLOCKED on #13265: services/mcp_dispatch.py:214 calls call_tool() without
-    # run_jwt and _WORKER_ENV_ALLOW excludes MCP_RUN_JWT, so filesystem_mcp,
-    # browser_mcp and vnc_mcp would return -32001 on every chat tool call.
-    # Enforcement must not be switched on before the token can be supplied.
+    # run-scoped JWT enforcement off in every bridge worker.
+    # #13265 cleared the blocker: mcp_dispatch now mints and forwards a run JWT
+    # on every isolated call, and run_jwt._secret() falls back to this config so
+    # the scrubbed-environment worker can verify it. Restoring the "1" default
+    # is #13263's call and is deliberately left to that issue.
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
