@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.tts_client import TTSClient
+from services.tts_client import STREAM_PROBE_TTL, TTSClient
 
 
 class _FakeStreamReader:
@@ -119,3 +119,148 @@ async def test_synthesize_stream_empty_body_yields_nothing():
         received = [c async for c in tts_client.synthesize_stream("hello")]
 
     assert received == []
+
+
+# ---------------------------------------------------------------------------
+# Stale-worker fallback + capability probe (#12886, #13215)
+# ---------------------------------------------------------------------------
+
+WHOLE_WAV = b"RIFF-whole-utterance"
+STREAM_URL_SUFFIX = "/tts/synthesize/stream"
+BLOCKING_URL_SUFFIX = "/tts/synthesize"
+
+
+def _make_routing_http_client(responses: dict) -> MagicMock:
+    """Mock pooled HTTP client that dispatches on the request URL.
+
+    ``responses`` maps a URL suffix to ``(status, body)``. Every requested URL
+    is recorded on ``mock_client.requested_urls`` so a test can assert that the
+    stream route was (or was not) attempted -- that is what distinguishes a
+    cached capability probe from a per-request round trip.
+    """
+    requested: list = []
+
+    def _tracked_request(method, url, **kwargs):
+        requested.append(url)
+        status, body = next(
+            ((s, b) for suffix, (s, b) in responses.items() if url.endswith(suffix)),
+            (404, b""),
+        )
+        resp = MagicMock()
+        resp.status = status
+        resp.content = _FakeStreamReader(body)
+        resp.text = AsyncMock(return_value="Not Found")
+        resp.read = AsyncMock(return_value=body)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        return cm
+
+    client = MagicMock()
+    client.tracked_request = MagicMock(side_effect=_tracked_request)
+    client.requested_urls = requested
+    return client
+
+
+class _FakeClock:
+    """Controllable stand-in for time.monotonic so the probe TTL is testable."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _stale_worker_client() -> MagicMock:
+    """A worker that serves /tts/synthesize but 404s /tts/synthesize/stream."""
+    return _make_routing_http_client(
+        {
+            STREAM_URL_SUFFIX: (404, b""),
+            BLOCKING_URL_SUFFIX: (200, WHOLE_WAV),
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_stream_or_synthesize_falls_back_when_worker_lacks_stream_route():
+    """A worker predating /tts/synthesize/stream must still produce audio (#12886).
+
+    The deployed worker 404s the streaming route while serving the whole-blob
+    one. Before this fallback existed the caller got a RuntimeError and the
+    user got silence.
+    """
+    mock_client = _stale_worker_client()
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
+        received = [c async for c in tts_client.stream_or_synthesize("hello", voice_id="alba")]
+
+    assert received == [WHOLE_WAV]
+    assert any(u.endswith(STREAM_URL_SUFFIX) for u in mock_client.requested_urls)
+    assert any(u.endswith(BLOCKING_URL_SUFFIX) for u in mock_client.requested_urls)
+
+
+@pytest.mark.asyncio
+async def test_stream_or_synthesize_caches_the_negative_probe():
+    """After one 404 the stream route is not re-attempted on every utterance."""
+    mock_client = _stale_worker_client()
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
+        async for _ in tts_client.stream_or_synthesize("first"):
+            pass
+        mock_client.requested_urls.clear()
+        received = [c async for c in tts_client.stream_or_synthesize("second")]
+
+    assert received == [WHOLE_WAV]
+    assert not any(u.endswith(STREAM_URL_SUFFIX) for u in mock_client.requested_urls)
+
+
+@pytest.mark.asyncio
+async def test_stream_or_synthesize_reprobes_after_ttl():
+    """A worker updated in place starts streaming again without a backend restart."""
+    mock_client = _stale_worker_client()
+    clock = _FakeClock()
+    with (
+        patch("services.tts_client.get_http_client", return_value=mock_client),
+        patch("services.tts_client.time.monotonic", clock),
+    ):
+        tts_client = TTSClient()
+        async for _ in tts_client.stream_or_synthesize("first"):
+            pass
+        mock_client.requested_urls.clear()
+        clock.now += STREAM_PROBE_TTL + 1
+        async for _ in tts_client.stream_or_synthesize("second"):
+            pass
+
+    assert any(u.endswith(STREAM_URL_SUFFIX) for u in mock_client.requested_urls)
+
+
+@pytest.mark.asyncio
+async def test_stream_or_synthesize_streams_when_the_route_is_served():
+    """A current worker streams: every chunk is yielded, the blocking route unused."""
+    chunks = [b"RIFF-one", b"RIFF-two", b"RIFF-three"]
+    mock_client = _make_routing_http_client({STREAM_URL_SUFFIX: (200, _framed(chunks))})
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
+        received = [c async for c in tts_client.stream_or_synthesize("hello")]
+
+    assert received == chunks
+    assert not any(u.endswith(BLOCKING_URL_SUFFIX) for u in mock_client.requested_urls)
+
+
+@pytest.mark.asyncio
+async def test_stream_or_synthesize_does_not_mask_worker_failures():
+    """A 500 is a real failure, not a contract skew -- it must not silently retry."""
+    mock_client = _make_routing_http_client(
+        {
+            STREAM_URL_SUFFIX: (500, b""),
+            BLOCKING_URL_SUFFIX: (200, WHOLE_WAV),
+        }
+    )
+    with patch("services.tts_client.get_http_client", return_value=mock_client):
+        tts_client = TTSClient()
+        with pytest.raises(RuntimeError):
+            async for _ in tts_client.stream_or_synthesize("hello"):
+                pass
+
+    assert not any(u.endswith(BLOCKING_URL_SUFFIX) for u in mock_client.requested_urls)
