@@ -209,7 +209,7 @@ class OverseerWebSocketHandler:
                 text=message_text,
                 message_type="overseer_plan",
                 session_id=self.session_id,
-                metadata={
+                raw_data={
                     "plan": plan_data,  # Full plan object for OverseerPlanMessage component
                     "plan_id": plan.plan_id,
                     "total_steps": len(plan.steps),
@@ -260,7 +260,7 @@ class OverseerWebSocketHandler:
                 text=message_text,
                 message_type="overseer_step",
                 session_id=self.session_id,
-                metadata={
+                raw_data={
                     "step": step_data,
                     "step_number": result.step_number,
                     "total_steps": result.total_steps,

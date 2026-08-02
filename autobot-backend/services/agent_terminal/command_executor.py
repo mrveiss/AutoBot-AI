@@ -108,7 +108,7 @@ class CommandExecutor:
                 text=f"⚠️ Command cancelled due to {reason}",
                 message_type="command_cancellation",
                 session_id=session.conversation_id,
-                metadata=session.get_cancellation_metadata(reason),
+                raw_data=session.get_cancellation_metadata(reason),
             )
             logger.info("[CANCEL] Logged cancellation to chat history")
         except Exception as log_error:
