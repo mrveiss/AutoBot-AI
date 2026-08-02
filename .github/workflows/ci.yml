@@ -55,6 +55,25 @@ jobs:
     # that #13300 restored, and fails visibly instead of hanging.
     timeout-minutes: 150
 
+    # #10691: the suite has always run with no Redis, so every test needing real
+    # atomic ops (rather than a `fakeredis` stub) was a standing failure that
+    # could never go green — `services/redis_listeners_e2e_test.py` imports the
+    # real `redis` client with no marker or skip guard, and
+    # `knowledge/connectors/scheduler_test.py::TestConnectorSchedulerRedis`
+    # needs real INCR/EXPIRE semantics. Same service definition as
+    # marker-tests.yml (#13304); the `config/config.yaml` written below already
+    # points at localhost:6379, so no extra env wiring is needed.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
     - uses: actions/checkout@v7
 
@@ -72,10 +91,21 @@ jobs:
         python -m pip install --upgrade pip setuptools wheel
 
         echo "Installing CI-safe requirements..."
-        python -m pip install -r requirements-ci.txt --prefer-binary
+        # #10691: requirements-ci.txt never names torch — it arrives transitively
+        # via sentence-transformers. From PyPI that pulls the CUDA build, whose
+        # dependency closure is ~1.6GB of nvidia-* wheels plus a 526MB torch, on
+        # a runner with no GPU. Resolving torch against PyTorch's CPU index
+        # instead yields `torch==X.Y.Z+cpu` with a 10-package closure and ZERO
+        # nvidia-* wheels (verified with `pip install --dry-run --report` for
+        # cp314/manylinux_2_28_x86_64). The local version segment `+cpu` sorts
+        # above the plain PyPI release under PEP 440, so the CPU build wins
+        # without needing torch pinned anywhere. This also makes `cache: 'pip'`
+        # meaningful: the restore was 54MB against a 3.1GB download.
+        python -m pip install -r requirements-ci.txt --prefer-binary \
+          --extra-index-url https://download.pytorch.org/whl/cpu
 
         echo "Installing testing dependencies..."
-        python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 'fakeredis[lua]' flake8 black isort mypy bandit
+        python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 pytest-split==0.11.0 'fakeredis[lua]' flake8 black isort mypy bandit
 
     - name: Create necessary directories and config files
       run: |
