@@ -12,7 +12,6 @@ import asyncio
 import base64
 import re
 import subprocess  # nosec B404
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
@@ -65,6 +64,7 @@ from api.vnc_humanization import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.temp_files import temporary_file_path
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 
@@ -549,6 +549,25 @@ async def vnc_mouse_drag(
     return _run_xdotool_cmd(["mouseup", "1"])
 
 
+def _run_screenshot_capture(argv: list):
+    """Run one screenshot capture command. Issue #13208 (extracted helper)."""
+    return subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        argv,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
+    )
+
+
+def _capture_screenshot_to(tmp_path: str) -> bool:
+    """Capture the desktop into *tmp_path*, falling back from scrot to import."""
+    for argv in (["scrot", "-o", tmp_path], ["import", "-window", "root", tmp_path]):
+        if _run_screenshot_capture(argv).returncode == 0:
+            return True
+    return False
+
+
 @router.get("/screenshot", response_model=VncScreenshotResponse)
 @with_error_handling(error_code_prefix="VNC_SCREENSHOT")
 async def vnc_screenshot(
@@ -558,6 +577,10 @@ async def vnc_screenshot(
     Capture desktop screenshot.
     Issue #74: Desktop interaction controls.
 
+    Issue #13208: ``temporary_file_path`` owns the temp file, so it is removed
+    on the success path, on capture failure and on any exception. Previously
+    only the success path unlinked it and each failed capture leaked a PNG.
+
     Returns:
         {
             "status": "success|error",
@@ -566,41 +589,16 @@ async def vnc_screenshot(
         }
     """
     try:
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
-            tmp_path = tmp_file.name
+        with temporary_file_path(suffix=".png") as tmp_path:
+            if not _capture_screenshot_to(tmp_path):
+                return {
+                    "status": "error",
+                    "message": "Screenshot capture failed",
+                    "image_data": "",
+                }
 
-        # Use scrot to capture screenshot
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
-            ["scrot", "-o", tmp_path],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
-        )
-
-        if result.returncode != 0:
-            # Fallback to import command if scrot fails
-            result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
-                ["import", "-window", "root", tmp_path],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
-            )
-
-        if result.returncode != 0:
-            return {
-                "status": "error",
-                "message": "Screenshot capture failed",
-                "image_data": "",
-            }
-
-        # Read and encode image
-        with open(tmp_path, "rb") as f:
-            image_data = base64.b64encode(f.read()).decode("utf-8")
-
-        # Cleanup
-        Path(tmp_path).unlink(missing_ok=True)
+            with open(tmp_path, "rb") as f:
+                image_data = base64.b64encode(f.read()).decode("utf-8")
 
         return {
             "status": "success",
@@ -1120,6 +1118,20 @@ async def delete_macro(name: str, admin_check: bool = Depends(check_admin_permis
 # Area 5: Automation Features - OCR Text Recognition
 
 
+def _crop_to_region(image, region):
+    """Crop *image* to *region* when a complete x/y/width/height box is given."""
+    if not region or not all(k in region for k in ("x", "y", "width", "height")):
+        return image
+    box = (
+        region["x"],
+        region["y"],
+        region["x"] + region["width"],
+        region["y"] + region["height"],
+    )
+    return image.crop(box)
+
+
+
 @router.post("/ocr", response_model=VncOcrResponse)
 @with_error_handling(error_code_prefix="VNC_OCR")
 async def vnc_ocr_text(
@@ -1154,28 +1166,16 @@ async def vnc_ocr_text(
 
         # Decode image
         image_data = base64.b64decode(screenshot_result["image_data"])
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
-            tmp_file.write(image_data)
-            tmp_path = tmp_file.name
 
-        # Load image
-        image = Image.open(tmp_path, encoding="utf-8")
-
-        # Crop to region if specified
-        if request.region and all(k in request.region for k in ["x", "y", "width", "height"]):
-            box = (
-                request.region["x"],
-                request.region["y"],
-                request.region["x"] + request.region["width"],
-                request.region["y"] + request.region["height"],
-            )
-            image = image.crop(box)
-
-        # Perform OCR
-        text = pytesseract.image_to_string(image)
-
-        # Cleanup
-        Path(tmp_path).unlink(missing_ok=True)
+        # Issue #13208: the temp file is removed on every path, including the
+        # PIL/pytesseract failure paths that previously leaked it.
+        with temporary_file_path(suffix=".png") as tmp_path:
+            Path(tmp_path).write_bytes(image_data)
+            # Image.open takes no `encoding` kwarg — passing one raised TypeError
+            # and made every OCR call fail (found while fixing #13208).
+            image = Image.open(tmp_path)
+            image = _crop_to_region(image, request.region)
+            text = pytesseract.image_to_string(image)
 
         return {"status": "success", "text": text.strip(), "message": "OCR completed"}
 
