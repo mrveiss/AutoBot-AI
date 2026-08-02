@@ -16,6 +16,7 @@ into sys.modules before loading the module under test via importlib.
 """
 
 import importlib.util
+import logging
 import sys
 import types
 import uuid
@@ -99,8 +100,13 @@ _audit_mod.AuditResourceType = _AuditResourceType
 # restore block ran, permanently leaving sys.modules["autobot_shared"] as a
 # path-less MagicMock for the rest of the pytest session — every later test file
 # that does a real `from autobot_shared.X import Y` then failed the same way.
+# get_logger must resolve to the real stdlib logging.getLogger (not a MagicMock):
+# rbac_middleware.py's module-level `logger = get_logger(__name__)` is then a
+# genuine stdlib Logger, so logger.error(...) reaches caplog. A MagicMock logger
+# swallows every call silently, so test_db_failure_logs_error (which asserts on
+# caplog.records) could never pass with the old stub (#13312).
 _logging_manager_mod = MagicMock()
-_logging_manager_mod.get_logger = MagicMock(return_value=MagicMock())
+_logging_manager_mod.get_logger = logging.getLogger
 sys.modules["autobot_shared.logging_manager"] = _logging_manager_mod
 _ssot_constants_mod = MagicMock()
 _ssot_constants_mod.TTL_5_MINUTES = 300

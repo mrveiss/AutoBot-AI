@@ -20,6 +20,7 @@ via importlib — matching the approach used in other SLM unit tests that avoid 
 import asyncio
 import importlib.util
 import json
+import logging
 import sys
 import time
 import types
@@ -88,8 +89,13 @@ _fastapi_mock.status = http.HTTPStatus
 # that does a real `from autobot_shared.X import Y` then failed the same way.
 # TTL_5_MINUTES must be the real int (not a MagicMock) because CACHE_TTL_SECONDS
 # is used in real arithmetic/comparisons (time.time() - CACHE_TTL_SECONDS).
+# get_logger must resolve to the real stdlib logging.getLogger (not a MagicMock):
+# rbac_middleware.py's module-level `logger = get_logger(__name__)` is then a
+# genuine stdlib Logger, so logger.error(...) reaches caplog. A MagicMock logger
+# swallows every call silently, which would make any test asserting on
+# caplog.records for this module unable to ever pass (#13312).
 _logging_manager_mod = MagicMock()
-_logging_manager_mod.get_logger = MagicMock(return_value=MagicMock())
+_logging_manager_mod.get_logger = logging.getLogger
 sys.modules["autobot_shared.logging_manager"] = _logging_manager_mod
 _ssot_constants_mod = MagicMock()
 _ssot_constants_mod.TTL_5_MINUTES = 300
@@ -142,6 +148,17 @@ def _make_redis(get_return=None):
         yield  # make it an async generator
 
     r.scan_iter = _empty_scan
+
+    # redis.asyncio.Redis.pipeline() is SYNCHRONOUS — it returns a Pipeline
+    # object immediately, whose .delete() buffers synchronously and whose
+    # .execute() is the only awaited call (rbac_middleware.py:299-302). `r`
+    # being a bare AsyncMock made `r.pipeline` auto-spec as an AsyncMock too,
+    # so `redis.pipeline()` returned an un-awaited coroutine instead of a
+    # pipeline object and `pipeline.delete(key)` raised AttributeError (#13312).
+    _pipe = MagicMock()
+    _pipe.delete = MagicMock()
+    _pipe.execute = AsyncMock()
+    r.pipeline = MagicMock(return_value=_pipe)
     return r
 
 
