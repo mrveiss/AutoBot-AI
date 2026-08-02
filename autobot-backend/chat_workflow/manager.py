@@ -2908,13 +2908,16 @@ before summarizing.
         ``llm_response`` arrived here and was dropped, so a conversational streamed
         reply persisted nothing and ``chat:session:*`` read back user-turns only.
 
-        Returns None when there is nothing to add — an empty reply, or an identical
-        assistant turn already present in *batch* (e.g. the ``respond`` tool).
+        Returns None when there is nothing to add — an empty reply, or an assistant
+        entry in *batch* already carrying byte-identical text. The scan is restricted
+        to assistant entries so that a ``terminal_output`` or other system message
+        echoing the reply cannot suppress the assistant turn.
         """
         content = strip_unparsed_tool_tags(llm_response or "").strip()
         if not content:
             return None
-        if any((entry.get("text") or "").strip() == content for entry in batch):
+        assistant_texts = ((e.get("text") or "").strip() for e in batch if e.get("sender") == "assistant")
+        if any(text == content for text in assistant_texts):
             return None
         return chat_mgr._build_message_dict(
             "assistant",
@@ -2994,8 +2997,9 @@ before summarizing.
                 await chat_mgr.add_messages_batch(session_id, batch)
 
             logger.info(
-                "Persisted conversation to chat history: " "session=%s, workflow_messages=%d",
+                "Persisted conversation to chat history: " "session=%s, workflow_messages=%d, persisted=%d",
                 session_id,
+                len(workflow_messages or []),
                 len(batch),
             )
 
