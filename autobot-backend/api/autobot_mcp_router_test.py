@@ -15,6 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import api.autobot_mcp_router as mcp_router
 from api.autobot_mcp_router import router
 
 # ---------------------------------------------------------------------------
@@ -25,6 +26,20 @@ app = FastAPI()
 app.include_router(router, prefix="/api")
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _reset_server_singleton():
+    """Clear the module-level server cache between tests.
+
+    _get_server() memoises the instance in a module global, so
+    patch("api.autobot_mcp_router.AutoBotMCPServer") only took effect for the
+    first request in the session — every later test silently reused the first
+    test's mock (or a real server) and asserted against the wrong object.
+    """
+    mcp_router._server = None
+    yield
+    mcp_router._server = None
 
 
 def _json_rpc_body(method: str = "tools/call", name: str = "kb.search") -> dict:
@@ -93,3 +108,37 @@ def test_malformed_json_returns_400() -> None:
     assert response.status_code == 400
     body = response.json()
     assert body["error"]["code"] == -32700
+
+
+def test_client_ip_is_forwarded_to_the_throttle() -> None:
+    """#13268: the route must hand the resolved caller address to handle_request."""
+    handler = AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "result": {}})
+    with patch("api.autobot_mcp_router.AutoBotMCPServer") as mock_cls, patch(
+        "api.autobot_mcp_router.get_client_ip", return_value="203.0.113.9"
+    ):
+        mock_cls.return_value.handle_request = handler
+        client.post(
+            "/api/mcp/tool",
+            json=_json_rpc_body(),
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert handler.await_args.kwargs["client_ip"] == "203.0.113.9"
+
+
+def test_forwarded_header_is_ignored_from_an_untrusted_peer() -> None:
+    """X-Forwarded-For must not be honoured when the TCP peer is not a trusted proxy.
+
+    TestClient connects as 'testclient', which is not in AUTOBOT_TRUSTED_PROXIES,
+    so the spoofed header must not become the throttle key.
+    """
+    handler = AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "result": {}})
+    with patch("api.autobot_mcp_router.AutoBotMCPServer") as mock_cls:
+        mock_cls.return_value.handle_request = handler
+        client.post(
+            "/api/mcp/tool",
+            json=_json_rpc_body(),
+            headers={"Authorization": "Bearer test-token", "X-Forwarded-For": "198.51.100.77"},
+        )
+
+    assert handler.await_args.kwargs["client_ip"] != "198.51.100.77"
