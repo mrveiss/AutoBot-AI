@@ -38,6 +38,26 @@ _WORKER_ENV_ALLOW = frozenset(
 )
 
 
+def _resolve_run_jwt_secret() -> str:
+    """Resolve the run-JWT signing secret to hand to a worker (#13265).
+
+    Mirrors ``services.run_jwt._secret()`` priority, then falls back to the SSOT
+    config because the backend may itself run without the variable exported.
+
+    The worker validates the run JWT it is handed per request, and verifying an
+    HMAC requires the key.  The child's inherited environment is scrubbed to
+    ``_WORKER_ENV_ALLOW``, so the secret is provisioned explicitly here — the
+    same way cpu/mem/nofile limits are — rather than by widening that allow-list,
+    which would also leak every other matching variable.  The run JWT itself is
+    still passed per request and never via the environment.
+    """
+    for var in ("RUN_JWT_SECRET", "AUTOBOT_JWT_SECRET"):
+        val = os.environ.get(var, "")
+        if val:
+            return val
+    return config.run_jwt_secret or config.jwt_secret or ""
+
+
 class IsolatedBridgeClient:
     """Client for a single bridge running as a subprocess worker."""
 
@@ -64,6 +84,17 @@ class IsolatedBridgeClient:
         env["MCP_WORKER_MEM_MB"] = str(self._policy.memory_mb)
         env["MCP_WORKER_NOFILE"] = str(self._policy.nofile)
         env["MCP_WORKER_LOG_LEVEL"] = config.log_level
+        # #13265: without this the worker cannot verify the run JWT it receives,
+        # and MCP_RUN_JWT_ENFORCE=1 would reject every isolated tool call.
+        run_jwt_secret = _resolve_run_jwt_secret()
+        if run_jwt_secret:
+            env["RUN_JWT_SECRET"] = run_jwt_secret
+        else:
+            logger.warning(
+                "mcp_isolation: no run-JWT signing secret resolved for bridge %s — "
+                "isolated calls will be rejected if MCP_RUN_JWT_ENFORCE is set",
+                self._bridge,
+            )
 
         logger.info(
             "mcp_isolation: spawning worker bridge=%s cpu=%ss mem=%sMB nofile=%s",

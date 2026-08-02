@@ -95,8 +95,7 @@ def test_mint_failure_is_logged_and_does_not_raise(monkeypatch):
     """No signing secret must not crash dispatch; the worker rejects instead."""
     monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
     monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
-    with patch.object(config.misc, "run_jwt_secret", ""), patch.object(config.misc, "jwt_secret", ""):
-        assert MCPDispatcher._mint_bridge_jwt("filesystem_mcp", "read_file") is None
+    assert MCPDispatcher._mint_bridge_jwt("filesystem_mcp", "read_file") is None
 
 
 # ---------------------------------------------------------------------------
@@ -156,9 +155,7 @@ async def test_missing_secret_fails_the_request_not_the_worker(monkeypatch):
     token = _mint()
     monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
     monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
-    with patch.object(worker_entrypoint, "_JWT_ENFORCE", True), patch.object(
-        config.misc, "run_jwt_secret", ""
-    ), patch.object(config.misc, "jwt_secret", ""):
+    with patch.object(worker_entrypoint, "_JWT_ENFORCE", True):
         with pytest.raises(PermissionError, match="cannot verify token"):
             await worker_entrypoint._validate_run_jwt_param({"run_jwt": token})
 
@@ -170,21 +167,57 @@ async def test_missing_secret_fails_the_request_not_the_worker(monkeypatch):
 
 def test_secret_resolves_from_config_when_environment_is_scrubbed(monkeypatch):
     """#13265: workers run without RUN_JWT_SECRET in os.environ (_WORKER_ENV_ALLOW)."""
-    from services.run_jwt import _secret
+    from services.mcp_isolated_runtime import _resolve_run_jwt_secret
 
     monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
     monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
     with patch.object(config.misc, "run_jwt_secret", "from-dot-env-file"):
-        assert _secret() == "from-dot-env-file"
+        assert _resolve_run_jwt_secret() == "from-dot-env-file"
 
 
 def test_environment_keeps_priority_over_config(monkeypatch):
     """Existing deployments that export the variable are unaffected."""
-    from services.run_jwt import _secret
+    from services.mcp_isolated_runtime import _resolve_run_jwt_secret
 
     monkeypatch.setenv("RUN_JWT_SECRET", "from-environment")
     with patch.object(config.misc, "run_jwt_secret", "from-dot-env-file"):
-        assert _secret() == "from-environment"
+        assert _resolve_run_jwt_secret() == "from-environment"
+
+
+def test_parent_secret_chain_is_environment_only(monkeypatch):
+    """The .env fallback must NOT widen services.run_jwt._secret() for every caller.
+
+    Regression guard for tests/services/test_run_jwt.py::
+    test_secret_key_not_accepted_as_fallback — the worker gets the secret
+    provisioned explicitly, the shared resolver stays environment-only.
+    """
+    from services.run_jwt import _secret
+
+    monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
+    monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
+    monkeypatch.setenv("SECRET_KEY", "some-general-app-secret")
+    with patch.object(config.misc, "run_jwt_secret", "from-dot-env-file"):
+        with pytest.raises(RuntimeError, match="RUN_JWT_SECRET"):
+            _secret()
+
+
+def test_worker_env_is_provisioned_with_the_signing_secret(monkeypatch):
+    """#13265: the spawned worker receives RUN_JWT_SECRET explicitly."""
+    import asyncio
+
+    from services.mcp_isolated_runtime import IsolatedBridgeClient
+    from services.mcp_isolation_config import policy_for
+
+    monkeypatch.setenv("RUN_JWT_SECRET", TEST_JWT_SECRET)
+    client = IsolatedBridgeClient("filesystem_mcp", policy_for("filesystem_mcp"))
+    spawn = AsyncMock(return_value=AsyncMock(returncode=None))
+
+    with patch("asyncio.create_subprocess_exec", spawn):
+        asyncio.get_event_loop().run_until_complete(client.start())
+
+    env = spawn.call_args.kwargs["env"]
+    assert env["RUN_JWT_SECRET"] == TEST_JWT_SECRET
+    assert "MCP_RUN_JWT" not in env, "the token itself must stay per-request"
 
 
 def test_run_jwt_secret_has_no_default():

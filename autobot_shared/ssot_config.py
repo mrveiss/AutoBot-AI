@@ -1805,18 +1805,20 @@ class MiscConfig(BaseSettings):
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
-    # #13265: run-JWT signing secret as an SSOT field. services/run_jwt._secret()
-    # reads os.environ first (unchanged priority) and falls back to this, which
-    # is populated from the .env file. Isolated bridge workers run with a scrubbed
-    # environment (_WORKER_ENV_ALLOW), so without this fallback they cannot verify
-    # the token they are handed and enforcement can never be switched on.
+    # #13265: run-JWT signing secret as an SSOT field, read by
+    # mcp_isolated_runtime._resolve_run_jwt_secret() when provisioning an
+    # isolated bridge worker. The worker's inherited environment is scrubbed to
+    # _WORKER_ENV_ALLOW, so without an explicitly provisioned secret it cannot
+    # verify the run JWT it is handed and enforcement can never be switched on.
+    # services/run_jwt._secret() deliberately does NOT read this: the shared
+    # resolver stays environment-only so the chain is not widened for every caller.
     run_jwt_secret: str = Field(default="", alias="RUN_JWT_SECRET")
     # #13263: the pre-#7437 default was "1"; #7437 dropped it to "" and turned
     # run-scoped JWT enforcement off in every bridge worker.
     # #13265 cleared the blocker: mcp_dispatch now mints and forwards a run JWT
-    # on every isolated call, and run_jwt._secret() falls back to this config so
-    # the scrubbed-environment worker can verify it. Restoring the "1" default
-    # is #13263's call and is deliberately left to that issue.
+    # on every isolated call, and mcp_isolated_runtime provisions the signing
+    # secret into the scrubbed worker environment so it can verify that token.
+    # Restoring the "1" default is #13263's call and is left to that issue.
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")

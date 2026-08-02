@@ -46,8 +46,8 @@ logger = get_logger("mcp_worker")
 # is "1" (#6473). It shipped defaulting ON; the #7437 config migration dropped
 # the default to "" and silently turned it OFF (#13263).
 # #13265 removed the blocker: services/mcp_dispatch.py now mints and forwards a
-# run JWT on every isolated call, and services/run_jwt._secret() falls back to
-# the SSOT config so this scrubbed-environment child can still verify it.
+# run JWT on every isolated call, and the parent provisions RUN_JWT_SECRET into
+# this scrubbed child's environment so the token can actually be verified.
 # Flipping the default back to "1" belongs to #13263.
 _JWT_ENFORCE = config.mcp_run_jwt_enforce == "1"
 
