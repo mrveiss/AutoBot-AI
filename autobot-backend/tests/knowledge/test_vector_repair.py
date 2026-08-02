@@ -113,7 +113,9 @@ def _poisoned_collection() -> InMemoryCollection:
     _add(collection, "node-uuid-1", "", "fact-a")
     _add(collection, "node-uuid-2", "", "fact-b")
     _add(collection, "fact-c", "healthy content", "fact-c")
-    collection.upsert(ids=["node-orphan"], embeddings=[EMBEDDING], documents=[""], metadatas=[{"_node_type": "TextNode"}])
+    collection.upsert(
+        ids=["node-orphan"], embeddings=[EMBEDDING], documents=[""], metadatas=[{"_node_type": "TextNode"}]
+    )
     return collection
 
 
@@ -283,8 +285,7 @@ def test_chromadb_add_on_an_existing_id_is_a_silent_no_op():
     ``chromadb`` with a package stub for the whole suite (#MVA-1119), so an
     in-process probe would assert against a MagicMock.
     """
-    probe = textwrap.dedent(
-        """
+    probe = textwrap.dedent("""
         import chromadb
         collection = chromadb.EphemeralClient().create_collection("repair_probe")
         meta = {"document_id": "fact-x"}
@@ -292,8 +293,7 @@ def test_chromadb_add_on_an_existing_id_is_a_silent_no_op():
         collection.add(ids=["fact-x"], embeddings=[[0.4, 0.5, 0.6]], documents=["rewritten"], metadatas=[meta])
         stored = collection.get(ids=["fact-x"], include=["documents"])["documents"]
         print("DOC=%r COUNT=%d" % (stored[0], collection.count()))
-        """
-    )
+        """)
     result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=PROBE_TIMEOUT)
 
     if result.returncode != 0:

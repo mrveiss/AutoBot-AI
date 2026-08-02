@@ -291,7 +291,9 @@ class VectorIndexRepair:
             return FactOutcome(fact_id, NO_REDIS_CONTENT, reason, row_ids)
 
         if not self._apply:
-            return FactOutcome(fact_id, WOULD_REPAIR, "would delete %d empty row(s) and re-vectorize" % len(rows), row_ids)
+            return FactOutcome(
+                fact_id, WOULD_REPAIR, "would delete %d empty row(s) and re-vectorize" % len(rows), row_ids
+            )
 
         return await self._apply_repair(fact_id, rows, row_ids)
 
@@ -357,6 +359,24 @@ def _resolve_scope(grouped: Mapping[str, List[PoisonedRow]], fact_ids: Sequence[
     return sorted(dict.fromkeys(fact_ids))
 
 
+def _survey(
+    collection, fact_ids: Sequence[str] | None, apply_changes: bool, page_size: int
+) -> tuple[Dict[str, List[PoisonedRow]], RepairReport]:
+    """Read-only pass: find the damage and record the "before" evidence."""
+    rows, scanned = scan_poisoned_rows(collection, page_size=page_size)
+    grouped, unlinked = group_by_fact(rows)
+    scope = _resolve_scope(grouped, fact_ids)
+    report = RepairReport(
+        scope=scope,
+        unlinked_row_ids=unlinked,
+        rows_scanned=scanned,
+        poisoned_rows_found=len(rows),
+        applied=apply_changes,
+        unreachable_before=count_unreachable(collection, scope),
+    )
+    return grouped, report
+
+
 async def run_repair(
     collection,
     store: FactStateStore,
@@ -374,22 +394,13 @@ async def run_repair(
     if apply_changes and not fact_ids:
         raise ValueError("a write run requires an explicit fact-id scope; bulk repair is not supported")
 
-    rows, scanned = scan_poisoned_rows(collection, page_size=page_size)
-    grouped, unlinked = group_by_fact(rows)
-    scope = _resolve_scope(grouped, fact_ids)
-
-    report = RepairReport(
-        scope=scope,
-        unlinked_row_ids=unlinked,
-        rows_scanned=scanned,
-        poisoned_rows_found=len(rows),
-        applied=apply_changes,
-        unreachable_before=count_unreachable(collection, scope),
-    )
+    grouped, report = _survey(collection, fact_ids, apply_changes, page_size)
     engine = VectorIndexRepair(collection, store, revectorize, apply_changes=apply_changes)
-    for fact_id in scope:
+    for fact_id in report.scope:
         report.outcomes.append(await engine.repair_fact(fact_id, grouped.get(fact_id, [])))
-    report.unreachable_after = count_unreachable(collection, scope) if apply_changes else report.unreachable_before
+    report.unreachable_after = (
+        count_unreachable(collection, report.scope) if apply_changes else report.unreachable_before
+    )
     return report
 
 
