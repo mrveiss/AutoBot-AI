@@ -585,13 +585,13 @@ class TestSecurityBoundaryConditions:
         nothing to mock away without dropping the 1,000,000-char boundary the
         test exists to cover. Both pytest invocations in
         .github/workflows/ci.yml filter ``slow``, and no scheduled workflow
-        currently re-runs marker-excluded tests, so this boundary moves off CI
-        entirely until such a job exists — the one real coverage loss in
-        #13284, recorded there rather than papered over.
+        currently re-runs marker-excluded tests (#13286), so this boundary
+        moves off CI entirely until such a job exists — the one real coverage
+        loss in #13284, recorded rather than papered over.
 
-        The superlinear cost itself is a separate finding: 29s to classify
-        1.1MB is a resource-exhaustion smell in the risk assessor, not in this
-        test.
+        The superlinear cost itself is a separate finding (#13285): 29s to
+        classify 1.1MB is a resource-exhaustion smell in the risk assessor,
+        not in this test.
         """
         # Test various command lengths
         lengths = [1000, 10000, 100000, 1000000]
