@@ -489,3 +489,48 @@ def test_head_with_a_parked_run_is_polled_again(watchdog):
 
 def test_head_with_dispatched_runs_is_settled(watchdog):
     assert watchdog.needs_another_look([_run(), _run(id=2)]) is False
+
+
+def test_a_dry_run_does_not_warn_about_the_probe_it_skipped_on_purpose(watchdog, capsys):
+    """The warning must stay rare enough to be read when it means something."""
+    sha = "1" * 40
+    api = _FakeApi({sha: [_run()]})
+    api.open_pull_requests = lambda base: [
+        {"number": 3, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": []
+    api.run_jobs = lambda run_id: []
+    config = {
+        "base_branch": "Dev_new_gui",
+        "grace_minutes": 10,
+        "stall_minutes": 30,
+        "status_context": "ctx",
+        "max_approvals": 30,
+        "poll_attempts": 1,
+        "poll_interval_seconds": 1,
+        "max_job_lookups": 5,
+    }
+    assert watchdog.check_dispatch(api, config, dry_run=True) == 0
+    assert "UNRESOLVED" not in capsys.readouterr().out
+
+
+def test_a_real_sweep_does_warn_when_the_probe_is_unresolved(watchdog, capsys):
+    sha = "2" * 40
+    api = _FakeApi({sha: [_run()]})
+    api.open_pull_requests = lambda base: [
+        {"number": 4, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": []
+    api.run_jobs = lambda run_id: []
+    config = {
+        "base_branch": "Dev_new_gui",
+        "grace_minutes": 10,
+        "stall_minutes": 30,
+        "status_context": "ctx",
+        "max_approvals": 30,
+        "poll_attempts": 1,
+        "poll_interval_seconds": 1,
+        "max_job_lookups": 5,
+    }
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    assert "UNRESOLVED" in capsys.readouterr().out

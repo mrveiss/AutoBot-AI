@@ -709,10 +709,13 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
         print("::error::" + REMEDIATION.replace("\n", "%0A"))
         print(REMEDIATION)
         return 1
-    if permitted is None:
+    if permitted is None and not dry_run:
         # Unresolved is not benign: the repair path is unproven until a probe
         # returns a verdict, and saying nothing here is the exact failure mode
-        # this module was written to remove.
+        # this module was written to remove. A dry run is the one exception —
+        # it skips the probe deliberately, and `--check probe` answers the
+        # question on its own, so warning here would be noise that trains
+        # readers to ignore the warning that matters.
         print(f"::warning::Approval capability is UNRESOLVED — {explanation}. Do not treat #12823 as proven fixed.")
     return 0
 
