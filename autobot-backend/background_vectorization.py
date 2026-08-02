@@ -167,10 +167,13 @@ class BackgroundVectorizer:
         """Extract content and metadata from fact data (Issue #336 - extracted helper)."""
         import json
 
-        content_bytes = fact_data.get(b"content", b"")
-        content = self._decode_bytes(content_bytes)
-        metadata_str = fact_data.get(b"metadata", b"{}")
-        metadata = json.loads(self._decode_bytes(metadata_str, "{}"))
+        # kb.redis() is the shared decode_responses=True client, so hgetall yields
+        # str field names. Probing with bytes literals always missed, so every fact
+        # was vectorized as an empty Document and then marked completed (#13274).
+        content_raw = fact_data.get("content", "")
+        content = self._decode_bytes(content_raw)
+        metadata_raw = fact_data.get("metadata", "{}")
+        metadata = json.loads(self._decode_bytes(metadata_raw, "{}"))
         return content, metadata
 
     async def _mark_vectorization_complete(self, kb, fact_key: str) -> None:
