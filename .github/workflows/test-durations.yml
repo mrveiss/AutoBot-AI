@@ -1,0 +1,127 @@
+# Regenerates the stored per-test durations that `python-suite` splits on.
+#
+# #10691: pytest-split's default `duration_based_chunks` algorithm cuts the
+# collected list into contiguous chunks of equal *estimated time*. With no
+# durations file every test is assumed to cost the same, so the split degrades
+# to equal test COUNTS — and because this suite's per-test cost is wildly
+# uneven, one shard ends up carrying a disproportionate share of the wall clock
+# and a 6-way split delivers nowhere near 6x. The durations file is what makes
+# the split balanced, so it has to be regenerated as the suite changes.
+#
+# This job deliberately does NOT pass --splits/--group: with both options
+# pytest-split registers the cache plugin alongside the split plugin and stores
+# only the durations of the group that ran, silently truncating the file to a
+# sixth of the suite. Regeneration therefore has to be an unsharded run.
+name: test-durations
+
+on:
+  schedule:
+    # Weekly. The suite is ~1-2h unsharded, so this is deliberately infrequent;
+    # durations only need to be approximately right, and pytest-split assigns
+    # the mean duration to any test it has no timing for, so tests added between
+    # regenerations degrade the balance gradually rather than breaking anything.
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+  pull_request:
+    branches: [ main, Dev_new_gui ]
+    paths:
+      # A workflow that only ever runs on a schedule is never exercised until
+      # the day it silently breaks, and nobody is watching a 3am cron. Running
+      # it on PRs that change it is what makes it reviewable — and it is what
+      # produced the first committed .test_durations (#10691).
+      - '.github/workflows/test-durations.yml'
+      - '.github/actions/setup-python-suite/action.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  store-durations:
+    name: Measure and store per-test durations
+    runs-on: ubuntu-latest
+    # Unsharded, so this needs the full pre-sharding budget. Observed runner
+    # variance on this suite is roughly 2x (50m to 1h24m for identical work),
+    # hence the wide margin.
+    timeout-minutes: 180
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-python-suite
+
+      # Both invocations mirror python-suite exactly EXCEPT for coverage, which
+      # is omitted here. Only the RELATIVE cost of tests matters to the split,
+      # and coverage instrumentation is a broadly proportional multiplier, so
+      # dropping it makes regeneration substantially cheaper without meaningfully
+      # changing the chunk boundaries. Everything that does affect which tests
+      # exist — the marker exclusion, the target trees, the interpreter split —
+      # is identical, because a durations file whose keys do not match the
+      # collected node IDs is worth nothing.
+      #
+      # #13084: two separate interpreter sessions, for the same package-name
+      # collision reason as python-suite. Two separate durations files, because
+      # a single --durations-path would have the second invocation overwrite the
+      # first (--clean-durations discards timings for tests not in the run).
+      - name: Store durations — backend, shared, tts-worker, repo_tests
+        run: |
+          python -m pytest \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --store-durations \
+            --clean-durations \
+            --durations-path .test_durations \
+            --tb=no \
+            -q \
+          || echo "::warning::pytest exited non-zero; durations are still recorded for every test that ran"
+
+      - name: Store durations — slm-backend
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pytest \
+            autobot-slm-backend \
+            -n auto --dist loadscope \
+            -m "not integration and not slow and not distributed and not performance" \
+            --store-durations \
+            --clean-durations \
+            --durations-path .test_durations_slm \
+            --tb=no \
+            -q \
+          || echo "::warning::pytest exited non-zero; durations are still recorded for every test that ran"
+
+      - name: Summarise the split these durations produce
+        if: ${{ !cancelled() }}
+        run: |
+          python scripts/ci/summarize_test_durations.py \
+            --splits 6 \
+            .test_durations .test_durations_slm >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload durations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-durations
+          # Both paths are dotfiles; upload-artifact excludes hidden files
+          # unless told otherwise, which would silently produce an empty
+          # artifact.
+          include-hidden-files: true
+          path: |
+            .test_durations
+            .test_durations_slm
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,102 @@
+# Shared environment setup for every job that runs the Python test suite.
+#
+# #10691: sharding python-suite turns one copy of this block into seven (six
+# matrix shards plus the durations-regeneration job). Duplicating an interpreter
+# version, a dependency set and a config fixture seven times guarantees they
+# drift, and a shard that installs different packages from the one that measured
+# the durations produces a split that is silently wrong rather than visibly
+# broken. Keeping it in one composite action makes that class of drift
+# impossible.
+name: Set up Python suite environment
+description: Install the CI-safe Python dependency set and write the CI config fixture.
+
+inputs:
+  install-test-tools:
+    description: >-
+      Install the pytest tool-chain (pytest, xdist, split, cov, fakeredis) and
+      the static-analysis tools. Set to 'false' for jobs that only need the
+      runtime dependency set.
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python 3.14
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.14'
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements*.txt
+          autobot-backend/requirements*.txt
+
+    - name: Install Python dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+
+        echo "Installing CI-safe requirements..."
+        # #10691: requirements-ci.txt never names torch — it arrives
+        # transitively via sentence-transformers. Resolved against PyPI that
+        # pulls the CUDA build, whose dependency closure is ~1.6GB of nvidia-*
+        # wheels plus a 526MB torch, onto a runner with no GPU. Resolving
+        # against PyTorch's CPU index instead yields `torch==X.Y.Z+cpu` with a
+        # 10-package closure and ZERO nvidia-* wheels (verified with
+        # `pip install --dry-run --report` for cp314/manylinux_2_28_x86_64).
+        # The local version segment `+cpu` sorts above the plain PyPI release
+        # under PEP 440, so the CPU build wins without torch being pinned
+        # anywhere. This also makes `cache: 'pip'` meaningful: the restore was
+        # 54MB against a 3.1GB download.
+        python -m pip install -r requirements-ci.txt --prefer-binary \
+          --extra-index-url https://download.pytorch.org/whl/cpu
+
+    - name: Install test tooling
+      if: inputs.install-test-tools == 'true'
+      shell: bash
+      run: |
+        echo "Installing testing dependencies..."
+        python -m pip install \
+          pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 \
+          pytest-split==0.11.0 'fakeredis[lua]' \
+          flake8 black isort mypy bandit
+
+    - name: Create necessary directories and config files
+      shell: bash
+      run: |
+        mkdir -p data logs static config
+        touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+        # Minimal config.yaml for CI testing. `redis.host`/`redis.port` point at
+        # the service container the calling job declares (#10691).
+        cat > config/config.yaml << 'EOF'
+        # CI Testing Configuration
+        llm:
+          orchestrator_llm: "mock"
+          task_llm: "mock"
+          ollama:
+            model: "mock-model"
+            models: {}
+          unified:
+            embedding:
+              providers:
+                ollama:
+                  selected_model: "mock-embed"
+
+        deployment:
+          mode: "local"
+
+        data:
+          reliability_stats_file: "data/reliability_stats.json"
+
+        diagnostics:
+          enabled: false
+          use_llm_for_analysis: false
+          use_web_search_for_analysis: false
+          auto_apply_fixes: false
+
+        redis:
+          host: "localhost"
+          port: 6379
+          db: 0
+        EOF
