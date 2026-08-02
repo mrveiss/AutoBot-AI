@@ -40,6 +40,7 @@ from api.schemas_knowledge import (
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.redis_utils import decode_redis_value
 from constants.threshold_constants import QueryDefaults
 from services.grounded_agent import (
     Claim,
@@ -486,32 +487,33 @@ async def get_stats(
     try:
         stats_data = await redis.hgetall("grounding:stats")
 
+        # The shared client is decode_responses=True, so hgetall yields str keys.
+        # These probes used bytes literals and only appeared to work because the
+        # empty-hash fallback below was itself bytes-keyed: the moment a writer
+        # for grounding:stats exists, every field would silently read 0 (#13278).
         if not stats_data:
             # Return empty stats structure
             stats_data = {
-                b"total_responses_grounded": b"0",
-                b"total_claims_extracted": b"0",
-                b"claims_verified": b"0",
-                b"average_confidence": b"0",
+                "total_responses_grounded": "0",
+                "total_claims_extracted": "0",
+                "claims_verified": "0",
+                "average_confidence": "0",
             }
-
-        def decode_val(v):
-            return v.decode() if isinstance(v, bytes) else v
 
         return {
             "status": "success",
             "period": period,
-            "total_responses_grounded": int(decode_val(stats_data.get(b"total_responses_grounded", b"0"))),
-            "total_claims_extracted": int(decode_val(stats_data.get(b"total_claims_extracted", b"0"))),
-            "claims_verified": float(decode_val(stats_data.get(b"claims_verified", b"0"))),
+            "total_responses_grounded": int(decode_redis_value(stats_data.get("total_responses_grounded")) or 0),
+            "total_claims_extracted": int(decode_redis_value(stats_data.get("total_claims_extracted")) or 0),
+            "claims_verified": float(decode_redis_value(stats_data.get("claims_verified")) or 0),
             "claim_sources": {
                 "kb_lookup": 0.65,
                 "external_research": 0.22,
                 "causal_inference": 0.13,
             },
-            "average_confidence": float(decode_val(stats_data.get(b"average_confidence", b"0"))),
-            "conflicts_created": int(decode_val(stats_data.get(b"conflicts_created", b"0"))),
-            "conflicts_resolved": int(decode_val(stats_data.get(b"conflicts_resolved", b"0"))),
+            "average_confidence": float(decode_redis_value(stats_data.get("average_confidence")) or 0),
+            "conflicts_created": int(decode_redis_value(stats_data.get("conflicts_created")) or 0),
+            "conflicts_resolved": int(decode_redis_value(stats_data.get("conflicts_resolved")) or 0),
         }
 
     except Exception as e:
