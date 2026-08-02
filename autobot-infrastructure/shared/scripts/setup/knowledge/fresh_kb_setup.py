@@ -14,13 +14,12 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import centralized Redis client
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_utils import decode_redis_list, decode_redis_value
 
 
 def _clean_redis_indexes(r) -> None:
@@ -120,14 +119,17 @@ async def _test_knowledge_base(kb, r) -> bool:
         logger.info(f"   Indexes: {indexes}")
 
         if indexes:
-            idx_name = indexes[0].decode() if isinstance(indexes[0], bytes) else indexes[0]
-            info = r.execute_command("FT.INFO", idx_name)
-            attrs_idx = info.index(b"attributes")
+            # get_redis_client returns a decode_responses=True client, so FT.INFO
+            # elements arrive as str, not the bytes this used to index with
+            # (#13290) — decode defensively for both wire shapes.
+            idx_name = decode_redis_value(indexes[0])
+            info = decode_redis_list(r.execute_command("FT.INFO", idx_name))
+            attrs_idx = info.index("attributes")
             attrs = info[attrs_idx + 1]
             for attr in attrs:
-                if b"vector" in attr:
+                if "vector" in attr:
                     for i, item in enumerate(attr):
-                        if item == b"dim":
+                        if item == "dim":
                             logger.info(f"   Vector dimension: {attr[i+1]}")
                             break
 
