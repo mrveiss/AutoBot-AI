@@ -295,6 +295,10 @@ async def list_conflicts(
     for key in conflict_keys:
         conflict_data = await redis.hgetall(key)
         if conflict_data:
+            # The shared client is built with decode_responses=True, so keys() yields
+            # str; a bare .decode() here raised AttributeError and @with_error_handling
+            # turned it into a 500 for any non-empty conflict set (issue #13272).
+            conflict_key = key.decode() if isinstance(key, bytes) else key
             conflict_status = conflict_data.get("status", "pending")
             if status and conflict_status != status:
                 continue
@@ -306,7 +310,7 @@ async def list_conflicts(
 
             conflicts.append(
                 {
-                    "conflict_id": key.decode().split(":")[-1],
+                    "conflict_id": conflict_key.split(":")[-1],
                     "description": (
                         conflict_data.get("description", "").decode()
                         if isinstance(conflict_data.get("description"), bytes)

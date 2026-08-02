@@ -16,6 +16,7 @@ from typing import Dict, List
 from autobot_shared.env_utils import blank_to_none
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_config import config
 from utils.file_categorization import FILE_CATEGORY_CODE
 
@@ -372,9 +373,7 @@ async def _clear_redis_codebase_cache(task_id: str, source_id: str | None = None
             # Issue #1220: Preserve file hashes in incremental mode
             if INCREMENTAL_INDEXING_ENABLED:
                 keys_to_delete = [
-                    k
-                    for k in keys_to_delete
-                    if not k.decode("utf-8", errors="ignore").startswith(FILE_HASH_REDIS_PREFIX)
+                    k for k in keys_to_delete if not decode_redis_value(k).startswith(FILE_HASH_REDIS_PREFIX)
                 ]
             if keys_to_delete:
                 await redis_client.delete(*keys_to_delete)
