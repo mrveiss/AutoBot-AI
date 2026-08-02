@@ -1,23 +1,19 @@
 # Shared environment setup for every job that runs the Python test suite.
 #
-# #10691: sharding python-suite turns one copy of this block into seven (six
-# matrix shards plus the durations-regeneration job). Duplicating an interpreter
-# version, a dependency set and a config fixture seven times guarantees they
-# drift, and a shard that installs different packages from the one that measured
-# the durations produces a split that is silently wrong rather than visibly
-# broken. Keeping it in one composite action makes that class of drift
-# impossible.
+# #13316: sharding python-suite turns one copy of this block into many (twelve
+# matrix shards on the PR gate, twelve more on the nightly coverage run, plus
+# the durations job). Duplicating an interpreter version, a dependency set and a
+# config fixture that many times guarantees they drift, and a shard that
+# installs different packages from the one that measured the durations produces
+# a split that is silently wrong rather than visibly broken. Keeping it in one
+# composite action makes that class of drift impossible.
+#
+# It also caches the INSTALLED environment, not just pip's download cache.
+# `setup-python`'s `cache: 'pip'` only restores downloaded wheels -- pip still
+# resolves the graph and unpacks every package on each run, measured at ~2m30
+# per shard. Multiplied across twelve shards that dominated the job.
 name: Set up Python suite environment
 description: Install the CI-safe Python dependency set and write the CI config fixture.
-
-inputs:
-  install-test-tools:
-    description: >-
-      Install the pytest tool-chain (pytest, xdist, split, cov, fakeredis) and
-      the static-analysis tools. Set to 'false' for jobs that only need the
-      runtime dependency set.
-    required: false
-    default: 'true'
 
 runs:
   using: composite
@@ -26,40 +22,111 @@ runs:
       uses: actions/setup-python@v7
       with:
         python-version: '3.14'
+        # Still worth keeping: this only speeds up the cache-MISS path, where
+        # pip has to fetch wheels before building the venv below.
         cache: 'pip'
         cache-dependency-path: |
           requirements*.txt
           autobot-backend/requirements*.txt
 
-    - name: Install Python dependencies
+    # The venv lives OUTSIDE the workspace on purpose. Inside it, `actions/
+    # checkout` and the several `rm -rf .venv` cleanup steps elsewhere in this
+    # repo would fight over it, and pytest would try to collect tests out of
+    # site-packages.
+    - name: Resolve environment paths
+      id: env
       shell: bash
       run: |
-        python -m pip install --upgrade pip setuptools wheel
+        echo "venv=$HOME/.venv-python-suite" >> "$GITHUB_OUTPUT"
+        # The exact patch version matters: a venv records an absolute path to
+        # the interpreter that created it, so restoring one built against
+        # 3.14.6 onto a runner with 3.14.7 yields a venv whose python is a
+        # dangling symlink. Keying on the full version makes that a clean miss.
+        echo "pyversion=$(python -c 'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
+
+    - name: Restore cached virtualenv
+      id: venv-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.env.outputs.venv }}
+        # No `restore-keys`. A partial-match restore would hand back an
+        # environment built from DIFFERENT requirements, which is precisely the
+        # silent-staleness failure this cache must avoid. Exact hit or full
+        # reinstall, nothing in between.
+        #
+        # requirements-ci-test.txt is in the hash on purpose: that list used to
+        # be inline in the workflow, where no cache key could see it, so a test
+        # tool bump would have silently reused an environment still holding the
+        # old versions.
+        key: venv-python-suite-${{ runner.os }}-py${{ steps.env.outputs.pyversion }}-${{ hashFiles('requirements-ci.txt', 'requirements-ci/*.txt', 'requirements-ci-test.txt', 'constraints/*.txt') }}
+
+    - name: Install Python dependencies
+      # Only on a miss. On a hit the venv is already complete and this whole
+      # step is skipped, which is where the saving comes from.
+      if: steps.venv-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VENV: ${{ steps.env.outputs.venv }}
+      run: |
+        set -euo pipefail
+        # Rebuild from scratch so a partially-populated directory left behind by
+        # a failed earlier attempt can never masquerade as a complete env.
+        rm -rf "$VENV"
+        python -m venv "$VENV"
+        "$VENV/bin/python" -m pip install --upgrade pip setuptools wheel
 
         echo "Installing CI-safe requirements..."
-        # #10691: requirements-ci.txt never names torch — it arrives
+        # #13316: requirements-ci.txt never names torch -- it arrives
         # transitively via sentence-transformers. Resolved against PyPI that
         # pulls the CUDA build, whose dependency closure is ~1.6GB of nvidia-*
-        # wheels plus a 526MB torch, onto a runner with no GPU. Resolving
-        # against PyTorch's CPU index instead yields `torch==X.Y.Z+cpu` with a
-        # 10-package closure and ZERO nvidia-* wheels (verified with
-        # `pip install --dry-run --report` for cp314/manylinux_2_28_x86_64).
-        # The local version segment `+cpu` sorts above the plain PyPI release
-        # under PEP 440, so the CPU build wins without torch being pinned
-        # anywhere. This also makes `cache: 'pip'` meaningful: the restore was
-        # 54MB against a 3.1GB download.
-        python -m pip install -r requirements-ci.txt --prefer-binary \
+        # wheels plus a 526MB torch, onto a runner with no GPU (3.1GB per run).
+        # Resolving against PyTorch's CPU index instead yields `torch==X.Y.Z+cpu`
+        # with a 10-package closure and ZERO nvidia-* wheels (verified with
+        # `pip install --dry-run --report` for cp314/manylinux_2_28_x86_64). The
+        # local version segment `+cpu` sorts above the plain PyPI release under
+        # PEP 440, so the CPU build wins without torch being pinned anywhere.
+        #
+        # It is also what makes this cache viable: a ~3GB environment would cost
+        # more to upload and restore than skipping the install ever saves.
+        "$VENV/bin/python" -m pip install -r requirements-ci.txt --prefer-binary \
           --extra-index-url https://download.pytorch.org/whl/cpu
 
-    - name: Install test tooling
-      if: inputs.install-test-tools == 'true'
-      shell: bash
-      run: |
         echo "Installing testing dependencies..."
-        python -m pip install \
-          pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 \
-          pytest-split==0.11.0 'fakeredis[lua]' \
-          flake8 black isort mypy bandit
+        "$VENV/bin/python" -m pip install -r requirements-ci-test.txt --prefer-binary \
+          --extra-index-url https://download.pytorch.org/whl/cpu
+
+    - name: Activate virtualenv for subsequent steps
+      shell: bash
+      env:
+        VENV: ${{ steps.env.outputs.venv }}
+        CACHE_HIT: ${{ steps.venv-cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        # Fail loudly rather than silently falling back to the system
+        # interpreter, which would run the suite against a different and
+        # incomplete dependency set.
+        if [ ! -x "$VENV/bin/python" ]; then
+          echo "::error::Virtualenv at $VENV is missing or broken after setup."
+          exit 1
+        fi
+        echo "$VENV/bin" >> "$GITHUB_PATH"
+        echo "VIRTUAL_ENV=$VENV" >> "$GITHUB_ENV"
+        echo "venv cache-hit: ${CACHE_HIT:-false}"
+        echo "Using $("$VENV/bin/python" -V) from $VENV"
+
+    - name: Verify the environment is complete
+      shell: bash
+      env:
+        VENV: ${{ steps.env.outputs.venv }}
+      run: |
+        set -euo pipefail
+        # A restored cache is only useful if it actually satisfies the pinned
+        # set. This turns a subtly incomplete environment into an immediate,
+        # named failure instead of a confusing test error many minutes later.
+        "$VENV/bin/python" -m pytest --version
+        "$VENV/bin/python" -c "import xdist, pytest_split; print('xdist + pytest-split present')"
+        "$VENV/bin/python" -m pip check \
+          || echo "::warning::pip check reported dependency conflicts (pre-existing, not introduced by the cache)"
 
     - name: Create necessary directories and config files
       shell: bash
@@ -68,7 +135,7 @@ runs:
         touch data/.gitkeep logs/.gitkeep static/.gitkeep
 
         # Minimal config.yaml for CI testing. `redis.host`/`redis.port` point at
-        # the service container the calling job declares (#10691).
+        # the service container the calling job declares (#13316).
         cat > config/config.yaml << 'EOF'
         # CI Testing Configuration
         llm:
