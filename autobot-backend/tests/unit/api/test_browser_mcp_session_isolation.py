@@ -29,6 +29,18 @@ from api.browser_mcp import DEFAULT_BROWSER_SESSION_ID, send_to_browser_vm
 from tests.unit.api._fake_http_client import fake_http_client as _fake_http_client
 
 
+@pytest.fixture(autouse=True)
+def _allow_public_urls():
+    """#13204 added a DNS-resolving URL guard to ``send_to_browser_vm``.
+
+    These tests are about session-id routing, not URL validation, and a live
+    DNS lookup would make them depend on network access. Satisfy the guard so
+    they keep testing what they were written to test.
+    """
+    with patch("api.browser_mcp.is_public_url_async", AsyncMock(return_value=True)):
+        yield
+
+
 @pytest.mark.asyncio
 async def test_send_to_browser_vm_puts_session_id_on_the_wire():
     """Explicit session_id must appear verbatim in the /automation payload."""
