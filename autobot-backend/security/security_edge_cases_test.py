@@ -574,8 +574,25 @@ class TestSecurityBoundaryConditions:
         result = await self.security.execute_command("echo 'test'", user="test", user_role="test")
         assert isinstance(result, dict)
 
+    @pytest.mark.slow
     async def test_maximum_command_length(self):
-        """Test handling of extremely long commands"""
+        """Test handling of extremely long commands.
+
+        #13284: marked ``slow`` (29.39s). Unlike the other entries in that
+        tail this is not an accident — the test deliberately feeds
+        ``assess_command_risk()`` 1.1MB of command text across four lengths and
+        the time is real regex work on a pathological input, so there is
+        nothing to mock away without dropping the 1,000,000-char boundary the
+        test exists to cover. Both pytest invocations in
+        .github/workflows/ci.yml filter ``slow``, and no scheduled workflow
+        currently re-runs marker-excluded tests, so this boundary moves off CI
+        entirely until such a job exists — the one real coverage loss in
+        #13284, recorded there rather than papered over.
+
+        The superlinear cost itself is a separate finding: 29s to classify
+        1.1MB is a resource-exhaustion smell in the risk assessor, not in this
+        test.
+        """
         # Test various command lengths
         lengths = [1000, 10000, 100000, 1000000]
 
