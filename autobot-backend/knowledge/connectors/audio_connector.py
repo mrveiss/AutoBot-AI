@@ -33,7 +33,6 @@ from datetime import datetime, timezone
 from typing import List
 
 from autobot_shared.logging_manager import get_logger
-from voice_processing.hallucination_filter import is_silence_hallucination
 from autobot_shared.time_utils import now_utc
 from knowledge.connectors.base import AbstractConnector
 from knowledge.connectors.models import (
@@ -43,6 +42,7 @@ from knowledge.connectors.models import (
     SourceInfo,
 )
 from knowledge.connectors.registry import ConnectorRegistry
+from voice_processing.hallucination_filter import is_silence_hallucination
 
 logger = get_logger(__name__)
 
