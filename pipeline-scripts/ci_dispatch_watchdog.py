@@ -74,6 +74,7 @@ Environment:
     WATCHDOG_POLL_INTERVAL_SECONDS   delay between those attempts
     WATCHDOG_STATUS_CONTEXT          commit status context name
     WATCHDOG_MAX_JOB_LOOKUPS         runs inspected for runner liveness per check
+    WATCHDOG_ONLY_PR                 sweep just this PR number (default: every open PR)
 
 Exit codes:
     0  nothing wrong, or everything wrong was repaired
@@ -128,6 +129,8 @@ DEFAULT_POLL_ATTEMPTS = 3
 DEFAULT_POLL_INTERVAL_SECONDS = 20
 DEFAULT_STATUS_CONTEXT = "ci-dispatch-watchdog"
 DEFAULT_MAX_JOB_LOOKUPS = 10
+# 0 means "every open PR"; a PR number narrows the sweep to that one head.
+DEFAULT_ONLY_PR = 0
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
 
 
@@ -172,6 +175,26 @@ def _env_int(name: str, default: int) -> int:
         raise WatchdogConfigError(f"{name} must be an integer, got {raw!r}") from exc
     if value <= 0:
         raise WatchdogConfigError(f"{name} must be positive, got {value}")
+    return value
+
+
+def _env_non_negative_int(name: str, default: int) -> int:
+    """
+    Read a non-negative integer from the environment.
+
+    Separate from :func:`_env_int` because zero is meaningful here — it is how
+    ``WATCHDOG_ONLY_PR`` says "every open PR" — while every threshold read by
+    ``_env_int`` would be nonsense at zero.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise WatchdogConfigError(f"{name} must be an integer, got {raw!r}") from exc
+    if value < 0:
+        raise WatchdogConfigError(f"{name} must not be negative, got {value}")
     return value
 
 
@@ -649,6 +672,25 @@ def collect_heads(pulls: Sequence[Dict[str, Any]], repository: str) -> List[Pull
     return heads
 
 
+def select_heads(heads: Sequence[PullHead], only_pr: int) -> List[PullHead]:
+    """
+    Narrow the sweep to a single pull request when one fired the workflow.
+
+    A sweep costs roughly ``poll_attempts + 2`` API calls per head, so sweeping
+    every open PR on every pull-request event multiplies the per-event cost by
+    the size of the queue against the shared 1,000/hour ``GITHUB_TOKEN`` budget.
+    The scheduled and base-push sweeps keep covering every head; an event-driven
+    sweep only needs the head that moved.
+
+    Selecting nothing is returned as an empty list rather than silently falling
+    back to "all heads": the fallback would turn a closed or renumbered PR into
+    a full-queue sweep, which is the cost this exists to avoid.
+    """
+    if only_pr <= 0:
+        return list(heads)
+    return [head for head in heads if head.number == only_pr]
+
+
 def publish_dispatch_states(
     api: GitHubApi,
     heads: Sequence[PullHead],
@@ -695,6 +737,14 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
     heads = collect_heads(pulls, api.repository)
     forks = sum(1 for head in heads if not head.same_repo)
     print(f"Open PRs targeting {config['base_branch']}: {len(pulls)} ({forks} from forks, never auto-approved)")
+
+    only_pr = config.get("only_pr", 0)
+    if only_pr:
+        heads = select_heads(heads, only_pr)
+        print(f"Scoped to PR #{only_pr}: {len(heads)} head(s) selected")
+        if not heads:
+            print(f"PR #{only_pr} is not an open PR targeting {config['base_branch']} — nothing to sweep.")
+            return 0
 
     permitted, explanation = probe_approval_capability(api, dry_run)
     print(f"Approval capability probe: {explanation}")
@@ -796,6 +846,7 @@ def load_config() -> Dict[str, Any]:
         "poll_interval_seconds": _env_int("WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS),
         "status_context": os.environ.get("WATCHDOG_STATUS_CONTEXT", DEFAULT_STATUS_CONTEXT),
         "max_job_lookups": _env_int("WATCHDOG_MAX_JOB_LOOKUPS", DEFAULT_MAX_JOB_LOOKUPS),
+        "only_pr": _env_non_negative_int("WATCHDOG_ONLY_PR", DEFAULT_ONLY_PR),
     }
 
 

@@ -141,7 +141,7 @@ everything else fans out. U2 is two issues but is the keystone — **dispatch it
 - **U12 #9930** — SSO/OIDC (needs U2 → RBAC).
 
 > Parallelism budget: Waves 0+1 run **six umbrellas concurrently**. Honor the repo
-> PR-queue limit (≥5 open PRs → defer) and the single self-hosted runner — stagger
+> PR-queue limit (≥8 open PRs → defer) and the single self-hosted runner — stagger
 > PR opens so smoke-test doesn't starve.
 
 ### Dispatch-order delta — 2026-06-12

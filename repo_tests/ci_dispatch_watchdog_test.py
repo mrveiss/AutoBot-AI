@@ -454,6 +454,102 @@ def test_dry_run_approves_nothing_but_still_consumes_budget(watchdog):
     assert budget == 0
 
 
+# --- event-scoped sweeps (#12823 pull_request trigger) ----------------------
+
+
+def test_scoping_selects_only_the_firing_pull_request(watchdog):
+    heads = [
+        watchdog.PullHead(1, "a" * 40, _ts(5), "u", True),
+        watchdog.PullHead(2, "b" * 40, _ts(5), "u", True),
+        watchdog.PullHead(3, "c" * 40, _ts(5), "u", True),
+    ]
+    assert [head.number for head in watchdog.select_heads(heads, 2)] == [2]
+
+
+def test_scoping_off_returns_every_head(watchdog):
+    heads = [watchdog.PullHead(1, "a" * 40, _ts(5), "u", True), watchdog.PullHead(2, "b" * 40, _ts(5), "u", True)]
+    assert watchdog.select_heads(heads, 0) == heads
+
+
+def test_an_unknown_pr_number_selects_nothing_rather_than_everything(watchdog):
+    """Falling back to 'all heads' would restore the full-queue cost this avoids."""
+    heads = [watchdog.PullHead(1, "a" * 40, _ts(5), "u", True)]
+    assert watchdog.select_heads(heads, 999) == []
+
+
+def test_scoping_to_a_fork_pr_still_never_approves_it(watchdog):
+    """SECURITY: the fork guard is independent of how the head was selected."""
+    sha = "9" * 40
+    api = _FakeApi({sha: [_parked(id=77, head_repository={"full_name": FORK})]})
+    api.open_pull_requests = lambda base: [
+        {"number": 12, "head": {"sha": sha, "repo": {"full_name": FORK}}, "html_url": "u", "updated_at": _ts(5)},
+        {"number": 13, "head": {"sha": "8" * 40, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)},
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": []
+    api.run_jobs = lambda run_id: []
+    config = {
+        "base_branch": "Dev_new_gui",
+        "grace_minutes": 10,
+        "stall_minutes": 30,
+        "status_context": "ctx",
+        "max_approvals": 30,
+        "poll_attempts": 1,
+        "poll_interval_seconds": 1,
+        "max_job_lookups": 5,
+        "only_pr": 12,
+    }
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    assert api.approved == []
+    # The untouched same-repo PR was not swept either — scoping held.
+    assert [sha for sha, _state, _desc in api.statuses] == [sha]
+
+
+def test_scoping_to_a_same_repo_pr_still_approves_its_parked_bot_runs(watchdog):
+    sha = "7" * 40
+    api = _FakeApi({sha: [_parked(id=55)]})
+    api.open_pull_requests = lambda base: [
+        {"number": 21, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": []
+    api.run_jobs = lambda run_id: []
+    config = {
+        "base_branch": "Dev_new_gui",
+        "grace_minutes": 10,
+        "stall_minutes": 30,
+        "status_context": "ctx",
+        "max_approvals": 30,
+        "poll_attempts": 1,
+        "poll_interval_seconds": 1,
+        "max_job_lookups": 5,
+        "only_pr": 21,
+    }
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    assert api.approved == [55]
+
+
+def test_a_closed_or_renumbered_scope_target_sweeps_nothing(watchdog, capsys):
+    api = _FakeApi()
+    api.open_pull_requests = lambda base: [
+        {"number": 1, "head": {"sha": "6" * 40, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    config = {"base_branch": "Dev_new_gui", "only_pr": 4242}
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    assert api.approved == []
+    assert api.statuses == []
+    assert "nothing to sweep" in capsys.readouterr().out
+
+
+def test_only_pr_zero_means_every_open_pr(watchdog, monkeypatch):
+    monkeypatch.setenv("WATCHDOG_ONLY_PR", "0")
+    assert watchdog._env_non_negative_int("WATCHDOG_ONLY_PR", 0) == 0
+
+
+def test_only_pr_rejects_a_negative_number(watchdog, monkeypatch):
+    monkeypatch.setenv("WATCHDOG_ONLY_PR", "-1")
+    with pytest.raises(watchdog.WatchdogConfigError):
+        watchdog._env_non_negative_int("WATCHDOG_ONLY_PR", 0)
+
+
 # --- configuration ----------------------------------------------------------
 
 
