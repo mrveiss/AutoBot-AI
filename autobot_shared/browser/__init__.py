@@ -10,8 +10,13 @@ DNS-resolving public-address guard before any backend sees it.
 
     from autobot_shared.browser import Capability, NavigateRequest, get_browser
 
-    browser = await get_browser(requires={Capability.NAVIGATE, Capability.EXTRACT})
+    browser = await get_browser(requires={Capability.NAVIGATE, Capability.EXTRACT_TEXT})
     page = await browser.navigate(NavigateRequest(url=url))
+
+Ask for the content shape you need — `EXTRACT_HTML` for markup,
+`EXTRACT_STRUCTURED` for parsed structure. A backend that cannot produce the
+requested format is not selected, and naming a mismatched format on the
+request raises rather than returning the wrong shape (#13236).
 
 Backends are registered by the app that owns their transport — see
 ``registry.register_backend`` — so this package never imports an app-local
@@ -29,12 +34,15 @@ _LAZY_IMPORTS = {
     "BrowserError": (".base", "BrowserError"),
     "BrowserResult": (".base", "BrowserResult"),
     "Capability": (".base", "Capability"),
+    "ContentFormat": (".base", "ContentFormat"),
+    "FORMAT_CAPABILITY": (".base", "FORMAT_CAPABILITY"),
     "ExtractRequest": (".base", "ExtractRequest"),
     "NavigateRequest": (".base", "NavigateRequest"),
     "NoCapableBackendError": (".base", "NoCapableBackendError"),
     "ScreenshotRequest": (".base", "ScreenshotRequest"),
     "SessionHandle": (".base", "SessionHandle"),
     "UnsafeUrlError": (".base", "UnsafeUrlError"),
+    "UnsupportedFormatError": (".base", "UnsupportedFormatError"),
     "Browser": (".registry", "Browser"),
     "clear_backends": (".registry", "clear_backends"),
     "get_browser": (".registry", "get_browser"),

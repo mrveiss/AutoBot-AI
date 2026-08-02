@@ -18,15 +18,18 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autobot_shared.browser.base import (
+    FORMAT_CAPABILITY,
     ActionRequest,
     BrowserResult,
     Capability,
+    ContentFormat,
     ExtractRequest,
     NavigateRequest,
     NoCapableBackendError,
     ScreenshotRequest,
     SessionHandle,
     UnsafeUrlError,
+    UnsupportedFormatError,
 )
 from autobot_shared.browser.registry import (
     clear_backends,
@@ -128,11 +131,11 @@ async def test_extract_url_is_guarded_for_stateless_backends():
     reaches the network exactly like a navigate URL, so it cannot skip the
     check.
     """
-    backend = FakeBackend("fake", {Capability.EXTRACT})
+    backend = FakeBackend("fake", {Capability.EXTRACT_TEXT})
     register_backend(backend)
 
     with _deny():
-        browser = await get_browser(requires={Capability.EXTRACT})
+        browser = await get_browser(requires={Capability.EXTRACT_TEXT})
         with pytest.raises(UnsafeUrlError):
             await browser.extract(ExtractRequest(url="http://169.254.169.254/"))
 
@@ -142,11 +145,11 @@ async def test_extract_url_is_guarded_for_stateless_backends():
 @pytest.mark.asyncio
 async def test_extract_without_a_url_is_not_blocked():
     """Session-holding backends read their current page — nothing to validate."""
-    backend = FakeBackend("fake", {Capability.EXTRACT})
+    backend = FakeBackend("fake", {Capability.EXTRACT_TEXT})
     register_backend(backend)
 
     with _deny():
-        browser = await get_browser(requires={Capability.EXTRACT})
+        browser = await get_browser(requires={Capability.EXTRACT_TEXT})
         result = await browser.extract(ExtractRequest(session_id="s1"))
 
     assert result.success is True
@@ -155,12 +158,12 @@ async def test_extract_without_a_url_is_not_blocked():
 @pytest.mark.asyncio
 async def test_locality_narrows_dispatch():
     """#13236: a caller that must stay out-of-process cannot be routed in."""
-    in_proc = FakeBackend("in_proc", {Capability.EXTRACT, Capability.IN_PROCESS})
-    out_proc = FakeBackend("out_proc", {Capability.EXTRACT, Capability.OUT_OF_PROCESS})
+    in_proc = FakeBackend("in_proc", {Capability.EXTRACT_TEXT, Capability.IN_PROCESS})
+    out_proc = FakeBackend("out_proc", {Capability.EXTRACT_TEXT, Capability.OUT_OF_PROCESS})
     register_backend(in_proc)
     register_backend(out_proc)
 
-    chosen = await resolve_backend({Capability.EXTRACT, Capability.OUT_OF_PROCESS})
+    chosen = await resolve_backend({Capability.EXTRACT_TEXT, Capability.OUT_OF_PROCESS})
 
     assert chosen.name == "out_proc", "locality must pin dispatch, not just rank it"
 
@@ -298,10 +301,10 @@ async def test_result_names_the_backend_that_served_it():
 
 @pytest.mark.asyncio
 async def test_non_url_operations_reach_the_backend():
-    backend = FakeBackend("fake", {Capability.EXTRACT, Capability.INTERACT})
+    backend = FakeBackend("fake", {Capability.EXTRACT_TEXT, Capability.INTERACT})
     register_backend(backend)
 
-    browser = await get_browser(requires={Capability.EXTRACT})
+    browser = await get_browser(requires={Capability.EXTRACT_TEXT})
     await browser.extract(ExtractRequest(session_id="s1"))
     await browser.act(ActionRequest(action="click", selector="#go"))
     await browser.release(SessionHandle(session_id="s1", backend="fake"))
@@ -322,3 +325,73 @@ def test_shared_package_imports_nothing_app_local():
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
                 assert not node.module.startswith(forbidden), f"{path.name} imports app-local {node.module!r}"
+
+
+# ---------------------------------------------------------------- formats
+
+
+@pytest.mark.asyncio
+async def test_html_request_cannot_resolve_to_a_text_only_backend():
+    """The regression #13236 exists to stop.
+
+    `web_fetch` renders HTML for a parser. The worker's `get_text` strips
+    markup, and both it and the container previously declared a single
+    `EXTRACT`, so dispatch could hand `web_fetch` text where it needed HTML —
+    silently, because that is a valid result shape.
+    """
+    text_only = FakeBackend("worker", {Capability.EXTRACT_TEXT, Capability.OUT_OF_PROCESS})
+    html_capable = FakeBackend("container", {Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS})
+    register_backend(text_only)  # registered first — would win on a bare EXTRACT
+    register_backend(html_capable)
+
+    chosen = await resolve_backend({Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS})
+
+    assert chosen.name == "container", "an HTML caller must not be routed to a text-only stack"
+
+
+@pytest.mark.asyncio
+async def test_requesting_a_format_the_backend_cannot_produce_raises():
+    """Requiring a capability and naming a format are two statements.
+
+    They can disagree; the registry ties them together rather than returning
+    the wrong shape.
+    """
+    backend = FakeBackend("text_only", {Capability.EXTRACT_TEXT})
+    register_backend(backend)
+
+    browser = await get_browser(requires={Capability.EXTRACT_TEXT})
+    with pytest.raises(UnsupportedFormatError, match="extract_html"):
+        await browser.extract(ExtractRequest(format=ContentFormat.HTML))
+
+    assert backend.calls == [], "backend was reached with a format it cannot serve"
+
+
+@pytest.mark.asyncio
+async def test_matching_format_passes_through():
+    backend = FakeBackend("html", {Capability.EXTRACT_HTML})
+    register_backend(backend)
+
+    browser = await get_browser(requires={Capability.EXTRACT_HTML})
+    result = await browser.extract(ExtractRequest(format=ContentFormat.HTML))
+
+    assert result.success is True
+    assert backend.calls == ["extract"]
+
+
+def test_every_content_format_maps_to_a_capability():
+    """A format added without a capability would raise KeyError at dispatch."""
+    for fmt in ContentFormat:
+        assert fmt in FORMAT_CAPABILITY
+        assert isinstance(FORMAT_CAPABILITY[fmt], Capability)
+
+
+@pytest.mark.asyncio
+async def test_text_is_the_default_format():
+    """Most callers want text; defaulting avoids a required argument."""
+    backend = FakeBackend("text", {Capability.EXTRACT_TEXT})
+    register_backend(backend)
+
+    browser = await get_browser(requires={Capability.EXTRACT_TEXT})
+    result = await browser.extract(ExtractRequest())
+
+    assert result.success is True
