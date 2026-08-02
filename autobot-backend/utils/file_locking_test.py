@@ -313,7 +313,15 @@ class TestConcurrentFileWriteSafety:
 
     @pytest.mark.asyncio
     async def test_concurrent_writes_same_file_no_corruption(self):
-        """Test that concurrent writes to same file don't corrupt data"""
+        """Test that concurrent writes to same file don't corrupt data.
+
+        #13284 measured this at 13.62s on CI and deliberately left it alone:
+        it is not the module's first import of api.filesystem_mcp (that is
+        test_file_locks_dict_exists above), so the usual first-import
+        explanation does not apply, and no other cause was identified. The
+        assertions are a real corruption guard (#514) worth keeping on the PR
+        gate, so it is not marked. Cause tracked in #13287.
+        """
         import aiofiles
 
         from api.filesystem_mcp import _get_file_lock
