@@ -148,6 +148,8 @@ jobs:
           --cov=autobot_shared \
           --cov-report= \
           --tb=short \
+          --durations=25 \
+          --durations-min=10.0 \
           -q
 
         python -m pytest \
@@ -160,6 +162,8 @@ jobs:
           --cov-report=term-missing \
           --cov-fail-under=70 \
           --tb=short \
+          --durations=25 \
+          --durations-min=10.0 \
           -q
 
     - name: Run integration tests
