@@ -246,8 +246,11 @@ def test_pip_backend_emits_symlink_step(tmp_path) -> None:
             patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
             patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
             patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
-            # #13312: unmocked this shells out to `sudo ansible-playbook` when the
-            # target interpreter is not on PATH.
+            # #13312: unmocked this would shell out to `sudo ansible-playbook`
+            # when the target interpreter is off PATH.  Under the stubs the
+            # playbook path resolves through a mocked repo root so .exists() is
+            # False and it short-circuits — this is defence in depth against a
+            # run with a real SLM_REPO_PATH, not a live invocation today.
             patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
             patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)),
             patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
