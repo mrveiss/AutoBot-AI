@@ -44,7 +44,13 @@ import asyncio
 import logging
 from typing import Optional
 
+from autobot_shared.env_utils import env_float
+
 logger = logging.getLogger(__name__)
+
+# Bounded-drain timeout shared by every caller of drain_task()/aclose() — a
+# single tunable rather than a hard-coded literal per call site (#13210).
+_DRAIN_TIMEOUT_SECONDS = env_float("LLC_SCHEDULER_DRAIN_TIMEOUT_SECONDS", 5.0)
 
 
 def honour_pending_cancellation() -> None:
@@ -68,6 +74,44 @@ def honour_pending_cancellation() -> None:
     current = asyncio.current_task()
     if current is not None and current.cancelling():
         raise asyncio.CancelledError from None
+
+
+async def drain_task(
+    task: "Optional[asyncio.Task[None]]",
+    timeout: float = _DRAIN_TIMEOUT_SECONDS,
+    *,
+    label: str = "poll task",
+) -> None:
+    """Cancel ``task`` and bound-await its exit (#13210).
+
+    Shared by :meth:`PollLoopScheduler.aclose` and any standalone background
+    task built the same way (e.g. the lifespan community-clustering loop) so
+    there is exactly one implementation of this pattern rather than a
+    copy-pasted one per caller.
+
+    ``asyncio.wait_for(asyncio.gather(task), timeout)`` alone cannot bound the
+    drain: cancelling a bare ``gather()`` only re-cancels its child without
+    marking the gather itself cancelled, so the caller waits forever against a
+    tick that masks every cancellation (measured on Python 3.14, #13203).
+    ``asyncio.shield`` makes the timeout fire regardless of what the awaited
+    task does with its cancellation. On timeout the stuck task is left behind
+    and this returns anyway, matching how a fire-and-forget ``cancel()``
+    behaved before this drain existed — an unbounded drain here would skip
+    every later shutdown step instead.
+    """
+    if task is None:
+        return
+    if not task.done():
+        task.cancel()
+    drain = asyncio.gather(task, return_exceptions=True)
+    try:
+        await asyncio.wait_for(asyncio.shield(drain), timeout)
+    except asyncio.TimeoutError:
+        logger.warning(
+            "%s: did not drain within %.1fs; continuing shutdown without it",
+            label,
+            timeout,
+        )
 
 
 class PollLoopScheduler:
@@ -133,7 +177,7 @@ class PollLoopScheduler:
         if self._task and not self._task.done():
             self._task.cancel()
 
-    async def aclose(self, timeout: float = 5.0) -> None:
+    async def aclose(self, timeout: float = _DRAIN_TIMEOUT_SECONDS) -> None:
         """Stop the loop and await the task's exit — the shutdown drain (#13085).
 
         ``stop()`` only *requests* cancellation.  Without this drain the poll
@@ -159,18 +203,7 @@ class PollLoopScheduler:
         cancellation.  Shielding lets the timeout fire regardless.
         """
         self.stop()
-        task = self._task
-        if task is None:
-            return
-        drain = asyncio.gather(task, return_exceptions=True)
-        try:
-            await asyncio.wait_for(asyncio.shield(drain), timeout)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "%s: poll task did not drain within %.1fs; continuing shutdown without it",
-                type(self).__name__,
-                timeout,
-            )
+        await drain_task(self._task, timeout, label=type(self).__name__)
 
     # ------------------------------------------------------------------
     # Internal loop

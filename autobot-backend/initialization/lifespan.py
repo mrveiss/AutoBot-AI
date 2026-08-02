@@ -1695,40 +1695,21 @@ async def _start_community_clustering_loop(app: FastAPI) -> None:
 
     Uses the MeshDB adapter stored on app.state.mesh_db by _init_graph_rag_service.
     NON-CRITICAL: clustering failures do not affect request handling.
+
+    Backed by CommunityClusteringScheduler (#13210) rather than a hand-rolled
+    loop, so it shares PollLoopScheduler's cancellation-safety contract with
+    every other LLC scheduler instead of a second, divergent copy of it.
     """
     mesh_db = getattr(app.state, "mesh_db", None)
     if mesh_db is None:
         logger.info("CommunityClusterer: mesh_db not available, skipping periodic loop")
         return
 
-    from llc.scheduler.base import honour_pending_cancellation
-    from services.mesh_brain.community_clusterer import CommunityClusterer
+    from llc.scheduler.community_cluster_scheduler import CommunityClusteringScheduler
 
-    _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
-
-    async def _loop() -> None:
-        # Allow startup to complete before first expensive clustering pass
-        await asyncio.sleep(300)  # 5 minutes
-        while True:
-            try:
-                promoted = await CommunityClusterer(mesh_db).run()
-                logger.info(
-                    "CommunityClusterer periodic run: %d anchors promoted",
-                    len(promoted),
-                )
-            except Exception as exc:
-                logger.warning("CommunityClusterer periodic run failed (non-fatal): %s", exc)
-                # #13085: run() drives DB work that can mask the CancelledError
-                # cleanup_services() sent. Without this the loop would start a
-                # fresh 6-hour sleep and cleanup's gather() would never return.
-                honour_pending_cancellation()
-            await asyncio.sleep(_CLUSTER_INTERVAL_SECONDS)
-
-    app.state.community_cluster_task = asyncio.create_task(_loop())
-    logger.info(
-        "CommunityClusterer: periodic loop started (interval=%dh)",
-        _CLUSTER_INTERVAL_SECONDS // 3600,
-    )
+    scheduler = CommunityClusteringScheduler(mesh_db)
+    scheduler.start()
+    app.state.community_cluster_scheduler = scheduler
 
 
 async def _init_liveness_monitor(app: FastAPI) -> None:
@@ -2221,12 +2202,16 @@ async def cleanup_services(app: FastAPI):
             await app.state.llm_key_rotation_scheduler.stop()
             logger.info("✅ LLM key rotation scheduler stopped")
 
-        # Issue #4946: Cancel community clustering background task
-        task = getattr(app.state, "community_cluster_task", None)
-        if task and not task.done():
-            task.cancel()
-            await asyncio.gather(task, return_exceptions=True)
-            logger.info("✅ Community cluster task cancelled")
+        # Issue #4946: Drain community clustering background task (#13210:
+        # bounded + shielded via aclose(), guarded individually like its
+        # sibling schedulers above — see the comment on those for why.
+        scheduler = getattr(app.state, "community_cluster_scheduler", None)
+        if scheduler:
+            try:
+                await scheduler.aclose()
+                logger.info("✅ Community cluster task cancelled")
+            except Exception as cluster_stop_error:
+                logger.warning("Community cluster task drain failed (non-fatal): %s", cluster_stop_error)
 
         # Issue #1748: Stop process adapter dispatcher
         if hasattr(app.state, "process_adapter_service") and app.state.process_adapter_service:
