@@ -103,6 +103,14 @@ def _may_contain_offender(source: str) -> bool:
     file whose source contains neither substring cannot produce a hit, so it
     never needs parsing.
 
+    Known limit: any *obfuscated* spelling of the literal defeats the prefilter —
+    implicit concatenation (``"ad" "min"``), escape sequences (``"\x61dmin"``,
+    ``"\u0061dmin"``), an escaped subscript key (``d["\x72ole"]``), or an
+    NFKC-normalised identifier (``ｒｏｌｅ``). Each is a hit for the matcher whose
+    source text lacks the substring. Verified zero such constructs exist across
+    all 2,171 backend files; someone writing one is defeating a lint guard
+    deliberately, not tripping one accidentally.
+
     This is what makes the guard affordable (#13284): ``ast.walk`` plus the
     per-node loop in ``_offenders_in`` is pure Python, so under ``--cov`` every
     one of ~2.7M AST nodes is traced. The prefilter is a C-level ``str.lower``
@@ -127,8 +135,14 @@ def _hand_rolled_admin_comparisons() -> tuple[str, ...]:
     for path in _python_files():
         try:
             source = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except UnicodeDecodeError:
+            # A non-UTF-8 source cannot hold the ASCII literals this guard matches on.
             continue
+        except OSError as exc:
+            # #13284: do NOT skip silently. Before the prefilter this read was not
+            # wrapped, so an unreadable file failed the run. An unreadable file inside
+            # a security guard is exactly where an offender could hide, so keep it loud.
+            raise AssertionError(f"admin-role guard could not read {path}: {exc}") from exc
         if not _may_contain_offender(source):
             continue
         try:

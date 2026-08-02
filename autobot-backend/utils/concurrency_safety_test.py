@@ -52,6 +52,10 @@ class TestTerminalBufferRace:
         # still resets through the same _output_lock path, so the assertion
         # underneath is unchanged.
         terminal.chat_history_manager.add_message = AsyncMock()
+        # #13284: send_output also calls _log_to_transcript, which does a real
+        # aiofiles append per write whenever conversation_id is set — 100 more
+        # filesystem round-trips that have nothing to do with the buffer race.
+        terminal._log_to_transcript = AsyncMock()
 
         # Simulate 100 concurrent output writes
         async def write_output(text: str):
