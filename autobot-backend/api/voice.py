@@ -348,6 +348,29 @@ _MIME_TO_SUFFIX = {
 }
 
 
+def _drop_silence_hallucination(text: str, detected_lang: str, requested_lang: str) -> str:
+    """Return "" when Whisper hallucinated *text* from silence. Issue #13104.
+
+    This is the route behind hands-free and full-duplex conversation, so an
+    unfiltered hallucination here becomes a phantom user turn.
+
+    The transformers ASR pipeline reports neither a language nor a no-speech
+    probability, so ``detected_lang`` is always "unknown" and the caller's
+    requested language is used instead — without that fallback an unknown
+    language disables the phrase tiers and the filter would be dead here.
+    """
+    filter_lang = detected_lang if detected_lang and detected_lang != "unknown" else (requested_lang or None)
+    if not is_silence_hallucination(text, filter_lang):
+        return text
+
+    logger.info(
+        "Discarded silence hallucination from /voice/transcribe: %r (language=%s)",
+        text,
+        filter_lang or "unknown",
+    )
+    return ""
+
+
 def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> dict:
     """Blocking Whisper inference — call via asyncio.to_thread (#1030).
 
@@ -370,20 +393,7 @@ def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> 
         text = output.get("text", "").strip() if isinstance(output, dict) else ""
         detected_lang = output.get("language", "unknown") if isinstance(output, dict) else "unknown"
 
-        # Issue #13104: this is the route behind hands-free and full-duplex
-        # conversation, so an unfiltered Whisper hallucination here becomes a
-        # phantom user turn. The transformers ASR pipeline reports neither a
-        # language nor a no-speech probability, so fall back to the caller's
-        # requested language and run the gates that need no audio signal.
-        filter_lang = detected_lang if detected_lang and detected_lang != "unknown" else (language or None)
-        if is_silence_hallucination(text, filter_lang):
-            logger.info(
-                "Discarded silence hallucination from /voice/transcribe: %r (language=%s)",
-                text,
-                filter_lang or "unknown",
-            )
-            text = ""
-
+        text = _drop_silence_hallucination(text, detected_lang, language)
         confidence = 0.9 if text else 0.0
         return {
             "text": text,

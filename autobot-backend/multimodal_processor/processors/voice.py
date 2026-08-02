@@ -155,6 +155,61 @@ class VoiceProcessor(BaseModalProcessor):
         except Exception as e:
             self.logger.debug("GPU cleanup skipped: %s", e)
 
+    def _failure_result(
+        self,
+        input_data: MultiModalInput,
+        processing_time: float,
+        message: str,
+    ) -> ProcessingResult:
+        """Build a failed ProcessingResult with a stated reason. Issue #13207."""
+        return ProcessingResult(
+            result_id=f"voice_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=False,
+            confidence=0.0,
+            result_data=None,
+            processing_time=processing_time,
+            error_message=message,
+        )
+
+    def _threshold_checked_result(
+        self,
+        input_data: MultiModalInput,
+        result: Dict[str, Any],
+        processing_time: float,
+    ) -> ProcessingResult:
+        """Apply the configured confidence threshold to a completed result.
+
+        Issue #13207: confidence_threshold was read from config and then never
+        consulted. A result under it is reported as a failure with a stated
+        reason rather than passed off as a successful command.
+        """
+        confidence = self.calculate_confidence(result)
+        below = confidence < self.confidence_threshold
+        if below:
+            self.logger.info(
+                "Voice result confidence %.2f below threshold %.2f — not treated as a command",
+                confidence,
+                self.confidence_threshold,
+            )
+        return ProcessingResult(
+            result_id=f"voice_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=not below,
+            confidence=confidence,
+            result_data=result,
+            processing_time=processing_time,
+            error_message=(
+                f"Voice confidence {confidence:.2f} below configured threshold {self.confidence_threshold:.2f}"
+                if below
+                else None
+            ),
+        )
+
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """Process audio input (voice commands, speech)"""
         start_time = time.time()
@@ -165,90 +220,35 @@ class VoiceProcessor(BaseModalProcessor):
             # sending an operator to debug hardware they never broke.
             return self._build_disabled_result(input_data, time.time() - start_time)
 
-        try:
-            if input_data.modality_type == ModalityType.AUDIO:
-                result = await asyncio.wait_for(
-                    self._process_audio(input_data),
-                    timeout=self.processing_timeout,
-                )
-            else:
-                # #6755 LSP exception contract: don't raise — parent
-                # `BaseModalProcessor.process` only declares NotImplementedError;
-                # subclasses must return a failure ProcessingResult, not propagate
-                # ValueError. Same fix pattern as #6658 / VisionProcessor.
-                processing_time = time.time() - start_time
-                return ProcessingResult(
-                    result_id=f"voice_{input_data.input_id}",
-                    input_id=input_data.input_id,
-                    modality_type=input_data.modality_type,
-                    intent=input_data.intent,
-                    success=False,
-                    confidence=0.0,
-                    result_data=None,
-                    processing_time=processing_time,
-                    error_message=f"Unsupported modality: {input_data.modality_type}",
-                )
-
-            processing_time = time.time() - start_time
-            confidence = self.calculate_confidence(result)
-
-            # Issue #13207 review B: confidence_threshold was read from config and
-            # then never consulted. A result under it is reported as a failure with
-            # a stated reason rather than passed off as a successful command.
-            below_threshold = confidence < self.confidence_threshold
-            if below_threshold:
-                self.logger.info(
-                    "Voice result confidence %.2f below threshold %.2f — not treated as a command",
-                    confidence,
-                    self.confidence_threshold,
-                )
-
-            return ProcessingResult(
-                result_id=f"voice_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=not below_threshold,
-                confidence=confidence,
-                result_data=result,
-                processing_time=processing_time,
-                error_message=(
-                    f"Voice confidence {confidence:.2f} below configured threshold " f"{self.confidence_threshold:.2f}"
-                    if below_threshold
-                    else None
-                ),
+        if input_data.modality_type != ModalityType.AUDIO:
+            # #6755 LSP exception contract: don't raise — parent
+            # `BaseModalProcessor.process` only declares NotImplementedError;
+            # subclasses must return a failure ProcessingResult, not propagate
+            # ValueError. Same fix pattern as #6658 / VisionProcessor.
+            return self._failure_result(
+                input_data,
+                time.time() - start_time,
+                f"Unsupported modality: {input_data.modality_type}",
             )
 
+        try:
+            result = await asyncio.wait_for(
+                self._process_audio(input_data),
+                timeout=self.processing_timeout,
+            )
+            return self._threshold_checked_result(input_data, result, time.time() - start_time)
+
         except asyncio.TimeoutError:
-            processing_time = time.time() - start_time
             self.logger.error("Voice processing exceeded %ss timeout", self.processing_timeout)
-            return ProcessingResult(
-                result_id=f"voice_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=False,
-                confidence=0.0,
-                result_data=None,
-                processing_time=processing_time,
-                error_message=(f"Voice processing exceeded the configured {self.processing_timeout}s timeout"),
+            return self._failure_result(
+                input_data,
+                time.time() - start_time,
+                f"Voice processing exceeded the configured {self.processing_timeout}s timeout",
             )
 
         except Exception as e:
-            processing_time = time.time() - start_time
             self.logger.error("Voice processing failed: %s", e)
-
-            return ProcessingResult(
-                result_id=f"voice_{input_data.input_id}",
-                input_id=input_data.input_id,
-                modality_type=input_data.modality_type,
-                intent=input_data.intent,
-                success=False,
-                confidence=0.0,
-                result_data=None,
-                processing_time=processing_time,
-                error_message=str(e),
-            )
+            return self._failure_result(input_data, time.time() - start_time, str(e))
 
     def calculate_confidence(self, processing_data: Any) -> float:
         """Return the confidence the audio pipeline actually reported. Issue #13207.
@@ -264,16 +264,10 @@ class VoiceProcessor(BaseModalProcessor):
     def _build_disabled_result(self, input_data: MultiModalInput, processing_time: float) -> ProcessingResult:
         """Report that voice is switched off, not that the hardware is broken."""
         self.logger.info("Voice processing requested while multimodal.voice.enabled is false")
-        return ProcessingResult(
-            result_id=f"voice_{input_data.input_id}",
-            input_id=input_data.input_id,
-            modality_type=input_data.modality_type,
-            intent=input_data.intent,
-            success=False,
-            confidence=0.0,
-            result_data=None,
-            processing_time=processing_time,
-            error_message="Voice processing is disabled by configuration (multimodal.voice.enabled=false)",
+        return self._failure_result(
+            input_data,
+            processing_time,
+            "Voice processing is disabled by configuration (multimodal.voice.enabled=false)",
         )
 
     def _prepare_audio_data(self, input_data: MultiModalInput) -> Tuple[np.ndarray, int]:
