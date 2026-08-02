@@ -1,0 +1,203 @@
+# Full suite WITH coverage instrumentation, sharded and recombined.
+#
+# #10691: this is deliberately NOT part of the PR gate. Coverage was measured to
+# be the dominant cost of the suite, not the tests: the same trees run in 336s
+# without `--cov` and 35m11s with it, and on the slow shard pytest's own
+# `--durations=25` reported that every one of the 25 slowest tests finished in
+# under 10 seconds. So the time is instrumentation overhead, not test work, and
+# paying it on every pull request buys nothing a nightly run does not.
+#
+# The split is the same six-way pytest-split arrangement the PR gate uses, for
+# the same reason (one job would be ~45 minutes), and it reuses the same
+# durations files. Those were recorded WITHOUT instrumentation, so they describe
+# relative test cost rather than relative coverage cost; the chunks are
+# therefore approximate here. That is acceptable for a nightly job and is why
+# the shard timeout below is generous.
+name: coverage
+
+on:
+  schedule:
+    # Nightly, well clear of the working day.
+    - cron: '0 2 * * *'
+  push:
+    # Post-merge on the integration branch, so the figure tracks what actually
+    # landed rather than only what a nightly happened to catch.
+    branches: [ Dev_new_gui ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage-shard:
+    name: coverage shard ${{ matrix.shard }}/6
+    runs-on: ubuntu-latest
+    # Instrumentation makes the tail shard far slower than the PR gate's, and
+    # observed runner variance on this suite is roughly 2x for identical work.
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Distinct data file per shard so all six can be downloaded into one
+      # directory and combined without collision. `coverage combine` picks up
+      # `.coverage.*` by convention.
+      COVERAGE_FILE: .coverage.shard-${{ matrix.shard }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-python-suite
+
+      # #13084: two separate interpreter sessions — autobot-backend/ and
+      # autobot-slm-backend/ define identically named top-level packages, so
+      # collecting both in one session breaks whichever collects second.
+      # --cov-append on the second merges its data onto the first's.
+      - name: Run unit tests with coverage — backend, shared, tts-worker, repo_tests
+        run: |
+          python -m pytest \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            -n auto --dist loadscope \
+            --splits 6 --group ${{ matrix.shard }} \
+            --durations-path .test_durations \
+            -m "not integration and not slow and not distributed and not performance" \
+            --cov=autobot-backend \
+            --cov=autobot_shared \
+            --cov-report= \
+            --tb=short \
+            -q \
+          || echo "::warning::pytest exited non-zero; coverage data is still written for everything that ran"
+
+      - name: Run unit tests with coverage — slm-backend
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pytest \
+            autobot-slm-backend \
+            -n auto --dist loadscope \
+            --splits 6 --group ${{ matrix.shard }} \
+            --durations-path .test_durations_slm \
+            -m "not integration and not slow and not distributed and not performance" \
+            --cov=autobot-slm-backend \
+            --cov-append \
+            --cov-report= \
+            --tb=short \
+            -q \
+          || echo "::warning::pytest exited non-zero; coverage data is still written for everything that ran"
+
+      # Test failures must not lose the data: a shard with failing tests still
+      # covered the lines it executed, and this suite has standing failures.
+      - name: Upload shard coverage data
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: .coverage.shard-${{ matrix.shard }}
+          # `.coverage.*` is a dotfile and upload-artifact excludes hidden files
+          # unless told otherwise — without this the artifact uploads empty and
+          # the combine step below silently measures nothing.
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 1
+
+  # Each shard measured a different sixth of the suite, so no single shard's
+  # coverage means anything on its own — only the union does.
+  coverage-report:
+    name: coverage-report
+    needs: coverage-shard
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      # Only coverage is needed: this job reads data files and the checked-out
+      # sources, it never imports the application.
+      - name: Install coverage
+        run: python -m pip install coverage
+
+      - name: Download shard coverage data
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-shard-*
+          # Each artifact holds one distinctly named .coverage.shard-N, so
+          # merging into the workspace root cannot collide — and the root is
+          # what the recorded source paths are relative to.
+          merge-multiple: true
+          path: .
+
+      - name: Combine coverage and report the measured total
+        id: combine
+        run: |
+          set -euo pipefail
+          ls -la .coverage.shard-* || {
+            echo "::error::No shard coverage data was downloaded — nothing to combine."
+            exit 1
+          }
+
+          # The shards and this job run at the same absolute workspace path on
+          # ubuntu-latest, so the paths recorded in the data files resolve here
+          # without any [paths] remapping.
+          coverage combine .coverage.shard-*
+          coverage xml -o coverage.xml
+          coverage json -o coverage.json
+          coverage report | tee coverage-report.txt
+
+          TOTAL=$(python -c "import json; print(f\"{json.load(open('coverage.json'))['totals']['percent_covered']:.2f}\")")
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Combined coverage: ${TOTAL}%"
+            echo
+            echo "Recombined from 6 shards. Threshold is \`fail_under\` in .coveragerc."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload combined coverage
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      # Deliberately AFTER the upload, so the figure reaches the summary and
+      # codecov even on runs that fail the threshold.
+      #
+      # The threshold itself lives in .coveragerc, which is the only file
+      # coverage.py actually reads (it ignores pytest.ini, where it used to sit
+      # inertly). `coverage report` exits non-zero when the total is below it.
+      - name: Enforce the coverage threshold
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Combined coverage measured at ${{ steps.combine.outputs.total }}% (#3285)"
+          coverage report
+
+      - name: Fail if any shard failed
+        if: ${{ !cancelled() && needs.coverage-shard.result != 'success' }}
+        run: |
+          echo "::error::coverage shards reported '${{ needs.coverage-shard.result }}'; the combined figure above may understate real coverage."
+          exit 1
