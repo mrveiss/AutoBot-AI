@@ -260,13 +260,17 @@ def test_run_post_sync_steps_pip_ok_true_on_success() -> None:
         patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),
         patch("api.code_sync._restart_component_services", AsyncMock()),
-        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)),
+        patch("api.code_sync._wait_component_healthy", AsyncMock(return_value=True)) as wait_mock,
         patch("api.code_sync._rollback_component", AsyncMock()),
     ):
         _, _, pip_ok = _run(
             _run_post_sync_steps("autobot-backend", "/src/autobot-backend", "/opt/autobot/autobot-backend")
         )
     assert pip_ok is True
+    # #13312: _run_post_sync_steps forwards _ensure_venv_python's return as
+    # slow_start.  Assert the window selection instead of leaving it to a mock
+    # default — a bare AsyncMock() is truthy and silently picks the 180s window.
+    assert wait_mock.await_args.kwargs["slow_start"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -1493,6 +1497,9 @@ def test_wait_component_healthy_returns_true_on_healthy_response() -> None:
         patch("api.code_sync._HEALTH_POLL_TIMEOUT", 5.0),
         patch("api.code_sync._FAST_HEALTH_POLL_TIMEOUT", 5.0),  # #11458/#11467: default slow_start uses the fast window
         patch("httpx.AsyncClient", return_value=_FakeClient()),
+        # #13312: the poll checks systemd BEFORE probing, so without this the
+        # test spawns a real `systemctl is-failed` against the host's units.
+        patch("api.code_sync._is_systemd_unit_failed", AsyncMock(return_value=False)),
     ):
         result = _run(_wait_component_healthy("autobot-backend", steps))
 
@@ -1901,7 +1908,9 @@ def test_run_post_sync_steps_does_not_roll_back_on_slow_start() -> None:
         patch("api.code_sync._deploy_constraints_dir", AsyncMock()),
         patch("api.code_sync._deploy_repo_root_requirements", AsyncMock()),
         patch("api.code_sync._ensure_target_python_installed", AsyncMock()),
-        patch("api.code_sync._ensure_venv_python", AsyncMock()),
+        # #13312: bare AsyncMock() returns a truthy MagicMock, which
+        # _run_post_sync_steps forwards as slow_start=True — the 180s window.
+        patch("api.code_sync._ensure_venv_python", AsyncMock(return_value=False)),
         patch("api.code_sync._install_pip_deps_for_component", AsyncMock(return_value=True)),
         patch("api.code_sync._run_alembic_migrations", AsyncMock(return_value=True)),
         patch("api.code_sync._ensure_autobot_shared_symlink", AsyncMock()),

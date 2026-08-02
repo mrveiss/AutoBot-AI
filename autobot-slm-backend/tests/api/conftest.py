@@ -40,29 +40,42 @@ if "python_multipart" not in sys.modules:
 
 
 # ---------------------------------------------------------------------------
-# #13312 — no live health polls from the unit gate
+# #13312 — the unit gate never touches the network, the system, or the install
 # ---------------------------------------------------------------------------
-# api.code_sync._wait_component_healthy probes a component's HTTP health URL
-# every _HEALTH_POLL_INTERVAL seconds until _HEALTH_POLL_TIMEOUT (180s) or
-# _FAST_HEALTH_POLL_TIMEOUT (60s).  A _run_post_sync_steps test that does not
-# mock the poll therefore performs real outbound requests and burns the whole
-# window as dead wait — on a runner where nothing listens on the health port
-# that is ~180s per test.  This has now been fixed three times test-by-test
-# (#11462, #11467, #13312), so the guard lives here instead of in each file.
+# Two escape hatches in api/code_sync.py turn a forgotten mock into real I/O:
 #
-# httpx.AsyncClient is used by exactly one place in api/code_sync.py — the
-# health poll — so replacing it for the code-sync modules cannot mask anything
-# else.  Tests that legitimately exercise the poll install their own
-# httpx.AsyncClient stand-in inside the test body; that inner patch wins over
-# this fixture, so they are unaffected.
+#   * _wait_component_healthy probes a component's HTTP health URL every
+#     _HEALTH_POLL_INTERVAL seconds until _HEALTH_POLL_TIMEOUT (180s) or
+#     _FAST_HEALTH_POLL_TIMEOUT (60s) expires, swallowing every per-attempt
+#     error.  Unmocked, that is ~90 live requests and the whole window as dead
+#     wait on a runner where nothing listens.
+#   * _snapshot_component / _rollback_component / _is_systemd_unit_failed and
+#     friends shell out through asyncio.create_subprocess_exec — a deleting
+#     rsync against the deployed tree, systemctl against real units.  rsync
+#     creates its destination before failing, so an unmocked snapshot litters
+#     the live snapshot store with empty directories on any host where the test
+#     user can write there.
 #
-# The guard raises through pytest.fail (an OutcomeException, i.e. a
-# BaseException) precisely because _wait_component_healthy wraps the probe in a
-# broad ``except Exception`` — a plain error would be swallowed and the loop
-# would keep spinning for the full window, which is the failure mode being
+# Both have now been patched test-by-test several times over (#11462, #11467,
+# #13312) and both keep coming back, so the guards live here for the whole
+# tests/api package rather than in individual files.  Neither masks anything:
+# httpx.AsyncClient is used by exactly one place in api/code_sync.py (the health
+# poll), and every test that legitimately drives either path installs its own
+# stand-in inside the test body, whose inner patch wins over these guards.
+#
+# The guards raise through pytest.fail (an OutcomeException, i.e. a
+# BaseException) precisely because the code under test wraps these calls in
+# broad ``except Exception`` handlers — a plain error would be swallowed and the
+# poll would keep spinning for the full window, which is the failure mode being
 # prevented.
-_CODE_SYNC_MODULE_PREFIX = "test_code_sync_"
-
+#
+# Deliberately a runtest hook and NOT an autouse fixture.  An autouse fixture
+# that requests monkeypatch registers a finalizer for every test in the package,
+# and that extra teardown step reorders the async session fixture in
+# test_slm_endpoints_12515.py enough to break its ``async with
+# session_factory()`` exit (9 teardown errors).  A hookwrapper adds no fixture
+# and no finalizer, and wraps only the call phase — which is also the correct
+# scope, since the I/O being guarded happens inside the test body.
 _LIVE_POLL_MESSAGE = (
     "unit test attempted a live component health poll via httpx.AsyncClient. "
     "api.code_sync._wait_component_healthy polls until its timeout window "
@@ -70,6 +83,17 @@ _LIVE_POLL_MESSAGE = (
     "real network I/O (#13312). Patch 'api.code_sync._wait_component_healthy' "
     "when the test is about post-sync orchestration, or install an "
     "httpx.AsyncClient stand-in when the poll itself is under test."
+)
+
+_LIVE_SUBPROCESS_MESSAGE = (
+    "unit test spawned the real subprocess {argv} via "
+    "asyncio.create_subprocess_exec (#13312). api/code_sync.py shells out to "
+    "rsync, systemctl and ansible against the live install; rsync creates its "
+    "destination before failing, so this leaves debris behind wherever the test "
+    "user can write. Patch the helper that owns the call — "
+    "'api.code_sync._snapshot_component', '..._rollback_component', "
+    "'..._is_systemd_unit_failed' — or patch asyncio.create_subprocess_exec "
+    "with a fake when the invocation itself is under test."
 )
 
 
@@ -80,16 +104,30 @@ class _LiveHealthPollBlocked:
         pytest.fail(_LIVE_POLL_MESSAGE, pytrace=False)
 
 
-@pytest.fixture(autouse=True)
-def _block_live_code_sync_health_polls(request, monkeypatch):
-    """Fail fast instead of dead-waiting when a code-sync test polls for real."""
-    module_name = getattr(request.module, "__name__", "")
-    if not module_name.rpartition(".")[2].startswith(_CODE_SYNC_MODULE_PREFIX):
-        return
+def _blocked_subprocess_exec(*cmd: object, **kwargs: object):
+    """asyncio.create_subprocess_exec stand-in that refuses to spawn."""
+    argv = " ".join(str(c) for c in cmd[:3]) or "<no argv>"
+    pytest.fail(_LIVE_SUBPROCESS_MESSAGE.format(argv=argv), pytrace=False)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    """Fail fast instead of dead-waiting or touching the host."""
     try:
+        import asyncio
+
         import httpx
     except ImportError:
         # _wait_component_healthy short-circuits to "healthy" without httpx, so
         # there is no live poll to block.
+        yield
         return
-    monkeypatch.setattr(httpx, "AsyncClient", _LiveHealthPollBlocked)
+    saved_client = httpx.AsyncClient
+    saved_exec = asyncio.create_subprocess_exec
+    httpx.AsyncClient = _LiveHealthPollBlocked
+    asyncio.create_subprocess_exec = _blocked_subprocess_exec
+    try:
+        yield
+    finally:
+        httpx.AsyncClient = saved_client
+        asyncio.create_subprocess_exec = saved_exec
