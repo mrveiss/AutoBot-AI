@@ -20,8 +20,10 @@ def decode_redis_list(value: Any) -> Any:
 
     Commands like ``FT.INFO`` return a flat/nested list rather than a single
     scalar or a hash, so ``decode_redis_value`` alone only handles one leaf.
-    This walks lists element-by-element and defers to ``decode_redis_value``
-    for every leaf; non-list values pass through unchanged.
+    Lists are walked recursively and every leaf goes through
+    ``decode_redis_value``, so leaf ``bytes`` are decoded at any depth. Only
+    ``list`` is walked: RESP2 returns arrays as lists, and the repo pins no
+    ``protocol=3``, so tuples/dicts do not occur here and pass through as-is.
     """
     if isinstance(value, list):
         return [decode_redis_list(item) for item in value]

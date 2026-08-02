@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 
 from autobot_shared.logging_manager import get_logger
@@ -365,7 +366,7 @@ class TestExceptionPropagation:
 
     @pytest.mark.asyncio
     async def test_search_events_in_range_degrades_on_redis_error(self, service, mock_redis):
-        mock_redis.zrangebyscore.side_effect = ConnectionError("redis down")
+        mock_redis.zrangebyscore.side_effect = RedisConnectionError("redis down")
 
         events = await service.search_events_in_range(datetime(2024, 1, 1), datetime(2024, 12, 31))
         assert events == []
@@ -393,7 +394,7 @@ class TestExceptionPropagation:
 
     @pytest.mark.asyncio
     async def test_find_causal_chain_degrades_on_redis_error(self, service, mock_redis):
-        mock_redis.json().get.side_effect = ConnectionError("redis down")
+        mock_redis.json().get.side_effect = RedisConnectionError("redis down")
 
         chain = await service.find_causal_chain(uuid4())
         assert chain == []

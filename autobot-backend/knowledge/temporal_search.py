@@ -24,7 +24,13 @@ logger = get_logger(__name__)
 # defect fixed in #13270) must propagate so the route handlers' own
 # ``except Exception -> HTTPException(500)`` actually fires instead of
 # reporting "no data" for an infrastructure failure.
-_TRANSIENT_REDIS_ERRORS = (RedisError, ConnectionError)
+# ``redis.exceptions.ConnectionError`` is a subclass of ``RedisError`` and is
+# already covered. Naming the bare ``ConnectionError`` here would resolve to the
+# *builtin* (an ``OSError`` subclass) and silently re-widen this handler to any
+# socket failure raised by anything in the try block — reintroducing the very
+# swallow-into-silence pattern this change removes. redis-py already wraps
+# socket errors into ``redis.exceptions.ConnectionError``, so nothing is lost.
+_TRANSIENT_REDIS_ERRORS = (RedisError,)
 
 
 class TemporalSearchService:
