@@ -7,6 +7,15 @@
 # merge-conflict surprises at review time.
 #
 # See: #9300 post-mortem — direct hotfixes on main caused drift
+#
+# #12823: the merge commit this job creates is pushed with the default
+# GITHUB_TOKEN, so GitHub attributes it to github-actions[bot]. The repository's
+# fork-PR approval policy treats that bot as an external contributor, so every
+# `pull_request` run the refresh triggers is created with
+# conclusion=action_required and never starts — the refreshed PR ends up with a
+# head commit carrying ZERO executed checks, which reads as "no failures" to any
+# rollup. The `approve-refreshed-runs` job below runs immediately afterwards to
+# repair that, and publishes a visible commit status when it cannot.
 
 name: Auto-update PR branches
 
@@ -129,3 +138,32 @@ jobs:
           echo "Done: $UPDATED updated, $FAILED need manual attention."
           # Never fail — conflicting PRs just need human resolution
           exit 0
+
+  # #12823: repair the runs the refresh above just parked.
+  #
+  # This job must NOT run on the self-hosted runner: it exists to unblock CI,
+  # and the singleton runner is exactly the resource that is contended when
+  # several PRs are refreshed at once. `needs: auto-update` guarantees it runs
+  # after the branches were actually updated, so the parked runs already exist
+  # by the time it looks; the standalone `ci-dispatch-watchdog` schedule is the
+  # safety net for anything that appears later.
+  approve-refreshed-runs:
+    needs: auto-update
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+      statuses: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Approve parked runs and publish dispatch state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WATCHDOG_BASE_BRANCH: Dev_new_gui
+        run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch
