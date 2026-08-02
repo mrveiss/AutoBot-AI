@@ -101,7 +101,11 @@ class GitHistoryCrawler:
             all_commits = list(self.repo.iter_commits("HEAD"))
 
             for commit in all_commits:
-                commit_date = datetime.fromtimestamp(commit.committed_date)
+                # #13162: tz-aware UTC. A naive datetime here crashed
+                # calculate_trend, which compares against
+                # datetime.now(tz=timezone.utc), and made month bucketing
+                # depend on the server's local timezone.
+                commit_date = datetime.fromtimestamp(commit.committed_date, tz=timezone.utc)
 
                 # Filter by date range
                 if start_date and commit_date < start_date:
@@ -136,7 +140,8 @@ class GitHistoryCrawler:
                     {
                         "hash": commit.hexsha,
                         "message": commit.message.strip(),
-                        "timestamp": datetime.fromtimestamp(commit.committed_date),
+                        # #13162: tz-aware UTC — see the note above.
+                        "timestamp": datetime.fromtimestamp(commit.committed_date, tz=timezone.utc),
                     }
                 )
         except Exception as e:
