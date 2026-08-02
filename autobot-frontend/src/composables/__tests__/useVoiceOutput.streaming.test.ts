@@ -163,7 +163,7 @@ describe('useVoiceOutput — chunked HTTP synthesis (#13215)', () => {
     await speak('hello there', true)
 
     const [, init] = vi.mocked(fetchWithAuth).mock.calls[0]
-    expect((init?.body as FormData).get('stream')).toBe('true')
+    expect((init!.body as FormData).get('stream')).toBe('true')
     expect(decodedSizes).toEqual(CHUNKS.map((c) => c.length))
     expect(scheduledStarts).toBe(CHUNKS.length)
   })

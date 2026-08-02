@@ -240,8 +240,11 @@ async def voice_speak_api(
     # instead of a misleading 503 that implies TTS is uninstalled.
     voice_interface = getattr(request.app.state, "voice_interface", None)
     if voice_interface is None:
-        security_layer.audit_log("voice_speak", user_role, "success", {"via": "tts_worker", "text_preview": text[:50]})
-        return await _synthesized_audio_response(text, voice_id, language, stream)
+        # Audit after synthesis — see voice_synthesize_api for why.
+        response = await _synthesized_audio_response(text, voice_id, language, stream)
+        outcome = "accepted" if stream else "success"
+        security_layer.audit_log("voice_speak", user_role, outcome, {"via": "tts_worker", "text_preview": text[:50]})
+        return response
 
     result = await voice_interface.speak_text(text)
     if result["status"] == "success":
@@ -290,8 +293,15 @@ async def voice_synthesize_api(
             content={"message": "Permission denied to synthesize voice."},
         )
 
-    security_layer.audit_log("voice_synthesize", user_role, "success", {"text_preview": text[:50]})
-    return await _synthesized_audio_response(text, voice_id, language, stream)
+    # Synthesise first, then audit. Logging "success" before the worker is
+    # called would record a success for a run that then 500s (#13215 review).
+    # With stream=true the status is committed before the body is produced, so
+    # the outcome is only ever "accepted" — a mid-stream worker failure cannot
+    # be retracted once StreamingResponse has started.
+    response = await _synthesized_audio_response(text, voice_id, language, stream)
+    outcome = "accepted" if stream else "success"
+    security_layer.audit_log("voice_synthesize", user_role, outcome, {"text_preview": text[:50]})
+    return response
 
 
 @router.post("/clone-voice", response_model=None)  # Returns audio/wav Response — no Pydantic schema

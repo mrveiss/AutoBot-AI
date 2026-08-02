@@ -259,8 +259,12 @@ async def test_stream_or_synthesize_does_not_mask_worker_failures():
     )
     with patch("services.tts_client.get_http_client", return_value=mock_client):
         tts_client = TTSClient()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError) as exc:
             async for _ in tts_client.stream_or_synthesize("hello"):
                 pass
 
+    # TTSStreamUnsupported subclasses RuntimeError, so pytest.raises alone would
+    # also pass if a 500 were mistakenly treated as route skew. Pin the exact
+    # type: only 404/405 may degrade to the blocking endpoint.
+    assert type(exc.value) is RuntimeError
     assert not any(u.endswith(BLOCKING_URL_SUFFIX) for u in mock_client.requested_urls)

@@ -184,9 +184,15 @@ class TTSClient:
         """
         emitted = False
         if not self._streaming_known_absent():
+            degraded = self._stream_absent_until > 0.0
             try:
                 async with aclosing(self.synthesize_stream(text, voice_id=voice_id, language=language)) as stream:
                     async for chunk in stream:
+                        if not emitted and degraded:
+                            # Recovery is otherwise silent, leaving an operator
+                            # unable to tell which route is in use (#13215 review).
+                            logger.info("TTS worker now serves /tts/synthesize/stream; streaming resumed")
+                            self._stream_absent_until = 0.0
                         emitted = True
                         yield chunk
                 return

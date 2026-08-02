@@ -437,25 +437,45 @@ function _connectTtsWs(): Promise<WebSocket> {
 async function _playFramedAudioStream(body: ReadableStream<Uint8Array>): Promise<void> {
   const reader = body.getReader()
   let buffer = new Uint8Array(0)
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (value?.length) {
-      const merged = new Uint8Array(buffer.length + value.length)
-      merged.set(buffer)
-      merged.set(value, buffer.length)
-      buffer = merged
-    }
-    // Drain every complete frame currently buffered before reading again.
+  try {
     for (;;) {
-      if (buffer.length < FRAME_HEADER_BYTES) break
-      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-      const size = view.getUint32(0, false)
-      if (buffer.length < FRAME_HEADER_BYTES + size) break
-      const wav = buffer.slice(FRAME_HEADER_BYTES, FRAME_HEADER_BYTES + size)
-      buffer = buffer.slice(FRAME_HEADER_BYTES + size)
-      await _scheduleGaplessChunk(wav.buffer as ArrayBuffer)
+      const { done, value } = await reader.read()
+      if (value?.length) {
+        const merged = new Uint8Array(buffer.length + value.length)
+        merged.set(buffer)
+        merged.set(value, buffer.length)
+        buffer = merged
+      }
+      // Drain every complete frame currently buffered before reading again.
+      for (;;) {
+        if (buffer.length < FRAME_HEADER_BYTES) break
+        const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+        const size = view.getUint32(0, false)
+        if (buffer.length < FRAME_HEADER_BYTES + size) break
+        // A zero-length frame is reachable: readexactly(0) returns b'' without
+        // raising, so a 0 header from the worker propagates an empty chunk.
+        // decodeAudioData rejects on it, which would abandon every remaining
+        // frame of the utterance — skip it instead.
+        if (size === 0) {
+          buffer = buffer.slice(FRAME_HEADER_BYTES)
+          continue
+        }
+        const wav = buffer.slice(FRAME_HEADER_BYTES, FRAME_HEADER_BYTES + size)
+        buffer = buffer.slice(FRAME_HEADER_BYTES + size)
+        // One undecodable frame must not silence the rest of the reply — the
+        // WebSocket path already guards per-chunk this way.
+        try {
+          await _scheduleGaplessChunk(wav.buffer as ArrayBuffer)
+        } catch (error) {
+          logger.warn('TTS frame decode failed; skipping frame', error)
+        }
+      }
+      if (done) break
     }
-    if (done) break
+  } finally {
+    // Releases the response body on an abort or a throw; without this the
+    // stream stays locked and the connection is never cancelled.
+    reader.cancel().catch(() => {})
   }
   if (buffer.length > 0) {
     logger.warn('TTS stream ended mid-frame; dropped', buffer.length, 'trailing bytes')
