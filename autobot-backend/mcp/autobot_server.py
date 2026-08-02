@@ -31,6 +31,7 @@ Observability:
 
 import asyncio
 import json
+import secrets
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -320,11 +321,18 @@ class AutoBotMCPServer:
             secret_part, scopes_part = token.split(":", 1)
         except ValueError:
             return None
-        expected = config.mcp_token
+        # #13263: strip so a stray space in .env cannot become the secret —
+        # " " is truthy, so " :kb,memory,agents" would otherwise authenticate.
+        expected = (config.mcp_token or "").strip()
         # #13263: never authenticate against an unset secret — without this a
         # blank AUTOBOT_MCP_TOKEN would accept ":kb,memory,agents" from anyone,
-        # with the scopes chosen by the caller.
-        if not expected or secret_part != expected:
+        # with the scopes chosen by the caller. The `not expected` test must stay
+        # first so the empty case never reaches the comparison.
+        #
+        # compare_digest because this is a long-lived shared secret checked on an
+        # endpoint with no other auth layer (CWE-208); same primitive as
+        # middleware/service_auth_enforcement.py.
+        if not expected or not secrets.compare_digest(secret_part, expected):
             return None
         scopes = [s.strip() for s in scopes_part.split(",") if s.strip()]
         return scopes if scopes else None

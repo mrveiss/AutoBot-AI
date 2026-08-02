@@ -6,12 +6,12 @@ Exposes AutoBot's KB, memory graph, and agent introspection as an MCP server for
 
 **stdio** (default — used by Claude Code / Cline):
 ```bash
-AUTOBOT_MCP_TOKEN="dev:kb,memory,agents" python -m mcp.autobot_mcp_main
+AUTOBOT_MCP_TOKEN="$MCP_SECRET:kb,memory,agents" python -m mcp.autobot_mcp_main
 ```
 
 **HTTP** (standalone aiohttp on port 8200):
 ```bash
-AUTOBOT_MCP_TOKEN="dev:kb,memory,agents" python -m mcp.autobot_mcp_main --http
+AUTOBOT_MCP_TOKEN="$MCP_SECRET:kb,memory,agents" python -m mcp.autobot_mcp_main --http
 ```
 
 The HTTP transport is also available via the FastAPI backend at `POST /api/mcp/tool`.
@@ -20,10 +20,24 @@ The HTTP transport is also available via the FastAPI backend at `POST /api/mcp/t
 
 Token format: `<secret>:<scope1>,<scope2>`
 
-Set the shared secret via `AUTOBOT_MCP_TOKEN` env var (the part before the first `:`).
-Available scopes: `kb`, `memory`, `agents`.
+Set the shared secret via `AUTOBOT_MCP_TOKEN` (the part before the first `:`).
 
-Example token granting all scopes: `mysecret:kb,memory,agents`
+> **The secret is the entire check.** A caller presenting a valid secret chooses its
+> own scopes from the token string, so anyone holding it has every scope regardless
+> of what you intended to grant. Generate a real one and never commit it:
+>
+> ```bash
+> export MCP_SECRET="$(openssl rand -hex 32)"
+> ```
+>
+> There is **no default** (#13263). Left unset, the HTTP path rejects every request
+> rather than authenticating everyone — earlier revisions shipped a default that
+> made `:kb,memory,agents` valid from any caller.
+>
+> For HTTP clients, prefer admin-minted tokens from the MCP token API over this
+> long-lived shared secret.
+
+Available scopes: `kb`, `memory`, `agents`.
 
 Pass as `Authorization: Bearer <token>` for HTTP, or set `AUTOBOT_MCP_TOKEN` for stdio.
 
@@ -52,7 +66,7 @@ Add to your MCP config (e.g. `.claude/mcp.json`):
       "command": "python",
       "args": ["-m", "mcp.autobot_mcp_main"],
       "cwd": "/opt/autobot/autobot-backend",
-      "env": { "AUTOBOT_MCP_TOKEN": "dev:kb,memory,agents" }
+      "env": { "AUTOBOT_MCP_TOKEN": "<your-secret>:kb,memory,agents" }
     }
   }
 }
