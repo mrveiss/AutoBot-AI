@@ -118,6 +118,15 @@ def _stdio_bearer_token() -> str:
             "AUTOBOT_MCP_TOKEN is not set. The stdio transport has no default "
             "credential by design; set it to the shared MCP secret to start."
         )
+    if ":" in secret:
+        # The overloaded pre-#13266 form. _validate_token splits on the first
+        # colon, so this value can never match itself; say so instead of
+        # emitting an opaque -32001 on every request.
+        raise RuntimeError(
+            "AUTOBOT_MCP_TOKEN contains ':' — it holds the SECRET SEGMENT ONLY, "
+            "not a full '<secret>:<scopes>' token. Move the scopes to "
+            "AUTOBOT_MCP_STDIO_SCOPES."
+        )
     scopes = ",".join(s.strip() for s in (config.mcp_stdio_scopes or "").split(",") if s.strip())
     if not scopes:
         raise RuntimeError("AUTOBOT_MCP_STDIO_SCOPES resolved to no scopes; stdio transport would grant nothing.")
