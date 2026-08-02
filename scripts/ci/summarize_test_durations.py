@@ -21,9 +21,15 @@ Known approximation: the real algorithm runs over pytest's *collection* order,
 which this script does not have -- it sorts node IDs instead. That matches
 collection at file granularity (pytest walks directories sorted) but not within
 a file (pytest uses definition order). Chunk boundaries are coarse relative to
-a single test, so the effect on the projection is negligible; treat the output
-as a projection and the ``[pytest-split] Running group N/M (estimated
-duration: ...)`` line each shard prints as the authoritative figure.
+a single test, so the effect on the projection is negligible.
+
+Note the ``[pytest-split] Running group N/M (estimated duration: ...)`` banner
+is NOT available as a cross-check under ``-n auto``: xdist collects in the
+workers, so pytest-split's deselection -- and that banner -- happen there and
+the worker output is suppressed. Verified against a real run: only the
+controller-side "No test durations found" notice reaches the job log. The
+authoritative per-shard figures are therefore the reported test counts and the
+step wall-clock.
 
 Usage:
     summarize_test_durations.py [--splits N] .test_durations [.test_durations_slm ...]
