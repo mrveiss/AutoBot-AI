@@ -94081,11 +94081,17 @@ export interface components {
                 [key: string]: number;
             };
             /** Stage Progression */
-            stage_progression?: unknown[];
+            stage_progression?: {
+                [key: string]: unknown[];
+            };
             /** Metadata Analysis */
             metadata_analysis?: {
                 [key: string]: unknown;
             };
+            /** Cognitive Flow */
+            cognitive_flow?: {
+                [key: string]: unknown;
+            }[];
         } & {
             [key: string]: unknown;
         };
