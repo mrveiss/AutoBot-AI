@@ -1,0 +1,82 @@
+# CI dispatch watchdog — #12823, #13045
+#
+# Guards the two ways a pull request ends up reading as "waiting for CI" with
+# nothing actually queued:
+#
+#   #12823  auto-update-pr-branches refreshes stale PR branches with the default
+#           GITHUB_TOKEN, so the merge commit is pushed as github-actions[bot].
+#           The repository's fork-PR approval policy treats that bot as an
+#           external contributor, so every run it triggers is created with
+#           conclusion=action_required and never starts. The head commit then
+#           carries zero executed checks, and `gh pr checks` reports nothing at
+#           all — not pending, not failing. Tooling that reads "no failures" as
+#           "ready" will happily merge it.
+#
+#   #13045  While the singleton self-hosted runner pool is empty, runs are
+#           created but never allocate a job. A required context never reports,
+#           `commits/{sha}/status` stays pending forever, and the PR shows
+#           "19 success / 0 failures" while being structurally unmergeable.
+#
+# This workflow approves what it is permitted to approve, and — regardless of
+# whether approval succeeds — publishes a `ci-dispatch-watchdog` commit status
+# on every open PR head. Absence of CI therefore becomes a visible, named,
+# non-green context instead of silence.
+#
+# runs-on is ubuntu-latest on every job by design: the self-hosted runner is a
+# singleton, and a watchdog that queues behind the outage it exists to report
+# is useless.
+
+name: CI Dispatch Watchdog
+
+on:
+  schedule:
+    # Every 15 minutes. Scheduled runs are attributed to the repository, not to
+    # github-actions[bot] as a contributor, so this workflow itself is never
+    # subject to the approval policy it repairs.
+    - cron: '*/15 * * * *'
+  push:
+    branches: [Dev_new_gui]
+  workflow_dispatch:
+  pull_request:
+    # Self-test: any change to the watchdog exercises it (in --dry-run mode)
+    # before it can be merged, including the approval-capability probe.
+    paths:
+      - '.github/workflows/ci-dispatch-watchdog.yml'
+      - 'pipeline-scripts/ci_dispatch_watchdog.py'
+      - 'repo_tests/ci_dispatch_watchdog_test.py'
+
+concurrency:
+  # Never cancel a sweep in flight — a half-finished sweep leaves some PRs
+  # without a published status, which is the exact condition being guarded.
+  group: ci-dispatch-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+  statuses: write
+  pull-requests: read
+
+jobs:
+  watchdog:
+    name: Approve parked runs and publish dispatch state
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Sweep open PRs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # On a pull_request event the branch is unreviewed, so the sweep runs
+          # read-only: it still probes approval capability and still classifies
+          # every open PR, but writes no status and approves nothing.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch --dry-run
+          else
+            python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch
+          fi
