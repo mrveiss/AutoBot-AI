@@ -77,6 +77,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from autobot_shared.url_safety import is_public_url_async
 from constants.network_constants import NetworkConstants
 from research_browser_manager import get_research_browser_manager
 from services.mcp_bridge_manifest import MCPBridgeManifest
@@ -631,10 +632,31 @@ async def get_browser_mcp_tools() -> List[MCPTool]:
 # Tool Implementations
 
 
+async def _reject_non_public_url(params: Metadata) -> None:
+    """Validate a ``url`` in *params* with the DNS-resolving guard (#13204).
+
+    No-op when the action carries no URL. Raises 403 rather than returning a
+    falsy result so a caller cannot mistake a blocked navigation for an empty
+    page.
+    """
+    url = params.get("url") if isinstance(params, dict) else None
+    if not url:
+        return
+
+    if not await is_public_url_async(str(url)):
+        logger.warning("Blocked browser navigation to non-public URL: %s", url)
+        raise HTTPException(
+            status_code=403,
+            detail="URL is not a public address",
+        )
+
+
 async def send_to_browser_vm(
     action: str,
     params: Metadata,
     session_id: str = DEFAULT_BROWSER_SESSION_ID,
+    *,
+    internal_ok: bool = False,
 ) -> Metadata:
     """
     Send automation command to Browser VM
@@ -645,7 +667,40 @@ async def send_to_browser_vm(
     Issue #11539: ``session_id`` is threaded on every call so the worker
     routes to the BrowserContext dedicated to that conversation instead of a
     single context shared (and its cookies leaked) across every caller.
+
+    #13204: any URL in *params* is validated here, at the transport itself.
+    This helper previously performed **no** validation, and it is reachable
+    from the agent tool path — ``chat_workflow/tool_handler.py`` forwards a
+    model-chosen ``tool_name`` with model-supplied ``params``, so a navigate
+    URL could come straight from the model to the browser worker.
+
+    The guard lives here rather than at each call site deliberately: it is the
+    one place every current *and future* caller passes through, so a new call
+    site cannot reintroduce the gap. An audit found only ``navigate`` carries
+    a URL at all — the rest pass selectors, scripts and indices — so this
+    validates the URL when present and leaves the others untouched.
+
+    Args:
+        internal_ok: Skip the public-address check. Set **only** by this
+            module's own ``/browser/mcp/*`` endpoints, which are an admin
+            browser-remote-control surface (router-level
+            ``check_admin_permission`` plus per-endpoint rate limiting).
+
+            That surface is deliberately allowed to reach internal hosts, and
+            the reason is worth recording so this exemption is not later
+            removed as a leftover: pointing the browser at an internal service
+            and reading what the page actually requests is how wrong API calls
+            get found and callers mapped to the right routes. Blocking
+            loopback and the VM range would remove that, which is what
+            ``ALLOWED_URL_PATTERNS``' loopback and VM-range entries exist for.
+
+            Callers carrying untrusted input — above all the agent tool path,
+            where ``tool_handler`` forwards a model-chosen tool name with
+            model-supplied params — must leave this False.
     """
+    if not internal_ok:
+        await _reject_non_public_url(params)
+
     try:
         http_client = get_http_client()
         payload = {
@@ -713,6 +768,7 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
             "timeout": request.timeout,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -741,6 +797,7 @@ async def click_mcp(request: BrowserClickRequest) -> Metadata:
         "click",
         {"selector": request.selector, "timeout": request.timeout},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -773,6 +830,7 @@ async def fill_mcp(request: BrowserFillRequest) -> Metadata:
             "timeout": request.timeout,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -802,6 +860,7 @@ async def screenshot_mcp(request: BrowserScreenshotRequest) -> Metadata:
         "screenshot",
         {"selector": request.selector, "full_page": request.full_page},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -838,6 +897,7 @@ async def evaluate_mcp(request: BrowserEvaluateRequest) -> Metadata:
         "evaluate",
         {"script": request.script},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -870,6 +930,7 @@ async def wait_for_selector_mcp(request: BrowserWaitForSelectorRequest) -> Metad
             "state": request.state,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -899,6 +960,7 @@ async def get_text_mcp(request: BrowserGetTextRequest) -> Metadata:
         "get_text",
         {"selector": request.selector},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -927,6 +989,7 @@ async def get_attribute_mcp(request: BrowserGetAttributeRequest) -> Metadata:
         "get_attribute",
         {"selector": request.selector, "attribute": request.attribute},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -956,6 +1019,7 @@ async def select_mcp(request: BrowserSelectRequest) -> Metadata:
         "select",
         {"selector": request.selector, "value": request.value},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -985,6 +1049,7 @@ async def hover_mcp(request: BrowserHoverRequest) -> Metadata:
         "hover",
         {"selector": request.selector},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1014,6 +1079,7 @@ async def browser_state_mcp(request: BrowserStateRequest) -> Metadata:
         "browser_state",
         {},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1045,6 +1111,7 @@ async def click_index_mcp(request: BrowserClickIndexRequest) -> Metadata:
             "expected_element_count": request.expected_element_count,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1078,6 +1145,7 @@ async def fill_index_mcp(request: BrowserFillIndexRequest) -> Metadata:
             "expected_element_count": request.expected_element_count,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1111,6 +1179,7 @@ async def select_index_mcp(request: BrowserSelectIndexRequest) -> Metadata:
             "expected_element_count": request.expected_element_count,
         },
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
@@ -1140,6 +1209,7 @@ async def hover_index_mcp(request: BrowserHoverIndexRequest) -> Metadata:
         "hover_index",
         {"index": request.index, "expected_element_count": request.expected_element_count},
         session_id=request.session_id or DEFAULT_BROWSER_SESSION_ID,
+        internal_ok=True,
     )
 
     return {
