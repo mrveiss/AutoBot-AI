@@ -18,7 +18,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConfig, ModelConstants
+from constants.model_constants import ModelConfig
 from dependencies import get_config
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
