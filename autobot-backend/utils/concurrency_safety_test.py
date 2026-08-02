@@ -43,6 +43,16 @@ class TestTerminalBufferRace:
             redis_client=mock_redis,
         )
 
+        # #13284: passing conversation_id makes __init__ build a real
+        # ChatHistoryManager, and every "Output i\n" contains a newline, so
+        # _save_to_chat_buffered persists on all 100 writes. That is real chat
+        # persistence, not buffer-race verification, and it measured 51.22s on
+        # CI — the second-largest entry in the suite. Stub the save the same way
+        # test_buffer_lock_prevents_interleaving below already does; the buffer
+        # still resets through the same _output_lock path, so the assertion
+        # underneath is unchanged.
+        terminal.chat_history_manager.add_message = AsyncMock()
+
         # Simulate 100 concurrent output writes
         async def write_output(text: str):
             await terminal.send_output(text)
