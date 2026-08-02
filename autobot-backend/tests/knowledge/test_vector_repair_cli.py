@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from knowledge.vector_repair import NO_REDIS_CONTENT, FactOutcome, RepairReport
+
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "repair_kb_vector_index.py"
 
 
@@ -31,6 +33,10 @@ cli = _load_cli()
 
 def _args(argv):
     return cli._build_parser().parse_args(argv)
+
+
+def _report(**kwargs) -> RepairReport:
+    return RepairReport(**kwargs)
 
 
 def test_dry_run_is_the_default():
@@ -99,6 +105,37 @@ def test_empty_invocation_is_refused():
 def test_valid_invocations_pass_validation(argv):
     args = _args(argv)
     cli._validate(args, cli._resolve_fact_ids(args))
+
+
+def test_clean_apply_run_exits_zero():
+    report = _report()
+
+    assert cli._exit_code(report, apply_changes=True) == cli.EXIT_OK
+
+
+def test_unrepaired_facts_exit_non_zero():
+    report = _report(outcomes=[FactOutcome("fact-a", NO_REDIS_CONTENT, "gone")])
+
+    assert cli._exit_code(report, apply_changes=True) == cli.EXIT_FAILURES
+
+
+def test_facts_left_without_a_vector_exit_non_zero():
+    """No failure record, but the fact is absent — this must not read as success.
+
+    An interrupted earlier run leaves exactly this shape: nothing failed during
+    *this* run, yet the fact still has no row in the index.
+    """
+    report = _report(unreachable_after=["fact-a"])
+
+    assert report.failures == []
+    assert cli._exit_code(report, apply_changes=True) == cli.EXIT_FAILURES
+
+
+def test_dry_run_is_not_failed_by_pre_existing_damage():
+    """A census reports damage; it has not been asked to fix it."""
+    report = _report(unreachable_after=["fact-a"])
+
+    assert cli._exit_code(report, apply_changes=False) == cli.EXIT_OK
 
 
 def test_ids_file_is_written_utf8(tmp_path):

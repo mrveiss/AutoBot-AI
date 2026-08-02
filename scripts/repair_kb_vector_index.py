@@ -25,17 +25,23 @@ Step 3 — apply, once the dry-run plan looks right::
 
     python scripts/repair_kb_vector_index.py --fact-ids-file affected-facts.txt --apply
 
-Step 4 — confirm: re-run step 2. A repaired index reports zero unreachable
-facts and every id as ``already_clean``.
+If step 3 exits non-zero or is interrupted, re-run it with the same file. The
+tool rebuilds any fact left without a row, so an interrupted run is resumable
+rather than a dead end.
 
-Exit codes: 0 clean, 1 one or more facts could not be repaired, 2 bad usage.
+Step 4 — confirm: re-run step 2. A repaired index reports zero unreachable
+facts and every id as ``already_clean``, which is asserted against the store,
+not inferred from an absence of findings.
+
+Exit codes: 0 clean, 1 a fact could not be repaired *or* is still without a
+vector, 2 bad usage.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import os
+import logging
 import sys
 from pathlib import Path
 from typing import List, NoReturn
@@ -122,11 +128,18 @@ async def _open_knowledge_base():
 
 
 def _open_collection(kb):
-    """Return the live vector collection behind this knowledge base."""
-    from knowledge.backends import get_default_client
+    """Wrap the exact collection this knowledge base writes to.
 
-    client = get_default_client(db_path=str(kb.chromadb_path), allow_reset=False, anonymized_telemetry=False)
-    return client.get_collection(kb.chromadb_collection)
+    Taken from the live vector store rather than opening a second client on the
+    same path: it cannot drift from the collection the rebuild targets, and it
+    avoids two ChromaDB clients holding the same store open at once.
+    """
+    from knowledge.backends.chromadb_adapter import ChromaDBCollection
+
+    collection = getattr(kb.vector_store, "_collection", None)
+    if collection is None:
+        raise SystemExit("vector store exposes no collection — cannot inspect or repair the index")
+    return ChromaDBCollection(collection)
 
 
 def _make_revectorizer(kb):
@@ -144,6 +157,27 @@ def _make_revectorizer(kb):
         return result
 
     return revectorize
+
+
+def _exit_code(report, *, apply_changes: bool) -> int:
+    """Non-zero whenever a fact is left unrepaired *or* without a vector.
+
+    Gating on ``failures`` alone is not enough: a fact rebuilt into nothing, or
+    left behind by an earlier interrupted run, produces no failure record but is
+    still absent from the index. A silent 0 there is the worst possible outcome
+    — the operator reads success over missing data.
+    """
+    if report.failures:
+        logger.error("%d fact(s) could not be repaired — see FAILURES above", len(report.failures))
+        return EXIT_FAILURES
+    if apply_changes and report.unreachable_after:
+        logger.error(
+            "%d fact(s) still have no vector after the run: %s",
+            len(report.unreachable_after),
+            ", ".join(report.unreachable_after),
+        )
+        return EXIT_FAILURES
+    return EXIT_OK
 
 
 def _write_ids(path: Path, fact_ids: List[str]) -> None:
@@ -169,13 +203,13 @@ async def _run(args: argparse.Namespace, fact_ids: List[str] | None) -> int:
         logger.info("%s", line)
     if args.write_ids_to:
         _write_ids(args.write_ids_to, report.scope)
-    if report.failures:
-        logger.error("%d fact(s) could not be repaired — see FAILURES above", len(report.failures))
-        return EXIT_FAILURES
-    return EXIT_OK
+    return _exit_code(report, apply_changes=args.apply)
 
 
 def main(argv: List[str] | None = None) -> int:
+    # The report *is* the deliverable evidence, so it must survive an install
+    # whose configured logging level is above INFO.
+    logger.setLevel(logging.INFO)
     args = _build_parser().parse_args(argv)
     fact_ids = _resolve_fact_ids(args)
     _validate(args, fact_ids)
@@ -185,5 +219,4 @@ def main(argv: List[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("AUTOBOT_LOG_LEVEL", "INFO")
     sys.exit(main())

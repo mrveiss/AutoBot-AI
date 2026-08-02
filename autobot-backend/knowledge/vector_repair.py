@@ -48,9 +48,17 @@ logger = get_logger(__name__)
 # large collection can be scanned in smaller bites without a code change.
 SCAN_PAGE_SIZE = max(1, int(os.environ.get("KB_VECTOR_REPAIR_SCAN_PAGE_SIZE", "500")))
 
-# Metadata keys LlamaIndex writes on every ChromaDB row, in preference order,
-# that carry the originating fact id.
-FACT_ID_METADATA_KEYS = ("document_id", "ref_doc_id", "doc_id", "fact_id")
+# Metadata keys that can carry the originating fact id, in preference order.
+# ``fact_id`` comes first because it is the only one the inline writer sets to a
+# real value: ``node_to_metadata_dict`` writes ``document_id``/``doc_id``/
+# ``ref_doc_id`` as ``node.ref_doc_id or "None"``, and the inline path builds a
+# TextNode with no source relationship — so those three hold the *literal
+# string* "None" on every inline-shape row.
+FACT_ID_METADATA_KEYS = ("fact_id", "document_id", "ref_doc_id", "doc_id")
+
+# Values that mean "no reference", not a fact id. "None" is llama-index's
+# stringified absence, not a fact called None.
+ABSENT_REFERENCE_VALUES = frozenset({"", "None", "none"})
 
 # Redis hash fields that record vectorization state on ``fact:<id>``.
 VECTORIZATION_STATE_FIELDS = (
@@ -87,10 +95,16 @@ def is_empty_document(document: Any) -> bool:
 
 
 def fact_id_from_metadata(metadata: Mapping[str, Any] | None) -> str | None:
-    """Recover the originating fact id from a row's LlamaIndex metadata."""
+    """Recover the originating fact id from a row's LlamaIndex metadata.
+
+    Treats the literal string ``"None"`` as absence. Without that, every
+    inline-shape row buckets under a phantom fact named ``None``: the scope file
+    gets a bogus id, the affected-fact count is inflated, and the row that
+    squats on the real fact id is never recognised as blocking its own rewrite.
+    """
     for key in FACT_ID_METADATA_KEYS:
         value = (metadata or {}).get(key)
-        if value:
+        if value and str(value) not in ABSENT_REFERENCE_VALUES:
             return str(value)
     return None
 
@@ -281,8 +295,15 @@ class VectorIndexRepair:
     async def repair_fact(self, fact_id: str, rows: Sequence[PoisonedRow]) -> FactOutcome:
         """Repair a single fact. Never raises; every failure becomes an outcome."""
         row_ids = [row.row_id for row in rows]
+        if not rows and has_reachable_vector(self._collection, fact_id):
+            return FactOutcome(fact_id, ALREADY_CLEAN, "a non-empty row is present for this fact")
+
+        # No poisoned row *and* no vector: a previous run died between deleting
+        # the blocking row and writing its replacement. There is nothing left to
+        # delete and everything to rebuild, so fall through rather than
+        # reporting a clean bill of health over a fact that is simply missing.
         if not rows:
-            return FactOutcome(fact_id, ALREADY_CLEAN, "no empty-document rows reference this fact")
+            logger.warning("Fact %s has no vector and no empty row — rebuilding after an interrupted repair", fact_id)
 
         content = (await self._store.read(fact_id)).get("content", "").strip()
         if not content:
@@ -291,9 +312,12 @@ class VectorIndexRepair:
             return FactOutcome(fact_id, NO_REDIS_CONTENT, reason, row_ids)
 
         if not self._apply:
-            return FactOutcome(
-                fact_id, WOULD_REPAIR, "would delete %d empty row(s) and re-vectorize" % len(rows), row_ids
+            plan = (
+                "would delete %d empty row(s) and re-vectorize" % len(rows)
+                if rows
+                else "no vector present — would re-vectorize from Redis content"
             )
+            return FactOutcome(fact_id, WOULD_REPAIR, plan, row_ids)
 
         return await self._apply_repair(fact_id, rows, row_ids)
 

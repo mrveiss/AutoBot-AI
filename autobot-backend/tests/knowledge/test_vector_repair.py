@@ -86,9 +86,21 @@ class FakeRevectorizer:
 
 
 def _add(collection, row_id: str, document: str, fact_id: str) -> None:
-    """Insert a row shaped like LlamaIndex's ChromaDB write."""
+    """Insert a reconciler-shape row: node UUID id, fact id in the reference keys."""
     metadata = {"document_id": fact_id, "ref_doc_id": fact_id, "doc_id": fact_id, "_node_type": "TextNode"}
     collection.upsert(ids=[row_id], embeddings=[EMBEDDING], documents=[document], metadatas=[metadata])
+
+
+def _add_inline_shape(collection, fact_id: str, document: str) -> None:
+    """Insert a row exactly as the inline writer produces it.
+
+    ``node_to_metadata_dict`` writes ``node.ref_doc_id or "None"``, and the
+    inline path builds a TextNode with no source relationship — so all three
+    reference keys hold the *literal string* "None" and only ``fact_id`` carries
+    the real id. Using ``_add`` here would hide that.
+    """
+    metadata = {"document_id": "None", "ref_doc_id": "None", "doc_id": "None", "fact_id": fact_id}
+    collection.upsert(ids=[fact_id], embeddings=[EMBEDDING], documents=[document], metadatas=[metadata])
 
 
 def _chroma_add(collection, row_id: str, document: str, fact_id: str) -> None:
@@ -143,6 +155,32 @@ def test_fact_id_recovered_from_llamaindex_metadata():
     assert fact_id_from_metadata({"document_id": "fact-a", "ref_doc_id": "fact-a"}) == "fact-a"
     assert fact_id_from_metadata({"ref_doc_id": "fact-b"}) == "fact-b"
     assert fact_id_from_metadata({"_node_type": "TextNode"}) is None
+
+
+def test_literal_none_reference_is_not_a_fact_id():
+    """llama-index writes the string "None" for an absent reference, not a fact.
+
+    Reading it as an id buckets every inline-shape row under a phantom fact
+    named ``None``, writes that into the scope file, and stops the row squatting
+    on the real fact id from ever being recognised as blocking its own rewrite.
+    """
+    inline = {"document_id": "None", "doc_id": "None", "ref_doc_id": "None", "fact_id": "fact-real"}
+
+    assert fact_id_from_metadata(inline) == "fact-real"
+    assert fact_id_from_metadata({"document_id": "None", "doc_id": "None"}) is None
+    assert fact_id_from_metadata({"document_id": "none"}) is None
+
+
+def test_inline_shape_rows_group_under_their_real_fact():
+    collection = InMemoryCollection("autobot_memory")
+    _add_inline_shape(collection, "fact-inline", "")
+
+    rows, _ = scan_poisoned_rows(collection)
+    grouped, unlinked = group_by_fact(rows)
+
+    assert sorted(grouped) == ["fact-inline"]
+    assert unlinked == []
+    assert grouped["fact-inline"][0].collides_with_fact_id is True
 
 
 def test_scan_finds_only_empty_rows():
@@ -296,8 +334,11 @@ def test_chromadb_add_on_an_existing_id_is_a_silent_no_op():
         """)
     result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=PROBE_TIMEOUT)
 
-    if result.returncode != 0:
-        pytest.skip("real chromadb unavailable in this environment: %s" % result.stderr.strip()[-200:])
+    if "ModuleNotFoundError" in result.stderr:
+        pytest.skip("real chromadb is not installed in this environment")
+    # Any other non-zero exit is a real signal — e.g. chroma starting to raise on
+    # a duplicate id. Skipping on it would silently disarm this tripwire.
+    assert result.returncode == 0, result.stderr
     assert "DOC='' COUNT=1" in result.stdout, result.stdout
 
 
@@ -324,6 +365,83 @@ async def test_second_run_is_a_no_op():
     assert second.unreachable_before == [] and second.unreachable_after == []
     assert revectorize.calls == calls_after_first, "second run must not re-vectorize"
     assert collection.get(include=["documents", "metadatas"]) == snapshot, "second run must not mutate the store"
+
+
+async def test_a_fact_with_no_row_at_all_is_rebuilt_not_called_clean():
+    """The interrupted-repair window: no empty row left, and no vector either.
+
+    ``already_clean`` must mean "verified present", never "found nothing" — the
+    census cannot see such a fact, so a false all-clear here is unrecoverable.
+    """
+    collection = InMemoryCollection("autobot_memory")
+    store, revectorize = _wire(collection, {"fact-gone": "recoverable content"})
+
+    report = await run_repair(collection, store, revectorize, fact_ids=["fact-gone"], apply_changes=True)
+
+    assert report.outcomes[0].status == REPAIRED
+    assert revectorize.calls == ["fact-gone"]
+    assert report.unreachable_before == ["fact-gone"]
+    assert report.unreachable_after == []
+
+
+async def test_rerunning_after_a_failed_run_completes_the_repair():
+    """The exact cycle a reviewer reproduced: fail after the delete, then re-run.
+
+    Run 1 removes the blocking row and then fails to rebuild, leaving the fact
+    with no row at all. Run 2 must finish the job rather than report success
+    over a fact that is missing from the index.
+    """
+    collection = InMemoryCollection("autobot_memory")
+    _add_inline_shape(collection, "fact-x", "")
+    store = FakeFactStore({"fact-x": "recoverable content"})
+    failing = FakeRevectorizer(store, collection, fail_with=RuntimeError("backend down"))
+
+    first = await run_repair(collection, store, failing, fact_ids=["fact-x"], apply_changes=True)
+    assert first.outcomes[0].status == REVECTORIZE_FAILED
+    assert first.outcomes[0].deleted_row_ids == ["fact-x"]
+    assert has_reachable_vector(collection, "fact-x") is False
+
+    recovered = await run_repair(
+        collection, store, FakeRevectorizer(store, collection), fact_ids=["fact-x"], apply_changes=True
+    )
+
+    assert recovered.outcomes[0].status == REPAIRED
+    assert recovered.unreachable_after == []
+    assert collection.get(ids=["fact-x"])["documents"] == ["recoverable content"]
+
+
+async def test_dry_run_plans_a_rebuild_for_a_missing_fact():
+    collection = InMemoryCollection("autobot_memory")
+    store, revectorize = _wire(collection, {"fact-gone": "recoverable content"})
+
+    report = await run_repair(collection, store, revectorize, fact_ids=["fact-gone"])
+
+    assert report.outcomes[0].status == WOULD_REPAIR
+    assert "no vector present" in report.outcomes[0].reason
+    assert revectorize.calls == []
+
+
+async def test_already_clean_requires_a_verified_non_empty_row():
+    collection = InMemoryCollection("autobot_memory")
+    _add(collection, "node-ok", "healthy content", "fact-ok")
+    store, revectorize = _wire(collection, {"fact-ok": "healthy content"})
+
+    report = await run_repair(collection, store, revectorize, fact_ids=["fact-ok"], apply_changes=True)
+
+    assert report.outcomes[0].status == ALREADY_CLEAN
+    assert "non-empty row is present" in report.outcomes[0].reason
+    assert revectorize.calls == []
+
+
+async def test_a_missing_fact_without_redis_content_is_still_reported():
+    """No row, no content: unrepairable, and it must not read as clean."""
+    collection = InMemoryCollection("autobot_memory")
+    store, revectorize = _wire(collection, {})
+
+    report = await run_repair(collection, store, revectorize, fact_ids=["fact-gone"], apply_changes=True)
+
+    assert report.outcomes[0].status == NO_REDIS_CONTENT
+    assert report.unreachable_after == ["fact-gone"]
 
 
 async def test_second_dry_run_finds_nothing_left():
