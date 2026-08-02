@@ -1,3 +1,24 @@
+# Self-hosted runner health — #13045
+#
+# The previous probe called `GET /repos/{owner}/{repo}/actions/runners` and
+# selected a runner by hard-coded name. Both halves were broken:
+#
+#   * `/actions/runners` is an administration endpoint. GITHUB_TOKEN cannot read
+#     it — every run failed with `gh: Resource not accessible by integration
+#     (HTTP 403)`, and because the step ran under `set -euo pipefail` the job
+#     aborted on that very first line. The workflow had therefore been red on
+#     100% of its scheduled runs while reporting nothing about the runner, so a
+#     real outage was indistinguishable from its own standing failure.
+#   * The hard-coded runner name no longer matched the registered runner, so
+#     even with a privileged token the `select(...)` would have yielded an empty
+#     result and the desync branch could never have fired.
+#
+# The replacement probes the same user-visible symptom through an endpoint the
+# workflow token can actually read: work queued past a threshold that never
+# allocated a job means no runner is serving the pool. That is precisely the
+# condition of #13045, and it needs no runner name, so a runner rename can never
+# silently disable this check again.
+
 name: self-hosted-runner-health
 
 on:
@@ -5,22 +26,21 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   check:
+    # ubuntu-latest, never the self-hosted pool: a runner-outage detector that
+    # queues behind the outage it is meant to report cannot report it.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Probe runner state
+      - uses: actions/checkout@v7
+
+      - name: Probe for starved workflow runs
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          state=$(gh api repos/${{ github.repository }}/actions/runners --jq '.runners[] | select(.name == "MV-Stealth-VM")')
-          status=$(echo "$state" | jq -r '.status')
-          busy=$(echo "$state" | jq -r '.busy')
-          if [ "$status" != "online" ] || [ "$busy" = "true" ]; then
-            in_progress=$(gh api repos/${{ github.repository }}/actions/runs --paginate --jq '[.workflow_runs[] | select(.status == "in_progress")] | length')
-            if [ "$in_progress" = "0" ] && [ "$busy" = "true" ]; then
-              echo "::error::Runner desynced: status=$status busy=$busy with 0 in_progress jobs"
-              exit 1
-            fi
-          fi
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check runner-starvation

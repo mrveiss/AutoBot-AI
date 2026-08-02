@@ -12,10 +12,12 @@ bridging the FastAPI layer with the TTS/STT backend services.
 import asyncio
 import os
 import tempfile
+from collections.abc import AsyncIterator
+from contextlib import aclosing
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from api.schemas_agent import VoiceCreateResponse
@@ -123,6 +125,48 @@ async def voice_realtime_call_tool(
     return {"is_error": result.is_error, "content": result.content}
 
 
+# #13215: chunked audio wire format for the HTTP synthesis routes.
+#
+# The worker emits independently-decodable ~250ms mini-WAVs; concatenating them
+# into one audio/wav body would be undecodable (only the first RIFF header is
+# valid), so a streamed response repeats ``[4-byte big-endian length][WAV]``
+# instead — the same framing the worker itself uses, forwarded unchanged. The
+# header below lets a client confirm the framing rather than infer it.
+AUDIO_STREAM_MEDIA_TYPE = "application/octet-stream"
+AUDIO_STREAM_FRAMING_HEADER = "X-Audio-Framing"
+AUDIO_STREAM_FRAMING = "length-prefixed-wav"
+
+
+async def _framed_audio_chunks(text: str, voice_id: str, language: str) -> AsyncIterator[bytes]:
+    """Yield length-prefixed WAV chunks as the worker produces them."""
+    tts = get_tts_client()
+    async with aclosing(tts.stream_or_synthesize(text, voice_id=voice_id, language=language)) as stream:
+        async for chunk in stream:
+            yield len(chunk).to_bytes(4, "big") + chunk
+
+
+async def _synthesized_audio_response(text: str, voice_id: str, language: str, stream: bool) -> Response:
+    """Return synthesized speech, chunk-by-chunk when the caller opts in (#13215).
+
+    Without ``stream`` the response is the whole-utterance ``audio/wav`` blob
+    every existing caller expects, so time-to-first-byte equals total synthesis
+    time. With it, bytes leave as soon as the worker produces them.
+    """
+    resolved_voice = resolve_voice_id(voice_id, language)
+    if stream:
+        return StreamingResponse(
+            _framed_audio_chunks(text, resolved_voice, language),
+            media_type=AUDIO_STREAM_MEDIA_TYPE,
+            headers={AUDIO_STREAM_FRAMING_HEADER: AUDIO_STREAM_FRAMING},
+        )
+    wav_bytes = await get_tts_client().synthesize(text, voice_id=resolved_voice, language=language)
+    return Response(
+        content=wav_bytes,
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=speech.wav"},
+    )
+
+
 @router.post("/listen", response_model=VoiceListenResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -170,8 +214,13 @@ async def voice_speak_api(
     voice_id: str = Form(""),
     language: str = Form(""),
     user_role: str = Form("user"),
+    stream: bool = Form(False),
 ):
-    """Converts text to speech and plays it."""
+    """Converts text to speech and plays it.
+
+    ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
+    (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
+    """
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log(
@@ -191,14 +240,11 @@ async def voice_speak_api(
     # instead of a misleading 503 that implies TTS is uninstalled.
     voice_interface = getattr(request.app.state, "voice_interface", None)
     if voice_interface is None:
-        resolved_voice = resolve_voice_id(voice_id, language)
-        wav_bytes = await get_tts_client().synthesize(text, voice_id=resolved_voice, language=language)
-        security_layer.audit_log("voice_speak", user_role, "success", {"via": "tts_worker", "text_preview": text[:50]})
-        return Response(
-            content=wav_bytes,
-            media_type="audio/wav",
-            headers={"Content-Disposition": "attachment; filename=speech.wav"},
-        )
+        # Audit after synthesis — see voice_synthesize_api for why.
+        response = await _synthesized_audio_response(text, voice_id, language, stream)
+        outcome = "accepted" if stream else "success"
+        security_layer.audit_log("voice_speak", user_role, outcome, {"via": "tts_worker", "text_preview": text[:50]})
+        return response
 
     result = await voice_interface.speak_text(text)
     if result["status"] == "success":
@@ -229,8 +275,16 @@ async def voice_synthesize_api(
     voice_id: str = Form(""),
     language: str = Form(""),
     user_role: str = Form("user"),
+    stream: bool = Form(False),
 ):
-    """Synthesize speech via Pocket TTS worker. Returns audio/wav stream."""
+    """Synthesize speech via the Pocket TTS worker.
+
+    Returns a whole ``audio/wav`` body by default. With ``stream=true`` the
+    response is ``application/octet-stream`` carrying
+    ``[4-byte length][WAV]`` chunks emitted as the worker produces them, so
+    the caller hears audio after the first ~250ms instead of after the whole
+    utterance (#13215).
+    """
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log("voice_synthesize", user_role, "denied", {"reason": "permission_denied"})
@@ -239,15 +293,15 @@ async def voice_synthesize_api(
             content={"message": "Permission denied to synthesize voice."},
         )
 
-    tts = get_tts_client()
-    resolved_voice = resolve_voice_id(voice_id, language)
-    wav_bytes = await tts.synthesize(text, voice_id=resolved_voice, language=language)
-    security_layer.audit_log("voice_synthesize", user_role, "success", {"text_preview": text[:50]})
-    return Response(
-        content=wav_bytes,
-        media_type="audio/wav",
-        headers={"Content-Disposition": "attachment; filename=speech.wav"},
-    )
+    # Synthesise first, then audit. Logging "success" before the worker is
+    # called would record a success for a run that then 500s (#13215 review).
+    # With stream=true the status is committed before the body is produced, so
+    # the outcome is only ever "accepted" — a mid-stream worker failure cannot
+    # be retracted once StreamingResponse has started.
+    response = await _synthesized_audio_response(text, voice_id, language, stream)
+    outcome = "accepted" if stream else "success"
+    security_layer.audit_log("voice_synthesize", user_role, outcome, {"text_preview": text[:50]})
+    return response
 
 
 @router.post("/clone-voice", response_model=None)  # Returns audio/wav Response — no Pydantic schema
