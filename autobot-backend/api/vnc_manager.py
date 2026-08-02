@@ -549,9 +549,14 @@ async def vnc_mouse_drag(
     return _run_xdotool_cmd(["mouseup", "1"])
 
 
-def _run_screenshot_capture(argv: list):
-    """Run one screenshot capture command. Issue #13208 (extracted helper)."""
-    return subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+async def _run_screenshot_capture(argv: list):
+    """Run one screenshot capture command off the event loop. Issue #13208.
+
+    Each command carries a 10s timeout and there are two of them, so running
+    these inline blocked the loop for up to 20s per failed capture.
+    """
+    return await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+        subprocess.run,
         argv,
         capture_output=True,
         text=True,
@@ -560,10 +565,11 @@ def _run_screenshot_capture(argv: list):
     )
 
 
-def _capture_screenshot_to(tmp_path: str) -> bool:
+async def _capture_screenshot_to(tmp_path: str) -> bool:
     """Capture the desktop into *tmp_path*, falling back from scrot to import."""
     for argv in (["scrot", "-o", tmp_path], ["import", "-window", "root", tmp_path]):
-        if _run_screenshot_capture(argv).returncode == 0:
+        result = await _run_screenshot_capture(argv)
+        if result.returncode == 0:
             return True
     return False
 
@@ -590,7 +596,7 @@ async def vnc_screenshot(
     """
     try:
         with temporary_file_path(suffix=".png") as tmp_path:
-            if not _capture_screenshot_to(tmp_path):
+            if not await _capture_screenshot_to(tmp_path):
                 return {
                     "status": "error",
                     "message": "Screenshot capture failed",
@@ -1118,6 +1124,19 @@ async def delete_macro(name: str, admin_check: bool = Depends(check_admin_permis
 # Area 5: Automation Features - OCR Text Recognition
 
 
+def _ocr_png_file(tmp_path: str, image_data: bytes, region) -> str:
+    """Write, decode and OCR a PNG. Blocking — call via asyncio.to_thread."""
+    import pytesseract
+    from PIL import Image
+
+    Path(tmp_path).write_bytes(image_data)
+    # Image.open takes no `encoding` kwarg — passing one raised TypeError and
+    # made every OCR call fail (found while fixing #13208).
+    image = Image.open(tmp_path)
+    image = _crop_to_region(image, region)
+    return pytesseract.image_to_string(image)
+
+
 def _crop_to_region(image, region):
     """Crop *image* to *region* when a complete x/y/width/height box is given."""
     if not region or not all(k in region for k in ("x", "y", "width", "height")):
@@ -1147,9 +1166,10 @@ async def vnc_ocr_text(
         {"status": "success|error", "text": "recognized text", "message": "..."}
     """
     try:
-        # Check if pytesseract is available
-        import pytesseract
-        from PIL import Image
+        # Availability probe only — the real work imports these inside
+        # _ocr_png_file, which runs in a worker thread.
+        import pytesseract  # noqa: F401
+        from PIL import Image  # noqa: F401
     except ImportError:
         return {
             "status": "error",
@@ -1169,12 +1189,9 @@ async def vnc_ocr_text(
         # Issue #13208: the temp file is removed on every path, including the
         # PIL/pytesseract failure paths that previously leaked it.
         with temporary_file_path(suffix=".png") as tmp_path:
-            Path(tmp_path).write_bytes(image_data)
-            # Image.open takes no `encoding` kwarg — passing one raised TypeError
-            # and made every OCR call fail (found while fixing #13208).
-            image = Image.open(tmp_path)
-            image = _crop_to_region(image, request.region)
-            text = pytesseract.image_to_string(image)
+            # PIL decode and the tesseract call are both CPU-bound and blocking,
+            # so they run in a worker thread rather than on the event loop.
+            text = await asyncio.to_thread(_ocr_png_file, tmp_path, image_data, request.region)
 
         return {"status": "success", "text": text.strip(), "message": "OCR completed"}
 

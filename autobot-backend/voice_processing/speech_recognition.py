@@ -11,14 +11,14 @@ Extracted from voice_processing_system.py as part of Issue #381 god class refact
 
 import asyncio
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
 from autobot_shared.logging_manager import get_logger
 from memory import TaskPriority  # canonical enum (#10626)
 from task_execution_tracker import get_task_tracker
-from voice_processing.hallucination_filter import is_silence_hallucination
+from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 from voice_processing.models import AudioInput, SpeechRecognitionResult
 from voice_processing.types import SpeechQuality
 
@@ -124,7 +124,23 @@ class SpeechRecognitionEngine:
             },
         )
 
-    def _discard_silence_artifacts(self, transcription_result: Dict[str, Any], noise_level: float) -> Dict[str, Any]:
+    def _signal_peak_rms(self, audio_input: AudioInput) -> Optional[float]:
+        """Peak short-window RMS of the raw audio, or None when unmeasurable.
+
+        Issue #13104 review C: this deliberately does NOT reuse `noise_level`.
+        That value comes from `_calculate_noise_level`, whose name and result
+        field both say "background noise". It happens to compute full-signal
+        RMS today, so passing it as speech energy worked by luck — the day
+        anyone makes it measure what it is named after, the gate would invert
+        and a quiet room would discard every transcript.
+        """
+        if not isinstance(audio_input.audio_data, np.ndarray):
+            return None
+        return peak_window_rms(audio_input.audio_data, audio_input.sample_rate)
+
+    def _discard_silence_artifacts(
+        self, transcription_result: Dict[str, Any], audio_input: AudioInput
+    ) -> Dict[str, Any]:
         """Blank out a transcript that is a silence hallucination. Issue #13104.
 
         Returning an empty transcription rather than raising keeps the audio
@@ -136,11 +152,19 @@ class SpeechRecognitionEngine:
             return transcription_result
 
         transcript = transcription_result.get("transcription", "")
-        detected = transcription_result.get("language")
-        if not is_silence_hallucination(transcript, detected, rms=noise_level):
+        # This is the language that was *requested* of the recogniser and echoed
+        # back, not one the engine detected — naming it "detected" would invite
+        # trusting it as evidence.
+        requested_language = transcription_result.get("language")
+        rms = self._signal_peak_rms(audio_input)
+        if not is_silence_hallucination(transcript, requested_language, rms=rms):
             return transcription_result
 
-        logger.info("Discarded STT silence artifact instead of committing a user turn")
+        logger.info(
+            "Discarded STT silence artifact %r instead of committing a user turn (audio_id=%s)",
+            transcript,
+            audio_input.audio_id,
+        )
         return {
             **transcription_result,
             "transcription": "",
@@ -176,7 +200,7 @@ class SpeechRecognitionEngine:
                     transcription_result,
                     speech_segments,
                 ) = await self._run_parallel_analysis(audio_input, language)
-                transcription_result = self._discard_silence_artifacts(transcription_result, noise_level)
+                transcription_result = self._discard_silence_artifacts(transcription_result, audio_input)
                 processing_time = time.time() - start_time
 
                 result = self._build_recognition_result(

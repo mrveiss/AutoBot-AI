@@ -10,6 +10,7 @@ GPU-accelerated audio processing with Whisper and Wav2Vec2 models.
 Part of Issue #381 - God Class Refactoring
 """
 
+import asyncio
 import time
 from typing import Any, Dict, Tuple
 
@@ -19,7 +20,7 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
-from voice_processing.hallucination_filter import is_silence_hallucination
+from voice_processing.hallucination_filter import is_silence_hallucination, peak_window_rms
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult
@@ -158,9 +159,18 @@ class VoiceProcessor(BaseModalProcessor):
         """Process audio input (voice commands, speech)"""
         start_time = time.time()
 
+        if not self.enabled:
+            # Issue #13207 review E: without this, a deliberately disabled voice
+            # processor reports "models are not loaded, check your GPU/NPU",
+            # sending an operator to debug hardware they never broke.
+            return self._build_disabled_result(input_data, time.time() - start_time)
+
         try:
             if input_data.modality_type == ModalityType.AUDIO:
-                result = await self._process_audio(input_data)
+                result = await asyncio.wait_for(
+                    self._process_audio(input_data),
+                    timeout=self.processing_timeout,
+                )
             else:
                 # #6755 LSP exception contract: don't raise — parent
                 # `BaseModalProcessor.process` only declares NotImplementedError;
@@ -182,15 +192,46 @@ class VoiceProcessor(BaseModalProcessor):
             processing_time = time.time() - start_time
             confidence = self.calculate_confidence(result)
 
+            # Issue #13207 review B: confidence_threshold was read from config and
+            # then never consulted. A result under it is reported as a failure with
+            # a stated reason rather than passed off as a successful command.
+            below_threshold = confidence < self.confidence_threshold
+            if below_threshold:
+                self.logger.info(
+                    "Voice result confidence %.2f below threshold %.2f — not treated as a command",
+                    confidence,
+                    self.confidence_threshold,
+                )
+
             return ProcessingResult(
                 result_id=f"voice_{input_data.input_id}",
                 input_id=input_data.input_id,
                 modality_type=input_data.modality_type,
                 intent=input_data.intent,
-                success=True,
+                success=not below_threshold,
                 confidence=confidence,
                 result_data=result,
                 processing_time=processing_time,
+                error_message=(
+                    f"Voice confidence {confidence:.2f} below configured threshold " f"{self.confidence_threshold:.2f}"
+                    if below_threshold
+                    else None
+                ),
+            )
+
+        except asyncio.TimeoutError:
+            processing_time = time.time() - start_time
+            self.logger.error("Voice processing exceeded %ss timeout", self.processing_timeout)
+            return ProcessingResult(
+                result_id=f"voice_{input_data.input_id}",
+                input_id=input_data.input_id,
+                modality_type=input_data.modality_type,
+                intent=input_data.intent,
+                success=False,
+                confidence=0.0,
+                result_data=None,
+                processing_time=processing_time,
+                error_message=(f"Voice processing exceeded the configured {self.processing_timeout}s timeout"),
             )
 
         except Exception as e:
@@ -208,6 +249,32 @@ class VoiceProcessor(BaseModalProcessor):
                 processing_time=processing_time,
                 error_message=str(e),
             )
+
+    def calculate_confidence(self, processing_data: Any) -> float:
+        """Return the confidence the audio pipeline actually reported. Issue #13207.
+
+        The base implementation returns a flat 0.5 for every result, which made
+        ProcessingResult.confidence meaningless and left confidence_threshold
+        with nothing to compare against.
+        """
+        if isinstance(processing_data, dict):
+            return float(processing_data.get("confidence", 0.0))
+        return 0.0
+
+    def _build_disabled_result(self, input_data: MultiModalInput, processing_time: float) -> ProcessingResult:
+        """Report that voice is switched off, not that the hardware is broken."""
+        self.logger.info("Voice processing requested while multimodal.voice.enabled is false")
+        return ProcessingResult(
+            result_id=f"voice_{input_data.input_id}",
+            input_id=input_data.input_id,
+            modality_type=input_data.modality_type,
+            intent=input_data.intent,
+            success=False,
+            confidence=0.0,
+            result_data=None,
+            processing_time=processing_time,
+            error_message="Voice processing is disabled by configuration (multimodal.voice.enabled=false)",
+        )
 
     def _prepare_audio_data(self, input_data: MultiModalInput) -> Tuple[np.ndarray, int]:
         """Prepare and normalize audio data (Issue #315 - extracted method)"""
@@ -297,7 +364,7 @@ class VoiceProcessor(BaseModalProcessor):
 
             # Issue #13104: Whisper answers silence with a confident phantom
             # phrase; drop it here so it never becomes a user turn downstream.
-            transcribed_text = self._reject_silence_hallucination(transcribed_text, audio_array)
+            transcribed_text = self._reject_silence_hallucination(transcribed_text, audio_array, sampling_rate)
 
             # Process with Wav2Vec2 for embeddings (Issue #315 - extracted method)
             audio_embedding, wav2vec_transcription = self._process_wav2vec_embeddings(audio_array, sampling_rate)
@@ -327,7 +394,12 @@ class VoiceProcessor(BaseModalProcessor):
             # Return error result (Issue #620 - extracted method)
             return self._build_error_result(e)
 
-    def _reject_silence_hallucination(self, transcribed_text: str, audio_array: np.ndarray) -> str:
+    def _reject_silence_hallucination(
+        self,
+        transcribed_text: str,
+        audio_array: np.ndarray,
+        sampling_rate: int,
+    ) -> str:
         """Return "" when Whisper transcribed silence into a phantom phrase. Issue #13104.
 
         The language is whatever Whisper decided; the multilingual model does
@@ -337,11 +409,15 @@ class VoiceProcessor(BaseModalProcessor):
         if not transcribed_text:
             return transcribed_text
 
-        rms = float(np.sqrt(np.mean(np.square(audio_array)))) if audio_array.size else 0.0
+        rms = peak_window_rms(audio_array, sampling_rate)
         if not is_silence_hallucination(transcribed_text, rms=rms):
             return transcribed_text
 
-        self.logger.info("Discarded Whisper silence artifact instead of emitting a voice command")
+        self.logger.info(
+            "Discarded Whisper silence artifact %r instead of emitting a voice command (peak RMS %.5f)",
+            transcribed_text,
+            rms,
+        )
         return ""
 
     def _validate_audio_models_available(self) -> None:

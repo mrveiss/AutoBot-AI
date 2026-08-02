@@ -336,6 +336,8 @@ async def voice_delete_api(voice_id: str):
 # Audio transcription via Whisper (#1030)
 # ------------------------------------------------------------------
 
+from voice_processing.hallucination_filter import is_silence_hallucination  # noqa: E402
+
 _MIME_TO_SUFFIX = {
     "audio/webm": ".webm",
     "audio/ogg": ".ogg",
@@ -367,6 +369,21 @@ def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> 
         )
         text = output.get("text", "").strip() if isinstance(output, dict) else ""
         detected_lang = output.get("language", "unknown") if isinstance(output, dict) else "unknown"
+
+        # Issue #13104: this is the route behind hands-free and full-duplex
+        # conversation, so an unfiltered Whisper hallucination here becomes a
+        # phantom user turn. The transformers ASR pipeline reports neither a
+        # language nor a no-speech probability, so fall back to the caller's
+        # requested language and run the gates that need no audio signal.
+        filter_lang = detected_lang if detected_lang and detected_lang != "unknown" else (language or None)
+        if is_silence_hallucination(text, filter_lang):
+            logger.info(
+                "Discarded silence hallucination from /voice/transcribe: %r (language=%s)",
+                text,
+                filter_lang or "unknown",
+            )
+            text = ""
+
         confidence = 0.9 if text else 0.0
         return {
             "text": text,

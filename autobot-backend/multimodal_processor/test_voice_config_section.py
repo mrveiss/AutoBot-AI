@@ -71,11 +71,38 @@ class TestVoiceProcessorReadsTheRealSection:
         assert processor.processing_timeout == 7
         assert processor.enabled is True
 
-    def test_enabled_false_is_honoured(self, processor_cls):
-        """`enabled` gates model loading — the live casualty of the dead key."""
-        processor, _ = self._build(processor_cls, {"enabled": False})
+    def test_enabled_false_actually_prevents_model_loading(self, processor_cls):
+        """`enabled` gates model loading — the live casualty of the dead key.
+
+        Review item F: asserting only `processor.enabled is False` passed even
+        with the gate deleted. Force AUDIO_MODELS_AVAILABLE True (it is False in
+        this environment, which masked the gate) and assert the loader itself.
+        """
+        loader = MagicMock()
+        with (
+            patch.object(processor_cls, "get_config_section", return_value={"enabled": False}),
+            patch.object(processor_cls, "_get_torch", return_value=MagicMock()),
+            patch.object(processor_cls, "AUDIO_MODELS_AVAILABLE", True),
+            patch.object(processor_cls.VoiceProcessor, "_load_models", loader),
+        ):
+            processor = processor_cls.VoiceProcessor()
 
         assert processor.enabled is False
+        assert not loader.called, "models were loaded despite multimodal.voice.enabled=false"
+
+    def test_enabled_true_does_load_models(self, processor_cls):
+        """The mirror — without it the test above passes if loading never happens."""
+        loader = MagicMock()
+        with (
+            patch.object(processor_cls, "get_config_section", return_value={"enabled": True}),
+            patch.object(processor_cls, "_get_torch", return_value=MagicMock()),
+            patch.object(processor_cls, "AUDIO_MODELS_AVAILABLE", True),
+            patch.object(processor_cls.VoiceProcessor, "_load_models", loader),
+        ):
+            processor = processor_cls.VoiceProcessor()
+
+        assert processor.enabled is True
+        assert loader.called, "models were not loaded despite multimodal.voice.enabled=true"
 
 
 class TestEffectiveBehaviourIsPreserved:
@@ -118,3 +145,120 @@ class TestEffectiveBehaviourIsPreserved:
 
         assert processor.confidence_threshold == voice_module.VOICE_CONFIDENCE_THRESHOLD_DEFAULT
         assert processor.processing_timeout == voice_module.VOICE_PROCESSING_TIMEOUT_DEFAULT
+
+
+class TestConfiguredKnobsActuallyDoSomething:
+    """Review item B: a registered knob that nothing reads is the #13207 disease."""
+
+    @pytest.fixture
+    def voice_module(self):
+        import multimodal_processor.processors.voice as module
+
+        return module
+
+    def _processor(self, voice_module, section):
+        with (
+            patch.object(voice_module, "get_config_section", return_value=section),
+            patch.object(voice_module, "_get_torch", return_value=MagicMock()),
+            patch.object(voice_module.VoiceProcessor, "_load_models", lambda self: None),
+        ):
+            return voice_module.VoiceProcessor()
+
+    @pytest.mark.asyncio
+    async def test_disabled_processor_says_disabled_not_hardware_broken(self, voice_module):
+        """Review item E: the old message sent operators to debug a fine GPU."""
+        from multimodal_processor.models import MultiModalInput
+        from multimodal_processor.types import ModalityType
+
+        processor = self._processor(voice_module, {"enabled": False})
+        result = await processor.process(
+            MultiModalInput(
+                input_id="i1",
+                modality_type=ModalityType.AUDIO,
+                data=b"",
+                intent=None,
+                metadata={},
+            )
+        )
+
+        assert result.success is False
+        assert "disabled by configuration" in result.error_message
+        assert "GPU" not in result.error_message
+        assert "not loaded" not in result.error_message
+
+    @pytest.mark.asyncio
+    async def test_confidence_below_threshold_is_reported_as_failure(self, voice_module):
+        """confidence_threshold is now consulted instead of being decoration."""
+        from multimodal_processor.models import MultiModalInput
+        from multimodal_processor.types import ModalityType
+
+        processor = self._processor(voice_module, {"enabled": True, "confidence_threshold": 0.95})
+
+        async def _low_confidence(_input_data):
+            return {"type": "voice_command", "transcribed_text": "hello", "confidence": 0.9}
+
+        processor._process_audio = _low_confidence
+        result = await processor.process(
+            MultiModalInput(
+                input_id="i2",
+                modality_type=ModalityType.AUDIO,
+                data=b"",
+                intent=None,
+                metadata={},
+            )
+        )
+
+        assert result.confidence == pytest.approx(0.9)
+        assert result.success is False
+        assert "below configured threshold" in result.error_message
+
+    @pytest.mark.asyncio
+    async def test_confidence_above_threshold_succeeds(self, voice_module):
+        from multimodal_processor.models import MultiModalInput
+        from multimodal_processor.types import ModalityType
+
+        processor = self._processor(voice_module, {"enabled": True, "confidence_threshold": 0.5})
+
+        async def _high_confidence(_input_data):
+            return {"type": "voice_command", "transcribed_text": "hello", "confidence": 0.9}
+
+        processor._process_audio = _high_confidence
+        result = await processor.process(
+            MultiModalInput(
+                input_id="i3",
+                modality_type=ModalityType.AUDIO,
+                data=b"",
+                intent=None,
+                metadata={},
+            )
+        )
+
+        assert result.success is True
+        assert result.confidence == pytest.approx(0.9)
+
+    @pytest.mark.asyncio
+    async def test_processing_timeout_is_enforced(self, voice_module):
+        """processing_timeout was read from config and never applied."""
+        import asyncio
+
+        from multimodal_processor.models import MultiModalInput
+        from multimodal_processor.types import ModalityType
+
+        processor = self._processor(voice_module, {"enabled": True, "processing_timeout": 0.01})
+
+        async def _too_slow(_input_data):
+            await asyncio.sleep(5)
+
+        processor._process_audio = _too_slow
+        result = await processor.process(
+            MultiModalInput(
+                input_id="i4",
+                modality_type=ModalityType.AUDIO,
+                data=b"",
+                intent=None,
+                metadata={},
+            )
+        )
+
+        assert result.success is False
+        assert "timeout" in result.error_message.lower()

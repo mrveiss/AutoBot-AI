@@ -22,6 +22,7 @@ from voice_processing.hallucination_filter import (
     is_known_artifact,
     is_silence_hallucination,
     normalize_transcript,
+    peak_window_rms,
 )
 
 SPEECH_RMS = 0.08  # comfortably above the silence floor
@@ -80,26 +81,54 @@ class TestKnownArtifactDenylist:
         "language,transcript",
         [
             ("en", "Subtitles by the Amara.org community"),
+            ("en", "Transcription by CastingWords"),
+            ("lv", "Subtitrus sagatavoja"),
+            ("ru", "Субтитры сделал DimaTorzok"),
+            ("de", "Untertitelung des ZDF, 2020"),
+            ("es", "Subtítulos realizados por la comunidad de Amara.org"),
+            ("fr", "Sous-titres réalisés par la communauté d'Amara.org"),
+        ],
+    )
+    def test_structural_artifact_is_discarded_even_with_normal_audio_energy(self, language, transcript):
+        """Subtitle credits and URLs are never dictation, whatever the energy."""
+        assert is_silence_hallucination(transcript, language, rms=SPEECH_RMS) is True
+
+    @pytest.mark.parametrize(
+        "language,transcript",
+        [
             ("en", "Thanks for watching!"),
             ("en", "Please subscribe to my channel."),
             ("lv", "Paldies par skatīšanos!"),
-            ("ru", "Продолжение следует..."),
-            ("de", "Untertitelung des ZDF, 2020"),
-            ("es", "Subtítulos realizados por la comunidad de Amara.org"),
+            ("ru", "Спасибо за просмотр!"),
+            ("de", "Vielen Dank fürs Zuschauen!"),
             ("fr", "Merci d'avoir regardé cette vidéo !"),
         ],
     )
-    def test_artifact_is_discarded_even_with_normal_audio_energy(self, language, transcript):
-        assert is_silence_hallucination(transcript, language, rms=SPEECH_RMS) is True
+    def test_outro_artifact_is_discarded_when_no_energy_evidence(self, language, transcript):
+        """On a live mic with no RMS available, an outro phrase is the artifact."""
+        assert is_silence_hallucination(transcript, language) is True
+
+    @pytest.mark.parametrize(
+        "language,transcript",
+        [
+            ("en", "Thanks for watching!"),
+            ("en", "Please subscribe to my channel."),
+            ("de", "Vielen Dank fürs Zuschauen!"),
+        ],
+    )
+    def test_outro_artifact_survives_when_the_audio_shows_real_speech(self, language, transcript):
+        """Review item I: a dictated sign-off with real energy is real speech."""
+        assert is_silence_hallucination(transcript, language, rms=SPEECH_RMS) is False
 
     def test_unknown_language_never_filters(self):
         """Acceptance criterion: no denylist for a locale we have not curated."""
-        assert is_silence_hallucination("Thanks for watching!", None, rms=SPEECH_RMS) is False
-        assert is_silence_hallucination("Thanks for watching!", "unknown", rms=SPEECH_RMS) is False
-        assert is_silence_hallucination("Thanks for watching!", "ja", rms=SPEECH_RMS) is False
+        assert is_silence_hallucination("Subtitles by the Amara.org community", None, rms=SPEECH_RMS) is False
+        assert is_silence_hallucination("Subtitles by the Amara.org community", "unknown", rms=SPEECH_RMS) is False
+        assert is_silence_hallucination("Subtitles by the Amara.org community", "ja", rms=SPEECH_RMS) is False
 
     def test_language_region_subtags_resolve_to_the_base_language(self):
         assert is_known_artifact("Thanks for watching!", "en-GB") is True
+        assert is_known_artifact("Subtitles by the Amara.org community", "en-GB") is True
 
     def test_empty_transcript_is_not_a_hallucination(self):
         assert is_silence_hallucination("", "en", rms=SILENT_RMS) is False
@@ -132,3 +161,59 @@ class TestMissingSignalsAreNotGuessedAt:
 
     def test_zero_rms_is_not_confused_with_absent(self):
         assert is_silence_hallucination("open the browser", "en", rms=0.0) is True
+
+
+class TestPeakWindowRms:
+    """Review item D: a short utterance must not average away to silence."""
+
+    def test_short_utterance_in_a_long_silent_buffer_reads_as_speech(self):
+        """0.5s of speech in a 30s buffer — whole-buffer RMS would drop this."""
+        sample_rate = 16000
+        buffer = [0.0] * (30 * sample_rate)
+        for i in range(int(0.5 * sample_rate)):
+            buffer[i] = 0.03
+
+        whole_buffer_rms = (sum(v * v for v in buffer) / len(buffer)) ** 0.5
+        assert whole_buffer_rms < SILENCE_RMS_THRESHOLD, "precondition: the old gate would have dropped this"
+
+        peak = peak_window_rms(buffer, sample_rate)
+        assert peak > SILENCE_RMS_THRESHOLD
+        assert is_silence_hallucination("okay", "en", rms=peak) is False
+
+    def test_genuinely_silent_buffer_still_reads_as_silence(self):
+        sample_rate = 16000
+        assert peak_window_rms([0.0] * sample_rate, sample_rate) == 0.0
+        assert is_silence_hallucination("Thanks for watching!", "en", rms=0.0) is True
+
+    def test_empty_buffer_is_zero_not_an_error(self):
+        assert peak_window_rms([], 16000) == 0.0
+
+    def test_constant_tone_matches_its_own_rms(self):
+        assert peak_window_rms([0.5] * 16000, 16000) == pytest.approx(0.5)
+
+
+class TestDiscardsAreLogged:
+    """Owner rule: nothing is dropped silently — every gate must be diagnosable."""
+
+    def test_discard_logs_at_info_with_the_text_and_reason(self, caplog):
+        with caplog.at_level("INFO", logger="voice_processing.hallucination_filter"):
+            assert is_silence_hallucination("Thanks for watching!", "en", rms=0.0) is True
+
+        assert "Thanks for watching!" in caplog.text
+        assert "silence floor" in caplog.text
+
+    def test_kept_transcript_logs_nothing(self, caplog):
+        with caplog.at_level("INFO", logger="voice_processing.hallucination_filter"):
+            assert is_silence_hallucination("open the browser", "en", rms=SPEECH_RMS) is False
+
+        assert caplog.text == ""
+
+    def test_each_gate_names_itself(self, caplog):
+        with caplog.at_level("INFO", logger="voice_processing.hallucination_filter"):
+            is_silence_hallucination("anything", "en", no_speech_prob=0.99)
+            is_silence_hallucination("[BLANK_AUDIO]", "en")
+            is_silence_hallucination("Subtitles by the Amara.org community", "en", rms=SPEECH_RMS)
+
+        assert "no_speech_prob" in caplog.text
+        assert "bare audio tag" in caplog.text
+        assert "subtitle-credit artifact" in caplog.text
