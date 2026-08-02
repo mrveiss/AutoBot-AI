@@ -36,6 +36,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _BACKEND_ROOT = Path(__file__).parent.parent
+_REPO_ROOT = _BACKEND_ROOT.parent
 _VNC_MCP_PATH = _BACKEND_ROOT / "api" / "vnc_mcp.py"
 
 
@@ -193,6 +194,17 @@ def _install_stubs() -> dict:
     )
     _stub("autobot_shared.http_client", get_http_client=MagicMock())
     _stub("autobot_shared.logging_manager", get_logger=lambda name: MagicMock())
+
+    # #13208: temp_files is the component under test for the leak, so load the
+    # REAL module rather than stubbing it — a MagicMock context manager would
+    # make the "temp file was removed" assertion pass vacuously.
+    saved["autobot_shared.temp_files"] = sys.modules.get("autobot_shared.temp_files")
+    _temp_spec = importlib.util.spec_from_file_location(
+        "autobot_shared.temp_files", str(_REPO_ROOT / "autobot_shared" / "temp_files.py")
+    )
+    _temp_mod = importlib.util.module_from_spec(_temp_spec)
+    sys.modules["autobot_shared.temp_files"] = _temp_mod
+    _temp_spec.loader.exec_module(_temp_mod)
     _stub("autobot_shared.time_utils", parse_utc_iso=MagicMock())
     _stub("autobot_shared.ssot_config", config=MagicMock())
 
