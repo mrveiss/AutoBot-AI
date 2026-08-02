@@ -17,13 +17,17 @@ Usage:
 """
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 
 import aiohttp
 
+from autobot_shared.env_utils import blank_to_none
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config, get_config
+from autobot_shared.ssot_constants import TTL_5_MINUTES
 
 logger = get_logger(__name__)
 
@@ -35,7 +39,51 @@ TTS_WORKER_URL = f"http://{TTS_WORKER_HOST}:{TTS_WORKER_PORT}"
 HEALTH_TIMEOUT = 2.0
 SYNTHESIS_TIMEOUT = 60.0
 
+# #12886: a worker deployed before /tts/synthesize/stream existed 404s that
+# route while serving /tts/synthesize normally. The backend caches that
+# negative result for this long so it costs one failed round trip per window
+# instead of one per utterance, and re-probes afterwards so a worker updated
+# in place resumes streaming without a backend restart.
+_STREAM_PROBE_TTL_DEFAULT = TTL_5_MINUTES
+
+
+def _resolve_stream_probe_ttl() -> int:
+    """Return seconds to cache a negative /tts/synthesize/stream probe."""
+    raw = blank_to_none(config.misc.tts_stream_probe_ttl)
+    if raw is None:
+        return _STREAM_PROBE_TTL_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning(
+            "AUTOBOT_TTS_STREAM_PROBE_TTL=%r is not an integer; falling back to %ds",
+            raw,
+            _STREAM_PROBE_TTL_DEFAULT,
+        )
+        return _STREAM_PROBE_TTL_DEFAULT
+    if value <= 0:
+        logger.warning(
+            "AUTOBOT_TTS_STREAM_PROBE_TTL=%d must be positive; falling back to %ds",
+            value,
+            _STREAM_PROBE_TTL_DEFAULT,
+        )
+        return _STREAM_PROBE_TTL_DEFAULT
+    return value
+
+
+STREAM_PROBE_TTL = _resolve_stream_probe_ttl()
+
 _client_instance: "TTSClient | None" = None
+
+
+class TTSStreamUnsupported(RuntimeError):
+    """The worker does not serve ``/tts/synthesize/stream`` (#12886).
+
+    Distinct from a generic worker failure: it means the deployed worker's
+    route table predates the backend calling it, so the whole-utterance route
+    is the correct thing to use instead. Any other status is a real error and
+    must not be retried against a different endpoint.
+    """
 
 
 class TTSClient:
@@ -43,6 +91,8 @@ class TTSClient:
 
     def __init__(self, base_url: str = TTS_WORKER_URL) -> None:
         self.base_url = base_url
+        # monotonic deadline until which the streaming route is known-absent
+        self._stream_absent_until: float = 0.0
 
     async def is_available(self) -> bool:
         """Return True if the TTS worker health check passes."""
@@ -98,6 +148,9 @@ class TTSClient:
         async with client.tracked_request(
             "POST", f"{self.base_url}/tts/synthesize/stream", data=data, timeout=timeout
         ) as resp:
+            if resp.status in (404, 405):
+                # Route table skew, not a synthesis failure — see #12886.
+                raise TTSStreamUnsupported(f"TTS worker error {resp.status}: worker does not serve the stream route")
             if resp.status != 200:
                 body = await resp.text()
                 raise RuntimeError(f"TTS worker error {resp.status}: {body}")
@@ -111,6 +164,49 @@ class TTSClient:
                     yield await resp.content.readexactly(chunk_len)
                 except asyncio.IncompleteReadError as e:
                     raise RuntimeError("TTS stream truncated mid-chunk") from e
+
+    def _streaming_known_absent(self) -> bool:
+        """True while a recent probe showed the worker lacks the stream route."""
+        return time.monotonic() < self._stream_absent_until
+
+    async def stream_or_synthesize(self, text: str, voice_id: str = "", language: str = "") -> AsyncIterator[bytes]:
+        """Yield WAV chunks, degrading to the whole-utterance route (#12886, #13215).
+
+        Prefers ``/tts/synthesize/stream`` so the caller can emit audio after
+        the first ~250ms instead of after the whole clip. When the deployed
+        worker predates that route it answers 404 *before* any chunk is sent,
+        so falling back to ``/tts/synthesize`` here cannot duplicate or
+        interleave audio — the fallback yields the whole clip as one chunk.
+
+        Callers get one uniform contract regardless of how current the worker
+        is, which is what keeps a worker/backend skew from turning into
+        silence (WebSocket path) or a hard 404 (HTTP path).
+        """
+        emitted = False
+        if not self._streaming_known_absent():
+            degraded = self._stream_absent_until > 0.0
+            try:
+                async with aclosing(self.synthesize_stream(text, voice_id=voice_id, language=language)) as stream:
+                    async for chunk in stream:
+                        if not emitted and degraded:
+                            # Recovery is otherwise silent, leaving an operator
+                            # unable to tell which route is in use (#13215 review).
+                            logger.info("TTS worker now serves /tts/synthesize/stream; streaming resumed")
+                            self._stream_absent_until = 0.0
+                        emitted = True
+                        yield chunk
+                return
+            except TTSStreamUnsupported as e:
+                if emitted:
+                    raise  # cannot restart mid-utterance without repeating audio
+                self._stream_absent_until = time.monotonic() + STREAM_PROBE_TTL
+                logger.warning(
+                    "TTS worker does not serve /tts/synthesize/stream (%s); using the "
+                    "whole-utterance route for the next %ds",
+                    e,
+                    STREAM_PROBE_TTL,
+                )
+        yield await self.synthesize(text, voice_id=voice_id, language=language)
 
     async def clone_voice(self, text: str, reference_audio: bytes) -> bytes:
         """Send text + reference audio to TTS worker; returns WAV bytes."""
