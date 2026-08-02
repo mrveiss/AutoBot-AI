@@ -78,8 +78,25 @@ Environment:
 
 Exit codes:
     0  nothing wrong, or everything wrong was repaired
-    1  parked runs exist that this token is not permitted to approve
-       (owner action required — see the printed remediation)
+    1  an approval was refused (owner action required — see the remediation)
+
+       KNOWN INACCURATE, #12823 still open. Exit 1 and the remediation both
+       assert a *credential* problem, but a refusal has two other causes that
+       are not that, and both were observed on 2026-08-02:
+
+       * Two sweeps racing (two base pushes 13s apart each chain a sweep).
+         The loser POSTs approve against runs the winner already released and
+         gets HTTP 403 "not waiting for approval" — the very message
+         ``interpret_probe`` reads as PROOF the credential is fine. The sweep
+         still counted it as refused and printed a remediation demanding the
+         owner relax repository security settings, in the same log where the
+         probe reported the token may approve and 25 runs were approved.
+       * ``max_approvals`` exhausted. A single base merge parks ~20 runs per
+         open PR, so a queue of 5-6 PRs parks ~120 against a cap of 30. That
+         sweep approved 25, hit the cap, and left 4 PRs holding 12-23 parked
+         runs each — which is why bulk manual approval is still needed.
+
+       Neither is a credential fault, and neither is fixed here.
     2  internal error: configuration missing, or the API could not be reached
        at all. Never used for "the API answered and the answer was bad news".
 """
