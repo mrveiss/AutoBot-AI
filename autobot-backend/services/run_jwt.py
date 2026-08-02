@@ -69,6 +69,7 @@ from autobot_shared.auth.jwt_core import (
 from autobot_shared.fire_and_forget import run_redis_write
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.ssot_config import config
 from services.audit.audit import AuditAction, audit_record  # GH#8290 Phase 2
 
 
@@ -137,15 +138,22 @@ def _secret() -> str:
     general-purpose app secret that is known to multiple services would allow
     any of those services to forge run JWTs, undermining the isolation goal.
 
-    The run-JWT secret is resolved from the environment ONLY.  A config/.env
-    fallback here would silently widen the chain for every caller, including
-    the parent backend; the isolated bridge worker gets the secret provisioned
-    explicitly instead (see services/mcp_isolated_runtime._resolve_run_jwt_secret).
+    Environment variables keep priority.  ``RUN_JWT_SECRET`` — and only that
+    variable — additionally resolves from the SSOT config, which reads ``.env``:
+    it is the same dedicated secret by a different source, so the chain is not
+    widened.  Without it a ``.env``-only deployment cannot mint at all, and
+    #13265's propagation would silently degrade to forwarding ``None``.
+
+    ``config.jwt_secret`` is deliberately absent from that fallback for the same
+    reason ``SECRET_KEY`` is absent from the environment loop: it is the platform
+    user-session key, and admitting it here would let every holder forge run JWTs.
     """
     for var in (_ENV_SECRET, "AUTOBOT_JWT_SECRET"):
         val = os.environ.get(var, "")
         if val:
             return val
+    if config.run_jwt_secret:
+        return config.run_jwt_secret
     raise RuntimeError("No run-JWT signing secret configured.  Set RUN_JWT_SECRET (or AUTOBOT_JWT_SECRET).")
 
 

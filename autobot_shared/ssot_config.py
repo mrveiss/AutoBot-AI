@@ -1544,8 +1544,6 @@ class MiscConfig(BaseSettings):
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
-    # #13263: restore pre-#7437 default ("dev") — "" made the MCP server compare
-    # an incoming token's secret segment against "", accepting ":<scopes>" from anyone.
     # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
     # working default credential is a vulnerability in its own right — the
     # secret is the whole check, and "dev" is published in this repo, so any

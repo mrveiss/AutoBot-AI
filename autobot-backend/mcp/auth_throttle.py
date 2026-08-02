@@ -111,28 +111,55 @@ class PreAuthThrottle:
         """Initialise empty per-IP and global failure state."""
         self._ips: "OrderedDict[str, _IpRecord]" = OrderedDict()
         self._global_failures: Deque[float] = deque()
+        # Callers that authenticated within the window. Exempt from the global
+        # ceiling only (see check) so a flood of anonymous failures cannot take
+        # the endpoint offline for clients that are demonstrably not the source.
+        self._recent_success: "OrderedDict[str, float]" = OrderedDict()
+        self._last_evict_log: float = 0.0
 
     # -- internal helpers ------------------------------------------------
 
-    def _record_for(self, ip: str) -> _IpRecord:
+    def _record_for(self, ip: str, now: float) -> _IpRecord:
         """Return the record for *ip*, creating and size-capping as needed."""
         record = self._ips.get(ip)
         if record is None:
             record = _IpRecord()
             self._ips[ip] = record
         self._ips.move_to_end(ip)
-        self._evict_overflow()
+        self._evict_overflow(now)
         return record
 
-    def _evict_overflow(self) -> None:
-        """Evict least-recently-touched IPs so the map stays bounded."""
+    def _evict_overflow(self, now: float) -> None:
+        """Evict least-recently-touched entries so the maps stay bounded.
+
+        N1: eviction is oldest-first, so an attacker who rotates enough source
+        addresses can push their own record out and clear their per-IP lockout.
+        The per-IP tier is therefore NON-AUTHORITATIVE by construction — it exists
+        to stop naive repetition cheaply. The endpoint-wide ceiling in check() is
+        the control that actually bounds a rotating attacker, and it cannot be
+        evicted because it is a single counter, not a keyed entry.
+
+        N3: the eviction warning is sampled to once per window. Logging inside
+        this loop would give an unauthenticated caller a log line per rotating-IP
+        request — the same amplification #13268 set out to close.
+        """
         limit = _max_tracked_ips()
-        while limit > 0 and len(self._ips) > limit:
-            evicted, _ = self._ips.popitem(last=False)
+        if limit <= 0:
+            return
+        evicted = 0
+        while len(self._ips) > limit:
+            self._ips.popitem(last=False)
+            evicted += 1
+        while len(self._recent_success) > limit:
+            self._recent_success.popitem(last=False)
+        if evicted and now - self._last_evict_log >= _window_seconds():
+            self._last_evict_log = now
             logger.warning(
-                "mcp_throttle: tracker full (limit=%d), evicted least-recent IP entry "
-                "— source addresses may be spoofed; the global ceiling still applies",
+                "mcp_throttle: tracker at limit=%d, evicted %d least-recent entries in the last %.0fs "
+                "— source addresses may be spoofed; the endpoint-wide ceiling still applies",
                 limit,
+                evicted,
+                _window_seconds(),
             )
 
     def _prune_global(self, cutoff: float) -> None:
@@ -151,14 +178,24 @@ class PreAuthThrottle:
         now = time.monotonic() if now is None else now
         cutoff = now - _window_seconds()
 
-        self._prune_global(cutoff)
-        global_ceiling = _global_max_failures()
-        if global_ceiling > 0 and len(self._global_failures) >= global_ceiling:
-            return True, (
-                f"endpoint-wide auth failure ceiling reached "
-                f"({len(self._global_failures)}/{global_ceiling} in {_window_seconds():.0f}s)"
-            )
+        # B2: the ceiling sheds only callers that have not proven themselves.
+        # Applying it unconditionally made 100 anonymous failures per window
+        # enough to take the endpoint offline platform-wide for everyone,
+        # including holders of a valid token — an unauthenticated DoS.
+        # The anti-rotation property survives: an attacker cannot join
+        # _recent_success without first authenticating.
+        if not self._has_recent_success(ip, cutoff):
+            self._prune_global(cutoff)
+            global_ceiling = _global_max_failures()
+            if global_ceiling > 0 and len(self._global_failures) >= global_ceiling:
+                return True, (
+                    f"endpoint-wide auth failure ceiling reached "
+                    f"({len(self._global_failures)}/{global_ceiling} in {_window_seconds():.0f}s)"
+                )
 
+        # A recent success exempts a caller from the CEILING only, never from its
+        # own per-IP budget below: authenticating once must not buy an unlimited
+        # licence to guess afterwards.
         record = self._ips.get(ip)
         if record is None:
             return False, ""
@@ -176,7 +213,7 @@ class PreAuthThrottle:
         now = time.monotonic() if now is None else now
         cutoff = now - _window_seconds()
 
-        record = self._record_for(ip)
+        record = self._record_for(ip, now)
         record.prune(cutoff)
         record.failures.append(now)
 
@@ -193,14 +230,42 @@ class PreAuthThrottle:
                 _window_seconds(),
             )
 
-    def record_success(self, ip: str) -> None:
-        """Clear the failure record for *ip* after a successful authentication."""
+    def _has_recent_success(self, ip: str, cutoff: float) -> bool:
+        """Return True if *ip* authenticated within the current window."""
+        ts = self._recent_success.get(ip)
+        if ts is None:
+            return False
+        if ts <= cutoff:
+            del self._recent_success[ip]
+            return False
+        return True
+
+    def record_success(self, ip: str, now: float | None = None) -> None:
+        """Clear *ip*'s failure record and exempt it from the ceiling for one window.
+
+        The global counter is deliberately NOT cleared here. It is the only
+        control that bounds an attacker who rotates source addresses, and behind
+        an appending proxy the caller chooses the address it presents — so
+        clearing it on any single success would hand that attacker a reset button
+        (they need one valid credential, or one spoofed address that recently
+        succeeded). Do not "fix" the ceiling by draining it on success.
+
+        N2: for the same reason, note that a valid-credential holder can clear
+        the per-IP record of an address it does not own. That tier is already
+        non-authoritative (see _evict_overflow); the ceiling is not affected.
+        """
+        now = time.monotonic() if now is None else now
         self._ips.pop(ip, None)
+        self._recent_success[ip] = now
+        self._recent_success.move_to_end(ip)
+        self._evict_overflow(now)
 
     def reset(self) -> None:
         """Drop all state. Test helper; also usable for an operator unblock."""
         self._ips.clear()
         self._global_failures.clear()
+        self._recent_success.clear()
+        self._last_evict_log = 0.0
 
 
 _throttle: PreAuthThrottle | None = None

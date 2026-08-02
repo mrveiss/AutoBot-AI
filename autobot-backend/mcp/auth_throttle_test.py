@@ -177,3 +177,70 @@ def test_check_does_not_consume_budget():
         throttle.record_failure(CLIENT_IP)
         for _ in range(10):
             assert throttle.check(CLIENT_IP)[0] is False
+
+
+# ---------------------------------------------------------------------------
+# The endpoint-wide ceiling must not become an unauthenticated DoS
+# ---------------------------------------------------------------------------
+
+
+def test_ceiling_does_not_block_a_caller_that_never_failed():
+    """B2: a flood of anonymous failures must not take the endpoint offline for everyone.
+
+    Applying the ceiling unconditionally meant N junk requests per window blocked
+    every caller — including holders of a valid token — indefinitely, with no
+    operator-reachable way to clear it.
+    """
+    throttle = PreAuthThrottle()
+    with _limits(max_failures=100, global_max=10):
+        for i in range(10):
+            throttle.record_failure(f"198.51.100.{i}")
+
+        # A caller that has authenticated within the window stays reachable.
+        throttle.record_success(CLIENT_IP)
+        assert throttle.check(CLIENT_IP) == (False, "")
+
+
+def test_success_does_not_drain_the_global_counter():
+    """The ceiling is the only anti-rotation control; one success must not reset it."""
+    throttle = PreAuthThrottle()
+    with _limits(max_failures=100, global_max=10):
+        for i in range(10):
+            throttle.record_failure(f"198.51.100.{i}")
+        throttle.record_success(CLIENT_IP)
+
+        assert len(throttle._global_failures) == 10
+        # An address with no recent success is still shed.
+        assert throttle.check("198.51.100.200")[0] is True
+
+
+def test_recent_success_does_not_exempt_from_the_per_ip_budget():
+    """Authenticating once must not buy an unlimited licence to guess afterwards."""
+    throttle = PreAuthThrottle()
+    with _limits(max_failures=3, global_max=0):
+        throttle.record_success(CLIENT_IP)
+        for _ in range(3):
+            throttle.record_failure(CLIENT_IP)
+        assert throttle.check(CLIENT_IP)[0] is True
+
+
+def test_recent_success_expires_with_the_window():
+    """The exemption is not permanent."""
+    throttle = PreAuthThrottle()
+    with _limits(max_failures=100, window=60, global_max=5):
+        throttle.record_success(CLIENT_IP, now=1000.0)
+        # Failures land later than the success so they outlive the exemption.
+        for i in range(5):
+            throttle.record_failure(f"198.51.100.{i}", now=1040.0)
+
+        assert throttle.check(CLIENT_IP, now=1050.0)[0] is False, "exempt while the success is fresh"
+        assert throttle.check(CLIENT_IP, now=1090.0)[0] is True, "exemption must expire with the window"
+
+
+def test_recent_success_map_stays_bounded():
+    """The exemption set needs the same bound as the failure tracker."""
+    throttle = PreAuthThrottle()
+    with _limits(tracked=16):
+        for i in range(200):
+            throttle.record_success(f"198.51.100.{i}")
+    assert len(throttle._recent_success) == 16

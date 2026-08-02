@@ -183,19 +183,24 @@ def test_environment_keeps_priority_over_config(monkeypatch):
         assert _resolve_run_jwt_secret() == "from-environment"
 
 
-def test_parent_secret_chain_is_environment_only(monkeypatch):
-    """The .env fallback must NOT widen services.run_jwt._secret() for every caller.
+def test_parent_secret_chain_admits_only_the_dedicated_secret(monkeypatch):
+    """Only RUN_JWT_SECRET may resolve from .env — never a general-purpose key.
 
-    Regression guard for tests/services/test_run_jwt.py::
-    test_secret_key_not_accepted_as_fallback — the worker gets the secret
-    provisioned explicitly, the shared resolver stays environment-only.
+    Companion to tests/services/test_run_jwt.py::
+    test_secret_key_not_accepted_as_fallback, which pins the environment loop.
     """
     from services.run_jwt import _secret
 
     monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
     monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
     monkeypatch.setenv("SECRET_KEY", "some-general-app-secret")
+
+    # The dedicated secret resolves, so a .env-only deployment can mint.
     with patch.object(config.misc, "run_jwt_secret", "from-dot-env-file"):
+        assert _secret() == "from-dot-env-file"
+
+    # Nothing else does: not SECRET_KEY, not the platform user-session key.
+    with patch.object(config.misc, "run_jwt_secret", ""), patch.object(config.misc, "jwt_secret", "platform-auth-key"):
         with pytest.raises(RuntimeError, match="RUN_JWT_SECRET"):
             _secret()
 
@@ -231,3 +236,63 @@ def test_worker_env_allow_still_excludes_the_token(monkeypatch):
 
     assert "MCP_RUN_JWT" not in _WORKER_ENV_ALLOW
     assert "RUN_JWT_SECRET" not in _WORKER_ENV_ALLOW
+
+
+# ---------------------------------------------------------------------------
+# The platform user-session key must never cross into a bridge worker
+# ---------------------------------------------------------------------------
+
+
+def test_platform_jwt_secret_is_never_provisioned_to_a_worker(monkeypatch):
+    """AUTOBOT_JWT_SECRET signs user sessions; a bridge worker must never receive it.
+
+    auth_middleware verifies user auth JWTs with this key and slm_client mints
+    service tokens with it. The recipients are the bridges forced into subprocess
+    isolation because they handle untrusted content — handing them this key would
+    let a compromised bridge read /proc/self/environ and forge a session for any
+    user or role.
+    """
+    from services.mcp_isolated_runtime import _resolve_run_jwt_secret
+
+    monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
+    monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
+    with patch.object(config.misc, "run_jwt_secret", ""), patch.object(config.misc, "jwt_secret", "platform-auth-key"):
+        assert _resolve_run_jwt_secret() == ""
+
+
+def test_platform_jwt_secret_is_not_in_the_parent_mint_chain(monkeypatch):
+    """The same key must not become mintable via the config fallback either."""
+    from services.run_jwt import _secret
+
+    monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
+    monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
+    with patch.object(config.misc, "run_jwt_secret", ""), patch.object(config.misc, "jwt_secret", "platform-auth-key"):
+        with pytest.raises(RuntimeError, match="RUN_JWT_SECRET"):
+            _secret()
+
+
+def test_env_only_deployment_mints_verifies_and_provisions(monkeypatch):
+    """#13265 must not degrade to forwarding None where only .env is populated.
+
+    Guards the no-op the platform-key fallback was masking: parent mints, worker
+    receives ONLY the dedicated key, and verification succeeds with enforcement on.
+    """
+    import asyncio
+
+    from services.mcp_bridge_workers import worker_entrypoint
+    from services.mcp_isolated_runtime import _resolve_run_jwt_secret
+
+    monkeypatch.delenv("RUN_JWT_SECRET", raising=False)
+    monkeypatch.delenv("AUTOBOT_JWT_SECRET", raising=False)
+    with (
+        patch.object(config.misc, "run_jwt_secret", "dedicated-run-jwt-key"),
+        patch.object(config.misc, "jwt_secret", "platform-auth-key"),
+    ):
+        assert _resolve_run_jwt_secret() == "dedicated-run-jwt-key"
+        token = MCPDispatcher._mint_bridge_jwt("filesystem_mcp", "read_file")
+        assert token is not None, "#13265 degraded to forwarding None"
+        with patch.object(worker_entrypoint, "_JWT_ENFORCE", True):
+            claims = asyncio.get_event_loop().run_until_complete(
+                worker_entrypoint._validate_run_jwt_param({"run_jwt": token})
+            )
+    assert claims["scope"] == ["mcp:filesystem"]

@@ -103,6 +103,15 @@ the Redis token lookup it would otherwise drive once per attempt.
 | `AUTOBOT_MCP_AUTH_GLOBAL_MAX_FAILURES` | `100` | Failures across **all** IPs per window |
 | `AUTOBOT_MCP_AUTH_MAX_TRACKED_IPS` | `4096` | Cap on tracked IPs (bounds memory) |
 
+The throttle is **per backend process**, held in memory. Under N uvicorn workers
+the effective limits are N times the values above, and a restart clears the
+state. Size them per process, not per cluster.
+
+A caller that authenticated within the window is exempt from the endpoint-wide
+ceiling (never from its own per-IP budget), so a flood of anonymous failures
+cannot take the endpoint offline for clients that are demonstrably not the
+source. An attacker cannot enter that set without first authenticating.
+
 The endpoint-wide ceiling exists because the per-IP counter alone is not
 sufficient: the shipped nginx templates set
 `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`, which *appends* the
