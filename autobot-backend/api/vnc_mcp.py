@@ -50,6 +50,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.temp_files import temporary_file_path
 from autobot_shared.time_utils import parse_utc_iso
 from constants.network_constants import NetworkConstants
 from type_defs.common import Metadata
@@ -578,6 +579,32 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
     }
 
 
+async def _run_capture_command(argv: list):
+    """Run one screenshot capture command off the event loop. Issue #10785."""
+    import subprocess  # nosec B404
+
+    return await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+        subprocess.run,
+        argv,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
+    )
+
+
+async def _capture_desktop_png(tmp_path: str) -> bool:
+    """Capture the desktop into *tmp_path*, falling back from scrot to import.
+
+    Returns True when one of the capture commands succeeded.
+    """
+    for argv in (["scrot", "-o", tmp_path], ["import", "-window", "root", tmp_path]):
+        result = await _run_capture_command(argv)
+        if result.returncode == 0:
+            return True
+    return False
+
+
 @router.post("/mcp/desktop_screenshot", response_model=DesktopScreenshotMcpResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -588,50 +615,25 @@ async def desktop_screenshot_mcp() -> Metadata:
     """
     MCP tool: Capture desktop screenshot.
     Issue #74: Agent desktop observation.
+
+    Issue #13208: the temp file is owned by ``temporary_file_path``, so it is
+    removed on the success path, on capture failure and on any exception.
+    Previously only the success path unlinked it, so production leaked one PNG
+    per failed capture, indefinitely.
     """
     import base64
-    import subprocess  # nosec B404
-    import tempfile
-    from pathlib import Path
 
     try:
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
-            tmp_path = tmp_file.name
+        with temporary_file_path(suffix=".png") as tmp_path:
+            if not await _capture_desktop_png(tmp_path):
+                return {
+                    "success": False,
+                    "message": "Screenshot capture failed",
+                    "action": "screenshot",
+                }
 
-        # Use scrot to capture screenshot
-        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
-            subprocess.run,
-            ["scrot", "-o", tmp_path],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
-        )
-
-        if result.returncode != 0:
-            # Fallback to import command
-            result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
-                subprocess.run,
-                ["import", "-window", "root", tmp_path],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                env={"DISPLAY": NetworkConstants.DESKTOP_DISPLAY},
-            )
-
-        if result.returncode != 0:
-            return {
-                "success": False,
-                "message": "Screenshot capture failed",
-                "action": "screenshot",
-            }
-
-        # Read and encode image
-        with open(tmp_path, "rb") as f:
-            image_data = base64.b64encode(f.read()).decode("utf-8")
-
-        # Cleanup
-        Path(tmp_path).unlink(missing_ok=True)
+            with open(tmp_path, "rb") as f:
+                image_data = base64.b64encode(f.read()).decode("utf-8")
 
         return {
             "success": True,
