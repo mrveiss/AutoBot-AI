@@ -1867,6 +1867,19 @@ def test_unmocked_health_poll_fails_fast_instead_of_dead_waiting() -> None:
     assert time.monotonic() - started < 5.0, "guard must abort the poll, not wait out the window"
 
 
+def test_unmocked_subprocess_fails_fast_instead_of_touching_the_host() -> None:
+    """#13312: an unmocked shell-out must fail immediately, not run for real.
+
+    _is_systemd_unit_failed returns False on any exception, so a real
+    `systemctl` that is missing, slow or answering about the host's actual units
+    produced a green test either way.  The tests/api conftest guard replaces
+    asyncio.create_subprocess_exec with a stand-in that calls pytest.fail, which
+    escapes that broad handler.
+    """
+    with pytest.raises(pytest.fail.Exception):
+        _run(_is_systemd_unit_failed("autobot-backend"))
+
+
 def test_is_systemd_unit_failed_returns_true_on_failed_output() -> None:
     """_is_systemd_unit_failed returns True only when systemctl prints 'failed' (#11413)."""
 
