@@ -28,6 +28,7 @@ import asyncio
 import base64
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlencode
 
 import pytest
 from fastapi import FastAPI
@@ -118,21 +119,69 @@ def _make_app() -> FastAPI:
     return app
 
 
-def _time_to_first_byte(client: TestClient, payload: dict) -> tuple:
-    """POST /api/voice/synthesize; return (seconds-to-first-byte, all bytes)."""
+async def _time_to_first_byte(app: FastAPI, payload: dict) -> tuple:
+    """POST /api/voice/synthesize over raw ASGI; return (TTFB seconds, body).
+
+    Starlette's ``TestClient`` buffers the whole response before returning, so
+    it cannot observe time-to-first-byte at all -- driving the ASGI app
+    directly is the only way to measure the thing this issue is about, and it
+    still exercises the real route, form parsing and StreamingResponse.
+    """
+    encoded = urlencode(payload).encode("utf-8")
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.1"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/voice/synthesize",
+        "raw_path": b"/api/voice/synthesize",
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"host", b"testserver"),
+            (b"content-type", b"application/x-www-form-urlencoded"),
+            (b"content-length", str(len(encoded)).encode("ascii")),
+        ],
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+    }
+    sent = []
     started = time.monotonic()
-    with client.stream("POST", "/api/voice/synthesize", data=payload) as response:
-        assert response.status_code == 200
-        body = b""
-        first_byte_at = None
-        for piece in response.iter_bytes():
-            if piece and first_byte_at is None:
-                first_byte_at = time.monotonic() - started
-            body += piece
+
+    delivered = asyncio.Event()
+
+    async def _receive():
+        # First call delivers the body; every later call is starlette's
+        # disconnect listener, which must block (as a live client would)
+        # rather than spin -- the task group cancels it once the response
+        # generator finishes.
+        if delivered.is_set():
+            await asyncio.Event().wait()
+        delivered.set()
+        return {"type": "http.request", "body": encoded, "more_body": False}
+
+    async def _send(message):
+        sent.append((time.monotonic() - started, message))
+
+    await app(scope, _receive, _send)
+
+    status = next(m["status"] for _, m in sent if m["type"] == "http.response.start")
+    assert status == 200, f"unexpected status {status}"
+    body = b""
+    first_byte_at = None
+    for elapsed, message in sent:
+        if message["type"] != "http.response.body":
+            continue
+        piece = message.get("body", b"")
+        if piece and first_byte_at is None:
+            first_byte_at = elapsed
+        body += piece
     return first_byte_at, body
 
 
-def test_streaming_synthesize_reaches_first_audio_far_sooner():
+@pytest.mark.asyncio
+async def test_streaming_synthesize_reaches_first_audio_far_sooner():
     """Measured: the streaming route must beat the whole-blob route to first audio.
 
     Regression guard for #13215 -- a naive "it called synthesize_stream"
@@ -140,14 +189,13 @@ def test_streaming_synthesize_reaches_first_audio_far_sooner():
     before responding, which is exactly the defect.
     """
     app = _make_app()
-    client = TestClient(app)
     http_client = _make_worker_http_client(serves_stream=True)
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            blocking_ttfb, blocking_body = _time_to_first_byte(client, {"text": "hi", "user_role": "user"})
-            streaming_ttfb, streaming_body = _time_to_first_byte(
-                client, {"text": "hi", "user_role": "user", "stream": "true"}
+            blocking_ttfb, blocking_body = await _time_to_first_byte(app, {"text": "hi", "user_role": "user"})
+            streaming_ttfb, streaming_body = await _time_to_first_byte(
+                app, {"text": "hi", "user_role": "user", "stream": "true"}
             )
 
     assert blocking_body == WHOLE_WAV
@@ -159,15 +207,15 @@ def test_streaming_synthesize_reaches_first_audio_far_sooner():
     )
 
 
-def test_streaming_response_carries_every_chunk_in_order():
+@pytest.mark.asyncio
+async def test_streaming_response_carries_every_chunk_in_order():
     """The framed body must decode back to the worker's chunks, losing none."""
     app = _make_app()
-    client = TestClient(app)
     http_client = _make_worker_http_client(serves_stream=True)
 
     with patch("services.tts_client.get_http_client", return_value=http_client):
         with patch("api.voice.get_tts_client", return_value=TTSClient()):
-            _, body = _time_to_first_byte(client, {"text": "hi", "user_role": "user", "stream": "true"})
+            _, body = await _time_to_first_byte(app, {"text": "hi", "user_role": "user", "stream": "true"})
 
     decoded, offset = [], 0
     while offset < len(body):
