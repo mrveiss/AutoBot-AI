@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from redis.exceptions import RedisError
 
 from autobot_shared.logging_manager import get_logger
 from knowledge.temporal_search import TemporalSearchService
@@ -337,3 +338,76 @@ class TestGetEntityIdByName:
         mock_redis.get.return_value = b"id"
         await service._get_entity_id_by_name("  Python  ")
         mock_redis.get.assert_awaited_with("entity:name:python")
+
+
+# --- Exception Propagation (#13273) ---
+
+
+class TestExceptionPropagation:
+    """A broad ``except Exception`` at all four sites converted every failure
+    into a success-shaped empty result, so callers could never distinguish
+    "no data" from "the query failed" — this pattern is what let the
+    ``.decode()`` defect fixed in #13270 ship undetected for months.
+
+    Only genuine Redis-connectivity failures (``RedisError``/
+    ``ConnectionError``) may still degrade to an empty result. Everything
+    else must propagate so the route handlers' own
+    ``except Exception -> HTTPException(500)`` (``api/knowledge_graph_routes.py``)
+    actually fires.
+    """
+
+    @pytest.mark.asyncio
+    async def test_search_events_in_range_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.zrangebyscore.side_effect = AttributeError("'str' object has no attribute 'decode'")
+
+        with pytest.raises(AttributeError):
+            await service.search_events_in_range(datetime(2024, 1, 1), datetime(2024, 12, 31))
+
+    @pytest.mark.asyncio
+    async def test_search_events_in_range_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.zrangebyscore.side_effect = ConnectionError("redis down")
+
+        events = await service.search_events_in_range(datetime(2024, 1, 1), datetime(2024, 12, 31))
+        assert events == []
+
+    @pytest.mark.asyncio
+    async def test_get_event_timeline_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.get.side_effect = AttributeError("'str' object has no attribute 'decode'")
+
+        with pytest.raises(AttributeError):
+            await service.get_event_timeline("test_entity")
+
+    @pytest.mark.asyncio
+    async def test_get_event_timeline_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.get.side_effect = RedisError("redis down")
+
+        events = await service.get_event_timeline("test_entity")
+        assert events == []
+
+    @pytest.mark.asyncio
+    async def test_find_causal_chain_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.json().get.side_effect = TypeError("object dict can't be used in 'await' expression")
+
+        with pytest.raises(TypeError):
+            await service.find_causal_chain(uuid4())
+
+    @pytest.mark.asyncio
+    async def test_find_causal_chain_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.json().get.side_effect = ConnectionError("redis down")
+
+        chain = await service.find_causal_chain(uuid4())
+        assert chain == []
+
+    @pytest.mark.asyncio
+    async def test_get_event_reraises_non_redis_errors(self, service, mock_redis):
+        mock_redis.json().get.side_effect = ValueError("bad json")
+
+        with pytest.raises(ValueError):
+            await service._get_event("e1")
+
+    @pytest.mark.asyncio
+    async def test_get_event_degrades_on_redis_error(self, service, mock_redis):
+        mock_redis.json().get.side_effect = RedisError("redis down")
+
+        event = await service._get_event("e1")
+        assert event is None

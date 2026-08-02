@@ -12,10 +12,19 @@ from datetime import datetime
 from typing import List, Set
 from uuid import UUID
 
+from redis.exceptions import RedisError
+
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
+
+# #13273: only genuine Redis-connectivity failures degrade to an empty
+# result here. Any other exception (a programming bug like the .decode()
+# defect fixed in #13270) must propagate so the route handlers' own
+# ``except Exception -> HTTPException(500)`` actually fires instead of
+# reporting "no data" for an infrastructure failure.
+_TRANSIENT_REDIS_ERRORS = (RedisError, ConnectionError)
 
 
 class TemporalSearchService:
@@ -87,7 +96,7 @@ class TemporalSearchService:
             )
             return events
 
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.error("Event range search failed: %s", e)
             return []
 
@@ -126,7 +135,7 @@ class TemporalSearchService:
             )
             return events[:limit]
 
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.error("Timeline retrieval failed: %s", e)
             return []
 
@@ -168,7 +177,7 @@ class TemporalSearchService:
             )
             return chain
 
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.error("Causal chain traversal failed: %s", e)
             return []
 
@@ -231,6 +240,6 @@ class TemporalSearchService:
             key = f"event:{event_id}"
             event_data = await self.redis.json().get(key)
             return event_data
-        except Exception as e:
+        except _TRANSIENT_REDIS_ERRORS as e:
             logger.warning("Failed to get event %s: %s", event_id, e)
             return None
