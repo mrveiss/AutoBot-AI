@@ -163,6 +163,40 @@ async def test_start_community_clustering_loop_skips_without_mesh_db():
 
 
 @pytest.mark.asyncio
+async def test_init_liveness_monitor_actually_starts_it():
+    """#13085: same proof as the community-clustering test above, for the
+    other two named schedulers — LivenessMonitor and BudgetWatchdog are also
+    never exercised past construction anywhere in the suite."""
+    from initialization.lifespan import _init_liveness_monitor
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    await _init_liveness_monitor(app)
+
+    monitor = app.state.llc_liveness_monitor
+    assert monitor is not None
+    assert monitor.is_running, "LivenessMonitor must actually be started, not merely constructed"
+
+    await monitor.aclose()
+
+
+@pytest.mark.asyncio
+async def test_init_budget_watchdog_actually_starts_it():
+    """#13085: BudgetWatchdog counterpart of the LivenessMonitor test above."""
+    from initialization.lifespan import _init_budget_watchdog
+
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    await _init_budget_watchdog(app)
+
+    watchdog = app.state.llc_budget_watchdog
+    assert watchdog is not None
+    assert watchdog.is_running, "BudgetWatchdog must actually be started, not merely constructed"
+
+    await watchdog.aclose()
+
+
+@pytest.mark.asyncio
 async def test_cleanup_drain_uses_the_real_scheduler_contract():
     """The drain wired into cleanup_services matches PollLoopScheduler's own API.
 
