@@ -139,8 +139,7 @@ def test_dispatched_runs_are_success(watchdog):
 
 def test_description_never_exceeds_the_github_limit(watchdog):
     runs = [
-        _run(id=i, conclusion="action_required", name=f"A very long workflow name number {i}" * 4)
-        for i in range(30)
+        _run(id=i, conclusion="action_required", name=f"A very long workflow name number {i}" * 4) for i in range(30)
     ]
     _, description = watchdog.classify_dispatch(runs, _ts(5), NOW, 10, 30)
     assert len(description) <= watchdog.MAX_STATUS_DESCRIPTION

@@ -219,9 +219,7 @@ class GitHubApi:
         self.repository = repository
         self.api_root = api_root.rstrip("/")
 
-    def request(
-        self, method: str, path: str, payload: Optional[Dict[str, Any]] = None
-    ) -> Tuple[int, Any]:
+    def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
         """Issue a request and return ``(status_code, decoded_body)``."""
         url = path if path.startswith("http") else f"{self.api_root}/{path.lstrip('/')}"
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
@@ -425,7 +423,9 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     for run in starved:
         waited = age_minutes(run.get("created_at"), now)
         waited_text = f"{waited:.0f}m" if waited is not None else "unknown"
-        print(f"  {run.get('name')} on {run.get('head_branch')} — queued {waited_text} ({_run_url(api.repository, run)})")
+        print(
+            f"  {run.get('name')} on {run.get('head_branch')} — queued {waited_text} ({_run_url(api.repository, run)})"
+        )
     return 1
 
 
