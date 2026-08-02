@@ -112,9 +112,7 @@ class TestGetPerformanceStatsResponsePayload:
     def test_returns_the_real_performance_metrics_on_the_wire(self):
         client = _make_client()
         mock_processor = MagicMock()
-        mock_processor.performance_monitor.monitor_processing_performance = AsyncMock(
-            return_value={"throughput": 42}
-        )
+        mock_processor.performance_monitor.monitor_processing_performance = AsyncMock(return_value={"throughput": 42})
         mock_processor.get_stats.return_value = {"total_processed": 100}
         mock_processor.use_amp = True
         mock_processor.device = "cuda:0"
@@ -134,9 +132,7 @@ class TestOptimizePerformanceResponsePayload:
     def test_returns_the_real_optimization_result_on_the_wire(self):
         client = _make_client()
         mock_processor = MagicMock()
-        mock_processor.performance_monitor.optimize_gpu_memory = AsyncMock(
-            return_value={"freed_mb": 512}
-        )
+        mock_processor.performance_monitor.optimize_gpu_memory = AsyncMock(return_value={"freed_mb": 512})
 
         with patch("api.multimodal.processor", mock_processor):
             response = client.post("/api/multimodal/performance/optimize")
@@ -151,9 +147,7 @@ class TestGetPerformanceSummaryResponsePayload:
     def test_returns_the_real_summary_on_the_wire(self):
         client = _make_client()
         mock_processor = MagicMock()
-        mock_processor.performance_monitor.get_performance_summary.return_value = {
-            "avg_latency_ms": 12.3
-        }
+        mock_processor.performance_monitor.get_performance_summary.return_value = {"avg_latency_ms": 12.3}
 
         with patch("api.multimodal.processor", mock_processor):
             response = client.get("/api/multimodal/performance/summary")
