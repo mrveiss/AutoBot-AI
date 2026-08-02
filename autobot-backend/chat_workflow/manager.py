@@ -2892,6 +2892,39 @@ before summarizing.
             yield error_msg
             yield ([], [], error_msg)
 
+    def _build_final_response_entry(
+        self,
+        chat_mgr,
+        llm_response: str,
+        batch: List[Dict[str, Any]],
+    ) -> Dict[str, Any] | None:
+        """Build the chat-history entry for the completed streamed reply (#13214).
+
+        Streamed chunks carry ``metadata.streaming = True`` (set unconditionally by
+        ``StreamingMessage.to_workflow_message``) and are deliberately excluded from
+        ``workflow_messages`` by both accumulators — see ``graph._run_llm_iteration``
+        and ``_collect_llm_iteration_response``, whose comment states the complete
+        reply "is persisted in _persist_workflow_messages". That was never true:
+        ``llm_response`` arrived here and was dropped, so a conversational streamed
+        reply persisted nothing and ``chat:session:*`` read back user-turns only.
+
+        Returns None when there is nothing to add — an empty reply, or an identical
+        assistant turn already present in *batch* (e.g. the ``respond`` tool).
+        """
+        content = strip_unparsed_tool_tags(llm_response or "").strip()
+        if not content:
+            return None
+        if any((entry.get("text") or "").strip() == content for entry in batch):
+            return None
+        return chat_mgr._build_message_dict(
+            "assistant",
+            content,
+            "response",
+            {"message_type": "llm_response", "streamed": True},
+            None,
+            sources=[],
+        )
+
     async def _persist_workflow_messages(
         self,
         session_id: str,
@@ -2903,6 +2936,8 @@ before summarizing.
         Issue #332: Original implementation.
         Issue #1316: Batch all messages into one load/save cycle instead
         of N individual add_message() calls.
+        Issue #13214: also persist *llm_response* — the completed streamed reply —
+        which every caller already passes but which was previously ignored.
         """
         from chat_history import ChatHistoryManager
 
@@ -2947,6 +2982,13 @@ before summarizing.
                         sources=sources,
                     )
                 )
+
+            # Issue #13214: append the completed streamed reply. Without this the
+            # batch holds only non-streaming side messages (terminal output, errors)
+            # and a plain conversational turn writes nothing at all.
+            final_entry = self._build_final_response_entry(chat_mgr, llm_response, batch)
+            if final_entry:
+                batch.append(final_entry)
 
             if batch:
                 await chat_mgr.add_messages_batch(session_id, batch)
