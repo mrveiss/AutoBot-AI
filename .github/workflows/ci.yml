@@ -44,7 +44,7 @@ jobs:
               - 'autobot-frontend/**'
               - '.github/workflows/ci.yml'
 
-  # #10691: the suite is split six ways here; `python-suite` below reports the
+  # #13316: the suite is split twelve ways here; `python-suite` below reports the
   # combined verdict. Measured per-step baseline of the single job this replaces:
   # dependency install 162s, TEST EXECUTION 3055s, everything else ~14s — so
   # 95% of the job was the pytest run and nothing but parallelising the tests
@@ -61,11 +61,11 @@ jobs:
   # Six concurrent shards therefore cost the self-hosted queue nothing — which
   # is what makes a matrix safe here and was the original #10691 objection.
   python-shard:
-    name: python-suite shard ${{ matrix.shard }}/6
+    name: python-suite shard ${{ matrix.shard }}/12
     needs: changes
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
-    # A sixth of a ~51-minute run, with generous headroom: observed runner
+    # A twelfth of a ~51-minute run, with generous headroom: observed runner
     # variance on this suite is roughly 2x for identical work (12m18s and
     # 1h24m have both been recorded), and a shard whose durations have drifted
     # can run long without being broken.
@@ -78,7 +78,7 @@ jobs:
       # useless on essentially every run.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     # #10691: the suite has always run with no Redis, so every test needing
     # real atomic ops (rather than a `fakeredis` stub) was a standing failure
@@ -124,7 +124,7 @@ jobs:
     # measured ~51 minutes, while slm-backend had never executed in CI at all
     # before #13300 — so splitting per-invocation would have produced one
     # enormous job and one short one, capping the speed-up at roughly 1x. Six
-    # shards that each run a sixth of BOTH keeps every shard the same shape and
+    # shards that each run a twelfth of BOTH keeps every shard the same shape and
     # keeps the #13084 interpreter separation intact inside each shard.
     - name: Run unit tests — backend, shared, tts-worker, repo_tests
       run: |
@@ -158,7 +158,7 @@ jobs:
         python -m pytest \
           autobot-backend autobot_shared autobot-tts-worker repo_tests \
           -n auto --dist loadscope \
-          --splits 6 --group ${{ matrix.shard }} \
+          --splits 12 --group ${{ matrix.shard }} \
           --durations-path .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
@@ -171,7 +171,7 @@ jobs:
       # testing a separate tree (#13300).
       if: ${{ !cancelled() }}
       run: |
-        echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/6)..."
+        echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/12)..."
         # A SECOND durations file, not the backend one: pytest-split's
         # --clean-durations regeneration writes only the tests that ran, so a
         # shared path would have each invocation truncate the other's timings.
@@ -184,7 +184,7 @@ jobs:
         python -m pytest \
           autobot-slm-backend \
           -n auto --dist loadscope \
-          --splits 6 --group ${{ matrix.shard }} \
+          --splits 12 --group ${{ matrix.shard }} \
           --durations-path .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
@@ -194,7 +194,7 @@ jobs:
 
     - name: Run integration tests
       # Shard 1 only — this suite is selected by DIRECTORY, not by the split, so
-      # running it in every shard would execute it six times over.
+      # running it in every shard would execute it twelve times over.
       # NOTE: `infrastructure/shared/tests/integration` does not currently exist
       # in the tree, so this step is a no-op echo today (#734 moved the suite and
       # the path was never updated). Left wired rather than removed so it starts
@@ -229,7 +229,7 @@ jobs:
     # `deployment-check` and `notify` both gate on `needs.python-suite.result`,
     # so without this step a red test suite would leave `python-suite` green and
     # let deployment checks proceed on a broken tree. For a matrix, `result` is
-    # the aggregate across all six shards.
+    # the aggregate across all twelve shards.
     - name: Fail if any shard failed
       if: ${{ needs.python-shard.result != 'success' }}
       run: |

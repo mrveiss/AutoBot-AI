@@ -7,7 +7,7 @@
 # under 10 seconds. So the time is instrumentation overhead, not test work, and
 # paying it on every pull request buys nothing a nightly run does not.
 #
-# The split is the same six-way pytest-split arrangement the PR gate uses, for
+# The split is the same twelve-way pytest-split arrangement the PR gate uses, for
 # the same reason (one job would be ~45 minutes), and it reuses the same
 # durations files. Those were recorded WITHOUT instrumentation, so they describe
 # relative test cost rather than relative coverage cost; the chunks are
@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   coverage-shard:
-    name: coverage shard ${{ matrix.shard }}/6
+    name: coverage shard ${{ matrix.shard }}/12
     runs-on: ubuntu-latest
     # Instrumentation makes the tail shard far slower than the PR gate's, and
     # observed runner variance on this suite is roughly 2x for identical work.
@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     services:
       redis:
@@ -57,7 +57,7 @@ jobs:
           --health-retries 10
 
     env:
-      # Distinct data file per shard so all six can be downloaded into one
+      # Distinct data file per shard so all twelve can be downloaded into one
       # directory and combined without collision. `coverage combine` picks up
       # `.coverage.*` by convention.
       COVERAGE_FILE: .coverage.shard-${{ matrix.shard }}
@@ -76,7 +76,7 @@ jobs:
           python -m pytest \
             autobot-backend autobot_shared autobot-tts-worker repo_tests \
             -n auto --dist loadscope \
-            --splits 6 --group ${{ matrix.shard }} \
+            --splits 12 --group ${{ matrix.shard }} \
             --durations-path .test_durations \
             -m "not integration and not slow and not distributed and not performance" \
             --cov=autobot-backend \
@@ -92,7 +92,7 @@ jobs:
           python -m pytest \
             autobot-slm-backend \
             -n auto --dist loadscope \
-            --splits 6 --group ${{ matrix.shard }} \
+            --splits 12 --group ${{ matrix.shard }} \
             --durations-path .test_durations_slm \
             -m "not integration and not slow and not distributed and not performance" \
             --cov=autobot-slm-backend \
@@ -117,7 +117,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 1
 
-  # Each shard measured a different sixth of the suite, so no single shard's
+  # Each shard measured a different twelfth of the suite, so no single shard's
   # coverage means anything on its own — only the union does.
   coverage-report:
     name: coverage-report
@@ -172,7 +172,7 @@ jobs:
           {
             echo "## Combined coverage: ${TOTAL}%"
             echo
-            echo "Recombined from 6 shards. Threshold is \`fail_under\` in .coveragerc."
+            echo "Recombined from 12 shards. Threshold is \`fail_under\` in .coveragerc."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload combined coverage

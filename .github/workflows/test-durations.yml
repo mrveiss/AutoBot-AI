@@ -11,7 +11,7 @@
 # This job deliberately does NOT pass --splits/--group: with both options
 # pytest-split registers the cache plugin alongside the split plugin and stores
 # only the durations of the group that ran, silently truncating the file to a
-# sixth of the suite. Regeneration therefore has to be an unsharded run.
+# twelfth of the suite. Regeneration therefore has to be an unsharded run.
 name: test-durations
 
 on:
@@ -108,7 +108,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           python scripts/ci/summarize_test_durations.py \
-            --splits 6 \
+            --splits 12 \
             .test_durations .test_durations_slm >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload durations
