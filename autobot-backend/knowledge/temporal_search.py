@@ -210,11 +210,20 @@ class TemporalSearchService:
             )
 
     async def _get_entity_id_by_name(self, entity_name: str) -> str | None:
-        """Lookup entity ID by canonical name."""
+        """Lookup entity ID by canonical name.
+
+        The shared Redis client is built with ``decode_responses=True``
+        (``autobot_shared/redis_management/config.py``), so ``get`` yields
+        ``str``.  A bare ``.decode()`` raised ``AttributeError`` on every
+        lookup, which ``get_event_timeline`` swallowed into an empty
+        timeline for every entity.  Handle both wire shapes (#13270).
+        """
         canonical_name = entity_name.lower().strip()
         name_key = f"entity:name:{canonical_name}"
         entity_id = await self.redis.get(name_key)
-        return entity_id.decode() if entity_id else None
+        if not entity_id:
+            return None
+        return entity_id.decode() if isinstance(entity_id, bytes) else entity_id
 
     async def _get_event(self, event_id: str) -> dict | None:
         """Retrieve event data from Redis JSON."""
