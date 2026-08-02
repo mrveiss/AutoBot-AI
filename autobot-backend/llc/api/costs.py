@@ -5,13 +5,18 @@
 """Provider-normalised cost reporting endpoints (GH#8487).
 
 Routes:
-  GET /costs/by-agent-model   — normalised token usage per agent/model across
-                                Anthropic, OpenAI, Google, and other providers.
+  GET /costs/by-agent-model   — lifetime token totals per agent, sourced from
+                                llc_agent_budgets (GH#13067; see that route's
+                                docstring — no per-model/provider breakdown
+                                exists yet).
   GET /costs/quota-windows    — provider quota headroom per configured provider.
 
 Token field normalisation
 -------------------------
-Each provider uses different field names in usage metadata:
+``_normalise_usage`` below maps each provider's raw usage-metadata field names
+to the (input, cached, output) triple. It is kept for the per-model/provider
+breakdown this module was originally specified to provide (GH#8215) once a
+real per-event cost log exists; nothing calls it today (GH#13067).
 
   Provider   | input field           | cached field              | output field
   -----------|-----------------------|---------------------------|------------------
@@ -31,13 +36,15 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from autobot_shared.logging_manager import get_logger
 from llc.deps import assert_company_access
+from llc.models.budget import LLCAgentBudget
 from llc.services.model_tiers import get_model_tier_service
+from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -140,11 +147,18 @@ async def costs_by_agent_model(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCost]:
-    """Return normalised token usage per agent/model pair.
+    """Return lifetime token totals per agent for a company.
 
-    Aggregates rows from ``llc_cost_events`` and normalises token field names
-    across Anthropic, OpenAI, and Google so callers receive a consistent schema.
-    ``cachedInputTokens`` is ``0`` for providers without cache hit reporting.
+    Originally specified against ``llc_cost_events`` (GH#8215's per-event log
+    with model/provider columns), a table that was never migrated — confirmed
+    absent from every migration tree, so this endpoint always raised
+    ``UndefinedTable`` and silently returned ``[]`` (GH#13067). The actual
+    writer, ``BudgetService.ingest_cost_event``, only maintains a lifetime
+    aggregate on ``llc_agent_budgets`` (no per-model dimension, no timestamp),
+    so each row here is one lifetime token total per agent with
+    ``model="unknown"`` rather than a real per-model/time-windowed breakdown.
+    ``llc/services/agent_scorecard.py`` hit the identical gap and made the
+    same sourcing choice for spend.
     """
     if company_id:
         assert_company_access(ctx, company_id)
@@ -152,60 +166,30 @@ async def costs_by_agent_model(
     if not effective_company_id:
         return []
 
-    svc = get_model_tier_service()
+    result = await session.execute(
+        select(LLCAgentBudget, AgentOrgNode.name)
+        .outerjoin(AgentOrgNode, AgentOrgNode.agent_id == LLCAgentBudget.agent_id)
+        .where(LLCAgentBudget.company_id == effective_company_id)
+        .order_by(LLCAgentBudget.agent_id)
+    )
 
-    try:
-        result = await session.execute(
-            text("""
-                SELECT
-                    agent_id,
-                    COALESCE(agent_id, 'unknown') AS agent_name,
-                    model,
-                    COALESCE(SUM((usage_metadata->>'input_tokens')::int), 0)
-                        + COALESCE(SUM((usage_metadata->>'prompt_tokens')::int), 0)
-                        + COALESCE(SUM((usage_metadata->>'prompt_token_count')::int), 0)
-                        AS raw_input,
-                    COALESCE(SUM((usage_metadata->>'cache_read_input_tokens')::int), 0)
-                        AS raw_cached,
-                    COALESCE(SUM((usage_metadata->>'output_tokens')::int), 0)
-                        + COALESCE(SUM((usage_metadata->>'completion_tokens')::int), 0)
-                        + COALESCE(SUM((usage_metadata->>'candidates_token_count')::int), 0)
-                        AS raw_output,
-                    provider
-                FROM llc_cost_events
-                WHERE company_id = :company_id
-                GROUP BY agent_id, model, provider
-                ORDER BY agent_id, model
-                """),
-            {"company_id": effective_company_id},
+    return [
+        AgentModelCost(
+            agent_id=budget.agent_id,
+            agent_name=agent_name or budget.agent_id,
+            provider=None,
+            model="unknown",
+            input_tokens=0,
+            cached_input_tokens=0,
+            output_tokens=int(budget.tokens_spent),
         )
-        rows = result.fetchall()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("llc_cost_events not available: %s", exc)
-        rows = []
-
-    out: List[AgentModelCost] = []
-    for row in rows:
-        agent_id, agent_name, model, raw_input, raw_cached, raw_output, db_provider = row
-        provider = db_provider or svc.detect_provider(model or "")
-        out.append(
-            AgentModelCost(
-                agent_id=str(agent_id),
-                agent_name=str(agent_name),
-                provider=provider,
-                model=str(model or ""),
-                input_tokens=int(raw_input or 0),
-                cached_input_tokens=int(raw_cached or 0),
-                output_tokens=int(raw_output or 0),
-            )
-        )
-    return out
+        for budget, agent_name in result.all()
+    ]
 
 
 @router.get("/quota-windows", response_model=List[QuotaWindow])
 async def quota_windows(
     company_id: Optional[str] = Query(None, description="Filter by company UUID"),
-    session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[QuotaWindow]:
@@ -218,30 +202,15 @@ async def quota_windows(
     """
     if company_id:
         assert_company_access(ctx, company_id)
-    effective_company_id = company_id or str(ctx.org_id)
     svc = get_model_tier_service()
 
-    # Determine which providers are actively used by looking at cost events
-    active_providers: set[str] = set()
-    if effective_company_id:
-        try:
-            result = await session.execute(
-                text("""
-                    SELECT DISTINCT provider
-                    FROM llc_cost_events
-                    WHERE company_id = :company_id
-                      AND provider IS NOT NULL
-                    """),
-                {"company_id": effective_company_id},
-            )
-            active_providers = {row[0] for row in result.fetchall() if row[0]}
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("Could not query active providers: %s", exc)
-
-    # Also include providers from the platform tier map so the endpoint is
-    # useful even before any cost events have been ingested.
+    # "Actively used" providers were meant to come from llc_cost_events
+    # (GH#8487), but that table was never migrated (GH#13067) and its real
+    # replacement, llc_agent_budgets, carries no provider column — there is
+    # currently no per-company usage signal to source this from, so the
+    # response is the platform tier map only.
     tier_map = svc.get_tier_map()
-    all_providers = active_providers | set(tier_map.keys())
+    all_providers = set(tier_map.keys())
 
     return [
         QuotaWindow(
