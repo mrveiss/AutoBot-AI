@@ -18,6 +18,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from memory import TaskPriority  # canonical enum (#10626)
 from task_execution_tracker import get_task_tracker
+from voice_processing.hallucination_filter import is_silence_hallucination
 from voice_processing.models import AudioInput, SpeechRecognitionResult
 from voice_processing.types import SpeechQuality
 
@@ -123,6 +124,30 @@ class SpeechRecognitionEngine:
             },
         )
 
+    def _discard_silence_artifacts(self, transcription_result: Dict[str, Any], noise_level: float) -> Dict[str, Any]:
+        """Blank out a transcript that is a silence hallucination. Issue #13104.
+
+        Returning an empty transcription rather than raising keeps the audio
+        quality, noise level and segment metadata intact for callers, while
+        ensuring no phantom turn is committed from ambient noise.
+        """
+        if self.recognizer is None:
+            # The placeholder transcript is diagnostic text, not a user turn.
+            return transcription_result
+
+        transcript = transcription_result.get("transcription", "")
+        detected = transcription_result.get("language")
+        if not is_silence_hallucination(transcript, detected, rms=noise_level):
+            return transcription_result
+
+        logger.info("Discarded STT silence artifact instead of committing a user turn")
+        return {
+            **transcription_result,
+            "transcription": "",
+            "confidence": 0.0,
+            "silence_artifact_discarded": True,
+        }
+
     async def transcribe_audio(self, audio_input: AudioInput, language: str = "en") -> SpeechRecognitionResult:
         """Transcribe audio to text using speech recognition.
 
@@ -151,6 +176,7 @@ class SpeechRecognitionEngine:
                     transcription_result,
                     speech_segments,
                 ) = await self._run_parallel_analysis(audio_input, language)
+                transcription_result = self._discard_silence_artifacts(transcription_result, noise_level)
                 processing_time = time.time() - start_time
 
                 result = self._build_recognition_result(

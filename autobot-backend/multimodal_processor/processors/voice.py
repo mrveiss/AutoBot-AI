@@ -19,6 +19,7 @@ from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from config import get_config_section
 from llm_shared.torch_loader import lazy_torch
+from voice_processing.hallucination_filter import is_silence_hallucination
 
 from ..base import BaseModalProcessor
 from ..models import MultiModalInput, ProcessingResult
@@ -294,6 +295,10 @@ class VoiceProcessor(BaseModalProcessor):
             # Process with Whisper for transcription (Issue #315 - extracted method)
             transcribed_text = self._transcribe_with_whisper(audio_array, sampling_rate)
 
+            # Issue #13104: Whisper answers silence with a confident phantom
+            # phrase; drop it here so it never becomes a user turn downstream.
+            transcribed_text = self._reject_silence_hallucination(transcribed_text, audio_array)
+
             # Process with Wav2Vec2 for embeddings (Issue #315 - extracted method)
             audio_embedding, wav2vec_transcription = self._process_wav2vec_embeddings(audio_array, sampling_rate)
 
@@ -321,6 +326,23 @@ class VoiceProcessor(BaseModalProcessor):
                 torch.cuda.empty_cache()
             # Return error result (Issue #620 - extracted method)
             return self._build_error_result(e)
+
+    def _reject_silence_hallucination(self, transcribed_text: str, audio_array: np.ndarray) -> str:
+        """Return "" when Whisper transcribed silence into a phantom phrase. Issue #13104.
+
+        The language is whatever Whisper decided; the multilingual model does
+        not surface it here, so only the language-independent energy and audio
+        tag gates apply on this path.
+        """
+        if not transcribed_text:
+            return transcribed_text
+
+        rms = float(np.sqrt(np.mean(np.square(audio_array)))) if audio_array.size else 0.0
+        if not is_silence_hallucination(transcribed_text, rms=rms):
+            return transcribed_text
+
+        self.logger.info("Discarded Whisper silence artifact instead of emitting a voice command")
+        return ""
 
     def _validate_audio_models_available(self) -> None:
         """Validate that audio models are loaded and available. Issue #620."""
