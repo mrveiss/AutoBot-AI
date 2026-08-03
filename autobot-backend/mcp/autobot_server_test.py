@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autobot_shared.ssot_config import config
-from mcp.autobot_server import AutoBotMCPServer
+from mcp.autobot_server import AutoBotMCPServer, _stdio_bearer_token
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -330,3 +330,56 @@ async def test_legacy_token_still_works_without_run_jwt():
     assert "result" in resp
     tool_names = {t["name"] for t in resp["result"]["tools"]}
     assert "kb.search" in tool_names
+
+
+# ---------------------------------------------------------------------------
+# #13266: AUTOBOT_MCP_TOKEN has exactly one meaning (the secret segment)
+# ---------------------------------------------------------------------------
+
+
+def test_stdio_bearer_is_composed_from_secret_plus_scopes():
+    """#13266: stdio composes "<secret>:<scopes>" instead of reusing the secret as a bearer."""
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory"),
+    ):
+        assert _stdio_bearer_token() == f"{TEST_SECRET}:kb,memory"
+
+
+@pytest.mark.asyncio
+async def test_stdio_bearer_authenticates_end_to_end():
+    """#13266: the token stdio presents is accepted by the validator it is checked against.
+
+    Before the fix no value of AUTOBOT_MCP_TOKEN satisfied both readings, so
+    every stdio request was rejected with -32001 in every configuration.
+    """
+    server = make_server()
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory,agents"),
+    ):
+        resp = await server.handle_request("tools/list", {}, _stdio_bearer_token(), req_id=7, client_ip="stdio")
+
+    assert "error" not in resp, resp
+    assert {t["name"] for t in resp["result"]["tools"]} & {"kb.search"}
+
+
+def test_stdio_refuses_to_run_without_a_configured_secret():
+    """#13266/#13263: no default credential — an unset secret is fatal, not permissive."""
+    with patch.object(config.misc, "mcp_token", ""):
+        with pytest.raises(RuntimeError, match="AUTOBOT_MCP_TOKEN"):
+            _stdio_bearer_token()
+
+
+def test_stdio_refuses_to_run_with_no_scopes():
+    """An empty scope list would compose a token that grants nothing; fail loudly instead."""
+    with patch.object(config.misc, "mcp_token", TEST_SECRET), patch.object(config.misc, "mcp_stdio_scopes", " , "):
+        with pytest.raises(RuntimeError, match="scopes"):
+            _stdio_bearer_token()
+
+
+def test_stdio_rejects_the_overloaded_full_token_form():
+    """#13266: a '<secret>:<scopes>' value in AUTOBOT_MCP_TOKEN is named, not silently broken."""
+    with patch.object(config.misc, "mcp_token", f"{TEST_SECRET}:kb,memory,agents"):
+        with pytest.raises(RuntimeError, match="SECRET SEGMENT ONLY"):
+            _stdio_bearer_token()
