@@ -80,12 +80,18 @@ class _Mutation:
     owner_dir: Path
     owner_dir_display: str
     obj_id: int
+    # ``owner_dir.parents`` as a set, built once here rather than on every
+    # comparison.  ``Path.parents`` is a lazy sequence with no ``__contains__``,
+    # so ``x in path.parents`` walks it and constructs a fresh ``Path`` per
+    # level; at ~66 tracked stubs times ~1200 checks that was 640k throwaway
+    # ``Path`` objects and the single most expensive thing the guard did.
+    owner_ancestors: frozenset[Path]
 
     def is_live(self) -> bool:
         """True while the installed object is still the one in ``sys.modules``."""
         return id(sys.modules.get(self.key)) == self.obj_id
 
-    def escapes_to(self, path: Path | None) -> bool:
+    def escapes_to(self, path: Path | None, path_parents: frozenset[Path]) -> bool:
         """True when *path* is outside the directory that owns this stub.
 
         A strict *ancestor* directory is not an escape, and treating it as one
@@ -102,12 +108,15 @@ class _Mutation:
         Only *directories* are exempted.  A file sitting directly in an
         ancestor directory is never a member of ``owner_dir.parents``, so
         sibling modules one level up are still checked.
+
+        *path_parents* is ``path.parents`` as a set; the caller builds it once
+        per check and shares it across every tracked mutation.
         """
         if path is None:
             return False
-        if path == self.owner_dir or self.owner_dir in path.parents:
+        if path == self.owner_dir or self.owner_dir in path_parents:
             return False  # inside the owner's own subtree
-        if path in self.owner_dir.parents:
+        if path in self.owner_ancestors:
             return False  # a structural ancestor Dir node imports nothing
         return True
 
@@ -246,6 +255,7 @@ class _LeakGuard:
         owner = _display(owner_file, self._rootdir)
         owner_dir = owner_file if owner_file.is_dir() else owner_file.parent
         owner_dir_display = _display(owner_dir, self._rootdir)
+        owner_ancestors = frozenset(owner_dir.parents)
         for name, module, previous in changed:
             kind = self._classify(name, module, previous)
             if kind is None:
@@ -257,24 +267,28 @@ class _LeakGuard:
                 owner_dir=owner_dir,
                 owner_dir_display=owner_dir_display,
                 obj_id=id(module),
+                owner_ancestors=owner_ancestors,
             )
 
     def _changed_since(self, current: dict[str, object]) -> list[tuple[str, object, object]]:
         """Entries that are new or now bound to a different object.
 
-        This loop is the whole plugin's hot path, so it stays free of Python
-        calls: a C-level ``dict.get`` and an identity compare per entry.
-        Handing every module to ``_classify`` instead called it 443,487 times
-        for a 103-test session, since only a handful of keys ever change while
-        the scan is over all ~3600.
+        This is the whole plugin's hot path — one pass over every entry
+        ``sys.modules`` holds, on every collector and every test — so it stays
+        free of Python-level calls: a C ``dict.get`` and an identity compare
+        per entry, inside a comprehension rather than a statement loop
+        (measured 0.290 ms against 0.385 ms at 3600 entries).  Handing every
+        module to ``_classify`` instead called it 443,487 times for a
+        103-test session, since only a handful of keys ever change while the
+        scan has to cover all of them.
+
+        The bindings are gathered in a second pass because the first has to
+        stay as narrow as possible and the second runs over the 0-5 names that
+        actually changed.
         """
-        baseline = self._baseline
-        changed = []
-        for name, module in current.items():
-            previous = baseline.get(name, _MISSING)
-            if previous is not module:
-                changed.append((name, module, previous))
-        return changed
+        previous_of = self._baseline.get
+        changed = [name for name, module in current.items() if previous_of(name, _MISSING) is not module]
+        return [(name, current[name], previous_of(name, _MISSING)) for name in changed]
 
     def _classify(self, name: str, module: object, previous: object) -> str | None:
         """Return ``"replaced"``/``"synthetic"`` for a suspicious changed entry.
@@ -329,12 +343,19 @@ class _LeakGuard:
         return _resolves_on_disk(name)
 
     def check(self, path: Path | None, observed_at: str) -> None:
-        """Report every tracked stub still live while pytest works on *path*."""
+        """Report every tracked stub still live while pytest works on *path*.
+
+        ``path.parents`` is materialised once here and shared with every
+        tracked mutation rather than rebuilt inside each comparison.
+        """
+        if not self._tracked:
+            return
+        path_parents = frozenset(path.parents) if path is not None else frozenset()
         for mutation in list(self._tracked.values()):
             if not mutation.is_live():
                 self._tracked.pop(mutation.key, None)
                 continue
-            if not mutation.escapes_to(path):
+            if not mutation.escapes_to(path, path_parents):
                 continue
             token = (mutation.key, mutation.owner)
             if token in self._reported:
