@@ -129,7 +129,16 @@ async def test_returns_real_data_instead_of_always_empty(session_factory) -> Non
     body = resp.json()
     assert len(body) == 1
     assert body[0]["agent_id"] == "agent-alpha"
-    assert body[0]["output_tokens"] == 4200
+    # tokens_spent is an input+output COMBINED total (llc/services/budget.py's
+    # total_tokens = tokens_in + tokens_out) with no record of the split, so
+    # it must surface only via total_tokens -- not fabricated into one of the
+    # normalised split fields, which would misrepresent it as 100% output and
+    # apply the wrong per-token price to it.
+    assert body[0]["total_tokens"] == 4200
+    assert body[0]["input_tokens"] == 0
+    assert body[0]["cached_input_tokens"] == 0
+    assert body[0]["output_tokens"] == 0
+    assert body[0]["window"] == "lifetime"
     assert body[0]["model"] == "unknown"
 
 

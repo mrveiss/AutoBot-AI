@@ -115,7 +115,19 @@ def _normalise_usage(usage: Dict[str, Any], provider: str) -> tuple[int, int, in
 
 
 class AgentModelCost(BaseModel):
-    """Normalised token usage for one agent/model pair."""
+    """Normalised token usage for one agent/model pair.
+
+    ``input_tokens``/``cached_input_tokens``/``output_tokens`` require a
+    real per-event log to populate honestly (GH#13067) — ``llc_agent_budgets``
+    only accumulates a single combined ``tokens_spent`` counter
+    (``llc/services/budget.py``'s ``total_tokens = tokens_in + tokens_out``),
+    with no record of the input/output split. Rather than presenting that
+    combined total under one of the three split fields — which would apply
+    the wrong per-token pricing rate to whichever share it silently
+    misrepresents — they stay ``0`` and the real number is reported only in
+    ``total_tokens``, following ``llc/api/budget.py``'s ``list_cost_events``
+    precedent for the identical gap.
+    """
 
     agent_id: str
     agent_name: str
@@ -124,6 +136,8 @@ class AgentModelCost(BaseModel):
     input_tokens: int
     cached_input_tokens: int
     output_tokens: int
+    total_tokens: int
+    window: str = "lifetime"
 
 
 class QuotaWindow(BaseModel):
@@ -181,7 +195,9 @@ async def costs_by_agent_model(
             model="unknown",
             input_tokens=0,
             cached_input_tokens=0,
-            output_tokens=int(budget.tokens_spent),
+            output_tokens=0,
+            total_tokens=int(budget.tokens_spent),
+            window="lifetime",
         )
         for budget, agent_name in result.all()
     ]
