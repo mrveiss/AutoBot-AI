@@ -18,13 +18,33 @@
 # allocated a job means no runner is serving the pool. That is precisely the
 # condition of #13045, and it needs no runner name, so a runner rename can never
 # silently disable this check again.
+#
+# It now also reports the OPPOSITE fault (#13341): a self-hosted job that
+# started and then stopped making progress. That case defeated the starvation
+# probe rather than being caught by it — a wedged job is `in_progress` on a
+# `self-hosted` label, which the probe read as proof the pool was healthy, so
+# the work piling up behind it was dismissed as "contention, not an outage".
+# The required frontend check ran three hours past a declared 30-minute timeout
+# under exactly that reading. Wedged jobs are now excluded from the liveness
+# verdict and reported in their own right.
 
 name: self-hosted-runner-health
 
 on:
   schedule:
+    # DORMANT ON THIS BRANCH. GitHub dispatches `schedule` from the DEFAULT
+    # branch, and the copy of this file living there is the pre-#13045 version
+    # that queries the `/actions/runners` administration endpoint GITHUB_TOKEN
+    # cannot read — which is why the scheduled runs are still failing every 30
+    # minutes. The half-hourly cron starts exercising THIS probe on promotion.
     - cron: "*/30 * * * *"
   workflow_dispatch:
+  # Live coverage in the meantime. One short ubuntu-latest job per push to the
+  # integration branch, which is where the code that could wedge the runner
+  # lands. Without this the repaired probe would sit unexecuted behind the same
+  # default-branch registration wall that has kept the broken one running.
+  push:
+    branches: [Dev_new_gui]
 
 permissions:
   contents: read

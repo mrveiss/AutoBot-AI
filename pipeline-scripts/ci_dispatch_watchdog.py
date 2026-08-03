@@ -39,10 +39,30 @@ This module handles both:
   branch. This exists because ``--dry-run`` deliberately issues no approve
   request and therefore cannot answer the question at all.
 * ``--check runner-starvation`` — reports runs that have been queued past a
-  threshold while no self-hosted job is executing. The ``/actions/runners``
-  administration endpoint returns ``403 Resource not accessible by
-  integration`` for ``GITHUB_TOKEN``, so runner liveness is inferred from
-  ``GET /actions/runs/{id}/jobs`` labels instead.
+  threshold while no self-hosted job is executing, and separately reports
+  self-hosted jobs still executing well past the longest timeout any job in
+  this repository declares. The ``/actions/runners`` administration endpoint
+  returns ``403 Resource not accessible by integration`` for ``GITHUB_TOKEN``,
+  so runner liveness is inferred from ``GET /actions/runs/{id}/jobs`` labels
+  instead.
+
+A third failure mode joins those two, and it is the reason the second one is
+not sufficient on its own (#13341). A job can WEDGE rather than end: the
+required ``Unit & Integration Tests`` context ran for over three hours against
+a declared ``timeout-minutes: 30``, because GitHub enforces that timeout from
+the runner side and a runner that has stopped making progress never receives
+the cancellation. The consequences compound — the job holds a required context
+that no merge can proceed without, and it holds the singleton self-hosted
+runner that every other job needs.
+
+It is also INVISIBLE. An in-progress check is rendered exactly like a healthy
+one, so nothing distinguishes "running" from "wedged" but elapsed time. Worse,
+a wedged job makes the starvation probe read the pool as ALIVE: a hung job is
+``status=in_progress`` on a ``self-hosted`` label, which is precisely the
+signal ``self_hosted_pool_is_serving`` treats as proof of health. Queued work
+piling up behind it is then reported as "contention, not an outage" — a false
+negative in exactly the scenario the probe exists for. Overdue jobs are
+therefore excluded from the liveness verdict AND reported in their own right.
 
 **Fork safety.** ``POST /actions/runs/{id}/approve`` is GitHub's
 *approve-a-fork-pull-request-run* endpoint: releasing gated fork runs is its
@@ -74,6 +94,7 @@ Environment:
     WATCHDOG_POLL_INTERVAL_SECONDS   delay between those attempts
     WATCHDOG_STATUS_CONTEXT          commit status context name
     WATCHDOG_MAX_JOB_LOOKUPS         runs inspected for runner liveness per check
+    WATCHDOG_JOB_OVERDUE_MINUTES     runtime after which a self-hosted job is wedged
     WATCHDOG_ONLY_PR                 sweep just this PR number (default: every open PR)
 
 Exit codes:
@@ -159,10 +180,27 @@ DEFAULT_MAX_APPROVALS = 270
 DEFAULT_POLL_ATTEMPTS = 3
 DEFAULT_POLL_INTERVAL_SECONDS = 20
 DEFAULT_STATUS_CONTEXT = "ci-dispatch-watchdog"
-DEFAULT_MAX_JOB_LOOKUPS = 10
+# Runs inspected per check. Raised from 10 (#13341): the repository was measured
+# carrying 12 concurrently in-progress runs, so a budget of 10 could not reach
+# the whole set — and the run that matters is the one it dropped. See
+# `inspect_self_hosted_pool` for why the ORDER of that budget is the real fix.
+DEFAULT_MAX_JOB_LOOKUPS = 25
+# A self-hosted job still executing after this long is wedged, not slow (#13341).
+#
+# Derived, not chosen: every self-hosted job in .github/workflows declares
+# `timeout-minutes` of 30 or less (frontend-test's unit-tests and build-test at
+# 30, security-scan at 20, test-summary at 15, auto-update-pr-branches at 15).
+# 45 is therefore the largest declared ceiling in the repository plus a 50%
+# margin, so no job that is merely slow can reach it while still inside its own
+# declared limit. The case this catches is the one GitHub's own enforcement
+# missed: 3h05m against a declared 30m.
+DEFAULT_JOB_OVERDUE_MINUTES = 45
 # 0 means "every open PR"; a PR number narrows the sweep to that one head.
 DEFAULT_ONLY_PR = 0
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
+# GitHub's maximum page size. Listing runs is one call whatever the size, so the
+# full page is taken and the expensive per-run job lookups are budgeted instead.
+MAX_RUNS_PER_PAGE = 100
 
 
 class WatchdogError(RuntimeError):
@@ -217,6 +255,33 @@ class ApprovalOutcome(NamedTuple):
     raced: int = 0
     budget: int = 0
     exhausted: bool = False
+
+
+class OverdueJob(NamedTuple):
+    """A self-hosted job still executing long past any declared timeout."""
+
+    head_sha: str
+    workflow: str
+    job: str
+    elapsed_minutes: float
+    url: str
+
+    def describe(self) -> str:
+        return f"{self.workflow} / {self.job} running {self.elapsed_minutes:.0f}m"
+
+
+class PoolState(NamedTuple):
+    """
+    What one inspection of the self-hosted pool established.
+
+    ``serving`` is ``None`` when the answer could not be established at all, so
+    the caller can say "unknown" rather than inventing a verdict. It is ``True``
+    only when a self-hosted job is executing *within* a plausible runtime —
+    a wedged job is deliberately not evidence of health (#13341).
+    """
+
+    serving: Optional[bool]
+    overdue: List[OverdueJob]
 
 
 class SweepOutcome(NamedTuple):
@@ -349,6 +414,21 @@ def job_is_self_hosted(job: Dict[str, Any]) -> bool:
     return SELF_HOSTED_LABEL in labels
 
 
+def job_is_overdue(job: Dict[str, Any], now: datetime, overdue_minutes: int) -> bool:
+    """
+    True when a self-hosted job has been executing past the point of plausibility.
+
+    Only self-hosted jobs qualify. A GitHub-hosted job that overruns costs
+    billable minutes and nothing else; a self-hosted one holds the singleton
+    machine that every other job in the repository is waiting for, which is what
+    turns one wedged frontend check into a repository-wide merge freeze.
+    """
+    if job.get("status") != "in_progress" or not job_is_self_hosted(job):
+        return False
+    elapsed = age_minutes(job.get("started_at"), now)
+    return elapsed is not None and elapsed >= overdue_minutes
+
+
 def _truncate(text: str) -> str:
     if len(text) <= MAX_STATUS_DESCRIPTION:
         return text
@@ -362,6 +442,7 @@ def classify_dispatch(
     grace_minutes: int,
     stall_minutes: int,
     pool_serving: bool = True,
+    overdue: Sequence[OverdueJob] = (),
 ) -> Tuple[str, str]:
     """
     Decide the commit-status state for one PR head.
@@ -370,6 +451,12 @@ def classify_dispatch(
     state. The watchdog never reports ``success`` for a head whose CI has not
     demonstrably dispatched, so "no failures" can never be mistaken for
     "verified" (#12823 option 3, #13045 property 1).
+
+    A wedged job is reported as a failure for the same reason (#13341). Until
+    now an in-progress required check was rendered identically whether it was
+    working or hung, so the only way to tell was for a human to notice the clock
+    — which on 2026-08-03 took three hours. Naming it in a commit status makes
+    the difference visible on the pull request itself.
     """
     parked = [run for run in runs if is_parked(run)]
     if parked:
@@ -377,6 +464,13 @@ def classify_dispatch(
         return (
             "failure",
             _truncate(f"{len(parked)} run(s) parked awaiting approval and never started: {names}"),
+        )
+
+    if overdue:
+        names = ", ".join(sorted(entry.describe() for entry in overdue)[:2])
+        return (
+            "failure",
+            _truncate(f"{len(overdue)} job(s) wedged far past their declared timeout: {names}"),
         )
 
     starved = starved_runs(runs, now, stall_minutes)
@@ -510,25 +604,52 @@ class GitHubApi:
         return status
 
 
-def self_hosted_pool_is_serving(api: GitHubApi, max_lookups: int) -> Optional[bool]:
+def inspect_self_hosted_pool(
+    api: GitHubApi,
+    max_lookups: int,
+    overdue_minutes: int = DEFAULT_JOB_OVERDUE_MINUTES,
+    now: Optional[datetime] = None,
+) -> PoolState:
     """
-    True when a job is executing on the SELF-HOSTED pool right now.
+    Establish whether the SELF-HOSTED pool is healthy, and name what is wedged.
 
-    Any in-progress run used to count, which made this near-permanently true:
-    ``code-quality``, ``ci.yml`` and this very watchdog's own quarter-hourly
-    cron all run on GitHub-hosted runners, so "something is executing" says
-    nothing about the singleton machine that #13045 is about. Runner liveness is
-    therefore established from job labels — the closest signal to
+    Any in-progress run used to count as liveness, which made the verdict
+    near-permanently true: ``code-quality``, ``ci.yml`` and this very watchdog's
+    own quarter-hourly cron all run on GitHub-hosted runners, so "something is
+    executing" says nothing about the singleton machine that #13045 is about.
+    Liveness is therefore established from job labels — the closest signal to
     ``/actions/runners`` that a workflow token is allowed to read.
 
-    Returns ``None`` when the answer could not be established, so the caller can
-    say "unknown" instead of inventing a verdict.
+    A second false reading is corrected here (#13341). A job that has WEDGED is
+    still ``in_progress`` on a ``self-hosted`` label, so on the old rule the
+    hung job that was blocking every merge would itself have been read as proof
+    the pool was healthy, and the queue stacking up behind it dismissed as
+    "contention, not an outage". An overdue job is consequently excluded from
+    the liveness verdict and returned separately so it can be reported as the
+    fault it is. This costs no extra API call: the job listing that establishes
+    liveness is the same listing that finds the overdue jobs.
+
+    ``serving`` is ``None`` when the answer could not be established at all.
     """
+    now = now or datetime.now(timezone.utc)
+    overdue: List[OverdueJob] = []
     try:
-        running = api.recent_runs(per_page=max_lookups, run_status="in_progress")
+        # Ask for a full page and choose which runs to spend the job-lookup
+        # budget on here, rather than letting the API's ordering choose.
+        running = api.recent_runs(per_page=MAX_RUNS_PER_PAGE, run_status="in_progress")
     except WatchdogApiError as exc:
         print(f"  runner liveness unknown: {exc}")
-        return None
+        return PoolState(None, overdue)
+    # OLDEST FIRST — the correction that makes this detector able to fire at all
+    # (#13341). `GET /actions/runs` returns newest-first, and a wedged run is by
+    # definition the OLDEST in-progress run, so truncating the newest N to the
+    # lookup budget drops precisely the run being looked for. Measured on this
+    # repository: 12 runs in progress, and the wedging `Frontend Testing Suite`
+    # run was the oldest of the 12 — outside a budget of 10. The unit tests
+    # passed throughout, because a synthetic listing has nothing to truncate.
+    # Sorting costs nothing: it is the same single listing call.
+    running.sort(key=lambda run: str(run.get("run_started_at") or run.get("created_at") or ""))
+    serving = False
     for run in running[:max_lookups]:
         try:
             jobs = api.run_jobs(int(run["id"]))
@@ -536,9 +657,36 @@ def self_hosted_pool_is_serving(api: GitHubApi, max_lookups: int) -> Optional[bo
             print(f"  runner liveness partial: {exc}")
             continue
         for job in jobs:
-            if job.get("status") == "in_progress" and job_is_self_hosted(job):
-                return True
-    return False
+            if job.get("status") != "in_progress" or not job_is_self_hosted(job):
+                continue
+            if job_is_overdue(job, now, overdue_minutes):
+                elapsed = age_minutes(job.get("started_at"), now) or 0.0
+                overdue.append(
+                    OverdueJob(
+                        head_sha=str(run.get("head_sha") or ""),
+                        workflow=str(run.get("name") or "?"),
+                        job=str(job.get("name") or "?"),
+                        elapsed_minutes=elapsed,
+                        url=str(job.get("html_url") or _run_url(api.repository, run)),
+                    )
+                )
+                continue
+            serving = True
+    return PoolState(serving, overdue)
+
+
+def self_hosted_pool_is_serving(api: GitHubApi, max_lookups: int) -> Optional[bool]:
+    """Liveness alone, for callers that do not need the overdue detail."""
+    return inspect_self_hosted_pool(api, max_lookups).serving
+
+
+def overdue_by_head(overdue: Sequence[OverdueJob]) -> Dict[str, List[OverdueJob]]:
+    """Group wedged jobs by the head commit whose PR they are blocking."""
+    grouped: Dict[str, List[OverdueJob]] = {}
+    for entry in overdue:
+        if entry.head_sha:
+            grouped.setdefault(entry.head_sha, []).append(entry)
+    return grouped
 
 
 def interpret_probe(status: int, message: str) -> Tuple[Optional[bool], str]:
@@ -805,9 +953,11 @@ def publish_dispatch_states(
     config: Dict[str, Any],
     dry_run: bool,
     pool_serving: Optional[bool],
+    overdue: Sequence[OverdueJob] = (),
 ) -> int:
     """Write the dispatch commit status for each head. Returns the not-dispatched count."""
     now = datetime.now(timezone.utc)
+    wedged = overdue_by_head(overdue)
     blocked = 0
     for head in heads:
         try:
@@ -825,6 +975,7 @@ def publish_dispatch_states(
                 config["grace_minutes"],
                 config["stall_minutes"],
                 pool_serving is not False,
+                wedged.get(head.sha, ()),
             )
         target = _run_url(api.repository, runs[0]) if runs else head.url
         if dry_run:
@@ -835,6 +986,28 @@ def publish_dispatch_states(
         if state != "success":
             blocked += 1
     return blocked
+
+
+def report_overdue_jobs(overdue: Sequence[OverdueJob], overdue_minutes: int) -> None:
+    """
+    Print a named annotation for every wedged self-hosted job.
+
+    Deliberately an annotation rather than an exit code in the dispatch sweep:
+    the actionable signal is the FAILING COMMIT STATUS published on the head the
+    wedged job belongs to, and failing every other PR's sweep because one PR is
+    stuck would spread a precise fault into indiscriminate noise. The starvation
+    probe, which is a dedicated repository-wide health check rather than a
+    per-PR one, does exit non-zero — see :func:`check_runner_starvation`.
+    """
+    if not overdue:
+        return
+    print(
+        f"::error::{len(overdue)} self-hosted job(s) still executing after {overdue_minutes}m. "
+        "Every job in this repository declares a shorter timeout, so these are wedged, not slow. "
+        "They hold the singleton runner and any required context they carry."
+    )
+    for entry in overdue:
+        print(f"  {entry.describe()} on {entry.head_sha[:12] or 'unknown head'} ({entry.url})")
 
 
 def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False) -> int:
@@ -858,8 +1031,9 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
     print(f"Approval capability probe: {explanation}")
 
     approved, refused, raced, _touched, deferred = sweep_parked_runs(api, heads, config, dry_run)
-    pool_serving = self_hosted_pool_is_serving(api, config["max_job_lookups"])
-    blocked = publish_dispatch_states(api, heads, config, dry_run, pool_serving)
+    pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"])
+    report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
+    blocked = publish_dispatch_states(api, heads, config, dry_run, pool.serving, pool.overdue)
 
     print(
         f"Sweep complete: {approved} approved, {raced} already released, "
@@ -919,31 +1093,61 @@ def check_probe(api: GitHubApi) -> int:
 
 
 def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
-    """Report runs queued past the threshold while the self-hosted pool is idle (#13045)."""
+    """
+    Report a self-hosted pool that is not serving the work it has been given.
+
+    Two distinct faults produce the same user-visible symptom — a required
+    context that never reaches a conclusion — and both are reported here:
+
+    * **Starvation (#13045).** Runs are created but never allocate a job because
+      no runner is serving the pool. They sit ``queued`` with ``jobs: []``.
+    * **A wedged job (#13341).** A job DID start and then stopped making
+      progress, so GitHub's runner-side ``timeout-minutes`` enforcement never
+      fires and the job holds the singleton indefinitely.
+
+    The wedged case is checked unconditionally, not only when something is
+    queued behind it. It is a fault the moment it happens — it is holding a
+    required status check — and waiting for a queue to build before saying so
+    would reproduce the three-hour silence that #13341 records.
+    """
     now = datetime.now(timezone.utc)
     # Filtered server-side: an unfiltered page is dominated by the hundreds of
     # parked runs this repository carries, which can hide every queued run.
+    #
+    # KNOWN LIMIT, stated rather than papered over: this listing cannot tell the
+    # two runner pools apart. Labels live on JOBS, and a starved run has no jobs
+    # — that absence IS the condition being detected — so a run queued past the
+    # threshold cannot be attributed to the self-hosted pool from the API alone,
+    # and a GitHub-hosted capacity backlog would read the same way. The verdict
+    # below is therefore never taken from the queue on its own; it is qualified
+    # by the pool inspection, which IS label-attributed. Whether a starved queue
+    # can be attributed to a pool by any means the workflow token can read
+    # remains open.
     queued = api.recent_runs(run_status="queued")
     starved = starved_runs(queued, now, config["stall_minutes"])
+    pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"], now)
+    report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
+
     if not starved:
+        if pool.overdue:
+            return 1
         print(f"No run has been queued longer than {config['stall_minutes']}m — runner pool is keeping up.")
         return 0
 
-    serving = self_hosted_pool_is_serving(api, config["max_job_lookups"])
-    if serving is None:
+    if pool.serving is None:
         print(f"::warning::{len(starved)} run(s) queued over {config['stall_minutes']}m; runner liveness UNKNOWN")
-        return 0
-    if serving:
+        return 1 if pool.overdue else 0
+    if pool.serving:
+        # `pool.serving` excludes wedged jobs, so this really is healthy work in
+        # flight rather than the hung job that used to masquerade as liveness.
         print(
             f"{len(starved)} run(s) queued over {config['stall_minutes']}m, but a self-hosted job is executing — "
             "contention, not an outage."
         )
-        return 0
+        return 1 if pool.overdue else 0
 
-    print(
-        f"::error::{len(starved)} workflow run(s) queued over {config['stall_minutes']}m "
-        "while no self-hosted job is executing"
-    )
+    reason = "while a self-hosted job is wedged" if pool.overdue else "while no self-hosted job is executing"
+    print(f"::error::{len(starved)} workflow run(s) queued over {config['stall_minutes']}m {reason}")
     for run in starved:
         waited = age_minutes(run.get("created_at"), now)
         waited_text = f"{waited:.0f}m" if waited is not None else "unknown"
@@ -972,6 +1176,7 @@ def load_config() -> Dict[str, Any]:
         "poll_interval_seconds": _env_int("WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS),
         "status_context": os.environ.get("WATCHDOG_STATUS_CONTEXT", DEFAULT_STATUS_CONTEXT),
         "max_job_lookups": _env_int("WATCHDOG_MAX_JOB_LOOKUPS", DEFAULT_MAX_JOB_LOOKUPS),
+        "job_overdue_minutes": _env_int("WATCHDOG_JOB_OVERDUE_MINUTES", DEFAULT_JOB_OVERDUE_MINUTES),
         "only_pr": _env_non_negative_int("WATCHDOG_ONLY_PR", DEFAULT_ONLY_PR),
     }
 

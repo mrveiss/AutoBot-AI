@@ -61,16 +61,55 @@ jobs:
           # this guard actually blocks any new TS error (#10093).
           BASELINE: 0
         run: |
-          set +e
-          # Use a pipeline-safe pattern so vue-tsc's exit code doesn't break the count
-          ERRORS=$(npx vue-tsc --noEmit -p tsconfig.app.json 2>&1 | grep -cE "error TS")
+          set -uo pipefail
+          # #13341: this step carried the same fail-open as check-ts-delta.sh —
+          # `set +e` plus a bare `grep -c` meant a vue-tsc that CRASHED or could
+          # not read its tsconfig produced ERRORS=0, which against BASELINE=0 is
+          # a pass. The "any new TS error fails" guard was therefore green in
+          # every case where the compiler never checked anything.
+          #
+          # Also dropped `npx`, for the reason recorded in check-ts-delta.sh:
+          # it resolves packages (network), prompts on stdin when resolution
+          # misses, and takes npm-cache locks — all unbounded waits, and the
+          # cause of a required check hanging for three hours. vue-tsc is a
+          # devDependency and is on disk after `npm ci`.
+          TSC_BIN=node_modules/.bin/vue-tsc
+          if [ ! -x "$TSC_BIN" ]; then
+            echo "ERROR: vue-tsc not found at $TSC_BIN — did 'npm ci' run?"
+            exit 1
+          fi
+
+          TSC_OUTPUT=$(mktemp)
+          trap 'rm -f "$TSC_OUTPUT"' EXIT
+          TSC_STATUS=0
+          "$TSC_BIN" --noEmit -p tsconfig.app.json >"$TSC_OUTPUT" 2>&1 </dev/null || TSC_STATUS=$?
+          ERRORS=$(grep -cE "error TS" "$TSC_OUTPUT" || true)
+
+          # vue-tsc returns TypeScript's ExitStatus: 0 clean, 1 a configuration
+          # diagnostic, 2 "type errors found", 3/4 invalid project. Above 2 it
+          # never completed a check; non-zero with no diagnostics is a crash.
+          if [ "$TSC_STATUS" -gt 2 ] || { [ "$TSC_STATUS" -ne 0 ] && [ "$ERRORS" -eq 0 ]; }; then
+            echo "ERROR: vue-tsc exited $TSC_STATUS without completing a check."
+            cat "$TSC_OUTPUT"
+            exit 1
+          fi
+          # TS5xxx/TS6xxx are config/command-line diagnostics, reported INSTEAD
+          # of checking the sources — a missing tsconfig emits exactly one and
+          # would otherwise read as a single tolerable error.
+          if grep -qE "error TS[56][0-9]{3}" "$TSC_OUTPUT"; then
+            echo "ERROR: vue-tsc reported a configuration error; nothing was type-checked."
+            cat "$TSC_OUTPUT"
+            exit 1
+          fi
+
+          cat "$TSC_OUTPUT"
           echo "BASELINE: $BASELINE errors (see #7227 for breakdown)"
           echo "CURRENT:  $ERRORS errors"
           if [ "$ERRORS" -gt "$BASELINE" ]; then
             echo ""
             echo "❌ Regression: $ERRORS > $BASELINE errors"
             echo "This PR introduced $((ERRORS - BASELINE)) new TypeScript errors."
-            echo "Run \`npx vue-tsc --noEmit -p tsconfig.app.json\` locally to inspect."
+            echo "Run \`npm run type-check\` in autobot-frontend/ locally to inspect."
             exit 1
           fi
           if [ "$ERRORS" -lt "$BASELINE" ]; then
