@@ -4,3 +4,4 @@ chromadb==1.5.9
 sqlalchemy==2.0.51
 aiosqlite==0.22.1
 alembic==1.18.5  # migration-gate static tests import migrations.baseline (#10001)
+psycopg2-binary>=2.9.12  # production dep (autobot-slm-backend/requirements.txt): the sync driver every migrations/*.py uses. migrations/utils.py + migrations/runner.py import it at module level, so migrations/utils_test.py fails collection without it (#13086)

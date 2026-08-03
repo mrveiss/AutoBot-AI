@@ -6,3 +6,5 @@ jsonschema==4.26.0
 psutil==7.2.2
 watchdog==6.0.0    # services/documentation_watcher imports it; without it documentation_watcher_staleness_test fails collection (#11687)
 cachetools>=7.1.6  # security/enterprise/domain_reputation imports it; security/enterprise/__init__ re-exports that module, so without it the whole security suite aborts at collection (#13162)
+croniter>=6.2.4,<7.0.0        # production dep of BOTH backends; autobot-slm-backend/services/schedule_executor.py imports it unconditionally (reached via slm main.py), and llc/api/routines.py + llc/scheduler/heartbeat_scheduler.py silently degrade to croniter=None without it (#13086)
+apscheduler>=3.11.3,<4.0.0    # production dep (autobot-backend/requirements.txt); services/llm_key_rotation_scheduler.py imports it at module level. Errors nothing today only because lifespan.py imports that module inside a function — same latent shape as croniter (#13351)
