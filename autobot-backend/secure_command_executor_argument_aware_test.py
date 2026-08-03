@@ -148,28 +148,68 @@ def test_dns_recon_classifies_at_least_moderate(
 # ---------------------------------------------------------------------------
 
 
-def test_argument_aware_check_runs_before_base_command_lookup() -> None:
-    """Pin the architectural decision: argument-aware checks fire BEFORE
-    the base-command allowlist. Otherwise `docker run --privileged …`
-    would resolve as MODERATE (docker is allowlisted) and miss the
-    elevation.
+class TestArgumentAwareRiskWinsOverTheAllowlistedBaseCommand:
+    """Pin the architectural decision *by its consequence*.
 
-    Scoped to `assess_command_risk` body only — `_extract_command_name`
-    appears in many sibling helpers; we want the order WITHIN
-    `assess_command_risk` itself.
+    Argument-aware checks fire BEFORE the base-command allowlist, otherwise
+    ``docker run --privileged ...`` resolves as whatever ``docker`` alone is
+    worth and the elevation is lost.
+
+    This used to compare ``src.find("_check_argument_aware_risk")`` against
+    ``src.find("base_command = self._extract_command_name")`` inside
+    ``inspect.getsource(assess_command_risk)`` (#13311): it broke on any
+    rename or extraction, and it never checked that the ordering *mattered* --
+    it would have passed just as happily if both branches returned the same
+    thing.
     """
-    import inspect
 
-    import secure_command_executor as mod
+    @staticmethod
+    def _bare_base_command_risk(executor: SecureCommandExecutor, base: str) -> CommandRisk:
+        """What the allowlist alone says about the base command."""
+        risk, _reasons = executor.assess_command_risk(base)
+        return risk
 
-    src = inspect.getsource(mod.SecureCommandExecutor.assess_command_risk)
-    arg_aware_pos = src.find("_check_argument_aware_risk")
-    base_lookup_pos = src.find("base_command = self._extract_command_name")
-    assert arg_aware_pos != -1, "_check_argument_aware_risk must be wired into assess_command_risk"
-    assert base_lookup_pos != -1, "base_command extraction must be present in assess_command_risk"
-    assert arg_aware_pos < base_lookup_pos, (
-        "#7384: _check_argument_aware_risk must run BEFORE the "
-        "`base_command = self._extract_command_name(...)` call inside "
-        "assess_command_risk so argument-elevated risks override the "
-        "allowlisted base command."
+    @pytest.mark.parametrize(
+        "base, elevated",
+        [
+            ("docker ps", "docker run --privileged alpine"),
+            ("find /tmp -name x", "find / -perm -4000"),
+        ],
     )
+    def test_the_argument_elevates_above_the_base_commands_own_rating(
+        self, executor: SecureCommandExecutor, base: str, elevated: str
+    ) -> None:
+        """If the allowlist were consulted first, both would rate the same."""
+        base_risk = self._bare_base_command_risk(executor, base)
+        elevated_risk, reasons = executor.assess_command_risk(elevated)
+
+        order = list(CommandRisk)
+        assert order.index(elevated_risk) > order.index(base_risk), (
+            f"#7384: `{elevated}` rated {elevated_risk.value}, the same or less than "
+            f"`{base}` at {base_risk.value} -- the allowlist won, so the "
+            f"argument-aware check no longer runs first. Reasons: {reasons}"
+        )
+
+    def test_the_reason_names_the_argument_not_the_base_command(self, executor: SecureCommandExecutor) -> None:
+        """Ordering is only useful if the *more specific* reason survives."""
+        _risk, reasons = executor.assess_command_risk("docker run --privileged alpine")
+
+        joined = " ".join(reasons).lower()
+        assert "--privileged" in joined, f"expected the offending flag in the reasons; got {reasons}"
+
+    def test_a_dangerous_env_var_prefix_still_outranks_the_argument_check(
+        self, executor: SecureCommandExecutor
+    ) -> None:
+        """#7375 sits ahead of #7384; guard that this ordering did not invert."""
+        risk, reasons = executor.assess_command_risk("LD_PRELOAD=/tmp/e.so docker run --privileged alpine")
+
+        assert risk == CommandRisk.FORBIDDEN
+        assert any("env-var prefix" in r.lower() for r in reasons), reasons
+
+    def test_an_allowlisted_command_without_the_argument_is_not_elevated(
+        self, executor: SecureCommandExecutor
+    ) -> None:
+        """The mirror: the argument-aware branch must not swallow normal use."""
+        risk, _reasons = executor.assess_command_risk("docker ps")
+
+        assert risk != CommandRisk.FORBIDDEN
