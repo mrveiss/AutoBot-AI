@@ -171,34 +171,62 @@ class TestIsTaskStale:
 
 
 class TestCollectStaleTasks:
-    def test_returns_empty_when_no_agents(self):
-        mgr = _make_manager()
-        assert mgr._collect_stale_tasks(now_utc()) == []
+    """_collect_stale_tasks is async since #6468 (it also probes the Redis claim key).
 
-    def test_returns_stale_pair(self):
+    The claim probe is patched to report "alive" so these cases exercise the
+    in-memory timestamp thresholds only; claim expiry has its own test below.
+    """
+
+    @staticmethod
+    def _patch_claim_alive(alive: bool = True):
+        return patch(f"{_PERSISTENCE_MODULE}.is_claim_alive", AsyncMock(return_value=alive))
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_agents(self):
+        mgr = _make_manager()
+        with self._patch_claim_alive():
+            assert await mgr._collect_stale_tasks(now_utc()) == []
+
+    @pytest.mark.asyncio
+    async def test_returns_stale_pair(self):
         mgr = _make_manager(stale_task_timeout_seconds=60, grace_period_seconds=30)
         _register_agent(mgr, "agent-1")
         _assign_task(mgr, "agent-1", "task-A", assigned_seconds_ago=120)
-        pairs = mgr._collect_stale_tasks(now_utc())
+        with self._patch_claim_alive():
+            pairs = await mgr._collect_stale_tasks(now_utc())
         assert ("agent-1", "task-A") in pairs
 
-    def test_skips_fresh_tasks(self):
+    @pytest.mark.asyncio
+    async def test_skips_fresh_tasks(self):
         mgr = _make_manager(stale_task_timeout_seconds=300, grace_period_seconds=300)
         _register_agent(mgr, "agent-1")
         _assign_task(mgr, "agent-1", "task-B", assigned_seconds_ago=5)
-        assert mgr._collect_stale_tasks(now_utc()) == []
+        with self._patch_claim_alive():
+            assert await mgr._collect_stale_tasks(now_utc()) == []
 
-    def test_multiple_agents_multiple_tasks(self):
+    @pytest.mark.asyncio
+    async def test_multiple_agents_multiple_tasks(self):
         mgr = _make_manager(stale_task_timeout_seconds=60, grace_period_seconds=30)
         for aid in ("a1", "a2"):
             _register_agent(mgr, aid)
         _assign_task(mgr, "a1", "t1", assigned_seconds_ago=120)  # stale
         _assign_task(mgr, "a1", "t2", assigned_seconds_ago=5)  # fresh
         _assign_task(mgr, "a2", "t3", assigned_seconds_ago=200)  # stale
-        pairs = mgr._collect_stale_tasks(now_utc())
+        with self._patch_claim_alive():
+            pairs = await mgr._collect_stale_tasks(now_utc())
         assert ("a1", "t1") in pairs
         assert ("a2", "t3") in pairs
         assert all(p[1] != "t2" for p in pairs)
+
+    @pytest.mark.asyncio
+    async def test_expired_redis_claim_marks_fresh_task_stale(self):
+        """#6468: an expired claim key reclaims a task the timestamps still call fresh."""
+        mgr = _make_manager(stale_task_timeout_seconds=300, grace_period_seconds=300)
+        _register_agent(mgr, "agent-1")
+        _assign_task(mgr, "agent-1", "task-C", assigned_seconds_ago=5)
+        with self._patch_claim_alive(alive=False):
+            pairs = await mgr._collect_stale_tasks(now_utc())
+        assert pairs == [("agent-1", "task-C")]
 
 
 # ---------------------------------------------------------------------------
