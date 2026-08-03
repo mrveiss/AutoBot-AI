@@ -6,8 +6,11 @@
 
 set -euo pipefail
 
-SKILL_FILE="/home/martins/.claude/plugins/marketplaces/claude-plugins-official/plugins/code-review/commands/code-review.md"
-AGENT_FILE="/home/martins/.claude/plugins/marketplaces/claude-plugins-official/plugins/pr-review-toolkit/agents/code-reviewer.md"
+# Plugin files live outside the repo; derive from $HOME so this runs for any
+# developer rather than one workstation (#13409). Override with PLUGIN_ROOT.
+PLUGIN_ROOT="${PLUGIN_ROOT:-${HOME}/.claude/plugins/marketplaces/claude-plugins-official/plugins}"
+SKILL_FILE="${PLUGIN_ROOT}/code-review/commands/code-review.md"
+AGENT_FILE="${PLUGIN_ROOT}/pr-review-toolkit/agents/code-reviewer.md"
 
 echo "=== Code Review Hardening Test ==="
 echo
