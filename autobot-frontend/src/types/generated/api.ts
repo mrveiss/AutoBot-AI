@@ -1905,7 +1905,9 @@ export interface paths {
          *     This endpoint is called by Telegram servers when a message is sent to the bot.
          *     Messages are normalized via TelegramAdapter and routed to AutoBot chat.
          *
-         *     Security: Verifies X-Telegram-Bot-Api-Secret-Token header matches stored secret.
+         *     Security: Verifies the X-Telegram-Bot-Api-Secret-Token header matches the
+         *     stored secret, enforced by the ``verify_telegram_secret`` route dependency
+         *     so authentication runs before the request body is parsed.
          *
          *     Args:
          *         request: FastAPI request (for header access)
