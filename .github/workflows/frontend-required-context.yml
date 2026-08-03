@@ -1,0 +1,103 @@
+# Frontend required-context publisher — #10527, #13405
+#
+# `Unit & Integration Tests` is a REQUIRED status check on the integration
+# branch. Exactly one of two mutually exclusive jobs publishes it:
+#
+#   frontend paths changed   -> `unit-tests` in frontend-test.yml, on the
+#                               self-hosted runner. That is the real gate and
+#                               it stays there (this workflow never reports a
+#                               conclusion in that case).
+#   frontend paths untouched -> `unit-tests-skip` below, on ubuntu-latest.
+#
+# WHY THE SHIM IS ITS OWN WORKFLOW
+#
+# It used to be a job inside frontend-test.yml, which made it useless in the
+# exact outage it was written for. frontend-test.yml declares a WORKFLOW-level
+# concurrency group, and `cancel-in-progress: true` reaps an *in-progress*
+# predecessor but NOT a *queued* one. With the singleton self-hosted runner
+# offline a predecessor never reaches in-progress, so it never yields the group,
+# and every successor run sits in `status: pending` with an empty `jobs` array —
+# indefinitely. A shim cannot report a context from a run that never starts, so
+# the required check went missing and every affected pull request read
+# `mergeable: MERGEABLE` and `statusCheckRollup: SUCCESS` while
+# `mergeStateStatus` read `BLOCKED`, with no failing job to point at.
+#
+# Living in its own file gives the shim its own concurrency scope and a
+# GitHub-hosted runner, so no state of the self-hosted runner can stop the
+# required context from reporting.
+#
+# NO `concurrency:` BLOCK — DELIBERATE. A concurrency group is precisely what
+# broke the shim before. Both jobs here finish in seconds on ubuntu-latest, so
+# cancelling predecessors saves nothing, while any group at all reintroduces a
+# way for this workflow to be gated behind something else. A superseded run
+# simply finishes and publishes against its own, now stale, head SHA — which
+# branch protection does not read.
+#
+# NOT ON THE SELF-HOSTED RUNNER, EVER. Every job here must stay on
+# ubuntu-latest; a self-hosted step in this file would recreate the failure.
+
+name: Frontend Required Context
+
+on:
+  pull_request:
+    # Same branch list as frontend-test.yml, and deliberately NO `paths:`
+    # filter, for the same reason that workflow has none: a path-filtered
+    # required check that never triggers leaves the pull request deadlocked on
+    # "Expected — Waiting for status". Which side publishes the context is
+    # decided by the `changes` job below, never by the event filter.
+    #
+    # `pull_request` only. The shim was never reachable on `push`: that trigger
+    # in frontend-test.yml carries a `paths:` filter, so a push run only exists
+    # when frontend paths changed, and in that case the real `unit-tests` job
+    # publishes the context. Required contexts are evaluated against a pull
+    # request head, which for same-repo branches is only ever written by
+    # `pull_request` runs.
+    branches: [main, develop, 'Dev_*']
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed paths (required context)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
+        id: filter
+        with:
+          # A shared file, NOT an inline copy: frontend-test.yml's `changes` job
+          # loads the very same path set from the very same checkout. Two inline
+          # copies could drift, and a drift in one direction — this workflow
+          # deciding "no frontend change" while frontend-test.yml decides there
+          # was one — would hand the pull request the shim's green while the
+          # real suite never ran. One file, one answer.
+          filters: .github/filters/frontend-paths.yml
+
+  unit-tests-skip:
+    # IDENTICAL to the self-hosted job name in frontend-test.yml on purpose:
+    # the required status context is the JOB name, so this reports the same
+    # context from a runner that cannot be starved.
+    name: Unit & Integration Tests
+    needs: changes
+    # Exact complement of `unit-tests` in frontend-test.yml, which is
+    # `needs.changes.outputs.frontend == 'true'`. Both jobs evaluate the same
+    # filter file, for the same event, against the same head — so for any given
+    # pull request exactly one of the two runs and the other is `skipped`.
+    #
+    # Fail-closed: if `changes` errors, `needs` skips this job rather than
+    # reporting green, so a broken detector can never fake a pass.
+    if: needs.changes.outputs.frontend != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: No frontend changes — reporting required context as success
+        run: |
+          echo "No frontend paths changed in this pull request."
+          echo "The frontend Unit & Integration suite does not apply, so the"
+          echo "required 'Unit & Integration Tests' context is reported green"
+          echo "from ubuntu-latest, independently of the self-hosted runner."
+          echo "Path set: .github/filters/frontend-paths.yml (#10527, #13405)."

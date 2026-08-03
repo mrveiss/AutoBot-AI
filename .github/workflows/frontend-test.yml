@@ -6,9 +6,16 @@ name: Frontend Testing Suite
 on:
   push:
     branches: [main, develop, 'Dev_*']
+    # Mirror of .github/filters/frontend-paths.yml. GitHub requires event path
+    # filters to be inline, so this copy cannot be shared — but it only decides
+    # whether a POST-merge run happens here, never which job publishes the
+    # required context, so a drift is visible rather than dangerous. The filter
+    # file stays authoritative (#13405).
     paths:
       - 'autobot-frontend/**'
       - '.github/workflows/frontend-test.yml'
+      - '.github/workflows/frontend-required-context.yml'
+      - '.github/filters/frontend-paths.yml'
       # Canonical source for the cross-language parity guard (#13073, #13074):
       # a port/enum edit here with no frontend edit must still run the suite.
       - 'autobot_shared/ssot_config.py'
@@ -19,15 +26,30 @@ on:
     #
     # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so
     # its required-check context ("Unit & Integration Tests") always reports a
-    # conclusion. A path-filtered required check that never triggers leaves the
-    # PR deadlocked on "Expected — Waiting for status". The real work is gated on
-    # the `changes` job below; when no frontend paths are touched, the
-    # `unit-tests-skip` shim job (same `name:`, ubuntu-latest) reports the
-    # required context green so the PR is never blocked on an unreported check
-    # (#10527). Branch-protection promotion to required is the separate
-    # owner-confirmed follow-up (#10022).
+    # conclusion when the suite applies. A path-filtered required check that
+    # never triggers leaves the PR deadlocked on "Expected — Waiting for
+    # status". The real work is gated on the `changes` job below.
+    #
+    # When no frontend paths are touched the context is reported green by
+    # `unit-tests-skip` in .github/workflows/frontend-required-context.yml — a
+    # SEPARATE workflow, so it shares no concurrency group and no runner with
+    # the self-hosted jobs here (#10527, #13405). Branch-protection promotion to
+    # required is the separate owner-confirmed follow-up (#10022).
     branches: [main, develop, 'Dev_*']
 
+# Only the heavy, self-hosted half of the frontend CI lives in this workflow, so
+# superseding a predecessor is the right default: the runner is a singleton and
+# re-testing a stale head wastes the only machine that can test the new one.
+#
+# KNOWN LIMITATION (#13405): `cancel-in-progress` reaps an *in-progress*
+# predecessor, never a *queued* one. While the self-hosted runner is offline a
+# predecessor never reaches in-progress, so it holds this group and successor
+# runs sit in `status: pending` with an empty `jobs` array until something
+# force-cancels the predecessor. That is survivable HERE because nothing in this
+# workflow is on the critical path of a non-frontend PR any more: the required
+# `Unit & Integration Tests` context is published by frontend-required-context.yml
+# when the suite does not apply, and when it DOES apply a blocked run is a
+# correct block — the tests genuinely have not run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -51,12 +73,12 @@ jobs:
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706  # v4.0.2
         id: filter
         with:
-          filters: |
-            frontend:
-              - 'autobot-frontend/**'
-              - '.github/workflows/frontend-test.yml'
-              # See the push paths above (#13073, #13074).
-              - 'autobot_shared/ssot_config.py'
+          # Shared file, NOT an inline list: frontend-required-context.yml's
+          # `changes` job loads the very same path set. Its shim job and the
+          # `unit-tests` job below carry the same required context name under
+          # exactly complementary conditions, so the split is only correct while
+          # both compute the same answer — one file, one answer (#13405).
+          filters: .github/filters/frontend-paths.yml
 
   # Job 1: Unit and Integration Tests
   unit-tests:
@@ -180,34 +202,19 @@ jobs:
         run: |
           rm -rf autobot-frontend/node_modules || true
 
-  # Job 1b: Skip-success shim for the required "Unit & Integration Tests"
-  # context (#10527).
+  # Job 1b (RELOCATED, not removed): the skip-success shim for the required
+  # "Unit & Integration Tests" context now lives in
+  # .github/workflows/frontend-required-context.yml.
   #
-  # `Unit & Integration Tests` is a REQUIRED status check on Dev_new_gui. The
-  # real `unit-tests` job above runs on the self-hosted runner and only when
-  # frontend paths change. Relying on GitHub's implicit "skipped required job =
-  # pass" was fragile in practice: on non-frontend PRs the context could be left
-  # CANCELLED (concurrency cancel-in-progress) or stuck QUEUED on the singleton
-  # self-hosted runner, neither of which counts as success — permanently
-  # BLOCKING the PR and forcing `--admin` merges.
+  # It still carries the identical job `name:`, still runs on ubuntu-latest and
+  # still fires only when frontend paths did NOT change — the exact complement
+  # of `unit-tests` above, evaluated from the same
+  # .github/filters/frontend-paths.yml. What changed is only WHICH RUN hosts it.
   #
-  # This shim carries the IDENTICAL job `name:` so it reports the same required
-  # context, runs on ubuntu-latest (never contends for / is cancelled by the
-  # self-hosted runner), and fires ONLY when frontend paths did NOT change —
-  # mutually exclusive with the real job's `if:` above. Result: every PR gets
-  # exactly one terminal "Unit & Integration Tests" conclusion — the real gating
-  # tests when frontend changed, an explicit green here when it did not.
-  unit-tests-skip:
-    name: Unit & Integration Tests
-    needs: changes
-    if: needs.changes.outputs.frontend != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: No frontend changes — reporting required context as success
-        run: |
-          echo "No frontend paths changed in this PR."
-          echo "Skipping the frontend Unit & Integration test suite and reporting"
-          echo "the required 'Unit & Integration Tests' context as success (#10527)."
+  # It had to leave this file. A shim cannot report a context from a run that
+  # never starts, and this workflow's run does not start while a `queued`
+  # predecessor holds its concurrency group — the state the singleton
+  # self-hosted runner going offline puts every open PR into (#13405).
 
   # Job 2: Security Scanning
   security-scan:
@@ -312,8 +319,17 @@ jobs:
     name: Test Summary
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15  # #11077: fail fast (self-hosted); not GitHub's 24h default
-    needs: [unit-tests, security-scan, build-test]
-    if: always()
+    needs: [changes, unit-tests, security-scan, build-test]
+    # `always()` so the summary still reports when a test job FAILED, but gated
+    # on the same `changes` output as the jobs it summarises. Without the gate
+    # this was the ONLY job a non-frontend PR placed on the singleton
+    # self-hosted runner, and all it summarised was three skipped jobs —
+    # verified on run 30853514624, where `Test Summary` succeeded on
+    # self-hosted while `Unit & Integration Tests`, `Security Scan` and
+    # `Build Test` were all skipped. While the runner is offline those pointless
+    # jobs are exactly what keeps a superseded run `queued`, and a `queued`
+    # predecessor holds this workflow's concurrency group indefinitely (#13405).
+    if: always() && needs.changes.outputs.frontend == 'true'
 
     steps:
       - name: Download all artifacts
