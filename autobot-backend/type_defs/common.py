@@ -136,5 +136,23 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES: frozenset = frozenset(
     ]
 )
 
-# Backwards compatibility alias (deprecated - use SKIP_WEBSOCKET_PERSISTENCE_TYPES)
-STREAMING_MESSAGE_TYPES = SKIP_WEBSOCKET_PERSISTENCE_TYPES
+# Message types whose text accumulates progressively across a single turn, so a
+# later frame supersedes an earlier one with the same timestamp + sender.
+#
+# Issue #13162: this MUST stay a strict subset of SKIP_WEBSOCKET_PERSISTENCE_TYPES
+# and must NOT be aliased to it. The two sets answer different questions:
+#   - SKIP_WEBSOCKET_PERSISTENCE_TYPES: "is this persisted somewhere else?"
+#     (true for terminal/approval types, which their own handlers persist)
+#   - STREAMING_MESSAGE_TYPES: "may an earlier frame of this type be discarded
+#     in favour of a longer one?" (true ONLY for token-accumulating LLM output)
+# api/chat.py::_process_streaming_groups keeps just the longest message per
+# 2-minute window for every type listed here, so aliasing the two made
+# merge_messages silently drop terminal output, terminal commands, approval
+# requests and reasoning-trace events from restored chat history.
+STREAMING_MESSAGE_TYPES: frozenset = frozenset(
+    [
+        MessageTypes.LLM_RESPONSE,
+        MessageTypes.LLM_RESPONSE_CHUNK,
+        MessageTypes.RESPONSE,
+    ]
+)
