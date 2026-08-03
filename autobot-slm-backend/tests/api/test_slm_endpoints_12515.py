@@ -36,6 +36,7 @@ import asyncio
 import contextlib
 import importlib
 import sys
+import types
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -161,6 +162,29 @@ with _real_modules_swapped():
 _PRINCIPAL = {"admin": True, "role": "admin", "sub": "tester"}
 
 
+async def _close_session_and_engine(session, engine) -> None:
+    """Close *session*, then dispose *engine*, without using ``__aexit__``.
+
+    ``AsyncSession.__aexit__`` closes through
+    ``await asyncio.shield(asyncio.create_task(self.close()))``.  Any test in
+    this package that has replaced ``asyncio.create_task`` and whose
+    ``monkeypatch`` undo is ordered *after* this teardown therefore hands
+    ``shield`` a non-awaitable: the close is abandoned mid-flight and the
+    aiosqlite connection stays checked out until the garbage collector
+    terminates it (the ``SAWarning`` behind the xdist controller crash).
+    Registering any fixture finalizer in this package is enough to produce that
+    ordering, which made the old spelling a tripwire rather than a bug (#13329).
+
+    ``AsyncSession.close()`` is a plain coroutine, so awaiting it directly is
+    equivalent and depends on nothing global.  ``engine.dispose()`` runs from a
+    ``finally`` so a failed close can never leave a half-open transport behind.
+    """
+    try:
+        await session.close()
+    finally:
+        await engine.dispose()
+
+
 @pytest.fixture
 async def db():
     """A fresh real in-memory SQLite AsyncSession per test."""
@@ -168,10 +192,58 @@ async def db():
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with session_factory() as session:
+    session = async_sessionmaker(engine, expire_on_commit=False)()
+    try:
         yield session
-    await engine.dispose()
+    finally:
+        await _close_session_and_engine(session, engine)
+
+
+# ---------------------------------------------------------------------------
+# #13329 — the finalizer-ordering pin
+# ---------------------------------------------------------------------------
+
+_REAL_CREATE_TASK = asyncio.create_task
+
+
+@pytest.fixture(autouse=True)
+def finalizer_ordering_guard(request, monkeypatch):
+    """Hold this module to the fixture ordering that used to break its teardown.
+
+    ``db`` previously closed its session through
+    ``AsyncSession.__aexit__`` → ``await asyncio.shield(asyncio.create_task(...))``
+    while ``no_bg_tasks`` had ``asyncio.create_task`` replaced on the *shared*
+    ``asyncio`` module.  Requesting ``monkeypatch`` as a parameter here — plus
+    the ``addfinalizer`` below — puts ``monkeypatch``'s undo *underneath* ``db``
+    on the finalizer stack, so the undo runs after ``db`` tears down.  That
+    ordering is what turned the fixture into a tripwire: any fixture finalizer
+    anywhere in ``tests/api`` produced it, and it cost 9 teardown errors plus a
+    leaked aiosqlite connection (#13329).
+
+    Autouse and unconditional on purpose: every test in this module now runs
+    under the ordering, so a regression cannot hide behind a single test case.
+    """
+    request.addfinalizer(lambda: None)
+
+
+async def test_db_teardown_survives_a_replaced_global_create_task(db, monkeypatch):
+    """``db`` must tear down even with a non-awaitable ``asyncio.create_task``.
+
+    ``monkeypatch``'s undo is ordered after ``db``'s teardown (see
+    ``finalizer_ordering_guard``), so the replacement below is still live while
+    the session closes — the exact interpreter state that raised
+    ``TypeError: An asyncio.Future, a coroutine or an awaitable is required``.
+    """
+    monkeypatch.setattr(asyncio, "create_task", lambda *a, **kw: MagicMock())
+    assert db.is_active
+
+
+def test_no_bg_tasks_leaves_the_shared_asyncio_module_untouched(no_bg_tasks):
+    """The background-task patch stays inside ``api.stateful``."""
+    assert asyncio.create_task is _REAL_CREATE_TASK
+    assert _stateful.asyncio is not asyncio
+    assert _stateful.asyncio.create_task is not _REAL_CREATE_TASK
+    assert _stateful.asyncio.wait_for is asyncio.wait_for
 
 
 async def _insert_node(db, node_id: str, ip: str = "10.0.0.10", **overrides) -> Node:
@@ -290,6 +362,26 @@ class TestNodesCrud:
 # ---------------------------------------------------------------------------
 
 
+def _make_no_op_task_asyncio() -> types.ModuleType:
+    """Return an ``asyncio`` stand-in whose ``create_task`` schedules nothing.
+
+    A module object carrying a copy of the real ``asyncio`` namespace, so every
+    other attribute ``api/stateful.py`` reaches for
+    (``create_subprocess_exec``, ``subprocess.PIPE``, ``wait_for``,
+    ``TimeoutError``) keeps its real behaviour.
+    """
+
+    def _fake_create_task(coro=None, *args, **kwargs):
+        if asyncio.iscoroutine(coro):
+            coro.close()
+        return MagicMock()
+
+    shim = types.ModuleType("asyncio")
+    shim.__dict__.update(vars(asyncio))
+    shim.create_task = _fake_create_task  # type: ignore[attr-defined]
+    return shim
+
+
 @pytest.fixture
 def no_bg_tasks(monkeypatch):
     """Neutralise the fire-and-forget ``asyncio.create_task`` background jobs.
@@ -299,14 +391,17 @@ def no_bg_tasks(monkeypatch):
     Scheduling those would either raise (MagicMock isn't a coroutine) or leak
     'never retrieved' task warnings, so replace scheduling with a coroutine-safe
     no-op for the duration of the test.
+
+    #13329: the replacement goes on the *router module's* ``asyncio`` binding,
+    never on the shared ``asyncio`` module itself.  ``monkeypatch.setattr(
+    _stateful.asyncio, "create_task", ...)`` mutated the one ``asyncio`` object
+    the whole process shares — including the copy SQLAlchemy's
+    ``AsyncSession.__aexit__`` calls — so for as long as the undo had not run,
+    every unrelated async teardown in this package got a ``MagicMock`` back from
+    ``create_task``.  Rebinding the name inside ``api.stateful`` keeps the blast
+    radius at exactly the module under test.
     """
-
-    def _fake_create_task(coro=None, *args, **kwargs):
-        if asyncio.iscoroutine(coro):
-            coro.close()
-        return MagicMock()
-
-    monkeypatch.setattr(_stateful.asyncio, "create_task", _fake_create_task)
+    monkeypatch.setattr(_stateful, "asyncio", _make_no_op_task_asyncio())
 
 
 class TestStatefulBackups:
