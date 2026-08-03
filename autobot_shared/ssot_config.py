@@ -44,7 +44,7 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List
+from typing import ClassVar, Dict, FrozenSet, List
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -1184,6 +1184,9 @@ class TLSConfig(RedactedSettings):
     TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
     """
 
+    # Path to a public CA certificate — not key material.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_cert"})
+
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
@@ -1385,6 +1388,9 @@ class MiscConfig(RedactedSettings):
     Vars default to empty string ("") when not set in environment.
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
     """
+
+    # Matches the ``tokens`` credential suffix but holds a count, not a secret.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"speculation_num_tokens"})
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

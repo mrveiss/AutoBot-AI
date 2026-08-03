@@ -14,6 +14,7 @@ These tests deliberately compute leak checks into booleans before asserting, so
 that a *failing* assertion still never prints the secret it is guarding.
 """
 
+import re
 from unittest.mock import patch
 
 import pytest
@@ -35,7 +36,7 @@ class _SampleSettings(RedactedSettings):
     jwt_secret: str = ""
     searxng_basic_auth_pass: str = ""
     tls_key_path: str = ""
-    speculation_num_tokens: str = ""
+    tokenizers_parallelism: str = ""
 
 
 class TestCredentialFieldClassification:
@@ -64,7 +65,6 @@ class TestCredentialFieldClassification:
             # Substring matches that are NOT credentials — the reason suffix
             # matching is used instead of ``in``.
             "tokenizers_parallelism",
-            "speculation_num_tokens",
             "llm_key_rotation_grace_secs",
             "service_auth_rate_limit_max_failures",
             # Locations pointing at a credential are not the credential.
@@ -110,14 +110,25 @@ class TestRedactedRepr:
         assert REDACTED_PLACEHOLDER in text
 
     def test_non_credential_values_still_readable(self):
-        model = _SampleSettings(tls_key_path="/etc/example/tls.key", speculation_num_tokens="4")
+        model = _SampleSettings(tls_key_path="/etc/example/tls.key", tokenizers_parallelism="false")
         text = repr(model)
         assert "/etc/example/tls.key" in text
-        assert "speculation_num_tokens='4'" in text
+        assert "tokenizers_parallelism='false'" in text
 
     def test_str_is_redacted_too(self):
         model = _SampleSettings(jwt_secret=FAKE_SECRET)
         assert FAKE_SECRET not in str(model)
+
+    def test_count_field_is_exempted_at_the_model_level(self):
+        """``speculation_num_tokens`` matches the ``tokens`` plural but is a count.
+
+        The plural stays in the classifier so a future ``api_keys`` cannot fail
+        open; the false positive is resolved explicitly, not by weakening it.
+        """
+        from autobot_shared.ssot_config import MiscConfig
+
+        assert is_credential_field("speculation_num_tokens") is True
+        assert "speculation_num_tokens" in MiscConfig.NON_CREDENTIAL_FIELDS
 
     def test_class_var_is_not_collected_as_a_settings_field(self):
         """NON_CREDENTIAL_FIELDS must stay a ClassVar, not become config."""
@@ -143,39 +154,188 @@ class TestRedactedRepr:
         assert model.model_dump()["jwt_secret"] == FAKE_SECRET
 
 
-def _credential_values(model) -> list[tuple[str, str]]:
-    """Collect populated credential values from a settings model."""
-    found = []
-    for name in type(model).model_fields:
-        value = getattr(model, name, None)
-        if isinstance(value, str) and len(value) >= 8 and is_credential_field(name):
-            found.append((name, value))
-    return found
 
 
-class TestLiveConfigNeverLeaks:
-    """The actual regression guard, run against the real loaded config."""
+# ---------------------------------------------------------------------------
+# Ground-truth regression guard
+#
+# These lists are written out by hand from the credential audit.  They are
+# deliberately NOT derived from is_credential_field(): a guard that asks the
+# classifier what counts as a credential can only ever confirm what the
+# classifier already believes, and would report zero leaks while database_url
+# was leaking its password (#13325 review).
+# ---------------------------------------------------------------------------
 
-    def test_repr_of_every_section_hides_credential_values(self):
-        cfg = get_config()
-        leaked = []
-        for section in type(cfg).model_fields:
-            model = getattr(cfg, section, None)
-            if not hasattr(type(model), "model_fields"):
+#: section -> field names whose value must never appear in repr().
+MUST_BE_MASKED = {
+    "auth": [
+        "admin_password",
+        "google_oauth_client_secret",
+        "microsoft_oauth_client_secret",
+        "gitlab_oauth_client_secret",
+    ],
+    "llm": [
+        "openai_api_key",
+        "anthropic_api_key",
+        "brave_search_api_key",
+        "searxng_token",
+        "searxng_basic_auth_pass",
+    ],
+    "redis": ["password"],
+    "misc": [
+        "jwt_secret",
+        "run_jwt_secret",
+        "jwt_private_key",
+        "jwt_public_key",
+        "secret_key",
+        "secrets_key",
+        "encryption_key",
+        "master_key",
+        "internal_api_key",
+        "api_key",
+        "service_key",
+        "mcp_token",
+        "slm_auth_token",
+        "chromadb_auth_token",
+        "service_auth_override_token",
+        "postgres_password",
+        "database_password",
+        "smtp_password",
+        "password",
+        "hf_token",
+        "huggingface_api_token",
+        "google_api_key",
+        "groq_api_key",
+        "mistral_api_key",
+        "nous_api_key",
+        "openrouter_api_key",
+        "custom_openai_api_key",
+        "urlvoid_api_key",
+        "virustotal_api_key",
+        "slack_bot_token",
+        "discord_bot_token",
+    ],
+}
+
+#: section -> connection-string fields that must lose their userinfo password
+#: while keeping host/port/database visible.
+MUST_MASK_URL_PASSWORD = {
+    "misc": ["database_url", "redis_url", "celery_broker_url"],
+}
+
+#: section -> fields that are credential-SHAPED but hold no secret.  Listed so
+#: that over-redaction is caught too: masking a path costs diagnosability.
+MUST_STAY_VISIBLE = {
+    "misc": [
+        "speculation_num_tokens",
+        "tls_key_path",
+        "tls_cert_path",
+        "service_key_file",
+        "chromadb_path",
+        "db_path",
+        "llm_key_rotation_grace_secs",
+        "llm_key_rotation_interval_minutes",
+        "tokenizers_parallelism",
+    ],
+    "tls": ["ca_cert", "cert_dir", "remote_cert_dir"],
+    "path": ["ssh_key_path", "vnc_passwd_file"],
+    "auth": ["google_oauth_client_id", "microsoft_oauth_client_id"],
+    "llm": ["searxng_basic_auth_user"],
+}
+
+CANARY = "CANARY-VALUE-13325-MUST-NOT-APPEAR"
+CANARY_URL = f"postgresql://dbuser:{CANARY}@db.example.invalid:5432/appdb"
+
+
+def _section(name):
+    """Return a freshly built config section, isolated from the host .env."""
+    cfg = get_config()
+    return getattr(cfg, name)
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [(s, f) for s, fields in MUST_BE_MASKED.items() for f in fields],
+)
+def test_seeded_credential_never_appears_in_repr(section, field):
+    """Ground truth: seed a canary, assert repr() cannot show it."""
+    seeded = _section(section).model_copy(update={field: CANARY})
+    text = repr(seeded)
+    assert CANARY not in text, f"{section}.{field} leaked its value into repr()"
+    assert field in text, f"{section}.{field} lost its NAME — dumps must stay diagnosable"
+    assert REDACTED_PLACEHOLDER in text
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [(s, f) for s, fields in MUST_MASK_URL_PASSWORD.items() for f in fields],
+)
+def test_seeded_url_password_never_appears_in_repr(section, field):
+    """database_url and friends embed credentials — mask userinfo, keep host."""
+    seeded = _section(section).model_copy(update={field: CANARY_URL})
+    text = repr(seeded)
+    assert CANARY not in text, f"{section}.{field} leaked its URL password into repr()"
+    # Everything an operator needs to diagnose the connection survives.
+    assert "db.example.invalid" in text
+    assert "5432" in text
+    assert "appdb" in text
+    assert "dbuser" in text
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [(s, f) for s, fields in MUST_STAY_VISIBLE.items() for f in fields],
+)
+def test_non_secret_lookalike_stays_visible(section, field):
+    """Over-redaction is a bug too: a path or a count must remain readable."""
+    marker = "visible-marker-13325"
+    seeded = _section(section).model_copy(update={field: marker})
+    assert marker in repr(seeded), f"{section}.{field} was masked but holds no secret"
+
+
+def test_patch_object_typo_does_not_leak_seeded_credentials():
+    """The exact reported vector, driven by seeded ground truth (#13325)."""
+    seeded = _section("misc").model_copy(update={"jwt_secret": CANARY, "database_url": CANARY_URL})
+    with pytest.raises(AttributeError) as excinfo:
+        with patch.object(seeded, "definitely_not_a_real_config_field", "x"):
+            pass
+    message = str(excinfo.value)
+    assert CANARY not in message
+    assert "jwt_secret" in message, "field names must survive so failures stay diagnosable"
+
+
+# A deliberately over-broad, classifier-independent net.  Any field whose name
+# merely *looks* credential-ish must appear in one of the ground-truth lists
+# above, so a newly added field cannot be silently left untriaged.
+_LOOKS_LIKE_CREDENTIAL = re.compile(
+    r"(secret|key|token|password|passwd|pass|credential|salt|dsn|cert|pem|seed)",
+    re.IGNORECASE,
+)
+
+
+def test_classifier_covers_every_str_field_named_like_a_credential():
+    cfg = get_config()
+    triaged = {
+        f"{s}.{f}"
+        for mapping in (MUST_BE_MASKED, MUST_MASK_URL_PASSWORD, MUST_STAY_VISIBLE)
+        for s, fields in mapping.items()
+        for f in fields
+    }
+    untriaged = []
+    for section in type(cfg).model_fields:
+        model = getattr(cfg, section, None)
+        if not hasattr(type(model), "model_fields"):
+            continue
+        for field in type(model).model_fields:
+            if not _LOOKS_LIKE_CREDENTIAL.search(field):
                 continue
-            text = repr(model)
-            leaked += [f"{section}.{n}" for n, v in _credential_values(model) if v in text]
-        # Only field NAMES are reported — never the values they hold.
-        assert leaked == [], f"credential values present in repr(): {leaked}"
-
-    def test_patch_object_typo_does_not_leak(self):
-        """The exact reported vector: a typo'd patch target (#13325)."""
-        cfg = get_config()
-        message = ""
-        with pytest.raises(AttributeError) as excinfo:
-            with patch.object(cfg.misc, "definitely_not_a_real_config_field", "x"):
-                pass
-        message = str(excinfo.value)
-        leaked = [n for n, v in _credential_values(cfg.misc) if v in message]
-        assert leaked == [], f"credential values present in AttributeError: {leaked}"
-        assert "jwt_secret" in message, "field names must survive so failures stay diagnosable"
+            if f"{section}.{field}" in triaged:
+                continue
+            # Untriaged: it must at least be masked or URL-redacted by default.
+            seeded = model.model_copy(update={field: CANARY})
+            if CANARY in repr(seeded):
+                untriaged.append(f"{section}.{field}")
+    assert untriaged == [], (
+        "credential-looking fields are neither masked nor triaged as safe; "
+        f"add them to a ground-truth list in this file: {untriaged}"
+    )

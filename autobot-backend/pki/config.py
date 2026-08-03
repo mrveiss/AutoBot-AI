@@ -15,10 +15,12 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List
+from typing import ClassVar, Dict, FrozenSet, List
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from autobot_shared.secret_redaction import RedactedReprMixin
 
 from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
 from autobot_shared.ssot_config import config
@@ -69,12 +71,15 @@ class CertificateStatus:
     needs_renewal: bool = False
 
 
-class TLSConfig(BaseSettings):
+class TLSConfig(RedactedReprMixin, BaseSettings):
     """
     TLS/PKI Configuration - Part of SSOT system.
 
     Manages all TLS-related settings for the AutoBot distributed architecture.
     """
+
+    # Both hold filesystem PATHS to key material, not the material itself.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_key", "ssh_key"})
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

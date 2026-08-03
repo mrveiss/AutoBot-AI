@@ -241,6 +241,38 @@ class TestRateLimiting:
                 _record_failed_auth(ip)
             assert _is_rate_limited(ip) is False
 
+    def test_recorder_is_a_noop_when_limiting_is_disabled(self):
+        """Tracker must not grow without bound once 0 stops rejecting (#13325 review).
+
+        Nothing consumes the timestamps while limiting is off, so recording
+        them would leak memory on every failed request.
+        """
+        ip = "203.0.113.21"
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=0):
+            for _ in range(100):
+                _record_failed_auth(ip)
+            assert _failed_auth_tracker[ip] == []
+
+    def test_recorder_still_records_when_limiting_is_enabled(self):
+        ip = "203.0.113.22"
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=5):
+            for _ in range(3):
+                _record_failed_auth(ip)
+            assert len(_failed_auth_tracker[ip]) == 3
+
+    def test_startup_status_reports_rate_limit_state(self):
+        """Operators must see the limiter state in boot logs, not on first failure."""
+        with _cfg(
+            service_auth_enforcement_mode="true",
+            service_auth_rate_limit_window=300,
+            service_auth_rate_limit_max_failures=0,
+        ):
+            with patch.object(_sae_mod.logger, "info") as info:
+                _sae_mod.log_enforcement_status()
+        events = [c for c in info.call_args_list if c.args and "rate limiting" in c.args[0].lower()]
+        assert events, "startup log must mention failure rate limiting"
+        assert events[0].kwargs["enabled"] is False
+
     def test_disabled_rate_limiting_is_logged_not_silent(self):
         _sae_mod._rate_limit_disabled_logged = False
         with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=0):

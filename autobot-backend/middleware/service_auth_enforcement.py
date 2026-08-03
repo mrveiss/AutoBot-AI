@@ -302,7 +302,13 @@ def _record_failed_auth(ip: str) -> None:
     """Record a failed authentication attempt for rate limiting.
 
     Helper for enforce_service_auth (Issue #255).
+
+    No-op when rate limiting is disabled: nothing consumes the timestamps then,
+    so recording them would grow ``_failed_auth_tracker`` without bound (#13325).
     """
+    _, max_failures = _rate_limit_settings()
+    if max_failures <= 0:
+        return
     _failed_auth_tracker[ip].append(time.time())
 
 
@@ -450,6 +456,15 @@ def log_enforcement_status():
             override_token_set=bool(config.service_auth_override_token),
         )
         logger.info("Service-only paths", paths=SERVICE_ONLY_PATHS)
+        # Emits the one-shot warning at startup when limiting is off, so the
+        # state is visible in boot logs rather than only on first failure.
+        window, max_failures = _rate_limit_settings()
+        logger.info(
+            "Service-auth failure rate limiting",
+            rate_limit_window=window,
+            rate_limit_max_failures=max_failures,
+            enabled=max_failures > 0,
+        )
     else:
         logger.info("Service Authentication in LOGGING MODE (enforcement disabled)")
 
