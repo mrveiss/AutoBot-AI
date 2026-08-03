@@ -81,14 +81,31 @@ async def test_assemble_merges_chunks_from_collections(assembler: LLCRAGAssemble
             "sources": [coll_name],
         }
 
+    # ``assemble`` imports the ChromaDB client lazily inside the function, so the
+    # only seam is ``builtins.__import__``. Two things this shim must get right:
+    #   * hold the ORIGINAL __import__ (``_real_import``) rather than looking the
+    #     name up again at call time — the global lookup resolves to the patch
+    #     itself, so every non-matching import recursed until the stack blew.
+    #     It stayed invisible until Python 3.14 moved linecache's ``import os``
+    #     inside ``updatecache()``: the traceback formatting of any error raised
+    #     under the patch then re-entered the shim (#13162).
+    #   * hand back an AWAITABLE ``get_async_chromadb_client``. A bare MagicMock
+    #     made ``await get_async_chromadb_client()`` raise, so assemble() took its
+    #     graceful-degradation path and returned an EMPTY context — this test
+    #     asserted only ``isinstance(ctx, LLCContext)`` and passed without ever
+    #     reaching the merge it is named for.
+    _real_import = __import__
+    chromadb_stub = MagicMock()
+    chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=MagicMock())
+
+    def _import_with_chromadb_stub(name, *a, **kw):
+        if name == "utils.async_chromadb_client":
+            return chromadb_stub
+        return _real_import(name, *a, **kw)
+
     with (
         patch.object(assembler, "_query_collection", new=fake_query),
-        patch(
-            "builtins.__import__",
-            side_effect=lambda name, *a, **kw: (
-                MagicMock() if name == "utils.async_chromadb_client" else __import__(name, *a, **kw)
-            ),
-        ),
+        patch("builtins.__import__", side_effect=_import_with_chromadb_stub),
     ):
         ctx = await assembler.assemble(
             company_id="co1",
@@ -98,6 +115,9 @@ async def test_assemble_merges_chunks_from_collections(assembler: LLCRAGAssemble
         )
 
     assert isinstance(ctx, LLCContext)
+    # project + agent + company collections, one chunk each, merged in order.
+    assert ctx.sources == ["co1:project:proj1", "co1:agent:agent1", "co1:company"]
+    assert [c["content"] for c in ctx.chunks] == [f"doc from {s}" for s in ctx.sources]
 
 
 @pytest.mark.asyncio

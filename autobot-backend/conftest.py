@@ -729,10 +729,23 @@ except Exception:
 # modules with Python-3.10-incompatible annotations or missing config keys.
 # Stub these modules so the lightweight types-only tests can collect without
 # needing the full backend stack.
+#
+# ``orchestration.causal_validator`` is deliberately NOT on this list (#13162).
+# It has none of the heavy chain the entries below are here for — its only
+# imports are ``autobot_shared.logging_manager``, ``orchestration.causal_models``
+# (stdlib dataclasses/enum only) and ``orchestration.dag_executor``, both of
+# which every consumer already real-imports. Stubbing it handed
+# ``orchestration/test_causal_executor.py`` a MagicMock ``CausalValidator``, so
+# ``validate_workflow()`` returned a mock whose ``.valid`` was truthy, whose
+# ``errors()``/``warnings()`` had ``len() == 0`` and iterated empty — the whole
+# TestCausalValidator class asserted against mock defaults instead of the real
+# validator (2 tests failed outright, 3 silently asserted nothing, and
+# ``test_validate_no_issues_linear_workflow`` passed for the wrong reason).
+# Same class of harness bug as ``code_intelligence.merge_conflict_resolver``
+# below (#13111).
 for _causal_mod in [
     "orchestration.causal_error_recovery",
     "orchestration.causal_error_analyzer",
-    "orchestration.causal_validator",
     "agent_loop",
     "agent_loop.loop",
     "agent_loop.think_tool",
