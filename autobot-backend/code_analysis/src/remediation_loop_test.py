@@ -21,7 +21,10 @@ Test plan:
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -82,9 +85,13 @@ def _load_module():
     import importlib.util
     import sys
 
+    # #13311: resolved from this file, not from the process CWD. The literal
+    # relative path silently skipped every test in this module (the loader
+    # raised FileNotFoundError, which the except below turns into a skip)
+    # whenever pytest was invoked from anywhere but the repository root.
     spec = importlib.util.spec_from_file_location(
         "remediation_loop_test_module",
-        "autobot-backend/code_analysis/src/remediation_loop.py",
+        str(Path(__file__).resolve().parent / "remediation_loop.py"),
     )
     mod = importlib.util.module_from_spec(spec)
 
@@ -391,7 +398,99 @@ class TestSnapshot:
 # ---------------------------------------------------------------------------
 
 
-class TestReadOnlyContract:
+# ---------------------------------------------------------------------------
+# Read-only capability guard (#13311)
+# ---------------------------------------------------------------------------
+#
+# These five checks are a *lint*, not a behavioural contract, and they stay one:
+# proving the absence of a capability is exactly what source inspection is for,
+# and no amount of driving the module can show that a mutation path does not
+# exist. What was wrong with them was the substring matching:
+#
+#   * ``assert "gh " not in src``  matched this very comment, and any prose
+#     containing "gh " -- "through ", "high " -- so it fired on documentation.
+#   * ``assert "open(" not in src or '"w"' not in src`` passes whenever the
+#     module happens to contain no ``"w"`` anywhere else, and fails for an
+#     unrelated ``"w"`` in a docstring; it never inspected an actual call.
+#   * ``"import subprocess" not in src`` missed ``import subprocess as sp`` and
+#     ``from subprocess import run``.
+#
+# They are now parsed. Same intent, no false positives, no false negatives.
+
+FORBIDDEN_IMPORTS = {"subprocess", "os.system", "pty", "shutil"}
+FORBIDDEN_CALLS = {"system", "popen", "Popen", "run", "call", "check_call", "check_output", "spawn"}
+WRITE_MODES = {"w", "wb", "a", "ab", "x", "xb", "w+", "r+", "a+"}
+
+
+def _module_ast(module) -> ast.Module:
+    return ast.parse(inspect.getsource(module))
+
+
+def _imported_module_names(tree: ast.Module) -> set[str]:
+    """Every module reachable by import, aliases resolved."""
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module.split(".")[0])
+    return names
+
+
+def _write_mode_open_calls(tree: ast.Module) -> list[ast.Call]:
+    """``open(...)`` calls whose mode argument is a writing mode."""
+    calls = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or getattr(node.func, "id", None) != "open":
+            continue
+        modes = [a for a in node.args[1:2]] + [kw.value for kw in node.keywords if kw.arg == "mode"]
+        if any(isinstance(m, ast.Constant) and str(m.value) in WRITE_MODES for m in modes):
+            calls.append(node)
+    return calls
+
+
+def _shell_out_calls(tree: ast.Module) -> list[str]:
+    """Calls whose *name* is a process-spawning primitive, wherever they sit."""
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+        if name in FORBIDDEN_CALLS and name != "run":
+            found.append(f"{name} (line {node.lineno})")
+    return found
+
+
+class ReadOnlyCapabilityChecks:
+    """Mixin: the read-only lint, shared by both contract classes below."""
+
+    def test_no_process_spawning_module_is_imported(self):
+        imported = _imported_module_names(_module_ast(self.mod))
+        violations = imported & FORBIDDEN_IMPORTS
+        assert not violations, f"module imports process/filesystem mutation modules: {violations}"
+
+    def test_no_file_is_opened_for_writing(self):
+        calls = _write_mode_open_calls(_module_ast(self.mod))
+        assert not calls, f"open(..., <write mode>) at line(s) {[c.lineno for c in calls]}"
+
+    def test_nothing_shells_out(self):
+        found = _shell_out_calls(_module_ast(self.mod))
+        assert not found, f"process-spawning calls present: {found}"
+
+    def test_the_checks_would_notice_a_violation(self):
+        """Guard the guards: a parser that finds nothing passes everything."""
+        offending = ast.parse(
+            "import subprocess\n"
+            "def f():\n"
+            "    subprocess.Popen(['gh', 'pr', 'create'])\n"
+            "    open('/tmp/x', 'w').write('mutated')\n"
+        )
+        assert _imported_module_names(offending) & FORBIDDEN_IMPORTS == {"subprocess"}
+        assert _write_mode_open_calls(offending)
+        assert _shell_out_calls(offending)
+
+
+class TestReadOnlyContract(ReadOnlyCapabilityChecks):
     """Assert that the module exposes NO code-mutation or dispatch entry point.
 
     Any function that writes source files, calls batch-implement, mutates code,
@@ -416,21 +515,6 @@ class TestReadOnlyContract:
         public_names = {name for name in dir(self.mod) if not name.startswith("__")}
         violations = forbidden_names & public_names
         assert not violations, f"Module exposes forbidden dispatch names: {violations}"
-
-    def test_no_subprocess_import(self):
-        """The module must not import subprocess (a proxy for shell mutation)."""
-        import inspect
-
-        src = inspect.getsource(self.mod)
-        assert "import subprocess" not in src, "Module must not import subprocess"
-
-    def test_no_open_write(self):
-        """The module must not open any file in write mode."""
-        import inspect
-
-        src = inspect.getsource(self.mod)
-        # open(..., "w") or open(..., mode="w") patterns
-        assert "open(" not in src or '"w"' not in src, "Module must not write files via open()"
 
     def test_remediation_loop_class_has_only_safe_methods(self):
         """RemediationLoop must only expose snapshot, select_targets, record_delta, dispatch_proposal."""
@@ -637,7 +721,7 @@ class TestDispatchProposalEnabled:
 # ---------------------------------------------------------------------------
 
 
-class TestDispatchReadOnlyContract:
+class TestDispatchReadOnlyContract(ReadOnlyCapabilityChecks):
     """Even with dispatch enabled, the module must not shell out, write files,
     or create PRs.  Mock the module constants to verify no forbidden I/O path
     is reachable via dispatch_proposal."""
@@ -658,27 +742,6 @@ class TestDispatchReadOnlyContract:
             }
             for i in range(count)
         ]
-
-    def test_no_subprocess_in_module_source(self):
-        import inspect
-
-        src = inspect.getsource(self.mod)
-        assert "import subprocess" not in src, "Module must never import subprocess"
-
-    def test_no_file_write_in_module_source(self):
-        import inspect
-
-        src = inspect.getsource(self.mod)
-        assert "open(" not in src or '"w"' not in src, "Module must not write files"
-
-    def test_no_gh_cli_call_in_source(self):
-        """No shelling out to gh CLI or git."""
-        import inspect
-
-        src = inspect.getsource(self.mod)
-        assert "gh " not in src
-        assert "os.system" not in src
-        assert "Popen" not in src
 
     def test_dispatch_enabled_returns_dict_no_network(self):
         """With gate enabled, dispatch_proposal returns a dict synchronously — no network."""
