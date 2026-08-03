@@ -23,6 +23,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.ssot_config import (
+    SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
+    SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
+    MiscConfig,
+)
 from middleware import service_auth_enforcement as _sae_mod
 from middleware.service_auth_enforcement import (
     EXEMPT_PATHS,
@@ -149,6 +154,18 @@ class TestCircuitBreaker:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def unset_rate_limit_config(monkeypatch):
+    """A MiscConfig built with the rate-limit vars genuinely unset (#13326).
+
+    Deployed hosts and CI runners may export SERVICE_AUTH_RATE_LIMIT_*; ignore
+    both the environment and the .env file so the *declared* default is tested.
+    """
+    for var in ("SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES", "SERVICE_AUTH_RATE_LIMIT_WINDOW"):
+        monkeypatch.delenv(var, raising=False)
+    return MiscConfig(_env_file=None)
+
+
 class TestRateLimiting:
     def setup_method(self):
         """Clear tracker before each test."""
@@ -175,6 +192,64 @@ class TestRateLimiting:
                 _record_failed_auth("192.168.1.1")
             assert _is_rate_limited("192.168.1.1") is True
             assert _is_rate_limited("192.168.1.2") is False
+
+    @pytest.mark.parametrize("max_failures", [1, 3, 10])
+    def test_nth_failure_allowed_and_n_plus_first_limited(self, max_failures):
+        """Boundary: the Nth failure must still pass, the N+1th must not (#13326)."""
+        ip = "203.0.113.7"
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=max_failures):
+            for _ in range(max_failures - 1):
+                _record_failed_auth(ip)
+            assert _is_rate_limited(ip) is False, "Nth request must not be limited"
+            _record_failed_auth(ip)
+            assert _is_rate_limited(ip) is True, "N+1th request must be limited"
+
+    def test_unset_config_does_not_reject_first_request(self, unset_rate_limit_config):
+        """Default install must serve SERVICE_ONLY_PATHS, not 429 everything (#13326).
+
+        The field defaults previously evaluated ``0 >= 0`` on the very first
+        request, rejecting every service-only path before auth ever ran.
+        """
+        fresh = unset_rate_limit_config
+        assert fresh.service_auth_rate_limit_max_failures > 0
+        assert fresh.service_auth_rate_limit_window > 0
+        with _cfg(
+            service_auth_rate_limit_window=fresh.service_auth_rate_limit_window,
+            service_auth_rate_limit_max_failures=fresh.service_auth_rate_limit_max_failures,
+        ):
+            assert _is_rate_limited("198.51.100.4") is False
+
+    def test_defaults_match_declared_constants(self, unset_rate_limit_config):
+        fresh = unset_rate_limit_config
+        assert fresh.service_auth_rate_limit_max_failures == (
+            SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT
+        )
+        assert fresh.service_auth_rate_limit_window == SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT
+
+    def test_zero_max_failures_disables_rate_limiting(self):
+        """0 means DISABLED, not 'block everything' (#13326)."""
+        ip = "203.0.113.9"
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=0):
+            assert _is_rate_limited(ip) is False
+            for _ in range(50):
+                _record_failed_auth(ip)
+            assert _is_rate_limited(ip) is False
+
+    def test_zero_window_disables_rate_limiting(self):
+        """A zero-length window can never retain a failure — treat as disabled."""
+        ip = "203.0.113.11"
+        with _cfg(service_auth_rate_limit_window=0, service_auth_rate_limit_max_failures=5):
+            for _ in range(50):
+                _record_failed_auth(ip)
+            assert _is_rate_limited(ip) is False
+
+    def test_disabled_rate_limiting_is_logged_not_silent(self):
+        _sae_mod._rate_limit_disabled_logged = False
+        with _cfg(service_auth_rate_limit_window=300, service_auth_rate_limit_max_failures=0):
+            with patch.object(_sae_mod.logger, "warning") as warn:
+                _is_rate_limited("203.0.113.13")
+                _is_rate_limited("203.0.113.14")
+        assert warn.call_count == 1, "warn exactly once, not per request"
 
 
 # ---------------------------------------------------------------------------
