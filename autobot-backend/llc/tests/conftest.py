@@ -45,29 +45,35 @@ from knowledge.backends.memory_adapter import (  # noqa: E402
     InMemoryCollection,
 )
 
-_SESSION_STUB_KEYS = (
+# Every sys.modules key this file owns. The stubs are installed and removed as
+# a set so the package can never hand a half-stubbed import graph to anything
+# collected around it.
+#
+# #13084: these were installed unconditionally at module import time with no
+# restore, so once ``llc/tests/`` was collected in a full-suite run they
+# permanently shadowed the REAL ``knowledge``/``agents`` packages for the rest
+# of the session — breaking genuine consumers collected later (e.g.
+# ``services/research/quarantine_boundary_test.py``'s ``from
+# knowledge.backends import InMemoryClient``, which fails only in a full run,
+# never in isolation).
+#
+# #13337: the package-scoped restore added for #13084 fired only at
+# ``llc/tests`` *teardown*, so the whole collect-plus-run window stayed
+# polluted.  Anything importing ``initialization.lifespan`` inside it died with
+# ``ModuleNotFoundError: No module named 'agents.overseer'`` — already broken
+# for ``pytest autobot-backend/llc/tests autobot-backend/initialization``, and
+# in CI saved only by two undocumented accidents (``initialization`` sorting
+# before ``llc``, and one module-level import in ``lifespan_test.py``).  The
+# stubs are now bound to two explicit windows instead — see ``_ScopedStubs``.
+_SCOPED_STUB_KEYS = (
     "knowledge",
     "knowledge.embedding_cache",
     "knowledge.utils",
+    "knowledge.backends",
     "agents",
     "agents.base_agent",
+    "api.codebase_analytics",
 )
-
-
-def _snapshot_session_stub_keys() -> dict:
-    """Capture the pre-stub sys.modules state for every key this file stubs.
-
-    Issue #13084: these stubs were previously installed unconditionally at
-    module import time with no restore, so once ``llc/tests/`` was collected
-    in a full-suite run they permanently shadowed the REAL ``knowledge``/
-    ``services``/``agents`` packages for the rest of the session — breaking
-    genuine consumers collected later (e.g.
-    ``services/research/quarantine_boundary_test.py``'s
-    ``from knowledge.backends import InMemoryClient``, which fails only in a
-    full run, never in isolation). ``None`` means the key was absent before
-    this file ran.
-    """
-    return {key: sys.modules.get(key) for key in _SESSION_STUB_KEYS}
 
 
 # #13107: __file__ = .../autobot-backend/llc/tests/conftest.py → parents[2]
@@ -109,16 +115,14 @@ def _make_knowledge_stub() -> types.ModuleType:
     return mod
 
 
-def _make_knowledge_submodule_stubs() -> None:
-    """Stub knowledge sub-packages imported by knowledge_base.py."""
+def _make_knowledge_submodule_stubs() -> dict:
+    """Return the knowledge sub-package stubs imported by knowledge_base.py."""
     ec = types.ModuleType("knowledge.embedding_cache")
     ec.EmbeddingCache = MagicMock  # type: ignore[attr-defined]
     ec.get_embedding_cache = AsyncMock(return_value=MagicMock())  # type: ignore[attr-defined]
-    sys.modules["knowledge.embedding_cache"] = ec
 
     ku = types.ModuleType("knowledge.utils")
     ku.sanitize_metadata_for_chromadb = MagicMock(return_value={})  # type: ignore[attr-defined]
-    sys.modules["knowledge.utils"] = ku
 
     # codebase_analytics/storage.py does ``from knowledge.backends import
     # get_async_default_client, get_default_client`` at module level. Without a
@@ -136,7 +140,7 @@ def _make_knowledge_submodule_stubs() -> None:
     # ``services/research/quarantine_boundary_test.py``, which fails only in
     # a full-suite run, never in isolation, because collection-time imports
     # happen before any fixture teardown could restore this stub). Re-exporting
-    # the real classes here means no restore is even needed for this key.
+    # the real classes here means the restore for this key is a formality.
     kb = types.ModuleType("knowledge.backends")
     kb.get_default_client = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
     kb.get_async_default_client = AsyncMock(return_value=MagicMock())  # type: ignore[attr-defined]
@@ -144,21 +148,18 @@ def _make_knowledge_submodule_stubs() -> None:
     kb.InMemoryCollection = InMemoryCollection  # type: ignore[attr-defined]
     kb.AsyncInMemoryClient = AsyncInMemoryClient  # type: ignore[attr-defined]
     kb.AsyncInMemoryCollection = AsyncInMemoryCollection  # type: ignore[attr-defined]
-    sys.modules["knowledge.backends"] = kb
+
+    return {
+        "knowledge.embedding_cache": ec,
+        "knowledge.utils": ku,
+        "knowledge.backends": kb,
+    }
 
 
-# #13084: snapshot BEFORE stubbing so the package-scoped fixture below can
-# restore these exact keys once every test under llc/tests/ has run — the
-# stub is required for this package's own collection/tests but must not
-# outlive it (see _snapshot_session_stub_keys docstring).
-_PRE_STUB_MODULES = _snapshot_session_stub_keys()
-
-# The ``knowledge`` module imports lazily but fails when attributes are accessed
-# because chromadb → opentelemetry has a broken dependency in the dev venv.
-# Unconditionally replace with a stub so every lazy ``from knowledge import X``
-# receives our mock instead of triggering the broken chain.
-sys.modules["knowledge"] = _make_knowledge_stub()
-_make_knowledge_submodule_stubs()
+# NOTHING is stubbed at module import time (#13337). pytest pre-loads the
+# conftest of every *initial argument path* before collection starts, so an
+# import-time mutation here is live for the whole session's collection — not
+# just this package's. ``_ScopedStubs`` below installs them instead.
 
 
 def _make_services_stub() -> types.ModuleType:
@@ -212,8 +213,8 @@ def _make_services_stub() -> types.ModuleType:
     return services_mod
 
 
-def _make_agents_stub() -> None:
-    """Stub the ``agents`` package to avoid the knowledge/chromadb import chain.
+def _make_agents_stub() -> dict:
+    """Return ``agents`` stubs that avoid the knowledge/chromadb import chain.
 
     ``autobot_agent_adapter`` imports ``from agents.base_agent import AgentRequest``
     at module level.  Loading ``agents/__init__.py`` eagerly pulls in
@@ -224,26 +225,16 @@ def _make_agents_stub() -> None:
     agents_mod = types.ModuleType("agents")
     agents_mod.__path__ = []  # type: ignore[attr-defined]
     agents_mod.__package__ = "agents"
-    sys.modules["agents"] = agents_mod
 
     agents_base = types.ModuleType("agents.base_agent")
     agents_base.AgentRequest = MagicMock  # type: ignore[attr-defined]
     agents_base.AgentResponse = MagicMock  # type: ignore[attr-defined]
-    sys.modules["agents.base_agent"] = agents_base
+
+    return {"agents": agents_mod, "agents.base_agent": agents_base}
 
 
-# ``services.llm_service`` is imported at module level by llc/kb/handoff_brief.py
-# (merged to Dev_new_gui after issue-8238).  Stub it so the test collection
-# phase does not fail when the full service stack is absent.
-_make_services_stub()
-
-# ``agents.base_agent`` is imported by autobot_agent_adapter (GH#8502).
-# Stub it before any test module can trigger the agents/__init__.py chain.
-_make_agents_stub()
-
-
-def _shield_codebase_analytics_package() -> None:
-    """Register a lightweight package stub for api.codebase_analytics in sys.modules.
+def _make_codebase_analytics_shield() -> types.ModuleType:
+    """Return a lightweight package stub for api.codebase_analytics.
 
     Problem: api/codebase_analytics/__init__.py eagerly imports routes.py which
     chains through tasks/__init__.py → services.audit.audit — a path broken by
@@ -262,26 +253,257 @@ def _shield_codebase_analytics_package() -> None:
     The llc_client fixture installs per-test stubs for source_service and
     source_storage on top of this, and removes them at teardown so the real
     submodules remain available when analytics tests run afterward.
+
+    Built once and cached by ``_stub_modules`` — never rebuilt per install
+    window.  The real submodules this hollow ``__path__`` resolves
+    (``source_storage``, ``storage``, ``endpoints.stats``) bind themselves as
+    attributes of whichever parent object was live when they were first
+    imported, and ``unittest.mock.patch`` reaches them through exactly that
+    attribute.  A fresh parent per window therefore loses the bindings and
+    ``patch("api.codebase_analytics.source_storage.get_source")`` dies with
+    ``AttributeError: module 'api.codebase_analytics' has no attribute
+    'source_storage'`` (#13337).
     """
-    if "api.codebase_analytics" in sys.modules:
-        return  # real package already loaded — leave it intact
     # __file__ = .../autobot-backend/llc/tests/conftest.py → parents[2] = .../autobot-backend
     _pkg_dir = Path(__file__).parents[2] / "api" / "codebase_analytics"
     pkg = types.ModuleType("api.codebase_analytics")
     pkg.__path__ = [str(_pkg_dir)]  # type: ignore[attr-defined]
     pkg.__package__ = "api.codebase_analytics"
-    sys.modules["api.codebase_analytics"] = pkg
-    # Expose as an attribute on the parent ``api`` package so that
-    # ``mock.patch("api.codebase_analytics.<submodule>.<attr>")`` — whose dotted
-    # lookup runs ``getattr(api, "codebase_analytics")`` — resolves to this shield
-    # (#11129 P2). Without it, patching a lazily-imported analytics helper raises
-    # ``AttributeError: module 'api' has no attribute 'codebase_analytics'``.
+    return pkg
+
+
+# ---------------------------------------------------------------------------
+# #13337 — the stubs live exactly as long as this package needs them
+# ---------------------------------------------------------------------------
+
+
+# Packages whose object identity is swapped by install/restore, and whose
+# already-imported children therefore need their parent attribute re-bound.
+_REBIND_PARENTS = ("knowledge", "agents", "api.codebase_analytics")
+
+
+def _rebind_submodules(parent_key: str) -> None:
+    """Bind the direct ``sys.modules`` children of *parent_key* onto its parent.
+
+    Swapping a package object in or out of ``sys.modules`` orphans every child
+    that was imported through the *previous* parent: ``__import__``
+    short-circuits on the cached child entry and never re-runs the
+    parent-attribute bind the import system would normally do.  So
+    ``mock.patch("knowledge.connectors.X")`` — which resolves the dotted path
+    with ``getattr`` — dies with ``AttributeError: module 'knowledge' has no
+    attribute 'connectors'`` for anything the ``llc/tests`` window pulled in
+    through the stub's ``__path__`` (#13337).  Re-doing the bind reproduces
+    exactly what a fresh import would have left behind.
+    """
+    parent = sys.modules.get(parent_key)
+    if parent is None:
+        return
+    prefix = f"{parent_key}."
+    for name, module in list(sys.modules.items()):
+        child = name[len(prefix) :]
+        if module is None or not name.startswith(prefix) or "." in child:
+            continue
+        setattr(parent, child, module)
+
+
+def _rebind_all_submodules() -> None:
+    """Re-bind every swapped package's children (both install and restore)."""
+    for parent_key in _REBIND_PARENTS:
+        _rebind_submodules(parent_key)
+
+
+_STUB_MODULES: dict = {}
+
+
+def _stub_modules() -> dict:
+    """Build this package's stub modules once and hand back the same objects.
+
+    Identity is load-bearing.  ``unittest.mock.patch`` resolves a dotted target
+    by ``getattr`` on the parent module object, and the mocks these stubs carry
+    (``knowledge.get_knowledge_base``, ``agents.base_agent.AgentRequest``, the
+    ``api.codebase_analytics`` submodule bindings) are reached that way.  A
+    fresh object per install window would silently move the patch target away
+    from the object the code under test already holds (#13337).
+    """
+    if not _STUB_MODULES:
+        _STUB_MODULES["knowledge"] = _make_knowledge_stub()
+        _STUB_MODULES.update(_make_knowledge_submodule_stubs())
+        _STUB_MODULES.update(_make_agents_stub())
+        _STUB_MODULES["api.codebase_analytics"] = _make_codebase_analytics_shield()
+    return _STUB_MODULES
+
+
+def _install_scoped_stubs() -> None:
+    """Put this package's stubs into sys.modules, in dependency order.
+
+    ``api.codebase_analytics`` is only shielded when it is absent — a real,
+    fully-imported package always wins.  The parent-package attribute is set so
+    that ``mock.patch("api.codebase_analytics.<submodule>.<attr>")``, whose
+    dotted lookup runs ``getattr(api, "codebase_analytics")``, resolves to the
+    shield (#11129 P2).
+    """
+    stubs = _stub_modules()
+    for key, module in stubs.items():
+        if key == "api.codebase_analytics" and key in sys.modules:
+            continue  # real package already loaded — leave it intact
+        sys.modules[key] = module
+    # services.llm_service is imported at module level by llc/kb/handoff_brief.py
+    # (merged to Dev_new_gui after issue-8238). Guarded per-name, so the root
+    # autobot-backend/conftest.py's richer setup always wins; the attribute
+    # binds it performs are required on every call (see its docstring).
+    _make_services_stub()
     import importlib  # noqa: PLC0415
 
-    importlib.import_module("api").codebase_analytics = pkg  # type: ignore[attr-defined]
+    importlib.import_module("api").codebase_analytics = sys.modules[  # type: ignore[attr-defined]
+        "api.codebase_analytics"
+    ]
+    _rebind_all_submodules()
 
 
-_shield_codebase_analytics_package()
+class _ScopedStubs:
+    """Own the sys.modules stubs for ``llc/tests`` and nothing beyond it.
+
+    Entered once per collector under this directory and once per test run, and
+    exited on the matching event, so the stubs are live for exactly the two
+    windows that need them: importing this package's own test modules, and
+    running its tests.  Everything pytest does in between — collecting any
+    other directory, running any other package's tests — sees the real
+    ``knowledge``/``agents``/``services`` packages.
+
+    Re-entrant and restore-guaranteed: the snapshot is taken on the outermost
+    enter, the install runs under ``try/except`` so a failure part-way through
+    still restores, and ``restore_all`` is a hard reset for the session-teardown
+    safety net.
+    """
+
+    def __init__(self) -> None:
+        self._holders: set[str] = set()
+        self._snapshot: dict | None = None
+        self._api_attr_present = False
+        self._api_attr_prior = None
+
+    def enter(self, holder: str) -> None:
+        """Install the stubs if *holder* is the first to ask for them."""
+        first = not self._holders
+        self._holders.add(holder)
+        if not first:
+            return
+        self._snapshot = {key: sys.modules.get(key) for key in _SCOPED_STUB_KEYS}
+        self._snapshot_api_attr()
+        try:
+            _install_scoped_stubs()
+        except BaseException:
+            self._holders.clear()
+            self._restore()
+            raise
+
+    def exit(self, holder: str) -> None:
+        """Restore sys.modules once the last holder is done."""
+        self._holders.discard(holder)
+        if not self._holders:
+            self._restore()
+
+    def restore_all(self) -> None:
+        """Unconditionally release the stubs (session-teardown safety net)."""
+        self._holders.clear()
+        self._restore()
+
+    def _snapshot_api_attr(self) -> None:
+        """Remember whether ``api.codebase_analytics`` was already bound.
+
+        ``_shield_codebase_analytics_package`` sets the attribute on the real
+        ``api`` package so ``mock.patch("api.codebase_analytics...")`` resolves
+        (#11129 P2); the attribute has to come back off again with the stub.
+        """
+        api_mod = sys.modules.get("api")
+        self._api_attr_present = hasattr(api_mod, "codebase_analytics")
+        self._api_attr_prior = getattr(api_mod, "codebase_analytics", None)
+
+    def _restore_api_attr(self) -> None:
+        api_mod = sys.modules.get("api")
+        if api_mod is None:
+            return
+        if self._api_attr_present:
+            api_mod.codebase_analytics = self._api_attr_prior  # type: ignore[attr-defined]
+        else:
+            api_mod.__dict__.pop("codebase_analytics", None)
+
+    def _restore(self) -> None:
+        snapshot, self._snapshot = self._snapshot, None
+        if snapshot is None:
+            return
+        for key, prior in snapshot.items():
+            if prior is None:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = prior
+        self._restore_api_attr()
+        _rebind_all_submodules()
+
+
+_SCOPED_STUBS = _ScopedStubs()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):
+    """Stub the heavy imports around this directory's own collection, only.
+
+    Directory-scoped — pytest dispatches this through ``collector.ihook``, so it
+    fires only for nodes whose conftest chain includes this file — and it wraps
+    exactly ``collector.collect()``, which is where a ``Module`` node imports
+    its test module.  Nothing else runs inside that call, so the window cannot
+    span a sibling directory.
+
+    ``pytest_collectstart``/``pytest_collectreport`` are *not* usable here, and
+    not merely because of ordering: ``pytest_collectreport`` never fires for a
+    ``Dir`` or ``Package`` node at all.  Only ``Session`` and ``Module`` nodes
+    get one, because the initial-argument node chain is built outside the
+    ``Session.genitems`` recursion that emits the report.  Traced with a probe
+    plugin on ``pytest llc/tests/test_health_probe.py
+    initialization/lifespan_test.py``::
+
+        [start ] Package 'autobot-backend/llc/tests'
+        [start ] Package 'autobot-backend/initialization'
+        [report] ''
+        [start ] Module 'autobot-backend/llc/tests/test_health_probe.py'
+        [report] 'autobot-backend/llc/tests/test_health_probe.py'
+
+    A ``collectstart``/``collectreport`` pair keyed on the package node would
+    therefore install the stubs and **never** restore them — strictly worse
+    than the import-time bug this replaces.
+    """
+    holder = f"collect:{collector.nodeid}"
+    _SCOPED_STUBS.enter(holder)
+    try:
+        yield
+    finally:
+        _SCOPED_STUBS.exit(holder)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    """Stub the heavy imports for the whole of each test under this directory.
+
+    Covers setup, call and teardown — LLC route handlers import ``knowledge``
+    and ``agents`` lazily inside request handling — and restores from a
+    ``finally`` so no failure path can leak the stub into the next test.
+    """
+    holder = f"run:{item.nodeid}"
+    _SCOPED_STUBS.enter(holder)
+    try:
+        yield
+    finally:
+        _SCOPED_STUBS.exit(holder)
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Safety net: never let the stubs outlive the session.
+
+    Both windows restore from a ``finally``, but a ``BaseException`` that
+    unwinds past pytest's own hook machinery (``KeyboardInterrupt`` during
+    collection, a worker crash) could still strand the holders set.
+    """
+    _SCOPED_STUBS.restore_all()
 
 
 # ---------------------------------------------------------------------------
@@ -490,30 +712,6 @@ def _build_llc_app(
     _patch_kb.start()
 
     return app, _patch_kb
-
-
-@pytest.fixture(scope="package", autouse=True)
-def _restore_session_stubs_after_package():
-    """Restore the module-level ``knowledge``/``agents`` stubs after this
-    package finishes (#13084).
-
-    The stubs installed above at import time are required for llc/tests/
-    itself to collect (chromadb/opentelemetry are unavailable in dev/CI), but
-    were previously left in ``sys.modules`` for the rest of the pytest
-    session with no restore — shadowing the REAL ``knowledge.backends``
-    package for any test collected afterward in the same worker (reproduced:
-    ``services/research/quarantine_boundary_test.py``'s
-    ``from knowledge.backends import InMemoryClient`` fails only in a
-    full-suite run, never in isolation). Restoring here — rather than a
-    session-scoped hook — ties the fix to exactly the lifetime that needs
-    the stub.
-    """
-    yield
-    for key, prior in _PRE_STUB_MODULES.items():
-        if prior is None:
-            sys.modules.pop(key, None)
-        else:
-            sys.modules[key] = prior
 
 
 @pytest.fixture
