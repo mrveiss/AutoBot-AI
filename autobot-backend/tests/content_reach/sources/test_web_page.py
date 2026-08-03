@@ -67,6 +67,10 @@ async def test_trafilatura_fetch_maps_extracted_text(monkeypatch):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
+    # fetch() gates on _import_trafilatura() BEFORE the extraction seam, so on a
+    # runner without the optional `trafilatura` wheel the gate raises BackendError
+    # before _trafilatura_extract is ever reached (#13407). Patch both seams.
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "Extracted article text")
 
     from content_reach.sources.web_page import TrafilaturaBackend
@@ -96,6 +100,10 @@ async def test_trafilatura_fetch_none_extraction_raises(monkeypatch):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
+    # Both seams: without the _import_trafilatura patch this test passes
+    # vacuously on a runner lacking `trafilatura` — the BackendError it asserts
+    # would come from the import gate, never from the None extraction (#13407).
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: None)
 
     from content_reach.sources.web_page import TrafilaturaBackend
@@ -120,6 +128,8 @@ async def test_trafilatura_fetch_empty_extraction_raises(monkeypatch):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
+    # Both seams — same vacuous-pass hazard as the None-extraction case (#13407).
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "   ")
 
     from content_reach.sources.web_page import TrafilaturaBackend
@@ -154,6 +164,9 @@ async def test_trafilatura_fetch_httpx_error_raises_backend_error(monkeypatch):
     """httpx.HTTPError raised by client.get() → BackendError (not raw httpx error)."""
     from content_reach.sources import web_page as wp_mod
 
+    # Both seams — otherwise the asserted BackendError can come from the import
+    # gate instead of the httpx error this test is about (#13407).
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "text")
 
     mock_client = AsyncMock()

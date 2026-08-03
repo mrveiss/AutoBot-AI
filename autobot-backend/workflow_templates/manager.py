@@ -98,15 +98,25 @@ class WorkflowTemplateManager:
         # Create workflow steps from template
         workflow_steps = []
         for step in template.steps:
+            # #13162: template steps are canonical ``WorkflowTask`` instances
+            # since the #6951 Phase 2A migration, which renamed ``id`` ->
+            # ``task_id`` and ``expected_duration_ms`` ->
+            # ``estimated_duration_seconds``. These two reads were never
+            # updated, so this method raised AttributeError on its first step
+            # for every template — taking /templates/{id}/create-workflow,
+            # /templates/{id}/preview and /templates/{id}/execute down with it.
+            # The emitted key names stay as they are: ``_convert_template_steps``
+            # in api/templates.py and the frontend WorkflowStep type both read
+            # ``step_id`` and ``expected_duration_ms`` (milliseconds).
             workflow_step = {
-                "step_id": step.id,
+                "step_id": step.task_id,
                 "agent_type": step.agent_type,
                 "action": self._substitute_variables(step.action, variables),
                 "description": self._substitute_variables(step.description, variables),
                 "requires_approval": step.requires_approval,
                 "dependencies": step.dependencies.copy(),
                 "inputs": step.inputs.copy() if step.inputs else {},
-                "expected_duration_ms": step.expected_duration_ms,
+                "expected_duration_ms": int(step.estimated_duration_seconds * 1000),
                 "status": "pending",
             }
             workflow_steps.append(workflow_step)
