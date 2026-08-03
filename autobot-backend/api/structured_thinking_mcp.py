@@ -27,6 +27,7 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_common import MAX_THOUGHT_COUNT
 from api.schemas_system import (
     ClearHistoryRequest,
     GenerateSummaryRequest,
@@ -164,11 +165,13 @@ STRUCTURED_THINKING_MCP_TOOL_DEFINITIONS = (
                     "type": "integer",
                     "description": "Position in the thinking sequence",
                     "minimum": 1,
+                    "maximum": MAX_THOUGHT_COUNT,
                 },
                 "total_thoughts": {
                     "type": "integer",
                     "description": "Expected total number of thoughts",
                     "minimum": 1,
+                    "maximum": MAX_THOUGHT_COUNT,
                 },
                 "next_thought_needed": {
                     "type": "boolean",
