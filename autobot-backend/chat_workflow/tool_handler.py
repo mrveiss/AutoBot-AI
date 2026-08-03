@@ -2131,16 +2131,20 @@ class ToolHandlerMixin:
                 metadata={"message_type": "delegate_tool", "error": True},
             )
 
-    def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
+    async def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
         """Validate browser tool params. Returns a user-friendly block notice or None.
 
         #1368 / #10914: a disallowed URL or unsafe script is an *expected* policy
         outcome, so the returned text reads as a friendly notice (rendered as a
         normal assistant message, not a scary error banner — see _handle_browser_tool).
+
+        #13236 step 5: ``is_url_allowed`` became async when it stopped matching
+        URL prefixes with a regex and started resolving the host, so this is
+        async too. The caller already awaits inside an async method.
         """
         from api.browser_mcp import is_script_safe, is_url_allowed
 
-        if tool_name == "navigate" and not is_url_allowed(params.get("url", "")):
+        if tool_name == "navigate" and not await is_url_allowed(params.get("url", "")):
             url = params.get("url", "")
             return f"I can't open that link ({url}) — it isn't on the list of sites I'm allowed to browse."
         if tool_name == "evaluate" and not is_script_safe(params.get("script", "")):
@@ -2175,7 +2179,7 @@ class ToolHandlerMixin:
         )
 
         try:
-            validation_error = self._validate_browser_params(tool_name, params)
+            validation_error = await self._validate_browser_params(tool_name, params)
             if validation_error:
                 # Keep status="error" so the agent loop still knows the tool didn't run.
                 execution_results.append({"tool": tool_name, "status": "error", "error": validation_error})
