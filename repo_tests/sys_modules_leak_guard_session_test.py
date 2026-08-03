@@ -75,6 +75,27 @@ def pytest_make_collect_report(collector):
 """
 
 
+# An ini that silences one PytestWarning subclass. The guard appends its own
+# entry to "filterwarnings" and the last matching entry wins, so a guard filter
+# written against a base class would override this and un-silence it.
+_PYTEST_INI_WITH_IGNORE = """
+[pytest]
+python_files = test_*.py
+addopts = -p no:randomly
+filterwarnings =
+    ignore::pytest.PytestUnknownMarkWarning
+"""
+
+_UNKNOWN_MARK_TEST = """
+import pytest
+
+
+@pytest.mark.a_marker_nobody_registered
+def test_ok():
+    assert True
+"""
+
+
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(textwrap.dedent(text).lstrip(), encoding="utf-8")
@@ -216,6 +237,26 @@ def test_the_first_sighting_names_the_sibling_not_the_rootdir(scratch_repo):
     assert "LEAK:" in result.stdout, result.stdout
     assert "first seen at the collection of ." not in result.stdout, result.stdout
     assert "pkg_b" in result.stdout, result.stdout
+
+
+def test_the_guard_does_not_widen_other_pytest_warnings(scratch_repo):
+    """The guard must not change warning behaviour for the rest of the suite.
+
+    ``addinivalue_line`` appends to ``filterwarnings`` and the last matching
+    entry wins, so an entry written against ``pytest.PytestWarning`` silently
+    overrode any ini-level ``ignore`` of *any* subclass of it and flipped
+    every pytest warning from "once per location" to "always".  The guard's
+    entry names only its own warning class, so this repo's
+    ``ignore::pytest.PytestUnknownMarkWarning`` still holds.
+    """
+    repo = scratch_repo(_IMPORT_TIME_LEAK)
+    _write(repo / "pytest.ini", _PYTEST_INI_WITH_IGNORE)
+    _write(repo / "pkg_b" / "test_pkg_b.py", _UNKNOWN_MARK_TEST)
+
+    result = _run_pytest(repo)
+
+    assert "PytestUnknownMarkWarning" not in result.stdout, result.stdout
+    assert "LEAK:" in result.stdout, result.stdout  # the guard is still active
 
 
 # ---------------------------------------------------------------------------

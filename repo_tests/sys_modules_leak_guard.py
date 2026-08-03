@@ -247,6 +247,8 @@ class _LeakGuard:
         unconditionally would blame the level above and make every stub look
         like it never escapes.
         """
+        if self._matches_baseline():
+            return
         current = sys.modules.copy()
         changed = self._changed_since(current)
         self._baseline = current
@@ -269,6 +271,26 @@ class _LeakGuard:
                 obj_id=id(module),
                 owner_ancestors=owner_ancestors,
             )
+
+    def _matches_baseline(self) -> bool:
+        """True when nothing in ``sys.modules`` moved since the last baseline.
+
+        Most collectors import nothing — every ``Class`` node, every directory
+        that only lists its children — and this answers them with one C-level
+        dict comparison instead of a copy plus a Python pass over every entry
+        (0.065 ms against 0.390 ms at 3600 entries).  Under xdist every worker
+        collects the whole suite, so this is the guard's most repeated call.
+
+        CPython compares dict values with an identity short-circuit, so equal
+        entries never reach a user-defined ``__eq__``.  A *differing* entry
+        can, a Python ``__eq__`` can release the GIL, and a concurrent import
+        then makes the comparison raise; falling back to ``False`` runs the
+        full copy-and-scan below, which is the correct answer either way.
+        """
+        try:
+            return sys.modules == self._baseline
+        except Exception:  # noqa: BLE001 - any failure just means "do the full scan"
+            return False
 
     def _changed_since(self, current: dict[str, object]) -> list[tuple[str, object, object]]:
         """Entries that are new or now bound to a different object.
