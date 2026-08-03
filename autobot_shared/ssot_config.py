@@ -125,6 +125,23 @@ SUBAGENT_REFLECTION_ENABLED: bool = (
 SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT = 10
 SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT = 300
 
+# Service-auth enforcement gate (#13335) - the third drift in this same block.
+# The Ansible role has always written ``true``/``100``; the Pydantic fields
+# defaulted to ``""``/``0.0``, so every install that did not go through Ansible
+# ran the service-auth middleware in LOGGING MODE with the circuit breaker
+# sampling 0% of requests. Unlike #13326 (which failed closed and was loud),
+# this pair failed OPEN and was silent. ``tests/test_service_auth_default_parity``
+# now pins each of these to the Ansible role default.
+SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT = "true"
+SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT = 100.0
+
+# Replay window for HMAC-signed service requests (#13335). The Ansible role and
+# ``export_service_keys.py`` have always written ``AUTH_TIMESTAMP_WINDOW``, but
+# no Pydantic field claimed the alias, so ``ServiceAuthManager`` hard-coded 300
+# and the operator-facing knob did nothing. The default matches the role so
+# wiring it in cannot change behaviour on an existing install.
+SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT = 300
+
 
 class RedactedSettings(RedactedReprMixin, BaseSettings):
     """Base for every SSOT settings model.
@@ -1880,8 +1897,27 @@ class MiscConfig(RedactedSettings):
     redis_node_id: str = Field(default="", alias="REDIS_NODE_ID")
     redis_port: int = Field(default=0, alias="REDIS_PORT")
     secret_key: str = Field(default="", alias="SECRET_KEY")
-    service_auth_circuit_breaker_percentage: float = Field(default=0.0, alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE")
-    service_auth_enforcement_mode: str = Field(default="", alias="SERVICE_AUTH_ENFORCEMENT_MODE")
+    service_auth_circuit_breaker_percentage: float = Field(
+        default=SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
+        alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE",
+        description=(
+            "Percentage of service-auth-eligible requests the enforcement middleware "
+            "actually checks (0-100). 100 enforces every request; 0 explicitly "
+            "DISABLES the enforcement sampling entirely, so every request passes "
+            "through unchecked - it does not mean 'enforce a little'. Issue #13335."
+        ),
+    )
+    service_auth_enforcement_mode: str = Field(
+        default=SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
+        alias="SERVICE_AUTH_ENFORCEMENT_MODE",
+        description=(
+            "Master switch for service-auth enforcement, compared case-insensitively "
+            "against the literal 'true'. ANY other value - including the empty "
+            "string - explicitly DISABLES enforcement and selects LOGGING MODE: "
+            "unauthenticated service calls are logged and allowed through. "
+            "Issue #13335."
+        ),
+    )
     service_auth_override_token: str = Field(default="", alias="SERVICE_AUTH_OVERRIDE_TOKEN")
     service_auth_rate_limit_max_failures: int = Field(
         default=SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
@@ -1891,6 +1927,16 @@ class MiscConfig(RedactedSettings):
             "before further requests are rejected with HTTP 429. "
             "0 explicitly DISABLES failure rate limiting (service auth itself still runs); "
             "it does not mean 'tolerate nothing'. Issue #13326."
+        ),
+    )
+    service_auth_timestamp_window: int = Field(
+        default=SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
+        alias="AUTH_TIMESTAMP_WINDOW",
+        description=(
+            "Seconds a signed service request stays valid, in either direction, "
+            "before it is rejected as a replay. 0 accepts no clock skew at all "
+            "and will reject essentially every request; it does not disable the "
+            "replay check. Issue #13335."
         ),
     )
     service_auth_rate_limit_window: int = Field(
