@@ -330,9 +330,9 @@ def test_an_unlisted_leak_fails_the_run(scratch_repo):
 
     result = _run_pytest(repo)
 
+    assert result.returncode == 1, f"an unlisted leak must fail the run, got {result.returncode}"
     assert "pkg_a/conftest.py" in _owners_on(result.stdout, "LEAK:"), result.stdout
     assert "NOT on" in result.stdout, result.stdout
-    assert result.returncode == 1, f"an unlisted leak must fail the run, got {result.returncode}"
 
 
 def test_a_listed_leak_is_reported_without_failing(scratch_repo):
@@ -349,9 +349,9 @@ def test_a_listed_leak_is_reported_without_failing(scratch_repo):
 
     result = _run_pytest(repo)
 
-    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "known: "), result.stdout
-    assert "LEAK:" not in result.stdout, "known debt must not be reported as a regression"
     assert result.returncode == 0, result.stdout
+    assert "LEAK:" not in result.stdout, "known debt must not be reported as a regression"
+    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "known: "), result.stdout
 
 
 def test_a_listed_owner_that_no_longer_leaks_must_be_delisted(scratch_repo):
@@ -367,9 +367,9 @@ def test_a_listed_owner_that_no_longer_leaks_must_be_delisted(scratch_repo):
 
     result = _run_pytest(repo)
 
-    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "FIXED:"), result.stdout
-    assert "remove it from" in result.stdout, result.stdout
     assert result.returncode == 1, f"a stale baseline entry must fail the run, got {result.returncode}"
+    assert "remove it from" in result.stdout, result.stdout
+    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "FIXED:"), result.stdout
 
 
 def test_a_listed_owner_is_not_delisted_by_a_run_that_never_leaves_it(scratch_repo):
@@ -414,10 +414,10 @@ def test_an_unlisted_leak_still_fails_when_another_owner_is_listed(scratch_repo)
 
     result = _run_pytest(repo, targets=("pkg_a", "pkg_b", "pkg_c"))
 
+    assert result.returncode == 1, result.stdout
     blamed = _owners_on(result.stdout, "LEAK:")
     assert "pkg_c/conftest.py" in blamed, result.stdout
     assert "pkg_a" not in blamed, result.stdout
-    assert result.returncode == 1
 
 
 # ---------------------------------------------------------------------------
@@ -489,11 +489,11 @@ def test_all_three_verdicts_hold_under_xdist(scratch_repo):
         targets=("pkg_a", "pkg_b", "pkg_c", "pkg_d"),
     )
 
+    assert result.returncode == 1, result.stdout
     assert "pkg_c/conftest.py" in _owners_on(result.stdout, "LEAK:"), result.stdout
     assert "pkg_a" not in _owners_on(result.stdout, "LEAK:"), result.stdout
     assert "pkg_a/conftest.py" in _owners_on(result.stdout, "known: "), result.stdout
     assert "pkg_d/conftest.py" in _owners_on(result.stdout, "FIXED:"), result.stdout
-    assert result.returncode == 1
 
 
 def test_survives_a_session_without_pytest_xdist(scratch_repo):
