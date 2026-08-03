@@ -14,115 +14,42 @@ jobs:
     permissions:
       issues: write
     steps:
+      - uses: actions/checkout@v7
+
       - name: Triage issue
         uses: actions/github-script@v9
         with:
           script: |
+            // #13050: the label decision lives in .github/scripts/issue-triage-labels.js
+            // so it is a pure function with unit tests, instead of untestable
+            // inline substring matching that mislabelled #13032-#13036.
+            const { selectLabels } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-triage-labels.js`);
             const issue = context.payload.issue;
-            const issueBody = (issue.body || '').toLowerCase();
-            const issueTitle = (issue.title || '').toLowerCase();
-            const issueText = `${issueTitle} ${issueBody}`;
-            
-            // Skip if issue already has many labels (likely already triaged)
-            if (issue.labels.length > 3) {
-              console.log('Issue already has labels, skipping auto-triage');
+
+            const { labels, reason, suppressed } = selectLabels(issue);
+            console.log(`Triage decision: ${labels.length ? labels.join(', ') : '(none)'} — ${reason}`);
+
+            if (labels.length === 0) {
+              // #13050: no label beats a wrong one — but only ASK when we are
+              // genuinely uncertain. `suppressed` means the author already
+              // triaged it, and this workflow also fires on `edited`, so
+              // commenting there would nag a correctly-labelled issue on every
+              // checklist tick. Ask once, on creation, and never again.
+              if (!suppressed && context.payload.action === 'opened') {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `👋 Auto-triage could not confidently classify this issue (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`
+                });
+              }
               return;
             }
-            
-            let labelsToAdd = [];
-            let confidence = { skill: 'low', difficulty: 'low' };
-            
-            // === SKILL DETECTION ===
-            
-            // Frontend detection
-            const frontendKeywords = ['vue', 'frontend', 'typescript', 'ui', 'css', 'vite', 'component', 'dashboard', 'interface', 'button', 'modal', 'sidebar'];
-            if (frontendKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('frontend');
-              confidence.skill = 'high';
-            }
-            
-            // Backend detection
-            const backendKeywords = ['fastapi', 'python', 'api', 'database', 'async', 'backend', 'endpoint', 'route', 'sqlalchemy', 'orm', 'authentication', 'websocket'];
-            if (backendKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('backend');
-              confidence.skill = 'high';
-            }
-            
-            // Infrastructure detection
-            const infraKeywords = ['docker', 'ansible', 'deploy', 'infrastructure', 'devops', 'ci/cd', 'kubernetes', 'container', 'networking', 'deployment', 'orchestr', 'scale'];
-            if (infraKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('infrastructure');
-              confidence.skill = 'high';
-            }
-            
-            // Documentation detection
-            const docsKeywords = ['docs', 'readme', 'documentation', 'guide', 'tutorial', 'example', 'example', 'comment', 'docstring'];
-            if (docsKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('docs');
-              confidence.skill = 'high';
-            }
-            
-            // Testing detection
-            const testKeywords = ['test', 'coverage', 'qa', 'pytest', 'unit test', 'integration test', 'mock', 'fixture', 'assertion'];
-            if (testKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('testing');
-              confidence.skill = 'high';
-            }
-            
-            // === DIFFICULTY DETECTION ===
-            
-            // Good first issue detection
-            const firstIssueKeywords = ['beginner', 'simple', 'easy', 'first issue', 'newcomer', 'newbie', 'starter', 'onboarding'];
-            if (firstIssueKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('good-first-issue');
-              confidence.difficulty = 'high';
-            }
-            
-            // Intermediate detection
-            const intermediateKeywords = ['intermediate', 'moderate', 'some experience', 'moderate complexity'];
-            if (intermediateKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('intermediate');
-              confidence.difficulty = 'high';
-            }
-            
-            // Advanced detection
-            const advancedKeywords = ['advanced', 'complex', 'architecture', 'refactor', 'optimization', 'performance', 'scalability', 'deep knowledge'];
-            if (advancedKeywords.some(k => issueText.includes(k))) {
-              labelsToAdd.push('advanced');
-              confidence.difficulty = 'high';
-            }
-            
-            // Remove duplicates
-            labelsToAdd = [...new Set(labelsToAdd)];
-            
-            // Filter out labels that already exist
-            const existingLabelNames = issue.labels.map(l => l.name);
-            labelsToAdd = labelsToAdd.filter(l => !existingLabelNames.includes(l));
-            
-            if (labelsToAdd.length === 0) {
-              console.log('No labels to add');
-              return;
-            }
-            
-            // Apply labels
-            console.log(`Applying labels: ${labelsToAdd.join(', ')}`);
+
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue.number,
-              labels: labelsToAdd
+              labels
             });
-            
-            // Comment with low confidence suggestions
-            if (confidence.skill === 'low' && confidence.difficulty === 'low') {
-              const comment = `👋 Hello! I've analyzed this issue but I'm not entirely sure about the skill area and difficulty level. Can a maintainer review and add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`;
-              
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: comment
-              });
-            }
-            
-            console.log(`Triage complete! Applied labels: ${labelsToAdd.join(', ')}`);
+            console.log(`Triage complete! Applied labels: ${labels.join(', ')}`);
