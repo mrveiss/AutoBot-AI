@@ -191,14 +191,49 @@ class TestHireAgentNamedBindDict:
         )
 
     def test_no_naked_colon_colon_cast_after_named_bind(self) -> None:
-        """Guard against reintroducing ':name::type' anywhere in the module."""
+        """Guard against reintroducing ``:name::type`` in any SQL the module builds.
+
+        #13311 triage: this one stays a source-level check on purpose. It is a
+        *lint* -- "this token sequence must not appear in SQL we emit" -- and
+        no amount of driving the module can prove the absence of a string it
+        never happens to execute in a test. What changed is that it now scans
+        string literals via the AST instead of raw text, so a ``:name::type``
+        written in a ``#`` comment (documenting the very bug) no longer fails
+        the build, while one hidden inside a multi-line SQL constant is still
+        caught. Docstrings are ``ast.Constant`` nodes and so are still scanned
+        -- deliberately: a docstring is where a copy-pasteable SQL example
+        lives, and a wrong example there propagates into real queries.
+        """
+        import ast
         import inspect
         import re
 
-        mod = _get_agent_hires_mod()
-        source = inspect.getsource(mod)
-        offenders = re.findall(r":\w+::\w+", source)
+        pattern = re.compile(r":\w+::\w+")
+        tree = ast.parse(inspect.getsource(_get_agent_hires_mod()))
+        offenders = [
+            (node.lineno, match)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            for match in pattern.findall(node.value)
+        ]
+
         assert not offenders, f"Use CAST(:name AS type), not ':name::type' (GH#12134): {offenders}"
+
+    def test_the_cast_lint_actually_matches(self) -> None:
+        """Guard the guard: a scanner that finds nothing passes everything."""
+        import ast
+        import re
+
+        pattern = re.compile(r":\w+::\w+")
+        tree = ast.parse('SQL = """SELECT :company_id::uuid FROM agent_hires"""\n# :other::uuid in a comment\n')
+        offenders = [
+            match
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            for match in pattern.findall(node.value)
+        ]
+
+        assert offenders == [":company_id::uuid"], "the lint must catch a SQL constant and ignore a # comment"
 
 
 # ===========================================================================

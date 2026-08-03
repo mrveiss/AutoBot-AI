@@ -67,14 +67,63 @@ def test_env_var_zero_or_negative_falls_back_with_warning(caplog):
     assert any("must be positive" in r.getMessage() for r in caplog.records)
 
 
-def test_no_3600_literal_in_module_source():
-    """Pin the regression: original bug was `setex(key, 3600, ...)`."""
-    import inspect
+class TestTheTtlActuallySentToRedis:
+    """#6743's bug was ``setex(key, 3600, ...)`` -- a literal that ignored the
+    resolved TTL entirely.
 
-    import chat_history.cache as cache_mod
+    This used to assert ``"3600" not in inspect.getsource(...)`` (#13311),
+    which proves nothing about what Redis receives: any other hard-coded
+    number passes, and the assertion breaks the moment the call moves into a
+    helper. Observe the argument instead.
+    """
 
-    src = inspect.getsource(cache_mod.CacheMixin._async_cache_session)
-    assert "3600" not in src, "TTL must not be a 3600 literal in _async_cache_session"
+    @staticmethod
+    def _mixin_with_recording_redis(cache_mod):
+        """A CacheMixin instance whose Redis records every setex call."""
+        mixin = cache_mod.CacheMixin()
+        calls: list[tuple] = []
+
+        class _Redis:
+            @staticmethod
+            def setex(key, ttl, payload):
+                calls.append((key, ttl, payload))
+
+        mixin.redis_client = _Redis()
+        return mixin, calls
+
+    @pytest.mark.asyncio
+    async def test_setex_receives_the_resolved_ttl_not_a_literal(self):
+        cache_mod = _reload_cache_with_env(None)
+        mixin, calls = self._mixin_with_recording_redis(cache_mod)
+
+        await mixin._async_cache_session("chat:session:abc", {"messages": []})
+
+        assert len(calls) == 1, "session caching must reach Redis exactly once"
+        key, ttl, _payload = calls[0]
+        assert key == "chat:session:abc"
+        assert ttl == cache_mod._CHAT_SESSION_CACHE_TTL == 86_400
+
+    @pytest.mark.asyncio
+    async def test_env_override_changes_what_redis_is_told(self):
+        """The whole point of the knob: a configured TTL must reach Redis."""
+        cache_mod = _reload_cache_with_env("7200")
+        mixin, calls = self._mixin_with_recording_redis(cache_mod)
+
+        await mixin._async_cache_session("chat:session:abc", {"messages": []})
+
+        assert calls[0][1] == 7200, "a 3600 (or any hard-coded) literal would show up here"
+
+    @pytest.mark.asyncio
+    async def test_payload_is_the_serialized_session(self):
+        """Guard the mirror: pinning the TTL must not let the body rot."""
+        import json
+
+        cache_mod = _reload_cache_with_env(None)
+        mixin, calls = self._mixin_with_recording_redis(cache_mod)
+
+        await mixin._async_cache_session("chat:session:abc", {"messages": [{"role": "user"}]})
+
+        assert json.loads(calls[0][2]) == {"messages": [{"role": "user"}]}
 
 
 # ---------------------------------------------------------------------------
