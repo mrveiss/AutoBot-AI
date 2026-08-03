@@ -152,6 +152,20 @@ for _mod in _SIMPLE_STUBS:
         except ImportError:
             sys.modules[_mod] = MagicMock()
 
+# #13162: a machine without torch has no CUDA either, and the stub must say so.
+# A bare MagicMock returns a truthy MagicMock from ``torch.cuda.is_available()``,
+# which sends production code down the GPU branch — where it formats MagicMock
+# device properties ("unsupported format string passed to MagicMock.__format__")
+# and compares MagicMock device capability against an int. Attribute access on
+# the parent stub auto-creates its own ``cuda`` child, so the ``torch.cuda``
+# sys.modules entry must be that same object or the two disagree.
+_torch_stub = sys.modules.get("torch")
+if isinstance(_torch_stub, MagicMock):
+    _torch_stub.cuda.is_available.return_value = False
+    _torch_stub.cuda.device_count.return_value = 0
+    _torch_stub.cuda.get_device_capability.return_value = (0, 0)
+    sys.modules["torch.cuda"] = _torch_stub.cuda
+
 # Celery stub — issue #4455. When celery isn't installed in the dev venv,
 # provide a tiny shim so modules that do ``@celery_app.task`` import cleanly.
 # The real package is used on production nodes; tests never rely on Beat.
