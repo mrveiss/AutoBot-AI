@@ -23,7 +23,6 @@ router = APIRouter(tags=["startup", "status"])
 # Thread lock for synchronous access to startup_state
 import threading
 
-from api.schemas_common import DataResponse
 from api.schemas_system import StartupMessage, StartupPhase, StartupPhaseUpdateData, StartupStatusResponse
 from api.ws_security import enforce_ws_origin
 
@@ -166,7 +165,7 @@ async def startup_websocket(websocket: WebSocket):
             startup_state["websocket_clients"].discard(websocket)
 
 
-@router.post("/phase", response_model=DataResponse[StartupPhaseUpdateData])
+@router.post("/phase", response_model=StartupPhaseUpdateData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_startup_phase",

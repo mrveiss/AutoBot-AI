@@ -2992,8 +2992,9 @@ class StructuredThinkingSummaryData(BaseModel):
     thought_count: int = 0
     overview: StructuredThinkingOverview = Field(default_factory=StructuredThinkingOverview)
     stage_distribution: Dict[str, int] = Field(default_factory=dict)
-    stage_progression: List[Any] = Field(default_factory=list)
+    stage_progression: Dict[str, List[Any]] = Field(default_factory=dict)
     metadata_analysis: Dict[str, Any] = Field(default_factory=dict)
+    cognitive_flow: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class SequentialThinkingClearData(BaseModel):
