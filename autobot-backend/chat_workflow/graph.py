@@ -1294,7 +1294,11 @@ async def _persist_error_turn(manager, state: ChatState) -> None:
             )
         ]
     try:
-        await manager._persist_workflow_messages(session_id, wf_messages, "")
+        # Issue #13295: no completed response exists on this path — an empty
+        # list (not "") falls through _build_persist_batch's iteration loop
+        # untouched, so every wf_messages entry is appended via its unchanged
+        # leftover fallback, exactly as before.
+        await manager._persist_workflow_messages(session_id, wf_messages, [])
     except Exception as exc:  # noqa: BLE001
         logger.error("Failed to persist error turn for session %s: %s", session_id, exc, exc_info=True)
 
@@ -1353,14 +1357,20 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
 
     manager = config["configurable"]["manager"]
     session_id = state.get("session_id", "")
-    combined_response = "\n\n".join(state.get("all_llm_responses", []))
+    all_llm_responses = state.get("all_llm_responses", [])
+    combined_response = "\n\n".join(all_llm_responses)
 
     # Emit LOOP_COMPLETE hook to notify extensions
     await _emit_loop_complete(state.get("iteration_count", 0), combined_response, session_id)
 
     try:
         session = await manager.get_or_create_session(session_id)
-        # Issue #4263: allow extensions to inspect/modify response before sending
+        # Issue #4263: allow extensions to inspect/modify response before sending.
+        # Issue #13295: the (rare, default no-op) hook output feeds the combined
+        # session-level view below; it is intentionally NOT threaded into
+        # all_llm_responses, since a single edited string cannot be split back
+        # into the per-iteration entries _persist_workflow_messages now needs
+        # to interleave with tool output.
         combined_response = await _emit_before_response_send_safe(combined_response, session_id)
 
         await manager._persist_conversation(session_id, session, state["user_message"], combined_response)
@@ -1369,7 +1379,7 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
         await manager._persist_workflow_messages(
             session_id,
             wf_messages,
-            combined_response,
+            all_llm_responses,
             selected_model=state.get("llm_params", {}).get("selected_model", ""),
             rag_citations=state.get("rag_citations", []),
             used_knowledge=state.get("used_knowledge", False),
