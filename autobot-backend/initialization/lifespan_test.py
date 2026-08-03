@@ -9,14 +9,39 @@ awaited drain of the LLC poll-loop schedulers.
 """
 
 import asyncio
+import contextlib
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import initialization.lifespan as lifespan_module
 from initialization.lifespan import cleanup_services
+
+
+@contextlib.contextmanager
+def _stub_slow_cleanup_legs():
+    """Stub cleanup_services()'s unconditional (not hasattr-gated) real-I/O
+    calls that are unrelated to the LLC scheduler drain under test (#13284:
+    the suite budgets zero tests over 10s; these legs can hit real network
+    connect timeouts depending on environment, which has nothing to do with
+    what these tests assert)."""
+    handoff_svc = MagicMock()
+    handoff_svc.shutdown = AsyncMock()
+    connector_scheduler = MagicMock()
+    connector_scheduler.stop_all = AsyncMock()
+
+    with (
+        patch.object(lifespan_module, "shutdown_slm_client", new=AsyncMock()),
+        patch("services.documentation_watcher.stop_documentation_watcher", new=AsyncMock()),
+        patch("services.kb_folder_watcher.stop_kb_folder_watcher", new=AsyncMock()),
+        patch("llc.api.work_items._get_handoff_service", return_value=handoff_svc),
+        patch("workflow_scheduler.stop_autonomous_loop", new=AsyncMock()),
+        patch("api.analytics.analytics_controller.metrics_collector.stop_collection", new=AsyncMock()),
+        patch("knowledge.connectors.scheduler.get_connector_scheduler", return_value=connector_scheduler),
+    ):
+        yield
 
 
 @pytest.mark.asyncio
@@ -124,6 +149,7 @@ async def test_cleanup_drains_community_cluster_scheduler():
     with (
         patch("autobot_shared.redis_client.close_all_redis_connections", new=AsyncMock()),
         patch.object(lifespan_module, "shutdown_tracing", new=AsyncMock()),
+        _stub_slow_cleanup_legs(),
     ):
         await cleanup_services(app)
 
@@ -232,11 +258,19 @@ async def test_cleanup_drain_of_stuck_community_scheduler_is_bounded_and_measure
     connection, #13203's concrete failure mode). Measures wall-clock time
     rather than only asserting no exception, proving the bound is real.
 
-    ``cleanup_services()`` calls ``scheduler.aclose()`` with no explicit
-    timeout, so it uses whatever the scheduler's own ``aclose()`` resolves —
-    overridden here to a small value so the test proves the bound is honoured
-    end-to-end through the real cleanup path without waiting out the
-    production default.
+    Times ``scheduler.aclose()`` itself via a spy, not the whole
+    ``cleanup_services(app)`` call — the latter also runs Redis close,
+    tracing shutdown, and every other teardown step, so wrapping the full
+    call couples this assertion to their combined latency instead of the one
+    thing #13210 bounds.
+
+    The stuck task can never honour a real cancellation (that is the whole
+    point of the scenario, mirroring #13203's dead-connection retry), so it
+    cannot be reaped the way a normal task is. ``mask_cancellation`` is
+    flipped off after the measurement — mirroring
+    ``community_cluster_scheduler_test.py``'s ``_UncancellableClusterer`` —
+    so the reap in the ``finally`` block can actually succeed instead of
+    leaving a live task for pytest-asyncio's loop teardown to hang on.
     """
     import time
 
@@ -245,12 +279,16 @@ async def test_cleanup_drain_of_stuck_community_scheduler_is_bounded_and_measure
     tick_entered = asyncio.Event()
 
     class _UncancellableScheduler(PollLoopScheduler):
+        mask_cancellation = True
+
         async def _tick(self) -> None:
             tick_entered.set()
             while True:
                 try:
                     await asyncio.sleep(9999.0)
                 except asyncio.CancelledError:
+                    if not type(self).mask_cancellation:
+                        raise
                     continue  # models a driver that swallows every cancel
 
         async def aclose(self, timeout: float = 0.2) -> None:
@@ -261,20 +299,37 @@ async def test_cleanup_drain_of_stuck_community_scheduler_is_bounded_and_measure
     task = sched._task
     await asyncio.wait_for(tick_entered.wait(), timeout=1.0)
 
+    aclose_elapsed: list[float] = []
+    real_aclose = sched.aclose
+
+    async def _timed_aclose(*args, **kwargs) -> None:
+        start = time.monotonic()
+        try:
+            await real_aclose(*args, **kwargs)
+        finally:
+            aclose_elapsed.append(time.monotonic() - start)
+
+    sched.aclose = _timed_aclose
+
     app = SimpleNamespace(state=SimpleNamespace(community_cluster_scheduler=sched))
 
-    with (
-        patch("autobot_shared.redis_client.close_all_redis_connections", new=AsyncMock()),
-        patch.object(lifespan_module, "shutdown_tracing", new=AsyncMock()),
-    ):
-        start = time.monotonic()
-        await asyncio.wait_for(cleanup_services(app), timeout=3.0)
-        elapsed = time.monotonic() - start
+    try:
+        with (
+            patch("autobot_shared.redis_client.close_all_redis_connections", new=AsyncMock()),
+            patch.object(lifespan_module, "shutdown_tracing", new=AsyncMock()),
+            _stub_slow_cleanup_legs(),
+        ):
+            await asyncio.wait_for(cleanup_services(app), timeout=3.0)
 
-    assert elapsed < 1.0, f"cleanup_services() took {elapsed:.2f}s, expected to settle near the 0.2s bound"
-    assert not task.done(), "the uncancellable task is deliberately left behind, not force-killed"
-
-    # Reap it so the test process doesn't leak a background task.
-    task.cancel()
-    for _ in range(3):
-        await asyncio.sleep(0)
+        assert aclose_elapsed, "cleanup_services() must have called scheduler.aclose()"
+        assert (
+            aclose_elapsed[0] < 1.0
+        ), f"aclose() itself took {aclose_elapsed[0]:.2f}s, expected to settle near its 0.2s bound"
+        assert not task.done(), "the uncancellable task is deliberately left behind, not force-killed"
+    finally:
+        # Only now does the task honour a cancel — reap it so the test
+        # process doesn't leak a background task into pytest-asyncio's loop
+        # teardown, even if an assertion above failed.
+        _UncancellableScheduler.mask_cancellation = False
+        task.cancel()
+        await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), timeout=1.0)
