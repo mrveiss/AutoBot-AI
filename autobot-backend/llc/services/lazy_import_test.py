@@ -17,23 +17,40 @@ import sys
 
 import pytest
 
-
-def _fresh_llc_services_modules() -> list[str]:
-    """Drop every llc.services* / llc.kb* module from sys.modules so the next
-    import exercises real module-loading rather than an already-cached one
-    left behind by an earlier test in the same session."""
-    removed = [name for name in list(sys.modules) if name.startswith(("llc.services", "llc.kb", "llc.scheduler"))]
-    for name in removed:
-        del sys.modules[name]
-    return removed
+_LAZY_MODULE_PREFIXES = ("llc.services",)
 
 
 @pytest.fixture
 def isolated_llc_services():
-    """Undo any llc.services*/llc.kb* import caching before and after the test."""
-    _fresh_llc_services_modules()
-    yield
-    _fresh_llc_services_modules()
+    """Force a fresh import of llc.services* for the duration of the test,
+    then restore exactly the module objects that were present beforehand.
+
+    Dropping-and-never-restoring (the first version of this fixture) handed
+    every later test in the same session re-executed module/class objects:
+    ``isinstance`` checks and any ``unittest.mock.patch`` target resolved
+    before this fixture ran would keep pointing at the orphaned pre-test
+    objects while the rest of the session used the new ones, silently
+    breaking identity comparisons. Saving and restoring the originals keeps
+    this fixture's effect scoped to exactly the test that asked for it.
+
+    Deliberately scoped to ``llc.services`` only, not ``llc.kb``/
+    ``llc.scheduler`` (an earlier version wiped those too): forcing a fresh
+    ``llc.kb`` import drags in ``knowledge``, which has its own pre-existing,
+    order-dependent ``ImportError: cannot import name 'BaseCollection' from
+    'knowledge.backends'`` fragility — unrelated to #13057 and out of this
+    PR's scope. None of these tests' assertions inspect ``llc.kb``/
+    ``llc.scheduler`` module state, so narrowing the wipe doesn't weaken them.
+    """
+    saved = {name: mod for name, mod in sys.modules.items() if name.startswith(_LAZY_MODULE_PREFIXES)}
+    for name in saved:
+        del sys.modules[name]
+    try:
+        yield
+    finally:
+        for name in list(sys.modules):
+            if name.startswith(_LAZY_MODULE_PREFIXES) and name not in saved:
+                del sys.modules[name]
+        sys.modules.update(saved)
 
 
 class _RejectImport:
@@ -43,12 +60,19 @@ class _RejectImport:
     session — llm_shared may already be cached from an earlier, unrelated
     test. This intercepts the *attempt* to import it during the call under
     test, which is unaffected by what any other test already did.
+
+    Implements ``find_spec``, not the legacy ``find_module`` — the latter was
+    removed from ``importlib._bootstrap``'s finder protocol in Python 3.12,
+    so on this repo's CI-pinned 3.14 a ``find_module``-only finder is
+    silently skipped (``_find_spec`` catches ``AttributeError`` and moves to
+    the next finder) and this guard would pass vacuously without ever
+    blocking anything.
     """
 
     def __init__(self, blocked: tuple[str, ...]) -> None:
         self._blocked = blocked
 
-    def find_module(self, name, path=None):  # noqa: ANN001, ANN201 — importlib protocol
+    def find_spec(self, name, path=None, target=None):  # noqa: ANN001, ANN201 — importlib protocol
         if any(name == b or name.startswith(b + ".") for b in self._blocked):
             raise ImportError(f"BLOCKED: {name} must not be imported here (#13057)")
         return None
