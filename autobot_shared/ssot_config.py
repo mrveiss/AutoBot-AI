@@ -44,12 +44,13 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List
+from typing import ClassVar, Dict, FrozenSet, List
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.secret_redaction import RedactedReprMixin
 
 
 # Determine project root for .env file location
@@ -116,7 +117,28 @@ SUBAGENT_REFLECTION_ENABLED: bool = (
 )
 
 
-class VMConfig(BaseSettings):
+# Service-auth failure rate limiting (#13326).
+# These mirror the values the service_auth Ansible role has always written to
+# .env; the Pydantic fields previously defaulted to 0, which made
+# ``len(failures) >= max_failures`` true on the very first request and rejected
+# every SERVICE_ONLY_PATHS call on a default install.
+SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT = 10
+SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT = 300
+
+
+class RedactedSettings(RedactedReprMixin, BaseSettings):
+    """Base for every SSOT settings model.
+
+    Adds credential-aware ``repr()`` redaction so a config dump — e.g. the
+    ``AttributeError`` ``unittest.mock.patch.object`` raises on a misspelled
+    attribute — can never carry secret values into pytest output or CI logs.
+    Field names stay visible; only populated credential values are masked.
+
+    Issue: #13325
+    """
+
+
+class VMConfig(RedactedSettings):
     """
     VM IP address configuration.
 
@@ -149,7 +171,7 @@ class VMConfig(BaseSettings):
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
 
 
-class PortConfig(BaseSettings):
+class PortConfig(RedactedSettings):
     """Service port configuration."""
 
     model_config = SettingsConfigDict(
@@ -174,7 +196,7 @@ class PortConfig(BaseSettings):
     chrome_cdp: int = Field(default=9222, alias="AUTOBOT_CHROME_CDP_PORT")  # Issue #3829: Chrome DevTools Protocol
 
 
-class LLMConfig(BaseSettings):
+class LLMConfig(RedactedSettings):
     """
     LLM model configuration with multi-provider support.
 
@@ -509,7 +531,7 @@ class LLMConfig(BaseSettings):
         return self.get_endpoint_for_provider(provider)
 
 
-class TimeoutConfig(BaseSettings):
+class TimeoutConfig(RedactedSettings):
     """
     Timeout configuration — all values in seconds unless noted.
 
@@ -663,7 +685,7 @@ class TimeoutConfig(BaseSettings):
         return self.http
 
 
-class RedisConfig(BaseSettings):
+class RedisConfig(RedactedSettings):
     """Redis database configuration."""
 
     model_config = SettingsConfigDict(
@@ -709,7 +731,7 @@ class RedisConfig(BaseSettings):
     password: str | None = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
 
 
-class CacheCoordinatorConfig(BaseSettings):
+class CacheCoordinatorConfig(RedactedSettings):
     """
     Cache coordinator configuration for memory pressure management.
 
@@ -743,7 +765,7 @@ class CacheCoordinatorConfig(BaseSettings):
     )
 
 
-class CacheRedisConfig(BaseSettings):
+class CacheRedisConfig(RedactedSettings):
     """
     Redis connection pool configuration for caching.
 
@@ -776,7 +798,7 @@ class CacheRedisConfig(BaseSettings):
     )
 
 
-class CacheL1Config(BaseSettings):
+class CacheL1Config(RedactedSettings):
     """
     L1 (in-memory) cache size configuration.
 
@@ -836,7 +858,7 @@ class CacheL1Config(BaseSettings):
     )
 
 
-class CacheL2Config(BaseSettings):
+class CacheL2Config(RedactedSettings):
     """
     L2 (Redis) cache TTL configuration.
 
@@ -898,7 +920,7 @@ class CacheL2Config(BaseSettings):
     )
 
 
-class CacheConfig(BaseSettings):
+class CacheConfig(RedactedSettings):
     """
     Master cache configuration for AutoBot.
 
@@ -930,7 +952,7 @@ class CacheConfig(BaseSettings):
     l2: CacheL2Config = Field(default_factory=CacheL2Config)
 
 
-class AuthConfig(BaseSettings):
+class AuthConfig(RedactedSettings):
     """Authentication domain configuration.
 
     Controls auth-level defaults that are shared across middleware and API layers.
@@ -1069,7 +1091,7 @@ class PermissionAction(str, Enum):
     DENY = "deny"  # Block matching commands
 
 
-class PermissionConfig(BaseSettings):
+class PermissionConfig(RedactedSettings):
     """
     Permission system configuration - Claude Code style.
 
@@ -1155,12 +1177,15 @@ class TLSMode(str, Enum):
     REQUIRED = "required"
 
 
-class TLSConfig(BaseSettings):
+class TLSConfig(RedactedSettings):
     """TLS/PKI Configuration for secure communications.
 
     Issue #164: Added frontend TLS support for HTTPS on the frontend VM.
     TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
     """
+
+    # Path to a public CA certificate — not key material.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_cert"})
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -1195,7 +1220,7 @@ class TLSConfig(BaseSettings):
         return self.redis_tls_enabled or self.backend_tls_enabled or self.frontend_tls_enabled or self.slm_tls_enabled
 
 
-class DatabasePoolConfig(BaseSettings):
+class DatabasePoolConfig(RedactedSettings):
     """Database connection pool configuration (#2860).
 
     Centralizes SQLAlchemy and SQLite pool settings so all services use
@@ -1248,7 +1273,7 @@ class DatabasePoolConfig(BaseSettings):
     )
 
 
-class PathConfig(BaseSettings):
+class PathConfig(RedactedSettings):
     """
     File-system path configuration.
 
@@ -1356,13 +1381,16 @@ class PathConfig(BaseSettings):
         return f"{self.ssh_key_path}.pub"
 
 
-class MiscConfig(BaseSettings):
+class MiscConfig(RedactedSettings):
     """Miscellaneous/unmapped environment variables.
 
     This class collects all env vars not yet migrated to structured config sections.
     Vars default to empty string ("") when not set in environment.
     Issue: GH#7437 — Migrate 675 os.getenv/os.environ callsites
     """
+
+    # Matches the ``tokens`` credential suffix but holds a count, not a secret.
+    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"speculation_num_tokens"})
 
     model_config = SettingsConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -1845,8 +1873,25 @@ class MiscConfig(BaseSettings):
     service_auth_circuit_breaker_percentage: float = Field(default=0.0, alias="SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE")
     service_auth_enforcement_mode: str = Field(default="", alias="SERVICE_AUTH_ENFORCEMENT_MODE")
     service_auth_override_token: str = Field(default="", alias="SERVICE_AUTH_OVERRIDE_TOKEN")
-    service_auth_rate_limit_max_failures: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES")
-    service_auth_rate_limit_window: int = Field(default=0, alias="SERVICE_AUTH_RATE_LIMIT_WINDOW")
+    service_auth_rate_limit_max_failures: int = Field(
+        default=SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
+        alias="SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES",
+        description=(
+            "Failed service-auth attempts tolerated per IP inside the rate-limit window "
+            "before further requests are rejected with HTTP 429. "
+            "0 explicitly DISABLES failure rate limiting (service auth itself still runs); "
+            "it does not mean 'tolerate nothing'. Issue #13326."
+        ),
+    )
+    service_auth_rate_limit_window: int = Field(
+        default=SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
+        alias="SERVICE_AUTH_RATE_LIMIT_WINDOW",
+        description=(
+            "Sliding window in seconds over which service-auth failures are counted. "
+            "0 explicitly DISABLES failure rate limiting, since a zero-length window can "
+            "never retain a failure. Issue #13326."
+        ),
+    )
     service_id: str = Field(default="", alias="SERVICE_ID")
     service_key: str = Field(default="", alias="SERVICE_KEY")
     service_key_file: str = Field(default="", alias="SERVICE_KEY_FILE")
@@ -1882,7 +1927,7 @@ class MiscConfig(BaseSettings):
     vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
 
 
-class FeatureConfig(BaseSettings):
+class FeatureConfig(RedactedSettings):
     """Feature flags configuration."""
 
     model_config = SettingsConfigDict(
@@ -1942,7 +1987,7 @@ class FeatureConfig(BaseSettings):
     cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
 
 
-class CostModelConfig(BaseSettings):
+class CostModelConfig(RedactedSettings):
     """Operator-supplied monthly cost estimates for hardware components.
 
     Issue #10720: Replaces hardcoded literals in business_intelligence_dashboard.py
@@ -2043,7 +2088,7 @@ class CostModelConfig(BaseSettings):
     )
 
 
-class TelemetryConfig(BaseSettings):
+class TelemetryConfig(RedactedSettings):
     """
     Telemetry and analytics opt-out configuration.
 
@@ -2084,7 +2129,7 @@ class TelemetryConfig(BaseSettings):
     )
 
 
-class AutoBotConfig(BaseSettings):
+class AutoBotConfig(RedactedSettings):
     """
     Master configuration - SINGLE SOURCE OF TRUTH.
 
