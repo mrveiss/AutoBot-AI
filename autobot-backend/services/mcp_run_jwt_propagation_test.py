@@ -216,8 +216,10 @@ def test_worker_env_is_provisioned_with_the_signing_secret(monkeypatch):
     client = IsolatedBridgeClient("filesystem_mcp", policy_for("filesystem_mcp"))
     spawn = AsyncMock(return_value=AsyncMock(returncode=None))
 
+    # #13162: asyncio.get_event_loop() raises "no current event loop" on Python
+    # 3.14 (the CI interpreter) once the implicit-loop fallback was removed.
     with patch("asyncio.create_subprocess_exec", spawn):
-        asyncio.get_event_loop().run_until_complete(client.start())
+        asyncio.run(client.start())
 
     env = spawn.call_args.kwargs["env"]
     assert env["RUN_JWT_SECRET"] == TEST_JWT_SECRET
@@ -291,8 +293,8 @@ def test_env_only_deployment_mints_verifies_and_provisions(monkeypatch):
         assert _resolve_run_jwt_secret() == "dedicated-run-jwt-key"
         token = MCPDispatcher._mint_bridge_jwt("filesystem_mcp", "read_file")
         assert token is not None, "#13265 degraded to forwarding None"
+        # #13162: see test_worker_env_is_provisioned_with_the_signing_secret —
+        # asyncio.get_event_loop() no longer creates a loop on Python 3.14.
         with patch.object(worker_entrypoint, "_JWT_ENFORCE", True):
-            claims = asyncio.get_event_loop().run_until_complete(
-                worker_entrypoint._validate_run_jwt_param({"run_jwt": token})
-            )
+            claims = asyncio.run(worker_entrypoint._validate_run_jwt_param({"run_jwt": token}))
     assert claims["scope"] == ["mcp:filesystem"]
