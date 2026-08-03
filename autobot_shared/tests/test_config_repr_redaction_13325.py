@@ -154,8 +154,6 @@ class TestRedactedRepr:
         assert model.model_dump()["jwt_secret"] == FAKE_SECRET
 
 
-
-
 # ---------------------------------------------------------------------------
 # Ground-truth regression guard
 #

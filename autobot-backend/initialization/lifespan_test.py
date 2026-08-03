@@ -223,6 +223,90 @@ async def test_init_budget_watchdog_actually_starts_it():
 
 
 @pytest.mark.asyncio
+async def test_health_probe_reports_liveness_monitor_and_checkpointer_running_via_real_lifespan():
+    """#13331: llc/health/probe.py used to build its own private,
+    never-started LivenessMonitor/SessionCheckpointer singletons instead of
+    reading the ones lifespan actually starts and stores on app.state, so
+    the probe permanently reported them as not running. Asserting against a
+    mock would not catch that class of bug -- the objects here are started
+    through the REAL production init functions (same precedent as
+    test_init_liveness_monitor_actually_starts_it above), and the probe must
+    report them running.
+    """
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from initialization.lifespan import _init_liveness_monitor, _init_session_checkpointer
+    from llc.health.probe import probe_llc
+
+    app = SimpleNamespace(state=SimpleNamespace())
+    await _init_liveness_monitor(app)
+    await _init_session_checkpointer(app)
+
+    request = MagicMock()
+    request.app = app
+
+    # Only the DB/Redis-backed metrics unrelated to this regression are
+    # stubbed -- the liveness-monitor/session-checkpointer wiring under test
+    # runs for real.
+    try:
+        with (
+            patch("llc.health.probe._count_overdue_agents", new=AsyncMock(return_value=(0, 0))),
+            patch("llc.health.probe._budget_counts", new=AsyncMock(return_value=(0, 0))),
+            patch("llc.health.probe._pending_approvals_critical", new=AsyncMock(return_value=0)),
+            patch("llc.health.probe._count_agents_missing_instructions", new=AsyncMock(return_value=0)),
+            patch("llc.health.probe._scheduler_tick_age", new=AsyncMock(return_value=None)),
+            patch("llc.health.probe._session_recovery_available", new=AsyncMock(return_value=False)),
+        ):
+            result = await probe_llc(request)
+
+        assert result.data["liveness_monitor_wired"] is True
+        assert (
+            result.data["liveness_monitor_running"] is True
+        ), "must report the object lifespan actually started, not a disconnected shadow (GH#13331)"
+        assert result.data["session_checkpointer_wired"] is True
+        assert (
+            result.data["session_checkpointer_running"] is True
+        ), "must report the object lifespan actually started, not a disconnected shadow (GH#13331)"
+    finally:
+        await app.state.llc_liveness_monitor.aclose()
+        await app.state.llc_session_checkpointer.aclose()
+
+
+@pytest.mark.asyncio
+async def test_health_probe_reports_wired_but_not_running_after_real_shutdown():
+    """#13331: a component lifespan started and then stopped (aclose()) is
+    wired=True, running=False -- degraded, not down. Distinct from the
+    unwired case (no request / app.state never got the attribute), which is
+    the whole point of this fix -- see llc/tests/test_health_probe.py's
+    _app_state_scheduler_state unit tests for the unwired-vs-not-running
+    matrix."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from initialization.lifespan import _init_liveness_monitor
+    from llc.health.probe import probe_llc
+
+    app = SimpleNamespace(state=SimpleNamespace())
+    await _init_liveness_monitor(app)
+    await app.state.llc_liveness_monitor.aclose()
+
+    request = MagicMock()
+    request.app = app
+
+    with (
+        patch("llc.health.probe._count_overdue_agents", new=AsyncMock(return_value=(0, 0))),
+        patch("llc.health.probe._budget_counts", new=AsyncMock(return_value=(0, 0))),
+        patch("llc.health.probe._pending_approvals_critical", new=AsyncMock(return_value=0)),
+        patch("llc.health.probe._count_agents_missing_instructions", new=AsyncMock(return_value=0)),
+        patch("llc.health.probe._scheduler_tick_age", new=AsyncMock(return_value=None)),
+        patch("llc.health.probe._session_recovery_available", new=AsyncMock(return_value=False)),
+    ):
+        result = await probe_llc(request)
+
+    assert result.data["liveness_monitor_wired"] is True
+    assert result.data["liveness_monitor_running"] is False
+
+
+@pytest.mark.asyncio
 async def test_cleanup_drain_uses_the_real_scheduler_contract():
     """The drain wired into cleanup_services matches PollLoopScheduler's own API.
 

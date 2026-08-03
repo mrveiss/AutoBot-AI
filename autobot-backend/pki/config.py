@@ -21,7 +21,6 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.secret_redaction import RedactedReprMixin
-
 from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
 from autobot_shared.ssot_config import config
 

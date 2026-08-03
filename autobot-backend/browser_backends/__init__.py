@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 
-from autobot_shared.browser.registry import register_backend
+from autobot_shared.browser.registry import register_backend, registered_backends
 from browser_backends.container import ContainerBrowserBackend
 from browser_backends.in_process import InProcessBrowserBackend
 from browser_backends.worker import WorkerBrowserBackend
@@ -44,10 +44,15 @@ def register_all(*, force: bool = False) -> None:
     """Register this app's browser backends. Idempotent.
 
     Safe to call from app startup more than once — `register_backend` replaces
-    by name rather than stacking, and the module-level guard avoids the churn.
+    by name rather than stacking, and the module-level memo avoids the churn.
+
+    The memo is checked *against the registry*, not on its own: anything that
+    clears the registry (notably a test fixture) would otherwise leave this
+    believing registration had happened while nothing was registered, and every
+    subsequent `resolve_backend` would raise `NoCapableBackendError` (#13236).
     """
     global _registered
-    if _registered and not force:
+    if _registered and not force and registered_backends():
         return
 
     register_backend(InProcessBrowserBackend())
