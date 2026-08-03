@@ -40,11 +40,43 @@ Only *suspicious* mutations are tracked, so an ordinary import never registers:
   ``types.ModuleType(...)`` hand-built stubs and of ``MagicMock``, and never of
   a module the import system loaded.
 
-Configuration (env var ``AUTOBOT_SYSMODULES_GUARD``):
+What a finding costs is decided by a checked-in baseline of the owners that
+leak today (``repo_tests/sys_modules_leak_baseline.txt``), applied per *owner*
+rather than per key — one conftest dragging 40 keys along is one line:
 
-``report``  default — warn, and print a dedicated terminal section
-``error``   also fail the session with a non-zero exit status
-``off``     disable entirely
+* an owner **on** the baseline is reported and does not fail the run; that is
+  pre-existing debt, tracked in #13361, and failing on it would mean the gate
+  could not be switched on until the last one was fixed;
+* an owner **not** on the baseline **fails the run** — a new leak is a
+  regression, and gating it is the whole point of the guard;
+* an owner on the baseline that the session exercised and that **no longer
+  leaks** also **fails the run**, asking for its line to be deleted.
+
+The last rule is what makes the list shrink-only: it cannot rot, and every fix
+lands with a one-line deletion that proves it.  It needs the session to have
+actually given the owner a chance to escape — a run confined to
+``autobot-backend/`` never takes that conftest's stubs anywhere they could be
+seen — so :meth:`_LeakGuard._note_escape_opportunity` only counts an owner once
+pytest has handled a node outside it.
+
+A handful of owners install their stub *while their own tests run* rather than
+at import, and those are marked ``run-phase`` in the baseline.  CI shards the
+suite twelve ways, so eleven of those twelve sessions collect such a module,
+never run a single one of its tests, and see nothing — which under the rule
+above would read as "fixed, delete the line" and fail eleven shards over a leak
+that is still there.  Annotated entries are therefore reported but never
+checked for removal.  Nothing else changes for them: they are still on the
+list, so they never fail as a regression either.
+
+The predecessor of this was a ``report``/``error`` pair (#13370) where
+``report`` never failed on anything and ``error`` failed on everything, so the
+only reachable setting gated nothing at all (#13398).
+
+Configuration:
+
+``AUTOBOT_SYSMODULES_GUARD=off``   disable the guard entirely (local escape hatch)
+``AUTOBOT_SYSMODULES_BASELINE``    read the baseline from elsewhere; the guard's
+                                   own nested-session tests are the only caller
 """
 
 from __future__ import annotations
@@ -60,14 +92,77 @@ import pytest
 
 _MODE_ENV = "AUTOBOT_SYSMODULES_GUARD"
 _MODE_OFF = "off"
-_MODE_ERROR = "error"
+
+_BASELINE_ENV = "AUTOBOT_SYSMODULES_BASELINE"
+_BASELINE_NAME = "sys_modules_leak_baseline.txt"
+_RUN_PHASE = "run-phase"
 
 _SECTION_TITLE = "sys.modules leak guard"
 _KEYS_PER_OWNER = 8
 
 
-def _mode() -> str:
-    return os.environ.get(_MODE_ENV, "report").strip().lower()
+def _enabled() -> bool:
+    """False only for ``AUTOBOT_SYSMODULES_GUARD=off``, the local escape hatch."""
+    return os.environ.get(_MODE_ENV, "").strip().lower() != _MODE_OFF
+
+
+def _baseline_path() -> Path:
+    """Where the allowlist lives — beside this file unless the env var moves it."""
+    override = os.environ.get(_BASELINE_ENV, "").strip()
+    return Path(override) if override else Path(__file__).resolve().with_name(_BASELINE_NAME)
+
+
+@dataclass(frozen=True)
+class _Baseline:
+    """The checked-in allowlist, split by what each entry may be judged on."""
+
+    owners: frozenset[str]  # every listed owner — none of these fails as new
+    removal_checked: frozenset[str]  # the subset whose silence means "fixed"
+
+
+def _load_baseline(path: Path) -> _Baseline:
+    """Read the allowlist: one repo-relative owner path per line.
+
+    Blank lines and ``#`` comments are ignored.  A trailing ``run-phase``
+    marks an owner that only leaks while its own tests run, which exempts it
+    from the removal check (see the module docstring); it is the only
+    annotation, and anything else is deliberately treated as no annotation so
+    a typo shows up as a failing removal check rather than as silence.
+
+    A missing file means an *empty* allowlist rather than a disabled gate —
+    that is the right answer for the scratch repos the guard's own tests build,
+    and it keeps a deleted or mistyped path loud instead of silent.
+    """
+    if not path.is_file():
+        return _Baseline(frozenset(), frozenset())
+    owners: set[str] = set()
+    removal_checked: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        owner, _, annotation = entry.partition(" ")
+        owners.add(owner)
+        if annotation.strip() != _RUN_PHASE:
+            removal_checked.add(owner)
+    return _Baseline(frozenset(owners), frozenset(removal_checked))
+
+
+def _outside_owner_dir(
+    path: Path | None,
+    path_parents: frozenset[Path],
+    owner_dir: Path,
+    owner_ancestors: frozenset[Path],
+) -> bool:
+    """The escape rule, shared by leak detection and baseline bookkeeping.
+
+    See :meth:`_Mutation.escapes_to` for why an ancestor directory is exempt.
+    """
+    if path is None:
+        return False
+    if path == owner_dir or owner_dir in path_parents:
+        return False  # inside the owner's own subtree
+    return path not in owner_ancestors  # a structural ancestor Dir imports nothing
 
 
 @dataclass(frozen=True)
@@ -95,7 +190,7 @@ class _Mutation:
         """True when *path* is outside the directory that owns this stub.
 
         A strict *ancestor* directory is not an escape, and treating it as one
-        made ``error`` mode unusable.  Pytest builds a ``Dir`` collector for
+        made the gate unusable.  Pytest builds a ``Dir`` collector for
         every level from the rootdir down, so a session confined entirely to
         ``autobot-backend/`` still collects the rootdir node ``.``; that node
         imports nothing itself, it only lists its children, so a stub being
@@ -112,13 +207,7 @@ class _Mutation:
         *path_parents* is ``path.parents`` as a set; the caller builds it once
         per check and shares it across every tracked mutation.
         """
-        if path is None:
-            return False
-        if path == self.owner_dir or self.owner_dir in path_parents:
-            return False  # inside the owner's own subtree
-        if path in self.owner_ancestors:
-            return False  # a structural ancestor Dir node imports nothing
-        return True
+        return _outside_owner_dir(path, path_parents, self.owner_dir, self.owner_ancestors)
 
 
 @dataclass(frozen=True)
@@ -196,21 +285,44 @@ def _resolves_on_disk(top_level: str) -> bool:
 
 
 def _display(path: Path, rootdir: Path) -> str:
+    """*path* in the form the baseline file stores: repo-relative and POSIX.
+
+    A path outside the root keeps its absolute form instead of collapsing to a
+    basename.  Collapsing made every ``conftest.py`` in the tree share one
+    display name, and since the baseline is keyed on that name, two different
+    conftests became one entry — harmless in this repo, where nothing sits
+    outside the root, but not in the scratch repos the guard's own
+    nested-session tests build under ``tmp_path``.
+    """
     try:
-        return str(path.relative_to(rootdir))
+        return path.relative_to(rootdir).as_posix()
     except ValueError:
-        return path.name
+        return str(path)
 
 
 class _LeakGuard:
     """Track suspicious ``sys.modules`` mutations and where they escape to."""
 
-    def __init__(self, rootdir: Path) -> None:
+    def __init__(self, rootdir: Path, removal_candidates: frozenset[str] = frozenset()) -> None:
         self._rootdir = rootdir
         self._baseline: dict[str, object] = {}
+        # Only the owners the shrink check may fire on are worth watching; the
+        # rest are on the allowlist and nothing this session sees can move them.
+        self._removal_candidates = removal_candidates
+        # Their basenames, so the visit check can reject the overwhelming
+        # majority of nodes — every directory and every unrelated module — on
+        # one set lookup instead of building a repo-relative display path for
+        # each of the thousands of collectors a session brackets.
+        self._candidate_names = {Path(owner).name for owner in removal_candidates}
         self._tracked: dict[str, _Mutation] = {}
         self._reported: set[tuple[str, str]] = set()
         self._warned_owners: set[str] = set()
+        # Baselined owners this session has loaded but not yet taken anywhere
+        # they could escape to, mapped to their directory and its ancestors.
+        self._visited: dict[str, tuple[Path, frozenset[Path]]] = {}
+        # Baselined owners the session *has* taken outside their directory —
+        # the only ones whose silence is evidence that they were fixed.
+        self._exercised: set[str] = set()
         self.leaks: list[_Leak] = []
 
     @property
@@ -247,6 +359,7 @@ class _LeakGuard:
         unconditionally would blame the level above and make every stub look
         like it never escapes.
         """
+        self._note_visit(owner_file)
         if self._matches_baseline():
             return
         current = sys.modules.copy()
@@ -369,10 +482,15 @@ class _LeakGuard:
 
         ``path.parents`` is materialised once here and shared with every
         tracked mutation rather than rebuilt inside each comparison.
+
+        This is also where a baselined owner earns the right to be called
+        fixed: the same step that would have caught its stub records that the
+        session gave it the chance to escape.
         """
-        if not self._tracked:
+        if not self._tracked and not self._visited:
             return
         path_parents = frozenset(path.parents) if path is not None else frozenset()
+        self._note_escape_opportunity(path, path_parents)
         for mutation in list(self._tracked.values()):
             if not mutation.is_live():
                 self._tracked.pop(mutation.key, None)
@@ -399,6 +517,43 @@ class _LeakGuard:
             return
         self._warned_owners.add(leak.mutation.owner)
         warnings.warn(leak.describe(), _SysModulesLeakWarning, stacklevel=1)
+
+    def _note_visit(self, owner_file: Path) -> None:
+        """Remember that a baselined owner was loaded by this session.
+
+        Recorded *before* :meth:`attribute`'s no-delta early return: an owner
+        that has stopped leaking installs nothing and so produces no delta at
+        all, and that is precisely the case the baseline has to notice.
+        """
+        if owner_file.name not in self._candidate_names:
+            return
+        owner = _display(owner_file, self._rootdir)
+        if owner not in self._removal_candidates or owner in self._visited or owner in self._exercised:
+            return
+        owner_dir = owner_file if owner_file.is_dir() else owner_file.parent
+        self._visited[owner] = (owner_dir, frozenset(owner_dir.parents))
+
+    def _note_escape_opportunity(self, path: Path | None, path_parents: frozenset[Path]) -> None:
+        """Promote every visited baselined owner that *path* lies outside of.
+
+        "This owner did not leak" is only evidence when the session gave it the
+        chance to: a run confined to ``autobot-backend/`` never takes that
+        conftest's stubs anywhere they could be seen, and concluding from such
+        a run that the entry is removable would fail every partial run in the
+        tree.  The test is the same one leak detection uses, so an owner is
+        exercised exactly when a leak would have been reported had one been
+        live.
+        """
+        if not self._visited or path is None:
+            return
+        for owner, (owner_dir, ancestors) in list(self._visited.items()):
+            if _outside_owner_dir(path, path_parents, owner_dir, ancestors):
+                del self._visited[owner]
+                self._exercised.add(owner)
+
+    def exercised_owners(self) -> set[str]:
+        """Baselined owners this session took outside their own directory."""
+        return set(self._exercised)
 
     def records(self) -> list[dict]:
         """Every leak in transport form, in first-seen order."""
@@ -432,6 +587,11 @@ class _SysModulesLeakWarning(pytest.PytestWarning):
 # moving the checkout or the machine cannot strand the guard.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
+# Read once, at import: the file is small, and every hook below needs it.
+_BASELINE_PATH = _baseline_path()
+_BASELINE = _load_baseline(_BASELINE_PATH)
+_BASELINE_DISPLAY = _display(_BASELINE_PATH, _REPO_ROOT)
+
 
 def _make_guard() -> _LeakGuard | None:
     """Build the guard at *import* time, before any other conftest loads.
@@ -443,9 +603,9 @@ def _make_guard() -> _LeakGuard | None:
     pulls this module in through ``pytest_plugins``, and the rootdir conftest is
     an ancestor of every argument, so this runs first.
     """
-    if _mode() == _MODE_OFF:
+    if not _enabled():
         return None
-    guard = _LeakGuard(_REPO_ROOT)
+    guard = _LeakGuard(_REPO_ROOT, _BASELINE.removal_checked)
     guard.snapshot()
     return guard
 
@@ -562,11 +722,50 @@ _WORKER_RECORDS: list[dict] = []
 # observation is the one kept, matching the serial path's ``_reported``.
 _WORKER_TOKENS: set[tuple[str, str]] = set()
 
+# Baselined owners the workers took outside their own directory. Merged as a
+# union: an owner only has to be exercised somewhere for its silence to count.
+_WORKER_EXERCISED: set[str] = set()
+
 
 def _all_records() -> list[dict]:
     """Every leak this process knows about, worker-reported ones included."""
     local = _GUARD.records() if _GUARD is not None else []
     return local + _WORKER_RECORDS
+
+
+def _all_exercised_owners() -> set[str]:
+    """Every baselined owner given a chance to escape, in any process."""
+    local = _GUARD.exercised_owners() if _GUARD is not None else set()
+    return local | _WORKER_EXERCISED
+
+
+@dataclass(frozen=True)
+class _Verdict:
+    """What this session's findings mean once the baseline is applied."""
+
+    new_owners: list[str]  # leaking and unlisted — a regression, fails the run
+    known_owners: list[str]  # leaking and listed — known debt, reported only
+    fixed_owners: list[str]  # listed, exercised, silent — delete the line
+
+    @property
+    def failed(self) -> bool:
+        return bool(self.new_owners or self.fixed_owners)
+
+
+def _verdict() -> _Verdict:
+    """Split the session's owners into regression / known debt / removable.
+
+    ``fixed_owners`` subtracts *every* leaking owner rather than only the ones
+    this process saw: under xdist one worker can exercise an owner without
+    meeting its stub while another meets it, and an entry is removable only
+    when nobody saw it leak.
+    """
+    leaking = {record["owner"] for record in _all_records()}
+    return _Verdict(
+        new_owners=sorted(leaking - _BASELINE.owners),
+        known_owners=sorted(leaking & _BASELINE.owners),
+        fixed_owners=sorted((_all_exercised_owners() & _BASELINE.removal_checked) - leaking),
+    )
 
 
 def _group_records(records: list[dict]) -> dict[str, list[dict]]:
@@ -578,18 +777,24 @@ def _group_records(records: list[dict]) -> dict[str, list[dict]]:
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Ship worker findings to the controller, and fail the run in error mode.
+    """Ship worker findings to the controller, and fail on an unbaselined verdict.
 
     Under xdist every check runs in a worker, so the controller's own ``_GUARD``
     never sees a leak.  Without this hand-off both the terminal section and the
-    ``error`` gate were silently dead under ``-n`` — which is the only shape CI
-    uses, so the gate #13361 relies on would not have existed.
+    gate were silently dead under ``-n`` — which is the only shape CI uses, so
+    the gate this guard exists to be would not have existed.
+
+    Both halves of the verdict travel: the leaks, and the baselined owners this
+    process took outside their directory without meeting their stub.  The
+    second is what lets the controller tell "fixed, delete the line" from
+    "never exercised, say nothing".
     """
     workeroutput = getattr(session.config, "workeroutput", None)
     if workeroutput is not None:
         workeroutput["sys_modules_leaks"] = _GUARD.records() if _GUARD else []
+        workeroutput["sys_modules_exercised"] = sorted(_GUARD.exercised_owners()) if _GUARD else []
         return
-    if _mode() == _MODE_ERROR and _all_records():
+    if _verdict().failed:
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
@@ -611,6 +816,7 @@ def pytest_testnodedown(node: object, error: object) -> None:
             continue  # another worker saw the same stub at a different nodeid
         _WORKER_TOKENS.add(token)
         _WORKER_RECORDS.append(record)
+    _WORKER_EXERCISED.update(output.get("sys_modules_exercised", []))
 
 
 # ---------------------------------------------------------------------------
@@ -619,20 +825,58 @@ def pytest_testnodedown(node: object, error: object) -> None:
 
 
 def pytest_terminal_summary(terminalreporter: object, exitstatus: int) -> None:
-    """Print the leaks in their own section; a warnings line is too easy to miss."""
-    records = _all_records()
-    if not records:
+    """Print the findings in their own section, split by what has to be done.
+
+    Only a *failing* verdict paints the section red.  A full CI run is 12
+    shards times 2 invocations, so a red block per shard for debt nobody is
+    required to act on is 24 sections of wallpaper — which is exactly how a
+    report-only guard stops being read (#13398).
+    """
+    verdict = _verdict()
+    grouped = _group_records(_all_records())
+    if not grouped and not verdict.fixed_owners:
         return
-    grouped = _group_records(records)
-    terminalreporter.section(_SECTION_TITLE, sep="=", red=True, bold=True)
-    for owner, owned in grouped.items():
-        _write_owner_report(terminalreporter, owner, owned)
+    terminalreporter.section(_SECTION_TITLE, sep="=", red=verdict.failed, bold=True)
+    _write_new_owners(terminalreporter, verdict, grouped)
+    _write_fixed_owners(terminalreporter, verdict)
+    _write_known_owners(terminalreporter, verdict, grouped)
+
+
+def _write_new_owners(terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]) -> None:
+    """Regressions: files that leak and are not on the baseline."""
+    if not verdict.new_owners:
+        return
+    for owner in verdict.new_owners:
+        _write_owner_report(terminalreporter, owner, grouped[owner])
     terminalreporter.write_line(
-        f"{len(records)} leaked sys.modules key(s) from {len(grouped)} file(s). "
-        f"Install and remove each stub in the same try/finally, scoped to the "
-        f"nodes that need it. Set {_MODE_ENV}={_MODE_ERROR} to fail the run on "
-        f"these, or {_MODE_ENV}={_MODE_OFF} to disable the guard."
+        f"{len(verdict.new_owners)} file(s) above are NOT on {_BASELINE_DISPLAY}, so this run "
+        f"fails. Install and remove each stub in the same try/finally, scoped to the nodes "
+        f"that need it — do not add a line to the baseline, it only shrinks. "
+        f"{_MODE_ENV}={_MODE_OFF} disables the guard for a local run.",
+        red=True,
     )
+
+
+def _write_fixed_owners(terminalreporter: object, verdict: _Verdict) -> None:
+    """The shrink-only rule: a listed file that no longer leaks must be delisted."""
+    for owner in verdict.fixed_owners:
+        terminalreporter.write_line(
+            f"FIXED: {owner} no longer leaks — remove it from {_BASELINE_DISPLAY}",
+            red=True,
+        )
+
+
+def _write_known_owners(terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]) -> None:
+    """Known debt (#13361): listed, still leaking, and not a failure."""
+    if not verdict.known_owners:
+        return
+    keys = sum(len(grouped[owner]) for owner in verdict.known_owners)
+    terminalreporter.write_line(
+        f"{len(verdict.known_owners)} known leaking file(s), {keys} sys.modules key(s), all on "
+        f"{_BASELINE_DISPLAY} — not a failure. Fixing one means deleting its line (#13361)."
+    )
+    for owner in verdict.known_owners:
+        terminalreporter.write_line(f"      known: {owner} ({len(grouped[owner])} key(s))")
 
 
 def _write_owner_report(terminalreporter: object, owner: str, records: list[dict]) -> None:

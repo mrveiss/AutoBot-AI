@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Nested-session cover for the sys.modules leak guard (#13361).
+"""Nested-session cover for the sys.modules leak guard (#13361, #13398).
 
 The unit tests next door drive ``_LeakGuard`` directly.  That is fast and
 precise, but it cannot see any of the three defects review found in the first
@@ -16,8 +16,11 @@ than the classifier:
   the very pattern #13361 tells implementers to adopt — was already in place
   when the baseline snapshot was taken, and the guard reported nothing;
 * detection runs in xdist workers while reporting runs on the controller, so
-  ``AUTOBOT_SYSMODULES_GUARD=error`` was a no-op under ``-n``, which is the only
-  shape CI uses.
+  the exit-status gate was a no-op under ``-n``, which is the only shape CI uses.
+
+The baseline ratchet (#13398) is covered here for exactly the same reason: its
+three transitions are decided in ``pytest_sessionfinish`` from records that,
+under xdist, were produced in another process entirely.
 
 So these tests run real pytest sessions against a scratch repo.  Each builds a
 two-package tree — ``pkg_a`` leaks, ``pkg_b`` is the innocent importer — and
@@ -55,10 +58,36 @@ addopts = -p no:randomly
 # yes — see _resolves_on_disk.
 _VICTIM = "victim"
 
-_IMPORT_TIME_LEAK = f"""
-import sys, types
-sys.modules[{_VICTIM!r}] = types.ModuleType({_VICTIM!r})
-"""
+_BASELINE_FILE = "baseline.txt"
+
+
+def _import_time_leak(victim: str) -> str:
+    """A conftest that stubs *victim* at import time and never puts it back."""
+    return f"import sys, types\nsys.modules[{victim!r}] = types.ModuleType({victim!r})\n"
+
+
+def _restoring_hookwrapper(victim: str) -> str:
+    """The correct pattern: install and restore *victim* in one try/finally."""
+    return f"""
+        import sys, types
+        import pytest
+
+
+        @pytest.hookimpl(hookwrapper=True)
+        def pytest_make_collect_report(collector):
+            prior = sys.modules.get({victim!r})
+            sys.modules[{victim!r}] = types.ModuleType({victim!r})
+            try:
+                yield
+            finally:
+                if prior is None:
+                    sys.modules.pop({victim!r}, None)
+                else:
+                    sys.modules[{victim!r}] = prior
+    """
+
+
+_IMPORT_TIME_LEAK = _import_time_leak(_VICTIM)
 
 # The shape #13361 mandates: install and restore from a hookwrapper. This one
 # is deliberately buggy — it installs but never restores — which is precisely
@@ -101,17 +130,53 @@ def _write(path: Path, text: str) -> None:
     path.write_text(textwrap.dedent(text).lstrip(), encoding="utf-8")
 
 
+def _baseline(repo: Path, *owners: Path) -> None:
+    """Write the scratch repo's allowlist of owners that are allowed to leak.
+
+    Entries are absolute here only because the guard displays paths relative to
+    the *real* repo root, which a ``tmp_path`` scratch repo is outside of; the
+    checked-in baseline is a list of short repo-relative paths.
+    """
+    body = "".join(f"{owner.resolve()}\n" for owner in owners)
+    (repo / _BASELINE_FILE).write_text(f"# scratch-repo baseline\n\n{body}", encoding="utf-8")
+
+
+def _owners_on(stdout: str, marker: str) -> str:
+    """The owner each *marker* line blames, joined — one assertion target.
+
+    All three verdicts print inside one section, so "does pkg_a appear in the
+    output" is not a question worth asking.  Nor is "is pkg_a on a ``LEAK:``
+    line": that line also carries where the stub was first *seen*, which is a
+    sibling package by definition, so a whole-line substring test passes for
+    the innocent party too.  Every line puts the owner first, so the token
+    after the marker is the subject and nothing else is.
+    """
+    subjects = (line.split(marker, 1)[1] for line in stdout.splitlines() if marker in line)
+    return "\n".join(subject.strip().split(" ")[0] for subject in subjects)
+
+
 @pytest.fixture
 def scratch_repo(tmp_path: Path):
-    """Build a minimal two-package repo and return a factory for its conftest."""
+    """Build a minimal two-package repo and return a factory for its conftests."""
     _write(tmp_path / "pytest.ini", _PYTEST_INI)
     _write(tmp_path / "conftest.py", _ROOT_CONFTEST)
     _write(tmp_path / _VICTIM / "__init__.py", "REAL = True\n")
     for pkg in ("pkg_a", "pkg_b"):
         _write(tmp_path / pkg / f"test_{pkg}.py", "def test_ok():\n    assert True\n")
 
-    def seed(leak_source: str) -> Path:
+    def seed(leak_source: str, **extra_packages: str) -> Path:
+        """Write ``pkg_a``'s conftest, plus one package per ``name=source``.
+
+        Each extra package gets its own victim (``victim_pkg_c`` and friends):
+        two conftests stubbing the same key would both be attributed to
+        whichever installed it last, and the multi-owner tests need them told
+        apart.
+        """
         _write(tmp_path / "pkg_a" / "conftest.py", leak_source)
+        for pkg, source in extra_packages.items():
+            _write(tmp_path / pkg / f"test_{pkg}.py", "def test_ok():\n    assert True\n")
+            _write(tmp_path / pkg / "conftest.py", source)
+            _write(tmp_path / f"victim_{pkg}" / "__init__.py", "REAL = True\n")
         return tmp_path
 
     return seed
@@ -129,11 +194,17 @@ def _run_pytest(
     asyncio and friends on every one of these sessions — it keeps each test
     comfortably inside the suite's per-test budget.  ``xdist`` is re-enabled
     explicitly by the callers that need ``-n``.
+
+    The baseline is pointed at the scratch repo rather than left to default: a
+    child reading the checked-in one would be judging ``tmp_path`` owners
+    against ``autobot-backend`` entries.  The file is absent unless the test
+    wrote one, and an absent baseline allows nothing.
     """
     import os
 
     env = dict(os.environ)
     env.pop("AUTOBOT_SYSMODULES_GUARD", None)
+    env["AUTOBOT_SYSMODULES_BASELINE"] = str(cwd / _BASELINE_FILE)
     env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     env.update(env_extra or {})
     return subprocess.run(
@@ -185,24 +256,7 @@ def test_reports_a_hook_installed_leak_that_never_restores(scratch_repo):
 
 def test_stays_silent_when_the_hookwrapper_restores_properly(scratch_repo):
     """The correct pattern must not be reported — a noisy guard gets disabled."""
-    correct = f"""
-        import sys, types
-        import pytest
-
-
-        @pytest.hookimpl(hookwrapper=True)
-        def pytest_make_collect_report(collector):
-            prior = sys.modules.get({_VICTIM!r})
-            sys.modules[{_VICTIM!r}] = types.ModuleType({_VICTIM!r})
-            try:
-                yield
-            finally:
-                if prior is None:
-                    sys.modules.pop({_VICTIM!r}, None)
-                else:
-                    sys.modules[{_VICTIM!r}] = prior
-    """
-    result = _run_pytest(scratch_repo(correct))
+    result = _run_pytest(scratch_repo(_restoring_hookwrapper(_VICTIM)))
 
     assert "LEAK:" not in result.stdout, result.stdout
     assert result.returncode == 0
@@ -215,9 +269,9 @@ def test_stays_silent_when_the_leaking_package_is_the_whole_session(scratch_repo
     the stub never reaches a sibling and there is nothing to report.  Pytest
     still builds a ``Dir`` collector for every level from the rootdir down,
     including ``.``, and that node used to count as "outside ``pkg_a``/" —
-    which made every clean session fail under ``error`` mode and, because the
-    ancestor node always wins the per-``(key, owner)`` dedupe, replaced the
-    ``first seen at`` sibling with the meaningless ``the collection of .``.
+    which made every clean session fail the gate and, because the ancestor node
+    always wins the per-``(key, owner)`` dedupe, replaced the ``first seen at``
+    sibling with the meaningless ``the collection of .``.
     """
     result = _run_pytest(scratch_repo(_IMPORT_TIME_LEAK), targets=("pkg_a",))
 
@@ -260,6 +314,113 @@ def test_the_guard_does_not_widen_other_pytest_warnings(scratch_repo):
 
 
 # ---------------------------------------------------------------------------
+# #13398 — the shrink-only baseline: new fails, listed passes, fixed delists
+# ---------------------------------------------------------------------------
+
+
+def test_an_unlisted_leak_fails_the_run(scratch_repo):
+    """Transition 1: a leak nobody has signed off on is a regression.
+
+    This is the case the guard exists for and the one its predecessor could not
+    gate: ``report`` exited 0 on it, and ``error`` — which would have caught it
+    — could not be switched on while the known offenders stood.
+    """
+    repo = scratch_repo(_IMPORT_TIME_LEAK)
+    _baseline(repo)  # nothing is allowed to leak
+
+    result = _run_pytest(repo)
+
+    assert result.returncode == 1, f"an unlisted leak must fail the run, got {result.returncode}"
+    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "LEAK:"), result.stdout
+    assert "NOT on" in result.stdout, result.stdout
+
+
+def test_a_listed_leak_is_reported_without_failing(scratch_repo):
+    """Transition 2: known debt stays green, and stays visible.
+
+    Failing on it would mean the gate could not be switched on until the last
+    of #13361's owners was fixed, which is how the previous design stalled.
+    Dressing it up as a regression is the other failure mode: a red block per
+    shard for something nobody is required to act on is how a guard becomes
+    wallpaper.
+    """
+    repo = scratch_repo(_IMPORT_TIME_LEAK)
+    _baseline(repo, repo / "pkg_a" / "conftest.py")
+
+    result = _run_pytest(repo)
+
+    assert result.returncode == 0, result.stdout
+    assert "LEAK:" not in result.stdout, "known debt must not be reported as a regression"
+    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "known: "), result.stdout
+
+
+def test_a_listed_owner_that_no_longer_leaks_must_be_delisted(scratch_repo):
+    """Transition 3: the list only shrinks, so a fixed entry has to go.
+
+    ``pkg_a`` installs and restores properly here while still being listed.
+    Without this rule the baseline decays into a permanent allowlist and each
+    fix lands with nothing to show for it; with it, every fix comes with a
+    one-line deletion that proves the leak is gone.
+    """
+    repo = scratch_repo(_restoring_hookwrapper(_VICTIM))
+    _baseline(repo, repo / "pkg_a" / "conftest.py")
+
+    result = _run_pytest(repo)
+
+    assert result.returncode == 1, f"a stale baseline entry must fail the run, got {result.returncode}"
+    assert "remove it from" in result.stdout, result.stdout
+    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "FIXED:"), result.stdout
+
+
+def test_a_listed_owner_is_not_delisted_by_a_run_that_never_leaves_it(scratch_repo):
+    """Silence only counts once the session gave the stub somewhere to escape to.
+
+    ``pytest pkg_a`` collects nothing outside ``pkg_a``, so the leak it still
+    has is invisible — and concluding "fixed" from that would fail every narrow
+    run in the tree.
+    """
+    repo = scratch_repo(_IMPORT_TIME_LEAK)
+    _baseline(repo, repo / "pkg_a" / "conftest.py")
+
+    result = _run_pytest(repo, targets=("pkg_a",))
+
+    assert "FIXED:" not in result.stdout, result.stdout
+    assert result.returncode == 0, result.stdout
+
+
+def test_a_run_phase_entry_is_never_asked_to_be_delisted(scratch_repo):
+    """A ``run-phase`` entry is exempt from the removal check, and must stay so.
+
+    Such an owner installs its stub while its own tests run, so the eleven CI
+    shards that collect the module without running any of it see nothing at
+    all.  Reading that silence as "fixed" would fail eleven shards over a leak
+    that is still there, so the annotation opts the entry out.  Modelled here
+    with a listed package that never leaks in this session.
+    """
+    repo = scratch_repo(_restoring_hookwrapper(_VICTIM))
+    owner = (repo / "pkg_a" / "conftest.py").resolve()
+    (repo / _BASELINE_FILE).write_text(f"{owner} run-phase\n", encoding="utf-8")
+
+    result = _run_pytest(repo)
+
+    assert "FIXED:" not in result.stdout, result.stdout
+    assert result.returncode == 0, result.stdout
+
+
+def test_an_unlisted_leak_still_fails_when_another_owner_is_listed(scratch_repo):
+    """One listed owner must not buy silence for an unlisted one."""
+    repo = scratch_repo(_IMPORT_TIME_LEAK, pkg_c=_import_time_leak("victim_pkg_c"))
+    _baseline(repo, repo / "pkg_a" / "conftest.py")
+
+    result = _run_pytest(repo, targets=("pkg_a", "pkg_b", "pkg_c"))
+
+    assert result.returncode == 1, result.stdout
+    blamed = _owners_on(result.stdout, "LEAK:")
+    assert "pkg_c/conftest.py" in blamed, result.stdout
+    assert "pkg_a" not in blamed, result.stdout
+
+
+# ---------------------------------------------------------------------------
 # G1 / G3 — the guard must survive xdist, and gate under it
 # ---------------------------------------------------------------------------
 
@@ -284,8 +445,8 @@ def test_a_leak_warning_does_not_crash_the_xdist_controller(scratch_repo):
     assert result.returncode != 3, "exit 3 means the session died before reporting"
 
 
-def test_error_mode_fails_the_run_under_xdist(scratch_repo):
-    """``AUTOBOT_SYSMODULES_GUARD=error`` must gate under ``-n``, not just serially.
+def test_an_unlisted_leak_fails_the_run_under_xdist(scratch_repo):
+    """The gate must hold under ``-n``, not just serially.
 
     Detection happens in the workers; the exit status and the terminal section
     are decided on the controller.  Without the worker->controller hand-off this
@@ -293,20 +454,46 @@ def test_error_mode_fails_the_run_under_xdist(scratch_repo):
     """
     _xdist_or_skip()
     repo = scratch_repo(_IMPORT_TIME_LEAK)
-    result = _run_pytest(
-        repo, "-p", "xdist", "-n", "2", "--dist", "loadscope", env_extra={"AUTOBOT_SYSMODULES_GUARD": "error"}
-    )
+    _baseline(repo)
+
+    result = _run_pytest(repo, "-p", "xdist", "-n", "2", "--dist", "loadscope")
 
     assert "LEAK:" in result.stdout, result.stdout
     assert result.returncode == 1, f"expected a failing exit status, got {result.returncode}"
 
 
-def test_error_mode_fails_the_run_serially(scratch_repo):
-    """The same gate, without xdist — the serial path must keep working."""
-    result = _run_pytest(scratch_repo(_IMPORT_TIME_LEAK), env_extra={"AUTOBOT_SYSMODULES_GUARD": "error"})
+def test_all_three_verdicts_hold_under_xdist(scratch_repo):
+    """The full three-way split in one ``-n 2 --dist loadscope`` session.
 
-    assert "LEAK:" in result.stdout, result.stdout
-    assert result.returncode == 1
+    Every input arrives from another process here, and ``FIXED`` is the
+    delicate one: it is the *absence* of a record, so it can only be concluded
+    once the last worker has reported both what it saw and which listed owners
+    it took outside their own directory.
+    """
+    _xdist_or_skip()
+    repo = scratch_repo(
+        _IMPORT_TIME_LEAK,
+        pkg_c=_import_time_leak("victim_pkg_c"),
+        pkg_d=_restoring_hookwrapper("victim_pkg_d"),
+    )
+    _baseline(repo, repo / "pkg_a" / "conftest.py", repo / "pkg_d" / "conftest.py")
+
+    result = _run_pytest(
+        repo,
+        "-p",
+        "xdist",
+        "-n",
+        "2",
+        "--dist",
+        "loadscope",
+        targets=("pkg_a", "pkg_b", "pkg_c", "pkg_d"),
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert "pkg_c/conftest.py" in _owners_on(result.stdout, "LEAK:"), result.stdout
+    assert "pkg_a" not in _owners_on(result.stdout, "LEAK:"), result.stdout
+    assert "pkg_a/conftest.py" in _owners_on(result.stdout, "known: "), result.stdout
+    assert "pkg_d/conftest.py" in _owners_on(result.stdout, "FIXED:"), result.stdout
 
 
 def test_survives_a_session_without_pytest_xdist(scratch_repo):
