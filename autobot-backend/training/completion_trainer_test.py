@@ -14,18 +14,15 @@ from pathlib import Path
 
 import pytest
 
-# Optional ML training stack. Skip cleanly when absent; run for real when it IS
-# installed (e.g. a GPU CI image or a local dev box with the full backend reqs).
+# Optional ML training stack — a LOCAL-DEV guard, not a CI opt-out (#13086).
+# CI installs both: torch arrives transitively via sentence-transformers and
+# torchmetrics is pinned in requirements-ci/ai-ml.txt, so all 17 tests below run
+# on every shard. These two lines only spare a dev box that has neither.
 #
-# BOTH imports must be guarded (#13086). `training/evaluator.py` — pulled in
-# below — imports `torchmetrics` at module level, and the `python-suite` CI
-# environment installs torch TRANSITIVELY via sentence-transformers while never
-# installing torchmetrics. That combination let the torch guard pass and then
-# blew up on torchmetrics, turning this module into a hard collection ERROR on
-# every shard. torchmetrics is deliberately NOT added to requirements-ci.txt:
-# the repo already treats this subsystem as optional (`training/__init__.py`
-# wraps every symbol in `optional_import`), and the CI install resolves torch
-# against the CPU-only index specifically to keep the CUDA-adjacent closure out.
+# BOTH must be guarded. `training/evaluator.py` — pulled in below — imports
+# `torchmetrics` at module level. Guarding torch alone let the guard pass in CI
+# (torch present) and then blow up on torchmetrics, turning this module into a
+# hard collection ERROR on every shard rather than a skip.
 pytest.importorskip("torch.nn.functional", reason="torch not installed — optional ML dep")
 pytest.importorskip("torchmetrics", reason="torchmetrics not installed — optional ML dep (training/evaluator.py)")
 
