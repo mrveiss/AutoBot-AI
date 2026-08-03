@@ -194,14 +194,22 @@ class AuthenticationMiddleware:
                 logger.error("Failed to load AUTOBOT_JWT_PRIVATE_KEY: %s — will auto-generate", exc)
 
         # Tier 2: durable file (survives restart and code-sync deploys)
-        if key_file.exists():
-            try:
+        #
+        # #13162: the existence probe belongs INSIDE the guard. Path.exists()
+        # only swallows "not there" errnos (ENOENT/ENOTDIR/ELOOP) — EACCES
+        # propagates. When the service user cannot traverse the service-keys
+        # directory (e.g. it is mode 0700 and owned by another account) the
+        # PermissionError escaped this function, out of the AuthMiddleware
+        # constructor, and turned every request behind check_admin_permission
+        # into a 500 instead of falling through to the tiers below.
+        try:
+            if key_file.exists():
                 pem_private = key_file.read_text(encoding="utf-8")
                 private_key = _load_pem(pem_private)
                 logger.info("RS256 private key loaded from durable file %s", key_file)
                 return pem_private, _derive_public(private_key), kid
-            except Exception as exc:
-                logger.warning("Durable RS256 key file %s is invalid: %s — regenerating", key_file, exc)
+        except Exception as exc:
+            logger.warning("Durable RS256 key file %s is unusable: %s — regenerating", key_file, exc)
 
         # Tier 3: in-memory security config (previous process wrote it without persisting to file)
         stored_pem = self.security_config.get("jwt_private_key_pem", "")

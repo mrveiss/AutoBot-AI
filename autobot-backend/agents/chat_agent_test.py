@@ -95,12 +95,13 @@ async def test_mcp_tools_injected_into_system_prompt():
 
     captured_messages = []
 
-    async def fake_chat_completion(messages, **kwargs):
+    async def fake_chat(messages, **kwargs):
         captured_messages.extend(messages)
         return {"message": {"content": "Hello!"}}
 
+    # ChatAgent talks to LLMService, whose non-streaming entry point is chat().
     mock_llm = MagicMock()
-    mock_llm.chat_completion = fake_chat_completion
+    mock_llm.chat = fake_chat
 
     with (
         patch(
