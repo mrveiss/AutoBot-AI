@@ -44,6 +44,7 @@ from autobot_shared.security.path_validator import (
     SANDBOX_INVALID_PATH_CHARACTERS,
     SandboxPathError,
     resolve_within_sandbox,
+    validate_relative_path,
 )
 from constants.error_constants import (
     ERR_DIRECTORY_NOT_FOUND,
@@ -284,6 +285,12 @@ def is_safe_file(filename: str) -> bool:
 
     # Check for dangerous characters (Issue #380: module-level constant)
     if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
+        return False
+
+    # An uploaded filename is a bare name, never a path (#13394). Backslash is
+    # checked explicitly because Path.name is platform-dependent — on POSIX
+    # "dir\\evil.py" is one valid component (#13162).
+    if "/" in filename or "\\" in filename or Path(filename).name != filename:
         return False
 
     if len(filename) > 255:
@@ -642,8 +649,13 @@ async def upload_file(
     # Issue #358: mkdir in thread to avoid blocking
     await run_in_file_executor(lambda: target_dir.mkdir(parents=True, exist_ok=True))
 
-    # Prepare target file path
-    target_file = target_dir / file.filename
+    # Not `target_dir / file.filename`: pathlib's join is hostile here, and an
+    # ABSOLUTE filename discards target_dir outright. Resolve via realpath so
+    # containment holds for symlinks too (#13394).
+    try:
+        target_file = validate_relative_path(file.filename, target_dir)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
 
     # Write file (Issue #281: uses helper)
     await _write_upload_file(target_file, content, overwrite)
