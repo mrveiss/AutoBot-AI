@@ -12,6 +12,7 @@ All Redis calls are patched so the suite runs without a live Redis instance.
 
 from __future__ import annotations
 
+import importlib
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
@@ -30,6 +31,18 @@ from security.enterprise.threat_detection.learner import (  # noqa: E402
     ThreatDetectionLearner,
 )
 
+# Resolved through sys.modules rather than by dotted-string lookup (#13086).
+# Under pytest's `--import-mode=importlib` (set in pytest.ini) the package
+# `security/enterprise/threat_detection/__init__.py` is executed a second time
+# as this test module's parent. That second execution re-imports its own
+# submodules, but CPython only binds a submodule as an attribute of its parent
+# on a FRESH load -- the submodules are already in sys.modules, so the bindings
+# are silently skipped. `mock.patch("a.b.c.symbol")` walks exactly those
+# attributes, so the string form raises AttributeError before it ever reaches
+# the patch. `import_module` returns sys.modules[name] directly and is correct
+# under both import modes.
+_learner_module = importlib.import_module("security.enterprise.threat_detection.learner")
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -47,10 +60,7 @@ def mock_redis():
 @pytest.fixture()
 def learner(mock_redis):
     """Return a ThreatDetectionLearner with its Redis client mocked."""
-    with patch(
-        "security.enterprise.threat_detection.learner.get_redis_client",
-        return_value=mock_redis,
-    ):
+    with patch.object(_learner_module, "get_redis_client", return_value=mock_redis):
         return ThreatDetectionLearner()
 
 

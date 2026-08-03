@@ -131,14 +131,51 @@ async def test_no_capable_backend_returns_none_not_an_exception():
             assert await _fetch_playwright("https://example.com/", timeout=5.0) is None
 
 
-def test_the_requirements_describe_what_this_caller_needs():
-    """Documented so a later edit cannot quietly widen them."""
-    import inspect
+@pytest.mark.asyncio
+async def test_the_requirements_are_the_ones_actually_handed_to_the_resolver():
+    """A widened requirement set would re-open the #13306 mis-routing.
 
-    src = inspect.getsource(_fetch_playwright)
+    This used to grep ``inspect.getsource(_fetch_playwright)`` for
+    ``Capability.EXTRACT_HTML`` and friends (#13311). The literal appearing in
+    the docstring -- which it does, at length -- satisfied that assertion by
+    itself, so the check could never have failed. Capture what ``get_browser``
+    is called with instead.
+    """
+    seen = {}
 
-    assert "Capability.EXTRACT_HTML" in src, "a parser needs markup, not text"
-    assert "Capability.OUT_OF_PROCESS" in src, "Playwright must stay out of the backend process"
-    assert "ContentFormat.HTML" in src
-    assert str(Capability.EXTRACT_HTML.value) == "extract_html"
-    assert str(ContentFormat.HTML.value) == "html"
+    async def _capture(requires=None, **kwargs):
+        seen["requires"] = requires
+        raise RuntimeError("stop after routing — the assertion is the argument")
+
+    with (
+        patch("web_fetch.fetcher._is_public_url", AsyncMock(return_value=True)),
+        patch("autobot_shared.browser.get_browser", _capture),
+    ):
+        assert await _fetch_playwright("https://example.com/", timeout=5.0) is None
+
+    assert seen["requires"] == {Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS}, (
+        "a parser needs markup, not text (EXTRACT_HTML), and Playwright must "
+        f"stay out of the backend process (OUT_OF_PROCESS); got {seen['requires']}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_extract_request_asks_for_html_and_carries_the_caller_timeout():
+    """``ContentFormat.HTML`` in the source proved nothing about the request."""
+    captured = {}
+
+    class _Browser:
+        @staticmethod
+        async def extract(request):
+            captured["request"] = request
+            raise RuntimeError("stop after dispatch")
+
+    with (
+        patch("web_fetch.fetcher._is_public_url", AsyncMock(return_value=True)),
+        patch("autobot_shared.browser.get_browser", AsyncMock(return_value=_Browser())),
+    ):
+        assert await _fetch_playwright("https://example.com/", timeout=11.5) is None
+
+    assert captured["request"].format is ContentFormat.HTML
+    assert captured["request"].timeout_seconds == 11.5
+    assert captured["request"].url == "https://example.com/"
