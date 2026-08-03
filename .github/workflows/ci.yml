@@ -11,6 +11,30 @@ on:
     # regressions were only discovered once already on the shared branch
     # (#10691). main kept for promotion PRs.
     branches: [ main, Dev_new_gui ]
+    # #13388: SAFE because this workflow publishes NO required status context.
+    # Branch protection on Dev_new_gui requires exactly ten contexts and none of
+    # them is produced here (`python-suite` is explicitly not one of them —
+    # #13162), so a run that is never created cannot leave a pull request waiting
+    # on a context that never reports. Any workflow here that DOES publish one of
+    # the ten deliberately has no `pull_request.paths` filter.
+    #
+    # This list is the exact UNION of the `python` and `frontend` filters in the
+    # `changes` job below, which together gate every job that does real work
+    # (`python-shard`, `python-suite`, `frontend-tests`; `deployment-check` is
+    # branch-gated to push and `notify` only summarises). So a pull request whose
+    # files match none of these already ran nothing but `changes` and `notify` —
+    # this filter removes the empty run itself, not any test coverage.
+    #
+    # Keep in sync with the `changes` job filters below: a pattern added there
+    # must be added here too, or the run that would evaluate it never starts.
+    paths:
+      - '**/*.py'
+      - '**/requirements*.txt'
+      - 'requirements-ci/**'
+      - 'pyproject.toml'
+      - 'autobot_shared/pyproject.toml'
+      - 'autobot-frontend/**'
+      - '.github/workflows/ci.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
