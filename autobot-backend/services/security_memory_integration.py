@@ -505,14 +505,14 @@ class SecurityMemoryIntegration:
         await self._create_security_relation(
             from_entity=f"Host: {host_ip}",
             to_entity=entity_name,
-            relation_type="relates_to",
+            relation_type="affects",
         )
         if affected_port and affected_service:
             service_entity = f"Service: {host_ip}:{affected_port}/tcp ({affected_service})"
             await self._create_security_relation(
                 from_entity=service_entity,
                 to_entity=entity_name,
-                relation_type="relates_to",
+                relation_type="affects",
             )
 
     async def _store_vulnerability_in_memory(
@@ -705,12 +705,16 @@ class SecurityMemoryIntegration:
             True if created successfully
         """
         try:
-            # Map security relation types to base types
+            # Map security relation types onto the base graph's RELATION_TYPES
+            # vocabulary (autobot_memory_graph.core.RELATION_TYPES) — create_relation
+            # rejects anything outside it. The base name is "related_to"; the
+            # previous "relates_to" was not a valid type, so every mapped relation
+            # raised ValueError and was silently swallowed below.
             base_relation = relation_type
             if relation_type in DETAIL_RELATION_TYPES:
                 base_relation = "contains"
             elif relation_type in SEVERITY_RELATION_TYPES:
-                base_relation = "relates_to"
+                base_relation = "related_to"
 
             await self._memory_graph.create_relation(
                 from_entity=from_entity,

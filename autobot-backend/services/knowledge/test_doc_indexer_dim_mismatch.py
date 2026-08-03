@@ -56,12 +56,23 @@ class _FakePATH:
 
 _path_constants.PATH = _FakePATH()  # type: ignore[attr-defined]
 
-_DOC_INDEXER_PATH = Path(__file__).parent / "doc_indexer.py"
-_spec = importlib.util.spec_from_file_location("services.knowledge.doc_indexer", str(_DOC_INDEXER_PATH))
-assert _spec and _spec.loader, "Could not load doc_indexer spec"
-_doc_indexer_mod = importlib.util.module_from_spec(_spec)
-sys.modules["services.knowledge.doc_indexer"] = _doc_indexer_mod
-_spec.loader.exec_module(_doc_indexer_mod)  # type: ignore[union-attr]
+# Reuse the module object if a sibling test file (test_doc_indexer.py) already
+# loaded it. pytest imports every test module during collection, so an
+# unconditional re-load here would replace
+# sys.modules["services.knowledge.doc_indexer"] behind that file's back: its
+# already-imported helpers would keep the OLD module's globals while its
+# patch("services.knowledge.doc_indexer.X") calls resolved against the NEW
+# one, making those patches inert.
+_existing_doc_indexer = sys.modules.get("services.knowledge.doc_indexer")
+if _existing_doc_indexer is not None and _existing_doc_indexer.__dict__.get("__file__"):
+    _doc_indexer_mod = _existing_doc_indexer
+else:
+    _DOC_INDEXER_PATH = Path(__file__).parent / "doc_indexer.py"
+    _spec = importlib.util.spec_from_file_location("services.knowledge.doc_indexer", str(_DOC_INDEXER_PATH))
+    assert _spec and _spec.loader, "Could not load doc_indexer spec"
+    _doc_indexer_mod = importlib.util.module_from_spec(_spec)
+    sys.modules["services.knowledge.doc_indexer"] = _doc_indexer_mod
+    _spec.loader.exec_module(_doc_indexer_mod)  # type: ignore[union-attr]
 
 if "services.knowledge" in sys.modules:
     sys.modules["services.knowledge"].doc_indexer = _doc_indexer_mod  # type: ignore[attr-defined]
