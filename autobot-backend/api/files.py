@@ -286,6 +286,22 @@ def is_safe_file(filename: str) -> bool:
     if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
         return False
 
+    # An uploaded filename is a bare name, never a path (#13394). Anything with a
+    # directory component — "../x", "a/b", or an absolute "/etc/x" — is rejected.
+    #
+    # Without this the checks below are trivially bypassed rather than merely
+    # weak: _DANGEROUS_FILENAMES compares whole strings, so a directory prefix
+    # defeats it, and Path(...).suffix reads only the last component, so any
+    # prefix still presents an allowed extension.
+    #
+    # Backslash is rejected explicitly because Path.name is platform-dependent:
+    # on POSIX "dir\\evil.py" is a single valid component, so the Path.name
+    # comparison alone lets it through. It is not a POSIX escape, but the name is
+    # a separator to any Windows-side or path-splitting consumer downstream, and
+    # filesystem_mcp already rejects it for the same reason (#13162).
+    if "/" in filename or "\\" in filename or Path(filename).name != filename:
+        return False
+
     if len(filename) > 255:
         return False
 
@@ -642,8 +658,23 @@ async def upload_file(
     # Issue #358: mkdir in thread to avoid blocking
     await run_in_file_executor(lambda: target_dir.mkdir(parents=True, exist_ok=True))
 
-    # Prepare target file path
-    target_file = target_dir / file.filename
+    # Prepare target file path (#13394).
+    #
+    # Deliberately NOT `target_dir / file.filename`. Validating the directory says
+    # nothing about the joined result, and pathlib's join is hostile here: a
+    # traversing name resolves outside the sandbox, and an ABSOLUTE name discards
+    # `target_dir` entirely ( Path('/sandbox') / '/etc/passwd' -> '/etc/passwd' ).
+    # The post-write relative_to() below cannot catch either, because it is purely
+    # lexical — it does not normalise '..' and so does not raise — and it runs only
+    # after the bytes are already on disk.
+    #
+    # is_safe_file() already rejects any non-bare filename; re-resolving the joined
+    # path through the shared sandbox resolver keeps containment true even if that
+    # check is later relaxed or the join refactored, and covers symlinked escapes
+    # that a '..' comparison would miss (it resolves via os.path.realpath).
+    target_file = validate_and_resolve_path(
+        "/".join(part for part in (path.strip("/"), file.filename) if part)
+    )
 
     # Write file (Issue #281: uses helper)
     await _write_upload_file(target_file, content, overwrite)
