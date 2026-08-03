@@ -605,9 +605,13 @@ async def _generate_response_planned(
 
     await _emit_planned_agent_complete_hook(session_id, iteration, llm_response or "")
 
+    # Issue #13295 (review B3): append unconditionally — iteration_count below
+    # increments every pass regardless of whether llm_response was falsy, so a
+    # skipped append here would desync all_responses[idx] from iteration=idx+1
+    # and misfile every later iteration's tool output under the wrong prose.
+    # _build_final_response_entry already no-ops on empty content.
     all_responses = list(state.get("all_llm_responses", []))
-    if llm_response:
-        all_responses.append(llm_response)
+    all_responses.append(llm_response or "")
 
     tool_calls = tool_calls or []
     for tc in tool_calls:
@@ -728,9 +732,11 @@ async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     except Exception as _hook_exc:  # noqa: BLE001
         logger.debug("Plugin hook ON_AGENT_COMPLETE failed (non-fatal): %s", _hook_exc)
 
+    # Issue #13295 (review B3): append unconditionally — see the matching
+    # comment in _generate_response_planned for why a skipped append here
+    # would desync all_responses[idx] from iteration=idx+1.
     all_responses = list(state.get("all_llm_responses", []))
-    if llm_response:
-        all_responses.append(llm_response)
+    all_responses.append(llm_response or "")
     parsed_tool_calls = list(ctx.execution_history) if ctx.execution_history else []
 
     # Issue #3232: emit plan event when the response contains a planning block.
@@ -954,6 +960,12 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     stream_cb = config["configurable"].get("stream_callback")
     messages = list(state.get("workflow_messages", []))
     session_id = state.get("session_id")
+    # Issue #13295 (review B1): the GH#11202 interrupt-resume dispatch below
+    # calls manager._process_tool_calls directly, bypassing
+    # _process_tool_results/_handle_tool_message_types entirely — so nothing
+    # tags these messages unless this node does it. generate_response already
+    # set iteration_count to the LLM pass that produced these tool_calls.
+    iteration = state.get("iteration_count", 0)
 
     decision = state.get("approval_decision")
     tool_calls = state.get("tool_calls", [])
@@ -1005,6 +1017,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
         deny_msg = {
             "type": "response",
             "content": f"Command denied: {decision.get('reason', 'User denied')}",
+            "metadata": {"iteration": iteration},
         }
         messages.append(deny_msg)
         if stream_cb:
@@ -1086,6 +1099,12 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
             break_loop, _ = item
         else:
             msg_dict = item.to_dict() if hasattr(item, "to_dict") else item
+            # Issue #13295 (review B1): _process_tool_calls is the same
+            # producer _process_tool_results drives, but this interrupt-resume
+            # dispatch never routes through it — tag here so these messages
+            # interleave correctly instead of falling into the untagged
+            # leftover fallback.
+            msg_dict.setdefault("metadata", {})["iteration"] = iteration
             # Stream ALL messages for real-time display
             if stream_cb:
                 stream_cb(msg_dict)
@@ -1107,6 +1126,7 @@ async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
                 "and stopped the loop. Please let me know if you would like me to "
                 "try a different approach."
             ),
+            "metadata": {"iteration": iteration},
         }
         messages.append(abort_msg)
         if stream_cb:

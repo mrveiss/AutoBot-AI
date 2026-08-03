@@ -26,9 +26,10 @@ from typing import Any, Dict, List
 
 import pytest
 
+from async_chat_workflow import WorkflowMessage
 from chat_history.messages import MessagesMixin
 from chat_workflow.manager import ChatWorkflowManager
-from chat_workflow.models import StreamingMessage
+from chat_workflow.models import LLMIterationContext, StreamingMessage
 
 SESSION_ID = "sess-13214"
 REPLY = "Hello! I'm AutoBot. How can I help you today?"
@@ -205,6 +206,68 @@ class TestStreamedReplyIsReadableAfterReload:
             ("system", "uptime: 3 days"),
             ("assistant", "Uptime is 3 days."),
         ]
+
+    @pytest.mark.asyncio
+    async def test_graph_path_tags_and_dedupes_via_process_tool_results(self, store, monkeypatch):
+        """Review F4: drives the REAL _process_tool_results -> graph._run_llm_iteration
+        -> _persist_workflow_messages — not a hand-tagged ``SimpleNamespace`` fixture.
+
+        Only the innermost LLM-call (``_process_single_llm_iteration``) and
+        tool-dispatch (``_process_tool_calls``) primitives are faked; every
+        manager/graph method between them — including the fixed
+        ``_process_tool_results`` — runs for real. Catches two regressions a
+        hand-built fixture cannot: (B1) a NON-terminal tool message
+        (``tool_result``) was only tagged when its type was in
+        ``_TERMINAL_MESSAGE_TYPES``, so it fell into the untagged leftover
+        bucket and was misordered after the answer; (B2) the ``respond``
+        tool's own byte-identical ``response`` message was likewise untagged,
+        so the dedup guard never saw it and the answer was duplicated.
+        """
+        from chat_workflow import graph as graph_mod
+
+        manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+        answer = "Uptime is 3 days."
+
+        async def fake_llm_iteration(*_args, **_kwargs):
+            yield (answer, [{"name": "respond", "params": {"message": answer}}])
+
+        async def fake_tool_calls(*_args, **_kwargs):
+            yield WorkflowMessage(type="tool_result", content="checked uptime", metadata={})
+            yield WorkflowMessage(type="terminal_output", content="uptime: 3 days", metadata={})
+            yield WorkflowMessage(type="response", content=answer, metadata={"message_type": "respond_tool"})
+            yield (True, answer)  # break_loop_requested=True: respond tool ends the turn
+
+        monkeypatch.setattr(manager, "_process_single_llm_iteration", fake_llm_iteration)
+        monkeypatch.setattr(manager, "_process_tool_calls", fake_tool_calls)
+
+        ctx = LLMIterationContext(
+            ollama_endpoint="http://fake",
+            selected_model="test-model",
+            session_id=SESSION_ID,
+            terminal_session_id="term-1",
+            used_knowledge=False,
+            rag_citations=[],
+            workflow_messages=[],
+            initial_prompt="What is the uptime?",
+        )
+
+        messages, llm_response, should_continue = await graph_mod._run_llm_iteration(manager, ctx, 1, [], None)
+        assert should_continue is False
+
+        wf_messages = graph_mod._build_workflow_messages_from_state({"workflow_messages": messages})
+        await ChatWorkflowManager._persist_workflow_messages(manager, SESSION_ID, wf_messages, [llm_response])
+
+        persisted = await store.load_session(SESSION_ID)
+        # B1: tool_result (non-terminal) stays interleaved with terminal_output,
+        # not shoved to the end as an untagged leftover.
+        # B2: the respond-tool's own "response" entry IS the answer bubble — the
+        # dedup guard suppresses a second, separately-built prose entry.
+        assert [(m["sender"], m["text"]) for m in persisted] == [
+            ("assistant", "checked uptime"),
+            ("system", "uptime: 3 days"),
+            ("assistant", answer),
+        ]
+        assert len(_assistant_turns(persisted)) == 2
 
 
 class TestNoDuplicateOrEmptyTurns:
