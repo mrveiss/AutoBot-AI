@@ -90,6 +90,29 @@ from services.failure_pattern_detector import (  # noqa: E402
     FailurePatternDetector,
 )
 
+# ---------------------------------------------------------------------------
+# Real-symbol anchor (#13162).
+#
+# Displacing the stubs above is only half the contract: the names this module
+# imported must still be the REAL ones when the tests run. If anything replaces
+# a symbol in the loaded module's globals with a MagicMock (the shape the root
+# conftest's stub decoration used to have), the real ``recommend_recovery()``
+# keeps running but returns ``RecoveryPlan(...)`` as a mock — ``plan.error_type``
+# compares a MagicMock against a string, and ``plan.causal_chain.encode()``
+# reaches ``hashlib.md5`` as a non-buffer. Both were live CI failures whose
+# tracebacks pointed at production code that was in fact behaving correctly.
+#
+# Assert the identity once, at import, so any future clobber is a single loud
+# error here instead of two misleading failures deep inside the recovery system.
+# ---------------------------------------------------------------------------
+
+_CER = sys.modules["orchestration.causal_error_recovery"]
+assert _CER.RecoveryPlan is RecoveryPlan and _CER.CausalErrorRecovery is CausalErrorRecovery, (
+    "orchestration.causal_error_recovery symbols were replaced after import — "
+    "the module in sys.modules no longer matches what this test imported, so the "
+    "recovery system under test would be exercised through mocks."
+)
+
 
 @pytest.fixture(scope="module", autouse=True)
 def _restore_conftest_stubs():

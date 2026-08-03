@@ -879,25 +879,49 @@ if "code_intelligence.cross_language_patterns" not in sys.modules:
     _ci_clp_stub.CrossLanguagePatternDetector = MagicMock()  # type: ignore[attr-defined]
     sys.modules["code_intelligence.cross_language_patterns"] = _ci_clp_stub
 
+
+def _stub_symbols(name: str, **symbols) -> types.ModuleType:
+    """Return the ``sys.modules`` entry for *name*, decorating it ONLY if it is a stub.
+
+    #13162: these three blocks used to read
+    ``sys.modules.get(name) or _make_pkg_stub(name)`` and then assign MagicMocks
+    unconditionally. When the real module was already imported — anything loaded
+    earlier in this conftest can pull ``orchestration/__init__.py``, whose line
+    ``from .causal_error_recovery import CausalErrorRecovery, RecoveryPlan, ...``
+    imports the genuine module — that assignment silently REPLACED real classes
+    in a real module's globals. The module then keeps executing its own code
+    against mocks: ``recommend_recovery()`` runs for real, logs a real pattern
+    hash, and returns ``RecoveryPlan(...)`` — a MagicMock. Callers see
+    ``plan.error_type`` as a mock and ``plan.causal_chain.encode()`` blows up in
+    ``hashlib.md5`` with "object supporting the buffer API required".
+
+    A module loaded from a file has ``__file__``; the package stubs built by
+    ``_make_pkg_stub`` never do. Decorating only the latter keeps the stub
+    contract (orchestration's import must resolve) without ever mutating real code.
+    """
+    existing = sys.modules.get(name)
+    if existing is not None and getattr(existing, "__file__", None) is not None:
+        return existing  # real module — never overwrite its symbols
+    stub = existing if existing is not None else _make_pkg_stub(name)
+    for _sym_name, _sym_value in symbols.items():
+        setattr(stub, _sym_name, _sym_value)
+    sys.modules[name] = stub
+    return stub
+
+
 # Ensure CausalErrorRecovery / RecoveryPlan / get_recovery_recommender are
 # resolvable from the stub so orchestration/__init__.py's wildcard import
 # (`from .causal_error_recovery import CausalErrorRecovery, ...`) succeeds.
-_cer_stub = sys.modules.get("orchestration.causal_error_recovery") or _make_pkg_stub(
-    "orchestration.causal_error_recovery"
+_stub_symbols(
+    "orchestration.causal_error_recovery",
+    CausalErrorRecovery=MagicMock(),
+    RecoveryPlan=MagicMock(),
+    get_recovery_recommender=MagicMock(),
 )
-_cer_stub.CausalErrorRecovery = MagicMock()  # type: ignore[attr-defined]
-_cer_stub.RecoveryPlan = MagicMock()  # type: ignore[attr-defined]
-_cer_stub.get_recovery_recommender = MagicMock()  # type: ignore[attr-defined]
-sys.modules["orchestration.causal_error_recovery"] = _cer_stub
 
-_cea_stub = sys.modules.get("orchestration.causal_error_analyzer") or _make_pkg_stub(
-    "orchestration.causal_error_analyzer"
-)
-_cea_stub.CausalErrorAnalysis = MagicMock()  # type: ignore[attr-defined]
-sys.modules["orchestration.causal_error_analyzer"] = _cea_stub
+_stub_symbols("orchestration.causal_error_analyzer", CausalErrorAnalysis=MagicMock())
 
-_al_stub = sys.modules.get("agent_loop") or _make_pkg_stub("agent_loop")
-_al_stub.AgentLoop = MagicMock()  # type: ignore[attr-defined]
+_al_stub = _stub_symbols("agent_loop", AgentLoop=MagicMock())
 # Give the injected stub a REAL __path__ so the package's light submodules
 # (types, belief_state, pre_action_verifier, slack_hook, …) resolve on-demand from
 # disk for the in-package agent_loop/ tests (#11153) — WITHOUT running agent_loop/
