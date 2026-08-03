@@ -65791,21 +65791,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AnalyticsCodeGenRollbackData] */
-        DataResponse_AnalyticsCodeGenRollbackData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AnalyticsCodeGenRollbackData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[AnalyticsDebtByCategoryResponse] */
         DataResponse_AnalyticsDebtByCategoryResponse_: {
             /**
@@ -66331,36 +66316,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AuditCleanupData] */
-        DataResponse_AuditCleanupData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditCleanupData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuditOperationsData] */
-        DataResponse_AuditOperationsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditOperationsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[AuthLogoutData] */
         DataResponse_AuthLogoutData_: {
             /**
@@ -66369,21 +66324,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["AuthLogoutData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuthRefreshData] */
-        DataResponse_AuthRefreshData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuthRefreshData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -67534,81 +67474,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[GPUBenchmarkResponse] */
-        DataResponse_GPUBenchmarkResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUBenchmarkResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUCapabilitiesResponse] */
-        DataResponse_GPUCapabilitiesResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUCapabilitiesResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUConfigUpdateResponse] */
-        DataResponse_GPUConfigUpdateResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUConfigUpdateResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUEfficiencyResponse] */
-        DataResponse_GPUEfficiencyResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUEfficiencyResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUOptimizeResponse] */
-        DataResponse_GPUOptimizeResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUOptimizeResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[GoalData] */
         DataResponse_GoalData_: {
             /**
@@ -67662,36 +67527,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["KnowledgeExtractionResult"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[KnowledgeFreshStatsData] */
-        DataResponse_KnowledgeFreshStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["KnowledgeFreshStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[KnowledgeRebuildIndexData] */
-        DataResponse_KnowledgeRebuildIndexData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["KnowledgeRebuildIndexData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -67927,36 +67762,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[ManPageLookupData] */
-        DataResponse_ManPageLookupData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ManPageLookupData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ManPageSearchData] */
-        DataResponse_ManPageSearchData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ManPageSearchData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[MemoryEntityData] */
         DataResponse_MemoryEntityData_: {
             /**
@@ -68137,111 +67942,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[MultimodalBatchSizeData] */
-        DataResponse_MultimodalBatchSizeData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalBatchSizeData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalEmbeddingData] */
-        DataResponse_MultimodalEmbeddingData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalEmbeddingData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalFusionData] */
-        DataResponse_MultimodalFusionData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalFusionData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalOptimizeData] */
-        DataResponse_MultimodalOptimizeData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalOptimizeData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalPerfStatsData] */
-        DataResponse_MultimodalPerfStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalPerfStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalPerfSummaryData] */
-        DataResponse_MultimodalPerfSummaryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalPerfSummaryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalStatsData] */
-        DataResponse_MultimodalStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[OrchestrationActiveWorkflowsResponse] */
         DataResponse_OrchestrationActiveWorkflowsResponse_: {
             /**
@@ -68362,21 +68062,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[OverseerQueryData] */
-        DataResponse_OverseerQueryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["OverseerQueryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[ParseToolOutputData] */
         DataResponse_ParseToolOutputData_: {
             /**
@@ -68482,81 +68167,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[ProjectStateActivatePhaseResponse] */
-        DataResponse_ProjectStateActivatePhaseResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateActivatePhaseResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateAutoProgressResponse] */
-        DataResponse_ProjectStateAutoProgressResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateAutoProgressResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStatePhasesResponse] */
-        DataResponse_ProjectStatePhasesResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStatePhasesResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateReportResponse] */
-        DataResponse_ProjectStateReportResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateReportResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateValidateResponse] */
-        DataResponse_ProjectStateValidateResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateValidateResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[QueryReformulationResult] */
         DataResponse_QueryReformulationResult_: {
             /**
@@ -68640,21 +68250,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["RedisScanFileResultResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[SavedReportDeleteResponse] */
-        DataResponse_SavedReportDeleteResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SavedReportDeleteResponse"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68827,21 +68422,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[SequentialThinkingClearData] */
-        DataResponse_SequentialThinkingClearData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SequentialThinkingClearData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[SessionActivitiesData] */
         DataResponse_SessionActivitiesData_: {
             /**
@@ -69007,21 +68587,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[SkillCatalogInstallData] */
-        DataResponse_SkillCatalogInstallData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SkillCatalogInstallData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[SkillFeedbackData] */
         DataResponse_SkillFeedbackData_: {
             /**
@@ -69045,36 +68610,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SnapshotWithRegionsResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[StartupPhaseUpdateData] */
-        DataResponse_StartupPhaseUpdateData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["StartupPhaseUpdateData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[StructuredThinkingSummaryData] */
-        DataResponse_StructuredThinkingSummaryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["StructuredThinkingSummaryData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -94553,11 +94088,17 @@ export interface components {
                 [key: string]: number;
             };
             /** Stage Progression */
-            stage_progression?: unknown[];
+            stage_progression?: {
+                [key: string]: unknown[];
+            };
             /** Metadata Analysis */
             metadata_analysis?: {
                 [key: string]: unknown;
             };
+            /** Cognitive Flow */
+            cognitive_flow?: {
+                [key: string]: unknown;
+            }[];
         } & {
             [key: string]: unknown;
         };
@@ -102763,7 +102304,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditCleanupData_"];
+                    "application/json": components["schemas"]["AuditCleanupData"];
                 };
             };
             /** @description Validation Error */
@@ -102792,7 +102333,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditOperationsData_"];
+                    "application/json": components["schemas"]["AuditOperationsData"];
                 };
             };
         };
@@ -103050,7 +102591,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuthRefreshData_"];
+                    "application/json": components["schemas"]["AuthRefreshData"];
                 };
             };
         };
@@ -120044,7 +119585,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SequentialThinkingClearData_"];
+                    "application/json": components["schemas"]["SequentialThinkingClearData"];
                 };
             };
             /** @description Validation Error */
@@ -120150,7 +119691,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_StructuredThinkingSummaryData_"];
+                    "application/json": components["schemas"]["StructuredThinkingSummaryData"];
                 };
             };
             /** @description Validation Error */
@@ -122556,7 +122097,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageLookupData_"];
+                    "application/json": components["schemas"]["ManPageLookupData"];
                 };
             };
             /** @description Validation Error */
@@ -122589,7 +122130,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -122622,7 +122163,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -123853,7 +123394,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_OverseerQueryData_"];
+                    "application/json": components["schemas"]["OverseerQueryData"];
                 };
             };
             /** @description Validation Error */
@@ -132806,7 +132347,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AnalyticsCodeGenRollbackData_"];
+                    "application/json": components["schemas"]["AnalyticsCodeGenRollbackData"];
                 };
             };
             /** @description Validation Error */
@@ -139033,7 +138574,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUEfficiencyResponse_"];
+                    "application/json": components["schemas"]["GPUEfficiencyResponse"];
                 };
             };
         };
@@ -139053,7 +138594,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUCapabilitiesResponse_"];
+                    "application/json": components["schemas"]["GPUCapabilitiesResponse"];
                 };
             };
         };
@@ -139073,7 +138614,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUBenchmarkResponse_"];
+                    "application/json": components["schemas"]["GPUBenchmarkResponse"];
                 };
             };
         };
@@ -139093,7 +138634,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUOptimizeResponse_"];
+                    "application/json": components["schemas"]["GPUOptimizeResponse"];
                 };
             };
         };
@@ -139117,7 +138658,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUConfigUpdateResponse_"];
+                    "application/json": components["schemas"]["GPUConfigUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -145011,7 +144552,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalEmbeddingData_"];
+                    "application/json": components["schemas"]["MultimodalEmbeddingData"];
                 };
             };
             /** @description Validation Error */
@@ -145073,7 +144614,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalStatsData_"];
+                    "application/json": components["schemas"]["MultimodalStatsData"];
                 };
             };
         };
@@ -145097,7 +144638,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalFusionData_"];
+                    "application/json": components["schemas"]["MultimodalFusionData"];
                 };
             };
             /** @description Validation Error */
@@ -145126,7 +144667,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalPerfStatsData_"];
+                    "application/json": components["schemas"]["MultimodalPerfStatsData"];
                 };
             };
         };
@@ -145146,7 +144687,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalOptimizeData_"];
+                    "application/json": components["schemas"]["MultimodalOptimizeData"];
                 };
             };
         };
@@ -145166,7 +144707,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalPerfSummaryData_"];
+                    "application/json": components["schemas"]["MultimodalPerfSummaryData"];
                 };
             };
         };
@@ -145189,7 +144730,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalBatchSizeData_"];
+                    "application/json": components["schemas"]["MultimodalBatchSizeData"];
                 };
             };
             /** @description Validation Error */
@@ -147752,7 +147293,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateValidateResponse_"];
+                    "application/json": components["schemas"]["ProjectStateValidateResponse"];
                 };
             };
         };
@@ -147772,7 +147313,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateReportResponse_"];
+                    "application/json": components["schemas"]["ProjectStateReportResponse"];
                 };
             };
         };
@@ -147792,7 +147333,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStatePhasesResponse_"];
+                    "application/json": components["schemas"]["ProjectStatePhasesResponse"];
                 };
             };
         };
@@ -147814,7 +147355,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateActivatePhaseResponse_"];
+                    "application/json": components["schemas"]["ProjectStateActivatePhaseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -147843,7 +147384,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateAutoProgressResponse_"];
+                    "application/json": components["schemas"]["ProjectStateAutoProgressResponse"];
                 };
             };
         };
@@ -148356,7 +147897,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_StartupPhaseUpdateData_"];
+                    "application/json": components["schemas"]["StartupPhaseUpdateData"];
                 };
             };
             /** @description Validation Error */
@@ -157797,7 +157338,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_KnowledgeFreshStatsData_"];
+                    "application/json": components["schemas"]["KnowledgeFreshStatsData"];
                 };
             };
         };
@@ -157817,7 +157358,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_KnowledgeRebuildIndexData_"];
+                    "application/json": components["schemas"]["KnowledgeRebuildIndexData"];
                 };
             };
         };
@@ -162506,7 +162047,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SkillCatalogInstallData_"];
+                    "application/json": components["schemas"]["SkillCatalogInstallData"];
                 };
             };
             /** @description Validation Error */
@@ -163802,7 +163343,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SavedReportDeleteResponse_"];
+                    "application/json": components["schemas"]["SavedReportDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -173418,7 +172959,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageLookupData_"];
+                    "application/json": components["schemas"]["ManPageLookupData"];
                 };
             };
             /** @description Validation Error */
@@ -173451,7 +172992,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -173484,7 +173025,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */

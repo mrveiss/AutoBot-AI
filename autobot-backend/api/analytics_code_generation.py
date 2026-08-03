@@ -45,7 +45,6 @@ from api.schemas_analytics import (
     RefactoringResponse,
     RefactoringType,
 )
-from api.schemas_common import DataResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -918,7 +917,7 @@ async def get_versions(admin_check: bool = Depends(check_admin_permission), file
     }
 
 
-@router.post("/rollback", response_model=DataResponse[AnalyticsCodeGenRollbackData])
+@router.post("/rollback", response_model=AnalyticsCodeGenRollbackData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rollback_code",

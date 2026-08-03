@@ -10,7 +10,6 @@ Exposes project development phase information and validation status
 
 from fastapi import APIRouter, HTTPException
 
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     PhaseStatus,
     PhaseValidationModel,
@@ -79,7 +78,7 @@ async def get_project_status(detailed: bool = False):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/validate", response_model=DataResponse[ProjectStateValidateResponse])
+@router.post("/validate", response_model=ProjectStateValidateResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_validation",
@@ -120,7 +119,7 @@ async def run_validation():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/report", response_model=DataResponse[ProjectStateReportResponse])
+@router.get("/report", response_model=ProjectStateReportResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_report",
@@ -147,7 +146,7 @@ async def get_validation_report():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/phases", response_model=DataResponse[ProjectStatePhasesResponse])
+@router.get("/phases", response_model=ProjectStatePhasesResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_phases",
@@ -197,7 +196,7 @@ async def get_all_phases():
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/phase/{phase_id}/activate", response_model=DataResponse[ProjectStateActivatePhaseResponse])
+@router.post("/phase/{phase_id}/activate", response_model=ProjectStateActivatePhaseResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="activate_phase",
@@ -238,7 +237,7 @@ async def activate_phase(phase_id: str):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/auto-progress", response_model=DataResponse[ProjectStateAutoProgressResponse])
+@router.post("/auto-progress", response_model=ProjectStateAutoProgressResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="auto_progress_phases",
