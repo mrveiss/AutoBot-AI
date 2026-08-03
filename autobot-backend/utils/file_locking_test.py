@@ -358,35 +358,58 @@ class TestConcurrentFileWriteSafety:
 
     @pytest.mark.asyncio
     async def test_different_files_can_write_concurrently(self):
-        """Test that writes to different files happen concurrently"""
-        import time
+        """Writes to different files must hold their locks concurrently.
 
+        Issue #13162: the previous version inferred concurrency from wall-clock
+        elapsed time (<0.04s for five 10ms critical sections), which reported a
+        serialization regression whenever the machine was merely busy — it was
+        already relaxed once for the same reason (#11954). This version proves
+        the property directly: every writer parks inside its own critical
+        section until all five are inside simultaneously. A shared (serialized)
+        lock makes that state unreachable, so the wait times out and the test
+        fails with a clear message instead of depending on scheduler timing.
+        """
         import aiofiles
 
         from api.filesystem_mcp import _get_file_lock
 
+        writer_count = 5
+        # Generous: only a genuinely serialized lock can exhaust this.
+        rendezvous_timeout = 10.0
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            start_times = {}
-            end_times = {}
+            inside = 0
+            all_inside = asyncio.Event()
+            peak_concurrency = 0
 
             async def write_to_file(file_num: int):
+                nonlocal inside, peak_concurrency
                 test_file = Path(tmpdir) / f"file_{file_num}.txt"
                 lock = await _get_file_lock(str(test_file))
                 async with lock:
-                    start_times[file_num] = time.time()
                     async with aiofiles.open(test_file, "w", encoding="utf-8") as f:
                         await f.write(f"Content {file_num}")
-                    await asyncio.sleep(0.01)  # Small delay to detect serialization
-                    end_times[file_num] = time.time()
+                    inside += 1
+                    peak_concurrency = max(peak_concurrency, inside)
+                    if inside == writer_count:
+                        all_inside.set()
+                    try:
+                        await asyncio.wait_for(all_inside.wait(), timeout=rendezvous_timeout)
+                    except asyncio.TimeoutError:
+                        # Serialized: release the other writers so the run ends
+                        # cleanly; peak_concurrency below reports the failure.
+                        all_inside.set()
+                    finally:
+                        inside -= 1
 
-            # Write to 5 different files
-            await asyncio.gather(*[write_to_file(i) for i in range(5)])
+            await asyncio.gather(*[write_to_file(i) for i in range(writer_count)])
 
-            # If writes were serialized, total time would be ~50ms
-            # If concurrent, should be close to 10ms. Threshold has headroom
-            # above the 10ms sleep for scheduler jitter (#11954 flaky at 0.03).
-            total_elapsed = max(end_times.values()) - min(start_times.values())
-            assert total_elapsed < 0.04, f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.04s)"
+            assert peak_concurrency == writer_count, (
+                f"Writes to different files are serialized: only {peak_concurrency} of "
+                f"{writer_count} per-file locks were held at the same time"
+            )
+            for file_num in range(writer_count):
+                assert (Path(tmpdir) / f"file_{file_num}.txt").read_text(encoding="utf-8") == f"Content {file_num}"
 
 
 class TestLockPatternConsistency:
