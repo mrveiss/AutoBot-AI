@@ -49106,23 +49106,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Token breakdown per agent+model with cache hit rate (GH#8486)
-         * @description Return token usage broken down by agent and model for a company.
+         * Lifetime token/cost totals per agent (GH#8486, GH#13330)
+         * @description Return lifetime token totals per agent for a company (GH#13330).
          *
-         *     Required fields: agentId, agentName, model, inputTokens,
-         *     cachedInputTokens, outputTokens, cacheHitRate.
-         *
-         *     Cache hit rate = cachedInputTokens / totalInputTokens.  A low rate
-         *     signals session churn — the agent is not benefiting from prompt caching.
-         *
-         *     Data is sourced from ``agent_org_nodes`` (for model + name) joined to
-         *     ``llc_heartbeat_runs`` (for token usage).  Rows without any heartbeat
-         *     runs are included with zero token counts so the roster is always complete.
-         *
-         *     Note: ``llc_heartbeat_runs`` does not yet have ``input_tokens`` /
-         *     ``cached_input_tokens`` columns.  The query returns zeros for those until
-         *     a future migration adds the columns.  The endpoint is intentionally
-         *     available from day one so dashboards can start wiring up immediately.
+         *     Sourced from ``llc_agent_budgets`` — the table ``BudgetService.
+         *     ingest_cost_event`` (the actual writer) maintains — enriched with the
+         *     display name and model from ``agent_org_nodes`` when the agent is
+         *     registered there. ``input_tokens`` / ``cached_input_tokens`` /
+         *     ``output_tokens`` / ``cache_hit_rate`` cannot be populated honestly (see
+         *     ``AgentModelCostRow`` docstring); the real spend signal is
+         *     ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
+         *     ``/costs/by-agent-model`` sibling endpoint, fixed for the identical gap
+         *     in GH#13067.
          */
         get: operations["costs_by_agent_model_api_llc_companies__company_id__costs_by_agent_model_get"];
         put?: never;
@@ -54559,6 +54554,24 @@ export interface components {
         /**
          * AgentModelCostRow
          * @description Per-agent + per-model token breakdown row.
+         *
+         *     Mirrors ``llc/api/costs.py``'s ``AgentModelCost`` (GH#13067): this
+         *     endpoint previously raw-SELECTed ``hr.tokens_in`` / ``hr.tokens_out`` from
+         *     ``llc_heartbeat_runs``, columns that never existed on that model
+         *     (GH#13330 — every call 500'd).  The only real per-agent token source is
+         *     ``llc_agent_budgets.tokens_spent`` — a single combined
+         *     ``tokens_in + tokens_out`` lifetime counter (``llc/services/budget.py``'s
+         *     ``ingest_cost_event``), with no per-model dimension and no input/output
+         *     split.  ``input_tokens`` / ``cached_input_tokens`` / ``output_tokens``
+         *     stay ``0`` rather than putting the combined total under
+         *     ``output_tokens`` — the first #13067 attempt did exactly that and applied
+         *     output-rate pricing to input tokens (3-5x over).  The real number is
+         *     reported only in ``total_tokens``.  ``cache_hit_rate`` has no source at
+         *     all — no per-model cache-read counter exists anywhere in the schema — so
+         *     it is ``None`` rather than a fabricated value.  ``window`` is always
+         *     ``"lifetime"`` — this endpoint has no date/period parameter, and both
+         *     ``total_tokens`` and ``cost_usd`` are cumulative totals-to-date, matching
+         *     ``AgentModelCost.window`` in ``llc/api/costs.py``.
          */
         AgentModelCostRow: {
             /** Agent Id */
@@ -54573,10 +54586,17 @@ export interface components {
             cached_input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
             /** Cache Hit Rate */
-            cache_hit_rate: number;
+            cache_hit_rate?: number | null;
             /** Cost Usd */
             cost_usd: string;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };
