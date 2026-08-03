@@ -51895,11 +51895,18 @@ export interface paths {
         };
         /**
          * Costs By Agent Model
-         * @description Return normalised token usage per agent/model pair.
+         * @description Return lifetime token totals per agent for a company.
          *
-         *     Aggregates rows from ``llc_cost_events`` and normalises token field names
-         *     across Anthropic, OpenAI, and Google so callers receive a consistent schema.
-         *     ``cachedInputTokens`` is ``0`` for providers without cache hit reporting.
+         *     Originally specified against ``llc_cost_events`` (GH#8215's per-event log
+         *     with model/provider columns), a table that was never migrated — confirmed
+         *     absent from every migration tree, so this endpoint always raised
+         *     ``UndefinedTable`` and silently returned ``[]`` (GH#13067). The actual
+         *     writer, ``BudgetService.ingest_cost_event``, only maintains a lifetime
+         *     aggregate on ``llc_agent_budgets`` (no per-model dimension, no timestamp),
+         *     so each row here is one lifetime token total per agent with
+         *     ``model="unknown"`` rather than a real per-model/time-windowed breakdown.
+         *     ``llc/services/agent_scorecard.py`` hit the identical gap and made the
+         *     same sourcing choice for spend.
          */
         get: operations["costs_by_agent_model_api_llc_costs_by_agent_model_get"];
         put?: never;
@@ -54512,6 +54519,17 @@ export interface components {
         /**
          * AgentModelCost
          * @description Normalised token usage for one agent/model pair.
+         *
+         *     ``input_tokens``/``cached_input_tokens``/``output_tokens`` require a
+         *     real per-event log to populate honestly (GH#13067) — ``llc_agent_budgets``
+         *     only accumulates a single combined ``tokens_spent`` counter
+         *     (``llc/services/budget.py``'s ``total_tokens = tokens_in + tokens_out``),
+         *     with no record of the input/output split. Rather than presenting that
+         *     combined total under one of the three split fields — which would apply
+         *     the wrong per-token pricing rate to whichever share it silently
+         *     misrepresents — they stay ``0`` and the real number is reported only in
+         *     ``total_tokens``, following ``llc/api/budget.py``'s ``list_cost_events``
+         *     precedent for the identical gap.
          */
         AgentModelCost: {
             /** Agent Id */
@@ -54528,6 +54546,13 @@ export interface components {
             cached_input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };
