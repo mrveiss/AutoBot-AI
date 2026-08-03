@@ -55,6 +55,14 @@ _SSO_AUTH_PY = Path(__file__).parent.parent.parent / "api" / "sso_auth.py"
 # failed (tests/test_prometheus_registry_endpoint.py,
 # tests/test_api_request_counter.py; #11798).  All loads now go through this
 # snapshot/restore helper (same pattern as _load_sso_auth_with_real_endpoints).
+#
+# #13312: "api.security" was missing here — sso_auth.py's `from api.security
+# import create_audit_log` then real-imports api/security.py, whose module-
+# level route decorators read fastapi.status.HTTP_201_CREATED. Tests that pass
+# a restricted fastapi_stub (only HTTP_400_BAD_REQUEST) raised AttributeError
+# the FIRST time this ran in the process; it only worked afterwards because a
+# real "api.security" import from an earlier test in the same session got
+# cached in sys.modules. Stubbing it here removes that run-order dependency.
 _SSO_STUB_KEYS = (
     "fastapi",
     "fastapi.responses",
@@ -64,6 +72,7 @@ _SSO_STUB_KEYS = (
     "user_management.services.base_service",
     "user_management.services.sso_service",
     "services.auth",
+    "api.security",
 )
 
 
@@ -146,6 +155,69 @@ def test_build_callback_url_host_with_port():
     assert (
         result == "http://localhost:8000/api/auth/sso/callback"
     )  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
+
+
+def test_build_callback_url_invalid_port_rejected():
+    """Test callback URL rejects an out-of-range port with 400, not an unhandled 500 (#13312).
+
+    urlsplit()'s .port property re-parses on access and raises ValueError for
+    a non-numeric or >65535 port; that access must stay inside the function's
+    try/except or it escapes past every caller of _build_callback_url — both
+    public, pre-auth SSO endpoints — as an unhandled 500.
+    """
+
+    class MockHTTPException(Exception):
+        def __init__(self, status_code, detail):
+            self.status_code = status_code
+            self.detail = detail
+            super().__init__(detail)
+
+    fastapi_mock = MagicMock()
+    fastapi_mock.HTTPException = MockHTTPException
+    fastapi_mock.status = SimpleNamespace(HTTP_400_BAD_REQUEST=400)
+
+    sso_auth = _load_sso_auth_with_stubs(fastapi_stub=fastapi_mock)
+
+    request = _make_mock_request(
+        "http", "localhost:99999", {"x-forwarded-proto": "http", "x-forwarded-host": "localhost:99999"}
+    )
+
+    with pytest.raises(MockHTTPException) as exc_info:
+        sso_auth._build_callback_url(request)
+
+    assert exc_info.value.status_code == 400
+    assert "Invalid callback host" in exc_info.value.detail
+
+
+def test_build_callback_url_invalid_scheme_rejected():
+    """Test callback URL rejects a non-http(s) x-forwarded-proto (#13312).
+
+    x-forwarded-proto is attacker-controlled the same as x-forwarded-host, but
+    used to reach the returned redirect_uri unvalidated (e.g. "javascript" ->
+    "javascript://localhost/api/auth/sso/callback").
+    """
+
+    class MockHTTPException(Exception):
+        def __init__(self, status_code, detail):
+            self.status_code = status_code
+            self.detail = detail
+            super().__init__(detail)
+
+    fastapi_mock = MagicMock()
+    fastapi_mock.HTTPException = MockHTTPException
+    fastapi_mock.status = SimpleNamespace(HTTP_400_BAD_REQUEST=400)
+
+    sso_auth = _load_sso_auth_with_stubs(fastapi_stub=fastapi_mock)
+
+    request = _make_mock_request(
+        "javascript", "localhost", {"x-forwarded-proto": "javascript", "x-forwarded-host": "localhost"}
+    )
+
+    with pytest.raises(MockHTTPException) as exc_info:
+        sso_auth._build_callback_url(request)
+
+    assert exc_info.value.status_code == 400
+    assert "Invalid callback host" in exc_info.value.detail
 
 
 def test_build_callback_url_case_insensitive():

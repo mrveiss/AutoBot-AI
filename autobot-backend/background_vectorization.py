@@ -13,6 +13,7 @@ Issue #285: Integrated with Embedding Pattern Analyzer for cost tracking.
 
 import asyncio
 import os
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -345,8 +346,21 @@ class BackgroundVectorizer:
 # Global instance (thread-safe)
 
 _background_vectorizer: BackgroundVectorizer | None = None
+_background_vectorizer_lock = threading.Lock()
 
 
 def get_background_vectorizer() -> BackgroundVectorizer:
-    """Get or create the global background vectorizer (thread-safe)."""
-    return _background_vectorizer()
+    """Get or create the global background vectorizer (thread-safe).
+
+    This used to call the ``None`` global instead of constructing it, so both
+    production entrypoints — starting a reconcile run and reading its status —
+    raised ``TypeError: 'NoneType' object is not callable``. That left
+    ``kb:vectorize:pending`` with no consumer that could be started, voiding the
+    retry contract #12312 established and the recovery path the #13277 repair
+    tool falls back to when a fact cannot be rebuilt.
+    """
+    global _background_vectorizer
+    with _background_vectorizer_lock:
+        if _background_vectorizer is None:
+            _background_vectorizer = BackgroundVectorizer()
+        return _background_vectorizer

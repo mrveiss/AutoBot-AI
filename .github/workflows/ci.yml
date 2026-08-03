@@ -44,70 +44,65 @@ jobs:
               - 'autobot-frontend/**'
               - '.github/workflows/ci.yml'
 
-  python-suite:
+  # #13316: the suite is split twelve ways here; `python-suite` below reports the
+  # combined verdict. Measured per-step baseline of the single job this replaces:
+  # dependency install 162s, TEST EXECUTION 3055s, everything else ~14s — so
+  # 95% of the job was the pytest run and nothing but parallelising the tests
+  # themselves could matter.
+  #
+  # Sharding was chosen over running only the tests affected by a diff: every
+  # test still runs, so no regression can be silently missed. Impact analysis
+  # under-selects badly against this repo's conftest, which installs module
+  # stubs whose PEP 562 `__getattr__` returns a MagicMock for ANY attribute.
+  #
+  # This runs on ubuntu-latest, NOT the singleton [self-hosted, Linux, X64]
+  # pool (only no-commit-trailers, code-quality, frontend-test,
+  # verify-generated-types, auto-fix-generated-types and auto-update use that).
+  # Six concurrent shards therefore cost the self-hosted queue nothing — which
+  # is what makes a matrix safe here and was the original #10691 objection.
+  python-shard:
+    name: python-suite shard ${{ matrix.shard }}/12
     needs: changes
     if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
+    # A twelfth of a ~51-minute run, with generous headroom: observed runner
+    # variance on this suite is roughly 2x for identical work (12m18s and
+    # 1h24m have both been recorded), and a shard whose durations have drifted
+    # can run long without being broken.
+    timeout-minutes: 60
+
+    strategy:
+      # Never cancel sibling shards. Cancelling them would hide every failure
+      # outside the first shard to go red — and this suite currently has
+      # standing failures, so fail-fast would make the other five shards
+      # useless on essentially every run.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+    # #10691: the suite has always run with no Redis, so every test needing
+    # real atomic ops (rather than a `fakeredis` stub) was a standing failure
+    # that could never go green — `services/redis_listeners_e2e_test.py`
+    # imports the real `redis` client with no marker or skip guard, and
+    # `autobot-backend/knowledge/connectors/scheduler_test.py::TestConnectorSchedulerRedis`
+    # needs real INCR/EXPIRE semantics. Same service definition as
+    # marker-tests.yml (#13304); the config fixture written by the composite
+    # action already points at localhost:6379, so no extra env wiring is needed.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
     - uses: actions/checkout@v7
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.14'
-        cache: 'pip'
-        cache-dependency-path: |
-          requirements*.txt
-          autobot-backend/requirements*.txt
-
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip setuptools wheel
-
-        echo "Installing CI-safe requirements..."
-        python -m pip install -r requirements-ci.txt --prefer-binary
-
-        echo "Installing testing dependencies..."
-        python -m pip install pytest pytest-asyncio pytest-cov pytest-xdist==3.8.0 'fakeredis[lua]' flake8 black isort mypy bandit
-
-    - name: Create necessary directories and config files
-      run: |
-        mkdir -p data logs static config
-        touch data/.gitkeep logs/.gitkeep static/.gitkeep
-
-        # Create minimal config.yaml for CI testing
-        cat > config/config.yaml << 'EOF'
-        # CI Testing Configuration
-        llm:
-          orchestrator_llm: "mock"
-          task_llm: "mock"
-          ollama:
-            model: "mock-model"
-            models: {}
-          unified:
-            embedding:
-              providers:
-                ollama:
-                  selected_model: "mock-embed"
-
-        deployment:
-          mode: "local"
-
-        data:
-          reliability_stats_file: "data/reliability_stats.json"
-
-        diagnostics:
-          enabled: false
-          use_llm_for_analysis: false
-          use_web_search_for_analysis: false
-          auto_apply_fixes: false
-
-        redis:
-          host: "localhost"
-          port: 6379
-          db: 0
-        EOF
+    - uses: ./.github/actions/setup-python-suite
 
     # Static checks (black / isort / flake8 / bandit) deliberately live in
     # code-quality.yml, NOT here (#13162). They were duplicated across both
@@ -117,14 +112,41 @@ jobs:
     # also meant four checks that finish in minutes were gated behind a
     # ~105-minute pytest run in the same job.
 
-    - name: Run unit tests with coverage gate
+    # #13300: these two invocations used to live in ONE `run:` block. GitHub's
+    # default shell is `bash -e`, so the first invocation's non-zero exit on the
+    # standing failures aborted the step and the second NEVER executed. Two
+    # separate steps with `!cancelled()` on the second decouple them: each
+    # reports its own conclusion in the job UI, both contribute to the job
+    # result, and neither can silently swallow the other.
+    #
+    # #10691: BOTH invocations are sharded, rather than giving each invocation
+    # a whole job. The two are wildly unequal — the backend invocation is the
+    # measured ~51 minutes, while slm-backend had never executed in CI at all
+    # before #13300 — so splitting per-invocation would have produced one
+    # enormous job and one short one, capping the speed-up at roughly 1x. Six
+    # shards that each run a twelfth of BOTH keeps every shard the same shape and
+    # keeps the #13084 interpreter separation intact inside each shard.
+    - name: Run unit tests — backend, shared, tts-worker, repo_tests
       run: |
-        echo "Running unit tests with 70% coverage gate (#3285)..."
-        # Run all unit tests excluding slow/integration/distributed/performance markers.
-        # --cov-fail-under=70 enforces the minimum 70% coverage threshold.
-        # -n auto --dist loadscope parallelizes across workers (#10398); pytest-cov
-        # auto-combines per-worker coverage, and loadscope keeps same-module tests
-        # on one worker so shared-fixture/ordering behaviour matches serial.
+        echo "Running unit tests for autobot-backend / autobot_shared / autobot-tts-worker / repo_tests..."
+        # Run all unit tests excluding slow/integration/distributed/performance
+        # markers. Those markers are NOT a way to retire a test: marker-tests.yml
+        # runs exactly the excluded set on a schedule (#13286).
+        #
+        # -n auto --dist loadscope is UNCHANGED from the pre-sharding job and
+        # must stay that way. --dist worksteal was measured on the same machine:
+        # faster (12m36s vs 14m53s) but 352 failures against 246, because
+        # loadscope is what keeps same-module tests on one worker so
+        # shared-fixture and ordering behaviour matches a serial run. Sharding
+        # composes with it rather than replacing it: pytest-split deselects
+        # everything outside this shard's group at collection time, and xdist
+        # then distributes what remains by scope exactly as before.
+        #
+        # pytest-split's default `duration_based_chunks` algorithm cuts the
+        # collected list into CONTIGUOUS chunks, which keeps whole modules
+        # inside one shard. The alternative `least_duration` would scatter
+        # individual tests across shards and split modules — the same
+        # fixture-sharing hazard that made worksteal worse. Do not switch it.
         #
         # #13084: two SEPARATE pytest invocations, not one combined session.
         # autobot-backend/ and autobot-slm-backend/ each define top-level
@@ -132,63 +154,91 @@ jobs:
         # middleware, migrations). Collecting both in one interpreter session
         # makes whichever backend's file collects first bind that dotted name
         # in sys.modules for the rest of the session, breaking the other
-        # backend's own tests (~95% of a full single-session run's collection
-        # errors — see #13084). A fresh interpreter per invocation eliminates
-        # the collision entirely; --cov-append merges coverage across both so
-        # the combined --cov-fail-under=70 gate still reflects the whole
-        # suite. This does NOT add a second CI job (the singleton self-hosted
-        # runner concern from #10691) — both invocations run sequentially in
-        # this same job/step, so total wall-clock is the sum of the parts,
-        # same as today's single combined run.
+        # backend's own tests.
         python -m pytest \
           autobot-backend autobot_shared autobot-tts-worker repo_tests \
           -n auto --dist loadscope \
+          --splits 12 --group ${{ matrix.shard }} \
+          --durations-path .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
-          --cov=autobot-backend \
-          --cov=autobot_shared \
-          --cov-report= \
           --tb=short \
           --durations=25 \
           --durations-min=10.0 \
           -q
 
+    - name: Run unit tests — slm-backend
+      # Runs even when the invocation above failed: it is a separate interpreter
+      # testing a separate tree (#13300).
+      if: ${{ !cancelled() }}
+      run: |
+        echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/12)..."
+        # A SECOND durations file, not the backend one: pytest-split's
+        # --clean-durations regeneration writes only the tests that ran, so a
+        # shared path would have each invocation truncate the other's timings.
+        #
+        # No --cov here: coverage moved to coverage.yml (#10691). Measured on
+        # this very suite, instrumentation was the dominant cost — the same
+        # trees run in 336s without it and 35m11s with it, while pytest's own
+        # --durations reported every one of the 25 slowest tests under 10s. It
+        # is the wrong thing to pay for on every PR.
         python -m pytest \
           autobot-slm-backend \
           -n auto --dist loadscope \
+          --splits 12 --group ${{ matrix.shard }} \
+          --durations-path .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
-          --cov=autobot-slm-backend \
-          --cov-append \
-          --cov-report=xml:coverage.xml \
-          --cov-report=term-missing \
-          --cov-fail-under=70 \
           --tb=short \
           --durations=25 \
           --durations-min=10.0 \
           -q
 
     - name: Run integration tests
+      # Shard 1 only — this suite is selected by DIRECTORY, not by the split, so
+      # running it in every shard would execute it twelve times over.
+      # NOTE: `infrastructure/shared/tests/integration` does not currently exist
+      # in the tree, so this step is a no-op echo today (#734 moved the suite and
+      # the path was never updated). Left wired rather than removed so it starts
+      # working again the moment the directory reappears.
+      if: ${{ !cancelled() && matrix.shard == 1 }}
       run: |
-        echo "🔄 Running integration tests..."
-        # Integration tests remain in shared directory (#734)
+        echo "Running integration tests..."
         TEST_DIR="infrastructure/shared/tests/integration"
         if [ -d "$TEST_DIR" ]; then
           python -m pytest "$TEST_DIR" -v --tb=short --maxfail=5
         else
-          echo "⚠️ No integration test directory found - skipping"
+          echo "::warning::No integration test directory at $TEST_DIR - skipping"
         fi
 
-    - name: Upload coverage reports
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
-      with:
-        files: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+  # #10691: the PR gate reports one pass/fail context. The historical
+  # `python-suite` job id is kept so `deployment-check` and `notify`, which both
+  # gate on `needs.python-suite.result`, need no change.
+  python-suite:
+    name: python-suite
+    needs: [changes, python-shard]
+    # `!cancelled()` rather than `success()` so this always reports a verdict
+    # for the matrix, including when shards fail. The `changes` guard is
+    # required too, or this would run when no Python path changed and every
+    # shard was skipped.
+    if: ${{ !cancelled() && needs.changes.outputs.python == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
 
-    - name: Cleanup
-      if: always()
+    steps:
+    # Because this job runs on `!cancelled()`, a shard failure does NOT
+    # propagate here on its own. It has to be re-asserted explicitly:
+    # `deployment-check` and `notify` both gate on `needs.python-suite.result`,
+    # so without this step a red test suite would leave `python-suite` green and
+    # let deployment checks proceed on a broken tree. For a matrix, `result` is
+    # the aggregate across all twelve shards.
+    - name: Fail if any shard failed
+      if: ${{ needs.python-shard.result != 'success' }}
       run: |
-        rm -rf .venv || true
+        echo "::error::python-suite shards reported '${{ needs.python-shard.result }}' — see the individual shard jobs for the failing tests."
+        exit 1
+
+    - name: Report success
+      run: echo "All 6 python-suite shards passed."
+
 
   frontend-tests:
     needs: changes

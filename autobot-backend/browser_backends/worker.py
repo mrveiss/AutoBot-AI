@@ -44,7 +44,7 @@ class WorkerBrowserBackend:
     capabilities = frozenset(
         {
             Capability.NAVIGATE,
-            Capability.EXTRACT,
+            Capability.EXTRACT_TEXT,
             Capability.SCREENSHOT,
             Capability.INTERACT,
             Capability.ELEMENT_REFS,
@@ -75,7 +75,11 @@ class WorkerBrowserBackend:
         return self._to_result(raw, request.session_id, url=request.url)
 
     async def extract(self, request: ExtractRequest) -> BrowserResult:
-        """Read text from *selector*, defaulting to the whole body."""
+        """Read **text** from *selector*, defaulting to the whole body.
+
+        `get_text` strips markup, so this stack serves TEXT only — it cannot
+        satisfy a caller that needs HTML (#13236).
+        """
         raw = await self._send(
             "get_text",
             {"selector": request.selector or "body"},
