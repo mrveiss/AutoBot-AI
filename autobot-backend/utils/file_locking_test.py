@@ -46,33 +46,23 @@ class TestWebsocketsNPUEventsLocking:
 
         assert hasattr(websockets, "_npu_events_subscribed")
 
-    def test_subscription_happens_exactly_once_under_contention(self):
-        """The #513 defect: without the lock, racing callers each subscribed.
-
-        This used to grep ``inspect.getsource`` for ``with _npu_events_lock:``
-        and count occurrences of the flag name (#13311) -- a pattern match that
-        passes for a lock held around the wrong thing, and breaks on any
-        refactor. The observable is duplicate subscriptions: a handler
-        registered N times fires N times per event.
-        """
-        import threading
-
-        from api import websockets
-
-        websockets._npu_events_subscribed = False
-        subscriptions = []
-        barrier = threading.Barrier(THREAD_COUNT)
-        errors = []
-
+    @staticmethod
+    def _slow_recording_bus(subscriptions: list) -> MagicMock:
+        """A bus whose subscribe is slow enough to expose an unguarded check."""
         bus = MagicMock()
 
-        def _record(topic, handler):
-            # Widen the race the lock has to close: a slow subscribe is what
-            # lets a second thread through an unguarded check.
+        def _record(topic, _handler):
             subscriptions.append(topic)
             time.sleep(0.001)
 
         bus.subscribe = _record
+        return bus
+
+    @staticmethod
+    def _init_concurrently(websockets, bus) -> list:
+        """Release THREAD_COUNT initialisers at once; return their errors."""
+        barrier = threading.Barrier(THREAD_COUNT)
+        errors = []
 
         def _init():
             try:
@@ -87,6 +77,23 @@ class TestWebsocketsNPUEventsLocking:
                 t.start()
             for t in threads:
                 t.join(timeout=10)
+        return errors
+
+    def test_subscription_happens_exactly_once_under_contention(self):
+        """The #513 defect: without the lock, racing callers each subscribed.
+
+        This used to grep ``inspect.getsource`` for ``with _npu_events_lock:``
+        and count occurrences of the flag name (#13311) -- a pattern match that
+        passes for a lock held around the wrong thing, and breaks on any
+        refactor. The observable is duplicate subscriptions: a handler
+        registered N times fires N times per event.
+        """
+        from api import websockets
+
+        websockets._npu_events_subscribed = False
+        subscriptions = []
+
+        errors = self._init_concurrently(websockets, self._slow_recording_bus(subscriptions))
 
         assert not errors, f"errors during concurrent init: {errors}"
         assert len(subscriptions) == len(set(subscriptions)), (

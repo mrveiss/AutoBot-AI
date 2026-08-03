@@ -186,16 +186,13 @@ class TestGetLlmServiceResolvesTheCanonicalModule:
         assert first is second
         assert request.app.state.llm_service is first
 
-    def test_the_legacy_module_name_does_not_exist(self) -> None:
-        """The bug shape only worked if a top-level ``llm_service`` existed.
-
-        Asserting it does not is what makes the reintroduced import fatal --
-        and fatal at the seam this test drives, not somewhere in production.
-        """
-        import importlib
-
-        with pytest.raises(ModuleNotFoundError):
-            importlib.import_module("llm_service")
+    # A ``pytest.raises(ModuleNotFoundError): import_module("llm_service")``
+    # check lived here and was dropped: its premise is a global sys.path /
+    # sys.modules property that conftest's ``services.llm_service`` stub and
+    # sibling suites can invalidate, so it passed alone and failed in the
+    # sharded run. It was also redundant --
+    # ``test_constructs_the_class_from_services_llm_service`` above already
+    # goes red when the import is pointed at the legacy module name.
 
     def test_a_broken_import_surfaces_rather_than_silently_returning_none(self, monkeypatch) -> None:
         """``lazy_init_singleton`` swallows factory exceptions and returns None.

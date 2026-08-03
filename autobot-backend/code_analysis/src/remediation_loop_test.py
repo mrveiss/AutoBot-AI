@@ -417,9 +417,29 @@ class TestSnapshot:
 #
 # They are now parsed. Same intent, no false positives, no false negatives.
 
-FORBIDDEN_IMPORTS = {"subprocess", "os.system", "pty", "shutil"}
+# Top-level module names only: ``_imported_module_names`` keeps the first
+# dotted segment, so an entry like "os.system" here could never match. The
+# ``os.system`` *call* is caught by FORBIDDEN_CALLS below instead.
+FORBIDDEN_IMPORTS = {"subprocess", "pty", "shutil", "tempfile"}
 FORBIDDEN_CALLS = {"system", "popen", "Popen", "run", "call", "check_call", "check_output", "spawn"}
 WRITE_MODES = {"w", "wb", "a", "ab", "x", "xb", "w+", "r+", "a+"}
+# Writers that never go through ``open()`` at all -- ``Path.write_text``,
+# ``Path.write_bytes``, ``os.remove`` and friends mutate the filesystem just as
+# effectively, and the mode-argument check above cannot see any of them.
+FORBIDDEN_WRITE_METHODS = {
+    "write_text",
+    "write_bytes",
+    "mkdir",
+    "touch",
+    "unlink",
+    "rename",
+    "replace",
+    "remove",
+    "rmtree",
+    "copy",
+    "copy2",
+    "move",
+}
 
 
 def _module_ast(module) -> ast.Module:
@@ -437,16 +457,25 @@ def _imported_module_names(tree: ast.Module) -> set[str]:
     return names
 
 
-def _write_mode_open_calls(tree: ast.Module) -> list[ast.Call]:
-    """``open(...)`` calls whose mode argument is a writing mode."""
-    calls = []
+def _is_write_mode_open(node: ast.Call) -> bool:
+    """``open(...)`` / ``io.open(...)`` with a writing mode argument."""
+    name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+    if name != "open":
+        return False
+    modes = list(node.args[1:2]) + [kw.value for kw in node.keywords if kw.arg == "mode"]
+    return any(isinstance(m, ast.Constant) and str(m.value) in WRITE_MODES for m in modes)
+
+
+def _filesystem_write_calls(tree: ast.Module) -> list[str]:
+    """Every call that can mutate the filesystem, by any route."""
+    found = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or getattr(node.func, "id", None) != "open":
+        if not isinstance(node, ast.Call):
             continue
-        modes = [a for a in node.args[1:2]] + [kw.value for kw in node.keywords if kw.arg == "mode"]
-        if any(isinstance(m, ast.Constant) and str(m.value) in WRITE_MODES for m in modes):
-            calls.append(node)
-    return calls
+        name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+        if _is_write_mode_open(node) or name in FORBIDDEN_WRITE_METHODS:
+            found.append(f"{name} (line {node.lineno})")
+    return found
 
 
 def _shell_out_calls(tree: ast.Module) -> list[str]:
@@ -469,9 +498,9 @@ class ReadOnlyCapabilityChecks:
         violations = imported & FORBIDDEN_IMPORTS
         assert not violations, f"module imports process/filesystem mutation modules: {violations}"
 
-    def test_no_file_is_opened_for_writing(self):
-        calls = _write_mode_open_calls(_module_ast(self.mod))
-        assert not calls, f"open(..., <write mode>) at line(s) {[c.lineno for c in calls]}"
+    def test_nothing_writes_to_the_filesystem(self):
+        calls = _filesystem_write_calls(_module_ast(self.mod))
+        assert not calls, f"filesystem-mutating calls present: {calls}"
 
     def test_nothing_shells_out(self):
         found = _shell_out_calls(_module_ast(self.mod))
@@ -480,14 +509,29 @@ class ReadOnlyCapabilityChecks:
     def test_the_checks_would_notice_a_violation(self):
         """Guard the guards: a parser that finds nothing passes everything."""
         offending = ast.parse(
-            "import subprocess\n"
-            "def f():\n"
-            "    subprocess.Popen(['gh', 'pr', 'create'])\n"
-            "    open('/tmp/x', 'w').write('mutated')\n"
+            "import subprocess as sp\n"
+            "from pathlib import Path\n"
+            "def f(p):\n"
+            "    sp.Popen(['gh', 'pr', 'create'])\n"
+            "    open('/x', mode='a').write('mutated')\n"
+            "    Path(p).write_text('mutated')\n"
+            "    os.system('git commit')\n"
         )
         assert _imported_module_names(offending) & FORBIDDEN_IMPORTS == {"subprocess"}
-        assert _write_mode_open_calls(offending)
-        assert _shell_out_calls(offending)
+        writes = _filesystem_write_calls(offending)
+        assert any(w.startswith("open") for w in writes), writes
+        assert any(w.startswith("write_text") for w in writes), writes
+        shells = _shell_out_calls(offending)
+        assert any(s.startswith("Popen") for s in shells), shells
+        assert any(s.startswith("system") for s in shells), shells
+
+    def test_the_lint_does_not_fire_on_a_clean_module(self):
+        """The mirror: a read-only module must produce no findings at all."""
+        clean = ast.parse("import json\ndef f(p):\n    return json.loads(open(p).read())\n")
+
+        assert not _imported_module_names(clean) & FORBIDDEN_IMPORTS
+        assert not _filesystem_write_calls(clean)
+        assert not _shell_out_calls(clean)
 
 
 class TestReadOnlyContract(ReadOnlyCapabilityChecks):

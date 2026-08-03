@@ -198,9 +198,11 @@ class TestHireAgentNamedBindDict:
         no amount of driving the module can prove the absence of a string it
         never happens to execute in a test. What changed is that it now scans
         string literals via the AST instead of raw text, so a ``:name::type``
-        written in a comment or docstring (documenting the very bug) no longer
-        fails the build, and one hidden inside a multi-line SQL constant is
-        still caught.
+        written in a ``#`` comment (documenting the very bug) no longer fails
+        the build, while one hidden inside a multi-line SQL constant is still
+        caught. Docstrings are ``ast.Constant`` nodes and so are still scanned
+        -- deliberately: a docstring is where a copy-pasteable SQL example
+        lives, and a wrong example there propagates into real queries.
         """
         import ast
         import inspect
@@ -231,7 +233,7 @@ class TestHireAgentNamedBindDict:
             for match in pattern.findall(node.value)
         ]
 
-        assert offenders == [":company_id::uuid"], "the lint must catch SQL and ignore comments"
+        assert offenders == [":company_id::uuid"], "the lint must catch a SQL constant and ignore a # comment"
 
 
 # ===========================================================================

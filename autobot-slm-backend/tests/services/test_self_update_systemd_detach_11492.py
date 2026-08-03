@@ -572,22 +572,24 @@ def test_prune_removes_only_files_past_the_ttl(tmp_path, monkeypatch):
     assert not stale.exists()
 
 
-async def _run_playbook_capturing_staged_files(tmp_path, monkeypatch, *, detach: bool):
-    """Drive a whole ``execute_playbook`` and report which staged files survive.
-
-    Everything below the staging decision is stubbed: the point is what the
-    ``finally`` block does to the two files, not what Ansible does.
-    """
+def _stage_dir_fixture(tmp_path, monkeypatch) -> Path:
+    """A real shared staging dir plus a playbook for the executor to find."""
     ansible_dir = tmp_path / "ansible"
     ansible_dir.mkdir()
     (ansible_dir / "update-all-nodes.yml").write_text("- hosts: all\n", encoding="utf-8")
     shared = tmp_path / "shared"
     shared.mkdir(mode=0o700)
     monkeypatch.setattr(_pe, "SELF_UPDATE_SHARED_DIR", shared)
-    monkeypatch.setattr(_pe, "fetch_deploy_secrets", AsyncMock(return_value={}))
+    return ansible_dir
 
-    ex = _executor(ansible_dir)
-    ex.inventory_path = ansible_dir / "slm-nodes.yml"
+
+def _stub_staged_file_writers(tmp_path, monkeypatch) -> None:
+    """Write real inventory / extra-vars files into the run's stage dir.
+
+    ``services.inventory_builder`` is a MagicMock in this module's loader, so
+    the real writers produce no file at all -- and the assertion is what the
+    ``finally`` block does to those files.
+    """
 
     async def _fake_inventory(_self, stage_dir=None):
         path = Path(stage_dir or tmp_path) / "autobot_inv_run.yml"
@@ -595,15 +597,17 @@ async def _run_playbook_capturing_staged_files(tmp_path, monkeypatch, *, detach:
         return path
 
     def _fake_extra_vars(extra_vars, uid_tmp_dir=None):
-        # ``services.inventory_builder`` is a MagicMock in this module's loader,
-        # so the real writer produces no file. Write a real one into the same
-        # stage dir: the assertion is what the ``finally`` block does to it.
         path = Path(uid_tmp_dir or tmp_path) / "autobot_evars_run.json"
         path.write_text(json.dumps(extra_vars), encoding="utf-8")
         return path
 
+    monkeypatch.setattr(_pe, "fetch_deploy_secrets", AsyncMock(return_value={}))
     monkeypatch.setattr(_pe, "write_temp_extra_vars", _fake_extra_vars)
     monkeypatch.setattr(_pe.PlaybookExecutor, "_build_dynamic_inventory", _fake_inventory)
+
+
+def _stub_ansible_invocation(monkeypatch) -> None:
+    """Stub the command build and the run itself -- neither is under test."""
     monkeypatch.setattr(
         _pe.PlaybookExecutor,
         "_build_ansible_command",
@@ -616,13 +620,23 @@ async def _run_playbook_capturing_staged_files(tmp_path, monkeypatch, *, detach:
         AsyncMock(return_value={"returncode": 0, "output": ""}),
     )
 
+
+async def _run_playbook_capturing_staged_files(tmp_path, monkeypatch, *, detach: bool):
+    """Drive a whole ``execute_playbook`` and report which staged files survive."""
+    ansible_dir = _stage_dir_fixture(tmp_path, monkeypatch)
+    _stub_staged_file_writers(tmp_path, monkeypatch)
+    _stub_ansible_invocation(monkeypatch)
+
+    ex = _executor(ansible_dir)
+    ex.inventory_path = ansible_dir / "slm-nodes.yml"
     result = await ex.execute_playbook(
         "update-all-nodes.yml",
         extra_vars={"a_secret": "value"},  # forces an extra-vars file into stage_dir
         detach=detach,
     )
-    survivors = sorted(f.name for f in shared.iterdir()) if shared.exists() else []
-    return result, survivors
+
+    shared = tmp_path / "shared"
+    return result, (sorted(f.name for f in shared.iterdir()) if shared.exists() else [])
 
 
 @pytest.mark.asyncio

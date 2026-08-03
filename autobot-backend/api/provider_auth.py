@@ -81,7 +81,7 @@ async def _reject_redirect(resp, what: str) -> None:
     """
     if not 300 <= resp.status < 400:
         return
-    location = resp.headers.get("Location", "") if hasattr(resp, "headers") else ""
+    location = resp.headers.get("Location", "")
     logger.warning("%s returned HTTP %s; redirects are disabled (SSRF guard)", what, resp.status)
     target = f" -> {location[:100]}" if location else ""
     raise HTTPException(

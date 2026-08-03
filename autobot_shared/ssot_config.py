@@ -1929,6 +1929,15 @@ class MiscConfig(RedactedSettings):
             "it does not mean 'tolerate nothing'. Issue #13326."
         ),
     )
+    service_auth_rate_limit_window: int = Field(
+        default=SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
+        alias="SERVICE_AUTH_RATE_LIMIT_WINDOW",
+        description=(
+            "Sliding window in seconds over which service-auth failures are counted. "
+            "0 explicitly DISABLES failure rate limiting, since a zero-length window can "
+            "never retain a failure. Issue #13326."
+        ),
+    )
     service_auth_timestamp_window: int = Field(
         default=SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
         alias="AUTH_TIMESTAMP_WINDOW",
@@ -1937,15 +1946,6 @@ class MiscConfig(RedactedSettings):
             "before it is rejected as a replay. 0 accepts no clock skew at all "
             "and will reject essentially every request; it does not disable the "
             "replay check. Issue #13335."
-        ),
-    )
-    service_auth_rate_limit_window: int = Field(
-        default=SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
-        alias="SERVICE_AUTH_RATE_LIMIT_WINDOW",
-        description=(
-            "Sliding window in seconds over which service-auth failures are counted. "
-            "0 explicitly DISABLES failure rate limiting, since a zero-length window can "
-            "never retain a failure. Issue #13326."
         ),
     )
     service_id: str = Field(default="", alias="SERVICE_ID")

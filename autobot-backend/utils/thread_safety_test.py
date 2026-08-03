@@ -14,7 +14,10 @@ Verifies thread safety of:
 These tests use concurrent execution to verify no race conditions exist.
 """
 
+import ast
 import asyncio
+import inspect
+import textwrap
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
@@ -322,6 +325,53 @@ class TestExistingLockVerification:
         assert isinstance(analytics_controller._analytics_state_lock, asyncio.Lock)
 
 
+def _run_on_threads(target, count: int = THREAD_COUNT) -> list:
+    """Release *count* threads simultaneously and collect their exceptions."""
+    barrier = threading.Barrier(count)
+    errors: list[BaseException] = []
+
+    def _wrapped():
+        try:
+            barrier.wait(timeout=5)
+            target()
+        except BaseException as exc:  # noqa: BLE001 - reported via `errors`
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_wrapped) for _ in range(count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+    return errors
+
+
+def _lock_guarded_assignment_targets_from_source(source: str) -> set[str]:
+    """Names assigned inside a ``with ..._lock:`` block in *source*."""
+    guarded: set[str] = set()
+    for node in ast.walk(ast.parse(textwrap.dedent(source))):
+        if not isinstance(node, ast.With):
+            continue
+        if not any("_lock" in ast.unparse(item.context_expr) for item in node.items):
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Assign):
+                guarded.update(ast.unparse(t) for t in inner.targets)
+    return guarded
+
+
+def _lock_guarded_assignment_targets(func) -> set[str]:
+    """Names assigned inside a ``with cls._lock:`` block in *func*.
+
+    The behavioural race test below cannot see a missing lock: under the GIL,
+    20 threads never interleave the two bytecodes between the ``is None`` check
+    and the assignment, so removing the lock leaves it green (#13311 review,
+    mutation M7). Whether a critical section is *held* is a structural property
+    of the code, so it is asserted structurally — same "kept as a lint, but
+    parsed" treatment used elsewhere in this PR.
+    """
+    return _lock_guarded_assignment_targets_from_source(inspect.getsource(func))
+
+
 class TestDoubleCheckedLocking:
     """Test that double-checked locking pattern is correctly implemented"""
 
@@ -334,32 +384,16 @@ class TestDoubleCheckedLocking:
         """The #481 defect: two threads past an unguarded check each built one.
 
         This used to grep ``inspect.getsource(TracingService.__new__)`` for
-        ``with cls._lock:`` and count ``_instance is None`` (#13311) -- a shape
-        match that says nothing about whether the lock guards the right thing,
-        and that a rename breaks. Race the constructor instead and assert the
-        singleton identity every caller depends on.
+        ``with cls._lock:`` and count ``_instance is None`` (#13311). Race the
+        constructor instead and assert the singleton identity callers depend
+        on. Pairs with the lint below, which covers what a race cannot see.
         """
-        import threading
-
         from services.tracing_service import TracingService
 
         TracingService.reset_instance()
-        barrier = threading.Barrier(THREAD_COUNT)
         instances = []
-        errors = []
 
-        def _construct():
-            try:
-                barrier.wait(timeout=5)
-                instances.append(TracingService())
-            except Exception as exc:  # noqa: BLE001 - reported via `errors`
-                errors.append(exc)
-
-        threads = [threading.Thread(target=_construct) for _ in range(THREAD_COUNT)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=10)
+        errors = _run_on_threads(lambda: instances.append(TracingService()))
 
         assert not errors, f"errors during concurrent construction: {errors}"
         assert len(instances) == THREAD_COUNT
@@ -369,11 +403,33 @@ class TestDoubleCheckedLocking:
             f"created concurrently — spans would be split across tracer providers"
         )
 
+    def test_the_singleton_assignment_happens_under_the_lock(self):
+        """A GIL-invisible unlocked window is still the #481 defect.
+
+        ``cls._instance = ...`` must sit inside ``with cls._lock:``; the race
+        test above stays green without it, so this is the half that catches it.
+        """
+        from services.tracing_service import TracingService
+
+        guarded = _lock_guarded_assignment_targets(TracingService.__new__)
+
+        assert "cls._instance" in guarded, (
+            "#481 regression: TracingService.__new__ assigns cls._instance outside "
+            f"`with cls._lock:` — a second thread can build a second singleton. "
+            f"Assignments currently under the lock: {sorted(guarded) or 'none'}"
+        )
+
+    def test_the_lock_lint_can_tell_the_two_shapes_apart(self):
+        """Guard the guard: a parser that returns nothing passes everything."""
+        locked = "def __new__(cls):\n    with cls._lock:\n        cls._instance = object()\n"
+        unlocked = "def __new__(cls):\n    # with cls._lock:\n    cls._instance = object()\n"
+
+        assert _lock_guarded_assignment_targets_from_source(locked) == {"cls._instance"}
+        assert _lock_guarded_assignment_targets_from_source(unlocked) == set()
+
     def test_the_race_is_actually_run(self):
         """Guard the guard: a singleton already built before the threads start
-        would make the assertion above hold for the wrong reason."""
-        import threading
-
+        would make the identity assertion hold for the wrong reason."""
         from services.tracing_service import TracingService
 
         TracingService.reset_instance()
@@ -382,23 +438,9 @@ class TestDoubleCheckedLocking:
         created = []
         original_new = TracingService.__new__
 
-        def _counting_new(cls):
-            instance = original_new(cls)
-            created.append(id(instance))
-            return instance
+        errors = _run_on_threads(lambda: created.append(id(original_new(TracingService))))
 
-        barrier = threading.Barrier(THREAD_COUNT)
-
-        def _construct():
-            barrier.wait(timeout=5)
-            _counting_new(TracingService)
-
-        threads = [threading.Thread(target=_construct) for _ in range(THREAD_COUNT)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=10)
-
+        assert not errors, f"errors during concurrent construction: {errors}"
         assert len(created) == THREAD_COUNT, "the threads did not all reach __new__"
         assert len(set(created)) == 1
 
