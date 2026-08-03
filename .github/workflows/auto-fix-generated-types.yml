@@ -72,6 +72,11 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: autobot-frontend
+        # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
+        # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
+        # required check. Local dev `npm ci` is unaffected and still gets it.
+        env:
+          CYPRESS_INSTALL_BINARY: '0'
         run: npm ci
 
       - name: Regenerate api.ts from authoritative schema
