@@ -27,6 +27,9 @@ logger = structlog.get_logger()
 # Rate limiting tracker for failed auth attempts per IP
 _failed_auth_tracker: Dict[str, List[float]] = defaultdict(list)
 
+# Guards the one-shot 'rate limiting disabled' warning (#13326).
+_rate_limit_disabled_logged = False
+
 # ============================================================================
 # ENDPOINT CATEGORIZATION
 # ============================================================================
@@ -251,15 +254,46 @@ def _should_enforce_by_circuit_breaker() -> bool:
     return random.randint(1, 100) <= pct  # nosec B311 - percentage-based sampling gate, not cryptographic
 
 
+def _rate_limit_settings() -> tuple[int, int]:
+    """Return (window_seconds, max_failures), or (0, 0) when disabled (#13326).
+
+    ``max_failures`` is a *threshold*, not an allowance: at N the Nth failure is
+    still served and the N+1th is limited.  A value of 0 (or a 0-length window)
+    therefore cannot mean "tolerate nothing" — it is treated as an explicit
+    DISABLE of failure rate limiting rather than falling out of a ``>=``
+    comparison and rejecting the very first request.
+    """
+    window = int(config.service_auth_rate_limit_window)
+    max_failures = int(config.service_auth_rate_limit_max_failures)
+    if max_failures <= 0 or window <= 0:
+        _warn_rate_limiting_disabled(window, max_failures)
+        return 0, 0
+    return window, max_failures
+
+
+def _warn_rate_limiting_disabled(window: int, max_failures: int) -> None:
+    """Log once that failure rate limiting is off, so it is never silent."""
+    global _rate_limit_disabled_logged
+    if _rate_limit_disabled_logged:
+        return
+    _rate_limit_disabled_logged = True
+    logger.warning(
+        "Service-auth failure rate limiting is disabled by configuration",
+        rate_limit_window=window,
+        rate_limit_max_failures=max_failures,
+        service_auth_still_enforced=True,
+    )
+
+
 def _is_rate_limited(ip: str) -> bool:
     """Check if IP is rate-limited due to excessive auth failures.
 
     Helper for enforce_service_auth (Issue #255).
     """
-    window = int(config.service_auth_rate_limit_window)
-    max_failures = int(config.service_auth_rate_limit_max_failures)
-    now = time.time()
-    cutoff = now - window
+    window, max_failures = _rate_limit_settings()
+    if max_failures <= 0:
+        return False
+    cutoff = time.time() - window
     _failed_auth_tracker[ip] = [t for t in _failed_auth_tracker[ip] if t > cutoff]
     return len(_failed_auth_tracker[ip]) >= max_failures
 
@@ -268,7 +302,13 @@ def _record_failed_auth(ip: str) -> None:
     """Record a failed authentication attempt for rate limiting.
 
     Helper for enforce_service_auth (Issue #255).
+
+    No-op when rate limiting is disabled: nothing consumes the timestamps then,
+    so recording them would grow ``_failed_auth_tracker`` without bound (#13325).
     """
+    _, max_failures = _rate_limit_settings()
+    if max_failures <= 0:
+        return
     _failed_auth_tracker[ip].append(time.time())
 
 
@@ -416,6 +456,15 @@ def log_enforcement_status():
             override_token_set=bool(config.service_auth_override_token),
         )
         logger.info("Service-only paths", paths=SERVICE_ONLY_PATHS)
+        # Emits the one-shot warning at startup when limiting is off, so the
+        # state is visible in boot logs rather than only on first failure.
+        window, max_failures = _rate_limit_settings()
+        logger.info(
+            "Service-auth failure rate limiting",
+            rate_limit_window=window,
+            rate_limit_max_failures=max_failures,
+            enabled=max_failures > 0,
+        )
     else:
         logger.info("Service Authentication in LOGGING MODE (enforcement disabled)")
 
