@@ -3001,7 +3001,11 @@ before summarizing.
         the whole batch is built, on whichever entry is actually last.
         """
         entry["metadata"]["model"] = selected_model
-        entry["sources"] = _kb_sources_from_citations(rag_citations or []) if used_knowledge else []
+        kb_sources = _kb_sources_from_citations(rag_citations or []) if used_knowledge else []
+        # Never blank out sources an entry already carries — the fallback target
+        # may be a tool entry that legitimately has its own.
+        if kb_sources or not entry.get("sources"):
+            entry["sources"] = kb_sources
 
     def _build_workflow_message_batch(self, chat_mgr, workflow_messages: List[WorkflowMessage]) -> List[Dict[str, Any]]:
         """Build the chat-history message dicts for one turn's WorkflowMessages.
@@ -3137,8 +3141,15 @@ before summarizing.
         leftover = [m for m in workflow_messages if id(m) not in consumed]
         batch.extend(self._build_workflow_message_batch(chat_mgr, leftover))
 
-        if last_prose_entry is not None:
-            self._attach_model_and_citations(last_prose_entry, selected_model, rag_citations, used_knowledge)
+        # Review F5: when every iteration's prose is empty or deduped away — the
+        # ``respond``-tool turn — no prose entry exists, and the model badge and
+        # KB sources would be carried by nothing. Fall back to the last assistant
+        # entry actually written so #13292 cannot regress to "no entry has them".
+        target = last_prose_entry or next(
+            (e for e in reversed(batch) if e.get("sender") == "assistant"), None
+        )
+        if target is not None:
+            self._attach_model_and_citations(target, selected_model, rag_citations, used_knowledge)
         return batch
 
     async def _persist_workflow_messages(

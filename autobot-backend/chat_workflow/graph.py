@@ -1378,7 +1378,11 @@ async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict
     manager = config["configurable"]["manager"]
     session_id = state.get("session_id", "")
     all_llm_responses = state.get("all_llm_responses", [])
-    combined_response = "\n\n".join(all_llm_responses)
+    # Review B3 makes ``all_llm_responses`` carry "" for an iteration with no
+    # prose, so the blanks must be dropped here or a leading/interior "\n\n"
+    # reaches conversation_history — which feeds the NEXT turn's LLM context —
+    # plus the transcript file and the LOOP_COMPLETE/BEFORE_RESPONSE_SEND hooks.
+    combined_response = "\n\n".join(r for r in all_llm_responses if r)
 
     # Emit LOOP_COMPLETE hook to notify extensions
     await _emit_loop_complete(state.get("iteration_count", 0), combined_response, session_id)
