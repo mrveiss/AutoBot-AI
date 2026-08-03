@@ -139,8 +139,11 @@ class TestFilenamePatterns:
 
             try:
                 sample = await service._extract_text_sample(temp_path)
-                # Should detect Latvian hint
-                assert sample is not None or "_lv_" in temp_path.lower()
+                # #13162: every listed pattern must resolve. The previous
+                # "or '_lv_' in path" clause passed vacuously for the patterns
+                # that already contained a separator on both sides, hiding the
+                # fact that a trailing code ("audio_LV.wav") never matched.
+                assert sample == "latviešu valoda", f"no Latvian hint from {pattern}"
             finally:
                 os.unlink(temp_path)
 
@@ -161,7 +164,8 @@ class TestFilenamePatterns:
 
             try:
                 sample = await service._extract_text_sample(temp_path)
-                # Should detect English hint
-                assert sample is not None or "_en_" in temp_path.lower()
+                # #13162: see test_latvian_patterns — the escape-hatch clause
+                # made "meeting_EN.wav" pass without ever matching.
+                assert sample == "english language", f"no English hint from {pattern}"
             finally:
                 os.unlink(temp_path)
