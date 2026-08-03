@@ -1507,7 +1507,15 @@ class MiscConfig(RedactedSettings):
     desktop_max_sessions: str = Field(default="", alias="AUTOBOT_DESKTOP_MAX_SESSIONS")
     desktop_resolution: str = Field(default="", alias="AUTOBOT_DESKTOP_RESOLUTION")
     dev_mode: str = Field(default="", alias="AUTOBOT_DEV_MODE")
-    encryption_key: str = Field(default="", alias="AUTOBOT_ENCRYPTION_KEY")
+    # #13162: this field used to be declared twice in MiscConfig — the later
+    # ``alias="ENCRYPTION_KEY"`` copy silently won, so the documented and
+    # deployed ``AUTOBOT_ENCRYPTION_KEY`` (docker-compose.yml, the ValueError
+    # raised by EncryptionService) was never read. Both spellings are now
+    # accepted, AUTOBOT_-prefixed first.
+    encryption_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
+    )
     env: str = Field(default="", alias="AUTOBOT_ENV")
     error_resolved_ttl_seconds: str = Field(
         default="",
@@ -1802,7 +1810,9 @@ class MiscConfig(RedactedSettings):
     display: str = Field(default="", alias="DISPLAY")
     display_height: str = Field(default="", alias="DISPLAY_HEIGHT")
     display_width: str = Field(default="", alias="DISPLAY_WIDTH")
-    encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")  # type: ignore[no-redef]  # GH#7105
+    # #13162: `encryption_key` is declared once, above, with an AliasChoices
+    # that already covers the bare ENCRYPTION_KEY spelling. Re-declaring it
+    # here shadowed the AUTOBOT_ENCRYPTION_KEY alias.
     # #11681: restore pre-#7437 default (300 s) — 0 made every file-list entry expire instantly
     file_cache_ttl_seconds: int = Field(default=300, alias="FILE_CACHE_TTL_SECONDS")
     gateway_enable_sandbox: str = Field(default="", alias="GATEWAY_ENABLE_SANDBOX")
