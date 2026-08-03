@@ -2,12 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit cover for the repo-wide sys.modules leak guard (#13337).
+"""Unit cover for the repo-wide sys.modules leak guard (#13337, #13398).
 
 The guard's whole value is that it fires on a real leak and stays silent on
 everything else, so both halves are pinned here.  The classifier and the
 escape rule are exercised directly against a throwaway ``sys.modules`` — no
 nested pytest session, so every test finishes in milliseconds.
+
+The baseline ratchet is covered at both ends: the bookkeeping that decides
+whether a listed owner was given a chance to leak, and the verdict that turns
+that plus the leak records — the workers' included — into an exit status.  The
+end-to-end transitions live in the nested-session tests next door.
 """
 
 from __future__ import annotations
@@ -19,16 +24,21 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from repo_tests.sys_modules_leak_guard import _DISK_CACHE, _LeakGuard
+from repo_tests import sys_modules_leak_guard as guard_module
+from repo_tests.sys_modules_leak_guard import _DISK_CACHE, _Baseline, _LeakGuard, _load_baseline
 
 _ROOT = Path("/repo")
 _LLC_CONFTEST = _ROOT / "backend" / "llc" / "tests" / "conftest.py"
 _OTHER_MODULE = _ROOT / "backend" / "initialization" / "lifespan_test.py"
 
+# The same conftest as the guard displays it: repo-relative, the form a
+# baseline line holds.
+_LLC_OWNER = "backend/llc/tests/conftest.py"
+
 
 @pytest.fixture
-def guard(monkeypatch):
-    """A guard over an isolated ``sys.modules`` copy.
+def make_guard(monkeypatch):
+    """Build guards over an isolated ``sys.modules`` copy.
 
     ``_DISK_CACHE`` is pre-seeded so the tests never depend on what happens to
     be installed on the machine running them.
@@ -38,9 +48,19 @@ def guard(monkeypatch):
         "repo_tests.sys_modules_leak_guard._DISK_CACHE",
         dict(_DISK_CACHE, agents=True, autobot_shared=True, celery=True, knowledge=True, _sodium=False),
     )
-    instance = _LeakGuard(_ROOT)
-    instance.snapshot()
-    return instance
+
+    def build(removal_candidates: frozenset[str] = frozenset()) -> _LeakGuard:
+        instance = _LeakGuard(_ROOT, removal_candidates)
+        instance.snapshot()
+        return instance
+
+    return build
+
+
+@pytest.fixture
+def guard(make_guard):
+    """A guard with an empty baseline: nothing is listed, every leak is new."""
+    return make_guard()
 
 
 def _install(name: str, module: object) -> None:
@@ -236,3 +256,176 @@ def test_each_leak_is_reported_once_not_once_per_test(guard):
     _leaks_for(guard, _OTHER_MODULE.parent / "another_test.py")
 
     assert [leak.mutation.key for leak in guard.leaks] == ["agents"]
+
+
+# ---------------------------------------------------------------------------
+# The baseline ratchet: who may be asked to leave the list (#13398)
+# ---------------------------------------------------------------------------
+
+
+def test_a_listed_owner_taken_outside_its_directory_counts_as_exercised(make_guard):
+    """The evidence "this owner no longer leaks" is only collected here.
+
+    The conftest is loaded and installs nothing, and the session then imports a
+    sibling — the moment a stub would have been caught if there had been one.
+    """
+    guard = make_guard(frozenset({_LLC_OWNER}))
+    guard.attribute(_LLC_CONFTEST)
+
+    _leaks_for(guard, _OTHER_MODULE)
+
+    assert guard.exercised_owners() == {_LLC_OWNER}
+
+
+def test_a_listed_owner_is_not_exercised_by_its_own_subtree(make_guard):
+    """``pytest backend/llc/tests`` proves nothing about that directory's stubs."""
+    guard = make_guard(frozenset({_LLC_OWNER}))
+    guard.attribute(_LLC_CONFTEST)
+
+    _leaks_for(guard, _LLC_CONFTEST.parent / "test_something.py")
+
+    assert guard.exercised_owners() == set()
+
+
+def test_a_listed_owner_is_not_exercised_by_an_ancestor_directory(make_guard):
+    """A ``Dir`` collector above the owner imports nothing, so it sees nothing.
+
+    Pytest builds one for every level down to the rootdir on every session,
+    which would otherwise make every run claim every entry was removable.
+    """
+    guard = make_guard(frozenset({_LLC_OWNER}))
+    guard.attribute(_LLC_CONFTEST)
+
+    _leaks_for(guard, _ROOT)
+
+    assert guard.exercised_owners() == set()
+
+
+def test_an_owner_the_session_never_loaded_is_not_exercised(make_guard):
+    """``pytest repo_tests`` must conclude nothing about a backend conftest."""
+    guard = make_guard(frozenset({_LLC_OWNER}))
+
+    _leaks_for(guard, _OTHER_MODULE)
+
+    assert guard.exercised_owners() == set()
+
+
+def test_an_owner_that_is_not_listed_is_never_tracked_for_removal(make_guard):
+    """Only listed owners are watched — the rest are judged on their leaks."""
+    guard = make_guard(frozenset({"backend/other/conftest.py"}))
+    guard.attribute(_LLC_CONFTEST)
+
+    _leaks_for(guard, _OTHER_MODULE)
+
+    assert guard.exercised_owners() == set()
+
+
+def test_a_still_leaking_listed_owner_is_exercised_and_reported(make_guard):
+    """Both signals fire; it is the verdict's subtraction that keeps it listed."""
+    guard = make_guard(frozenset({_LLC_OWNER}))
+    _install("agents", types.ModuleType("agents"))
+    guard.attribute(_LLC_CONFTEST)
+
+    assert _leaks_for(guard, _OTHER_MODULE) == ["agents"]
+    assert guard.exercised_owners() == {_LLC_OWNER}
+
+
+# ---------------------------------------------------------------------------
+# Reading the file, and turning findings into a verdict
+# ---------------------------------------------------------------------------
+
+
+def test_the_baseline_file_ignores_comments_and_blank_lines(tmp_path):
+    """The file carries its own instructions, so comments have to be free."""
+    path = tmp_path / "baseline.txt"
+    path.write_text("# header\n\nbackend/conftest.py\n  backend/x/conftest.py  \n", encoding="utf-8")
+
+    baseline = _load_baseline(path)
+
+    assert baseline.owners == frozenset({"backend/conftest.py", "backend/x/conftest.py"})
+    assert baseline.removal_checked == baseline.owners
+
+
+def test_a_run_phase_entry_is_listed_but_never_checked_for_removal(tmp_path):
+    """It still cannot fail as new; it just cannot be delisted by a shard."""
+    path = tmp_path / "baseline.txt"
+    path.write_text("backend/a_test.py run-phase\nbackend/b_test.py\n", encoding="utf-8")
+
+    baseline = _load_baseline(path)
+
+    assert baseline.owners == frozenset({"backend/a_test.py", "backend/b_test.py"})
+    assert baseline.removal_checked == frozenset({"backend/b_test.py"})
+
+
+def test_a_missing_baseline_file_allows_nothing(tmp_path):
+    """A deleted or mistyped path must not quietly turn the gate into an allowlist."""
+    baseline = _load_baseline(tmp_path / "nope.txt")
+
+    assert baseline == _Baseline(frozenset(), frozenset())
+
+
+def _verdict_over(monkeypatch, listed, *, checked=None, leaking=(), exercised=()):
+    """Drive ``_verdict`` with worker-shaped input and no live guard."""
+    checked = listed if checked is None else checked
+    monkeypatch.setattr(guard_module, "_GUARD", None)
+    monkeypatch.setattr(guard_module, "_BASELINE", _Baseline(frozenset(listed), frozenset(checked)))
+    monkeypatch.setattr(guard_module, "_WORKER_RECORDS", [{"owner": owner} for owner in leaking])
+    monkeypatch.setattr(guard_module, "_WORKER_EXERCISED", set(exercised))
+    return guard_module._verdict()
+
+
+def test_an_unlisted_leak_is_a_regression(monkeypatch):
+    """The transition the previous report/error pair could not gate at all."""
+    verdict = _verdict_over(monkeypatch, listed={"a/conftest.py"}, leaking=("b/conftest.py",))
+
+    assert verdict.new_owners == ["b/conftest.py"]
+    assert verdict.failed
+
+
+def test_a_listed_leak_is_known_debt(monkeypatch):
+    """#13361's owners keep the suite green while they are worked through."""
+    verdict = _verdict_over(monkeypatch, listed={"a/conftest.py"}, leaking=("a/conftest.py",))
+
+    assert verdict.known_owners == ["a/conftest.py"]
+    assert not verdict.failed
+
+
+def test_a_listed_owner_that_was_exercised_and_stayed_silent_must_be_delisted(monkeypatch):
+    """Shrink-only: the fix and the deletion land together or not at all."""
+    verdict = _verdict_over(monkeypatch, listed={"a/conftest.py"}, exercised=("a/conftest.py",))
+
+    assert verdict.fixed_owners == ["a/conftest.py"]
+    assert verdict.failed
+
+
+def test_one_worker_meeting_the_stub_keeps_the_entry_for_every_other(monkeypatch):
+    """The xdist shape: exercised in one worker, caught leaking in another.
+
+    Each worker only sees its own share of the nodes, so a worker that met no
+    stub proves nothing on its own.  Deciding per worker would have deleted
+    entries that are still leaking — and under ``--dist loadscope``, which is
+    the only shape CI runs, there is always more than one.
+    """
+    verdict = _verdict_over(
+        monkeypatch,
+        listed={"a/conftest.py"},
+        leaking=("a/conftest.py",),
+        exercised=("a/conftest.py",),
+    )
+
+    assert verdict.fixed_owners == []
+    assert verdict.known_owners == ["a/conftest.py"]
+    assert not verdict.failed
+
+
+def test_a_run_phase_entry_is_exempt_from_the_removal_check(monkeypatch):
+    """Eleven of twelve CI shards never run such a module — silence means nothing."""
+    verdict = _verdict_over(
+        monkeypatch,
+        listed={"a_test.py"},
+        checked=set(),
+        exercised=("a_test.py",),
+    )
+
+    assert verdict.fixed_owners == []
+    assert not verdict.failed
