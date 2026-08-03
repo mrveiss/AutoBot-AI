@@ -17,6 +17,7 @@ Fixtures for project-repo API tests (#11129):
   a_project_with_repo — dict with ``id``/``company_id`` of a mock project already linked
 """
 
+import importlib
 import sys
 import types
 import uuid  # noqa: F401 — used in fixture helpers below
@@ -74,6 +75,7 @@ def _snapshot_session_stub_keys() -> dict:
 # = .../autobot-backend, matching the same on-disk-path derivation already
 # used by _shield_codebase_analytics_package below.
 _KNOWLEDGE_DIR = str(Path(__file__).parents[2] / "knowledge")
+_AGENTS_DIR = str(Path(__file__).parents[2] / "agents")
 
 
 def _make_knowledge_stub() -> types.ModuleType:
@@ -213,23 +215,44 @@ def _make_services_stub() -> types.ModuleType:
 
 
 def _make_agents_stub() -> None:
-    """Stub the ``agents`` package to avoid the knowledge/chromadb import chain.
+    """Register a hollow ``agents`` package that never runs ``__init__.py``.
 
     ``autobot_agent_adapter`` imports ``from agents.base_agent import AgentRequest``
     at module level.  Loading ``agents/__init__.py`` eagerly pulls in
     ``kb_librarian_agent`` → ``knowledge_base`` → ``knowledge`` → chromadb chain.
     We short-circuit that by pre-populating sys.modules before any test module
     triggers the import.
+
+    ``__path__`` points at the REAL on-disk ``agents/`` directory — the same
+    "hollow package" pattern already used for ``knowledge`` above (#13107) and
+    for ``api.codebase_analytics`` below.  Python consults ``__path__`` only to
+    locate a submodule that is not already in ``sys.modules``, and it never
+    executes the parent's ``__init__.py`` for a package object that is already
+    registered, so the heavy chain stays untouched while every real
+    ``agents.X`` submodule remains importable.
+
+    An empty ``__path__`` blocked every other real submodule too — notably
+    ``agents.agent_client``, which ``autobot-backend/orchestrator.py`` imports
+    at module level.  Because collection-time imports all happen before any
+    fixture teardown could restore the pre-stub state, that shadowing broke
+    *collection* of files gathered after this package in the same session
+    (reproduced: ``orchestration/plan_steps_e2e_test.py`` fails with
+    ``ModuleNotFoundError: No module named 'agents.agent_client'`` in a
+    combined run, never in isolation) — #13162.
+
+    ``agents/base_agent.py`` is dependency-light (autobot_shared + constants +
+    protocols, no knowledge/chromadb import at module level), so it is
+    real-loaded through the same ``__path__`` rather than replaced by a mock:
+    ``agents/agent_client.py`` does ``from .base_agent import AgentHealth,
+    BaseAgent, ...``, names a hand-written stub module did not carry.
     """
     agents_mod = types.ModuleType("agents")
-    agents_mod.__path__ = []  # type: ignore[attr-defined]
+    agents_mod.__path__ = [_AGENTS_DIR]  # type: ignore[attr-defined]
     agents_mod.__package__ = "agents"
+    agents_mod.__spec__ = None  # type: ignore[attr-defined]
     sys.modules["agents"] = agents_mod
 
-    agents_base = types.ModuleType("agents.base_agent")
-    agents_base.AgentRequest = MagicMock  # type: ignore[attr-defined]
-    agents_base.AgentResponse = MagicMock  # type: ignore[attr-defined]
-    sys.modules["agents.base_agent"] = agents_base
+    importlib.import_module("agents.base_agent")
 
 
 # ``services.llm_service`` is imported at module level by llc/kb/handoff_brief.py
@@ -240,6 +263,19 @@ _make_services_stub()
 # ``agents.base_agent`` is imported by autobot_agent_adapter (GH#8502).
 # Stub it before any test module can trigger the agents/__init__.py chain.
 _make_agents_stub()
+
+# Everything this file installs, captured once so the package-scoped fixture
+# below can RE-install it on every entry into this package — not just remove it
+# on the way out (#13162). CI runs ``-n auto --dist loadscope``, which groups by
+# module, not by package: a worker interleaves llc/tests modules with modules
+# from elsewhere, so the package fixture tears down and sets up repeatedly. The
+# installs above run once, at import time, so a teardown that only restored the
+# pre-stub state left every LATER llc/tests module running against the REAL
+# ``knowledge`` package (reproduced by ordering test_heartbeat_context.py,
+# knowledge/pipeline/cognifiers/cognifiers_test.py, test_sprint_close.py in one
+# run: ``test_kb_summarizer_stub_is_called`` then tries to reach a live Redis
+# and fails with "Failed to initialize knowledge base").
+_INSTALLED_STUBS = {key: sys.modules[key] for key in _SESSION_STUB_KEYS if key in sys.modules}
 
 
 def _shield_codebase_analytics_package() -> None:
@@ -276,8 +312,6 @@ def _shield_codebase_analytics_package() -> None:
     # lookup runs ``getattr(api, "codebase_analytics")`` — resolves to this shield
     # (#11129 P2). Without it, patching a lazily-imported analytics helper raises
     # ``AttributeError: module 'api' has no attribute 'codebase_analytics'``.
-    import importlib  # noqa: PLC0415
-
     importlib.import_module("api").codebase_analytics = pkg  # type: ignore[attr-defined]
 
 
@@ -494,8 +528,8 @@ def _build_llc_app(
 
 @pytest.fixture(scope="package", autouse=True)
 def _restore_session_stubs_after_package():
-    """Restore the module-level ``knowledge``/``agents`` stubs after this
-    package finishes (#13084).
+    """Install the module-level ``knowledge``/``agents`` stubs for the lifetime
+    of this package, and restore the pre-stub state afterwards (#13084/#13162).
 
     The stubs installed above at import time are required for llc/tests/
     itself to collect (chromadb/opentelemetry are unavailable in dev/CI), but
@@ -507,7 +541,14 @@ def _restore_session_stubs_after_package():
     full-suite run, never in isolation). Restoring here — rather than a
     session-scoped hook — ties the fix to exactly the lifetime that needs
     the stub.
+
+    Setup re-installs rather than assuming the import-time install is still in
+    place: with ``--dist loadscope`` this fixture is entered once per contiguous
+    run of llc/tests modules, so on every entry after the first the previous
+    teardown has already handed ``sys.modules`` back to the real packages.
     """
+    for key, stub in _INSTALLED_STUBS.items():
+        sys.modules[key] = stub
     yield
     for key, prior in _PRE_STUB_MODULES.items():
         if prior is None:
