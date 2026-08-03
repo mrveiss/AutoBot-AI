@@ -1544,8 +1544,6 @@ class MiscConfig(BaseSettings):
     llm_temperature: str = Field(default="", alias="AUTOBOT_LLM_TEMPERATURE")
     log_backup_count: int = Field(default=0, alias="AUTOBOT_LOG_BACKUP_COUNT")
     log_max_bytes: int = Field(default=0, alias="AUTOBOT_LOG_MAX_BYTES")
-    # #13263: restore pre-#7437 default ("dev") — "" made the MCP server compare
-    # an incoming token's secret segment against "", accepting ":<scopes>" from anyone.
     # #13263: deliberately NO default. The pre-#7437 value was "dev", but a
     # working default credential is a vulnerability in its own right — the
     # secret is the whole check, and "dev" is published in this repo, so any
@@ -1553,6 +1551,23 @@ class MiscConfig(BaseSettings):
     # Empty means unconfigured, and autobot_server._validate_token fails
     # closed on it rather than authenticating everyone.
     mcp_token: str = Field(default="", alias="AUTOBOT_MCP_TOKEN")
+    # #13268: pre-auth throttle limits for POST /api/mcp/tool. These are
+    # thresholds, not credentials — a default is safe and a missing one would
+    # disable the only brute-force brake on an endpoint whose sole boundary is
+    # the shared secret above.
+    mcp_auth_max_failures: int = Field(default=10, alias="AUTOBOT_MCP_AUTH_MAX_FAILURES")
+    mcp_auth_window_seconds: int = Field(default=300, alias="AUTOBOT_MCP_AUTH_WINDOW_SECONDS")
+    mcp_auth_lockout_seconds: int = Field(default=900, alias="AUTOBOT_MCP_AUTH_LOCKOUT_SECONDS")
+    # #13268: ceiling across ALL client IPs in one window. X-Forwarded-For is
+    # attacker-controlled behind an appending proxy, so a per-IP counter alone
+    # is defeated by rotating the header; this bound is not.
+    mcp_auth_global_max_failures: int = Field(default=100, alias="AUTOBOT_MCP_AUTH_GLOBAL_MAX_FAILURES")
+    # #13268: bounds the tracker dict so spoofed source IPs cannot exhaust memory.
+    mcp_auth_max_tracked_ips: int = Field(default=4096, alias="AUTOBOT_MCP_AUTH_MAX_TRACKED_IPS")
+    # #13266: scopes the stdio transport grants itself. AUTOBOT_MCP_TOKEN is the
+    # SECRET only; stdio composes "<secret>:<these scopes>" instead of reusing the
+    # secret as a whole bearer token. Scope names are not a credential.
+    mcp_stdio_scopes: str = Field(default="kb,memory,agents", alias="AUTOBOT_MCP_STDIO_SCOPES")
     voice_toolset_bundle: str = Field(default="voice_safe", alias="AUTOBOT_VOICE_TOOLSETS")
     voice_disabled_tools: str = Field(default="", alias="AUTOBOT_VOICE_DISABLED_TOOLS")
     voice_realtime_model: str = Field(default="gpt-realtime-2", alias="AUTOBOT_VOICE_REALTIME_MODEL")
@@ -1788,12 +1803,20 @@ class MiscConfig(BaseSettings):
     mcp_registry_cache_enabled: bool = Field(default=True, alias="MCP_REGISTRY_CACHE_ENABLED")
     mcp_registry_cache_ttl: str = Field(default="60", alias="MCP_REGISTRY_CACHE_TTL")
     mcp_run_jwt: str = Field(default="", alias="MCP_RUN_JWT")
+    # #13265: run-JWT signing secret as an SSOT field, read by
+    # mcp_isolated_runtime._resolve_run_jwt_secret() when provisioning an
+    # isolated bridge worker. The worker's inherited environment is scrubbed to
+    # _WORKER_ENV_ALLOW, so without an explicitly provisioned secret it cannot
+    # verify the run JWT it is handed and enforcement can never be switched on.
+    # services/run_jwt._secret() deliberately does NOT read this: the shared
+    # resolver stays environment-only so the chain is not widened for every caller.
+    run_jwt_secret: str = Field(default="", alias="RUN_JWT_SECRET")
     # #13263: the pre-#7437 default was "1"; #7437 dropped it to "" and turned
-    # run-scoped JWT enforcement off in every bridge worker. Restoring it is
-    # BLOCKED on #13265: services/mcp_dispatch.py:214 calls call_tool() without
-    # run_jwt and _WORKER_ENV_ALLOW excludes MCP_RUN_JWT, so filesystem_mcp,
-    # browser_mcp and vnc_mcp would return -32001 on every chat tool call.
-    # Enforcement must not be switched on before the token can be supplied.
+    # run-scoped JWT enforcement off in every bridge worker.
+    # #13265 cleared the blocker: mcp_dispatch now mints and forwards a run JWT
+    # on every isolated call, and mcp_isolated_runtime provisions the signing
+    # secret into the scrubbed worker environment so it can verify that token.
+    # Restoring the "1" default is #13263's call and is left to that issue.
     mcp_run_jwt_enforce: str = Field(default="", alias="MCP_RUN_JWT_ENFORCE")
     mcp_worker_cpu_seconds: int = Field(default=0, alias="MCP_WORKER_CPU_SECONDS")
     mcp_worker_log_level: str = Field(default="", alias="MCP_WORKER_LOG_LEVEL")
