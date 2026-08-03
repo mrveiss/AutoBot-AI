@@ -53,8 +53,21 @@ def sample_event():
 
 @pytest.fixture
 def sample_events_list():
-    """Create a list of sample events"""
-    base_time = now_utc()
+    """Create a list of sample events.
+
+    The base time is pinned to the most recent 12:30 UTC rather than "now"
+    (#13162). ``EventHistory.count_off_hours_activity`` classifies any event
+    before 06:00 UTC as off-hours over the whole retained deque, with no time
+    window, so anchoring the twenty-three "business hours" events to the wall
+    clock made ``test_event_history_count_off_hours_activity`` count 28
+    instead of 5 on every run started between 00:00 and 05:59 UTC — a quarter
+    of the day. Pinning the anchor keeps every event in the past, inside the
+    24-hour windows the frequency queries use, and makes the off-hours and
+    high-risk counts independent of when the suite runs.
+    """
+    base_time = now_utc().replace(hour=12, minute=30, second=0, microsecond=0)
+    if base_time > now_utc():
+        base_time -= timedelta(days=1)
     events = []
 
     # Create variety of events
@@ -89,7 +102,7 @@ def sample_events_list():
 
     # Add off-hours activity
     for i in range(5):
-        early_morning = now_utc().replace(hour=3, minute=i)
+        early_morning = base_time.replace(hour=3, minute=i)
         events.append(
             {
                 "user_id": "test_user",
