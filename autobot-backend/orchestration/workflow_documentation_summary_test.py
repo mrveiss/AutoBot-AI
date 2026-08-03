@@ -150,17 +150,51 @@ async def test_summary_swallows_exception_and_logs(make_llm_response: Any, caplo
 
 
 # ---------------------------------------------------------------------------
-# Source-level pin — catches reintroduction of the bug
+# Migration pin — #3185 retired LLMService.chat_completion
 # ---------------------------------------------------------------------------
 
 
-def test_source_does_not_call_chat_completion() -> None:
-    """Read the source of the migrated method and assert the legacy
-    method name is gone. Catches future regressions even if no test
-    runtime path covers them.
+@pytest.mark.asyncio
+async def test_summary_never_reaches_for_the_retired_chat_completion(make_llm_response: Any) -> None:
+    """``chat_completion`` no longer exists on LLMService, so calling it would
+    raise AttributeError at runtime and the broad except-guard would swallow it
+    into a missing summary — silently, exactly like the original defect.
+
+    This replaces ``assert ".chat_completion(" not in inspect.getsource(...)``
+    (#13311): a comment mentioning the old name failed that grep, and moving
+    the call into a helper failed it too, while neither told us what the
+    method actually calls.
     """
-    src = inspect.getsource(WorkflowDocumenter._generate_llm_summary)
-    assert ".chat_completion(" not in src, (
-        "_generate_llm_summary must call llm_service.chat(...), " "not the deleted-from-LLMService chat_completion(...)"
-    )
-    assert ".chat(" in src, "expected a llm_service.chat(...) call"
+    llm_service = AsyncMock()
+    llm_service.chat = AsyncMock(return_value=make_llm_response(content="a summary", error=None))
+    llm_service.chat_completion = AsyncMock(side_effect=AssertionError("retired LLMService.chat_completion called"))
+
+    documenter = WorkflowDocumenter(llm_service=llm_service)
+    workflow_doc = _make_workflow_doc()
+
+    await documenter._generate_llm_summary(workflow_doc, {"status": "completed"})
+
+    assert workflow_doc.content["generated_summary"] == "a summary"
+    llm_service.chat.assert_awaited_once()
+    llm_service.chat_completion.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_service_without_chat_produces_no_summary_and_logs(caplog) -> None:
+    """The mirror of the guard above: pin that an absent ``chat`` is visible.
+
+    ``spec=[]`` gives an object with no attributes at all, so any method name
+    the documenter reaches for raises — the observable is the warning, not a
+    silently empty document.
+    """
+    import logging
+    from unittest.mock import MagicMock
+
+    documenter = WorkflowDocumenter(llm_service=MagicMock(spec=[]))
+    workflow_doc = _make_workflow_doc()
+
+    with caplog.at_level(logging.WARNING):
+        await documenter._generate_llm_summary(workflow_doc, {"status": "completed"})
+
+    assert "generated_summary" not in workflow_doc.content
+    assert any("Failed to generate workflow summary" in r.message for r in caplog.records)
