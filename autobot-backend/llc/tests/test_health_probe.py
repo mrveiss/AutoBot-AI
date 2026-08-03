@@ -451,24 +451,24 @@ async def test_probe_returns_unwired_degraded_with_no_request_context():
 
 
 # NOTE on why the real-lifespan-objects test for this fix lives in
-# initialization/lifespan_test.py instead of here: this is NOT primarily a
-# "safer file placement" choice -- it works today because
-# initialization/lifespan_test.py:19 imports `initialization.lifespan` at
-# MODULE level (eagerly, at collection time), and pytest's default
-# collection order visits `autobot-backend/initialization/` before
-# `autobot-backend/llc/` (plain alphabetical directory order) when both are
-# swept in one run. `initialization.lifespan` and its transitive
-# `api.overseer_handlers -> agents.overseer` chain are therefore already
-# fully imported and cached in sys.modules before llc/tests/conftest.py ever
-# installs its `sys.modules["agents"]` stub (added to dodge the chromadb
-# import chain) -- so the stub has nothing left to shadow for that already
-# -cached module.
+# initialization/lifespan_test.py instead of here: it is a plain locality
+# choice -- that test drives the real lifespan objects, which belong to that
+# module.
 #
-# That invariant is fragile, not structural: (1) it silently breaks if
-# `lifespan_test.py`'s top-level import is ever converted to a lazy
-# in-function import, matching the style this file's own two new tests
-# already use; (2) it is already broken today for anyone who runs
-# `pytest autobot-backend/llc/tests autobot-backend/initialization` (llc
-# first) -- confirmed the ModuleNotFoundError reproduces with that explicit
-# ordering. See GH#13331 PR review (#13336) for the filed follow-up on
-# conftest.py's stub scoping.
+# It used to be a load-bearing workaround. llc/tests/conftest.py installed a
+# `sys.modules["agents"]` stub at import time (to dodge the chromadb import
+# chain) and only restored it at package teardown, so the stub was live for
+# the whole collect-plus-run window. Nothing importing
+# `initialization.lifespan` -> `api.overseer_handlers` -> `agents.overseer`
+# could be collected inside it. A one-run sweep survived only because
+# `initialization` sorts before `llc` alphabetically AND
+# lifespan_test.py:19 imports at MODULE level, so the chain was already
+# cached before the stub landed -- an invariant that broke the moment either
+# changed, and that was already broken for
+# `pytest autobot-backend/llc/tests autobot-backend/initialization`.
+#
+# #13337 removed the workaround's reason to exist: the stubs are now bound to
+# this package's own collect and run windows (see conftest.py's
+# `_ScopedStubs`), so either ordering passes. The repo-wide detector that
+# would catch a future conftest letting a stub escape is tracked separately
+# in #13361.

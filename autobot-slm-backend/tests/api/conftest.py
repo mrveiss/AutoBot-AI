@@ -69,13 +69,16 @@ if "python_multipart" not in sys.modules:
 # poll would keep spinning for the full window, which is the failure mode being
 # prevented.
 #
-# Deliberately a runtest hook and NOT an autouse fixture.  An autouse fixture
-# that requests monkeypatch registers a finalizer for every test in the package,
-# and that extra teardown step reorders the async session fixture in
-# test_slm_endpoints_12515.py enough to break its ``async with
-# session_factory()`` exit (9 teardown errors).  A hookwrapper adds no fixture
-# and no finalizer, and wraps only the call phase — which is also the correct
-# scope, since the I/O being guarded happens inside the test body.
+# A runtest hook rather than an autouse fixture.  #13320 had no choice: an
+# autouse fixture requesting monkeypatch registers a finalizer for every test in
+# the package, and that reordered the async session fixture in
+# test_slm_endpoints_12515.py enough to break its session close (9 teardown
+# errors).  That tripwire is fixed — the fixture now closes its session
+# explicitly and no longer patches the shared asyncio module, and the module
+# carries an autouse ``finalizer_ordering_guard`` that keeps it fixed (#13329) —
+# so the constraint no longer applies.  The hookwrapper stays because it is
+# still the better scope: it adds no fixture and no finalizer, and wraps only
+# the call phase, which is where the I/O being guarded happens.
 _LIVE_POLL_MESSAGE = (
     "unit test attempted a live component health poll via httpx.AsyncClient. "
     "api.code_sync._wait_component_healthy polls until its timeout window "
