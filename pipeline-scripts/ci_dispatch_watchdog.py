@@ -180,7 +180,11 @@ DEFAULT_MAX_APPROVALS = 270
 DEFAULT_POLL_ATTEMPTS = 3
 DEFAULT_POLL_INTERVAL_SECONDS = 20
 DEFAULT_STATUS_CONTEXT = "ci-dispatch-watchdog"
-DEFAULT_MAX_JOB_LOOKUPS = 10
+# Runs inspected per check. Raised from 10 (#13341): the repository was measured
+# carrying 12 concurrently in-progress runs, so a budget of 10 could not reach
+# the whole set — and the run that matters is the one it dropped. See
+# `inspect_self_hosted_pool` for why the ORDER of that budget is the real fix.
+DEFAULT_MAX_JOB_LOOKUPS = 25
 # A self-hosted job still executing after this long is wedged, not slow (#13341).
 #
 # Derived, not chosen: every self-hosted job in .github/workflows declares
@@ -194,6 +198,9 @@ DEFAULT_JOB_OVERDUE_MINUTES = 45
 # 0 means "every open PR"; a PR number narrows the sweep to that one head.
 DEFAULT_ONLY_PR = 0
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
+# GitHub's maximum page size. Listing runs is one call whatever the size, so the
+# full page is taken and the expensive per-run job lookups are budgeted instead.
+MAX_RUNS_PER_PAGE = 100
 
 
 class WatchdogError(RuntimeError):
@@ -627,10 +634,21 @@ def inspect_self_hosted_pool(
     now = now or datetime.now(timezone.utc)
     overdue: List[OverdueJob] = []
     try:
-        running = api.recent_runs(per_page=max_lookups, run_status="in_progress")
+        # Ask for a full page and choose which runs to spend the job-lookup
+        # budget on here, rather than letting the API's ordering choose.
+        running = api.recent_runs(per_page=MAX_RUNS_PER_PAGE, run_status="in_progress")
     except WatchdogApiError as exc:
         print(f"  runner liveness unknown: {exc}")
         return PoolState(None, overdue)
+    # OLDEST FIRST — the correction that makes this detector able to fire at all
+    # (#13341). `GET /actions/runs` returns newest-first, and a wedged run is by
+    # definition the OLDEST in-progress run, so truncating the newest N to the
+    # lookup budget drops precisely the run being looked for. Measured on this
+    # repository: 12 runs in progress, and the wedging `Frontend Testing Suite`
+    # run was the oldest of the 12 — outside a budget of 10. The unit tests
+    # passed throughout, because a synthetic listing has nothing to truncate.
+    # Sorting costs nothing: it is the same single listing call.
+    running.sort(key=lambda run: str(run.get("run_started_at") or run.get("created_at") or ""))
     serving = False
     for run in running[:max_lookups]:
         try:

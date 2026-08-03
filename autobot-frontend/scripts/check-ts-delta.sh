@@ -67,14 +67,31 @@ TSC_STATUS=0
 
 CURRENT=$(grep -c "error TS" "${TSC_OUTPUT}" || true)
 
-# vue-tsc exits non-zero WITH diagnostics when it finds type errors, and
-# non-zero WITHOUT them when it could not compile at all (bad tsconfig, OOM,
-# a killed process). The old code funnelled both into `|| true` and then counted
-# zero matches, so a compiler that never ran reported "0 errors" and PASSED —
-# a gate that fails open is not a gate. Distinguish the two by the diagnostics.
-if (( TSC_STATUS != 0 )) && (( CURRENT == 0 )); then
-  echo "ERROR: vue-tsc exited ${TSC_STATUS} without reporting any diagnostics." >&2
-  echo "It did not run to completion, so the error delta is unknown. Output:" >&2
+# A count is only a measurement if the compiler actually checked the sources.
+# The old code funnelled every failure into `|| true` and counted matches, so a
+# compiler that never ran reported "0 errors" and PASSED. Counting alone is not
+# enough to repair that, because the count is non-zero in two failure modes too:
+# a missing tsconfig emits ONE diagnostic (TS5058) having checked NOTHING, and a
+# crash part-way through emits however many diagnostics it reached before dying.
+# Both then read as a comfortable pass. The exit status is the discriminator.
+#
+# vue-tsc returns TypeScript's ExitStatus: 0 clean, 1 a configuration/command
+# diagnostic, 2 the normal "type errors were found", 3 and 4 invalid project.
+# So anything above 2 never completed a check, and a non-zero status with no
+# diagnostics at all is the crash case.
+if (( TSC_STATUS > 2 )) || { (( TSC_STATUS != 0 )) && (( CURRENT == 0 )); }; then
+  echo "ERROR: vue-tsc exited ${TSC_STATUS} without completing a check." >&2
+  echo "The error delta is unknown, so this is a failure, not a pass. Output:" >&2
+  cat "${TSC_OUTPUT}" >&2
+  exit 1
+fi
+
+# TS5xxx/TS6xxx are configuration and command-line diagnostics — a missing or
+# unreadable tsconfig, an unknown option. They are reported INSTEAD of checking
+# the sources, so the count above measures nothing. Type errors occupy the other
+# code ranges, so this cannot swallow a genuine regression.
+if grep -qE "error TS[56][0-9]{3}" "${TSC_OUTPUT}"; then
+  echo "ERROR: vue-tsc reported a configuration error; nothing was type-checked." >&2
   cat "${TSC_OUTPUT}" >&2
   exit 1
 fi

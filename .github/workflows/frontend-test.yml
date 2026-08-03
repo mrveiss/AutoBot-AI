@@ -118,10 +118,16 @@ jobs:
         # step fails with a diagnosable "timed out" instead of hanging silently.
         # 600s is roughly seven times the ~89s this step took on its last clean
         # run; TERM first so vue-tsc can flush, KILL 60s later if it will not.
+        # `--verbose` matters: without it `timeout` prints NOTHING, so the log
+        # ends at "Process completed with exit code 124" and the operator is
+        # left to know that 124 means a timeout. With it the step says
+        # "timeout: sending signal TERM to command 'npm'", which is the
+        # diagnosable failure this bound exists to produce.
         # The hang itself is fixed at the root in scripts/check-ts-delta.sh
         # (npx removed) — this bound is the guard for the NEXT unknown cause,
         # not the fix for the known one.
-        run: timeout --kill-after=60s 600 npm run check-ts-delta
+        run: timeout --verbose --kill-after=60s 600 npm run check-ts-delta
+
       - name: Run linting
         working-directory: autobot-frontend
         run: npm run lint

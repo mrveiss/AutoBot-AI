@@ -426,6 +426,34 @@ def test_a_completed_job_is_never_wedged(watchdog):
     assert watchdog.job_is_overdue(job, NOW, 45) is False
 
 
+def test_the_wedged_run_is_found_even_when_it_is_the_oldest_of_many(watchdog):
+    """
+    The detector's real failure mode, invisible to every other test here.
+
+    `GET /actions/runs` returns NEWEST first, and a wedged run is by definition
+    the OLDEST in-progress one. Truncating the newest N to the lookup budget
+    therefore drops exactly the run being looked for. Measured live: 12 runs in
+    progress, the wedging one the oldest of the 12, a budget of 10 — missed.
+    """
+    healthy = [{"id": i, "name": "CI", "head_sha": f"sha{i}", "run_started_at": _ts(i)} for i in range(1, 12)]
+    wedged = {"id": 99, "name": "Frontend Testing Suite", "head_sha": "wedged", "run_started_at": _ts(185)}
+
+    class _Api:
+        repository = REPO
+
+        def recent_runs(self, per_page=100, run_status=""):
+            # Newest first, exactly as GitHub returns it.
+            return healthy + [wedged]
+
+        def run_jobs(self, run_id):
+            if run_id == 99:
+                return [_job(185)]
+            return [_job(2, name="Something Fine")]
+
+    state = watchdog.inspect_self_hosted_pool(_Api(), 10, 45, NOW)
+    assert [entry.head_sha for entry in state.overdue] == ["wedged"]
+
+
 def test_a_healthy_job_alongside_a_wedged_one_still_proves_liveness(watchdog):
     state = watchdog.inspect_self_hosted_pool(_pool_api([_job(185), _job(3, name="Build Test")]), 10, 45, NOW)
     assert state.serving is True
