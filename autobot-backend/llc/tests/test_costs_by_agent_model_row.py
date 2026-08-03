@@ -101,7 +101,14 @@ async def _insert_budget(
         await session.commit()
 
 
-async def _insert_agent_org_node(session_factory, company_id: str, agent_id: str, name: str) -> None:  # noqa: ANN001
+async def _insert_agent_org_node(
+    session_factory,  # noqa: ANN001
+    company_id: str,
+    agent_id: str,
+    name: str,
+    *,
+    model: str | None = None,
+) -> None:
     async with session_factory() as session:
         session.add(
             AgentOrgNode(
@@ -110,6 +117,7 @@ async def _insert_agent_org_node(session_factory, company_id: str, agent_id: str
                 agent_id=agent_id,
                 name=name,
                 org_role="worker",
+                model=model,
             )
         )
         await session.commit()
@@ -130,6 +138,10 @@ async def test_returns_real_data_instead_of_500(session_factory) -> None:  # noq
     body = resp.json()
     assert len(body) == 1
     assert body[0]["agent_id"] == "agent-alpha"
+    # No agent_org_nodes row exists for this agent -- the LEFT join's NULL
+    # branch must fall back to the raw agent_id slug (see
+    # test_agent_name_enriched_from_agent_org_nodes for the non-NULL branch).
+    assert body[0]["agent_name"] == "agent-alpha"
     # tokens_spent is an input+output COMBINED total (llc/services/budget.py's
     # total_tokens = tokens_in + tokens_out) with no record of the split, so
     # it must surface only via total_tokens -- not fabricated into
@@ -147,6 +159,7 @@ async def test_returns_real_data_instead_of_500(session_factory) -> None:  # noq
     # not fabricate a specific hit rate.
     assert body[0]["cache_hit_rate"] is None
     assert body[0]["model"] == "unknown"
+    assert body[0]["window"] == "lifetime"
 
 
 @pytest.mark.asyncio
@@ -175,6 +188,24 @@ async def test_agent_name_enriched_from_agent_org_nodes(session_factory) -> None
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body[0]["agent_name"] == "Beta Prime"
+
+
+@pytest.mark.asyncio
+async def test_model_enriched_from_agent_org_nodes(session_factory) -> None:  # noqa: ANN001
+    """model comes from agent_org_nodes.model when the agent is registered
+    there, falling back to "unknown" otherwise (review nit: the endpoint
+    already joins agent_org_nodes for agent_name -- reading its real model
+    column too costs nothing over hard-coding "unknown")."""
+    company_id = str(uuid.uuid4())
+    await _insert_budget(session_factory, company_id, "agent-gamma", tokens_spent=5)
+    await _insert_agent_org_node(session_factory, company_id, "agent-gamma", "Gamma", model="claude-haiku-4-5")
+
+    async with _client(_make_app(session_factory, company_id)) as client:
+        resp = await client.get(f"/api/llc/companies/{company_id}/costs/by-agent-model")
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body[0]["model"] == "claude-haiku-4-5"
 
 
 @pytest.mark.asyncio

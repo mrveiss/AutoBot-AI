@@ -289,31 +289,35 @@ def test_status_degraded_monitor_down():
     assert _compute_status(_base_metrics(liveness_monitor_running=False)) == "degraded"
 
 
-def test_status_down_when_liveness_monitor_unwired():
-    """GH#13331: unwired must be worse than degraded, and distinct from the
-    wired-but-stopped case above."""
+def test_status_degraded_when_liveness_monitor_unwired():
+    """GH#13331: unwired (never set on app.state) must land at "degraded",
+    matching api/system_health.py's probe_app_state() precedent for a
+    missing attribute -- NOT "down". A request-less internal caller, or the
+    background lifespan window before this init step runs, must not drag
+    the whole system-health aggregate to "down" (#13336 review A1/A2)."""
     from llc.health.probe import _compute_status
 
     m = _base_metrics(liveness_monitor_wired=False, liveness_monitor_running=False)
-    assert _compute_status(m) == "down"
+    assert _compute_status(m) == "degraded"
 
 
-def test_status_down_when_session_checkpointer_unwired():
+def test_status_degraded_when_session_checkpointer_unwired():
     from llc.health.probe import _compute_status
 
     m = _base_metrics(session_checkpointer_wired=False, session_checkpointer_running=False)
-    assert _compute_status(m) == "down"
+    assert _compute_status(m) == "degraded"
 
 
-def test_status_backward_compat_missing_wired_keys_defaults_ok():
-    """A metrics dict built before GH#13331 (no *_wired keys) must not be
-    newly downgraded to "down" -- absence of the key means "assume wired"."""
+def test_status_wired_key_is_diagnostic_only_not_a_severity_input():
+    """The *_wired keys exist purely so callers can distinguish "never wired"
+    from "wired but stopped" in `data` -- _compute_status must derive
+    severity from `running` alone, so wired=True with the same running value
+    produces an identical status to wired=False (#13336 review A1)."""
     from llc.health.probe import _compute_status
 
-    m = _base_metrics()
-    del m["liveness_monitor_wired"]
-    del m["session_checkpointer_wired"]
-    assert _compute_status(m) == "ok"
+    wired = _base_metrics(liveness_monitor_wired=True, liveness_monitor_running=False)
+    unwired = _base_metrics(liveness_monitor_wired=False, liveness_monitor_running=False)
+    assert _compute_status(wired) == _compute_status(unwired) == "degraded"
 
 
 def test_status_degraded_pending_approvals():
@@ -412,10 +416,12 @@ async def test_probe_returns_degraded_when_agents_overdue_degraded():
 
 
 @pytest.mark.asyncio
-async def test_probe_returns_unwired_down_with_no_request_context():
-    """GH#13331: without a request, the probe cannot reach app.state at all
-    and must report the components unwired (down) rather than fabricate a
-    running/not-running verdict from a disconnected shadow singleton."""
+async def test_probe_returns_unwired_degraded_with_no_request_context():
+    """GH#13331 (review A1/A2): without a request, the probe cannot reach
+    app.state at all and must report the components unwired -- but that is
+    "degraded", not "down". A missing request context (an internal caller,
+    or the background lifespan window before this init step has run) must
+    not drag the whole /api/health aggregate to "down"."""
     from unittest.mock import patch
 
     async_pair = AsyncMock(return_value=(0, 0))
@@ -424,6 +430,10 @@ async def test_probe_returns_unwired_down_with_no_request_context():
     async_false = AsyncMock(return_value=False)
 
     with (
+        # Isolate the wired/unwired behaviour under test from the unrelated
+        # HeartbeatScheduler-not-started case, which would independently
+        # force "down" via the very first _compute_status check.
+        patch("llc.health.probe._is_scheduler_running", return_value=True),
         patch("llc.health.probe._count_overdue_agents", new=async_pair),
         patch("llc.health.probe._budget_counts", new=async_pair),
         patch("llc.health.probe._pending_approvals_critical", new=async_zero),
@@ -437,16 +447,28 @@ async def test_probe_returns_unwired_down_with_no_request_context():
 
     assert result.data["liveness_monitor_wired"] is False
     assert result.data["session_checkpointer_wired"] is False
-    assert result.status == "down"
+    assert result.status == "degraded"
 
 
-# NOTE: the "real lifespan objects" regression test for this fix lives in
-# initialization/lifespan_test.py, not here. llc/tests/conftest.py stubs
-# sys.modules["agents"] at collection time (to dodge the chromadb import
-# chain) so every test file under llc/tests/ can import cleanly -- but that
-# stub also permanently breaks `initialization.lifespan`'s own import chain
-# (api.overseer_handlers -> agents.overseer) for the rest of the pytest
-# process once it has run. Exercising the real lifespan init functions from
-# initialization/lifespan_test.py avoids that collision and matches the
-# precedent already established there (test_init_liveness_monitor_actually_starts_it,
-# #13085).
+# NOTE on why the real-lifespan-objects test for this fix lives in
+# initialization/lifespan_test.py instead of here: this is NOT primarily a
+# "safer file placement" choice -- it works today because
+# initialization/lifespan_test.py:19 imports `initialization.lifespan` at
+# MODULE level (eagerly, at collection time), and pytest's default
+# collection order visits `autobot-backend/initialization/` before
+# `autobot-backend/llc/` (plain alphabetical directory order) when both are
+# swept in one run. `initialization.lifespan` and its transitive
+# `api.overseer_handlers -> agents.overseer` chain are therefore already
+# fully imported and cached in sys.modules before llc/tests/conftest.py ever
+# installs its `sys.modules["agents"]` stub (added to dodge the chromadb
+# import chain) -- so the stub has nothing left to shadow for that already
+# -cached module.
+#
+# That invariant is fragile, not structural: (1) it silently breaks if
+# `lifespan_test.py`'s top-level import is ever converted to a lazy
+# in-function import, matching the style this file's own two new tests
+# already use; (2) it is already broken today for anyone who runs
+# `pytest autobot-backend/llc/tests autobot-backend/initialization` (llc
+# first) -- confirmed the ModuleNotFoundError reproduces with that explicit
+# ordering. See GH#13331 PR review (#13336) for the filed follow-up on
+# conftest.py's stub scoping.

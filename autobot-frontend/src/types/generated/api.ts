@@ -49106,16 +49106,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Token breakdown per agent+model with cache hit rate (GH#8486)
+         * Lifetime token/cost totals per agent (GH#8486, GH#13330)
          * @description Return lifetime token totals per agent for a company (GH#13330).
          *
          *     Sourced from ``llc_agent_budgets`` — the table ``BudgetService.
          *     ingest_cost_event`` (the actual writer) maintains — enriched with the
-         *     display name from ``agent_org_nodes`` when the agent is registered there.
-         *     ``model`` is always ``"unknown"`` and ``input_tokens`` /
-         *     ``cached_input_tokens`` / ``output_tokens`` / ``cache_hit_rate`` cannot be
-         *     populated honestly (see ``AgentModelCostRow`` docstring); the real spend
-         *     signal is ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
+         *     display name and model from ``agent_org_nodes`` when the agent is
+         *     registered there. ``input_tokens`` / ``cached_input_tokens`` /
+         *     ``output_tokens`` / ``cache_hit_rate`` cannot be populated honestly (see
+         *     ``AgentModelCostRow`` docstring); the real spend signal is
+         *     ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
          *     ``/costs/by-agent-model`` sibling endpoint, fixed for the identical gap
          *     in GH#13067.
          */
@@ -54568,7 +54568,10 @@ export interface components {
          *     output-rate pricing to input tokens (3-5x over).  The real number is
          *     reported only in ``total_tokens``.  ``cache_hit_rate`` has no source at
          *     all — no per-model cache-read counter exists anywhere in the schema — so
-         *     it is ``None`` rather than a fabricated value.
+         *     it is ``None`` rather than a fabricated value.  ``window`` is always
+         *     ``"lifetime"`` — this endpoint has no date/period parameter, and both
+         *     ``total_tokens`` and ``cost_usd`` are cumulative totals-to-date, matching
+         *     ``AgentModelCost.window`` in ``llc/api/costs.py``.
          */
         AgentModelCostRow: {
             /** Agent Id */
@@ -54589,6 +54592,11 @@ export interface components {
             cache_hit_rate?: number | null;
             /** Cost Usd */
             cost_usd: string;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };

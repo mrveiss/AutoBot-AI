@@ -376,7 +376,10 @@ class AgentModelCostRow(BaseModel):
     output-rate pricing to input tokens (3-5x over).  The real number is
     reported only in ``total_tokens``.  ``cache_hit_rate`` has no source at
     all — no per-model cache-read counter exists anywhere in the schema — so
-    it is ``None`` rather than a fabricated value.
+    it is ``None`` rather than a fabricated value.  ``window`` is always
+    ``"lifetime"`` — this endpoint has no date/period parameter, and both
+    ``total_tokens`` and ``cost_usd`` are cumulative totals-to-date, matching
+    ``AgentModelCost.window`` in ``llc/api/costs.py``.
     """
 
     agent_id: str
@@ -388,12 +391,13 @@ class AgentModelCostRow(BaseModel):
     total_tokens: int
     cache_hit_rate: Optional[float] = None
     cost_usd: str
+    window: str = "lifetime"
 
 
 @costs_by_model_router.get(
     "/{company_id}/costs/by-agent-model",
     response_model=List[AgentModelCostRow],
-    summary="Token breakdown per agent+model with cache hit rate (GH#8486)",
+    summary="Lifetime token/cost totals per agent (GH#8486, GH#13330)",
 )
 async def costs_by_agent_model(
     company_id: str,
@@ -405,17 +409,17 @@ async def costs_by_agent_model(
 
     Sourced from ``llc_agent_budgets`` — the table ``BudgetService.
     ingest_cost_event`` (the actual writer) maintains — enriched with the
-    display name from ``agent_org_nodes`` when the agent is registered there.
-    ``model`` is always ``"unknown"`` and ``input_tokens`` /
-    ``cached_input_tokens`` / ``output_tokens`` / ``cache_hit_rate`` cannot be
-    populated honestly (see ``AgentModelCostRow`` docstring); the real spend
-    signal is ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
+    display name and model from ``agent_org_nodes`` when the agent is
+    registered there. ``input_tokens`` / ``cached_input_tokens`` /
+    ``output_tokens`` / ``cache_hit_rate`` cannot be populated honestly (see
+    ``AgentModelCostRow`` docstring); the real spend signal is
+    ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
     ``/costs/by-agent-model`` sibling endpoint, fixed for the identical gap
     in GH#13067.
     """
     assert_company_access(ctx, company_id)
     result = await session.execute(
-        select(LLCAgentBudget, AgentOrgNode.name)
+        select(LLCAgentBudget, AgentOrgNode.name, AgentOrgNode.model)
         .outerjoin(AgentOrgNode, AgentOrgNode.agent_id == LLCAgentBudget.agent_id)
         .where(LLCAgentBudget.company_id == company_id)
         .order_by(LLCAgentBudget.agent_id)
@@ -425,7 +429,7 @@ async def costs_by_agent_model(
         AgentModelCostRow(
             agent_id=budget.agent_id,
             agent_name=agent_name or budget.agent_id,
-            model="unknown",
+            model=model or "unknown",
             input_tokens=0,
             cached_input_tokens=0,
             output_tokens=0,
@@ -433,5 +437,5 @@ async def costs_by_agent_model(
             cache_hit_rate=None,
             cost_usd=str(budget.budget_spent),
         )
-        for budget, agent_name in result.all()
+        for budget, agent_name, model in result.all()
     ]

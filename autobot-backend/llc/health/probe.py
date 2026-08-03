@@ -119,14 +119,17 @@ def _compute_status(metrics: dict) -> str:
         return "down"
     if metrics["agents_overdue_critical"] > 0:
         return "down"
-    # Issue #13331: an unwired probe (app.state never got the attribute the
-    # lifespan sets — the probe cannot verify the component at all) is a
-    # different, more severe problem than a wired-but-stopped component, and
-    # must not collapse into the same "degraded" bucket. `.get(..., True)`
-    # keeps pre-#13331 hand-built metrics dicts (missing the new keys) at
-    # their old "assume wired" behaviour.
-    if not metrics.get("liveness_monitor_wired", True) or not metrics.get("session_checkpointer_wired", True):
-        return "down"
+    # Issue #13331: `liveness_monitor_running`/`session_checkpointer_running`
+    # are only True when `_app_state_scheduler_state` found the attribute
+    # AND it is running — an unwired probe (attribute never set) already
+    # reports `running=False` here, same as wired but stopped, so it already
+    # falls into this "degraded" bucket below with no extra branch needed.
+    # This matches api/system_health.py's probe_app_state(): a missing
+    # attribute is "degraded", not "down" — a request-less internal caller
+    # or a not-yet-finished lifespan startup window must not drag the whole
+    # aggregate to "down". `*_wired` stays in `data` purely as a diagnostic
+    # (was it never wired, or did it start and stop?) — it does not change
+    # severity on its own.
     if (
         metrics["agents_overdue_degraded"] > 0
         or metrics["budget_exhausted_companies"] > 0
@@ -156,12 +159,16 @@ def _app_state_scheduler_state(request: Request | None, attr: str) -> tuple[bool
     regardless of the real component's health.
 
     ``wired=False`` means ``app.state`` never got the attribute at all —
-    lifespan never ran, or this probe call has no request context — which is
-    a probe-integration failure, distinct from ``wired=True, running=False``
+    lifespan never ran (or hasn't reached this init step yet — see
+    initialization/lifespan.py's background phase-2 ordering), or this probe
+    call has no request context — distinct from ``wired=True, running=False``
     (lifespan set the attribute — possibly to ``None`` after a caught startup
-    failure — but the component is not currently running). Conflating the two
-    is exactly how this bug survived: a probe that cannot tell "never wired"
-    from "wired but stopped" reports the same status for both.
+    failure — but the component is not currently running). Conflating the
+    two was the original bug: a probe that cannot tell "never wired" from
+    "wired but stopped" reports the same verdict for both. ``running`` is
+    ``False`` in both cases — see ``_compute_status`` for why that alone is
+    enough to drive severity, and why ``wired`` is reported in ``data`` as a
+    diagnostic only, not as its own severity input.
     """
     if request is None or request.app is None or not hasattr(request.app.state, attr):
         return False, False
