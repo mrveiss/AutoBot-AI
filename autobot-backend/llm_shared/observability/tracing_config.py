@@ -12,6 +12,7 @@ callers must check `.enabled` before instantiating the observer.
 from __future__ import annotations
 
 from pydantic_settings import BaseSettings
+
 from autobot_shared.secret_redaction import RedactedReprMixin
 
 

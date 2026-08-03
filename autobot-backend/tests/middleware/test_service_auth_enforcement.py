@@ -221,9 +221,7 @@ class TestRateLimiting:
 
     def test_defaults_match_declared_constants(self, unset_rate_limit_config):
         fresh = unset_rate_limit_config
-        assert fresh.service_auth_rate_limit_max_failures == (
-            SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT
-        )
+        assert fresh.service_auth_rate_limit_max_failures == (SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT)
         assert fresh.service_auth_rate_limit_window == SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT
 
     def test_zero_max_failures_disables_rate_limiting(self):
