@@ -227,6 +227,26 @@ def register_root_endpoints(app: FastAPI) -> None:
             **status,
         }
 
+    @app.get("/api/hello")
+    @with_error_handling(category=ErrorCategory.SYSTEM)
+    async def root_hello():
+        """Dependency-free liveness probe (#13162).
+
+        The readiness helpers in the E2E suites and the operator diagnostic
+        scripts have always polled this path to decide whether the backend has
+        finished booting, but it was never registered on the real app — only on
+        the standalone minimal_backend_test fixture. Every one of those probes
+        therefore waited for a 200 that could not arrive.
+
+        Deliberately touches no Redis, database or config so that it answers
+        while the rest of startup is still in progress.
+        """
+        return {
+            "message": "AutoBot backend is running",
+            "status": "ok",
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+
     @app.get("/api/version")
     @with_error_handling(category=ErrorCategory.SYSTEM)
     async def root_version():
@@ -248,7 +268,7 @@ def register_root_endpoints(app: FastAPI) -> None:
     logger.info(
         "Root endpoints registered: /api/health, /api/health/ai-stack, "
         "/api/health/circuit-breakers, /api/health/celery-dead-letter, "
-        "/api/version, /.well-known/agent.json"
+        "/api/hello, /api/version, /.well-known/agent.json"
     )
 
 
