@@ -118,6 +118,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hello": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Root Hello
+         * @description Dependency-free liveness probe (#13162).
+         *
+         *     The readiness helpers in the E2E suites and the operator diagnostic
+         *     scripts have always polled this path to decide whether the backend has
+         *     finished booting, but it was never registered on the real app — only on
+         *     the standalone minimal_backend_test fixture. Every one of those probes
+         *     therefore waited for a 200 that could not arrive.
+         *
+         *     Deliberately touches no Redis, database or config so that it answers
+         *     while the rest of startup is still in progress.
+         */
+        get: operations["root_hello_api_hello_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/version": {
         parameters: {
             query?: never;
@@ -1905,7 +1934,9 @@ export interface paths {
          *     This endpoint is called by Telegram servers when a message is sent to the bot.
          *     Messages are normalized via TelegramAdapter and routed to AutoBot chat.
          *
-         *     Security: Verifies X-Telegram-Bot-Api-Secret-Token header matches stored secret.
+         *     Security: Verifies the X-Telegram-Bot-Api-Secret-Token header matches the
+         *     stored secret, enforced by the ``verify_telegram_secret`` route dependency
+         *     so authentication runs before the request body is parsed.
          *
          *     Args:
          *         request: FastAPI request (for header access)
@@ -101821,6 +101852,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    root_hello_api_hello_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
