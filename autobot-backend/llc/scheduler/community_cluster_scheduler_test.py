@@ -10,8 +10,13 @@ fixed for LivenessMonitor/BudgetWatchdog/SessionCheckpointer:
 
 1. ``honour_pending_cancellation()`` ran only in the ``except Exception`` arm,
    so a masked cancellation that ``CommunityClusterer.run()`` swallowed and
-   returned from normally (the dominant real-world shape, #13203) never hit
-   the guard and re-armed a full 6-hour sleep.
+   returned from normally never hit the guard and re-armed a full 6-hour
+   sleep. #13203 established this as the shape a per-iteration guard must
+   protect against for the *other* three schedulers (each of whose ``_tick``
+   provably swallows its own errors) — this file does not measure whether
+   the real ``CommunityClusterer.run()`` swallows a cancellation the same
+   way; ``_SwallowingClusterer`` below models that scenario so the fix is
+   exercised either way.
 2. Its shutdown drain was a bare, unshielded
    ``asyncio.gather(task, return_exceptions=True)`` with no timeout, so a
    tick that could never be cancelled would hang ``cleanup_services()``
@@ -55,12 +60,15 @@ def _patch_clusterer(run_coro_factory):
 
 
 class _SwallowingClusterer:
-    """Models a real CommunityClusterer.run() whose DB driver masks a cancel.
+    """Models a CommunityClusterer.run() whose DB driver masks a cancel.
 
-    SQLAlchemy/asyncpg catch BaseException while unwinding a connection and
-    re-raise their own error type, so a cancellation delivered mid-run is
-    consumed inside run() and it returns normally — the dominant shape,
-    not the exception-escaping one.
+    SQLAlchemy/asyncpg are known to catch BaseException while unwinding a
+    connection and re-raise their own error type, which would deliver a
+    cancellation into ``run()`` as an ordinary exception rather than
+    ``CancelledError`` — this class stands in for that shape (not measured
+    against the real ``community_clusterer.py`` call graph; see the module
+    docstring) so the guard-placement fix is exercised regardless of whether
+    the real code hits it today.
     """
 
     tick_count = 0
@@ -180,10 +188,13 @@ async def test_first_tick_applies_the_startup_delay_only_once() -> None:
     sched = CommunityClusteringScheduler(_FakeMeshDB(), poll_interval=9999.0)
     assert sched._first_tick is True
 
+    # Patches this module's own `_sleep` indirection, not `asyncio.sleep` on
+    # the shared asyncio module — the latter would silently no-op every other
+    # coroutine's sleep in the process for the duration of this `with` block.
     mock_sleep = AsyncMock(return_value=None)
     with (
         _patch_clusterer(_CountingClusterer),
-        patch("llc.scheduler.community_cluster_scheduler.asyncio.sleep", mock_sleep),
+        patch("llc.scheduler.community_cluster_scheduler._sleep", mock_sleep),
     ):
         sched.start()
         # Event-gated, not timing-gated: the mocked sleep(300) is a no-op

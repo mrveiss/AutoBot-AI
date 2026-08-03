@@ -31,6 +31,13 @@ logger = logging.getLogger(__name__)
 _CLUSTER_INTERVAL_SECONDS = 6 * 3600  # 6 hours
 _INITIAL_DELAY_SECONDS = 300  # let startup finish before the first expensive pass
 
+# Indirection so a test can patch just this module's initial-delay sleep
+# (``patch("llc.scheduler.community_cluster_scheduler._sleep", ...)``)
+# without reaching through to ``asyncio.sleep`` on the shared ``asyncio``
+# module object, which would affect every other coroutine in the process for
+# the duration of the patch.
+_sleep = asyncio.sleep
+
 
 class CommunityClusteringScheduler(PollLoopScheduler):
     """Periodic community-clustering pass over the mesh graph."""
@@ -55,7 +62,7 @@ class CommunityClusteringScheduler(PollLoopScheduler):
             self._first_tick = False
             # A bare sleep, not driver code — a cancellation delivered here
             # propagates as a real CancelledError, no masking possible.
-            await asyncio.sleep(_INITIAL_DELAY_SECONDS)
+            await _sleep(_INITIAL_DELAY_SECONDS)
 
         from services.mesh_brain.community_clusterer import CommunityClusterer
 
