@@ -14,6 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 FRONTEND_DIR="${REPO_ROOT}/autobot-frontend"
 BASELINE_FILE="${REPO_ROOT}/docs/developer/audits/typescript-baseline.md"
+# The compiler this script measures with. Resolved as a path rather than through
+# `npx` — see "Why not npx" below.
+TSC_BIN="${FRONTEND_DIR}/node_modules/.bin/vue-tsc"
 
 # --- Resolve baseline ---
 if [[ ! -f "${BASELINE_FILE}" ]]; then
@@ -28,11 +31,53 @@ if [[ -z "${BASELINE}" ]]; then
 fi
 
 # --- Run TypeScript check ---
+#
+# Why not npx (#13341). This step ran unbounded for over three hours on the
+# singleton self-hosted runner while its sibling `type-check` step — the SAME
+# vue-tsc invocation, reached through `npm run` — finished in about a minute in
+# the same job. The difference was `npx`, and every one of its extra behaviours
+# is an unbounded wait:
+#
+#   * it resolves the package before running it, which can reach the registry;
+#   * when resolution misses it PROMPTS ("Ok to proceed?") and blocks on stdin,
+#     which in a CI step is a pipe that never delivers a line and never closes;
+#   * it takes locks under the shared npm cache, and on the self-hosted runner
+#     $HOME is shared with every concurrently executing job rather than being a
+#     fresh VM per job, so a stale lock blocks instead of being absent.
+#
+# `vue-tsc` is a devDependency, so it is already on disk after `npm ci`; there
+# is nothing for a resolver to do. Calling the installed binary directly removes
+# the network path, the prompt and the cache lock in one move. `</dev/null`
+# guarantees that nothing downstream of this line can ever block on stdin.
+if [[ ! -x "${TSC_BIN}" ]]; then
+  echo "ERROR: vue-tsc not found at ${TSC_BIN}" >&2
+  echo "Run 'npm ci' in ${FRONTEND_DIR} first." >&2
+  exit 1
+fi
+
 echo "Running vue-tsc (baseline: ${BASELINE} errors)..."
-CURRENT=$(
+TSC_OUTPUT="$(mktemp)"
+trap 'rm -f "${TSC_OUTPUT}"' EXIT
+
+TSC_STATUS=0
+(
   cd "${FRONTEND_DIR}"
-  npx vue-tsc --noEmit -p tsconfig.app.json 2>&1 | grep -c "error TS" || true
-)
+  "${TSC_BIN}" --noEmit -p tsconfig.app.json
+) >"${TSC_OUTPUT}" 2>&1 </dev/null || TSC_STATUS=$?
+
+CURRENT=$(grep -c "error TS" "${TSC_OUTPUT}" || true)
+
+# vue-tsc exits non-zero WITH diagnostics when it finds type errors, and
+# non-zero WITHOUT them when it could not compile at all (bad tsconfig, OOM,
+# a killed process). The old code funnelled both into `|| true` and then counted
+# zero matches, so a compiler that never ran reported "0 errors" and PASSED —
+# a gate that fails open is not a gate. Distinguish the two by the diagnostics.
+if (( TSC_STATUS != 0 )) && (( CURRENT == 0 )); then
+  echo "ERROR: vue-tsc exited ${TSC_STATUS} without reporting any diagnostics." >&2
+  echo "It did not run to completion, so the error delta is unknown. Output:" >&2
+  cat "${TSC_OUTPUT}" >&2
+  exit 1
+fi
 
 echo "Current TS errors : ${CURRENT}"
 echo "Baseline TS errors: ${BASELINE}"

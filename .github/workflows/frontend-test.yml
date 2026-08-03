@@ -107,7 +107,21 @@ jobs:
 
       - name: Check TypeScript error delta
         working-directory: autobot-frontend
-        run: npm run check-ts-delta
+        # #13341: bound the STEP, not just the job. GitHub enforces
+        # `timeout-minutes` from the RUNNER side, so when the runner process
+        # stops making progress the job-level cancellation may never be issued
+        # — observed here as a run of over three hours against the declared
+        # 30-minute limit above, on the singleton self-hosted runner, holding
+        # a REQUIRED context and starving every other job needing that machine.
+        # `timeout` runs inside this step's own process tree, so it fires at a
+        # known point whether or not GitHub's cancellation ever arrives, and the
+        # step fails with a diagnosable "timed out" instead of hanging silently.
+        # 600s is roughly seven times the ~89s this step took on its last clean
+        # run; TERM first so vue-tsc can flush, KILL 60s later if it will not.
+        # The hang itself is fixed at the root in scripts/check-ts-delta.sh
+        # (npx removed) — this bound is the guard for the NEXT unknown cause,
+        # not the fix for the known one.
+        run: timeout --kill-after=60s 600 npm run check-ts-delta
       - name: Run linting
         working-directory: autobot-frontend
         run: npm run lint
