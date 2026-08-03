@@ -457,6 +457,12 @@ async def test_trafilatura_robots_disabled_env_passes(monkeypatch):
     monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(guard_mod, "_RESPECT_ROBOTS", False)
 
+    # TrafilaturaBackend.fetch() gates on _import_trafilatura() BEFORE it
+    # extracts, so patching the extraction seam alone is not enough: on a
+    # runner without the optional `trafilatura` wheel the gate raises
+    # BackendError before client.get is ever reached (#13162). Patch both
+    # module seams so this guard test stays independent of that optional dep.
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "extracted text")
 
     mock_response = MagicMock()
@@ -494,6 +500,8 @@ async def test_trafilatura_public_allowed_url_reaches_fetch(monkeypatch):
         return True
 
     monkeypatch.setattr(guard_mod, "_robots_is_allowed", _allowed)
+    # Same optional-dependency gate as above (#13162).
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "article body")
 
     mock_response = MagicMock()

@@ -18,6 +18,7 @@ the full loop integration (verifier result shown at the approval gate).
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -34,6 +35,34 @@ from agent_loop.pre_action_verifier import (
     _parse_probability,
     _parse_rationale,
     _threshold_for_tool,
+)
+
+# ---------------------------------------------------------------------------
+# Module-identity anchor for patching (#13162).
+#
+# ``patch("agent_loop.pre_action_verifier.X")`` resolves its target by walking
+# the dotted path with ``getattr`` — ``getattr(sys.modules["agent_loop"],
+# "pre_action_verifier")``. The backend root conftest plants ``agent_loop`` as a
+# package stub whose catch-all ``__getattr__`` returns a fresh MagicMock for ANY
+# name, and sibling conftests (tests/search, tests/agent_loop) replace or pop
+# ``agent_loop*`` entries during collection. Whenever the submodule binding is
+# lost, that string form silently patches a mock — or a SECOND module object
+# re-imported from disk — while the class this file imported keeps reading its
+# own untouched globals. The patch then does nothing and the assertion falls
+# through to whatever the unpatched code returns: in CI all three
+# VERIFIER_ENABLED/_select_verifier_provider tests reported PASS because the
+# real module ran with no LLM provider configured.
+#
+# Anchoring on the module that actually owns ``PreActionVerifier`` and patching
+# it with ``patch.object`` removes the getattr walk entirely. The identity
+# assertion turns any future module-identity split into a loud failure at import
+# instead of a silent green test.
+# ---------------------------------------------------------------------------
+
+_PAV = sys.modules[PreActionVerifier.__module__]
+assert _PAV.PreActionVerifier is PreActionVerifier, (
+    "agent_loop.pre_action_verifier was loaded twice — sys.modules holds a different "
+    "module object than the one this test imported from; patches would be inert."
 )
 
 # ---------------------------------------------------------------------------
@@ -144,7 +173,7 @@ class TestParsing:
 class TestVerifierDisabled:
     @pytest.mark.asyncio
     async def test_verifier_disabled_returns_skip(self):
-        with patch("agent_loop.pre_action_verifier.VERIFIER_ENABLED", False):
+        with patch.object(_PAV, "VERIFIER_ENABLED", False):
             v = PreActionVerifier()
             result = await v.verify("write_file", {"path": "/etc/passwd"}, "test")
         assert result.verdict == VerifierVerdict.SKIP
@@ -169,11 +198,12 @@ class TestVerifierBlocksPlausibleButWrong:
         provider.chat_completion.return_value = _make_llm_response(_REFUTE_RESPONSE)
 
         with (
-            patch(
-                "agent_loop.pre_action_verifier._select_verifier_provider",
+            patch.object(
+                _PAV,
+                "_select_verifier_provider",
                 new=AsyncMock(return_value=provider),
             ),
-            patch("agent_loop.pre_action_verifier.VERIFIER_ENABLED", True),
+            patch.object(_PAV, "VERIFIER_ENABLED", True),
         ):
             v = PreActionVerifier(actor_provider="ollama")
             result = await v.verify(
@@ -199,11 +229,12 @@ class TestVerifierBlocksPlausibleButWrong:
         provider.chat_completion.return_value = _make_llm_response(_PASS_RESPONSE)
 
         with (
-            patch(
-                "agent_loop.pre_action_verifier._select_verifier_provider",
+            patch.object(
+                _PAV,
+                "_select_verifier_provider",
                 new=AsyncMock(return_value=provider),
             ),
-            patch("agent_loop.pre_action_verifier.VERIFIER_ENABLED", True),
+            patch.object(_PAV, "VERIFIER_ENABLED", True),
         ):
             v = PreActionVerifier(actor_provider="ollama")
             result = await v.verify(
@@ -243,7 +274,7 @@ class TestDistinctProvider:
 
         with (
             patch("llm_shared.provider_registry.get_provider_registry", return_value=mock_registry),
-            patch("agent_loop.pre_action_verifier.VERIFIER_ENABLED", True),
+            patch.object(_PAV, "VERIFIER_ENABLED", True),
         ):
             from agent_loop.pre_action_verifier import _select_verifier_provider
 
@@ -335,7 +366,7 @@ class TestLoopIntegration:
         loop._record_verifier_verdict = AsyncMock()
         loop._request_approval = AsyncMock(return_value=True)
 
-        with patch("agent_loop.pre_action_verifier.HARD_BLOCK", True):
+        with patch.object(_PAV, "HARD_BLOCK", True):
             result = await loop._check_approvals([{"tool_name": "bash", "args": {}}])
 
         loop._request_approval.assert_not_called()
@@ -358,7 +389,7 @@ class TestLoopIntegration:
         # Human approves
         loop._request_approval = AsyncMock(return_value=True)
 
-        with patch("agent_loop.pre_action_verifier.HARD_BLOCK", False):
+        with patch.object(_PAV, "HARD_BLOCK", False):
             result = await loop._check_approvals([{"tool_name": "bash", "args": {}}])
 
         # Human approved, so no error returned
@@ -426,12 +457,13 @@ class TestPanel:
             return provider
 
         with (
-            patch(
-                "agent_loop.pre_action_verifier._select_verifier_provider",
+            patch.object(
+                _PAV,
+                "_select_verifier_provider",
                 side_effect=_side_effect,
             ),
-            patch("agent_loop.pre_action_verifier.VERIFIER_ENABLED", True),
-            patch("agent_loop.pre_action_verifier.PANEL_QUORUM", 2),
+            patch.object(_PAV, "VERIFIER_ENABLED", True),
+            patch.object(_PAV, "PANEL_QUORUM", 2),
         ):
             v = PreActionVerifier()
             result = await v.verify(
@@ -452,12 +484,13 @@ class TestPanel:
         provider_pass.chat_completion.return_value = _make_llm_response(_PASS_RESPONSE)
 
         with (
-            patch(
-                "agent_loop.pre_action_verifier._select_verifier_provider",
+            patch.object(
+                _PAV,
+                "_select_verifier_provider",
                 new=AsyncMock(return_value=provider_pass),
             ),
-            patch("agent_loop.pre_action_verifier.VERIFIER_ENABLED", True),
-            patch("agent_loop.pre_action_verifier.PANEL_QUORUM", 2),
+            patch.object(_PAV, "VERIFIER_ENABLED", True),
+            patch.object(_PAV, "PANEL_QUORUM", 2),
         ):
             v = PreActionVerifier()
             result = await v.verify(
