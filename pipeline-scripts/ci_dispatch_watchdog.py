@@ -69,16 +69,32 @@ Environment:
     WATCHDOG_BASE_BRANCH             PR base to watch (default Dev_new_gui)
     WATCHDOG_GRACE_MINUTES           age before "no runs at all" is a failure
     WATCHDOG_STALL_MINUTES           age before a job-less queued run is a failure
-    WATCHDOG_MAX_APPROVALS           per-sweep approval cap (blast-radius guard)
+    WATCHDOG_MAX_APPROVALS           per-sweep approval cap (blast-radius guard; exceeding it fails)
     WATCHDOG_POLL_ATTEMPTS           re-list attempts while runs appear
     WATCHDOG_POLL_INTERVAL_SECONDS   delay between those attempts
     WATCHDOG_STATUS_CONTEXT          commit status context name
     WATCHDOG_MAX_JOB_LOOKUPS         runs inspected for runner liveness per check
+    WATCHDOG_ONLY_PR                 sweep just this PR number (default: every open PR)
 
 Exit codes:
     0  nothing wrong, or everything wrong was repaired
-    1  parked runs exist that this token is not permitted to approve
-       (owner action required — see the printed remediation)
+    1  the sweep finished with parked runs still outstanding. Two distinct
+       causes, reported separately because they need different fixes:
+
+       * an approval was REFUSED on permission grounds — the credential cannot
+         release parked runs (see ``REMEDIATION``); or
+       * the per-sweep approval cap was EXHAUSTED before the queue was clear
+         (see ``budget_exhausted_message``). Nothing was refused and the
+         credential is fine; there were simply more parked runs than one sweep
+         is allowed to release.
+
+       A third case is deliberately NOT a failure: an approve attempt that
+       comes back "not waiting for approval" means a concurrent sweep already
+       released the run. That is the outcome this tool wants, and it is the
+       exact message ``interpret_probe`` reads as proof the credential is
+       permitted, so counting it as a refusal used to make a benign race print
+       a demand to relax repository security settings. See
+       ``is_already_released``.
     2  internal error: configuration missing, or the API could not be reached
        at all. Never used for "the API answered and the answer was bad news".
 """
@@ -123,11 +139,29 @@ DEFAULT_API_ROOT = "https://api.github.com"
 DEFAULT_BASE_BRANCH = "Dev_new_gui"
 DEFAULT_GRACE_MINUTES = 10
 DEFAULT_STALL_MINUTES = 45
-DEFAULT_MAX_APPROVALS = 30
+# Sized from measurement, not preference. A single base merge parks every run
+# on every open PR, and the run count carried by one head in this repository was
+# measured at 20, 22, 24 and 27 across four PRs on 2026-08-02 — call it 27, the
+# worst observed. Ten open PRs is comfortably above the working queue seen since
+# the PR queue limit was removed and well below the 25 that pr-queue-gate treats
+# as a runaway, so 27 x 10 clears a realistic queue in ONE pass.
+#
+# The old value of 30 was below the cost of a SINGLE merge with two PRs open, so
+# every sweep on a real queue stopped part-way and promised a "next sweep" that
+# the never-firing schedule could not provide. Observed: 30 approved, 0 refused,
+# 4 PRs left parked.
+#
+# It remains a blast-radius guard, and exhausting it is now a hard error rather
+# than a line of log. Worst case it spends 270 of the 1,000/hour GITHUB_TOKEN
+# budget, which is only reached when ten PRs were genuinely just parked — the
+# one moment that spend is worth making.
+DEFAULT_MAX_APPROVALS = 270
 DEFAULT_POLL_ATTEMPTS = 3
 DEFAULT_POLL_INTERVAL_SECONDS = 20
 DEFAULT_STATUS_CONTEXT = "ci-dispatch-watchdog"
 DEFAULT_MAX_JOB_LOOKUPS = 10
+# 0 means "every open PR"; a PR number narrows the sweep to that one head.
+DEFAULT_ONLY_PR = 0
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30
 
 
@@ -172,6 +206,48 @@ def _env_int(name: str, default: int) -> int:
         raise WatchdogConfigError(f"{name} must be an integer, got {raw!r}") from exc
     if value <= 0:
         raise WatchdogConfigError(f"{name} must be positive, got {value}")
+    return value
+
+
+class ApprovalOutcome(NamedTuple):
+    """What one head's approval pass did. ``raced`` is benign, ``refused`` is not."""
+
+    approved: int = 0
+    refused: int = 0
+    raced: int = 0
+    budget: int = 0
+    exhausted: bool = False
+
+
+class SweepOutcome(NamedTuple):
+    """Totals for one pass over every head, plus the PRs the budget could not reach."""
+
+    approved: int = 0
+    refused: int = 0
+    raced: int = 0
+    budget: int = 0
+    unsettled: bool = False
+    touched: Set[str] = frozenset()  # type: ignore[assignment]
+    deferred: Set[int] = frozenset()  # type: ignore[assignment]
+
+
+def _env_non_negative_int(name: str, default: int) -> int:
+    """
+    Read a non-negative integer from the environment.
+
+    Separate from :func:`_env_int` because zero is meaningful here — it is how
+    ``WATCHDOG_ONLY_PR`` says "every open PR" — while every threshold read by
+    ``_env_int`` would be nonsense at zero.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise WatchdogConfigError(f"{name} must be an integer, got {raw!r}") from exc
+    if value < 0:
+        raise WatchdogConfigError(f"{name} must not be negative, got {value}")
     return value
 
 
@@ -236,6 +312,23 @@ def is_approvable(run: Dict[str, Any], repository: str) -> Tuple[bool, str]:
     if actor != UPDATE_BOT_LOGIN:
         return False, f"parked for actor {actor or 'unknown'}, not the branch-update bot"
     return True, ""
+
+
+def is_already_released(message: str) -> bool:
+    """
+    True when an approve attempt failed only because the run was already released.
+
+    ``interpret_probe`` treats this exact message as PROOF the credential may
+    approve — a token without permission is rejected on permission grounds
+    instead. Counting it as a refusal therefore contradicts the probe in the
+    same log, and refusals drive the credential remediation, so a benign race
+    printed an instruction to relax repository security settings.
+
+    The race is routine, not exceptional: two base pushes seconds apart each
+    chain a sweep, and the second one POSTs approve against runs the first has
+    already released.
+    """
+    return NOT_WAITING_MARKER in message.lower()
 
 
 def starved_runs(runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: int) -> List[Dict[str, Any]]:
@@ -522,6 +615,19 @@ REMEDIATION = (
 )
 
 
+def budget_exhausted_message(deferred: Set[int], cap: int) -> str:
+    """Explain a partial sweep in terms of the cap, not the credential."""
+    return (
+        f"The per-sweep approval cap ({cap}) was reached with parked runs still outstanding on "
+        f"{len(deferred)} pull request(s). Those runs are STILL PARKED and their PRs still carry no "
+        "executed checks.\n"
+        "This is not a permissions problem — nothing was refused. Either raise WATCHDOG_MAX_APPROVALS, "
+        "or approve the remainder from the Actions tab.\n"
+        "Do not rely on 'the next sweep': the only triggers are a push to the base branch and a "
+        "schedule that does not dispatch while this workflow is absent from the default branch."
+    )
+
+
 def _run_url(repository: str, run: Dict[str, Any]) -> str:
     return str(run.get("html_url") or f"https://github.com/{repository}/actions")
 
@@ -542,10 +648,12 @@ def needs_another_look(runs: Sequence[Dict[str, Any]]) -> bool:
 
 def _approve_head(
     api: GitHubApi, number: int, runs: Sequence[Dict[str, Any]], budget: int, dry_run: bool
-) -> Tuple[int, int, int]:
-    """Approve the eligible parked runs of one head. Returns (approved, refused, budget)."""
+) -> ApprovalOutcome:
+    """Approve the eligible parked runs of one head."""
     approved = 0
     refused = 0
+    raced = 0
+    exhausted = False
     for run in runs:
         eligible, reason = is_approvable(run, api.repository)
         if not eligible:
@@ -553,7 +661,11 @@ def _approve_head(
                 print(f"  PR #{number}: leaving '{run.get('name')}' parked — {reason}")
             continue
         if budget <= 0:
+            # Named, counted and escalated by the caller. "Deferring to the next
+            # sweep" is only true if a next sweep happens, and the schedule that
+            # was supposed to guarantee one has never fired.
             print(f"  PR #{number}: approval budget exhausted, deferring to the next sweep")
+            exhausted = True
             break
         # Decremented on a dry run too, so the preview reflects the cap a real
         # sweep would hit rather than promising more than it would do.
@@ -565,20 +677,26 @@ def _approve_head(
         if status in (200, 201, 204):
             approved += 1
             print(f"  PR #{number}: approved '{run.get('name')}' ({run['id']})")
+        elif is_already_released(message):
+            # A concurrent sweep got there first. The run is released, which is
+            # the outcome this tool wanted — not a failure, and emphatically not
+            # evidence that the credential is inadequate.
+            raced += 1
+            print(f"  PR #{number}: '{run.get('name')}' already released by a concurrent sweep — no action needed")
         else:
             refused += 1
             print(f"  PR #{number}: could NOT approve '{run.get('name')}' — HTTP {status}: {message}")
-    return approved, refused, budget
+    return ApprovalOutcome(approved, refused, raced, budget, exhausted)
 
 
-def _sweep_once(
-    api: GitHubApi, heads: Sequence[PullHead], budget: int, dry_run: bool
-) -> Tuple[int, int, int, bool, Set[str]]:
-    """One pass over every head. Returns (approved, refused, budget, unsettled, touched)."""
+def _sweep_once(api: GitHubApi, heads: Sequence[PullHead], budget: int, dry_run: bool) -> SweepOutcome:
+    """One pass over every head."""
     approved = 0
     refused = 0
+    raced = 0
     unsettled = False
     touched: Set[str] = set()
+    deferred: Set[int] = set()
     for head in heads:
         try:
             runs = api.runs_for_sha(head.sha)
@@ -592,17 +710,21 @@ def _sweep_once(
             if any(is_parked(run) for run in runs):
                 print(f"  PR #{head.number}: fork pull request — parked runs left for a human to approve")
             continue
-        head_approved, head_refused, budget = _approve_head(api, head.number, runs, budget, dry_run)
-        if head_approved:
+        outcome = _approve_head(api, head.number, runs, budget, dry_run)
+        budget = outcome.budget
+        if outcome.approved:
             touched.add(head.sha)
-        approved += head_approved
-        refused += head_refused
-    return approved, refused, budget, unsettled, touched
+        if outcome.exhausted:
+            deferred.add(head.number)
+        approved += outcome.approved
+        refused += outcome.refused
+        raced += outcome.raced
+    return SweepOutcome(approved, refused, raced, budget, unsettled, touched, deferred)
 
 
 def sweep_parked_runs(
     api: GitHubApi, heads: Sequence[PullHead], config: Dict[str, Any], dry_run: bool
-) -> Tuple[int, int, Set[str]]:
+) -> Tuple[int, int, int, Set[str], Set[int]]:
     """
     Approve parked runs across every head, re-listing while any head is unsettled.
 
@@ -611,21 +733,30 @@ def sweep_parked_runs(
     """
     approved = 0
     refused = 0
+    raced = 0
     touched: Set[str] = set()
+    deferred: Set[int] = set()
     budget = config["max_approvals"]
     for attempt in range(config["poll_attempts"]):
-        pass_approved, pass_refused, budget, unsettled, pass_touched = _sweep_once(api, heads, budget, dry_run)
-        approved += pass_approved
-        refused += pass_refused
-        touched |= pass_touched
+        outcome = _sweep_once(api, heads, budget, dry_run)
+        budget = outcome.budget
+        approved += outcome.approved
+        refused += outcome.refused
+        raced += outcome.raced
+        touched |= outcome.touched
+        # Only the LAST pass decides what was left behind: an earlier pass may
+        # have deferred a PR that a later one, with budget freed by nothing
+        # needing approval, went on to clear.
+        deferred = set(outcome.deferred)
         last_attempt = attempt + 1 >= config["poll_attempts"]
         # Stop once nothing is outstanding, on a dry run (which changes nothing,
-        # so a second look is pointless), or once approval was refused —
-        # retrying a permission failure only delays the report.
-        if not unsettled or dry_run or refused or last_attempt:
+        # so a second look is pointless), once approval was refused (retrying a
+        # permission failure only delays the report), or once the budget is
+        # gone (further passes cannot approve anything).
+        if not outcome.unsettled or dry_run or refused or budget <= 0 or last_attempt:
             break
         time.sleep(config["poll_interval_seconds"])
-    return approved, refused, touched
+    return approved, refused, raced, touched, deferred
 
 
 def collect_heads(pulls: Sequence[Dict[str, Any]], repository: str) -> List[PullHead]:
@@ -647,6 +778,25 @@ def collect_heads(pulls: Sequence[Dict[str, Any]], repository: str) -> List[Pull
             )
         )
     return heads
+
+
+def select_heads(heads: Sequence[PullHead], only_pr: int) -> List[PullHead]:
+    """
+    Narrow the sweep to a single pull request when one fired the workflow.
+
+    A sweep costs roughly ``poll_attempts + 2`` API calls per head, so sweeping
+    every open PR on every pull-request event multiplies the per-event cost by
+    the size of the queue against the shared 1,000/hour ``GITHUB_TOKEN`` budget.
+    The scheduled and base-push sweeps keep covering every head; an event-driven
+    sweep only needs the head that moved.
+
+    Selecting nothing is returned as an empty list rather than silently falling
+    back to "all heads": the fallback would turn a closed or renumbered PR into
+    a full-queue sweep, which is the cost this exists to avoid.
+    """
+    if only_pr <= 0:
+        return list(heads)
+    return [head for head in heads if head.number == only_pr]
 
 
 def publish_dispatch_states(
@@ -696,18 +846,44 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
     forks = sum(1 for head in heads if not head.same_repo)
     print(f"Open PRs targeting {config['base_branch']}: {len(pulls)} ({forks} from forks, never auto-approved)")
 
+    only_pr = config.get("only_pr", 0)
+    if only_pr:
+        heads = select_heads(heads, only_pr)
+        print(f"Scoped to PR #{only_pr}: {len(heads)} head(s) selected")
+        if not heads:
+            print(f"PR #{only_pr} is not an open PR targeting {config['base_branch']} — nothing to sweep.")
+            return 0
+
     permitted, explanation = probe_approval_capability(api, dry_run)
     print(f"Approval capability probe: {explanation}")
 
-    approved, refused, _touched = sweep_parked_runs(api, heads, config, dry_run)
+    approved, refused, raced, _touched, deferred = sweep_parked_runs(api, heads, config, dry_run)
     pool_serving = self_hosted_pool_is_serving(api, config["max_job_lookups"])
     blocked = publish_dispatch_states(api, heads, config, dry_run, pool_serving)
 
-    print(f"Sweep complete: {approved} approved, {refused} refused, {blocked} PR(s) not dispatched.")
+    print(
+        f"Sweep complete: {approved} approved, {raced} already released, "
+        f"{refused} refused, {blocked} PR(s) not dispatched."
+    )
+    if raced:
+        print(f"{raced} run(s) had already been released by a concurrent sweep — routine, not a failure.")
+
+    failed = False
+    if deferred and not dry_run:
+        # Silent deferral is the failure this tool exists to remove. Saying
+        # "next sweep" is not enough when the schedule that would provide one
+        # has never fired, so the run goes red and names what was left.
+        left = ", ".join(f"#{number}" for number in sorted(deferred))
+        print("::error::" + budget_exhausted_message(deferred, config["max_approvals"]).replace("\n", "%0A"))
+        print(budget_exhausted_message(deferred, config["max_approvals"]))
+        print(f"PR(s) left with parked runs: {left}")
+        failed = True
 
     if refused or permitted is False:
         print("::error::" + REMEDIATION.replace("\n", "%0A"))
         print(REMEDIATION)
+        failed = True
+    if failed:
         return 1
     if permitted is None and not dry_run:
         # Unresolved is not benign: the repair path is unproven until a probe
@@ -796,6 +972,7 @@ def load_config() -> Dict[str, Any]:
         "poll_interval_seconds": _env_int("WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS),
         "status_context": os.environ.get("WATCHDOG_STATUS_CONTEXT", DEFAULT_STATUS_CONTEXT),
         "max_job_lookups": _env_int("WATCHDOG_MAX_JOB_LOOKUPS", DEFAULT_MAX_JOB_LOOKUPS),
+        "only_pr": _env_non_negative_int("WATCHDOG_ONLY_PR", DEFAULT_ONLY_PR),
     }
 
 

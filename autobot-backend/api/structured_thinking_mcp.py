@@ -27,7 +27,6 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_common import DataResponse
 from api.schemas_system import (
     ClearHistoryRequest,
     GenerateSummaryRequest,
@@ -339,7 +338,7 @@ async def process_thought_mcp(request: ProcessThoughtRequest) -> Metadata:
     return response
 
 
-@router.post("/mcp/generate_summary", response_model=DataResponse[StructuredThinkingSummaryData])
+@router.post("/mcp/generate_summary", response_model=StructuredThinkingSummaryData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_summary_mcp",
