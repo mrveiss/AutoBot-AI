@@ -16,6 +16,18 @@ on:
     branches: [ main, Dev_new_gui, develop ]
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
+    # #13388: SAFE — "SSOT Configuration Compliance" is not a required context.
+    # pipeline-scripts/detect-hardcoded-values.sh scans with
+    # `grep -rn --include="*.py" --include="*.ts" --include="*.vue"` and nothing
+    # else, so a pull request touching none of those three extensions cannot
+    # change the violation count this workflow reports. The script itself and this
+    # file are included because either can change the verdict.
+    paths:
+      - '**/*.py'
+      - '**/*.ts'
+      - '**/*.vue'
+      - 'pipeline-scripts/detect-hardcoded-values.sh'
+      - '.github/workflows/ssot-coverage.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

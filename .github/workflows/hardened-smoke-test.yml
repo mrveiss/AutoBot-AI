@@ -11,6 +11,23 @@ on:
   pull_request:
     branches:
       - Dev_new_gui
+    # #13388: SAFE — this workflow publishes `hardened-smoke-test`, which is NOT
+    # one of the ten required contexts (the required `smoke-test` comes from
+    # docker-smoke-test.yml, which is deliberately left unfiltered).
+    #
+    # `paths-ignore` rather than `paths` ON PURPOSE. This job builds all three
+    # images and starts the hardened compose overlay, so almost any source,
+    # dependency, Dockerfile or compose edit can legitimately break it and an
+    # allow-list would eventually miss one. An ignore-list inverts the risk: the
+    # run still happens for everything except changes that are purely
+    # documentation, which cannot alter a container's runtime behaviour. GitHub
+    # skips the run only when EVERY changed file matches, so a pull request
+    # mixing docs with code still runs the full smoke test.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
   schedule:
     - cron: '0 11 * * 0'  # Every Sunday at 11 AM UTC (offset from regular smoke test)
 
