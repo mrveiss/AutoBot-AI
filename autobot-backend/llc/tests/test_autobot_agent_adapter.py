@@ -16,6 +16,7 @@ import asyncio
 import logging
 import sys
 import types
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,10 +25,13 @@ import pytest
 # ──────────────────────────────────────────────────────────────────────────────
 # Stub agents/* so importing autobot_agent_adapter doesn't pull the full chain.
 # autobot_agent_adapter only needs `AgentRequest` from agents.base_agent.
+# #13162: ``__path__`` points at the real ``agents`` directory so only
+# ``agents/__init__.py`` is bypassed — an empty ``__path__`` here would make
+# every ``agents.<submodule>`` import fail for the rest of the worker.
 # ──────────────────────────────────────────────────────────────────────────────
 if "agents" not in sys.modules:
     _agents_stub = types.ModuleType("agents")
-    _agents_stub.__path__ = []
+    _agents_stub.__path__ = [str(Path(__file__).resolve().parents[2] / "agents")]
     _agents_stub.__package__ = "agents"
     sys.modules["agents"] = _agents_stub
 
@@ -253,6 +257,8 @@ async def test_invoke_returns_run_id_then_completed():
     await asyncio.sleep(0)
 
     status = await adapter.status({}, run_id)
+    # status() must honour the LLCAdapter contract, not just carry the right value.
+    assert isinstance(status, AdapterRunStatus)
     assert status.status == LLCRunStatus.COMPLETED
     assert status.exit_code == 0
 
@@ -501,6 +507,7 @@ async def test_cost_forwarded_to_budget_service():
             budget_session_factory=session_factory,
         )
         run_id = await adapter.invoke({}, {"title": "T", "agent_id": "agent-xyz"})
+        assert isinstance(run_id, str) and run_id
         await asyncio.sleep(0.05)
 
         MockBS.return_value.ingest_cost_event.assert_called_once()
