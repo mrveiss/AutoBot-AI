@@ -14,9 +14,20 @@ from pathlib import Path
 
 import pytest
 
-# Optional ML dependency (torch is in requirements-gpu.txt, never default reqs).
-# Skip cleanly when absent; run for real when torch IS installed (e.g. GPU CI).
+# Optional ML training stack. Skip cleanly when absent; run for real when it IS
+# installed (e.g. a GPU CI image or a local dev box with the full backend reqs).
+#
+# BOTH imports must be guarded (#13086). `training/evaluator.py` — pulled in
+# below — imports `torchmetrics` at module level, and the `python-suite` CI
+# environment installs torch TRANSITIVELY via sentence-transformers while never
+# installing torchmetrics. That combination let the torch guard pass and then
+# blew up on torchmetrics, turning this module into a hard collection ERROR on
+# every shard. torchmetrics is deliberately NOT added to requirements-ci.txt:
+# the repo already treats this subsystem as optional (`training/__init__.py`
+# wraps every symbol in `optional_import`), and the CI install resolves torch
+# against the CPU-only index specifically to keep the CUDA-adjacent closure out.
 pytest.importorskip("torch.nn.functional", reason="torch not installed — optional ML dep")
+pytest.importorskip("torchmetrics", reason="torchmetrics not installed — optional ML dep (training/evaluator.py)")
 
 import torch  # noqa: E402 — after importorskip by design
 
