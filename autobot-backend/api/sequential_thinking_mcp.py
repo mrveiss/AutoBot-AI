@@ -20,6 +20,7 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.schemas_common import MAX_THOUGHT_COUNT
 from api.schemas_workflows import (
     SequentialThinkingClearData,
     SequentialThinkingMCPTool,
@@ -76,11 +77,13 @@ SEQUENTIAL_THINKING_MCP_TOOL_DEFINITION = (
                 "type": "integer",
                 "description": "Current thought number in the sequence",
                 "minimum": 1,
+                "maximum": MAX_THOUGHT_COUNT,
             },
             "total_thoughts": {
                 "type": "integer",
                 "description": "Estimated total thoughts needed (can be adjusted)",
                 "minimum": 1,
+                "maximum": MAX_THOUGHT_COUNT,
             },
             "next_thought_needed": {
                 "type": "boolean",
