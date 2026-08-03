@@ -80,7 +80,10 @@ class CompletionTrainer:
         self.model: CompletionModel | None = None
         self.optimizer: optim.Optimizer | None = None
         self.criterion = nn.CrossEntropyLoss(ignore_index=0)
-        self.evaluator = CompletionEvaluator(device=self.device)
+        # Issue #13162: the evaluator's accuracy metric is sized by the model's
+        # vocabulary, which is only known once the data loaders are built, so it
+        # is constructed alongside the model rather than here.
+        self.evaluator: CompletionEvaluator | None = None
 
         # Training state
         self.current_epoch = 0
@@ -106,6 +109,7 @@ class CompletionTrainer:
         # Initialize model with vocabulary size
         self.model = CompletionModel(vocab_size=vocab_size).to(self.device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=1e-4)
+        self.evaluator = CompletionEvaluator(vocab_size=vocab_size, device=self.device)
 
         logger.info(f"Model initialized with vocab_size={vocab_size}")
         logger.info(f"Total parameters: " f"{sum(p.numel() for p in self.model.parameters()):,}")
@@ -306,6 +310,9 @@ class CompletionTrainer:
         config = checkpoint["model_config"]
         self.model = CompletionModel.from_config(config).to(self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
+        # Issue #13162: a resumed run validates too, so the evaluator has to be
+        # rebuilt for the restored model's vocabulary.
+        self.evaluator = CompletionEvaluator(vocab_size=config["vocab_size"], device=self.device)
 
         # Restore optimizer
         self.optimizer = optim.AdamW(self.model.parameters())
