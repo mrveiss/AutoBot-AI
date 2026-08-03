@@ -86,10 +86,30 @@ class _Mutation:
         return id(sys.modules.get(self.key)) == self.obj_id
 
     def escapes_to(self, path: Path | None) -> bool:
-        """True when *path* is outside the directory that owns this stub."""
+        """True when *path* is outside the directory that owns this stub.
+
+        A strict *ancestor* directory is not an escape, and treating it as one
+        made ``error`` mode unusable.  Pytest builds a ``Dir`` collector for
+        every level from the rootdir down, so a session confined entirely to
+        ``autobot-backend/`` still collects the rootdir node ``.``; that node
+        imports nothing itself, it only lists its children, so a stub being
+        live while it runs reaches nothing.  Reporting it fired on every clean
+        session, and — because :meth:`_LeakGuard.check` dedupes per
+        ``(key, owner)`` and the ancestor node always runs first — it also
+        stole the ``first seen at`` slot from the sibling that actually
+        inherited the stub, discarding the actionable half of the report.
+
+        Only *directories* are exempted.  A file sitting directly in an
+        ancestor directory is never a member of ``owner_dir.parents``, so
+        sibling modules one level up are still checked.
+        """
         if path is None:
             return False
-        return self.owner_dir not in path.parents and path != self.owner_dir
+        if path == self.owner_dir or self.owner_dir in path.parents:
+            return False  # inside the owner's own subtree
+        if path in self.owner_dir.parents:
+            return False  # a structural ancestor Dir node imports nothing
+        return True
 
 
 @dataclass(frozen=True)
@@ -178,6 +198,11 @@ class _LeakGuard:
         self._reported: set[tuple[str, str]] = set()
         self._warned_owners: set[str] = set()
         self.leaks: list[_Leak] = []
+
+    @property
+    def rootdir(self) -> Path:
+        """The repo root every reported path is displayed relative to."""
+        return self._rootdir
 
     def snapshot(self) -> None:
         """Re-baseline. Everything after this point is attributable.
@@ -346,7 +371,7 @@ def pytest_configure(config: pytest.Config) -> None:
     """Keep the guard's warnings visible even under a strict filter set."""
     if _GUARD is None:
         return
-    config.addinivalue_line("filterwarnings", "always::pytest.PytestWarning")
+    config.addinivalue_line("filterwarnings", f"always::{__name__}.{_SysModulesLeakWarning.__name__}")
 
 
 def pytest_plugin_registered(plugin: object, manager: object) -> None:
@@ -391,7 +416,7 @@ def pytest_make_collect_report(collector: pytest.Collector) -> Iterator[None]:
         return
     path = Path(str(collector.path))
     phase = "the collection of" if path.is_dir() else "the import of"
-    _GUARD.check(path, f"{phase} {_display(path, _GUARD._rootdir)}")
+    _GUARD.check(path, f"{phase} {_display(path, _GUARD.rootdir)}")
     _GUARD.snapshot()
     try:
         yield
@@ -427,6 +452,13 @@ def pytest_runtest_protocol(item: pytest.Item, nextitem: object) -> Iterator[Non
 # Records collected from workers. Empty in a serial run, where the controller
 # and the detector are the same process and ``_GUARD.records()`` is used.
 _WORKER_RECORDS: list[dict] = []
+
+# ``(key, owner)`` of every record already merged.  Each worker checks the same
+# stub against its own share of the nodes, so the same escape arrives from
+# several of them with a different ``observed_at``; a full-dict comparison
+# treats those as distinct and inflates the reported key count.  The first
+# observation is the one kept, matching the serial path's ``_reported``.
+_WORKER_TOKENS: set[tuple[str, str]] = set()
 
 
 def _all_records() -> list[dict]:
@@ -472,8 +504,11 @@ def pytest_testnodedown(node: object, error: object) -> None:
     """
     output = getattr(node, "workeroutput", None) or {}
     for record in output.get("sys_modules_leaks", []):
-        if record not in _WORKER_RECORDS:
-            _WORKER_RECORDS.append(record)
+        token = (record["key"], record["owner"])
+        if token in _WORKER_TOKENS:
+            continue  # another worker saw the same stub at a different nodeid
+        _WORKER_TOKENS.add(token)
+        _WORKER_RECORDS.append(record)
 
 
 # ---------------------------------------------------------------------------

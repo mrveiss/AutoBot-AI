@@ -96,7 +96,12 @@ def scratch_repo(tmp_path: Path):
     return seed
 
 
-def _run_pytest(cwd: Path, *args: str, env_extra: dict | None = None) -> subprocess.CompletedProcess:
+def _run_pytest(
+    cwd: Path,
+    *args: str,
+    env_extra: dict | None = None,
+    targets: tuple[str, ...] = ("pkg_a", "pkg_b"),
+) -> subprocess.CompletedProcess:
     """Run a child pytest session in *cwd* and capture everything it printed.
 
     Plugin autoload is off so the child does not pay for coverage, anyio,
@@ -119,8 +124,7 @@ def _run_pytest(cwd: Path, *args: str, env_extra: dict | None = None) -> subproc
             "--no-header",
             "-p",
             "no:cacheprovider",
-            "pkg_a",
-            "pkg_b",
+            *targets,
             *args,
         ],
         cwd=str(cwd),
@@ -181,6 +185,37 @@ def test_stays_silent_when_the_hookwrapper_restores_properly(scratch_repo):
 
     assert "LEAK:" not in result.stdout, result.stdout
     assert result.returncode == 0
+
+
+def test_stays_silent_when_the_leaking_package_is_the_whole_session(scratch_repo):
+    """A leak that reaches nobody is not a leak — not even the rootdir node.
+
+    ``pkg_a`` leaks at import time, but the session collects nothing else, so
+    the stub never reaches a sibling and there is nothing to report.  Pytest
+    still builds a ``Dir`` collector for every level from the rootdir down,
+    including ``.``, and that node used to count as "outside ``pkg_a``/" —
+    which made every clean session fail under ``error`` mode and, because the
+    ancestor node always wins the per-``(key, owner)`` dedupe, replaced the
+    ``first seen at`` sibling with the meaningless ``the collection of .``.
+    """
+    result = _run_pytest(scratch_repo(_IMPORT_TIME_LEAK), targets=("pkg_a",))
+
+    assert "LEAK:" not in result.stdout, result.stdout
+    assert result.returncode == 0, result.stdout
+
+
+def test_the_first_sighting_names_the_sibling_not_the_rootdir(scratch_repo):
+    """``first seen at`` is the actionable half of the report — it must be real.
+
+    The rootdir ``Dir`` node is collected before any sibling, so while it
+    counted as an escape it always claimed this slot and pointed every
+    offender at ``.`` instead of at the package that inherited the stub.
+    """
+    result = _run_pytest(scratch_repo(_IMPORT_TIME_LEAK))
+
+    assert "LEAK:" in result.stdout, result.stdout
+    assert "first seen at the collection of ." not in result.stdout, result.stdout
+    assert "pkg_b" in result.stdout, result.stdout
 
 
 # ---------------------------------------------------------------------------
