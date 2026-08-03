@@ -20,10 +20,14 @@ These tests verify the acceptance criteria:
 import asyncio
 import tempfile
 import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# Enough concurrency to lose an unguarded double-check reliably on WSL2/CI.
+THREAD_COUNT = 20
 
 
 class TestWebsocketsNPUEventsLocking:
@@ -42,19 +46,75 @@ class TestWebsocketsNPUEventsLocking:
 
         assert hasattr(websockets, "_npu_events_subscribed")
 
-    def test_init_npu_worker_websocket_uses_lock(self):
-        """Test that init_npu_worker_websocket uses the lock"""
-        import inspect
+    @staticmethod
+    def _slow_recording_bus(subscriptions: list) -> MagicMock:
+        """A bus whose subscribe is slow enough to expose an unguarded check."""
+        bus = MagicMock()
 
+        def _record(topic, _handler):
+            subscriptions.append(topic)
+            time.sleep(0.001)
+
+        bus.subscribe = _record
+        return bus
+
+    @staticmethod
+    def _init_concurrently(websockets, bus) -> list:
+        """Release THREAD_COUNT initialisers at once; return their errors."""
+        barrier = threading.Barrier(THREAD_COUNT)
+        errors = []
+
+        def _init():
+            try:
+                barrier.wait(timeout=5)
+                websockets.init_npu_worker_websocket()
+            except Exception as exc:  # noqa: BLE001 - reported via `errors`
+                errors.append(exc)
+
+        with patch.object(websockets, "get_event_bus", lambda: bus):
+            threads = [threading.Thread(target=_init) for _ in range(THREAD_COUNT)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=10)
+        return errors
+
+    def test_subscription_happens_exactly_once_under_contention(self):
+        """The #513 defect: without the lock, racing callers each subscribed.
+
+        This used to grep ``inspect.getsource`` for ``with _npu_events_lock:``
+        and count occurrences of the flag name (#13311) -- a pattern match that
+        passes for a lock held around the wrong thing, and breaks on any
+        refactor. The observable is duplicate subscriptions: a handler
+        registered N times fires N times per event.
+        """
         from api import websockets
 
-        source = inspect.getsource(websockets.init_npu_worker_websocket)
+        websockets._npu_events_subscribed = False
+        subscriptions = []
 
-        # Verify double-checked locking pattern
-        assert "_npu_events_lock" in source, "Lock not used in function"
-        assert "with _npu_events_lock:" in source, "Lock context manager not used"
-        # Check for double-check pattern (two checks of _npu_events_subscribed)
-        assert source.count("_npu_events_subscribed") >= 2, "Double-checked locking not implemented"
+        errors = self._init_concurrently(websockets, self._slow_recording_bus(subscriptions))
+
+        assert not errors, f"errors during concurrent init: {errors}"
+        assert len(subscriptions) == len(set(subscriptions)), (
+            f"#513 regression: {len(subscriptions)} subscribe() calls for "
+            f"{len(set(subscriptions))} distinct topics — every event would be "
+            f"broadcast more than once"
+        )
+        assert websockets._npu_events_subscribed is True
+
+    def test_a_failed_subscribe_does_not_latch_the_flag(self):
+        """The mirror: the flag must not claim success the bus never gave."""
+        from api import websockets
+
+        websockets._npu_events_subscribed = False
+        bus = MagicMock()
+        bus.subscribe = MagicMock(side_effect=RuntimeError("bus down"))
+
+        with patch.object(websockets, "get_event_bus", lambda: bus):
+            websockets.init_npu_worker_websocket()
+
+        assert websockets._npu_events_subscribed is False, "a failed subscribe must stay retryable"
 
     def test_concurrent_init_npu_worker_websocket(self):
         """Test concurrent calls to init_npu_worker_websocket"""
