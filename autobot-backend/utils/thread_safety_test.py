@@ -21,6 +21,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# Enough concurrency to lose an unguarded double-check reliably on WSL2/CI.
+THREAD_COUNT = 20
+
 
 def _require_real_tracing_service() -> None:
     """Skip when OpenTelemetry is absent; fail when TracingService is a stub.
@@ -327,20 +330,77 @@ class TestDoubleCheckedLocking:
         """Guard: real TracingService or skip — never a Mock (#11681, #13094)."""
         _require_real_tracing_service()
 
-    def test_tracing_service_double_check(self):
-        """Test TracingService uses double-checked locking"""
-        import inspect
+    def test_racing_constructors_all_get_the_same_instance(self):
+        """The #481 defect: two threads past an unguarded check each built one.
+
+        This used to grep ``inspect.getsource(TracingService.__new__)`` for
+        ``with cls._lock:`` and count ``_instance is None`` (#13311) -- a shape
+        match that says nothing about whether the lock guards the right thing,
+        and that a rename breaks. Race the constructor instead and assert the
+        singleton identity every caller depends on.
+        """
+        import threading
 
         from services.tracing_service import TracingService
 
-        # Get the source of __new__
-        source = inspect.getsource(TracingService.__new__)
+        TracingService.reset_instance()
+        barrier = threading.Barrier(THREAD_COUNT)
+        instances = []
+        errors = []
 
-        # Verify double-check pattern exists
-        assert "if cls._instance is None:" in source
-        assert "with cls._lock:" in source
-        # Should have two None checks (outer and inner)
-        assert source.count("_instance is None") >= 2, "Double-checked locking not implemented"
+        def _construct():
+            try:
+                barrier.wait(timeout=5)
+                instances.append(TracingService())
+            except Exception as exc:  # noqa: BLE001 - reported via `errors`
+                errors.append(exc)
+
+        threads = [threading.Thread(target=_construct) for _ in range(THREAD_COUNT)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        assert not errors, f"errors during concurrent construction: {errors}"
+        assert len(instances) == THREAD_COUNT
+        distinct = {id(instance) for instance in instances}
+        assert len(distinct) == 1, (
+            f"#481 regression: {len(distinct)} distinct TracingService objects were "
+            f"created concurrently — spans would be split across tracer providers"
+        )
+
+    def test_the_race_is_actually_run(self):
+        """Guard the guard: a singleton already built before the threads start
+        would make the assertion above hold for the wrong reason."""
+        import threading
+
+        from services.tracing_service import TracingService
+
+        TracingService.reset_instance()
+        assert TracingService._instance is None
+
+        created = []
+        original_new = TracingService.__new__
+
+        def _counting_new(cls):
+            instance = original_new(cls)
+            created.append(id(instance))
+            return instance
+
+        barrier = threading.Barrier(THREAD_COUNT)
+
+        def _construct():
+            barrier.wait(timeout=5)
+            _counting_new(TracingService)
+
+        threads = [threading.Thread(target=_construct) for _ in range(THREAD_COUNT)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        assert len(created) == THREAD_COUNT, "the threads did not all reach __new__"
+        assert len(set(created)) == 1
 
 
 if __name__ == "__main__":
