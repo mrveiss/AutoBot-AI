@@ -41,6 +41,29 @@ def _reset_rag_config_singleton():
     reset_rag_config()
 
 
+@pytest.fixture(autouse=True)
+def _isolate_hash_cache(tmp_path, monkeypatch):
+    """Isolate the doc-indexer hash cache from ambient on-disk state (#12673).
+
+    ``RAGService._filter_stale_chunks`` reads ``doc_indexer.HASH_CACHE_FILE``
+    through a module-level TTL memo.  Without isolation the suite picks up the
+    real ``data/.doc_index_hashes.json`` that exists on any machine where the
+    indexer has run, so the provenance filter drops every test-double chunk.
+    Point the cache at an absent tmp path and reset the memo around each test.
+    """
+    import services.rag_service as rag_mod
+
+    monkeypatch.setattr(
+        "services.knowledge.doc_indexer.HASH_CACHE_FILE",
+        tmp_path / "absent_doc_index_hashes.json",
+    )
+    rag_mod._hash_cache_memo = {}
+    rag_mod._hash_cache_loaded_at = 0.0
+    yield
+    rag_mod._hash_cache_memo = {}
+    rag_mod._hash_cache_loaded_at = 0.0
+
+
 class TestKnowledgeBaseAdapter:
     """Tests for KnowledgeBaseAdapter unified interface."""
 
@@ -289,8 +312,14 @@ class TestRAGService:
         assert reranked[0]["rerank_score"] == 0.95
         assert reranked[1]["rerank_score"] == 0.6
 
-    def test_cache_management(self) -> None:
-        """Test result caching functionality."""
+    @pytest.mark.asyncio
+    async def test_cache_management(self) -> None:
+        """Test result caching functionality.
+
+        The cache helpers are coroutines guarded by an asyncio lock, so they
+        must be awaited — calling them synchronously only built coroutine
+        objects and asserted nothing about the cache.
+        """
         mock_kb = Mock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
 
@@ -298,15 +327,15 @@ class TestRAGService:
 
         # Add to cache
         test_results = ([Mock()], RAGMetrics())
-        service._add_to_cache("test_key", test_results)
+        await service._add_to_cache("test_key", test_results)
 
         # Retrieve from cache
-        cached = service._get_from_cache("test_key")
+        cached = await service._get_from_cache("test_key")
         assert cached is not None
 
         # Clear cache
-        service.clear_cache()
-        cached_after_clear = service._get_from_cache("test_key")
+        await service.clear_cache()
+        cached_after_clear = await service._get_from_cache("test_key")
         assert cached_after_clear is None
 
 
@@ -343,15 +372,20 @@ class TestCrossEncoderReranking:
         assert reranked[0].rerank_score is not None
 
     @pytest.mark.asyncio
-    @patch("advanced_rag_optimizer.CrossEncoder")
-    async def test_cross_encoder_integration(self, mock_cross_encoder_class) -> None:
-        """Test cross-encoder model integration."""
+    @patch("knowledge.search_components.reranking.get_cross_encoder")
+    async def test_cross_encoder_integration(self, mock_get_cross_encoder) -> None:
+        """Test cross-encoder model integration.
+
+        Since #1549 the model comes from the process-wide
+        ``knowledge.search_components.reranking.get_cross_encoder()`` singleton;
+        ``advanced_rag_optimizer`` no longer imports ``CrossEncoder`` itself.
+        """
         from advanced_rag_optimizer import AdvancedRAGOptimizer
 
         # Mock cross-encoder predict
         mock_ce = Mock()
         mock_ce.predict.return_value = [0.9, 0.6]  # Relevance scores
-        mock_cross_encoder_class.return_value = mock_ce
+        mock_get_cross_encoder.return_value = mock_ce
 
         optimizer = AdvancedRAGOptimizer()
 
@@ -419,8 +453,11 @@ class TestKBSynthesisSchemaCache:
                 "services.knowledge.synthesis_schema_loader.load_synthesis_schema",
                 return_value=mock_schema,
             ) as mock_loader,
+            # get_async_chromadb_client lives in utils.async_chromadb_client
+            # since #5316; the sync utils.chromadb_client never defined it, so
+            # the old target could only resolve against a leftover test stub.
             patch(
-                "utils.chromadb_client.get_async_chromadb_client",
+                "utils.async_chromadb_client.get_async_chromadb_client",
                 AsyncMock(return_value=chromadb_client),
             ),
         ):

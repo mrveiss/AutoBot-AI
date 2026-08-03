@@ -2,7 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for per-user voice bundle assignment (GH#8605)."""
+"""Tests for per-user voice bundle assignment (GH#8605).
+
+resolve_bundle_for_user opens its own session through the canonical
+``user_management.database.db_session_context`` async context manager, so
+that is the patch target here — the old ``database.session`` target named a
+module that has never existed in this tree.
+"""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,7 +31,7 @@ async def test_resolve_bundle_user_override():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         bundle, resolution = await resolve_bundle_for_user("user-123", role="user")
 
     assert bundle == "voice_extended"
@@ -44,7 +50,7 @@ async def test_resolve_bundle_role_default_admin():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.execute = AsyncMock(return_value=mock_row)
 
-    with patch("database.session.get_async_session", return_value=mock_session):
+    with patch("user_management.database.db_session_context", return_value=mock_session):
         bundle, resolution = await resolve_bundle_for_user("admin-1", role="admin")
 
     assert bundle == "voice_admin"
@@ -66,7 +72,7 @@ async def test_resolve_bundle_global_env_fallback():
     import os
 
     with (
-        patch("database.session.get_async_session", return_value=mock_session),
+        patch("user_management.database.db_session_context", return_value=mock_session),
         patch.dict(os.environ, {"AUTOBOT_VOICE_TOOLSETS": "voice_extended"}),
     ):
         bundle, resolution = await resolve_bundle_for_user("user-99", role="unknown_role")
@@ -80,7 +86,7 @@ async def test_resolve_bundle_db_failure_falls_through():
     """DB failure should not crash — falls through to role default."""
     from api.redis_mcp.rbac import resolve_bundle_for_user
 
-    with patch("database.session.get_async_session", side_effect=Exception("DB down")):
+    with patch("user_management.database.db_session_context", side_effect=Exception("DB down")):
         bundle, resolution = await resolve_bundle_for_user("user-42", role="user")
 
     assert bundle == "voice_safe"

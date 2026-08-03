@@ -31,6 +31,15 @@ from constants.network_constants import ServiceURLs
 logging.basicConfig(level=logging.INFO)
 logger = get_logger(__name__)
 
+# Every test here drives a real Chromium through Playwright against a live
+# frontend VM and backend API, so it cannot run without that external stack
+# (a bare checkout has no downloaded browser and no fleet). Same rationale as
+# security/security_api_e2e_test.py — the `integration` marker matches the
+# filename and is already excluded by the two
+# `-m "not integration and not slow and not distributed and not performance"`
+# invocations in .github/workflows/ci.yml.
+pytestmark = pytest.mark.integration
+
 
 # Fixtures
 @pytest.fixture(scope="session")

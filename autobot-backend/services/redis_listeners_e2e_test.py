@@ -10,10 +10,21 @@ import json
 import sys
 import time
 
+import pytest
 import redis
 
 from autobot_shared.redis_client import get_redis_client
-from config import config as global_config_manager
+from config import unified_config_manager as global_config_manager
+
+# This module is a manual end-to-end script, not a unit test: every function
+# needs a live Redis plus a running orchestrator to consume the published
+# messages, prints its result instead of asserting, and returns a bool for
+# main()'s summary. Same shape and same rationale as
+# security/security_api_e2e_test.py — the `integration` marker matches the
+# filename and is already excluded by the two
+# `-m "not integration and not slow and not distributed and not performance"`
+# invocations in .github/workflows/ci.yml.
+pytestmark = pytest.mark.integration
 
 
 def test_worker_capabilities():

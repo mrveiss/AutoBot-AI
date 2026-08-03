@@ -28566,8 +28566,8 @@ export interface paths {
          *     Phase 3 (Issue #346): AlertManager → WebSocket integration
          *     Replaces MonitoringAlertsManager's WebSocket notification channel
          *
-         *     Security (GH#9657): Requires X-AlertManager-Secret header authentication.
-         *     Fails closed when ALERTMANAGER_WEBHOOK_SECRET is not configured.
+         *     Security (GH#9657): Requires X-AlertManager-Secret header authentication,
+         *     enforced by the ``verify_alertmanager_secret`` route dependency.
          */
         post: operations["receive_alertmanager_webhook_api_webhook_alertmanager_post"];
         delete?: never;

@@ -159,6 +159,12 @@ async def scoped_search(
             kb.ownership_manager,
         )
 
+    except HTTPException:
+        # Deliberate status codes (503 "knowledge base not available",
+        # 500 "search not available") must reach the caller unchanged —
+        # collapsing them into a generic 500 hid a retryable outage behind
+        # a fatal-looking error.
+        raise
     except Exception as e:
         logger.error("Error in scoped search: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -258,6 +264,8 @@ async def scoped_rag_search(
             scoped_results=scoped_results,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error in scoped RAG search: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -311,6 +319,8 @@ async def get_accessible_scopes(request: Request, current_user: User = Depends(g
             "accessible_scopes": scopes,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Error getting accessible scopes: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")

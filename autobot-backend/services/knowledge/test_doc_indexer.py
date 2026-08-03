@@ -61,13 +61,22 @@ _path_constants.PATH = _FakePATH()  # type: ignore[attr-defined]
 # Load doc_indexer bypassing the services package __init__ (which needs the
 # full stack).  Using spec_from_file_location keeps the module name canonical
 # so patch() paths work correctly.
+# Reuse the module object if a sibling test file
+# (test_doc_indexer_dim_mismatch.py) already loaded it — see the matching note
+# there. Re-loading would swap sys.modules out from under whichever file
+# imported first, leaving that file's patch() targets pointing at a different
+# module object than its imported helpers close over.
 _BACKEND_ROOT = Path(__file__).parent.parent.parent  # autobot-backend/
-_DOC_INDEXER_PATH = Path(__file__).parent / "doc_indexer.py"
-_spec = importlib.util.spec_from_file_location("services.knowledge.doc_indexer", str(_DOC_INDEXER_PATH))
-assert _spec and _spec.loader, "Could not load doc_indexer spec"
-_doc_indexer_mod = importlib.util.module_from_spec(_spec)
-sys.modules["services.knowledge.doc_indexer"] = _doc_indexer_mod
-_spec.loader.exec_module(_doc_indexer_mod)  # type: ignore[union-attr]
+_existing_doc_indexer = sys.modules.get("services.knowledge.doc_indexer")
+if _existing_doc_indexer is not None and _existing_doc_indexer.__dict__.get("__file__"):
+    _doc_indexer_mod = _existing_doc_indexer
+else:
+    _DOC_INDEXER_PATH = Path(__file__).parent / "doc_indexer.py"
+    _spec = importlib.util.spec_from_file_location("services.knowledge.doc_indexer", str(_DOC_INDEXER_PATH))
+    assert _spec and _spec.loader, "Could not load doc_indexer spec"
+    _doc_indexer_mod = importlib.util.module_from_spec(_spec)
+    sys.modules["services.knowledge.doc_indexer"] = _doc_indexer_mod
+    _spec.loader.exec_module(_doc_indexer_mod)  # type: ignore[union-attr]
 
 # Ensure the package stub exposes doc_indexer as an attribute so patch()
 # can resolve "services.knowledge.doc_indexer.<name>" correctly.
