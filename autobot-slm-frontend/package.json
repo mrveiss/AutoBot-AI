@@ -28,7 +28,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
-    "axios": "^1.18.0",
+    "axios": "^1.19.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.32",
     "vue-i18n": "^11.4.8",
@@ -53,12 +53,12 @@
     "eslint": "^10.8.0",
     "eslint-plugin-vue": "^10.10.0",
     "openapi-typescript": "^7.13.0",
-    "postcss": "^8.5.24",
+    "postcss": "^8.5.25",
     "storybook": "^10.4.6",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.65.0",
     "vite": "^8.0.13",
-    "vue-tsc": "^3.3.8"
+    "vue-tsc": "^3.3.9"
   }
 }
