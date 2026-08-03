@@ -218,13 +218,18 @@ class TestCostsByAgentModel:
             input_tokens=1000,
             cached_input_tokens=800,
             output_tokens=200,
+            total_tokens=1200,
             cache_hit_rate=0.8,
             cost_usd="0.00",
         )
         assert row.cache_hit_rate == 0.8
         assert row.cached_input_tokens == 800
+        assert row.total_tokens == 1200
 
-    def test_cache_hit_rate_zero_when_no_tokens(self) -> None:
+    def test_cache_hit_rate_none_by_default(self) -> None:
+        """No per-model cache-read counter exists anywhere in the schema
+        (GH#13330) -- cache_hit_rate must default to None, not a fabricated
+        0.0, when the caller omits it."""
         mod = _get_budget_mod()
         row = mod.AgentModelCostRow(
             agent_id="a2",
@@ -233,10 +238,10 @@ class TestCostsByAgentModel:
             input_tokens=0,
             cached_input_tokens=0,
             output_tokens=0,
-            cache_hit_rate=0.0,
+            total_tokens=0,
             cost_usd="0.00",
         )
-        assert row.cache_hit_rate == 0.0
+        assert row.cache_hit_rate is None
 
     def test_costs_by_model_router_exported(self) -> None:
         """costs_by_model_router must be exported from budget.py for __init__.py."""
