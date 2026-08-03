@@ -591,7 +591,7 @@ def _decode_refresh_token(token: str) -> Dict:
     return payload
 
 
-@router.post("/refresh", response_model=DataResponse[AuthRefreshData])
+@router.post("/refresh", response_model=AuthRefreshData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_token",

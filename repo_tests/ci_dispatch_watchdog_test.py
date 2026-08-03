@@ -72,11 +72,12 @@ def _parked(**overrides):
 class _FakeApi:
     """Records approve calls so a test can assert what was NOT approved."""
 
-    def __init__(self, runs_by_sha=None, repository=REPO):
+    def __init__(self, runs_by_sha=None, repository=REPO, approve_response=(201, "")):
         self.repository = repository
         self._runs_by_sha = runs_by_sha or {}
         self.approved = []
         self.statuses = []
+        self._approve_response = approve_response
 
     def runs_for_sha(self, sha):
         value = self._runs_by_sha[sha]
@@ -86,7 +87,7 @@ class _FakeApi:
 
     def approve_run(self, run_id):
         self.approved.append(run_id)
-        return 201, ""
+        return self._approve_response
 
     def set_status(self, sha, state, context, description, target_url):
         self.statuses.append((sha, state, description))
@@ -126,12 +127,13 @@ def test_a_fork_origin_parked_run_is_never_approvable(watchdog):
 def test_sweep_never_approves_a_fork_origin_parked_run(watchdog):
     """The end-to-end guard: approve() must not be called for a fork run."""
     api = _FakeApi()
-    approved, refused, budget = watchdog._approve_head(
+    outcome = watchdog._approve_head(
         api, 42, [_parked(id=7, head_repository={"full_name": FORK})], budget=30, dry_run=False
     )
     assert api.approved == []
-    assert (approved, refused) == (0, 0)
-    assert budget == 30
+    assert (outcome.approved, outcome.refused, outcome.raced) == (0, 0, 0)
+    assert outcome.budget == 30
+    assert outcome.exhausted is False
 
 
 def test_a_fork_head_is_flagged_by_collect_heads(watchdog):
@@ -152,10 +154,11 @@ def test_the_sweep_skips_a_fork_head_entirely(watchdog):
     sha = "f" * 40
     api = _FakeApi({sha: [_parked(id=99, head_repository={"full_name": FORK})]})
     head = watchdog.PullHead(number=8, sha=sha, updated_at=_ts(5), url="u", same_repo=False)
-    approved, refused, budget, _unsettled, touched = watchdog._sweep_once(api, [head], budget=30, dry_run=False)
+    outcome = watchdog._sweep_once(api, [head], budget=30, dry_run=False)
     assert api.approved == []
-    assert (approved, refused, budget) == (0, 0, 30)
-    assert touched == set()
+    assert (outcome.approved, outcome.refused, outcome.budget) == (0, 0, 30)
+    assert outcome.touched == set()
+    assert outcome.deferred == set()
 
 
 def test_a_run_parked_for_a_human_actor_is_not_approvable(watchdog):
@@ -280,10 +283,10 @@ def test_a_sweep_survives_an_api_error_on_one_head(watchdog):
         watchdog.PullHead(1, bad, _ts(5), "u", True),
         watchdog.PullHead(2, good, _ts(5), "u", True),
     ]
-    approved, refused, _budget, unsettled, _touched = watchdog._sweep_once(api, heads, budget=30, dry_run=False)
-    assert approved == 1
-    assert refused == 0
-    assert unsettled is True
+    outcome = watchdog._sweep_once(api, heads, budget=30, dry_run=False)
+    assert outcome.approved == 1
+    assert outcome.refused == 0
+    assert outcome.unsettled is True
     assert api.approved == [11]
 
 
@@ -447,11 +450,245 @@ def test_probe_reports_unresolved_when_the_listing_fails(watchdog):
 def test_dry_run_approves_nothing_but_still_consumes_budget(watchdog):
     api = _FakeApi()
     runs = [_parked(id=i) for i in range(5)]
-    approved, refused, budget = watchdog._approve_head(api, 1, runs, budget=3, dry_run=True)
+    outcome = watchdog._approve_head(api, 1, runs, budget=3, dry_run=True)
     assert api.approved == []
-    assert (approved, refused) == (0, 0)
+    assert (outcome.approved, outcome.refused) == (0, 0)
     # Budget consumed so the preview matches the cap a real sweep would hit.
-    assert budget == 0
+    assert outcome.budget == 0
+    assert outcome.exhausted is True
+
+
+# --- event-scoped sweeps (#12823 pull_request trigger) ----------------------
+
+
+def test_scoping_selects_only_the_firing_pull_request(watchdog):
+    heads = [
+        watchdog.PullHead(1, "a" * 40, _ts(5), "u", True),
+        watchdog.PullHead(2, "b" * 40, _ts(5), "u", True),
+        watchdog.PullHead(3, "c" * 40, _ts(5), "u", True),
+    ]
+    assert [head.number for head in watchdog.select_heads(heads, 2)] == [2]
+
+
+def test_scoping_off_returns_every_head(watchdog):
+    heads = [watchdog.PullHead(1, "a" * 40, _ts(5), "u", True), watchdog.PullHead(2, "b" * 40, _ts(5), "u", True)]
+    assert watchdog.select_heads(heads, 0) == heads
+
+
+def test_an_unknown_pr_number_selects_nothing_rather_than_everything(watchdog):
+    """Falling back to 'all heads' would restore the full-queue cost this avoids."""
+    heads = [watchdog.PullHead(1, "a" * 40, _ts(5), "u", True)]
+    assert watchdog.select_heads(heads, 999) == []
+
+
+def test_scoping_to_a_fork_pr_still_never_approves_it(watchdog):
+    """SECURITY: the fork guard is independent of how the head was selected."""
+    sha = "9" * 40
+    api = _FakeApi({sha: [_parked(id=77, head_repository={"full_name": FORK})]})
+    api.open_pull_requests = lambda base: [
+        {"number": 12, "head": {"sha": sha, "repo": {"full_name": FORK}}, "html_url": "u", "updated_at": _ts(5)},
+        {"number": 13, "head": {"sha": "8" * 40, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)},
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": []
+    api.run_jobs = lambda run_id: []
+    config = {
+        "base_branch": "Dev_new_gui",
+        "grace_minutes": 10,
+        "stall_minutes": 30,
+        "status_context": "ctx",
+        "max_approvals": 30,
+        "poll_attempts": 1,
+        "poll_interval_seconds": 1,
+        "max_job_lookups": 5,
+        "only_pr": 12,
+    }
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    assert api.approved == []
+    # The untouched same-repo PR was not swept either — scoping held.
+    assert [sha for sha, _state, _desc in api.statuses] == [sha]
+
+
+def test_scoping_to_a_same_repo_pr_still_approves_its_parked_bot_runs(watchdog):
+    sha = "7" * 40
+    api = _FakeApi({sha: [_parked(id=55)]})
+    api.open_pull_requests = lambda base: [
+        {"number": 21, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": []
+    api.run_jobs = lambda run_id: []
+    config = {
+        "base_branch": "Dev_new_gui",
+        "grace_minutes": 10,
+        "stall_minutes": 30,
+        "status_context": "ctx",
+        "max_approvals": 30,
+        "poll_attempts": 1,
+        "poll_interval_seconds": 1,
+        "max_job_lookups": 5,
+        "only_pr": 21,
+    }
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    assert api.approved == [55]
+
+
+def test_a_closed_or_renumbered_scope_target_sweeps_nothing(watchdog, capsys):
+    api = _FakeApi()
+    api.open_pull_requests = lambda base: [
+        {"number": 1, "head": {"sha": "6" * 40, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    config = {"base_branch": "Dev_new_gui", "only_pr": 4242}
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    assert api.approved == []
+    assert api.statuses == []
+    assert "nothing to sweep" in capsys.readouterr().out
+
+
+def test_only_pr_zero_means_every_open_pr(watchdog, monkeypatch):
+    monkeypatch.setenv("WATCHDOG_ONLY_PR", "0")
+    assert watchdog._env_non_negative_int("WATCHDOG_ONLY_PR", 0) == 0
+
+
+def test_only_pr_rejects_a_negative_number(watchdog, monkeypatch):
+    monkeypatch.setenv("WATCHDOG_ONLY_PR", "-1")
+    with pytest.raises(watchdog.WatchdogConfigError):
+        watchdog._env_non_negative_int("WATCHDOG_ONLY_PR", 0)
+
+
+# --- a concurrent sweep is not a refusal ------------------------------------
+
+RACE_403 = (403, "This workflow run is not waiting for approval")
+
+
+def test_the_race_message_is_recognised(watchdog):
+    assert watchdog.is_already_released("This workflow run is not waiting for approval") is True
+    assert watchdog.is_already_released("Resource not accessible by integration") is False
+    assert watchdog.is_already_released("") is False
+
+
+def test_the_probe_and_the_sweep_agree_about_the_same_message(watchdog):
+    """The exact string interpret_probe calls PROOF of permission.
+
+    Reading it as a refusal in one place and as proof of permission in the
+    other is what made a benign race demand a security downgrade.
+    """
+    message = "This workflow run is not waiting for approval"
+    assert watchdog.interpret_probe(403, message)[0] is True
+    assert watchdog.is_already_released(message) is True
+
+
+def test_a_run_already_released_by_a_concurrent_sweep_is_not_refused(watchdog):
+    api = _FakeApi(approve_response=RACE_403)
+    outcome = watchdog._approve_head(api, 7, [_parked(id=3)], budget=30, dry_run=False)
+    assert outcome.raced == 1
+    assert outcome.refused == 0
+    assert outcome.approved == 0
+
+
+def test_a_genuine_permission_failure_is_still_refused(watchdog):
+    api = _FakeApi(approve_response=(403, "Resource not accessible by integration"))
+    outcome = watchdog._approve_head(api, 7, [_parked(id=3)], budget=30, dry_run=False)
+    assert outcome.refused == 1
+    assert outcome.raced == 0
+
+
+def test_a_raced_sweep_exits_zero_and_never_prints_the_credential_remediation(watchdog, capsys):
+    """The whole point: a routine race must not advise relaxing repo security."""
+    sha = "a" * 40
+    api = _FakeApi({sha: [_parked(id=3)]}, approve_response=RACE_403)
+    api.open_pull_requests = lambda base: [
+        {"number": 31, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": [{"id": 1, "conclusion": "success"}]
+    api.run_jobs = lambda run_id: []
+    config = _sweep_config()
+    assert watchdog.check_dispatch(api, config, dry_run=False) == 0
+    out = capsys.readouterr().out
+    assert "already released" in out
+    assert "relax the repository Actions setting" not in out
+
+
+# --- budget exhaustion must be loud, not a deferral that never arrives ------
+
+
+def _sweep_config(**overrides):
+    config = {
+        "base_branch": "Dev_new_gui",
+        "grace_minutes": 10,
+        "stall_minutes": 30,
+        "status_context": "ctx",
+        "max_approvals": 30,
+        "poll_attempts": 1,
+        "poll_interval_seconds": 1,
+        "max_job_lookups": 5,
+    }
+    config.update(overrides)
+    return config
+
+
+def test_exhausting_the_budget_marks_the_head_deferred(watchdog):
+    api = _FakeApi()
+    outcome = watchdog._approve_head(api, 9, [_parked(id=i) for i in range(4)], budget=2, dry_run=False)
+    assert outcome.approved == 2
+    assert outcome.exhausted is True
+
+
+def test_a_sweep_reports_which_prs_the_budget_could_not_reach(watchdog):
+    a, b = "1" * 40, "2" * 40
+    api = _FakeApi({a: [_parked(id=1), _parked(id=2)], b: [_parked(id=3), _parked(id=4)]})
+    heads = [watchdog.PullHead(101, a, _ts(5), "u", True), watchdog.PullHead(102, b, _ts(5), "u", True)]
+    outcome = watchdog._sweep_once(api, heads, budget=3, dry_run=False)
+    assert outcome.approved == 3
+    assert outcome.deferred == {102}
+
+
+def test_a_budget_exhausted_sweep_exits_non_zero(watchdog, capsys):
+    """Silent deferral to a sweep that never comes is the failure being removed."""
+    sha = "3" * 40
+    api = _FakeApi({sha: [_parked(id=i) for i in range(5)]})
+    api.open_pull_requests = lambda base: [
+        {"number": 55, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": [{"id": 1, "conclusion": "success"}]
+    api.run_jobs = lambda run_id: []
+    assert watchdog.check_dispatch(api, _sweep_config(max_approvals=2), dry_run=False) == 1
+    out = capsys.readouterr().out
+    assert "#55" in out
+    assert "not a permissions problem" in out.lower()
+
+
+def test_budget_exhaustion_does_not_blame_the_credential(watchdog):
+    message = watchdog.budget_exhausted_message({1, 2}, 30)
+    assert "not a permissions problem" in message.lower()
+    assert "30" in message
+    assert "WATCHDOG_MAX_APPROVALS" in message
+
+
+def test_a_dry_run_previews_exhaustion_without_failing(watchdog):
+    """A preview changes nothing, so it has nothing to be silent about."""
+    sha = "4" * 40
+    api = _FakeApi({sha: [_parked(id=i) for i in range(5)]})
+    api.open_pull_requests = lambda base: [
+        {"number": 56, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+    ]
+    api.recent_runs = lambda per_page=100, run_status="": []
+    api.run_jobs = lambda run_id: []
+    assert watchdog.check_dispatch(api, _sweep_config(max_approvals=2), dry_run=True) == 0
+
+
+def test_the_default_budget_covers_a_realistic_queue(watchdog):
+    """27 runs measured on the busiest head x 10 open PRs. Below that, sweeps
+    stop part-way and promise a next sweep the schedule cannot deliver."""
+    assert watchdog.DEFAULT_MAX_APPROVALS >= 27 * 10
+
+
+def test_a_bigger_budget_does_not_widen_what_is_approvable(watchdog):
+    """SECURITY: the cap bounds HOW MANY, never WHAT. Fork runs stay excluded."""
+    api = _FakeApi()
+    fork_runs = [_parked(id=i, head_repository={"full_name": FORK}) for i in range(50)]
+    outcome = watchdog._approve_head(api, 1, fork_runs, budget=watchdog.DEFAULT_MAX_APPROVALS, dry_run=False)
+    assert api.approved == []
+    assert outcome.budget == watchdog.DEFAULT_MAX_APPROVALS
+    assert outcome.exhausted is False
 
 
 # --- configuration ----------------------------------------------------------

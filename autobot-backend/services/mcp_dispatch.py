@@ -24,6 +24,7 @@ Cache TTL and RBAC filtering added in #2598.
 """
 
 import time
+import uuid
 
 import aiohttp
 
@@ -33,6 +34,17 @@ from autobot_shared.logging_manager import get_logger
 from constants.network_constants import NetworkConstants
 
 logger = get_logger(__name__)
+
+# #13265: minimum run-JWT scopes per isolated bridge. resolve_mode() forces
+# SUBPROCESS for filesystem_mcp, browser_mcp and vnc_mcp regardless of config,
+# so these are the bridges whose workers validate a run JWT. Unlisted bridges
+# get the safest scope, matching services/run_jwt._FALLBACK_SCOPES.
+_BRIDGE_RUN_JWT_SCOPES: dict[str, list[str]] = {
+    "filesystem_mcp": ["mcp:filesystem"],
+    "browser_mcp": ["mcp:web_fetch"],
+    "vnc_mcp": ["task:read"],
+}
+_DEFAULT_BRIDGE_SCOPES: list[str] = ["task:read"]
 
 
 class MCPDispatcher:
@@ -191,6 +203,36 @@ class MCPDispatcher:
         )
         return result
 
+    @staticmethod
+    def _mint_bridge_jwt(bridge: str, tool_name: str) -> str | None:
+        """Mint a short-lived run JWT scoped to *bridge* (#13265).
+
+        Returns None when no signing secret is configured. That is not silent:
+        it is logged, and the worker then rejects the call itself with a
+        -32001 whenever MCP_RUN_JWT_ENFORCE is on. Failing to mint must not
+        crash dispatch for deployments that run with enforcement off.
+        """
+        from services.run_jwt import mint_run_jwt
+
+        scopes = _BRIDGE_RUN_JWT_SCOPES.get(bridge, _DEFAULT_BRIDGE_SCOPES)
+        try:
+            return mint_run_jwt(
+                run_id=str(uuid.uuid4()),
+                task_id=f"mcp:{tool_name}",
+                agent_id=f"mcp_dispatch:{bridge}",
+                tenant_id="default",
+                scope=scopes,
+            )
+        except (RuntimeError, ValueError) as exc:
+            logger.warning(
+                "MCPDispatcher: could not mint run JWT for bridge %s tool %s: %s "
+                "— isolated call will be rejected if MCP_RUN_JWT_ENFORCE is set",
+                bridge,
+                tool_name,
+                exc,
+            )
+            return None
+
     async def _call_bridge(self, tool_name: str, bridge: str, endpoint: str, arguments: dict) -> dict:
         """Execute a tool call against an MCP bridge.
 
@@ -211,7 +253,10 @@ class MCPDispatcher:
 
         isolated = await get_isolated_registry().get_or_create(bridge)
         if isolated is not None:
-            return await isolated.call_tool(tool_name, arguments)
+            # #13265: the worker validates a run JWT when MCP_RUN_JWT_ENFORCE=1.
+            # It cannot read one from its environment (_WORKER_ENV_ALLOW scrubs
+            # MCP_RUN_JWT by design), so it must be passed per request.
+            return await isolated.call_tool(tool_name, arguments, run_jwt=self._mint_bridge_jwt(bridge, tool_name))
 
         try:
             http_client = get_http_client()
