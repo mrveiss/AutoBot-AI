@@ -10944,6 +10944,9 @@ export interface paths {
         /**
          * Voice Speak Api
          * @description Converts text to speech and plays it.
+         *
+         *     ``stream=true`` returns length-prefixed WAV chunks as they are synthesized
+         *     (#13215); omitting it keeps the whole-utterance ``audio/wav`` contract.
          */
         post: operations["voice_speak_api_api_voice_speak_post"];
         delete?: never;
@@ -10963,7 +10966,13 @@ export interface paths {
         put?: never;
         /**
          * Voice Synthesize Api
-         * @description Synthesize speech via Pocket TTS worker. Returns audio/wav stream.
+         * @description Synthesize speech via the Pocket TTS worker.
+         *
+         *     Returns a whole ``audio/wav`` body by default. With ``stream=true`` the
+         *     response is ``application/octet-stream`` carrying
+         *     ``[4-byte length][WAV]`` chunks emitted as the worker produces them, so
+         *     the caller hears audio after the first ~250ms instead of after the whole
+         *     utterance (#13215).
          */
         post: operations["voice_synthesize_api_api_voice_synthesize_post"];
         delete?: never;
@@ -12005,6 +12014,10 @@ export interface paths {
          * Vnc Screenshot
          * @description Capture desktop screenshot.
          *     Issue #74: Desktop interaction controls.
+         *
+         *     Issue #13208: ``temporary_file_path`` owns the temp file, so it is removed
+         *     on the success path, on capture failure and on any exception. Previously
+         *     only the success path unlinked it and each failed capture leaked a PNG.
          *
          *     Returns:
          *         {
@@ -13420,6 +13433,11 @@ export interface paths {
          * Desktop Screenshot Mcp
          * @description MCP tool: Capture desktop screenshot.
          *     Issue #74: Agent desktop observation.
+         *
+         *     Issue #13208: the temp file is owned by ``temporary_file_path``, so it is
+         *     removed on the success path, on capture failure and on any exception.
+         *     Previously only the success path unlinked it, so production leaked one PNG
+         *     per failed capture, indefinitely.
          */
         post: operations["desktop_screenshot_mcp_api_vnc_mcp_desktop_screenshot_post"];
         delete?: never;
@@ -13656,6 +13674,12 @@ export interface paths {
         /**
          * Enable Mcp Bridge
          * @description Enable a registered MCP bridge (Issue #4462).
+         *
+         *     #13261: the registry cache is a per-process global, so ``invalidate_all()``
+         *     clears only the worker that handled this request. With multiple uvicorn
+         *     workers the others keep serving the previous ``enabled`` flag until their
+         *     own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+         *     same worker-locality caveat.
          */
         post: operations["enable_mcp_bridge_api_mcp_bridges__name__enable_post"];
         delete?: never;
@@ -13676,6 +13700,12 @@ export interface paths {
         /**
          * Disable Mcp Bridge
          * @description Disable a registered MCP bridge (Issue #4462).
+         *
+         *     #13261: the registry cache is a per-process global, so ``invalidate_all()``
+         *     clears only the worker that handled this request. With multiple uvicorn
+         *     workers the others keep serving the previous ``enabled`` flag until their
+         *     own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+         *     same worker-locality caveat.
          */
         post: operations["disable_mcp_bridge_api_mcp_bridges__name__disable_post"];
         delete?: never;
@@ -49076,23 +49106,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Token breakdown per agent+model with cache hit rate (GH#8486)
-         * @description Return token usage broken down by agent and model for a company.
+         * Lifetime token/cost totals per agent (GH#8486, GH#13330)
+         * @description Return lifetime token totals per agent for a company (GH#13330).
          *
-         *     Required fields: agentId, agentName, model, inputTokens,
-         *     cachedInputTokens, outputTokens, cacheHitRate.
-         *
-         *     Cache hit rate = cachedInputTokens / totalInputTokens.  A low rate
-         *     signals session churn — the agent is not benefiting from prompt caching.
-         *
-         *     Data is sourced from ``agent_org_nodes`` (for model + name) joined to
-         *     ``llc_heartbeat_runs`` (for token usage).  Rows without any heartbeat
-         *     runs are included with zero token counts so the roster is always complete.
-         *
-         *     Note: ``llc_heartbeat_runs`` does not yet have ``input_tokens`` /
-         *     ``cached_input_tokens`` columns.  The query returns zeros for those until
-         *     a future migration adds the columns.  The endpoint is intentionally
-         *     available from day one so dashboards can start wiring up immediately.
+         *     Sourced from ``llc_agent_budgets`` — the table ``BudgetService.
+         *     ingest_cost_event`` (the actual writer) maintains — enriched with the
+         *     display name and model from ``agent_org_nodes`` when the agent is
+         *     registered there. ``input_tokens`` / ``cached_input_tokens`` /
+         *     ``output_tokens`` / ``cache_hit_rate`` cannot be populated honestly (see
+         *     ``AgentModelCostRow`` docstring); the real spend signal is
+         *     ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
+         *     ``/costs/by-agent-model`` sibling endpoint, fixed for the identical gap
+         *     in GH#13067.
          */
         get: operations["costs_by_agent_model_api_llc_companies__company_id__costs_by_agent_model_get"];
         put?: never;
@@ -51865,11 +51890,18 @@ export interface paths {
         };
         /**
          * Costs By Agent Model
-         * @description Return normalised token usage per agent/model pair.
+         * @description Return lifetime token totals per agent for a company.
          *
-         *     Aggregates rows from ``llc_cost_events`` and normalises token field names
-         *     across Anthropic, OpenAI, and Google so callers receive a consistent schema.
-         *     ``cachedInputTokens`` is ``0`` for providers without cache hit reporting.
+         *     Originally specified against ``llc_cost_events`` (GH#8215's per-event log
+         *     with model/provider columns), a table that was never migrated — confirmed
+         *     absent from every migration tree, so this endpoint always raised
+         *     ``UndefinedTable`` and silently returned ``[]`` (GH#13067). The actual
+         *     writer, ``BudgetService.ingest_cost_event``, only maintains a lifetime
+         *     aggregate on ``llc_agent_budgets`` (no per-model dimension, no timestamp),
+         *     so each row here is one lifetime token total per agent with
+         *     ``model="unknown"`` rather than a real per-model/time-windowed breakdown.
+         *     ``llc/services/agent_scorecard.py`` hit the identical gap and made the
+         *     same sourcing choice for spend.
          */
         get: operations["costs_by_agent_model_api_llc_costs_by_agent_model_get"];
         put?: never;
@@ -54482,6 +54514,17 @@ export interface components {
         /**
          * AgentModelCost
          * @description Normalised token usage for one agent/model pair.
+         *
+         *     ``input_tokens``/``cached_input_tokens``/``output_tokens`` require a
+         *     real per-event log to populate honestly (GH#13067) — ``llc_agent_budgets``
+         *     only accumulates a single combined ``tokens_spent`` counter
+         *     (``llc/services/budget.py``'s ``total_tokens = tokens_in + tokens_out``),
+         *     with no record of the input/output split. Rather than presenting that
+         *     combined total under one of the three split fields — which would apply
+         *     the wrong per-token pricing rate to whichever share it silently
+         *     misrepresents — they stay ``0`` and the real number is reported only in
+         *     ``total_tokens``, following ``llc/api/budget.py``'s ``list_cost_events``
+         *     precedent for the identical gap.
          */
         AgentModelCost: {
             /** Agent Id */
@@ -54498,12 +54541,37 @@ export interface components {
             cached_input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };
         /**
          * AgentModelCostRow
          * @description Per-agent + per-model token breakdown row.
+         *
+         *     Mirrors ``llc/api/costs.py``'s ``AgentModelCost`` (GH#13067): this
+         *     endpoint previously raw-SELECTed ``hr.tokens_in`` / ``hr.tokens_out`` from
+         *     ``llc_heartbeat_runs``, columns that never existed on that model
+         *     (GH#13330 — every call 500'd).  The only real per-agent token source is
+         *     ``llc_agent_budgets.tokens_spent`` — a single combined
+         *     ``tokens_in + tokens_out`` lifetime counter (``llc/services/budget.py``'s
+         *     ``ingest_cost_event``), with no per-model dimension and no input/output
+         *     split.  ``input_tokens`` / ``cached_input_tokens`` / ``output_tokens``
+         *     stay ``0`` rather than putting the combined total under
+         *     ``output_tokens`` — the first #13067 attempt did exactly that and applied
+         *     output-rate pricing to input tokens (3-5x over).  The real number is
+         *     reported only in ``total_tokens``.  ``cache_hit_rate`` has no source at
+         *     all — no per-model cache-read counter exists anywhere in the schema — so
+         *     it is ``None`` rather than a fabricated value.  ``window`` is always
+         *     ``"lifetime"`` — this endpoint has no date/period parameter, and both
+         *     ``total_tokens`` and ``cost_usd`` are cumulative totals-to-date, matching
+         *     ``AgentModelCost.window`` in ``llc/api/costs.py``.
          */
         AgentModelCostRow: {
             /** Agent Id */
@@ -54518,10 +54586,17 @@ export interface components {
             cached_input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
             /** Cache Hit Rate */
-            cache_hit_rate: number;
+            cache_hit_rate?: number | null;
             /** Cost Usd */
             cost_usd: string;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };
@@ -58586,6 +58661,11 @@ export interface components {
              * @default user
              */
             user_role: string;
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -58608,6 +58688,11 @@ export interface components {
              * @default user
              */
             user_role: string;
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -65744,21 +65829,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AnalyticsCodeGenRollbackData] */
-        DataResponse_AnalyticsCodeGenRollbackData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AnalyticsCodeGenRollbackData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[AnalyticsDebtByCategoryResponse] */
         DataResponse_AnalyticsDebtByCategoryResponse_: {
             /**
@@ -66284,51 +66354,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[AuditCleanupData] */
-        DataResponse_AuditCleanupData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditCleanupData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuditLogData] */
-        DataResponse_AuditLogData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditLogData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuditOperationsData] */
-        DataResponse_AuditOperationsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuditOperationsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[AuthLogoutData] */
         DataResponse_AuthLogoutData_: {
             /**
@@ -66337,21 +66362,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["AuthLogoutData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[AuthRefreshData] */
-        DataResponse_AuthRefreshData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["AuthRefreshData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -66944,21 +66954,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[CommandHistoryData] */
-        DataResponse_CommandHistoryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["CommandHistoryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[ComprehensiveResearchData] */
         DataResponse_ComprehensiveResearchData_: {
             /**
@@ -67517,81 +67512,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[GPUBenchmarkResponse] */
-        DataResponse_GPUBenchmarkResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUBenchmarkResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUCapabilitiesResponse] */
-        DataResponse_GPUCapabilitiesResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUCapabilitiesResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUConfigUpdateResponse] */
-        DataResponse_GPUConfigUpdateResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUConfigUpdateResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUEfficiencyResponse] */
-        DataResponse_GPUEfficiencyResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUEfficiencyResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[GPUOptimizeResponse] */
-        DataResponse_GPUOptimizeResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["GPUOptimizeResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[GoalData] */
         DataResponse_GoalData_: {
             /**
@@ -67645,36 +67565,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["KnowledgeExtractionResult"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[KnowledgeFreshStatsData] */
-        DataResponse_KnowledgeFreshStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["KnowledgeFreshStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[KnowledgeRebuildIndexData] */
-        DataResponse_KnowledgeRebuildIndexData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["KnowledgeRebuildIndexData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -67910,36 +67800,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[ManPageLookupData] */
-        DataResponse_ManPageLookupData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ManPageLookupData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ManPageSearchData] */
-        DataResponse_ManPageSearchData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ManPageSearchData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[MemoryEntityData] */
         DataResponse_MemoryEntityData_: {
             /**
@@ -68120,111 +67980,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[MultimodalBatchSizeData] */
-        DataResponse_MultimodalBatchSizeData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalBatchSizeData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalEmbeddingData] */
-        DataResponse_MultimodalEmbeddingData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalEmbeddingData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalFusionData] */
-        DataResponse_MultimodalFusionData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalFusionData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalOptimizeData] */
-        DataResponse_MultimodalOptimizeData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalOptimizeData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalPerfStatsData] */
-        DataResponse_MultimodalPerfStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalPerfStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalPerfSummaryData] */
-        DataResponse_MultimodalPerfSummaryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalPerfSummaryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[MultimodalStatsData] */
-        DataResponse_MultimodalStatsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["MultimodalStatsData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[OrchestrationActiveWorkflowsResponse] */
         DataResponse_OrchestrationActiveWorkflowsResponse_: {
             /**
@@ -68345,21 +68100,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[OverseerQueryData] */
-        DataResponse_OverseerQueryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["OverseerQueryData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[ParseToolOutputData] */
         DataResponse_ParseToolOutputData_: {
             /**
@@ -68368,21 +68108,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["ParseToolOutputData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[PendingApprovalsData] */
-        DataResponse_PendingApprovalsData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["PendingApprovalsData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68480,81 +68205,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[ProjectStateActivatePhaseResponse] */
-        DataResponse_ProjectStateActivatePhaseResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateActivatePhaseResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateAutoProgressResponse] */
-        DataResponse_ProjectStateAutoProgressResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateAutoProgressResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStatePhasesResponse] */
-        DataResponse_ProjectStatePhasesResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStatePhasesResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateReportResponse] */
-        DataResponse_ProjectStateReportResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateReportResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[ProjectStateValidateResponse] */
-        DataResponse_ProjectStateValidateResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["ProjectStateValidateResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[QueryReformulationResult] */
         DataResponse_QueryReformulationResult_: {
             /**
@@ -68638,21 +68288,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["RedisScanFileResultResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[SavedReportDeleteResponse] */
-        DataResponse_SavedReportDeleteResponse_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SavedReportDeleteResponse"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -68825,21 +68460,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[SequentialThinkingClearData] */
-        DataResponse_SequentialThinkingClearData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SequentialThinkingClearData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[SessionActivitiesData] */
         DataResponse_SessionActivitiesData_: {
             /**
@@ -69005,21 +68625,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[SkillCatalogInstallData] */
-        DataResponse_SkillCatalogInstallData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["SkillCatalogInstallData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[SkillFeedbackData] */
         DataResponse_SkillFeedbackData_: {
             /**
@@ -69043,36 +68648,6 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SnapshotWithRegionsResponse"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[StartupPhaseUpdateData] */
-        DataResponse_StartupPhaseUpdateData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["StartupPhaseUpdateData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
-        /** DataResponse[StructuredThinkingSummaryData] */
-        DataResponse_StructuredThinkingSummaryData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["StructuredThinkingSummaryData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -94551,11 +94126,17 @@ export interface components {
                 [key: string]: number;
             };
             /** Stage Progression */
-            stage_progression?: unknown[];
+            stage_progression?: {
+                [key: string]: unknown[];
+            };
             /** Metadata Analysis */
             metadata_analysis?: {
                 [key: string]: unknown;
             };
+            /** Cognitive Flow */
+            cognitive_flow?: {
+                [key: string]: unknown;
+            }[];
         } & {
             [key: string]: unknown;
         };
@@ -102761,7 +102342,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditCleanupData_"];
+                    "application/json": components["schemas"]["AuditCleanupData"];
                 };
             };
             /** @description Validation Error */
@@ -102790,7 +102371,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditOperationsData_"];
+                    "application/json": components["schemas"]["AuditOperationsData"];
                 };
             };
         };
@@ -103048,7 +102629,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuthRefreshData_"];
+                    "application/json": components["schemas"]["AuthRefreshData"];
                 };
             };
         };
@@ -120042,7 +119623,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SequentialThinkingClearData_"];
+                    "application/json": components["schemas"]["SequentialThinkingClearData"];
                 };
             };
             /** @description Validation Error */
@@ -120148,7 +119729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_StructuredThinkingSummaryData_"];
+                    "application/json": components["schemas"]["StructuredThinkingSummaryData"];
                 };
             };
             /** @description Validation Error */
@@ -122554,7 +122135,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageLookupData_"];
+                    "application/json": components["schemas"]["ManPageLookupData"];
                 };
             };
             /** @description Validation Error */
@@ -122587,7 +122168,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -122620,7 +122201,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -123851,7 +123432,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_OverseerQueryData_"];
+                    "application/json": components["schemas"]["OverseerQueryData"];
                 };
             };
             /** @description Validation Error */
@@ -132804,7 +132385,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AnalyticsCodeGenRollbackData_"];
+                    "application/json": components["schemas"]["AnalyticsCodeGenRollbackData"];
                 };
             };
             /** @description Validation Error */
@@ -139031,7 +138612,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUEfficiencyResponse_"];
+                    "application/json": components["schemas"]["GPUEfficiencyResponse"];
                 };
             };
         };
@@ -139051,7 +138632,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUCapabilitiesResponse_"];
+                    "application/json": components["schemas"]["GPUCapabilitiesResponse"];
                 };
             };
         };
@@ -139071,7 +138652,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUBenchmarkResponse_"];
+                    "application/json": components["schemas"]["GPUBenchmarkResponse"];
                 };
             };
         };
@@ -139091,7 +138672,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUOptimizeResponse_"];
+                    "application/json": components["schemas"]["GPUOptimizeResponse"];
                 };
             };
         };
@@ -139115,7 +138696,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_GPUConfigUpdateResponse_"];
+                    "application/json": components["schemas"]["GPUConfigUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -145009,7 +144590,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalEmbeddingData_"];
+                    "application/json": components["schemas"]["MultimodalEmbeddingData"];
                 };
             };
             /** @description Validation Error */
@@ -145071,7 +144652,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalStatsData_"];
+                    "application/json": components["schemas"]["MultimodalStatsData"];
                 };
             };
         };
@@ -145095,7 +144676,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalFusionData_"];
+                    "application/json": components["schemas"]["MultimodalFusionData"];
                 };
             };
             /** @description Validation Error */
@@ -145124,7 +144705,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalPerfStatsData_"];
+                    "application/json": components["schemas"]["MultimodalPerfStatsData"];
                 };
             };
         };
@@ -145144,7 +144725,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalOptimizeData_"];
+                    "application/json": components["schemas"]["MultimodalOptimizeData"];
                 };
             };
         };
@@ -145164,7 +144745,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalPerfSummaryData_"];
+                    "application/json": components["schemas"]["MultimodalPerfSummaryData"];
                 };
             };
         };
@@ -145187,7 +144768,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_MultimodalBatchSizeData_"];
+                    "application/json": components["schemas"]["MultimodalBatchSizeData"];
                 };
             };
             /** @description Validation Error */
@@ -147750,7 +147331,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateValidateResponse_"];
+                    "application/json": components["schemas"]["ProjectStateValidateResponse"];
                 };
             };
         };
@@ -147770,7 +147351,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateReportResponse_"];
+                    "application/json": components["schemas"]["ProjectStateReportResponse"];
                 };
             };
         };
@@ -147790,7 +147371,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStatePhasesResponse_"];
+                    "application/json": components["schemas"]["ProjectStatePhasesResponse"];
                 };
             };
         };
@@ -147812,7 +147393,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateActivatePhaseResponse_"];
+                    "application/json": components["schemas"]["ProjectStateActivatePhaseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -147841,7 +147422,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ProjectStateAutoProgressResponse_"];
+                    "application/json": components["schemas"]["ProjectStateAutoProgressResponse"];
                 };
             };
         };
@@ -148354,7 +147935,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_StartupPhaseUpdateData_"];
+                    "application/json": components["schemas"]["StartupPhaseUpdateData"];
                 };
             };
             /** @description Validation Error */
@@ -149730,7 +149311,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_PendingApprovalsData_"];
+                    "application/json": components["schemas"]["PendingApprovalsData"];
                 };
             };
         };
@@ -149753,7 +149334,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_CommandHistoryData_"];
+                    "application/json": components["schemas"]["CommandHistoryData"];
                 };
             };
             /** @description Validation Error */
@@ -149784,7 +149365,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_AuditLogData_"];
+                    "application/json": components["schemas"]["AuditLogData"];
                 };
             };
             /** @description Validation Error */
@@ -157795,7 +157376,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_KnowledgeFreshStatsData_"];
+                    "application/json": components["schemas"]["KnowledgeFreshStatsData"];
                 };
             };
         };
@@ -157815,7 +157396,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_KnowledgeRebuildIndexData_"];
+                    "application/json": components["schemas"]["KnowledgeRebuildIndexData"];
                 };
             };
         };
@@ -162504,7 +162085,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SkillCatalogInstallData_"];
+                    "application/json": components["schemas"]["SkillCatalogInstallData"];
                 };
             };
             /** @description Validation Error */
@@ -163800,7 +163381,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_SavedReportDeleteResponse_"];
+                    "application/json": components["schemas"]["SavedReportDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -173416,7 +172997,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageLookupData_"];
+                    "application/json": components["schemas"]["ManPageLookupData"];
                 };
             };
             /** @description Validation Error */
@@ -173449,7 +173030,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */
@@ -173482,7 +173063,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_ManPageSearchData_"];
+                    "application/json": components["schemas"]["ManPageSearchData"];
                 };
             };
             /** @description Validation Error */

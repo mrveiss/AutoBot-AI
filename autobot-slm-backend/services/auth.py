@@ -39,6 +39,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role
+from autobot_shared.user_management.password_epoch import (
+    is_token_revoked_by_password_change,
+)
 from config import settings
 from models.schemas import TokenResponse, UserCreate, UserResponse
 from services.token_denylist import is_jti_revoked
@@ -131,6 +134,16 @@ class AuthService:
                         return None
                 except Exception:
                     logger.warning("jti denylist check failed; failing open", exc_info=True)
+
+            # #12924: the jti denylist revokes one token at a time and there is
+            # no user->jti index, so it cannot express "every session opened
+            # with the old password". The epoch check does that in one lookup.
+            try:
+                if await is_token_revoked_by_password_change(claims):
+                    return None
+            except Exception:
+                logger.warning("password-epoch check failed; failing open", exc_info=True)
+
             return claims
 
         # alg=none or unsupported — reject

@@ -1,0 +1,161 @@
+# CI dispatch watchdog — #12823, #13045
+#
+# Guards the two ways a pull request ends up reading as "waiting for CI" with
+# nothing actually queued:
+#
+#   #12823  auto-update-pr-branches refreshes stale PR branches with the default
+#           GITHUB_TOKEN, so the merge commit is pushed as github-actions[bot].
+#           The repository's fork-PR approval policy treats that bot as an
+#           external contributor, so every run it triggers is created with
+#           conclusion=action_required and never starts. The head commit then
+#           carries zero executed checks, and `gh pr checks` reports nothing at
+#           all — not pending, not failing. Tooling that reads "no failures" as
+#           "ready" will happily merge it.
+#
+#   #13045  While the singleton self-hosted runner pool is empty, runs are
+#           created but never allocate a job. A required context never reports,
+#           `commits/{sha}/status` stays pending forever, and the PR shows
+#           "19 success / 0 failures" while being structurally unmergeable.
+#
+# This workflow approves what it is permitted to approve, and — regardless of
+# whether approval succeeds — publishes a `ci-dispatch-watchdog` commit status
+# on every open PR head. Absence of CI therefore becomes a visible, named,
+# non-green context instead of silence.
+#
+# FORK SAFETY: `POST /actions/runs/{id}/approve` is the approve-a-fork-run
+# endpoint. This repository is public, takes fork pull requests, and runs
+# `pull_request` jobs on the self-hosted runner, so approving a fork run would
+# execute contributor-supplied code on the owner's machine — the very thing the
+# `all_external_contributors` policy exists to stop. The sweep therefore
+# approves only runs whose head repository is this repository AND whose
+# triggering actor is the branch-update bot. Fork pull requests get a published
+# status; they never get an approval.
+#
+# runs-on is ubuntu-latest on every job by design: the self-hosted runner is a
+# singleton, and a watchdog that queues behind the outage it exists to report
+# is useless.
+
+name: CI Dispatch Watchdog
+
+on:
+  schedule:
+    # Every 15 minutes. Scheduled runs are attributed to the repository, not to
+    # github-actions[bot] as a contributor, so this workflow itself is never
+    # subject to the approval policy it repairs.
+    #
+    # NOT YET LIVE: GitHub only dispatches `schedule` from the DEFAULT branch,
+    # which is `main`, and this file exists only on Dev_new_gui. Every run of
+    # this workflow to date came from `push` or `pull_request`; none from
+    # `schedule`. The cron starts working the moment Dev_new_gui reaches main —
+    # until then the push and pull_request hooks below are the only coverage,
+    # so neither is redundant with it.
+    - cron: '*/15 * * * *'
+  push:
+    branches: [Dev_new_gui]
+  workflow_dispatch:
+  pull_request:
+    # A PR head moving is the moment its CI either dispatches or parks, so the
+    # sweep runs then rather than waiting for the next base push. Previously
+    # this trigger was filtered to the watchdog's own files, which made it a
+    # self-test and nothing more.
+    #
+    # This does NOT replace the push/`needs:` hooks, and cannot: the #12823
+    # parking is caused by github-actions[bot] pushing a merge commit to a PR
+    # head, and the `synchronize` event that push raises is itself attributed to
+    # the bot — so a watchdog run triggered by it would be parked awaiting the
+    # very approval it exists to grant. The bot case is repaired by the
+    # `approve-refreshed-runs` job in auto-update-pr-branches.yml. What this
+    # trigger adds is immediate coverage for every OTHER way a head moves.
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  # Never cancel a sweep in flight — a half-finished sweep leaves some PRs
+  # without a published status, which is the exact condition being guarded.
+  group: ci-dispatch-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+  statuses: write
+  pull-requests: read
+
+jobs:
+  watchdog:
+    name: Approve parked runs and publish dispatch state
+    # Fork pull requests are skipped outright rather than run read-only.
+    # A `pull_request` run from a fork gets a read-only GITHUB_TOKEN, so the
+    # approval-capability probe would come back "token lacks permission" and
+    # fail the job — a permanent red check on every fork PR reporting a
+    # condition that is correct and expected. Skipping also means no
+    # fork-supplied copy of this workflow is ever executed by a job holding
+    # `actions: write`. Fork PRs still get a published status from the
+    # scheduled and base-push sweeps, which run from this repository.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Answers "may this workflow's GITHUB_TOKEN approve a parked run?" and
+      # nothing else. It POSTs approve against a run that already succeeded,
+      # which GitHub rejects on state grounds, so it has no side effect and is
+      # safe on an unreviewed branch. It is a separate step from the sweep
+      # because --dry-run deliberately issues no approve request and so cannot
+      # answer the question — the omission that made an earlier self-test report
+      # "probe skipped" while the job passed.
+      - name: Report approval capability
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check probe
+
+      - name: Sweep open PRs
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WATCHDOG_BASE_BRANCH: Dev_new_gui
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch
+            exit 0
+          fi
+
+          # A `pull_request` job executes the workflow and the script AS THEY
+          # EXIST ON THE PR HEAD. That is safe precisely when the PR does not
+          # touch them: the code then byte-matches the reviewed copy on the base
+          # branch. When the PR DOES touch them, the sweep drops to --dry-run,
+          # so unreviewed watchdog code never reaches `approve` or `statuses`
+          # while holding write permission. The listing failing is treated as
+          # self-modification — fail closed, never open.
+          SELF_MODIFYING=yes
+          if CHANGED=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" \
+                --paginate --jq '.[].filename'); then
+            case "$CHANGED" in
+              *ci_dispatch_watchdog*|*ci-dispatch-watchdog*) SELF_MODIFYING=yes ;;
+              *) SELF_MODIFYING=no ;;
+            esac
+          else
+            echo "Could not list changed files — treating this PR as self-modifying."
+          fi
+
+          if [ "$SELF_MODIFYING" = "yes" ]; then
+            echo "PR #$PR_NUMBER modifies the watchdog — self-test only, no writes."
+            python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch --dry-run
+          else
+            # Scoped to the firing PR: a full-queue sweep costs
+            # poll_attempts+2 API calls per open PR, which on every PR event
+            # would consume the shared 1,000/hour GITHUB_TOKEN budget. The
+            # schedule and base-push sweeps still cover every head.
+            echo "Sweeping PR #$PR_NUMBER only."
+            WATCHDOG_ONLY_PR="$PR_NUMBER" \
+              python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch
+          fi

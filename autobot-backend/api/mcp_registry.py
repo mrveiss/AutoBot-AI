@@ -79,7 +79,7 @@ router = APIRouter(
 
 # Load cache configuration from environment
 CACHE_ENABLED = bool(config.mcp_registry_cache_enabled)
-CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl or "300")
+CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl or "60")
 
 logger.info("MCP Registry Cache: enabled=%s, TTL=%ss", CACHE_ENABLED, CACHE_TTL_SECONDS)
 
@@ -911,7 +911,14 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     error_code_prefix="MCP_REGISTRY",
 )
 async def enable_mcp_bridge(name: str) -> Metadata:
-    """Enable a registered MCP bridge (Issue #4462)."""
+    """Enable a registered MCP bridge (Issue #4462).
+
+    #13261: the registry cache is a per-process global, so ``invalidate_all()``
+    clears only the worker that handled this request. With multiple uvicorn
+    workers the others keep serving the previous ``enabled`` flag until their
+    own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+    same worker-locality caveat.
+    """
     _find_bridge_by_name(name)
     toggle_svc = get_toggle_service()
     await toggle_svc.set_bridge_enabled(name, True)
@@ -932,7 +939,14 @@ async def enable_mcp_bridge(name: str) -> Metadata:
     error_code_prefix="MCP_REGISTRY",
 )
 async def disable_mcp_bridge(name: str) -> Metadata:
-    """Disable a registered MCP bridge (Issue #4462)."""
+    """Disable a registered MCP bridge (Issue #4462).
+
+    #13261: the registry cache is a per-process global, so ``invalidate_all()``
+    clears only the worker that handled this request. With multiple uvicorn
+    workers the others keep serving the previous ``enabled`` flag until their
+    own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+    same worker-locality caveat.
+    """
     _find_bridge_by_name(name)
     toggle_svc = get_toggle_service()
     await toggle_svc.set_bridge_enabled(name, False)

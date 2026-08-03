@@ -17,14 +17,26 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mcp.autobot_server import AutoBotMCPServer
+from autobot_shared.ssot_config import config
+from mcp.autobot_server import AutoBotMCPServer, _stdio_bearer_token
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-VALID_TOKEN = "dev:kb,memory,agents"
-KB_TOKEN = "dev:kb"
+# #13263: these tests configure their own secret rather than relying on a
+# shipped default. AUTOBOT_MCP_TOKEN now defaults to "" (unconfigured, fails
+# closed) because any non-empty default is itself a working credential.
+TEST_SECRET = "test-mcp-secret"
+VALID_TOKEN = f"{TEST_SECRET}:kb,memory,agents"
+KB_TOKEN = f"{TEST_SECRET}:kb"
+
+
+@pytest.fixture(autouse=True)
+def _configure_mcp_secret():
+    """Give every test in this module a configured secret to authenticate against."""
+    with patch.object(config.misc, "mcp_token", TEST_SECRET):
+        yield
 
 
 def make_server() -> AutoBotMCPServer:
@@ -147,6 +159,37 @@ async def test_missing_token_returns_401():
 async def test_wrong_secret_returns_401():
     server = make_server()
     resp = await server.handle_request("tools/list", {}, "wrongsecret:kb,memory,agents")
+    assert "error" in resp
+    assert resp["error"]["code"] == -32001
+
+
+def test_empty_secret_rejected_with_configured_secret():
+    """#13263: ``":<scopes>"`` carries no secret and must never authenticate."""
+    assert AutoBotMCPServer._validate_token(":kb,memory,agents") is None
+
+
+def test_empty_secret_rejected_when_configured_secret_is_blank():
+    """#13263: the check fails closed even when AUTOBOT_MCP_TOKEN is blank.
+
+    Before the fix ``expected`` was ``""`` by default, so ``secret_part != expected``
+    was False for a token beginning with ``:`` — the caller was authenticated and
+    granted exactly the scopes it named for itself.
+    """
+    with patch.object(config.misc, "mcp_token", ""):
+        assert AutoBotMCPServer._validate_token(":kb,memory,agents") is None
+        assert AutoBotMCPServer._validate_token(":") is None
+        assert AutoBotMCPServer._validate_token("dev:kb,memory,agents") is None
+
+
+@pytest.mark.asyncio
+async def test_empty_secret_token_returns_401_end_to_end():
+    """#13263: the empty-secret token is rejected through the full request path."""
+    server = make_server()
+    with (
+        patch.object(config.misc, "mcp_token", ""),
+        patch.object(AutoBotMCPServer, "_validate_redis_token", new=AsyncMock(return_value=None)),
+    ):
+        resp = await server.handle_request("tools/list", {}, ":kb,memory,agents")
     assert "error" in resp
     assert resp["error"]["code"] == -32001
 
@@ -287,3 +330,56 @@ async def test_legacy_token_still_works_without_run_jwt():
     assert "result" in resp
     tool_names = {t["name"] for t in resp["result"]["tools"]}
     assert "kb.search" in tool_names
+
+
+# ---------------------------------------------------------------------------
+# #13266: AUTOBOT_MCP_TOKEN has exactly one meaning (the secret segment)
+# ---------------------------------------------------------------------------
+
+
+def test_stdio_bearer_is_composed_from_secret_plus_scopes():
+    """#13266: stdio composes "<secret>:<scopes>" instead of reusing the secret as a bearer."""
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory"),
+    ):
+        assert _stdio_bearer_token() == f"{TEST_SECRET}:kb,memory"
+
+
+@pytest.mark.asyncio
+async def test_stdio_bearer_authenticates_end_to_end():
+    """#13266: the token stdio presents is accepted by the validator it is checked against.
+
+    Before the fix no value of AUTOBOT_MCP_TOKEN satisfied both readings, so
+    every stdio request was rejected with -32001 in every configuration.
+    """
+    server = make_server()
+    with (
+        patch.object(config.misc, "mcp_token", TEST_SECRET),
+        patch.object(config.misc, "mcp_stdio_scopes", "kb,memory,agents"),
+    ):
+        resp = await server.handle_request("tools/list", {}, _stdio_bearer_token(), req_id=7, client_ip="stdio")
+
+    assert "error" not in resp, resp
+    assert {t["name"] for t in resp["result"]["tools"]} & {"kb.search"}
+
+
+def test_stdio_refuses_to_run_without_a_configured_secret():
+    """#13266/#13263: no default credential — an unset secret is fatal, not permissive."""
+    with patch.object(config.misc, "mcp_token", ""):
+        with pytest.raises(RuntimeError, match="AUTOBOT_MCP_TOKEN"):
+            _stdio_bearer_token()
+
+
+def test_stdio_refuses_to_run_with_no_scopes():
+    """An empty scope list would compose a token that grants nothing; fail loudly instead."""
+    with patch.object(config.misc, "mcp_token", TEST_SECRET), patch.object(config.misc, "mcp_stdio_scopes", " , "):
+        with pytest.raises(RuntimeError, match="scopes"):
+            _stdio_bearer_token()
+
+
+def test_stdio_rejects_the_overloaded_full_token_form():
+    """#13266: a '<secret>:<scopes>' value in AUTOBOT_MCP_TOKEN is named, not silently broken."""
+    with patch.object(config.misc, "mcp_token", f"{TEST_SECRET}:kb,memory,agents"):
+        with pytest.raises(RuntimeError, match="SECRET SEGMENT ONLY"):
+            _stdio_bearer_token()

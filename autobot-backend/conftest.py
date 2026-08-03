@@ -611,13 +611,34 @@ if "llm_shared" not in sys.modules:
 
 # auth_middleware stub — the real module pulls in the full config/Redis chain
 # at import time (config.manager, error_catalog, etc.) which fails in the dev
-# venv.  Tests that exercise openai_compat patch _get_user directly and never
-# call get_current_user, so a lightweight stub is safe here.
+# venv.  Every name exported here must be a real callable with a real
+# signature, because routers capture them in ``Depends(...)`` at import time.
 if "auth_middleware" not in sys.modules:
+    from fastapi import Request as _FastAPIRequest
+
     _auth_stub = types.ModuleType("auth_middleware")
     _auth_stub.__path__ = []  # type: ignore[attr-defined]
     _auth_stub.__package__ = "auth_middleware"
-    _auth_stub.get_current_user = MagicMock()  # type: ignore[attr-defined]
+
+    # get_current_user must be a real callable, not a bare MagicMock (#13253).
+    # ``inspect.signature(MagicMock())`` is ``(*args, **kwargs)``; FastAPI's
+    # get_dependant() does not skip VAR_POSITIONAL/VAR_KEYWORD parameters, so
+    # both become REQUIRED query parameters. Every request to any router that
+    # declares ``Depends(get_current_user)`` then fails validation with
+    # ``422 {'loc': ['query', 'args'], 'msg': 'Field required'}`` before the
+    # handler ever runs — same failure mode as #10472 below.
+    # The ``request`` parameter is annotated ``Request`` so FastAPI injects it
+    # instead of treating it as a request field, and defaults to None so
+    # direct ``get_current_user()`` call sites keep working.
+    def _get_current_user_stub(request: _FastAPIRequest = None) -> dict:  # type: ignore[assignment] # noqa: E301
+        return {
+            "username": "test-user",
+            "user_id": "test-user",
+            "role": "admin",
+            "auth_method": "stub",
+        }
+
+    _auth_stub.get_current_user = _get_current_user_stub  # type: ignore[attr-defined]
 
     # check_admin_permission must be a proper no-arg callable so FastAPI can
     # inspect its signature at route-registration time without producing spurious

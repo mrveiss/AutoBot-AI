@@ -14,6 +14,8 @@ Proves:
       lived only in models.py; manager.py had 5).
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from chat_workflow.manager import ChatWorkflowManager
@@ -109,7 +111,10 @@ class _FakeManager:
         return {}
 
     def _create_llm_iteration_context(self, *args, **kwargs):
-        return object()
+        # #13292: production reads ctx.selected_model/rag_citations/used_knowledge
+        # at the _persist_workflow_messages call site — a bare object() no longer
+        # satisfies that attribute access.
+        return SimpleNamespace(selected_model="", rag_citations=[], used_knowledge=False)
 
     async def _execute_llm_continuation_loop(self, ctx):
         # Model echoed the internal prompt then produced the real answer.
@@ -118,8 +123,13 @@ class _FakeManager:
     async def _persist_conversation(self, session_id, session, message, llm_response):
         self.persisted["conversation"] = llm_response
 
-    async def _persist_workflow_messages(self, session_id, workflow_messages, combined_response):
-        self.persisted["workflow"] = combined_response
+    async def _persist_workflow_messages(self, session_id, workflow_messages, all_llm_responses, **_kwargs):
+        # #13292: production now calls this with keyword-only selected_model/
+        # rag_citations/used_knowledge — accept and ignore them here since this
+        # fake only asserts on the filtered text, not persisted metadata.
+        # #13295: production now passes the per-iteration response list
+        # (filtered per-item) instead of one pre-joined string.
+        self.persisted["workflow"] = all_llm_responses
 
     async def _fire_stop_hook(self, *args, **kwargs):
         return None
@@ -150,8 +160,9 @@ class TestProductionWirePoint:
         assert "CRITICAL MULTI-STEP" not in persisted
         assert "YOUR RESPONSE" not in persisted
         assert REAL_ANSWER in persisted
-        # Both persist sinks receive the same filtered text.
-        assert fake.persisted["workflow"] == persisted
+        # #13295: the workflow sink now receives the per-iteration list (one
+        # entry here); each entry is filtered the same way as the join.
+        assert fake.persisted["workflow"] == [persisted]
 
     def test_raw_join_would_leak_echo_on_base(self):
         """Documents the base defect: the pre-fix expression leaks the echo."""

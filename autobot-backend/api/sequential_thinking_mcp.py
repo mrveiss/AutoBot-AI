@@ -20,7 +20,6 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from api.schemas_common import DataResponse
 from api.schemas_workflows import (
     SequentialThinkingClearData,
     SequentialThinkingMCPTool,
@@ -260,7 +259,7 @@ async def get_thinking_session(session_id: str) -> Metadata:
     }
 
 
-@router.delete("/sessions/{session_id}", response_model=DataResponse[SequentialThinkingClearData])
+@router.delete("/sessions/{session_id}", response_model=SequentialThinkingClearData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_thinking_session",
