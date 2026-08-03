@@ -48,6 +48,20 @@ _ssot.config.port.chromadb = 8100  # type: ignore[attr-defined]
 # utils / chromadb_client stubs
 _utils_stub = _make_stub("utils")
 _chromadb_stub = _make_stub("utils.chromadb_client")
+# AnalyzerService reaches ChromaDB through knowledge.backends'
+# get_async_default_client(), which lazily imports get_async_chromadb_client
+# from utils.async_chromadb_client (#5316) — not the sync utils.chromadb_client.
+# _make_stub() uses sys.modules.setdefault but returns its own fresh object, so
+# when a sibling test module registered this name first the returned stub is a
+# dangling copy that production code never sees. Read the registered module back.
+_make_stub("utils.async_chromadb_client")
+_async_chromadb_stub = sys.modules["utils.async_chromadb_client"]
+# Injecting a submodule straight into sys.modules does not bind it on the
+# parent package, so mock.patch("utils.async_chromadb_client....") — used by
+# services/rag_service_kb_synthesis_test.py — cannot resolve it. Bind it, and
+# seed the symbol production imports so patch() finds an existing attribute.
+_async_chromadb_stub.get_async_chromadb_client = AsyncMock()  # type: ignore[attr-defined]
+sys.modules["utils"].async_chromadb_client = _async_chromadb_stub  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # Load analyzer_service via importlib to bypass package __init__ imports
@@ -96,7 +110,7 @@ def _make_chromadb_client(collection: AsyncMock) -> AsyncMock:
 def _patch_chromadb(analyzer: AnalyzerService, collection: AsyncMock) -> None:
     """Inject a mock ChromaDB client into analyzer._get_collection path."""
     client = _make_chromadb_client(collection)
-    _chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
+    _async_chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
 
 
 # ---------------------------------------------------------------------------

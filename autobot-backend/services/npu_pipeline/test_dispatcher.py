@@ -20,8 +20,13 @@ _PKG_DIR = Path(__file__).parent
 
 
 def _load_module(name: str, filename: str):
-    if name in sys.modules and hasattr(sys.modules[name], "__file__"):
-        return sys.modules[name]
+    # Probe __dict__ rather than using hasattr: the root conftest's package
+    # stubs define a module-level __getattr__ that answers EVERY attribute
+    # with a MagicMock, so hasattr(stub, "__file__") is always True and the
+    # stub would be handed back instead of the real module.
+    existing = sys.modules.get(name)
+    if existing is not None and existing.__dict__.get("__file__"):
+        return existing
     spec = importlib.util.spec_from_file_location(name, str(_PKG_DIR / filename))
     mod = importlib.util.module_from_spec(spec)
     mod.__package__ = "services.npu_pipeline"
@@ -75,7 +80,7 @@ async def test_happy_path_three_workers():
 
     call_log: List[str] = []
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         resp = AsyncMock()
         resp.raise_for_status = MagicMock()
         if "/forward" in url:
@@ -123,7 +128,7 @@ async def test_worker_drop_mid_pass_failover():
 
     import aiohttp as _aiohttp
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         resp = AsyncMock()
         resp.raise_for_status = MagicMock()
 
@@ -172,7 +177,7 @@ async def test_worker_drop_no_peer_raises():
 
     import aiohttp as _aiohttp
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         raise _aiohttp.ClientConnectionError("worker0 down")
 
     session_mock = MagicMock()
@@ -195,7 +200,7 @@ async def test_single_worker_produces_tokens():
     """Single-worker plan: worker is both first and last, produces tokens."""
     plan = _make_plan("w0")
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         assert "/generate" in url, f"Expected /generate, got {url}"
         resp = AsyncMock()
         resp.raise_for_status = MagicMock()
