@@ -36,6 +36,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.sql_identifier import validate_sql_identifier
 from autobot_shared.time_utils import now_utc
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
@@ -71,32 +72,6 @@ router = APIRouter(
 
 # Issue #380: Module-level tuple for allowed DML operations
 _ALLOWED_DML_OPERATIONS = ("INSERT", "UPDATE", "DELETE")
-
-# Issue #2845: Allowlist pattern for SQL identifiers (table and column names)
-_SQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def _validate_sql_identifier(name: str, label: str = "identifier") -> str:
-    """Validate a SQL identifier (table or column name) against an allowlist pattern.
-
-    Only permits names composed of ASCII letters, digits, and underscores, starting
-    with a letter or underscore. This prevents SQL injection when user-supplied identifiers
-    are interpolated into query strings. (#2845)
-
-    Args:
-        name: The identifier to validate.
-        label: Human-readable label used in the error message.
-
-    Returns:
-        The validated name unchanged.
-
-    Raises:
-        ValueError: If the name contains characters outside the allowed set.
-    """
-    if not _SQL_IDENTIFIER_RE.match(name):
-        raise ValueError(f"Invalid SQL {label} '{name}': only letters, digits, and underscores allowed")
-    return name
-
 
 # Security Configuration
 
@@ -308,8 +283,8 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
         for (table_name,) in tables:
             # table_name originates from sqlite_master (system catalogue), not user input.
             # SQLite does not support parameterised identifiers; f-string is unavoidable.
-            # _validate_sql_identifier enforces an allowlist as defence-in-depth.
-            _validate_sql_identifier(table_name, "table name")
+            # validate_sql_identifier enforces an allowlist as defence-in-depth.
+            validate_sql_identifier(table_name, "table name")
             # Bare-assign the SQL so the nosec/nosemgrep stay on the flagged line:
             # black would split `cursor.execute(f"...")  # nosec` and orphan the
             # comment onto the `)` line, defeating the suppression (#9489).
@@ -334,9 +309,9 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
         schemas = {}
 
         if table:
-            # table is validated by _validate_sql_identifier (allowlist) above.
+            # table is validated by validate_sql_identifier (allowlist) above.
             # PRAGMA does not accept parameterised identifiers in SQLite.
-            _validate_sql_identifier(table, "table name")
+            validate_sql_identifier(table, "table name")
             pragma_sql = f"PRAGMA table_info([{table}])"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
             cursor.execute(pragma_sql)
             columns = cursor.fetchall()
@@ -356,9 +331,9 @@ def _describe_schema_sync(db_path: Path, table: str | None) -> dict:
             tables = cursor.fetchall()
 
             for (table_name,) in tables:
-                # table_name from sqlite_master; _validate_sql_identifier enforces allowlist.
+                # table_name from sqlite_master; validate_sql_identifier enforces allowlist.
                 # PRAGMA does not support ? parameters in SQLite.
-                _validate_sql_identifier(table_name, "table name")
+                validate_sql_identifier(table_name, "table name")
                 pragma_sql = f"PRAGMA table_info([{table_name}])"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
                 cursor.execute(pragma_sql)
                 columns = cursor.fetchall()
@@ -405,8 +380,8 @@ def _get_db_statistics_sync(db_path: Path) -> dict:
         for (table_name,) in tables:
             # table_name from sqlite_master (system catalogue), not user input.
             # SQLite does not support parameterised identifiers; f-string unavoidable.
-            # _validate_sql_identifier enforces an allowlist as defence-in-depth.
-            _validate_sql_identifier(table_name, "table name")
+            # validate_sql_identifier enforces an allowlist as defence-in-depth.
+            validate_sql_identifier(table_name, "table name")
             count_sql = f"SELECT COUNT(*) FROM [{table_name}]"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
             cursor.execute(count_sql)
             total_rows += cursor.fetchone()[0]
