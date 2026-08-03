@@ -37,11 +37,12 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import os
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -571,27 +572,97 @@ def test_prune_removes_only_files_past_the_ttl(tmp_path, monkeypatch):
     assert not stale.exists()
 
 
-def test_detached_finally_deletes_neither_staged_file(tmp_path):
+async def _run_playbook_capturing_staged_files(tmp_path, monkeypatch, *, detach: bool):
+    """Drive a whole ``execute_playbook`` and report which staged files survive.
+
+    Everything below the staging decision is stubbed: the point is what the
+    ``finally`` block does to the two files, not what Ansible does.
+    """
+    ansible_dir = tmp_path / "ansible"
+    ansible_dir.mkdir()
+    (ansible_dir / "update-all-nodes.yml").write_text("- hosts: all\n", encoding="utf-8")
+    shared = tmp_path / "shared"
+    shared.mkdir(mode=0o700)
+    monkeypatch.setattr(_pe, "SELF_UPDATE_SHARED_DIR", shared)
+    monkeypatch.setattr(_pe, "fetch_deploy_secrets", AsyncMock(return_value={}))
+
+    ex = _executor(ansible_dir)
+    ex.inventory_path = ansible_dir / "slm-nodes.yml"
+
+    async def _fake_inventory(_self, stage_dir=None):
+        path = Path(stage_dir or tmp_path) / "autobot_inv_run.yml"
+        path.write_text("all:\n", encoding="utf-8")
+        return path
+
+    def _fake_extra_vars(extra_vars, uid_tmp_dir=None):
+        # ``services.inventory_builder`` is a MagicMock in this module's loader,
+        # so the real writer produces no file. Write a real one into the same
+        # stage dir: the assertion is what the ``finally`` block does to it.
+        path = Path(uid_tmp_dir or tmp_path) / "autobot_evars_run.json"
+        path.write_text(json.dumps(extra_vars), encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(_pe, "write_temp_extra_vars", _fake_extra_vars)
+    monkeypatch.setattr(_pe.PlaybookExecutor, "_build_dynamic_inventory", _fake_inventory)
+    monkeypatch.setattr(
+        _pe.PlaybookExecutor,
+        "_build_ansible_command",
+        lambda *a, **kw: ["/usr/bin/ansible-playbook", "update-all-nodes.yml"],
+    )
+    monkeypatch.setattr(_pe.PlaybookExecutor, "_build_ansible_env", lambda _self: {"PATH": "/usr/bin"})
+    monkeypatch.setattr(
+        _pe.PlaybookExecutor,
+        "_run_subprocess",
+        AsyncMock(return_value={"returncode": 0, "output": ""}),
+    )
+
+    result = await ex.execute_playbook(
+        "update-all-nodes.yml",
+        extra_vars={"a_secret": "value"},  # forces an extra-vars file into stage_dir
+        detach=detach,
+    )
+    survivors = sorted(f.name for f in shared.iterdir()) if shared.exists() else []
+    return result, survivors
+
+
+@pytest.mark.asyncio
+async def test_a_detached_run_leaves_both_staged_files_on_disk(tmp_path, monkeypatch):
     """The caller must not unlink files the detached payload still owns.
 
-    #12803 reported this as the root cause. It was not — the real cause was the
-    PrivateTmp namespace — but the deletion IS a live hazard now that the
+    #12803 reported this as the root cause. It was not -- the real cause was
+    the PrivateTmp namespace -- but the deletion IS a live hazard now that the
     payload outlives this coroutine by design (Play 1 restarts this service
-    mid-run). Both files must survive, not just the inventory: they are removed
-    by two separate branches in the finally, and guarding only one leaves the
-    extra-vars race intact.
+    mid-run). BOTH files must survive: they are removed by two separate
+    branches, and guarding only one leaves the extra-vars race intact.
+
+    This replaces a source-text check that compared ``str.index`` positions of
+    ``"if detach:"``, ``"dynamic_inv_path.unlink"`` and ``"extra_vars_file.unlink"``
+    inside ``inspect.getsource(execute_playbook)`` (#13311) -- it asserted the
+    *textual order* of three substrings, so it passed for an ``if detach:``
+    belonging to some other statement and broke on any reordering that changed
+    nothing.
     """
-    import inspect
+    result, survivors = await _run_playbook_capturing_staged_files(tmp_path, monkeypatch, detach=True)
 
-    src = inspect.getsource(_pe.PlaybookExecutor.execute_playbook)
-    finally_body = src.split("finally:", 1)[1]
+    assert result["success"] is True
+    assert any(name.startswith("autobot_inv_") for name in survivors), (
+        f"#12803: the staged inventory was deleted under a still-starting "
+        f"detached run; survivors={survivors}"
+    )
+    assert len(survivors) >= 2, (
+        f"#12803: the extra-vars file was deleted under a still-starting "
+        f"detached run; survivors={survivors}"
+    )
 
-    guard = finally_body.index("if detach:")
-    inv_unlink = finally_body.index("dynamic_inv_path.unlink")
-    evars_unlink = finally_body.index("extra_vars_file.unlink")
 
-    # BOTH unlinks must sit after the detach guard, i.e. inside its else branch.
-    assert guard < inv_unlink
-    assert guard < evars_unlink
-    else_branch = finally_body.index("else:")
-    assert else_branch < inv_unlink and else_branch < evars_unlink
+@pytest.mark.asyncio
+async def test_an_attached_run_still_cleans_both_staged_files(tmp_path, monkeypatch):
+    """The mirror: the detach guard must not turn into a permanent leak.
+
+    Attached runs own their payload for the whole call, so nothing may be
+    left behind for ``_prune_stage_dir`` to reclaim later.
+    """
+    result, survivors = await _run_playbook_capturing_staged_files(tmp_path, monkeypatch, detach=False)
+
+    assert result["success"] is True
+    assert survivors == [], f"attached run leaked staged files: {survivors}"
