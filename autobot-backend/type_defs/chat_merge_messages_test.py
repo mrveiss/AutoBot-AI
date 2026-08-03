@@ -18,7 +18,7 @@ import pytest
 
 # Import the function under test
 # Note: We test the logic directly since merge_messages is async
-from type_defs.common import STREAMING_MESSAGE_TYPES
+from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES, STREAMING_MESSAGE_TYPES
 
 
 class TestMergeMessagesSignature:
@@ -30,6 +30,26 @@ class TestMergeMessagesSignature:
         assert "llm_response_chunk" in STREAMING_MESSAGE_TYPES
         assert "response" in STREAMING_MESSAGE_TYPES
         assert len(STREAMING_MESSAGE_TYPES) == 3
+
+    def test_streaming_types_are_not_the_persistence_skip_list(self):
+        """Issue #13162: the two sets must stay distinct.
+
+        Aliasing STREAMING_MESSAGE_TYPES to SKIP_WEBSOCKET_PERSISTENCE_TYPES made
+        api/chat.py treat terminal output, approval requests and reasoning-trace
+        events as token-accumulating streams, so merge_messages kept only the
+        longest one per 2-minute window and dropped the rest.
+        """
+        assert STREAMING_MESSAGE_TYPES < SKIP_WEBSOCKET_PERSISTENCE_TYPES
+        for never_streaming in (
+            "terminal_command",
+            "terminal_output",
+            "command_approval_request",
+            "terminal_interpretation",
+            "agent.step.start",
+            "agent.tool.result",
+        ):
+            assert never_streaming in SKIP_WEBSOCKET_PERSISTENCE_TYPES
+            assert never_streaming not in STREAMING_MESSAGE_TYPES
 
     def test_message_id_signature_priority(self):
         """Test that message ID takes priority for signature."""

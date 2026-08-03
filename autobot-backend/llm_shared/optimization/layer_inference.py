@@ -185,7 +185,7 @@ class LayerInferenceEngine:
         logger.debug("Loading model config for %s", model_name)
         auto_cfg = AutoConfig.from_pretrained(
             model_name, resume_download=True, **kwargs
-        )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+        )  # nosec B615  # HuggingFace model loaded by name; revision pinning managed operationally
         cfg_dict: Dict[str, Any] = auto_cfg.to_dict()
         logger.info(
             "Loaded model config for %s: arch=%s",
@@ -461,7 +461,7 @@ class LayerInferenceEngine:
             kwargs["cache_dir"] = self._config.cache_dir
         return AutoTokenizer.from_pretrained(
             self._config.model_name, resume_download=True, **kwargs
-        )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+        )  # nosec B615  # HuggingFace model loaded by name; revision pinning managed operationally
 
     def _resolve_checkpoint_path(self) -> str:
         """Return the checkpoint path for the configured model.
@@ -581,11 +581,41 @@ def _move_to_meta(torch: Any, module: Any) -> None:
     Issue #1946.
     """
     meta = torch.device("meta")
-    for param in list(module.parameters()):
-        param.data = torch.empty(param.shape, dtype=param.dtype, device=meta)
+    # remove_duplicate=False so a parameter shared by two submodules is released at
+    # every name it is registered under. The old in-place ``.data`` assignment
+    # reached all aliases through the single deduplicated entry; re-registering
+    # does not, and a missed alias would keep the real tensor — and its memory —
+    # alive, defeating the eviction. The layer is documented as unusable after
+    # eviction, so untying the shared storage here is safe.
+    for param_name, param in list(module.named_parameters(remove_duplicate=False)):
+        if param is not None:
+            _set_parameter(module, torch, param_name, meta, param)
     for buf_name, buf in list(module.named_buffers()):
         if buf is not None:
             _set_buffer(module, torch, buf_name, meta, buf)
+
+
+def _set_parameter(module: Any, torch: Any, name: str, device: Any, param: Any) -> None:
+    """Replace a named parameter with a meta-device empty tensor of the same shape.
+
+    Issue #13162: eviction previously did ``param.data = torch.empty(..., device=meta)``.
+    PyTorch rejects that with ``RuntimeError: Attempted to call variable.set_data(tensor),
+    but variable and tensor have incompatible tensor type`` because a meta tensor carries a
+    different ``TensorImpl`` than a dense one, so ``evict_layer`` raised instead of freeing
+    the layer. Re-registering the parameter — the same shape ``_set_buffer`` already uses
+    for buffers — is the supported way to move one across device types.
+    """
+    parts = name.split(".")
+    container = module
+    for part in parts[:-1]:
+        container = getattr(container, part)
+    container.register_parameter(
+        parts[-1],
+        torch.nn.Parameter(
+            torch.empty(param.shape, dtype=param.dtype, device=device),
+            requires_grad=param.requires_grad,
+        ),
+    )
 
 
 def _set_buffer(module: Any, torch: Any, name: str, device: Any, buf: Any) -> None:
