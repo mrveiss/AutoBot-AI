@@ -646,12 +646,10 @@ async def test_a_detached_run_leaves_both_staged_files_on_disk(tmp_path, monkeyp
 
     assert result["success"] is True
     assert any(name.startswith("autobot_inv_") for name in survivors), (
-        f"#12803: the staged inventory was deleted under a still-starting "
-        f"detached run; survivors={survivors}"
+        f"#12803: the staged inventory was deleted under a still-starting " f"detached run; survivors={survivors}"
     )
     assert len(survivors) >= 2, (
-        f"#12803: the extra-vars file was deleted under a still-starting "
-        f"detached run; survivors={survivors}"
+        f"#12803: the extra-vars file was deleted under a still-starting " f"detached run; survivors={survivors}"
     )
 
 

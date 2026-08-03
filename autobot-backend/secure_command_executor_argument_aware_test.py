@@ -206,9 +206,7 @@ class TestArgumentAwareRiskWinsOverTheAllowlistedBaseCommand:
         assert risk == CommandRisk.FORBIDDEN
         assert any("env-var prefix" in r.lower() for r in reasons), reasons
 
-    def test_an_allowlisted_command_without_the_argument_is_not_elevated(
-        self, executor: SecureCommandExecutor
-    ) -> None:
+    def test_an_allowlisted_command_without_the_argument_is_not_elevated(self, executor: SecureCommandExecutor) -> None:
         """The mirror: the argument-aware branch must not swallow normal use."""
         risk, _reasons = executor.assess_command_risk("docker ps")
 

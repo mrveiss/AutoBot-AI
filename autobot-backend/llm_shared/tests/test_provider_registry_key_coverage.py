@@ -23,7 +23,6 @@ import pytest
 
 from services.provider_key_vault import LLM_PROVIDER_KEY_NAMES
 
-
 # Names whose resolution is gated behind a *separate* setting, so a bare
 # registry build never reaches them.  The gate is enabled below rather than
 # excused: a vault name that no reachable configuration consults would be dead,

@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from services.envelope_secrets_service import EnvelopeSecretsService
 from services.provider_key_vault import (
-    LLM_PROVIDER_KEY_NAMES,
     _hydrated_keys,
     capture_provider_key,
     hydrate_provider_keys_from_vault,
