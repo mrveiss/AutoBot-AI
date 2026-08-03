@@ -68,6 +68,26 @@ class TestUpdateLatestVersionSetting:
 class TestVersionCheckTask:
     """Tests for version_check_task background task."""
 
+    @pytest.fixture(autouse=True)
+    def _local_checkout(self, tmp_path, monkeypatch):
+        """Give the loop a real git working tree to track.
+
+        version_check_task skips its entire body when the active CodeSource
+        path has no .git directory (#9716). These tests never established that
+        precondition, so they fell through to DEFAULT_REPO_PATH and read the
+        host's own deployed checkout: green on a developer box that has one,
+        red on a CI runner that does not (#13162).
+        """
+        code_source = tmp_path / "code_source"
+        (code_source / ".git").mkdir(parents=True)
+
+        async def _active_config():
+            return str(code_source), "Dev_new_gui"
+
+        monkeypatch.setattr(git_tracker_module, "_get_active_code_source_config", _active_config)
+        monkeypatch.setattr(git_tracker_module, "_missing_repo_warned", False)
+        return code_source
+
     @pytest.mark.asyncio
     async def test_task_calls_check_for_updates(self):
         """Test that version_check_task calls GitTracker.check_for_updates."""
@@ -238,6 +258,33 @@ class TestVersionCheckTask:
                         # Verify info log was called about update
                         info_calls = [str(call) for call in mock_logger.info.call_args_list]
                         assert any("Update available" in call for call in info_calls)
+
+    @pytest.mark.asyncio
+    async def test_task_skips_when_no_local_checkout(self, tmp_path, monkeypatch):
+        """No .git under the active CodeSource path → no git work at all (#9716).
+
+        Pins the gate that made every other test in this class depend on the
+        host filesystem (#13162): deployments without a local checkout must not
+        build a tracker or shell out to git on every interval.
+        """
+        no_checkout = tmp_path / "no_checkout"
+        no_checkout.mkdir()
+
+        async def _active_config():
+            return str(no_checkout), "Dev_new_gui"
+
+        monkeypatch.setattr(git_tracker_module, "_get_active_code_source_config", _active_config)
+
+        with patch.object(git_tracker_module, "get_git_tracker") as mock_get_tracker:
+            task = asyncio.create_task(git_tracker_module.version_check_task(interval=0.1))
+            await asyncio.sleep(0.2)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        mock_get_tracker.assert_not_called()
 
 
 class TestStartVersionChecker:
