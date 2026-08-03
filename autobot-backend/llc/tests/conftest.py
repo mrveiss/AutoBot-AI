@@ -17,6 +17,7 @@ Fixtures for project-repo API tests (#11129):
   a_project_with_repo — dict with ``id``/``company_id`` of a mock project already linked
 """
 
+import importlib
 import sys
 import types
 import uuid  # noqa: F401 — used in fixture helpers below
@@ -78,8 +79,9 @@ _SCOPED_STUB_KEYS = (
 
 # #13107: __file__ = .../autobot-backend/llc/tests/conftest.py → parents[2]
 # = .../autobot-backend, matching the same on-disk-path derivation already
-# used by _shield_codebase_analytics_package below.
+# used by _make_codebase_analytics_shield below.
 _KNOWLEDGE_DIR = str(Path(__file__).parents[2] / "knowledge")
+_AGENTS_DIR = str(Path(__file__).parents[2] / "agents")
 
 
 def _make_knowledge_stub() -> types.ModuleType:
@@ -214,21 +216,66 @@ def _make_services_stub() -> types.ModuleType:
 
 
 def _make_agents_stub() -> dict:
-    """Return ``agents`` stubs that avoid the knowledge/chromadb import chain.
+    """Return a hollow ``agents`` package that never runs ``__init__.py``.
 
     ``autobot_agent_adapter`` imports ``from agents.base_agent import AgentRequest``
     at module level.  Loading ``agents/__init__.py`` eagerly pulls in
     ``kb_librarian_agent`` → ``knowledge_base`` → ``knowledge`` → chromadb chain.
-    We short-circuit that by pre-populating sys.modules before any test module
-    triggers the import.
+    We short-circuit that with a hollow package the caller installs into
+    sys.modules before any test module triggers the import.
+
+    ``__path__`` points at the REAL on-disk ``agents/`` directory — the same
+    "hollow package" pattern already used for ``knowledge`` above (#13107) and
+    for ``api.codebase_analytics`` below.  Python consults ``__path__`` only to
+    locate a submodule that is not already in ``sys.modules``, and it never
+    executes the parent's ``__init__.py`` for a package object that is already
+    registered, so the heavy chain stays untouched while every real
+    ``agents.X`` submodule remains importable.
+
+    An empty ``__path__`` blocked every other real submodule too — notably
+    ``agents.agent_client``, which ``autobot-backend/orchestrator.py`` imports
+    at module level.  Because collection-time imports all happen before any
+    fixture teardown could restore the pre-stub state, that shadowing broke
+    *collection* of files gathered after this package in the same session
+    (reproduced: ``orchestration/plan_steps_e2e_test.py`` fails with
+    ``ModuleNotFoundError: No module named 'agents.agent_client'`` in a
+    combined run, never in isolation) — #13162.
+
+    ``agents/base_agent.py`` is dependency-light (autobot_shared + constants +
+    protocols, no knowledge/chromadb import at module level), so it is
+    real-loaded through the same ``__path__`` rather than replaced by a mock:
+    ``agents/agent_client.py`` does ``from .base_agent import AgentHealth,
+    BaseAgent, ...``, names a hand-written stub module did not carry.  That REAL
+    module — never a ``MagicMock`` stand-in, which would re-break exactly that
+    import — is what the mapping carries for ``agents.base_agent``.
+
+    Nothing is installed here.  Both modules are handed back as a
+    ``{sys.modules key: module}`` mapping so ``_ScopedStubs`` can install them
+    and restore the prior state around this package's own collect/run windows,
+    instead of leaving them live for the whole session (#13337).
     """
     agents_mod = types.ModuleType("agents")
-    agents_mod.__path__ = []  # type: ignore[attr-defined]
+    agents_mod.__path__ = [_AGENTS_DIR]  # type: ignore[attr-defined]
     agents_mod.__package__ = "agents"
+    agents_mod.__spec__ = None  # type: ignore[attr-defined]
 
-    agents_base = types.ModuleType("agents.base_agent")
-    agents_base.AgentRequest = MagicMock  # type: ignore[attr-defined]
-    agents_base.AgentResponse = MagicMock  # type: ignore[attr-defined]
+    # Real-loading ``base_agent`` needs the hollow parent visible to the import
+    # machinery for exactly that one import, so it goes in and comes straight
+    # back out — ``_install_scoped_stubs`` owns the snapshot-backed install.
+    # The import also binds the child onto ``agents_mod``, and ``_stub_modules``
+    # caches this mapping, so the module object that
+    # ``mock.patch("agents.base_agent.X")`` resolves against stays identical
+    # across every install window (#13337).
+    prior = {key: sys.modules.get(key) for key in ("agents", "agents.base_agent")}
+    sys.modules["agents"] = agents_mod
+    try:
+        agents_base = importlib.import_module("agents.base_agent")
+    finally:
+        for key, module in prior.items():
+            if module is None:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = module
 
     return {"agents": agents_mod, "agents.base_agent": agents_base}
 
@@ -319,9 +366,9 @@ def _stub_modules() -> dict:
     """Build this package's stub modules once and hand back the same objects.
 
     Identity is load-bearing.  ``unittest.mock.patch`` resolves a dotted target
-    by ``getattr`` on the parent module object, and the mocks these stubs carry
-    (``knowledge.get_knowledge_base``, ``agents.base_agent.AgentRequest``, the
-    ``api.codebase_analytics`` submodule bindings) are reached that way.  A
+    by ``getattr`` on the parent module object, and the attributes these modules
+    carry (``knowledge.get_knowledge_base``, ``agents.base_agent.AgentRequest``,
+    the ``api.codebase_analytics`` submodule bindings) are reached that way.  A
     fresh object per install window would silently move the patch target away
     from the object the code under test already holds (#13337).
     """
@@ -352,8 +399,6 @@ def _install_scoped_stubs() -> None:
     # autobot-backend/conftest.py's richer setup always wins; the attribute
     # binds it performs are required on every call (see its docstring).
     _make_services_stub()
-    import importlib  # noqa: PLC0415
-
     importlib.import_module("api").codebase_analytics = sys.modules[  # type: ignore[attr-defined]
         "api.codebase_analytics"
     ]
@@ -411,7 +456,7 @@ class _ScopedStubs:
     def _snapshot_api_attr(self) -> None:
         """Remember whether ``api.codebase_analytics`` was already bound.
 
-        ``_shield_codebase_analytics_package`` sets the attribute on the real
+        ``_install_scoped_stubs`` sets the attribute on the real
         ``api`` package so ``mock.patch("api.codebase_analytics...")`` resolves
         (#11129 P2); the attribute has to come back off again with the stub.
         """
@@ -551,7 +596,7 @@ def _install_source_stubs(fake_create: AsyncMock, fake_get: AsyncMock) -> dict:
 
     Only source_service and source_storage are stubbed.  source_models is never
     touched — the real module is always importable and analytics tests import
-    SourceType from it.  The package stub installed by _shield_codebase_analytics_package
+    SourceType from it.  The package stub installed by _install_scoped_stubs
     already allows submodule lookup without running __init__.py.
     """
     snapshot = {k: sys.modules.get(k) for k in _LLC_ANALYTICS_STUB_KEYS}
