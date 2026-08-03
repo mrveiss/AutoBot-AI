@@ -1127,7 +1127,7 @@ def _get_flat_heatmap_data(files: list) -> list:
 )
 async def get_risk_heatmap(
     admin_check: bool = Depends(check_admin_permission),
-    grouping: str = Query("directory", pattern="^(directory|module|flat)\z"),
+    grouping: str = Query("directory", pattern=r"^(directory|module|flat)\z"),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(100, ge=1, le=300),
@@ -1177,7 +1177,7 @@ async def get_risk_heatmap(
 )
 async def get_prediction_trends(
     admin_check: bool = Depends(check_admin_permission),
-    period: str = Query("30d", pattern="^(7d|30d|90d)\z"),
+    period: str = Query("30d", pattern=r"^(7d|30d|90d)\z"),
 ) -> dict[str, Any]:
     """
     Get historical bug prediction accuracy trends.

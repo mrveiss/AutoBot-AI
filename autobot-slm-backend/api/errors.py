@@ -556,7 +556,7 @@ async def clear_errors(
 async def create_test_error(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[dict, Depends(get_current_user)],
-    severity: str = Query("error", pattern="^(error|critical)\z"),
+    severity: str = Query("error", pattern=r"^(error|critical)\z"),
 ) -> TestErrorResponse:
     """Generate test error for validation."""
     event_id = f"test-{uuid.uuid4().hex[:12]}"
@@ -683,7 +683,7 @@ async def get_error_timeline(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
     hours: int = Query(24, ge=1, le=168),
-    interval: str = Query("hour", pattern="^(hour|day)\z"),
+    interval: str = Query("hour", pattern=r"^(hour|day)\z"),
 ) -> TimelineResponse:
     """Get error timeline data."""
     now = datetime.now(timezone.utc)

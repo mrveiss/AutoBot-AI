@@ -1349,7 +1349,7 @@ class RoleAssignmentResponse(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    role: str = Field(..., description="Role name: admin, user, or readonly", pattern="^(admin|user|readonly)\z")
+    role: str = Field(..., description="Role name: admin, user, or readonly", pattern=r"^(admin|user|readonly)\z")
 
 
 class RoleUpdateResponse(BaseModel):

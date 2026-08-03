@@ -1359,7 +1359,7 @@ def _calculate_trend_statistics(scores: list) -> dict:
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def get_quality_trends(
-    period: str = Query("30d", pattern="^(7d|14d|30d|90d)\z"),
+    period: str = Query("30d", pattern=r"^(7d|14d|30d|90d)\z"),
     metric: str | None = Query(None, description="Specific metric to trend"),
     admin_check: bool = Depends(check_admin_permission),
     source_id: str | None = Query(None, description="Project source ID to scope analysis"),
@@ -1579,7 +1579,7 @@ async def drill_down_category(
     error_code_prefix="ANALYTICS_QUALITY",
 )
 async def export_quality_report(
-    format: str = Query("json", pattern="^(json|csv|pdf)\z"),
+    format: str = Query("json", pattern=r"^(json|csv|pdf)\z"),
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """

@@ -498,7 +498,7 @@ class ChatMessage(BaseModel):
     content: str = Field(..., min_length=1, max_length=50000, description="Message content")
     role: str = Field(
         default=CategoryDefaults.ROLE_USER,
-        pattern="^(user|assistant|system)\z",
+        pattern=r"^(user|assistant|system)\z",
         description="Message role",
     )
     session_id: str = Field(..., description="Chat session ID")
@@ -529,7 +529,7 @@ class ChatMessage(BaseModel):
     )
     reasoning_effort: str | None = Field(
         None,
-        pattern="^(low|medium|high|auto)\z",
+        pattern=r"^(low|medium|high|auto)\z",
         description="Per-conversation reasoning effort override (low, medium, high, auto). "
         "Overrides the user's account-level default. Omit to use the user default. "
         "When 'auto' or absent the provider's own defaults are used (#9017).",
