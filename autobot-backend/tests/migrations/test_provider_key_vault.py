@@ -167,12 +167,10 @@ async def test_hydrate_never_logs_secret_value(session, caplog, monkeypatch):
     assert plaintext not in caplog.text
 
 
-def test_all_names_have_a_real_runtime_reader():
-    """Every name here must actually be consulted by provider_registry (no dead entries)."""
-    import inspect
-
-    from llm_shared import provider_registry
-
-    source = inspect.getsource(provider_registry._populate_default_providers)
-    for name in LLM_PROVIDER_KEY_NAMES:
-        assert name in source, f"{name} is declared but never resolved in _populate_default_providers"
+# #13311: the "every declared name has a real runtime reader" check used to
+# live here as an ``inspect.getsource`` grep over
+# ``provider_registry._populate_default_providers``.  It is now a behavioural
+# test that records which names the registry actually resolves, and it moved to
+# ``llm_shared/tests/test_provider_registry_key_coverage.py`` because this
+# module is gated behind ``requires_postgres`` -- a coverage assertion that
+# needs no database must not be skipped along with the migration tests.
