@@ -54519,6 +54519,17 @@ export interface components {
         /**
          * AgentModelCost
          * @description Normalised token usage for one agent/model pair.
+         *
+         *     ``input_tokens``/``cached_input_tokens``/``output_tokens`` require a
+         *     real per-event log to populate honestly (GH#13067) — ``llc_agent_budgets``
+         *     only accumulates a single combined ``tokens_spent`` counter
+         *     (``llc/services/budget.py``'s ``total_tokens = tokens_in + tokens_out``),
+         *     with no record of the input/output split. Rather than presenting that
+         *     combined total under one of the three split fields — which would apply
+         *     the wrong per-token pricing rate to whichever share it silently
+         *     misrepresents — they stay ``0`` and the real number is reported only in
+         *     ``total_tokens``, following ``llc/api/budget.py``'s ``list_cost_events``
+         *     precedent for the identical gap.
          */
         AgentModelCost: {
             /** Agent Id */
@@ -54535,6 +54546,13 @@ export interface components {
             cached_input_tokens: number;
             /** Output Tokens */
             output_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
+            /**
+             * Window
+             * @default lifetime
+             */
+            window: string;
         } & {
             [key: string]: unknown;
         };
