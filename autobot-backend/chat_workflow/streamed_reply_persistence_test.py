@@ -26,9 +26,10 @@ from typing import Any, Dict, List
 
 import pytest
 
+from async_chat_workflow import WorkflowMessage
 from chat_history.messages import MessagesMixin
 from chat_workflow.manager import ChatWorkflowManager
-from chat_workflow.models import StreamingMessage
+from chat_workflow.models import LLMIterationContext, StreamingMessage
 
 SESSION_ID = "sess-13214"
 REPLY = "Hello! I'm AutoBot. How can I help you today?"
@@ -114,7 +115,7 @@ class TestStreamedReplyIsReadableAfterReload:
     @pytest.mark.asyncio
     async def test_conversational_streamed_reply_is_persisted(self, store):
         """FAILS pre-fix: batch is empty, so the session reads back with zero turns."""
-        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, [], REPLY)
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, [], [REPLY])
 
         persisted = await store.load_session(SESSION_ID)
         assistant = _assistant_turns(persisted)
@@ -146,70 +147,127 @@ class TestStreamedReplyIsReadableAfterReload:
             for m in messages
         ]
 
-        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, llm_response)
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [llm_response])
 
         reloaded = await store.load_session(SESSION_ID)
         assert [m["text"] for m in _assistant_turns(reloaded)] == [REPLY]
 
     @pytest.mark.asyncio
-    async def test_reply_appended_after_tool_output(self, store):
-        """Issue #13295 (investigated, NOT fixed here): documents the CURRENT order.
+    async def test_reply_precedes_its_own_iteration_tool_output(self, store):
+        """Issue #13295 FIXED: a single-iteration tool turn reloads in live order.
 
-        A front-insertion fix was tried and reverted after code review: it
-        assumed the reply is always chronologically first, which only holds
-        for a single-iteration turn. The common case is 2+ iterations —
-        prose1 -> tool call -> terminal_output -> prose2 (the actual answer,
-        a SECOND LLM pass) — and "\n\n".join(all_llm_responses) collapses
-        both prose segments into the one string this function receives, which
-        legitimately belongs AFTER the tool output it was derived from.
-        Appending (this test) is therefore correct for the common case and
-        matches pre-PR behavior.
-
-        It is still WRONG for the single-iteration case (one prose blob
-        emitted BEFORE the only tool call, no second LLM pass) — see
-        ``test_two_iteration_turn_reload_order_matches_live_order`` below for
-        the case this DOES get right, and #13295 for the real fix (needs
-        _persist_workflow_messages to receive the per-iteration response list
-        plus an iteration marker on workflow_messages, so each prose segment
-        can be interleaved at its true position instead of collapsed to one
-        string with a single insertion point).
+        Live, the model's prose is generated (and streamed) BEFORE the tool
+        call it contains is dispatched (``_run_continuation_iteration`` runs
+        ``_yield_llm_response_and_check_stop`` before
+        ``_yield_tool_results_and_decide``). When the loop stops after that
+        one tool call (no second LLM pass), true order is prose -> tool
+        output — the reverse of the old flat "all tool output, then the
+        whole reply" batch, which a prior fix attempt (#13303 review) showed
+        cannot be produced by a single front/back insertion point. The tool
+        message's ``metadata.iteration`` (stamped by
+        ``_handle_tool_message_types``) is what lets ``_build_persist_batch``
+        place it after the prose that introduced it.
         """
         wf_messages = [
-            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={}),
+            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
         ]
 
-        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, REPLY)
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [REPLY])
 
         persisted = await store.load_session(SESSION_ID)
-        assert [m["sender"] for m in persisted] == ["system", "assistant"]
-        assert persisted[-1]["text"] == REPLY
+        assert [m["sender"] for m in persisted] == ["assistant", "system"]
+        assert persisted[0]["text"] == REPLY
 
     @pytest.mark.asyncio
     async def test_two_iteration_turn_reload_order_matches_live_order(self, store):
-        """Baseline for #13295: a genuine 2-iteration tool turn reloads correctly.
+        """Issue #13295 FIXED: a genuine 2-iteration tool turn reloads in live order.
 
-        iteration 1: model streams "Let me check." then calls a tool.
+        iteration 1: model streams "Let me check." then calls a tool (tagged
+        ``metadata.iteration = 1`` on the persisted terminal_output).
         iteration 2 (continuation, AFTER the tool result comes back): model
-        streams "Uptime is 3 days." — the actual answer.
-        combined_response = "Let me check.\n\nUptime is 3 days." (see
-        manager.py's ``"\n\n".join(all_llm_responses)`` / graph.py's
-        equivalent). The tool output belongs BETWEEN the two prose segments
-        live, but since both collapse into one persisted string, appending
-        that string after the tool output is the closest available
-        approximation with the current signature — not a regression to fix
-        here, just documented as the target the real interleaving fix must
-        preserve.
+        streams "Uptime is 3 days." — the actual answer, no further tool call.
+        Live order is prose1 -> tool output -> prose2. Previously (#13303),
+        both prose segments collapsed into one joined string with a single
+        insertion point, which could only match ONE of the single-iteration
+        or 2-iteration cases at a time — not both. ``_persist_workflow_messages``
+        now takes the per-iteration response list directly and interleaves
+        using each message's iteration tag.
         """
-        combined_response = "Let me check.\n\nUptime is 3 days."
         wf_messages = [
-            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={}),
+            SimpleNamespace(type="terminal_output", content="uptime: 3 days", metadata={"iteration": 1}),
         ]
+        all_llm_responses = ["Let me check.", "Uptime is 3 days."]
 
-        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, combined_response)
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, all_llm_responses)
 
         persisted = await store.load_session(SESSION_ID)
-        assert [m["sender"] for m in persisted] == ["system", "assistant"]
-        assert persisted[-1]["text"] == combined_response
+        assert [(m["sender"], m["text"]) for m in persisted] == [
+            ("assistant", "Let me check."),
+            ("system", "uptime: 3 days"),
+            ("assistant", "Uptime is 3 days."),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_graph_path_tags_and_dedupes_via_process_tool_results(self, store, monkeypatch):
+        """Review F4: drives the REAL _process_tool_results -> graph._run_llm_iteration
+        -> _persist_workflow_messages — not a hand-tagged ``SimpleNamespace`` fixture.
+
+        Only the innermost LLM-call (``_process_single_llm_iteration``) and
+        tool-dispatch (``_process_tool_calls``) primitives are faked; every
+        manager/graph method between them — including the fixed
+        ``_process_tool_results`` — runs for real. Catches two regressions a
+        hand-built fixture cannot: (B1) a NON-terminal tool message
+        (``tool_result``) was only tagged when its type was in
+        ``_TERMINAL_MESSAGE_TYPES``, so it fell into the untagged leftover
+        bucket and was misordered after the answer; (B2) the ``respond``
+        tool's own byte-identical ``response`` message was likewise untagged,
+        so the dedup guard never saw it and the answer was duplicated.
+        """
+        from chat_workflow import graph as graph_mod
+
+        manager = ChatWorkflowManager.__new__(ChatWorkflowManager)
+        answer = "Uptime is 3 days."
+
+        async def fake_llm_iteration(*_args, **_kwargs):
+            yield (answer, [{"name": "respond", "params": {"message": answer}}])
+
+        async def fake_tool_calls(*_args, **_kwargs):
+            yield WorkflowMessage(type="tool_result", content="checked uptime", metadata={})
+            yield WorkflowMessage(type="terminal_output", content="uptime: 3 days", metadata={})
+            yield WorkflowMessage(type="response", content=answer, metadata={"message_type": "respond_tool"})
+            yield (True, answer)  # break_loop_requested=True: respond tool ends the turn
+
+        monkeypatch.setattr(manager, "_process_single_llm_iteration", fake_llm_iteration)
+        monkeypatch.setattr(manager, "_process_tool_calls", fake_tool_calls)
+
+        ctx = LLMIterationContext(
+            ollama_endpoint="http://fake",
+            selected_model="test-model",
+            session_id=SESSION_ID,
+            terminal_session_id="term-1",
+            used_knowledge=False,
+            rag_citations=[],
+            workflow_messages=[],
+            initial_prompt="What is the uptime?",
+        )
+
+        messages, llm_response, should_continue = await graph_mod._run_llm_iteration(manager, ctx, 1, [], None)
+        assert should_continue is False
+
+        wf_messages = graph_mod._build_workflow_messages_from_state({"workflow_messages": messages})
+        await ChatWorkflowManager._persist_workflow_messages(manager, SESSION_ID, wf_messages, [llm_response])
+
+        persisted = await store.load_session(SESSION_ID)
+        # B1: tool_result (non-terminal) stays interleaved with terminal_output,
+        # not shoved to the end as an untagged leftover.
+        # B2: the respond-tool's own "response" entry IS the answer bubble — the
+        # dedup guard suppresses a second, separately-built prose entry.
+        assert [(m["sender"], m["text"]) for m in persisted] == [
+            ("assistant", "checked uptime"),
+            ("system", "uptime: 3 days"),
+            ("assistant", answer),
+        ]
+        assert len(_assistant_turns(persisted)) == 2
 
 
 class TestNoDuplicateOrEmptyTurns:
@@ -217,25 +275,38 @@ class TestNoDuplicateOrEmptyTurns:
 
     @pytest.mark.asyncio
     async def test_empty_llm_response_writes_nothing(self, store):
-        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, [], "")
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, [], [""])
         assert await store.load_session(SESSION_ID) == []
 
     @pytest.mark.asyncio
     async def test_identical_existing_turn_is_not_duplicated(self, store):
-        """The ``respond`` tool already emits a non-streaming turn with this text."""
-        wf_messages = [SimpleNamespace(type="response", content=REPLY, metadata={"message_type": "respond_tool"})]
+        """The ``respond`` tool already emits a non-streaming turn with this text.
 
-        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, REPLY)
+        Issue #13295: the duplicate is produced in the SAME iteration as the
+        prose it echoes — the dedup scan must see it even though it is
+        persisted AFTER the prose entry in the corrected order.
+        """
+        wf_messages = [
+            SimpleNamespace(type="response", content=REPLY, metadata={"message_type": "respond_tool", "iteration": 1})
+        ]
+
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [REPLY])
 
         persisted = await store.load_session(SESSION_ID)
         assert len(_assistant_turns(persisted)) == 1
 
     @pytest.mark.asyncio
     async def test_error_turn_persist_is_unchanged(self, store):
-        """``_persist_error_turn`` passes llm_response='' — behaviour must not change."""
+        """``_persist_error_turn`` passes ``all_llm_responses=[]`` — behaviour unchanged.
+
+        Issue #13295: confirms the error-turn path (no completed response at
+        all) still falls through to the flat, un-interleaved batch — every
+        workflow_messages entry is appended via the leftover fallback exactly
+        as the pre-#13295 code did.
+        """
         wf_messages = [SimpleNamespace(type="error", content="The assistant could not respond.", metadata={})]
 
-        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, "")
+        await ChatWorkflowManager._persist_workflow_messages(_manager(), SESSION_ID, wf_messages, [])
 
         persisted = await store.load_session(SESSION_ID)
         assert len(persisted) == 1
@@ -258,7 +329,7 @@ class TestFinalReplyCarriesModelAndCitations:
     async def test_model_is_recorded_on_the_persisted_turn(self, store):
         """FAILS pre-fix: metadata has no 'model' key at all."""
         await ChatWorkflowManager._persist_workflow_messages(
-            _manager(), SESSION_ID, [], REPLY, selected_model=self.MODEL
+            _manager(), SESSION_ID, [], [REPLY], selected_model=self.MODEL
         )
 
         persisted = await store.load_session(SESSION_ID)
@@ -271,7 +342,7 @@ class TestFinalReplyCarriesModelAndCitations:
             _manager(),
             SESSION_ID,
             [],
-            REPLY,
+            [REPLY],
             selected_model=self.MODEL,
             rag_citations=self.CITATIONS,
             used_knowledge=True,
@@ -288,7 +359,7 @@ class TestFinalReplyCarriesModelAndCitations:
             _manager(),
             SESSION_ID,
             [],
-            REPLY,
+            [REPLY],
             selected_model=self.MODEL,
             rag_citations=self.CITATIONS,
             used_knowledge=False,
