@@ -480,6 +480,30 @@ def pytest_make_collect_report(collector):
         _SCOPED_STUBS.exit(holder)
 
 
+_THIS_DIR = Path(__file__).parent
+
+
+def _is_ours(item) -> bool:
+    """True when *item* lives under this directory.
+
+    ``pytest_runtest_protocol`` is NOT directory-scoped, unlike every other
+    hook this file implements.  ``Session.pytest_runtestloop`` dispatches it
+    through ``item.config.hook`` — the global relay — not through
+    ``item.ihook``, so a hookwrapper defined in *any* conftest wraps *every*
+    item in the session.  Without this check the stubs were installed around
+    unrelated tests: ``knowledge/facts_metadata_sync_test.py`` lazily imports
+    ``knowledge.utils.sanitize_metadata_for_chromadb`` inside ``update_fact``
+    and got this file's ``MagicMock(return_value={})`` instead of the real
+    sanitiser, failing with ``KeyError: 'collection'``.
+
+    ``pytest_make_collect_report`` needs no such guard: ``collect_one_node``
+    dispatches it through ``collector.ihook``, which is scoped to the
+    collector's own conftest chain.
+    """
+    path = getattr(item, "path", None)
+    return path is not None and _THIS_DIR in Path(str(path)).parents
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
     """Stub the heavy imports for the whole of each test under this directory.
@@ -488,6 +512,9 @@ def pytest_runtest_protocol(item, nextitem):
     and ``agents`` lazily inside request handling — and restores from a
     ``finally`` so no failure path can leak the stub into the next test.
     """
+    if not _is_ours(item):
+        yield
+        return
     holder = f"run:{item.nodeid}"
     _SCOPED_STUBS.enter(holder)
     try:
