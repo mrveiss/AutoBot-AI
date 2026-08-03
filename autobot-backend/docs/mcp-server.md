@@ -6,13 +6,17 @@ Exposes AutoBot's KB, memory graph, and agent introspection as an MCP server for
 
 **stdio** (default — used by Claude Code / Cline):
 ```bash
-AUTOBOT_MCP_TOKEN="$MCP_SECRET:kb,memory,agents" python -m mcp.autobot_mcp_main
+AUTOBOT_MCP_TOKEN="$MCP_SECRET" python -m mcp.autobot_mcp_main
 ```
 
 **HTTP** (standalone aiohttp on port 8200):
 ```bash
-AUTOBOT_MCP_TOKEN="$MCP_SECRET:kb,memory,agents" python -m mcp.autobot_mcp_main --http
+AUTOBOT_MCP_TOKEN="$MCP_SECRET" python -m mcp.autobot_mcp_main --http
 ```
+
+`AUTOBOT_MCP_TOKEN` holds the **secret only** — never a full `<secret>:<scopes>`
+token (#13266). A value containing `:` is rejected at startup with a message
+saying so.
 
 The HTTP transport is also available via the FastAPI backend at `POST /api/mcp/tool`.
 
@@ -20,7 +24,13 @@ The HTTP transport is also available via the FastAPI backend at `POST /api/mcp/t
 
 Token format: `<secret>:<scope1>,<scope2>`
 
-Set the shared secret via `AUTOBOT_MCP_TOKEN` (the part before the first `:`).
+Set the shared secret via `AUTOBOT_MCP_TOKEN`. That variable has exactly one
+meaning: the secret segment — the part before the first `:`. It is never the
+whole token (#13266).
+
+The stdio transport composes its own bearer as `<AUTOBOT_MCP_TOKEN>:<AUTOBOT_MCP_STDIO_SCOPES>`,
+where `AUTOBOT_MCP_STDIO_SCOPES` defaults to `kb,memory,agents`. Scope names are
+not a credential; the secret is.
 
 > **The secret is the entire check.** A caller presenting a valid secret chooses its
 > own scopes from the token string, so anyone holding it has every scope regardless
@@ -39,7 +49,8 @@ Set the shared secret via `AUTOBOT_MCP_TOKEN` (the part before the first `:`).
 
 Available scopes: `kb`, `memory`, `agents`.
 
-Pass as `Authorization: Bearer <token>` for HTTP, or set `AUTOBOT_MCP_TOKEN` for stdio.
+Pass the full `<secret>:<scopes>` token as `Authorization: Bearer <token>` for HTTP.
+For stdio, set `AUTOBOT_MCP_TOKEN` (secret) and optionally `AUTOBOT_MCP_STDIO_SCOPES`.
 
 ## Tools
 
@@ -66,7 +77,10 @@ Add to your MCP config (e.g. `.claude/mcp.json`):
       "command": "python",
       "args": ["-m", "mcp.autobot_mcp_main"],
       "cwd": "/opt/autobot/autobot-backend",
-      "env": { "AUTOBOT_MCP_TOKEN": "<your-secret>:kb,memory,agents" }
+      "env": {
+        "AUTOBOT_MCP_TOKEN": "<your-secret>",
+        "AUTOBOT_MCP_STDIO_SCOPES": "kb,memory,agents"
+      }
     }
   }
 }
@@ -74,4 +88,40 @@ Add to your MCP config (e.g. `.claude/mcp.json`):
 
 ## Rate limiting
 
-50 requests per 60-second window per token. Excess requests receive HTTP 429 / JSON-RPC error code `-32029`.
+Two layers, both answering HTTP 429 / JSON-RPC `-32029`.
+
+**Pre-authentication (#13268).** `POST /api/mcp/tool` has no auth layer other than
+the MCP secret, so failed authentications are counted *before* the token is
+validated — guessing the secret is metered, and a rejected caller never reaches
+the Redis token lookup it would otherwise drive once per attempt.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `AUTOBOT_MCP_AUTH_MAX_FAILURES` | `10` | Failures per client IP per window before lockout |
+| `AUTOBOT_MCP_AUTH_WINDOW_SECONDS` | `300` | Sliding window over which failures accumulate |
+| `AUTOBOT_MCP_AUTH_LOCKOUT_SECONDS` | `900` | How long a tripped client stays blocked |
+| `AUTOBOT_MCP_AUTH_GLOBAL_MAX_FAILURES` | `100` | Failures across **all** IPs per window |
+| `AUTOBOT_MCP_AUTH_MAX_TRACKED_IPS` | `4096` | Cap on tracked IPs (bounds memory) |
+
+The throttle is **per backend process**, held in memory. Under N uvicorn workers
+the effective limits are N times the values above, and a restart clears the
+state. Size them per process, not per cluster.
+
+A caller that authenticated within the window is exempt from the endpoint-wide
+ceiling (never from its own per-IP budget), so a flood of anonymous failures
+cannot take the endpoint offline for clients that are demonstrably not the
+source. An attacker cannot enter that set without first authenticating.
+
+The endpoint-wide ceiling exists because the per-IP counter alone is not
+sufficient: the shipped nginx templates set
+`proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`, which *appends* the
+peer to whatever the client sent, so the leftmost address a proxied caller
+presents is caller-controlled. Rotating it defeats a per-IP lockout; it does not
+defeat the global ceiling. A successful authentication clears the caller's record,
+so ordinary traffic is unaffected.
+
+If a deployment terminates TLS somewhere that rewrites `X-Forwarded-For` to the
+true client address, set `AUTOBOT_TRUSTED_PROXIES` to that proxy and the per-IP
+layer becomes accurate as well.
+
+**Post-authentication.** 50 requests per 60-second window per token.
