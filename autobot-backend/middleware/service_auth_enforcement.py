@@ -39,6 +39,7 @@ EXEMPT_PATHS: List[str] = [
     # Health and version endpoints
     PATH_HEALTH,  # Health check (no /api prefix)
     PATH_API_HEALTH,  # API health check
+    "/api/hello",  # Liveness probe used by the readiness helpers (#13162)
     "/api/version",  # Version information
     # User-facing chat and conversation endpoints
     "/api/chat",
@@ -251,7 +252,7 @@ def _should_enforce_by_circuit_breaker() -> bool:
         return True
     if pct <= 0:
         return False
-    return random.randint(1, 100) <= pct  # nosec B311 - percentage-based sampling gate, not cryptographic
+    return random.randint(1, 100) <= pct  # nosec B311  # percentage-based sampling gate, not cryptographic
 
 
 def _rate_limit_settings() -> tuple[int, int]:
