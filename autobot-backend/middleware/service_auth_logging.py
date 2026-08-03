@@ -45,6 +45,7 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
         skip_paths = [
             PATH_HEALTH,  # Health check (no prefix)
             PATH_API_HEALTH,  # General health check
+            "/api/hello",  # Liveness probe (#13162)
             "/api/version",  # Version info
             "/docs",  # API documentation
             "/openapi.json",  # OpenAPI spec

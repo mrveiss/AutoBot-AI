@@ -39,8 +39,6 @@ from utils.knowledge_base_timeouts import kb_timeouts
 if TYPE_CHECKING:
     pass
 
-config = get_config_manager()
-
 logger = get_logger(__name__)
 
 
@@ -86,17 +84,17 @@ class KnowledgeBaseCore:
         self.redis_port = ssot_config.port.redis
         self.redis_password = ssot_config.redis.password
         self.redis_db = DATABASE_MAPPING["knowledge"]  # (#2670)
-        self.redis_index_name = config.get("redis.indexes.knowledge_base", "llama_index")
+        self.redis_index_name = self.config_manager.get("redis.indexes.knowledge_base", "llama_index")
 
     def _init_chromadb_config(self) -> None:
         """Initialize ChromaDB configuration (Issue #398: extracted)."""
-        self.chromadb_path = config.get("memory.chromadb.path", "data/chromadb")
-        self.chromadb_collection = config.get("memory.chromadb.collection_name", "autobot_memory")
+        self.chromadb_path = self.config_manager.get("memory.chromadb.path", "data/chromadb")
+        self.chromadb_collection = self.config_manager.get("memory.chromadb.collection_name", "autobot_memory")
         # Issue #72: HNSW parameters optimized for 545K+ vectors
-        self.hnsw_space = config.get("memory.chromadb.hnsw.space", "cosine")
-        self.hnsw_construction_ef = config.get("memory.chromadb.hnsw.construction_ef", 300)
-        self.hnsw_search_ef = config.get("memory.chromadb.hnsw.search_ef", 100)
-        self.hnsw_m = config.get("memory.chromadb.hnsw.M", 32)
+        self.hnsw_space = self.config_manager.get("memory.chromadb.hnsw.space", "cosine")
+        self.hnsw_construction_ef = self.config_manager.get("memory.chromadb.hnsw.construction_ef", 300)
+        self.hnsw_search_ef = self.config_manager.get("memory.chromadb.hnsw.search_ef", 100)
+        self.hnsw_m = self.config_manager.get("memory.chromadb.hnsw.M", 32)
         # Issue #8155: SQ8 scalar quantization — opt-in via AUTOBOT_HNSW_QUANTIZATION_TYPE=sq.
         # Empty string (default) disables quantization (safe for ChromaDB 1.5.x which rejects
         # the key; non-empty value is added to hnsw_metadata and tried at collection creation).
@@ -122,11 +120,22 @@ class KnowledgeBaseCore:
         # Issue #8391: VectorWriteBuffer (started in lifespan after ChromaDB init)
         self._write_buffer = None
 
-    def __init__(self):
-        """Initialize instance variables only (Issue #398: refactored)."""
+    def __init__(self, config_manager=None):
+        """Initialize instance variables only (Issue #398: refactored).
+
+        Args:
+            config_manager: ConfigManager to read Redis/ChromaDB settings from
+                (#13162). Falls back to the application-wide singleton, so the
+                many zero-arg callers keep working unchanged.
+        """
         # Call super().__init__() to ensure mixin __init__ methods are called
-        # This is critical for SearchMixin to initialize _query_processor
+        # This is critical for SearchMixin to initialize _query_processor.
+        # Deliberately not forwarding config_manager: the remaining mixins in
+        # the MRO take no constructor arguments.
         super().__init__()
+
+        # Must precede _init_redis_config/_init_chromadb_config, which read it.
+        self.config_manager = config_manager or get_config_manager()
 
         self.initialized = False
         self.initialization_lock = asyncio.Lock()
