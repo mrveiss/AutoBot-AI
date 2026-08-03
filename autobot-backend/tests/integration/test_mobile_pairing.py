@@ -16,6 +16,8 @@ Comprehensive end-to-end tests for the mobile device pairing flow:
 
 import uuid
 from datetime import timedelta
+from fnmatch import fnmatch
+from time import monotonic
 from typing import AsyncGenerator
 
 import pytest
@@ -29,7 +31,6 @@ from api.mobile_devices import _QR_CHALLENGE_TTL_SECONDS, _redis_challenge_key
 from api.mobile_devices import router as mobile_router
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
-from autobot_shared.redis_client import get_redis_client
 from autobot_shared.time_utils import now_utc
 from models.mobile_device import MobileDevice
 from user_management.models.base import Base
@@ -135,28 +136,105 @@ def test_client(test_db_session, test_user):
     return TestClient(app)
 
 
-@pytest.fixture
-def redis_client():
-    """Get Redis client for test."""
-    client = get_redis_client(database="main")
-    if client is None:
-        pytest.skip("Redis not available")
-    return client
+class _FakeRedis:
+    """In-process stand-in for the sync Redis client the pairing endpoints use.
+
+    Implements exactly the surface ``api/mobile_devices.py`` touches — ``setex``
+    / ``get`` / ``delete`` — plus ``ttl`` and ``scan_iter`` for the assertions in
+    this file, with genuine expiry semantics (monotonic deadlines) and the
+    ``decode_responses=True`` string values the production client is configured
+    with. That keeps every behaviour under test real: one-time-use consumption,
+    expiry, per-user binding and cross-request key visibility.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, tuple[str, float]] = {}
+
+    def _read(self, key: str) -> tuple[str, float] | None:
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        if entry[1] <= monotonic():
+            del self._store[key]
+            return None
+        return entry
+
+    def setex(self, key: str, ttl_seconds: int, value: str) -> bool:
+        self._store[key] = (str(value), monotonic() + int(ttl_seconds))
+        return True
+
+    def get(self, key: str) -> str | None:
+        entry = self._read(key)
+        return None if entry is None else entry[0]
+
+    def delete(self, *keys: str) -> int:
+        return sum(1 for key in keys if self._store.pop(key, None) is not None)
+
+    def ttl(self, key: str) -> int:
+        entry = self._read(key)
+        # Redis returns -2 for a missing key, -1 for a key with no expiry.
+        return -2 if entry is None else max(1, int(entry[1] - monotonic()))
+
+    def scan_iter(self, match: str = "*"):
+        return iter([key for key in list(self._store) if fnmatch(key, match)])
+
+
+class _FakeAsyncRedis:
+    """Async view over the same store, for callers that await their client.
+
+    ``DELETE /api/devices/{id}`` invalidates the device-JWT cache through
+    ``services.device_jwt.invalidate_device_cache``, which awaits
+    ``get_async_redis_client()``. Left unbound that dials the configured Redis
+    host and burns the full connect/retry budget — ~30 s in
+    ``test_unpair_device_success`` alone — before falling through its
+    ``if redis is None`` branch, so the invalidation was never actually
+    exercised. Sharing the sync double's store keeps it exercised and instant.
+    """
+
+    def __init__(self, sync_client: "_FakeRedis") -> None:
+        self._sync = sync_client
+
+    async def get(self, key: str) -> str | None:
+        return self._sync.get(key)
+
+    async def setex(self, key: str, ttl_seconds: int, value: str) -> bool:
+        return self._sync.setex(key, ttl_seconds, value)
+
+    async def delete(self, *keys: str) -> int:
+        return self._sync.delete(*keys)
 
 
 @pytest.fixture(autouse=True)
-def cleanup_redis(redis_client):
-    """Clean up Redis keys before and after each test."""
-    # Clean before
-    pattern = "autobot:mobile_pair_challenge:*"
-    for key in redis_client.scan_iter(match=pattern):
-        redis_client.delete(key)
+def redis_client(monkeypatch):
+    """Bind the pairing endpoints to a deterministic in-process Redis double.
 
-    yield
+    #13162: this fixture used to hand back ``get_redis_client(database="main")``
+    and ``pytest.skip`` when it returned ``None``. That guard cannot detect the
+    only failure mode that actually occurs in CI — the backend test harness
+    stubs ``autobot_shared.redis_client``, so the call returns a truthy
+    ``MagicMock`` rather than ``None``. The suite then ran against a mock whose
+    ``get()`` answers every lookup with a fresh ``MagicMock``: the challenge
+    token never round-tripped, and ``POST /pair`` wrote a ``MagicMock`` into the
+    ``user_id`` column, so SQLite rejected the INSERT and seven tests reported
+    500-vs-201. Locally the same guard skipped all nineteen, so the pairing
+    endpoints were verified in neither environment.
 
-    # Clean after
-    for key in redis_client.scan_iter(match=pattern):
-        redis_client.delete(key)
+    Injecting the double removes the ambient dependency entirely and pins the
+    name the router resolves (``api.mobile_devices`` binds ``get_redis_client``
+    at import), so the tests exercise the real endpoint logic everywhere.
+    """
+    import api.mobile_devices as mobile_devices_module
+    import services.device_jwt as device_jwt_module
+
+    client = _FakeRedis()
+    async_client = _FakeAsyncRedis(client)
+
+    async def _get_async_client(**_kwargs):
+        return async_client
+
+    monkeypatch.setattr(mobile_devices_module, "get_redis_client", lambda **_kwargs: client)
+    monkeypatch.setattr(device_jwt_module, "get_async_redis_client", _get_async_client)
+    return client
 
 
 # =============================================================================
