@@ -35,26 +35,6 @@ from ..models.enums import ApprovalStatus
 
 # HeartbeatScheduler import is lazy (inside _collect_metrics) to avoid circular-import
 # chains when the probe module is loaded in test environments.
-# LivenessMonitor singleton wrapper is created once at module level inside a try/except
-# so it is cached for the process lifetime without forcing an import at module load in
-# environments where the scheduler package is not yet available.
-try:
-    from autobot_shared.singleton_factory import lazy_singleton as _lazy_singleton
-
-    from ..scheduler.liveness_monitor import LivenessMonitor as _LivenessMonitor
-
-    _get_lm = _lazy_singleton(_LivenessMonitor)
-except ImportError:
-    _get_lm = None
-
-try:
-    from autobot_shared.singleton_factory import lazy_singleton as _lazy_singleton_sc
-
-    from ..scheduler.session_checkpointer import SessionCheckpointer as _SessionCheckpointer
-
-    _get_sc = _lazy_singleton_sc(_SessionCheckpointer)
-except ImportError:
-    _get_sc = None
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +58,7 @@ async def probe_llc(request: Request | None = None) -> ComponentHealth:
     start = time.monotonic()
 
     try:
-        metrics = await _collect_metrics()
+        metrics = await _collect_metrics(request)
         status = _compute_status(metrics)
         latency_ms = (time.monotonic() - start) * 1000
         return ComponentHealth(
@@ -98,16 +78,16 @@ async def probe_llc(request: Request | None = None) -> ComponentHealth:
         )
 
 
-async def _collect_metrics() -> dict:
+async def _collect_metrics(request: Request | None = None) -> dict:
     from ..scheduler.heartbeat_scheduler import get_heartbeat_scheduler
 
     scheduler = get_heartbeat_scheduler()
-    liveness_monitor = _get_liveness_monitor()
-    session_checkpointer = _get_session_checkpointer()
 
     heartbeat_scheduler_running = _is_scheduler_running(scheduler)
-    liveness_monitor_running = _is_liveness_monitor_running(liveness_monitor)
-    session_checkpointer_running = _is_session_checkpointer_running(session_checkpointer)
+    liveness_monitor_wired, liveness_monitor_running = _app_state_scheduler_state(request, "llc_liveness_monitor")
+    session_checkpointer_wired, session_checkpointer_running = _app_state_scheduler_state(
+        request, "llc_session_checkpointer"
+    )
     session_recovery_available = await _session_recovery_available()
     scheduler_last_tick_age_seconds = await _scheduler_tick_age()
     agents_overdue_degraded, agents_overdue_critical = await _count_overdue_agents()
@@ -117,7 +97,9 @@ async def _collect_metrics() -> dict:
 
     return {
         "heartbeat_scheduler_running": heartbeat_scheduler_running,
+        "liveness_monitor_wired": liveness_monitor_wired,
         "liveness_monitor_running": liveness_monitor_running,
+        "session_checkpointer_wired": session_checkpointer_wired,
         "session_checkpointer_running": session_checkpointer_running,
         "session_recovery_available": session_recovery_available,
         "scheduler_last_tick_age_seconds": scheduler_last_tick_age_seconds,
@@ -137,6 +119,14 @@ def _compute_status(metrics: dict) -> str:
         return "down"
     if metrics["agents_overdue_critical"] > 0:
         return "down"
+    # Issue #13331: an unwired probe (app.state never got the attribute the
+    # lifespan sets — the probe cannot verify the component at all) is a
+    # different, more severe problem than a wired-but-stopped component, and
+    # must not collapse into the same "degraded" bucket. `.get(..., True)`
+    # keeps pre-#13331 hand-built metrics dicts (missing the new keys) at
+    # their old "assume wired" behaviour.
+    if not metrics.get("liveness_monitor_wired", True) or not metrics.get("session_checkpointer_wired", True):
+        return "down"
     if (
         metrics["agents_overdue_degraded"] > 0
         or metrics["budget_exhausted_companies"] > 0
@@ -155,32 +145,30 @@ def _is_scheduler_running(scheduler: object) -> bool:
     return bool(getattr(scheduler, "is_running", False))
 
 
-def _get_liveness_monitor() -> object | None:
-    """Return the singleton LivenessMonitor if it exists, else None."""
-    if _get_lm is None:
-        return None
-    try:
-        return _get_lm()
-    except Exception:
-        return None
+def _app_state_scheduler_state(request: Request | None, attr: str) -> tuple[bool, bool]:
+    """Return ``(wired, running)`` for a poll-loop scheduler singleton kept on ``app.state``.
 
+    Issue #13331: the probe used to build its own private ``lazy_singleton``
+    instances of ``LivenessMonitor``/``SessionCheckpointer`` — objects
+    entirely disconnected from the ones ``initialization/lifespan.py``
+    actually starts and stores on ``app.state``. Those private instances were
+    never started, so the probe permanently reported them as not running,
+    regardless of the real component's health.
 
-def _is_liveness_monitor_running(monitor: object | None) -> bool:
-    return monitor is not None and bool(getattr(monitor, "is_running", False))
-
-
-def _get_session_checkpointer() -> object | None:
-    """Return the singleton SessionCheckpointer if it exists, else None."""
-    if _get_sc is None:
-        return None
-    try:
-        return _get_sc()
-    except Exception:
-        return None
-
-
-def _is_session_checkpointer_running(checkpointer: object | None) -> bool:
-    return checkpointer is not None and bool(getattr(checkpointer, "is_running", False))
+    ``wired=False`` means ``app.state`` never got the attribute at all —
+    lifespan never ran, or this probe call has no request context — which is
+    a probe-integration failure, distinct from ``wired=True, running=False``
+    (lifespan set the attribute — possibly to ``None`` after a caught startup
+    failure — but the component is not currently running). Conflating the two
+    is exactly how this bug survived: a probe that cannot tell "never wired"
+    from "wired but stopped" reports the same status for both.
+    """
+    if request is None or request.app is None or not hasattr(request.app.state, attr):
+        return False, False
+    instance = getattr(request.app.state, attr)
+    if instance is None:
+        return True, False
+    return True, bool(getattr(instance, "is_running", False))
 
 
 async def _session_recovery_available() -> bool:

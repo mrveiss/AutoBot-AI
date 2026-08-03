@@ -34,10 +34,19 @@ def _make_monitor(*, running: bool = True, task_done: bool = False) -> MagicMock
     return m
 
 
+def _make_request(app_state: object | None) -> MagicMock:
+    """Build a minimal fastapi.Request-like double exposing .app.state."""
+    request = MagicMock()
+    request.app.state = app_state
+    return request
+
+
 def _base_metrics(**overrides) -> dict:
     base = {
         "heartbeat_scheduler_running": True,
+        "liveness_monitor_wired": True,
         "liveness_monitor_running": True,
+        "session_checkpointer_wired": True,
         "session_checkpointer_running": True,
         "scheduler_last_tick_age_seconds": 2.5,
         "agents_overdue_degraded": 0,
@@ -81,26 +90,72 @@ def test_scheduler_not_running_falls_back_for_missing_property():
 
 
 # ---------------------------------------------------------------------------
-# _is_liveness_monitor_running
+# _app_state_scheduler_state — GH#13331: wired-vs-running distinction
 # ---------------------------------------------------------------------------
 
 
-def test_monitor_running():
-    from llc.health.probe import _is_liveness_monitor_running
+def test_wired_and_running_when_app_state_has_a_running_instance():
+    from types import SimpleNamespace
 
-    assert _is_liveness_monitor_running(_make_monitor(running=True, task_done=False)) is True
+    from llc.health.probe import _app_state_scheduler_state
 
-
-def test_monitor_not_running_when_none():
-    from llc.health.probe import _is_liveness_monitor_running
-
-    assert _is_liveness_monitor_running(None) is False
+    request = _make_request(SimpleNamespace(llc_liveness_monitor=_make_monitor(running=True)))
+    wired, running = _app_state_scheduler_state(request, "llc_liveness_monitor")
+    assert (wired, running) == (True, True)
 
 
-def test_monitor_not_running_when_stopped():
-    from llc.health.probe import _is_liveness_monitor_running
+def test_wired_but_not_running_when_app_state_instance_is_stopped():
+    from types import SimpleNamespace
 
-    assert _is_liveness_monitor_running(_make_monitor(running=False)) is False
+    from llc.health.probe import _app_state_scheduler_state
+
+    request = _make_request(SimpleNamespace(llc_liveness_monitor=_make_monitor(running=False)))
+    wired, running = _app_state_scheduler_state(request, "llc_liveness_monitor")
+    assert (wired, running) == (True, False)
+
+
+def test_wired_but_not_running_when_app_state_attr_is_none():
+    """Lifespan caught a startup failure and recorded None -- attribute IS
+    present, so this must read as wired, not unwired (GH#13331)."""
+    from types import SimpleNamespace
+
+    from llc.health.probe import _app_state_scheduler_state
+
+    request = _make_request(SimpleNamespace(llc_liveness_monitor=None))
+    wired, running = _app_state_scheduler_state(request, "llc_liveness_monitor")
+    assert (wired, running) == (True, False)
+
+
+def test_unwired_when_app_state_never_got_the_attribute():
+    """The core #13331 regression: an attribute lifespan never set must
+    report distinctly (unwired) from a wired-but-stopped component -- both
+    used to collapse into a single not-running bool."""
+    from types import SimpleNamespace
+
+    from llc.health.probe import _app_state_scheduler_state
+
+    request = _make_request(SimpleNamespace())  # no llc_liveness_monitor at all
+    wired, running = _app_state_scheduler_state(request, "llc_liveness_monitor")
+    assert (wired, running) == (False, False)
+
+
+def test_unwired_when_request_is_none():
+    """No request context (e.g. an internal caller) cannot verify wiring --
+    must report unwired, not fabricate a running/not-running verdict."""
+    from llc.health.probe import _app_state_scheduler_state
+
+    wired, running = _app_state_scheduler_state(None, "llc_liveness_monitor")
+    assert (wired, running) == (False, False)
+
+
+def test_app_state_scheduler_state_works_for_session_checkpointer_attr():
+    from types import SimpleNamespace
+
+    from llc.health.probe import _app_state_scheduler_state
+
+    request = _make_request(SimpleNamespace(llc_session_checkpointer=_make_monitor(running=True)))
+    wired, running = _app_state_scheduler_state(request, "llc_session_checkpointer")
+    assert (wired, running) == (True, True)
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +289,33 @@ def test_status_degraded_monitor_down():
     assert _compute_status(_base_metrics(liveness_monitor_running=False)) == "degraded"
 
 
+def test_status_down_when_liveness_monitor_unwired():
+    """GH#13331: unwired must be worse than degraded, and distinct from the
+    wired-but-stopped case above."""
+    from llc.health.probe import _compute_status
+
+    m = _base_metrics(liveness_monitor_wired=False, liveness_monitor_running=False)
+    assert _compute_status(m) == "down"
+
+
+def test_status_down_when_session_checkpointer_unwired():
+    from llc.health.probe import _compute_status
+
+    m = _base_metrics(session_checkpointer_wired=False, session_checkpointer_running=False)
+    assert _compute_status(m) == "down"
+
+
+def test_status_backward_compat_missing_wired_keys_defaults_ok():
+    """A metrics dict built before GH#13331 (no *_wired keys) must not be
+    newly downgraded to "down" -- absence of the key means "assume wired"."""
+    from llc.health.probe import _compute_status
+
+    m = _base_metrics()
+    del m["liveness_monitor_wired"]
+    del m["session_checkpointer_wired"]
+    assert _compute_status(m) == "ok"
+
+
 def test_status_degraded_pending_approvals():
     from llc.health.probe import _compute_status
 
@@ -327,3 +409,44 @@ async def test_probe_returns_degraded_when_agents_overdue_degraded():
         result = await probe_llc(None)
         assert result.status == "degraded"
         assert result.data["agents_overdue_degraded"] == 2
+
+
+@pytest.mark.asyncio
+async def test_probe_returns_unwired_down_with_no_request_context():
+    """GH#13331: without a request, the probe cannot reach app.state at all
+    and must report the components unwired (down) rather than fabricate a
+    running/not-running verdict from a disconnected shadow singleton."""
+    from unittest.mock import patch
+
+    async_pair = AsyncMock(return_value=(0, 0))
+    async_zero = AsyncMock(return_value=0)
+    async_none = AsyncMock(return_value=None)
+    async_false = AsyncMock(return_value=False)
+
+    with (
+        patch("llc.health.probe._count_overdue_agents", new=async_pair),
+        patch("llc.health.probe._budget_counts", new=async_pair),
+        patch("llc.health.probe._pending_approvals_critical", new=async_zero),
+        patch("llc.health.probe._count_agents_missing_instructions", new=async_zero),
+        patch("llc.health.probe._scheduler_tick_age", new=async_none),
+        patch("llc.health.probe._session_recovery_available", new=async_false),
+    ):
+        from llc.health.probe import probe_llc
+
+        result = await probe_llc(None)
+
+    assert result.data["liveness_monitor_wired"] is False
+    assert result.data["session_checkpointer_wired"] is False
+    assert result.status == "down"
+
+
+# NOTE: the "real lifespan objects" regression test for this fix lives in
+# initialization/lifespan_test.py, not here. llc/tests/conftest.py stubs
+# sys.modules["agents"] at collection time (to dodge the chromadb import
+# chain) so every test file under llc/tests/ can import cleanly -- but that
+# stub also permanently breaks `initialization.lifespan`'s own import chain
+# (api.overseer_handlers -> agents.overseer) for the rest of the pytest
+# process once it has run. Exercising the real lifespan init functions from
+# initialization/lifespan_test.py avoids that collision and matches the
+# precedent already established there (test_init_liveness_monitor_actually_starts_it,
+# #13085).

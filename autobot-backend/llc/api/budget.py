@@ -19,6 +19,7 @@ from llc.deps import assert_company_access, load_authorized
 from llc.exceptions import BudgetExhausted
 from llc.models.budget import LLCAgentBudget
 from llc.services.budget import BudgetService
+from models.agent_org import AgentOrgNode
 from user_management.database import get_async_session
 from user_management.services import TenantContext
 
@@ -360,7 +361,23 @@ async def list_cost_events(
 
 
 class AgentModelCostRow(BaseModel):
-    """Per-agent + per-model token breakdown row."""
+    """Per-agent + per-model token breakdown row.
+
+    Mirrors ``llc/api/costs.py``'s ``AgentModelCost`` (GH#13067): this
+    endpoint previously raw-SELECTed ``hr.tokens_in`` / ``hr.tokens_out`` from
+    ``llc_heartbeat_runs``, columns that never existed on that model
+    (GH#13330 — every call 500'd).  The only real per-agent token source is
+    ``llc_agent_budgets.tokens_spent`` — a single combined
+    ``tokens_in + tokens_out`` lifetime counter (``llc/services/budget.py``'s
+    ``ingest_cost_event``), with no per-model dimension and no input/output
+    split.  ``input_tokens`` / ``cached_input_tokens`` / ``output_tokens``
+    stay ``0`` rather than putting the combined total under
+    ``output_tokens`` — the first #13067 attempt did exactly that and applied
+    output-rate pricing to input tokens (3-5x over).  The real number is
+    reported only in ``total_tokens``.  ``cache_hit_rate`` has no source at
+    all — no per-model cache-read counter exists anywhere in the schema — so
+    it is ``None`` rather than a fabricated value.
+    """
 
     agent_id: str
     agent_name: str
@@ -368,7 +385,8 @@ class AgentModelCostRow(BaseModel):
     input_tokens: int
     cached_input_tokens: int
     output_tokens: int
-    cache_hit_rate: float
+    total_tokens: int
+    cache_hit_rate: Optional[float] = None
     cost_usd: str
 
 
@@ -383,58 +401,37 @@ async def costs_by_agent_model(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> List[AgentModelCostRow]:
-    """Return token usage broken down by agent and model for a company.
+    """Return lifetime token totals per agent for a company (GH#13330).
 
-    Required fields: agentId, agentName, model, inputTokens,
-    cachedInputTokens, outputTokens, cacheHitRate.
-
-    Cache hit rate = cachedInputTokens / totalInputTokens.  A low rate
-    signals session churn — the agent is not benefiting from prompt caching.
-
-    Data is sourced from ``agent_org_nodes`` (for model + name) joined to
-    ``llc_heartbeat_runs`` (for token usage).  Rows without any heartbeat
-    runs are included with zero token counts so the roster is always complete.
-
-    Note: ``llc_heartbeat_runs`` does not yet have ``input_tokens`` /
-    ``cached_input_tokens`` columns.  The query returns zeros for those until
-    a future migration adds the columns.  The endpoint is intentionally
-    available from day one so dashboards can start wiring up immediately.
+    Sourced from ``llc_agent_budgets`` — the table ``BudgetService.
+    ingest_cost_event`` (the actual writer) maintains — enriched with the
+    display name from ``agent_org_nodes`` when the agent is registered there.
+    ``model`` is always ``"unknown"`` and ``input_tokens`` /
+    ``cached_input_tokens`` / ``output_tokens`` / ``cache_hit_rate`` cannot be
+    populated honestly (see ``AgentModelCostRow`` docstring); the real spend
+    signal is ``total_tokens`` and ``cost_usd``. Matches ``llc/api/costs.py``'s
+    ``/costs/by-agent-model`` sibling endpoint, fixed for the identical gap
+    in GH#13067.
     """
     assert_company_access(ctx, company_id)
     result = await session.execute(
-        text("""
-            SELECT
-                aon.agent_id,
-                aon.name                                   AS agent_name,
-                COALESCE(aon.model, 'claude-sonnet-4-6')   AS model,
-                COALESCE(SUM(hr.tokens_in), 0)             AS input_tokens,
-                0                                          AS cached_input_tokens,
-                COALESCE(SUM(hr.tokens_out), 0)            AS output_tokens
-            FROM agent_org_nodes aon
-            LEFT JOIN llc_heartbeat_runs hr
-                   ON hr.agent_id = aon.agent_id
-            WHERE aon.company_id = :company_id
-            GROUP BY aon.agent_id, aon.name, aon.model
-            ORDER BY output_tokens DESC
-        """),
-        {"company_id": company_id},
+        select(LLCAgentBudget, AgentOrgNode.name)
+        .outerjoin(AgentOrgNode, AgentOrgNode.agent_id == LLCAgentBudget.agent_id)
+        .where(LLCAgentBudget.company_id == company_id)
+        .order_by(LLCAgentBudget.agent_id)
     )
-    rows = result.mappings().all()
 
-    out: List[AgentModelCostRow] = []
-    for row in rows:
-        total_in = int(row["input_tokens"]) + int(row["cached_input_tokens"])
-        cache_hit_rate = round(int(row["cached_input_tokens"]) / total_in, 4) if total_in > 0 else 0.0
-        out.append(
-            AgentModelCostRow(
-                agent_id=row["agent_id"],
-                agent_name=row["agent_name"],
-                model=row["model"],
-                input_tokens=int(row["input_tokens"]),
-                cached_input_tokens=int(row["cached_input_tokens"]),
-                output_tokens=int(row["output_tokens"]),
-                cache_hit_rate=cache_hit_rate,
-                cost_usd="0.00",  # populated by a future cost calculation pass
-            )
+    return [
+        AgentModelCostRow(
+            agent_id=budget.agent_id,
+            agent_name=agent_name or budget.agent_id,
+            model="unknown",
+            input_tokens=0,
+            cached_input_tokens=0,
+            output_tokens=0,
+            total_tokens=int(budget.tokens_spent),
+            cache_hit_rate=None,
+            cost_usd=str(budget.budget_spent),
         )
-    return out
+        for budget, agent_name in result.all()
+    ]
