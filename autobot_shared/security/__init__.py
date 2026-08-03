@@ -20,6 +20,7 @@ from autobot_shared.security.password_weakness import check_password_weakness
 from autobot_shared.security.path_validator import validate_path, validate_relative_path
 from autobot_shared.security.redaction import redact_mapping, redact_text
 from autobot_shared.security.safe_response import safe_error_response
+from autobot_shared.security.sql_identifier import validate_sql_identifier
 from autobot_shared.security.ssrf_guard import (
     SSRFError,
     fetch_safe_url,
@@ -43,4 +44,5 @@ __all__ = [
     "check_password_weakness",
     "redact_text",
     "redact_mapping",
+    "validate_sql_identifier",
 ]
