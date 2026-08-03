@@ -723,7 +723,7 @@ async def get_review_history(
 )
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
-    period: str = Query("30d", pattern="^(7d|30d|90d)$"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)\z"),
     source_id: str | None = Query(None, description="Project source ID to scope analysis"),
 ) -> dict[str, Any]:
     """

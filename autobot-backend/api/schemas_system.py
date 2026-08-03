@@ -1546,7 +1546,7 @@ class ThresholdUpdate(BaseModel):
     category: str
     metric: str
     threshold: float
-    comparison: str = Field(..., pattern="^(gt|lt|eq)$")
+    comparison: str = Field(..., pattern="^(gt|lt|eq)\z")
 
 
 # ---------------------------------------------------------------------------

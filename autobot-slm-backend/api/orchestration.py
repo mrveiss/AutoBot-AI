@@ -131,7 +131,7 @@ class FleetServicesResponse(BaseModel):
 class ServiceCategoryUpdate(BaseModel):
     """Request to update service category."""
 
-    category: str = Field(..., pattern="^(autobot|system)$")
+    category: str = Field(..., pattern="^(autobot|system)\z")
 
 
 # =============================================================================

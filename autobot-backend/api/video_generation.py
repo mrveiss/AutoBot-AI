@@ -74,10 +74,10 @@ _PROVIDER_ENV = {"runway": "RUNWAY_API_KEY", "sora": "SORA_API_KEY", "kling": "K
 
 class VideoGenerationRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=4000)
-    provider: str = Field("runway", pattern="^(runway|sora|kling)$")
+    provider: str = Field("runway", pattern="^(runway|sora|kling)\z")
     duration: int = Field(5, ge=1, le=20)
     resolution: Optional[str] = Field(None)
-    aspect_ratio: Optional[str] = Field(None, pattern="^(16:9|9:16|1:1)$")
+    aspect_ratio: Optional[str] = Field(None, pattern="^(16:9|9:16|1:1)\z")
 
 
 class VideoJobResponse(BaseModel):

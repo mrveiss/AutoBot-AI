@@ -222,12 +222,12 @@ async def verify_claim(
 async def list_conflicts(
     status: str = Query(
         "pending",
-        pattern="^(pending|resolved|inconclusive)$",
+        pattern="^(pending|resolved|inconclusive)\z",
         description="Filter by resolution status",
     ),
     severity: str | None = Query(
         None,
-        pattern="^(low|medium|high)$",
+        pattern="^(low|medium|high)\z",
         description="Filter by severity",
     ),
     limit: int = Query(
@@ -429,7 +429,7 @@ async def resolve_conflict(
 async def get_stats(
     period: str = Query(
         "24h",
-        pattern="^(1h|24h|7d|30d)$",
+        pattern="^(1h|24h|7d|30d)\z",
         description="Time period for stats",
     ),
     current_user: str = Depends(check_admin_permission),

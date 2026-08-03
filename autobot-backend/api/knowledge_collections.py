@@ -136,7 +136,7 @@ async def create_collection(
 )
 async def list_collections(
     pagination: PaginationParams = Depends(),
-    sort_by: str = Query(default="name", pattern="^(name|created_at|fact_count)$"),
+    sort_by: str = Query(default="name", pattern="^(name|created_at|fact_count)\z"),
     req: Request = None,
 ):
     """

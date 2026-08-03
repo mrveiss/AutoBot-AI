@@ -57,7 +57,7 @@ class SubmitScoreRequest(BaseModel):
 
 
 class ApprovalDecisionRequest(BaseModel):
-    decision: str = Field(..., pattern="^(approved|rejected)$")
+    decision: str = Field(..., pattern="^(approved|rejected)\z")
 
 
 class SynthesizeRequest(BaseModel):

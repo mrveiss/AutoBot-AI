@@ -157,7 +157,7 @@ class RunBenchmarkRequest(BaseModel):
     split: str = Field(
         ...,
         description="Which portion to benchmark: 'dev', 'test', or 'all'.",
-        pattern="^(dev|test|all)$",
+        pattern="^(dev|test|all)\z",
     )
     k: int = Field(default=5, ge=1, le=50, description="Top-k results per query.")
 
@@ -170,7 +170,7 @@ class RetrievalContextRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=2000, description="Generation query")
     collection_id: str | None = Field(default=None, description="Target collection identifier")
-    mode: str = Field(default="auto", pattern="^(auto|rag|cag|kag)$", description="Retrieval mode")
+    mode: str = Field(default="auto", pattern="^(auto|rag|cag|kag)\z", description="Retrieval mode")
     model: str | None = Field(default=None, description="Active model name for budget calculation")
 
 

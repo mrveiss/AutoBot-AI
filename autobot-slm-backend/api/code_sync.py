@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -3587,7 +3587,7 @@ async def get_fleet_sync_job_status(
 @router.get("/fleet/jobs", response_model=List[FleetSyncJobStatus])
 async def list_fleet_sync_jobs(
     _: Annotated[dict, Depends(get_current_user)],
-    limit: int = 10,
+    limit: int = Query(10, ge=1, le=100),
 ) -> List[FleetSyncJobStatus]:
     """
     List recent fleet sync jobs (Issue #741 Phase 8).

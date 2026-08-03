@@ -4230,7 +4230,7 @@ class AddUrlRequest(BaseModel):
 
     url: str = Field(..., min_length=1, max_length=2000, description="URL to fetch")
     title: str = Field(default="", max_length=500, description="Document title")
-    method: str = Field(default="fetch", pattern="^(fetch|raw)$", description="Fetch method")
+    method: str = Field(default="fetch", pattern="^(fetch|raw)\z", description="Fetch method")
     category: str = Field(default="web", max_length=100, description="Category")
     tags: List[str] = Field(default_factory=list, description="Tags")
     board_id: str | None = Field(
@@ -4253,7 +4253,7 @@ class AudioIngestRequest(BaseModel):
     category: str = Field(default="audio", max_length=100)
     tags: List[str] = Field(default_factory=list)
     whisper_model: str = Field(
-        default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)$", description="Whisper model size"
+        default="base", pattern="^(tiny|base|small|medium|large|large-v2|large-v3)\z", description="Whisper model size"
     )
     language: str | None = Field(default=None, max_length=10, description="ISO-639-1 language hint")
 
@@ -4288,9 +4288,9 @@ class DocsBrowseRequest(BaseModel):
     page: int = Field(default=1, ge=1, le=1000, description="Page number")
     page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
     sort_by: str = Field(
-        default="indexed_at", pattern="^(indexed_at|title|category|file_path)$", description="Sort field"
+        default="indexed_at", pattern="^(indexed_at|title|category|file_path)\z", description="Sort field"
     )
-    sort_order: str = Field(default="desc", pattern="^(asc|desc)$", description="Sort order")
+    sort_order: str = Field(default="desc", pattern="^(asc|desc)\z", description="Sort order")
 
 
 class OrgKnowledgeConfigPayload(BaseModel):
@@ -4894,7 +4894,7 @@ class ScopedSearchRequest(BaseModel):
     top_k: int = Field(default=10, ge=1, le=100, description="Maximum results")
     mode: str = Field(
         default="hybrid",
-        pattern="^(semantic|keyword|hybrid|auto)$",
+        pattern="^(semantic|keyword|hybrid|auto)\z",
         description="Search mode",
     )
     category: str | None = Field(default=None, description="Filter by category")

@@ -1087,7 +1087,7 @@ async def get_related_entities(
     entity_id: str = Path(..., description="Entity UUID"),
     admin_check: bool = Depends(check_admin_permission),
     relation_type: str | None = Query(None, description="Filter by relation type"),
-    direction: str = Query("both", pattern="^(outgoing|incoming|both)$", description="Relation direction"),
+    direction: str = Query("both", pattern="^(outgoing|incoming|both)\z", description="Relation direction"),
     max_depth: int = Query(1, ge=1, le=3, description="Relationship traversal depth (1-3)"),
     memory_graph: AutoBotMemoryGraph = Depends(get_memory_graph),
 ) -> JSONResponse:

@@ -138,7 +138,7 @@ class AlertRuleCreateRequest(BaseModel):
     name: str
     description: str | None = None
     metric_type: str
-    condition: str = Field(pattern="^(gt|lt|gte|lte|eq)$")
+    condition: str = Field(pattern="^(gt|lt|gte|lte|eq)\z")
     threshold: float
     duration_seconds: int = 300
     severity: str = "warning"
@@ -153,7 +153,7 @@ class AlertRuleUpdateRequest(BaseModel):
     name: str | None = None
     description: str | None = None
     metric_type: str | None = None
-    condition: str | None = Field(None, pattern="^(gt|lt|gte|lte|eq)$")
+    condition: str | None = Field(None, pattern="^(gt|lt|gte|lte|eq)\z")
     threshold: float | None = None
     duration_seconds: int | None = None
     severity: str | None = None
