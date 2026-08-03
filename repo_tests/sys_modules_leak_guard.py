@@ -479,6 +479,18 @@ def pytest_runtest_protocol(item: pytest.Item, nextitem: object) -> Iterator[Non
     ``pytest_runtest_setup`` alone only ever *checked*; nothing attributed what
     a run-phase hookwrapper installed, so a stub created for the run window and
     never restored was invisible.  Outermost again, for the same reason.
+
+    Caveat on the owner: during the run phase it is ``item.path``, the module
+    the test lives in.  A stub installed lazily *while a test runs* but
+    originating from a fixture defined in a conftest further up is therefore
+    blamed on whichever directory happened to be executing rather than on the
+    conftest that defines the fixture, and the reported directory can be
+    narrower than the one the stub really belongs to.  The report still names
+    a real key and a real observation point, so it stays actionable, and no
+    such case has been observed — the collection phase attributes conftest
+    fixtures to the conftest, which is where this shape would normally land.
+    Fixing it properly means tracing a stub back to the frame that installed
+    it, which costs far more than the guard is worth.
     """
     if _GUARD is None:
         yield
