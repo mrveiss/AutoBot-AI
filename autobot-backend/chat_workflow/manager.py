@@ -3145,9 +3145,7 @@ before summarizing.
         # ``respond``-tool turn — no prose entry exists, and the model badge and
         # KB sources would be carried by nothing. Fall back to the last assistant
         # entry actually written so #13292 cannot regress to "no entry has them".
-        target = last_prose_entry or next(
-            (e for e in reversed(batch) if e.get("sender") == "assistant"), None
-        )
+        target = last_prose_entry or next((e for e in reversed(batch) if e.get("sender") == "assistant"), None)
         if target is not None:
             self._attach_model_and_citations(target, selected_model, rag_citations, used_knowledge)
         return batch
