@@ -42,6 +42,18 @@ on:
   schedule:
     # 03:20 UTC daily — off the */15 dispatch-watchdog and */30 runner-health
     # slots, and well clear of working-hours PR traffic.
+    #
+    # DORMANT UNTIL THIS FILE REACHES THE DEFAULT BRANCH (#13286). GitHub
+    # registers `schedule` AND `workflow_dispatch` from the DEFAULT branch only.
+    # This file lives on the integration branch and does not exist on the
+    # default branch, so neither trigger can fire: the workflow has produced
+    # ZERO runs of any kind, and `gh run list --workflow=marker-tests.yml`
+    # answers "could not find any workflows named marker-tests.yml" because
+    # GitHub has never registered it. Adding the workflow was therefore only
+    # half of #13286 — a nightly that cannot be scheduled runs exactly as many
+    # marker-excluded tests as no workflow at all, which is the defect the issue
+    # is about. The cron below starts working the moment the integration branch
+    # is promoted; it is kept, not removed, because it is correct.
     - cron: '20 3 * * *'
   workflow_dispatch:
     inputs:
@@ -49,6 +61,21 @@ on:
         description: 'pytest -m expression to select (default: the full excluded set)'
         required: false
         default: 'integration or slow or distributed or performance'
+  # Until promotion, these are the only triggers that actually fire, and they
+  # exist so this workflow is never again shipped unexecuted. Scoped to its own
+  # file: a full marker sweep on every push would contend for nothing (it is
+  # ubuntu-latest) but would spend GitHub-hosted minutes for no new signal,
+  # whereas a change to the workflow is precisely when its result is unknown.
+  #
+  # This is what turns "a nightly nobody has ever seen run" into a workflow with
+  # an observed conclusion — the standing objection to shipping it.
+  push:
+    branches: [Dev_new_gui]
+    paths:
+      - '.github/workflows/marker-tests.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/marker-tests.yml'
 
 concurrency:
   group: marker-tests

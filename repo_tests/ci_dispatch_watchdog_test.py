@@ -354,6 +354,206 @@ def test_runner_liveness_is_none_when_it_cannot_be_established(watchdog):
     assert watchdog.self_hosted_pool_is_serving(_Api(), 10) is None
 
 
+# --- wedged self-hosted jobs (#13341) ---------------------------------------
+#
+# The required `Unit & Integration Tests` context ran for over three hours
+# against a declared `timeout-minutes: 30`. GitHub enforces that timeout from
+# the runner side, so a runner that stops making progress never receives the
+# cancellation. Two consequences these tests pin down: the job is not
+# distinguishable from a healthy one, and — worse — it made the pool read as
+# ALIVE, so the queue stacking up behind it was dismissed as contention.
+
+
+def _job(minutes_running, labels=("self-hosted", "Linux", "X64"), name="Unit & Integration Tests"):
+    return {
+        "name": name,
+        "status": "in_progress",
+        "labels": list(labels),
+        "started_at": _ts(minutes_running),
+        "html_url": "https://github.com/x/y/actions/runs/1/job/2",
+    }
+
+
+def _pool_api(jobs, run=None):
+    class _Api:
+        repository = REPO
+
+        def recent_runs(self, per_page=100, run_status=""):
+            return [run or {"id": 1, "name": "Frontend Testing Suite", "head_sha": "abc123def456"}]
+
+        def run_jobs(self, run_id):
+            return jobs
+
+    return _Api()
+
+
+def test_a_wedged_job_is_not_evidence_that_the_pool_is_healthy(watchdog):
+    """The false negative: a hung job is in_progress on a self-hosted label."""
+    state = watchdog.inspect_self_hosted_pool(_pool_api([_job(185)]), 10, 45, NOW)
+    assert state.serving is False
+    assert len(state.overdue) == 1
+
+
+def test_a_wedged_job_is_reported_with_the_head_it_is_blocking(watchdog):
+    state = watchdog.inspect_self_hosted_pool(_pool_api([_job(185)]), 10, 45, NOW)
+    entry = state.overdue[0]
+    assert entry.head_sha == "abc123def456"
+    assert entry.job == "Unit & Integration Tests"
+    assert entry.elapsed_minutes == pytest.approx(185, abs=1)
+    assert "185m" in entry.describe()
+
+
+def test_a_self_hosted_job_inside_the_ceiling_is_healthy_not_wedged(watchdog):
+    """29 minutes is inside every declared timeout in the repository."""
+    state = watchdog.inspect_self_hosted_pool(_pool_api([_job(29)]), 10, 45, NOW)
+    assert state.serving is True
+    assert state.overdue == []
+
+
+def test_a_long_running_github_hosted_job_is_not_wedged(watchdog):
+    """marker-tests declares 180m on ubuntu-latest and holds no singleton."""
+    state = watchdog.inspect_self_hosted_pool(_pool_api([_job(120, labels=("ubuntu-latest",))]), 10, 45, NOW)
+    assert state.overdue == []
+
+
+def test_a_job_that_has_not_started_is_never_wedged(watchdog):
+    assert watchdog.job_is_overdue({"status": "in_progress", "labels": ["self-hosted"]}, NOW, 45) is False
+
+
+def test_a_completed_job_is_never_wedged(watchdog):
+    job = _job(185)
+    job["status"] = "completed"
+    assert watchdog.job_is_overdue(job, NOW, 45) is False
+
+
+def test_the_wedged_run_is_found_even_when_it_is_the_oldest_of_many(watchdog):
+    """
+    The detector's real failure mode, invisible to every other test here.
+
+    `GET /actions/runs` returns NEWEST first, and a wedged run is by definition
+    the OLDEST in-progress one. Truncating the newest N to the lookup budget
+    therefore drops exactly the run being looked for. Measured live: 12 runs in
+    progress, the wedging one the oldest of the 12, a budget of 10 — missed.
+    """
+    healthy = [{"id": i, "name": "CI", "head_sha": f"sha{i}", "run_started_at": _ts(i)} for i in range(1, 12)]
+    wedged = {"id": 99, "name": "Frontend Testing Suite", "head_sha": "wedged", "run_started_at": _ts(185)}
+
+    class _Api:
+        repository = REPO
+
+        def recent_runs(self, per_page=100, run_status=""):
+            # Newest first, exactly as GitHub returns it.
+            return healthy + [wedged]
+
+        def run_jobs(self, run_id):
+            if run_id == 99:
+                return [_job(185)]
+            return [_job(2, name="Something Fine")]
+
+    state = watchdog.inspect_self_hosted_pool(_Api(), 10, 45, NOW)
+    assert [entry.head_sha for entry in state.overdue] == ["wedged"]
+
+
+def test_a_healthy_job_alongside_a_wedged_one_still_proves_liveness(watchdog):
+    state = watchdog.inspect_self_hosted_pool(_pool_api([_job(185), _job(3, name="Build Test")]), 10, 45, NOW)
+    assert state.serving is True
+    assert [entry.job for entry in state.overdue] == ["Unit & Integration Tests"]
+
+
+def test_overdue_jobs_are_grouped_by_head(watchdog):
+    a = watchdog.OverdueJob("sha-a", "wf", "job1", 90.0, "u")
+    b = watchdog.OverdueJob("sha-a", "wf", "job2", 91.0, "u")
+    c = watchdog.OverdueJob("", "wf", "job3", 92.0, "u")
+    grouped = watchdog.overdue_by_head([a, b, c])
+    assert list(grouped) == ["sha-a"]
+    assert len(grouped["sha-a"]) == 2
+
+
+def test_a_wedged_head_is_published_as_a_failure_not_a_healthy_in_progress(watchdog):
+    overdue = [watchdog.OverdueJob("sha", "Frontend Testing Suite", "Unit & Integration Tests", 185.0, "u")]
+    state, description = watchdog.classify_dispatch([_run()], _ts(5), NOW, 10, 30, True, overdue)
+    assert state == "failure"
+    assert "wedged" in description
+
+
+def test_a_wedged_head_never_reads_as_success(watchdog):
+    """Otherwise-green runs must not mask a job holding a required context."""
+    overdue = [watchdog.OverdueJob("sha", "wf", "job", 200.0, "u")]
+    state, _ = watchdog.classify_dispatch([_run(), _run(id=2)], _ts(5), NOW, 10, 30, True, overdue)
+    assert state == "failure"
+
+
+def test_a_head_with_no_wedged_job_is_unaffected(watchdog):
+    state, _ = watchdog.classify_dispatch([_run()], _ts(5), NOW, 10, 30, True, [])
+    assert state == "success"
+
+
+# --- starvation probe vs. a wedged job --------------------------------------
+
+
+def _starvation_api(queued, jobs):
+    class _Api:
+        repository = REPO
+
+        def recent_runs(self, per_page=100, run_status=""):
+            if run_status == "queued":
+                return queued
+            return [{"id": 1, "name": "Frontend Testing Suite", "head_sha": "sha"}]
+
+        def run_jobs(self, run_id):
+            return jobs
+
+    return _Api()
+
+
+_STARVATION_CONFIG = {"stall_minutes": 45, "max_job_lookups": 5, "job_overdue_minutes": 45}
+
+
+def _live_ts(minutes_ago):
+    """Relative to the real clock — check_runner_starvation reads it itself."""
+    return (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _live_job(minutes_running, name="Unit & Integration Tests"):
+    return {
+        "name": name,
+        "status": "in_progress",
+        "labels": ["self-hosted", "Linux", "X64"],
+        "started_at": _live_ts(minutes_running),
+    }
+
+
+def _live_queue():
+    return [{"id": 9, "name": "CI", "status": "queued", "created_at": _live_ts(60), "head_branch": "b"}]
+
+
+def test_a_wedged_job_fails_the_probe_even_with_an_empty_queue(watchdog):
+    """It is a fault the moment it happens — it is holding a required check."""
+    api = _starvation_api([], [_live_job(185)])
+    assert watchdog.check_runner_starvation(api, _STARVATION_CONFIG) == 1
+
+
+def test_a_queue_behind_a_wedged_job_is_no_longer_dismissed_as_contention(watchdog):
+    """The regression this check existed to catch and previously reported green."""
+    api = _starvation_api(_live_queue(), [_live_job(185)])
+    assert watchdog.check_runner_starvation(api, _STARVATION_CONFIG) == 1
+
+
+def test_a_queue_behind_genuinely_busy_work_is_still_contention(watchdog):
+    api = _starvation_api(_live_queue(), [_live_job(4, name="Build Test")])
+    assert watchdog.check_runner_starvation(api, _STARVATION_CONFIG) == 0
+
+
+def test_a_quiet_healthy_pool_still_passes(watchdog):
+    assert watchdog.check_runner_starvation(_starvation_api([], []), _STARVATION_CONFIG) == 0
+
+
+def test_starvation_with_no_runner_at_all_still_fails(watchdog):
+    """#13045's original condition must keep failing."""
+    api = _starvation_api(_live_queue(), [])
+    assert watchdog.check_runner_starvation(api, _STARVATION_CONFIG) == 1
+
+
 # --- approval-capability probe ---------------------------------------------
 
 
@@ -500,6 +700,7 @@ def test_scoping_to_a_fork_pr_still_never_approves_it(watchdog):
         "poll_attempts": 1,
         "poll_interval_seconds": 1,
         "max_job_lookups": 5,
+        "job_overdue_minutes": 45,
         "only_pr": 12,
     }
     assert watchdog.check_dispatch(api, config, dry_run=False) == 0
@@ -525,6 +726,7 @@ def test_scoping_to_a_same_repo_pr_still_approves_its_parked_bot_runs(watchdog):
         "poll_attempts": 1,
         "poll_interval_seconds": 1,
         "max_job_lookups": 5,
+        "job_overdue_minutes": 45,
         "only_pr": 21,
     }
     assert watchdog.check_dispatch(api, config, dry_run=False) == 0
@@ -620,6 +822,7 @@ def _sweep_config(**overrides):
         "poll_attempts": 1,
         "poll_interval_seconds": 1,
         "max_job_lookups": 5,
+        "job_overdue_minutes": 45,
     }
     config.update(overrides)
     return config
@@ -746,6 +949,7 @@ def test_a_dry_run_does_not_warn_about_the_probe_it_skipped_on_purpose(watchdog,
         "poll_attempts": 1,
         "poll_interval_seconds": 1,
         "max_job_lookups": 5,
+        "job_overdue_minutes": 45,
     }
     assert watchdog.check_dispatch(api, config, dry_run=True) == 0
     assert "UNRESOLVED" not in capsys.readouterr().out
@@ -768,6 +972,7 @@ def test_a_real_sweep_does_warn_when_the_probe_is_unresolved(watchdog, capsys):
         "poll_attempts": 1,
         "poll_interval_seconds": 1,
         "max_job_lookups": 5,
+        "job_overdue_minutes": 45,
     }
     assert watchdog.check_dispatch(api, config, dry_run=False) == 0
     assert "UNRESOLVED" in capsys.readouterr().out
