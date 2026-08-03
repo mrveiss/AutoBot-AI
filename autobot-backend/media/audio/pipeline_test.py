@@ -173,8 +173,17 @@ class TestAudioPipelineAsync:
             }
         )
 
+        # #13162: _whisper_pipeline alone is NOT the seam. _get_whisper_pipeline()
+        # only honours the module global once _WHISPER_LOADED marks the lazy load
+        # as already resolved; while it is False the loader calls hf_pipeline()
+        # and REBINDS _whisper_pipeline over the mock. On a machine with
+        # transformers installed (CI does) that downloaded and instantiated the
+        # real openai/whisper-base model mid-unit-test, which then failed on the
+        # fake bytes with "ffmpeg was not found" and returned the error result --
+        # so this asserted '' == 'test transcription'. Pin the sentinel too.
         with (
             patch("media.audio.pipeline._TRANSFORMERS_AVAILABLE", True),
+            patch("media.audio.pipeline._WHISPER_LOADED", True),
             patch("media.audio.pipeline._whisper_pipeline", mock_whisper),
             patch("os.unlink"),
         ):
