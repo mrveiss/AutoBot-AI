@@ -112,15 +112,53 @@ BROWSER_VM_URL = f"http://{NetworkConstants.BROWSER_VM_IP}:{NetworkConstants.BRO
 DEFAULT_BROWSER_SESSION_ID = "default"
 
 # URL Whitelist - Only these domains are allowed
-ALLOWED_URL_PATTERNS = [
-    r"^https?://localhost",
-    r"^https?://127\.0\.0\.1",
-    r"^https?://172\.16\.168\.\d+",  # AutoBot VMs
-    r"^https?://.*\.example\.com$",  # Example - add real domains
-    r"^https?://github\.com",
-    r"^https?://.*\.github\.com",
-    r"^https?://.*\.githubusercontent\.com",
-]
+# Internal hosts this ADMIN surface may still reach (#13236 step 5).
+#
+# Replaces a regex allowlist over the whole URL, which was unsound: the
+# patterns were anchored at the start but not the end, so any attacker domain
+# prefixed with an allowlisted string passed —
+# ``https://github.com.evil.example/`` matched ``^https?://github\.com``.
+# Public hosts no longer need listing at all; they are permitted by the
+# DNS-resolving guard, so this list is only the internal exceptions.
+#
+# Kept because reaching internal services is what this surface is *for*:
+# pointing the browser at one and reading what the page requests is how wrong
+# API calls get found and callers mapped to the right routes. Matched against
+# the parsed hostname, never against the raw URL string.
+INTERNAL_HOST_EXCEPTIONS: frozenset[str] = frozenset({"localhost", "127.0.0.1", "::1"})
+
+#: SSOT config keys naming the fleet's own hosts. The admin surface may reach
+#: these, resolved from ConfigRegistry rather than hardcoded — the old regex
+#: baked a /24 into the source, which is both a wider exemption than needed
+#: (a whole subnet, not the known hosts) and a fleet address in code.
+_FLEET_HOST_ATTRS = (
+    "MAIN_MACHINE_IP",
+    "FRONTEND_VM_IP",
+    "NPU_WORKER_VM_IP",
+    "REDIS_VM_IP",
+    "AI_STACK_VM_IP",
+    "BROWSER_VM_IP",
+    "SLM_VM_IP",
+)
+
+
+def fleet_host_exceptions() -> frozenset[str]:
+    """The fleet's own VM addresses, from SSOT config.
+
+    Read on each call rather than at import: ``NetworkConstants`` resolves
+    these lazily through ``ConfigRegistry``, so caching here would pin
+    whatever the values were at import time.
+    """
+    hosts = set()
+    for attr in _FLEET_HOST_ATTRS:
+        try:
+            value = getattr(NetworkConstants, attr, "")
+        except Exception:  # config unavailable — exempt nothing rather than guess
+            continue
+        if value:
+            hosts.add(str(value).strip().lower())
+    return frozenset(hosts)
+
 
 # Rate limiting: max requests per minute
 MAX_REQUESTS_PER_MINUTE = 60
@@ -149,29 +187,52 @@ BLOCKED_JS_PATTERNS = [
 ]
 
 
-def is_url_allowed(url: str) -> bool:
+def _is_excepted_internal_host(hostname: str) -> bool:
+    """True if *hostname* is an internal host this admin surface may reach.
+
+    Matches the **parsed hostname**, exactly or by network containment — never
+    a substring of the URL. That is the difference from the regex allowlist
+    this replaced, under which ``https://localhost.evil.example/`` was allowed.
     """
-    Validate URL against whitelist patterns
+    host = (hostname or "").strip("[]").lower()
+    if not host:
+        return False
+    if host in INTERNAL_HOST_EXCEPTIONS:
+        return True
+
+    return host in fleet_host_exceptions()
+
+
+async def is_url_allowed(url: str) -> bool:
+    """Validate a URL for the admin browser surface (#13236 step 5).
 
     Security measures:
-    - Pattern-based URL validation
-    - Block potentially dangerous schemes
-    - Prevent access to internal/private networks (except AutoBot VMs)
+    - block non-HTTP schemes;
+    - permit any URL that resolves to a **public** address, via
+      ``is_public_url_async`` — the DNS-resolving guard, so a hostname that
+      resolves into private space is rejected however it is spelled;
+    - permit a **non**-public address only when its hostname is an explicit
+      internal exception, matched on the parsed host rather than by regex.
+
+    This replaces a prefix-matching regex allowlist that was bypassable: its
+    patterns had no end anchor, so ``https://github.com.evil.example/`` and
+    ``https://localhost.evil.example/`` both passed.
     """
     try:
         parsed = urlparse(url)
 
-        # Block dangerous schemes
         if parsed.scheme not in ALLOWED_URL_SCHEMES:
             logger.warning("Blocked non-HTTP scheme: %s", parsed.scheme)
             return False
 
-        # Check against whitelist patterns
-        for pattern in ALLOWED_URL_PATTERNS:
-            if re.match(pattern, url):
-                return True
+        if await is_public_url_async(url):
+            return True
 
-        logger.warning("URL not in whitelist: %s", url)
+        if _is_excepted_internal_host(parsed.hostname or ""):
+            logger.info("Allowing admin browser navigation to internal host: %s", parsed.hostname)
+            return True
+
+        logger.warning("Blocked browser navigation to non-public URL: %s", url)
         return False
 
     except Exception as e:
@@ -752,7 +813,7 @@ async def navigate_mcp(request: BrowserNavigateRequest) -> Metadata:
     if not await check_rate_limit():
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    if not is_url_allowed(request.url):
+    if not await is_url_allowed(request.url):
         raise HTTPException(
             status_code=403,
             detail=f"URL not in whitelist: {request.url}",
@@ -1260,7 +1321,11 @@ async def get_browser_mcp_status() -> Metadata:
             "status": vm_status,
         },
         "security": {
-            "url_whitelist_patterns": len(ALLOWED_URL_PATTERNS),
+            # #13236 step 5: URLs are validated by the DNS-resolving guard,
+            # not a pattern list. What remains configurable is the set of
+            # internal hosts this admin surface may still reach.
+            "url_validation": "dns_resolving_public_address_guard",
+            "internal_host_exceptions": len(INTERNAL_HOST_EXCEPTIONS) + len(fleet_host_exceptions()),
             "blocked_js_patterns": len(BLOCKED_JS_PATTERNS),
             "rate_limit": f"{MAX_REQUESTS_PER_MINUTE} requests/minute",
         },
