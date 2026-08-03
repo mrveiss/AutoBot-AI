@@ -73,9 +73,10 @@ class TestRealMislabelledIssues:
         """The acceptance criterion from #13050, verbatim."""
         result = select(title="bug(optimization): LayerInferenceEngine cannot produce correct output", body=self.BODY)
 
-        assert "frontend" not in result["labels"], "'interface'/'component' must not imply frontend"
-        assert "docs" not in result["labels"], "quoting a docstring must not imply docs"
-        assert "advanced" not in result["labels"], "the package name 'optimization' must not imply advanced"
+        # #13050's acceptance criterion is "receives `backend` and nothing else",
+        # not merely "is not labelled wrongly" — asserting only absences passes
+        # vacuously even if the selector returns nothing at all.
+        assert result["labels"] == ["backend"]
 
     def test_explicit_backend_scope_wins(self):
         """A conventional-commit scope is the author's own statement of the area."""
@@ -99,11 +100,25 @@ class TestAlreadyTriaged:
 class TestPrefersNoLabelOverWrongLabel:
     """#13050 fix item 5."""
 
-    def test_ambiguous_prose_yields_no_label(self):
-        """Prose implying three or more areas is noise, not evidence."""
-        result = select(body="The vue dashboard calls a fastapi endpoint deployed with docker and ansible.")
+    def test_prose_matching_four_areas_yields_no_label(self):
+        """Four or more areas is noise, not evidence.
+
+        The threshold is 4 rather than 3 deliberately: two areas is a normal
+        cross-cutting issue, and three is common in this repo (a vue dashboard
+        calling a fastapi endpoint deployed with ansible really does span three).
+        Silencing those loses correct labels, which is its own cost.
+        """
+        result = select(
+            body="The vue dashboard calls a fastapi endpoint deployed with docker, "
+            "with pytest coverage and a README describing the tutorial."
+        )
         assert result["labels"] == []
         assert "too ambiguous" in result["reason"]
+
+    def test_prose_matching_three_areas_is_still_labelled(self):
+        """The counterpart: three areas is legitimate, not noise."""
+        result = select(body="The vue dashboard calls a fastapi endpoint deployed with ansible.")
+        assert sorted(result["labels"]) == ["backend", "frontend", "infrastructure"]
 
     def test_unremarkable_prose_yields_no_label(self):
         result = select(title="Something is wrong", body="It does not work as expected.")
@@ -129,16 +144,48 @@ class TestStillLabelsCorrectly:
 class TestKeywordHygiene:
     """Guards against reintroducing the #13050 keyword set."""
 
-    def test_no_keyword_is_shorter_than_three_characters(self):
+    def test_every_keyword_matches_itself(self):
+        """Guards the `\\b` inversion trap: a keyword with a non-word edge
+        (`.env`, `c++`) silently never fires. Each keyword must match a sentence
+        containing it — the property, not the spelling."""
         script = (
             f"const m = require({json.dumps(str(_MODULE))});"
-            "process.stdout.write(JSON.stringify(Object.keys(m)));"
+            "const all = [].concat(...Object.values(m.KEYWORDS), ...Object.values(m.DIFFICULTY_KEYWORDS));"
+            "const dead = all.filter((k) => !m.matchesWord(`before ${k} after`, k));"
+            "process.stdout.write(JSON.stringify(dead));"
         )
-        subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30, check=True)
+        result = subprocess.run(
+            ["node", "-e", script], capture_output=True, text=True, timeout=30, encoding="utf-8", check=True
+        )
+        assert json.loads(result.stdout) == [], "these keywords can never match anything"
 
-    @pytest.mark.parametrize("banned", ["interface", "component", "comment", "optimization"])
-    def test_banned_backend_vocabulary_is_absent(self, banned):
-        """These four are ordinary backend words and caused the original mislabelling."""
-        source = _MODULE.read_text(encoding="utf-8")
-        keyword_block = source.split("const KEYWORDS", 1)[1].split("};", 1)[0]
-        assert f"'{banned}'" not in keyword_block
+    def test_no_keyword_is_shorter_than_three_characters(self):
+        """Two-character keywords are what made 'ui' match 'build' (#13050)."""
+        script = (
+            f"const m = require({json.dumps(str(_MODULE))});"
+            "const all = [].concat(...Object.values(m.KEYWORDS), ...Object.values(m.DIFFICULTY_KEYWORDS));"
+            "process.stdout.write(JSON.stringify(all.filter((k) => k.length < 3)));"
+        )
+        result = subprocess.run(
+            ["node", "-e", script], capture_output=True, text=True, timeout=30, encoding="utf-8", check=True
+        )
+        assert json.loads(result.stdout) == []
+
+    @pytest.mark.parametrize(
+        "banned,body",
+        [
+            ("interface", "the public interface returns hidden states"),
+            ("component", "each component of the pipeline is exercised"),
+            ("comment", "the comment above the guard is stale"),
+            ("optimization", "the optimization package has no embedding layer"),
+        ],
+    )
+    def test_banned_backend_vocabulary_implies_nothing(self, banned, body):
+        """The four words that mislabelled #13032-#13036.
+
+        Asserted behaviourally rather than by grepping the source: the previous
+        version searched only the KEYWORDS block, so 'optimization' — which lived
+        in DIFFICULTY_KEYWORDS — passed vacuously and would still pass if it were
+        reintroduced there, i.e. it never guarded the regression it named.
+        """
+        assert select(body=body)["labels"] == [], f"{banned!r} must not imply a label on its own"

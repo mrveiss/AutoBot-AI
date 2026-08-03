@@ -26,17 +26,23 @@ jobs:
             const { selectLabels } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-triage-labels.js`);
             const issue = context.payload.issue;
 
-            const { labels, reason } = selectLabels(issue);
+            const { labels, reason, suppressed } = selectLabels(issue);
             console.log(`Triage decision: ${labels.length ? labels.join(', ') : '(none)'} — ${reason}`);
 
             if (labels.length === 0) {
-              // #13050: no label beats a wrong one. Ask a human instead of guessing.
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `👋 Auto-triage could not confidently classify this issue (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`
-              });
+              // #13050: no label beats a wrong one — but only ASK when we are
+              // genuinely uncertain. `suppressed` means the author already
+              // triaged it, and this workflow also fires on `edited`, so
+              // commenting there would nag a correctly-labelled issue on every
+              // checklist tick. Ask once, on creation, and never again.
+              if (!suppressed && context.payload.action === 'opened') {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `👋 Auto-triage could not confidently classify this issue (${reason}). Could a maintainer add the appropriate labels (\`frontend\`, \`backend\`, \`infrastructure\`, \`docs\`, \`testing\` and \`good-first-issue\`, \`intermediate\`, \`advanced\`)?`
+                });
+              }
               return;
             }
 

@@ -26,8 +26,8 @@
 
 'use strict';
 
-// Skill-area labels this module may assign. Used by the workflow to decide
-// whether an issue was already triaged by a human.
+// Skill-area labels this module may assign. `selectLabels` uses these to detect
+// an issue the author already triaged.
 const SKILL_LABELS = ['frontend', 'backend', 'infrastructure', 'docs', 'testing'];
 const DIFFICULTY_LABELS = ['good-first-issue', 'intermediate', 'advanced'];
 
@@ -46,6 +46,9 @@ const SCOPE_TO_LABEL = {
   chat: 'backend',
   voice: 'backend',
   security: 'backend',
+  optimization: 'backend',
+  llm: 'backend',
+  analytics: 'backend',
   deploy: 'infrastructure',
   ci: 'infrastructure',
   infra: 'infrastructure',
@@ -65,7 +68,7 @@ const SCOPE_TO_LABEL = {
 const KEYWORDS = {
   frontend: ['vue', 'frontend', 'typescript', 'css', 'vite', 'dashboard', 'button', 'modal', 'sidebar', 'tsx'],
   backend: ['fastapi', 'python', 'database', 'async', 'backend', 'endpoint', 'sqlalchemy', 'websocket', 'redis', 'celery'],
-  infrastructure: ['docker', 'ansible', 'deploy', 'deployment', 'infrastructure', 'devops', 'kubernetes', 'systemd', 'runner'],
+  infrastructure: ['docker', 'dockerfile', 'ansible', 'deploy', 'deployment', 'infrastructure', 'devops', 'kubernetes', 'systemd', 'runner'],
   docs: ['readme', 'documentation', 'changelog', 'tutorial'],
   testing: ['pytest', 'vitest', 'coverage', 'fixture', 'regression test', 'unit test', 'integration test'],
 };
@@ -89,7 +92,11 @@ function escapeRegExp(text) {
  * unchanged because the boundaries sit at the ends of the phrase.
  */
 function matchesWord(text, keyword) {
-  return new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'i').test(text);
+  // `\b` inverts at a non-word edge, so a keyword like '.env' or 'c++' would
+  // silently never match. Anchor on non-word characters instead, which behaves
+  // correctly for every keyword shape (#13050 review, finding 5).
+  const trailing = /[a-z0-9]$/i.test(keyword) ? '(?:s|es)?' : '';
+  return new RegExp(`(?:^|\\W)${escapeRegExp(keyword)}${trailing}(?=\\W|$)`, 'i').test(text);
 }
 
 /**
@@ -99,12 +106,37 @@ function matchesWord(text, keyword) {
  * Returns null when the title carries no scope.
  */
 function scopeFromTitle(title) {
-  const match = /^[a-zA-Z]+\(([^)]+)\)\s*:/.exec((title || '').trim());
+  // The type may be hyphenated ("tech-debt(ci):") and the scope is optional,
+  // because a bare "ci:" carries the area in the type itself (#13050 review).
+  const match = /^([a-zA-Z][a-zA-Z-]*)(?:\(([^)]+)\))?\s*:/.exec((title || '').trim());
   if (!match) {
     return null;
   }
-  // A scope may name a path segment, e.g. "chat-history" or "llc/scheduler".
-  return match[1].toLowerCase().split(/[\/,\s-]/)[0];
+  return { type: match[1].toLowerCase(), scope: (match[2] || '').toLowerCase() };
+}
+
+/**
+ * Resolve a title's conventional-commit prefix to a label.
+ *
+ * Checks EVERY segment of the scope, not just the first — "slm-frontend" and
+ * "code-intelligence" both name their area in the second segment. Falls back to
+ * the type when there is no scope, so "ci:" and "security:" still resolve.
+ */
+function scopeLabelFromTitle(title) {
+  const parsed = scopeFromTitle(title);
+  if (!parsed) {
+    return null;
+  }
+  const segments = parsed.scope ? parsed.scope.split(/[\/,\s-]+/).filter(Boolean) : [];
+  for (const segment of segments) {
+    if (SCOPE_TO_LABEL[segment]) {
+      return { label: SCOPE_TO_LABEL[segment], source: `scope "${segment}"` };
+    }
+  }
+  if (SCOPE_TO_LABEL[parsed.type]) {
+    return { label: SCOPE_TO_LABEL[parsed.type], source: `type "${parsed.type}"` };
+  }
+  return null;
 }
 
 /**
@@ -125,25 +157,31 @@ function selectLabels(issue) {
   // The old guard was `labels.length > 3`, which let issues created with three
   // explicit labels through to be mislabelled anyway.
   if (existing.some((name) => SKILL_LABELS.includes(name))) {
-    return { labels: [], reason: 'issue already carries a skill-area label; leaving triage to the author' };
+    // `suppressed` marks "deliberately did nothing", which the workflow must not
+    // confuse with "could not classify" — otherwise every edit nags an issue the
+    // author already triaged (#13050 review, blocker 1).
+    return {
+      labels: [],
+      reason: 'issue already carries a skill-area label; leaving triage to the author',
+      suppressed: true,
+    };
   }
 
   const labels = [];
 
   // An explicit scope is the author's own statement — trust it over prose.
-  const scope = scopeFromTitle(title);
-  const scopedLabel = scope ? SCOPE_TO_LABEL[scope] : null;
-  if (scopedLabel) {
-    labels.push(scopedLabel);
+  const scoped = scopeLabelFromTitle(title);
+  if (scoped) {
+    labels.push(scoped.label);
   } else {
     for (const [label, words] of Object.entries(KEYWORDS)) {
       if (words.some((word) => matchesWord(text, word))) {
         labels.push(label);
       }
     }
-    // Prose that implies three or more areas is not evidence, it is noise.
+    // Two areas is a legitimately cross-cutting issue; four or more is noise.
     // Adding all of them is worse than adding none (#13050).
-    if (labels.length >= 3) {
+    if (labels.length >= 4) {
       return { labels: [], reason: `prose matched ${labels.length} skill areas; too ambiguous to label` };
     }
   }
@@ -156,11 +194,20 @@ function selectLabels(issue) {
 
   const deduped = [...new Set(labels)].filter((l) => !existing.includes(l));
   const reason = deduped.length
-    ? scopedLabel
-      ? `scope "${scope}" in title`
+    ? scoped
+      ? `${scoped.source} in title`
       : 'keyword match on word boundaries'
     : 'no confident signal';
-  return { labels: deduped, reason };
+  return { labels: deduped, reason, suppressed: false };
 }
 
-module.exports = { selectLabels, matchesWord, scopeFromTitle, SKILL_LABELS, DIFFICULTY_LABELS };
+module.exports = {
+  selectLabels,
+  matchesWord,
+  scopeFromTitle,
+  scopeLabelFromTitle,
+  KEYWORDS,
+  DIFFICULTY_KEYWORDS,
+  SKILL_LABELS,
+  DIFFICULTY_LABELS,
+};
