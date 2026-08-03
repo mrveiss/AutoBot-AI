@@ -10,22 +10,37 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - name: Warn when PR queue is full
+      - name: Warn only on a runaway PR queue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          LIMIT=10
+          # THERE IS NO PR QUEUE LIMIT. Issues are solved one by one without
+          # capping open PRs; the real constraint is review capacity, and PRs
+          # merge as their CI finishes. See CLAUDE.md 'No PR queue limit'.
+          #
+          # This threshold is NOT that policy and must never be read as one. It
+          # is a runaway detector: a number high enough that reaching it means
+          # something is opening PRs in a loop, or that the merge pipeline has
+          # stalled so nothing is draining. Warn-only — it posts a comment and
+          # never fails a check.
+          #
+          # History, because the drift is the lesson: this gate said 10 while
+          # CLAUDE.md said 5 and UMBRELLA_PLAN said 5. Three files, three
+          # numbers, and the only one that executed was the one nobody had
+          # read. If this number ever starts meaning "defer work", delete it
+          # rather than tune it.
+          RUNAWAY_THRESHOLD=25
 
           # Count open PRs excluding the one just opened
           TOTAL=$(gh pr list --repo "$REPO" --state open --json number --jq 'length')
           EXISTING=$(( TOTAL - 1 ))
 
-          echo "Existing open PRs (excluding this one): $EXISTING / $LIMIT"
+          echo "Open PRs excluding this one: $EXISTING (runaway threshold $RUNAWAY_THRESHOLD)"
 
-          if [ "$EXISTING" -ge "$LIMIT" ]; then
-            echo "Queue is full — posting warning on PR #$PR_NUMBER"
+          if [ "$EXISTING" -ge "$RUNAWAY_THRESHOLD" ]; then
+            echo "Runaway threshold reached — posting a notice on PR #$PR_NUMBER"
 
             # shellcheck disable=SC2016  # $skip is a jq variable, not a shell variable
             OPEN_LIST=$(gh pr list \
@@ -40,22 +55,23 @@ jobs:
             # block scalar, making the whole workflow invalid YAML (#9722).
             # shellcheck disable=SC2016  # backticks/$ in single-quoted lines are intentionally literal
             BODY=$(printf '%s\n' \
-              "## ⚠️ PR Queue Warning: $EXISTING/$LIMIT PRs Already Open" \
+              "## Notice: $EXISTING open PRs — past the runaway threshold ($RUNAWAY_THRESHOLD)" \
               "" \
-              "This PR was opened while the queue is at capacity. **Please do not merge new work until existing PRs are reviewed and merged first.**" \
+              "**There is no PR queue limit, and this is not a request to defer this PR.** Work proceeds one issue at a time without a cap on open PRs; review capacity is the constraint." \
               "" \
-              "**Open PRs to clear:**" \
+              "This notice only means the count is high enough to be worth a glance for a *runaway* — something opening PRs in a loop, or a merge pipeline that has stalled so nothing is draining." \
+              "" \
+              "**Currently open:**" \
               "$OPEN_LIST" \
               "" \
-              "**Action required (agent or author):**" \
-              "1. Check CI status on each open PR above" \
-              '2. Merge any that are green: `gh pr merge <number> --squash --delete-branch`' \
-              "3. Fix CI on failing ones if straightforward" \
-              "4. Only then should this PR proceed to review/merge" \
+              "**If the queue is draining normally, ignore this.** Otherwise:" \
+              '1. Check whether CI is dispatching at all — see the `ci-dispatch-watchdog` status on these PRs' \
+              '2. Merge the ones whose CI has finished and review has passed: `gh pr merge <number> --squash --delete-branch`' \
+              "3. Look for a loop opening near-identical PRs" \
               "" \
-              '> Queue gate enforced by `.github/workflows/pr-queue-gate.yml`')
+              '> Warn-only runaway detector — `.github/workflows/pr-queue-gate.yml`. It never blocks a merge.')
 
             gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
           else
-            echo "Queue OK — $EXISTING/$LIMIT open PRs"
+            echo "No runaway — $EXISTING open PRs, below the $RUNAWAY_THRESHOLD threshold"
           fi
