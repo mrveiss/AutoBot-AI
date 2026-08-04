@@ -38,6 +38,27 @@ REPO_ROOT=$(git rev-parse --show-toplevel) || exit 2
 cd "$REPO_ROOT" || exit 2
 
 BASE="${PREFLIGHT_BASE:-origin/Dev_new_gui}"
+
+# Which interpreter runs the lint gates. CI runs 3.14; this box's default python3
+# is often older, and running the gates on it makes this script's whole premise
+# ("run every gate that CI runs") false in a way nothing surfaces (#13573).
+#
+# It matters most for black, which SKIPS its AST safety check when the running
+# interpreter is older than the target version -- it warns, and passes anyway. So
+# the weaker check is the silent one.
+#
+# Prefer the CI-parity venv built by scripts/setup-ci-parity-env.sh, at the same
+# path CI uses. Fall back to python3 so this script keeps working on a box that
+# has not built it, but say so, because a fallback nobody notices is how the
+# divergence got here.
+PARITY_VENV="${CI_PARITY_VENV:-$HOME/.venv-python-suite}"
+PY="python3"
+PY_SOURCE="system python3"
+if [ -x "$PARITY_VENV/bin/python" ]; then
+  PY="$PARITY_VENV/bin/python"
+  PY_SOURCE="CI-parity venv"
+fi
+PY_VERSION=$("$PY" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")' 2>/dev/null || echo unknown)
 FAILED=0
 
 # The fleet range is deliberately NOT written here -- putting it in a script is
@@ -55,6 +76,17 @@ pass() { printf '  ok    %s\n' "$1"; }
 fail() { printf '  FAIL  %s\n' "$1"; FAILED=$((FAILED + 1)); }
 note() { printf '  --    %s\n' "$1"; }
 section() { printf '\n%s\n' "$1"; }
+
+# ---------------------------------------------------------------- interpreter
+section "interpreter"
+
+if [ "$PY_SOURCE" = "CI-parity venv" ]; then
+  pass "python $PY_VERSION from the CI-parity venv"
+else
+  note "python $PY_VERSION from the system python3 -- CI runs 3.14 (#13573)"
+  note "black skips its AST safety check on an older interpreter; build parity with:"
+  note "    scripts/setup-ci-parity-env.sh"
+fi
 
 # ---------------------------------------------------------------- branch
 section "branch"
@@ -198,13 +230,13 @@ else
 
     # Same flags as .github/workflows/code-quality.yml. Different flags is how
     # a local green becomes a CI red.
-    if python3 -m black --check --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
+    if "$PY" -m black --check --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
       pass "black --line-length=120"
     else
       fail "black -- run: python3 -m black --line-length=120 ${PY[*]}"
     fi
 
-    if python3 -m isort --check-only --settings-path=. --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
+    if "$PY" -m isort --check-only --settings-path=. --line-length=120 "${PY[@]}" >/dev/null 2>&1; then
       pass "isort --settings-path=. --line-length=120"
     else
       fail "isort -- run: python3 -m isort --settings-path=. --line-length=120 ${PY[*]}"
@@ -223,11 +255,11 @@ else
 
     if [ "${#PY_LINT[@]}" -eq 0 ]; then
       note "flake8 -- every changed Python file is in .flake8's exclude list"
-    elif python3 -m flake8 --config=.flake8 "${PY_LINT[@]}" >/dev/null 2>&1; then
+    elif "$PY" -m flake8 --config=.flake8 "${PY_LINT[@]}" >/dev/null 2>&1; then
       pass "flake8 --config=.flake8"
     else
       fail "flake8 --config=.flake8"
-      python3 -m flake8 --config=.flake8 "${PY_LINT[@]}" 2>&1 | head -15 | sed 's/^/        /'
+      "$PY" -m flake8 --config=.flake8 "${PY_LINT[@]}" 2>&1 | head -15 | sed 's/^/        /'
     fi
 
     # code-quality.yml runs bandit with NO severity floor -- stricter than the
@@ -238,7 +270,7 @@ else
     # property of the file you happened to touch, and blocking on it would stop
     # anyone editing a file that carries a stale suppression. Reported by the
     # dedicated sweep instead; a real finding still says "Issue:".
-    BANDIT_OUT=$(python3 -m bandit -c .bandit -q "${PY[@]}" 2>&1 | grep -v "nosec encountered")
+    BANDIT_OUT=$("$PY" -m bandit -c .bandit -q "${PY[@]}" 2>&1 | grep -v "nosec encountered")
     if [ -z "$BANDIT_OUT" ]; then
       pass "bandit -c .bandit (no severity floor, as CI runs it)"
     else
