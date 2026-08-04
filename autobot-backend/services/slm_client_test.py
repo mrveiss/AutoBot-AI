@@ -143,6 +143,11 @@ class TestCreatePermissiveSslContext:
         assert ctx.verify_mode != ssl.CERT_NONE
 
 
+# Placeholder operator token for WS tests. _ws_connect_and_listen only checks
+# that a token exists before connecting, so the value is never validated.
+_WS_TOKEN_PLACEHOLDER = "placeholder-not-a-credential"  # nosec B105  # test fixture, never validated
+
+
 class TestSLMClientReconnectBackoff:
     """Tests for exponential backoff in the WebSocket reconnect loop (#4664)."""
 
@@ -235,6 +240,13 @@ class TestSLMClientReconnectBackoff:
     async def test_ssl_error_logged_not_raised(self) -> None:
         """SSL errors are caught and logged, not re-raised from _ws_connect_and_listen."""
         client = self._make_client()
+        # An explicit token keeps the test hermetic. Without one,
+        # _ws_connect_and_listen falls back to _get_slm_signing_secret(), which
+        # reads ambient deployment config: on a host with a populated .env it
+        # proceeded to websockets.connect, but on a bare CI runner it logged a
+        # warning and returned before reaching the code under test, so the
+        # assertion below failed for a reason unrelated to SSL handling (#13551).
+        client.auth_token = _WS_TOKEN_PLACEHOLDER
         client._shutdown = True  # Don't loop
 
         ssl_error = ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED")
