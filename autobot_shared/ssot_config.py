@@ -1561,6 +1561,14 @@ class MiscConfig(RedactedSettings):
     )
     hnsw_search_ef: str = Field(default="", alias="AUTOBOT_HNSW_SEARCH_EF")
     hnsw_space: str = Field(default="", alias="AUTOBOT_HNSW_SPACE")
+    impact_analysis_max_depth: str = Field(
+        default="",
+        alias="AUTOBOT_IMPACT_ANALYSIS_MAX_DEPTH",
+        description=(
+            "Reverse-BFS hop limit for code-graph impact analysis (#13471). "
+            "A truncated walk reports depth_capped=True rather than silently stopping."
+        ),
+    )
     inference_profiling: str = Field(default="", alias="AUTOBOT_INFERENCE_PROFILING")
     input_timeout: int = Field(default=0, alias="AUTOBOT_INPUT_TIMEOUT")
     internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
