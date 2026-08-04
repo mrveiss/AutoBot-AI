@@ -28,22 +28,66 @@ from .types import CircuitState, DistributedAgentInfo
 
 _PERSISTENCE_MODULE = "agents.agent_orchestration.distributed_management"
 
+# Every Redis-backed helper distributed_management imports. The state_persistence
+# six write task state; the services.task_claim four run SET NX EX / EXISTS / two
+# Lua scripts against ``task:claim:{task_id}``.
+_PERSISTENCE_NAMES = (
+    "persist_task_assigned",
+    "persist_task_progress",
+    "persist_task_reassignment",
+    "delete_task_state",
+    "delete_task_timing_state",
+)
+
+# #13449: the claim helpers default to "granted"/"alive" — the values a first
+# claimant gets. The denied path has one explicit test of its own
+# (test_add_active_task_denied_when_claim_is_held) and full coverage against a
+# real claim in tests/integration/test_task_claim_race.py; nothing else in this
+# file asserts claim semantics, and letting these reach Redis made six cases
+# fight over the single key ``task:claim:t1``.
+_CLAIM_DEFAULTS = {
+    "claim_task": True,
+    "release_claim": True,
+    "renew_claim": True,
+    "is_claim_alive": True,
+}
+
+
+def _external_mocks() -> dict:
+    """AsyncMock replacements for every Redis call this module can make."""
+    mocks = {name: AsyncMock() for name in _PERSISTENCE_NAMES}
+    mocks["load_task_state"] = AsyncMock(return_value=({}, {}, {}))
+    for name, result in _CLAIM_DEFAULTS.items():
+        mocks[name] = AsyncMock(return_value=result)
+    return mocks
+
+
+@pytest.fixture(autouse=True)
+def _no_live_redis():
+    """Keep every case in this file in memory (#13449).
+
+    ``_patch_persistence()`` below covers the tests that opt into it, but
+    ``_detect_and_steal_stale_tasks`` and ``_reassign_task`` are exercised
+    without it, and both reach Redis: the first probes ``is_claim_alive`` for
+    every task whose in-memory timestamps look fresh, the second persists the
+    reassignment. Whether that mattered used to depend on which module won the
+    ``autobot_shared.redis_client`` import race (#13446) — with the genuine
+    client, a missing claim key reads as "not alive", the task is stolen, and
+    ``assert count == 0`` becomes ``assert 1 == 0``.
+    """
+    with patch.multiple(_PERSISTENCE_MODULE, **_external_mocks()):
+        yield
+
 
 @asynccontextmanager
 async def _patch_persistence():
     """Patch all state_persistence async helpers to AsyncMock no-ops.
 
     Returns a dict of mock objects keyed by function name so callers can
-    inspect call counts / arguments.
+    inspect call counts / arguments. Re-patches on top of the autouse fixture
+    above so each caller gets its own, freshly-zeroed handles.
     """
-    mocks = {
-        "persist_task_assigned": AsyncMock(),
-        "persist_task_progress": AsyncMock(),
-        "persist_task_reassignment": AsyncMock(),
-        "delete_task_state": AsyncMock(),
-        "delete_task_timing_state": AsyncMock(),
-        "load_task_state": AsyncMock(return_value=({}, {}, {})),
-    }
+    mocks = _external_mocks()
     with patch.multiple(_PERSISTENCE_MODULE, **mocks):
         yield mocks
 
@@ -365,6 +409,23 @@ class TestTaskTrackingIntegration:
             assert "t1" in mgr._task_assigned_at
             assert before <= mgr._task_assigned_at["t1"] <= after
             mocks["persist_task_assigned"].assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_add_active_task_denied_when_claim_is_held(self):
+        """A denied claim records nothing and tells the caller to stand down.
+
+        The autouse fixture grants every claim, so this is the case that proves
+        ``add_active_task`` still consults ``claim_task`` at all (#13449) — and
+        that the double-pickup guard (GH#6468) survives the patching.
+        """
+        async with _patch_persistence() as mocks:
+            mgr = _make_manager()
+            _register_agent(mgr, "a1")
+            with patch(f"{_PERSISTENCE_MODULE}.claim_task", AsyncMock(return_value=False)):
+                assert await mgr.add_active_task("a1", "t1") is False
+            assert "t1" not in mgr._task_assigned_at
+            assert "t1" not in mgr.distributed_agents["a1"].active_tasks
+            mocks["persist_task_assigned"].assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_remove_active_task_clears_all_tracking(self):
