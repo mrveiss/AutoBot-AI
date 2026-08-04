@@ -31,6 +31,13 @@ inputs:
     description: 'Space-separated list of additional pip packages to install after requirements-file.'
     required: false
     default: ''
+  cache-dependency-path:
+    description: >-
+      Files whose hashes key pip's download cache. Most callers pin this to their
+      own requirements files; without it setup-python keys on a default glob, so
+      unrelated workflows share and evict each other's cache entries (#13517).
+    required: false
+    default: ''
 
 outputs:
   python-version:
@@ -45,10 +52,14 @@ runs:
   steps:
     - name: Set up Python ${{ inputs.python-version }}
       id: setup
-      uses: actions/setup-python@1d6f8c11a0e30b87a6af51d0d78681a80e55c65a  # v5
+      # #13517: was pinned to a v5 SHA while every workflow in this repo is
+      # already on v7. Adopting the action as-was would have silently
+      # downgraded setup-python across 21 jobs.
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
         cache: 'pip'
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
     # #13516: every input reaches the shell through `env:`, never inline
     # `${{ }}` in a `run:` body. Inline interpolation is textual substitution
