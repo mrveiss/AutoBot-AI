@@ -1465,6 +1465,17 @@ class MiscConfig(RedactedSettings):
         alias="AUTOBOT_CACHE_L2_TTL",
         description="L2 Redis LLM response cache TTL in seconds",
     )
+    call_graph_max_files: str = Field(
+        default="",
+        alias="AUTOBOT_CALL_GRAPH_MAX_FILES",
+        description=(
+            "Max Python files the call-graph endpoint AST-scans per request. Empty "
+            "(default) means unlimited -- Issue #13468: the previous hardcoded 300-file "
+            "cap silently analysed 8% of a 3,541-file backend and reported the result as "
+            "repo-wide statistics. Set only if a deployment's scan latency/memory forces "
+            "re-capping; the response always states files_scanned/files_total either way."
+        ),
+    )
     celery_dead_letter_max: str = Field(default="", alias="AUTOBOT_CELERY_DEAD_LETTER_MAX")
     celery_dedup_ttl: str = Field(default="", alias="AUTOBOT_CELERY_DEDUP_TTL")
     celery_max_retries: str = Field(default="", alias="AUTOBOT_CELERY_MAX_RETRIES")
