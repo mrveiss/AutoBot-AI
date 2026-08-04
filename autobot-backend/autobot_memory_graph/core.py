@@ -90,6 +90,13 @@ IDENTITY_RELATION_TYPES: Set[str] = {
     "has_participant",  # Issue #608 - Session has User
     "performed_by",  # Issue #608 - Activity performed by User
     "used_secret",  # Issue #608 - Activity used Secret
+    # #13452: user_session.py has always written these two, but neither was
+    # ever declared, so create_relation_by_id raised ValueError on both and
+    # create_chat_session_entity re-raised it — leaving a half-built graph with
+    # "owns" written and nothing else. get_user_sessions and the activity
+    # listing then filtered on names that could never match.
+    "has_session",  # Issue #608 - User has Session
+    "has_activity",  # Issue #608 - Session has Activity
 }
 
 RELATION_TYPES: Set[str] = CORE_RELATION_TYPES | IDENTITY_RELATION_TYPES
@@ -99,6 +106,11 @@ RELATION_TYPES: Set[str] = CORE_RELATION_TYPES | IDENTITY_RELATION_TYPES
 # while relations already stored under one keep resolving.
 RELATION_TYPE_ALIASES: Dict[str, str] = {
     "relates_to": "related_to",  # knowledge-base spelling before #13452
+    # Same concept as "used_secret" (Activity → Secret) in a different tense.
+    # "used_secret" is the declared #608 name but had no writer; "uses_secret"
+    # is what user_session.py actually emits. Mapped rather than added, so the
+    # vocabulary does not carry two spellings of one relation (#13452).
+    "uses_secret": "used_secret",  # nosec B105  # relation name, not a credential
 }
 
 
