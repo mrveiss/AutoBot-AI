@@ -20,6 +20,11 @@ _PKG_DIR = Path(__file__).parent
 
 _MISSING = object()
 
+_REAL_LOAD_KEYS = (
+    "services.npu_pipeline.shard_planner",
+    "services.npu_pipeline.dispatcher",
+)
+
 
 def _load_module(name: str, filename: str):
     # Probe __dict__ rather than using hasattr: the root conftest's package
@@ -61,11 +66,6 @@ def _load_real_modules():
             else:
                 sys.modules[key] = module
 
-
-_REAL_LOAD_KEYS = (
-    "services.npu_pipeline.shard_planner",
-    "services.npu_pipeline.dispatcher",
-)
 
 _shard_planner, _dispatcher_mod = _load_real_modules()
 
