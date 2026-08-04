@@ -53,6 +53,18 @@ CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES"
 # (design §3.1) is CODEEXEC_READONLY_TOOLS, imported above from the single
 # tool-policy classification source (readonly ⊆ injectable; sensitive excluded).
 # Approval-wait polling knobs (mirrors terminal-command approval loop).
+#
+# #13481: this is how long THIS TURN waits, not how long the approval lives.
+# The distinction was invisible before and is the whole of #13216's confusion:
+# the approval is persisted, and approving after this budget still executes the
+# command. Exhausting it means "stop holding the request/generator open", never
+# "the command failed" and never "the approval expired".
+#
+# There is deliberately NO approval-expiry knob here. The reported expectation —
+# that approval should not expire — is the behaviour, so nothing discards a
+# pending approval on a timer. A real expiry policy, if ever wanted, belongs
+# next to the approval's own storage with its own message ("this approval
+# expired, re-request it"), not as a side effect of how long a coroutine lives.
 CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
 CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
 
@@ -1607,7 +1619,21 @@ class ToolHandlerMixin:
     ) -> tuple[WorkflowMessage, str]:
         """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
 
-        Handle approval denial or timeout.
+        Handle approval denial, or this turn giving up on waiting for a decision.
+
+        #13481: those two are NOT the same outcome and used to be reported
+        identically, as ``type="error"``. A denial is a real, final failure. The
+        no-decision case is not a failure at all — the approval is still pending
+        and still executable:
+
+        * the poll timing out does not clear it (``clear_pending_and_resume()``
+          runs only on the approve/deny paths);
+        * ``AgentTerminalService._approve_command_internal`` executes on approve
+          with no coroutine waiting, so approving later still runs the command.
+
+        So ``Approval timeout for command: ls -la`` claimed a command had failed
+        when it had neither failed nor run, and the user could still make it run.
+        That wording is what made the reported behaviour unreadable.
 
         Returns:
             Tuple of (WorkflowMessage, additional_text)
@@ -1622,15 +1648,27 @@ class ToolHandlerMixin:
                 ),
                 f"\n\n❌ {error}",
             )
-        else:
-            return (
-                WorkflowMessage(
-                    type="error",
-                    content=f"Approval timeout for command: {command}",
-                    metadata={"command": command, "timeout": True},
-                ),
-                f"\n\n⏱️ Approval timeout for command: {command}",
-            )
+
+        still_pending = (
+            f"Still waiting on your approval for: `{command}`\n"
+            "This turn stopped waiting, but the request is still open — "
+            "approving it will run the command."
+        )
+        return (
+            WorkflowMessage(
+                type="response",
+                content=still_pending,
+                metadata={
+                    "command": command,
+                    "message_type": "approval_still_pending",
+                    # #13481: kept so existing consumers keying on it keep working,
+                    # but it now means "this turn stopped waiting", not "expired".
+                    "timeout": True,
+                    "approval_still_actionable": True,
+                },
+            ),
+            f"\n\n⏳ {still_pending}",
+        )
 
     async def _handle_approval_workflow(
         self,
