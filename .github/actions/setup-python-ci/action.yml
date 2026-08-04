@@ -5,8 +5,26 @@
 # Composite action: Setup Python + install CI dependencies (GH#7086)
 #
 # Encapsulates the repeated "setup Python + pip bootstrap + install deps"
-# pattern shared across ci.yml, code-quality.yml, and other workflows.
-# Eliminates ~15 lines of duplicated YAML per job.
+# pattern, so the interpreter version, pip cache and dependency install live in
+# one place rather than a copy per workflow.
+#
+# #13517: this previously claimed to be "shared across ci.yml, code-quality.yml,
+# and other workflows" while having ZERO callers — neither of those files used
+# it, and nothing else did either. A description that names callers it does not
+# have is worse than none: it reads as load-bearing shared infrastructure, so
+# nobody checks, and the three expression-injection sites it carried (#13516)
+# sat unreviewed because the file looked established.
+#
+# Current callers (keep this list honest — it is the only thing standing between
+# this file and being orphaned again):
+#   api-wiring.yml            enforce-precommit.yml   migration-gate.yml
+#   auto-fix-formatting.yml   marker-tests.yml        startup-import-smoke.yml
+#   canonical-audit.yml       constraint-drift.yml    coverage.yml
+#
+# 12 workflows still call actions/setup-python directly. Converting them is
+# worthwhile but not required for this action to be legitimate — each needs its
+# own cache-dependency-path carried across, which is why it is going in
+# tranches rather than one sweep.
 #
 # Usage:
 #   - uses: ./.github/actions/setup-python-ci
