@@ -82,6 +82,7 @@ from code_intelligence.security import (
     SecuritySeverity,
     get_vulnerability_types,
 )
+from code_intelligence.shared.process_offload import run_directory_scan, run_isolated
 from code_intelligence.shared.scoring import get_grade_from_score
 from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_security_analysis
@@ -545,7 +546,7 @@ def _filter_antipatterns_by_severity(
 
 
 async def _run_redis_analysis(
-    optimizer: RedisOptimizer,
+    project_root: str,
     path: str,
     exclude_patterns: list | None,
 ) -> list:
@@ -554,8 +555,14 @@ async def _run_redis_analysis(
 
     Issue #620.
 
+    #12866: takes the project root rather than a live ``RedisOptimizer`` so the
+    scan can run in a separate process — a constructed instance is not
+    guaranteed picklable, and the whole point is to keep this pure-Python scan
+    off the API process's GIL. A single-file scan is bounded and stays in a
+    thread; only the whole-tree walk is worth a process hop.
+
     Args:
-        optimizer: RedisOptimizer instance
+        project_root: Root the optimizer is constructed against
         path: Path to analyze
         exclude_patterns: Patterns to exclude from analysis
 
@@ -564,9 +571,13 @@ async def _run_redis_analysis(
     """
     is_file = await asyncio.to_thread(os.path.isfile, path)
     if is_file:
-        return await asyncio.to_thread(optimizer.analyze_file, path)
-    return await asyncio.to_thread(
-        optimizer.analyze_directory,
+        return await run_isolated(
+            RedisOptimizer, {"project_root": project_root}, "analyze_file", path
+        )
+    return await run_isolated(
+        RedisOptimizer,
+        {"project_root": project_root},
+        "analyze_directory",
         path,
         exclude_patterns=exclude_patterns,
     )
@@ -699,8 +710,12 @@ async def analyze_codebase(
     await _validate_path_is_directory(request.path)
 
     try:
-        detector = AntiPatternDetector(exclude_dirs=request.exclude_dirs)
-        report = await asyncio.to_thread(detector.analyze_directory, request.path)
+        report = await run_isolated(
+            AntiPatternDetector,
+            {"exclude_dirs": request.exclude_dirs},
+            "analyze_directory",
+            request.path,
+        )
         report.anti_patterns = _filter_antipatterns_by_severity(
             report.anti_patterns,
             request.min_severity,
@@ -885,8 +900,7 @@ async def get_codebase_health_score(
         raise_invalid_input("path", f"does not exist: {path}")
 
     try:
-        detector = AntiPatternDetector()
-        report = await asyncio.to_thread(detector.analyze_directory, path)
+        report = await run_isolated(AntiPatternDetector, {}, "analyze_directory", path)
 
         # Calculate health score
         score = _calculate_health_score(report.anti_patterns)
@@ -973,14 +987,17 @@ async def analyze_redis_usage_endpoint(
     await _validate_path_exists(request.path)
 
     try:
-        optimizer = RedisOptimizer(project_root=request.path)
         results = await _run_redis_analysis(
-            optimizer,
+            request.path,
             request.path,
             request.exclude_patterns,
         )
         results = _filter_redis_results_by_severity(results, request.min_severity)
 
+        # The scan ran in another process, so summarise through a local instance
+        # carrying the (already severity-filtered) findings — get_summary() reads
+        # self.results (#12866).
+        optimizer = RedisOptimizer(project_root=request.path)
         optimizer.results = results
         summary = optimizer.get_summary()
         response_content = _build_redis_analysis_response(request.path, results, summary)
@@ -1134,8 +1151,9 @@ async def get_redis_usage_health_score(
 
 async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
     """Run Redis health analysis in a thread. Issue #1034."""
-    optimizer = RedisOptimizer(project_root=path)
-    results = await asyncio.to_thread(optimizer.analyze_directory, path)
+    results = await run_isolated(
+        RedisOptimizer, {"project_root": path}, "analyze_directory", path
+    )
 
     score = _calculate_redis_health_score(results)
     grade = get_grade_from_score(score)
@@ -1194,7 +1212,7 @@ async def security_analyze(
             project_root=request.path,
             exclude_patterns=request.exclude_patterns,
         )
-        results = await asyncio.to_thread(analyzer.analyze_directory)
+        results = await run_directory_scan(analyzer)
         results = _filter_results_by_severity(results, request.min_severity)
         summary = analyzer.get_summary()
 
@@ -1403,7 +1421,7 @@ async def get_security_report(
 
     try:
         analyzer = SecurityAnalyzer(project_root=path)
-        await asyncio.to_thread(analyzer.analyze_directory)
+        await run_directory_scan(analyzer)
         return await _generate_report_response(analyzer, path, format)
 
     except Exception as e:
@@ -1447,7 +1465,7 @@ async def performance_analyze(
             project_root=request.path,
             exclude_patterns=request.exclude_patterns,
         )
-        results = await asyncio.to_thread(analyzer.analyze_directory)
+        results = await run_directory_scan(analyzer)
         results = _filter_results_by_severity(results, request.min_severity)
         summary = analyzer.get_summary()
 
@@ -1598,7 +1616,7 @@ async def get_performance_score(
 
     try:
         analyzer = PerformanceAnalyzer(project_root=path)
-        await asyncio.to_thread(analyzer.analyze_directory)
+        await run_directory_scan(analyzer)
         summary = analyzer.get_summary()
 
         # Get score and grade, generate status using extracted helper
@@ -1654,7 +1672,7 @@ async def get_performance_report(
 
     try:
         analyzer = PerformanceAnalyzer(project_root=path)
-        await asyncio.to_thread(analyzer.analyze_directory)
+        await run_directory_scan(analyzer)
         return await _generate_report_response(analyzer, path, format)
 
     except Exception as e:

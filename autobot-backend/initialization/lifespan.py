@@ -2004,6 +2004,17 @@ async def cleanup_services(app: FastAPI):
             logger.warning("Background init task raised during cancellation: %s", _bg_init_err)
         logger.info("✅ Phase-2 background init task cancelled before shutdown")
 
+    # #12866: the code-analysis process pool holds spawned children. They are not
+    # daemons, so leaving them behind keeps the unit in "deactivating" until
+    # systemd's timeout expires and SIGKILLs it. Torn down here, before the
+    # thread pool drains, because the shutdown call itself runs in a thread.
+    try:
+        from code_intelligence.shared.process_offload import shutdown_scan_pool
+
+        await shutdown_scan_pool()
+    except Exception as _pool_err:  # noqa: BLE001
+        logger.warning("Code-analysis process pool shutdown raised: %s", _pool_err)
+
     try:
         # GH#9044: Close transcriber DB connection
         transcriber_db = getattr(app.state, "transcriber_db", None)
