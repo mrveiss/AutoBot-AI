@@ -24,6 +24,7 @@ from .core import (
     OUTGOING_DIRECTIONS,
     RELATION_TYPES,
     AutoBotMemoryGraphCore,
+    canonical_relation_type,
 )
 
 logger = get_logger(__name__)
@@ -118,6 +119,10 @@ class RelationOperationsMixin:
             Created relation data
         """
         self.ensure_initialized()
+        # #13452: fold legacy spellings (e.g. "relates_to") onto the canonical
+        # name before validating, so a caller using the knowledge-base spelling
+        # writes a real edge instead of raising into a swallowing except block.
+        relation_type = canonical_relation_type(relation_type)
         if relation_type not in RELATION_TYPES:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
@@ -176,6 +181,7 @@ class RelationOperationsMixin:
         """Create relationship between entities using IDs. Issue #620."""
         self.ensure_initialized()
 
+        relation_type = canonical_relation_type(relation_type)  # #13452
         if relation_type not in RELATION_TYPES:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 

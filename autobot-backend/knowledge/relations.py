@@ -12,8 +12,9 @@ Relations are stored in Redis using the same pattern as
 autobot_memory_graph.relations (outgoing/incoming JSON lists), but scoped
 to knowledge-base facts (key prefix ``kb:rel:``).
 
-Relation types are imported from autobot_memory_graph.core.RELATION_TYPES
-plus additional knowledge-specific types.
+Relation types are imported from
+``autobot_memory_graph.core.CORE_RELATION_TYPES`` — the single canonical
+vocabulary (Issue #13452). This module no longer keeps its own copy.
 """
 
 import asyncio
@@ -22,26 +23,22 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Set
 
+from autobot_memory_graph.core import CORE_RELATION_TYPES, canonical_relation_type
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
 
-# Knowledge-specific relation types extend the memory graph set
-KB_RELATION_TYPES: Set[str] = {
-    "relates_to",
-    "depends_on",
-    "implements",
-    "fixes",
-    "informs",
-    "guides",
-    "follows",
-    "contains",
-    "blocks",
-    "references",
-    "supersedes",
-    "contradicts",
-}
+# Issue #13452: derived from the canonical vocabulary instead of restating it.
+# This module's docstring always claimed the types came from
+# autobot_memory_graph, but the list below was an independent copy that spelled
+# the general relation "relates_to" where the memory graph spelled it
+# "related_to" — a divergence that silently dropped edges (#13367).
+#
+# Facts relate to facts, so the knowledge base takes CORE_RELATION_TYPES and
+# not the identity/activity names (owns, has_secret, ...) that only make sense
+# between memory-graph entities.
+KB_RELATION_TYPES: Set[str] = set(CORE_RELATION_TYPES)
 
 
 class RelationsMixin:
@@ -55,6 +52,25 @@ class RelationsMixin:
     RELATION_TYPES = KB_RELATION_TYPES
 
     # -- helpers ----------------------------------------------------------
+
+    @staticmethod
+    def _relation_type_matches(stored_type: str, wanted_type: str | None) -> bool:
+        """Compare a stored relation type against a requested one (#13452).
+
+        Both sides are canonicalised, so relations persisted under the legacy
+        "relates_to" spelling stay reachable through the canonical
+        "related_to" and vice versa — no Redis migration required.
+
+        Args:
+            stored_type: Relation type as read back from Redis.
+            wanted_type: Relation type the caller filtered on, or None for any.
+
+        Returns:
+            True when the stored relation satisfies the filter.
+        """
+        if wanted_type is None:
+            return True
+        return canonical_relation_type(stored_type) == canonical_relation_type(wanted_type)
 
     def _rel_out_key(self, fact_id: str) -> str:
         return f"kb:rel:out:{fact_id}"
@@ -91,6 +107,10 @@ class RelationsMixin:
         """Create a relation between two knowledge-base facts."""
         self.ensure_initialized()
 
+        # #13452: accept the legacy "relates_to" spelling and store the
+        # canonical "related_to", so existing API clients keep working while
+        # only one spelling is ever written.
+        relation_type = canonical_relation_type(relation_type)
         if relation_type not in KB_RELATION_TYPES:
             return {
                 "success": False,
@@ -158,7 +178,7 @@ class RelationsMixin:
             kept = []
             for entry_bytes in raw_out:
                 entry = json.loads(entry_bytes)
-                if entry["to"] == target_fact_id and (relation_type is None or entry["type"] == relation_type):
+                if entry["to"] == target_fact_id and self._relation_type_matches(entry["type"], relation_type):
                     removed += 1
                 else:
                     kept.append(entry_bytes)
@@ -173,7 +193,7 @@ class RelationsMixin:
             kept = []
             for entry_bytes in raw_in:
                 entry = json.loads(entry_bytes)
-                if entry["from"] == source_fact_id and (relation_type is None or entry["type"] == relation_type):
+                if entry["from"] == source_fact_id and self._relation_type_matches(entry["type"], relation_type):
                     pass  # drop
                 else:
                     kept.append(entry_bytes)
@@ -204,7 +224,7 @@ class RelationsMixin:
             raw = await self.redis().lrange(self._rel_out_key(fact_id), 0, -1)
             for entry_bytes in raw:
                 entry = json.loads(entry_bytes)
-                if relation_type and entry["type"] != relation_type:
+                if not self._relation_type_matches(entry["type"], relation_type):
                     continue
                 rel = {
                     "from": fact_id,
@@ -221,7 +241,7 @@ class RelationsMixin:
             raw = await self.redis().lrange(self._rel_in_key(fact_id), 0, -1)
             for entry_bytes in raw:
                 entry = json.loads(entry_bytes)
-                if relation_type and entry["type"] != relation_type:
+                if not self._relation_type_matches(entry["type"], relation_type):
                     continue
                 rel = {
                     "from": entry["from"],
@@ -257,6 +277,8 @@ class RelationsMixin:
         queue: list = [(start_fact_id, 0)]
         nodes: list = []
         edges: list = []
+        # #13452: canonicalise the filter once so legacy-spelled stored edges match.
+        wanted = {canonical_relation_type(rt) for rt in relation_types} if relation_types else None
 
         while queue:
             current_id, depth = queue.pop(0)
@@ -275,7 +297,7 @@ class RelationsMixin:
             raw = await self.redis().lrange(self._rel_out_key(current_id), 0, -1)
             for entry_bytes in raw:
                 entry = json.loads(entry_bytes)
-                if relation_types and entry["type"] not in relation_types:
+                if wanted is not None and canonical_relation_type(entry["type"]) not in wanted:
                     continue
                 edges.append(
                     {

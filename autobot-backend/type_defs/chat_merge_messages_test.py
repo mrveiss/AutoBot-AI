@@ -12,13 +12,53 @@ Tests the merge_messages function's ability to handle:
 - Backend-added message preservation
 """
 
+from enum import Enum
 from typing import Dict, List
 
 import pytest
 
+from type_defs import common
+
 # Import the function under test
 # Note: We test the logic directly since merge_messages is async
-from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES, STREAMING_MESSAGE_TYPES
+from type_defs.common import (
+    SKIP_WEBSOCKET_PERSISTENCE_TYPES,
+    STREAMING_MESSAGE_TYPES,
+    MessageTypes,
+)
+
+
+class TestMessageTypeVocabulary:
+    """Drift guard for the message-type vocabulary (Issue #13452)."""
+
+    def test_message_types_is_an_enum(self):
+        """A bare constant bag let the two derived sets be aliased (#13402)."""
+        assert issubclass(MessageTypes, Enum)
+
+    def test_members_are_plain_strings(self):
+        """(str, Enum) keeps `message_type in <set>` working for raw strings."""
+        assert MessageTypes.LLM_RESPONSE == "llm_response"
+        assert hash(MessageTypes.LLM_RESPONSE) == hash("llm_response")
+
+    def test_both_collections_are_frozensets_of_str_at_runtime(self):
+        """NewType is erased at runtime; behaviour must be unchanged."""
+        for collection in (SKIP_WEBSOCKET_PERSISTENCE_TYPES, STREAMING_MESSAGE_TYPES):
+            assert isinstance(collection, frozenset)
+            assert all(type(item) is str for item in collection)
+
+    def test_no_collection_member_is_outside_the_enum(self):
+        """Every entry must come from MessageTypes — no stray literals."""
+        known = {member.value for member in MessageTypes}
+        assert SKIP_WEBSOCKET_PERSISTENCE_TYPES <= known
+        assert STREAMING_MESSAGE_TYPES <= known
+
+    def test_the_two_collections_have_distinct_types(self):
+        """Assigning one where the other is expected must be a type error."""
+        skip_type = common.__annotations__["SKIP_WEBSOCKET_PERSISTENCE_TYPES"]
+        streaming_type = common.__annotations__["STREAMING_MESSAGE_TYPES"]
+        assert skip_type is not streaming_type
+        assert skip_type is common.SkipPersistenceTypes
+        assert streaming_type is common.StreamingTypes
 
 
 class TestMergeMessagesSignature:

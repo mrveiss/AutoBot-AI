@@ -13,6 +13,11 @@ from typing import Any, Dict, List
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
+from autobot_memory_graph.core import (
+    RELATION_TYPE_ALIASES,
+    RELATION_TYPES,
+    canonical_relation_type,
+)
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
@@ -3808,19 +3813,13 @@ _VALID_ENTITY_TYPES = frozenset(
         "implementation",
     }
 )
-_VALID_RELATION_TYPES = frozenset(
-    {
-        "relates_to",
-        "depends_on",
-        "implements",
-        "fixes",
-        "informs",
-        "guides",
-        "follows",
-        "contains",
-        "blocks",
-    }
-)
+# Issue #13452: RelationCreateRequest is the body of POST /api/memory/relations,
+# which calls AutoBotMemoryGraph.create_relation — so it must validate against
+# the memory graph's vocabulary, not the knowledge base's. The previous literal
+# copy was the knowledge-base list: it rejected valid graph types (related_to,
+# caused_by, leads_to, owns, ...) and admitted "relates_to", which then raised
+# ValueError inside create_relation. Derived now, so it cannot drift again.
+_VALID_RELATION_TYPES = frozenset(RELATION_TYPES | set(RELATION_TYPE_ALIASES))
 
 
 class EntityCreateRequest(BaseModel):
@@ -3855,7 +3854,8 @@ class RelationCreateRequest(BaseModel):
     def validate_relation_type(cls, v):
         if v not in _VALID_RELATION_TYPES:
             raise ValueError(f"relation_type must be one of: {_VALID_RELATION_TYPES}")
-        return v
+        # #13452: normalise legacy spellings so only the canonical name is stored.
+        return canonical_relation_type(v)
 
 
 class InvalidateEntityRequest(BaseModel):

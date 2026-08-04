@@ -17,7 +17,7 @@ Issue: #260
 from dataclasses import dataclass
 from typing import Any, FrozenSet
 
-from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_memory_graph import RELATION_TYPES, AutoBotMemoryGraph, canonical_relation_type
 from autobot_shared.logging_manager import get_logger
 
 # Issue #380: Module-level frozenset for security-related tags
@@ -66,9 +66,21 @@ class ServiceRequest:
 
 logger = get_logger(__name__)
 
-# Performance optimization: O(1) lookup for security relation types (Issue #326)
-DETAIL_RELATION_TYPES = {"contains", "runs", "has_vulnerability", "exploited_by"}
-SEVERITY_RELATION_TYPES = {"affects"}
+# Issue #13452: one explicit table instead of two membership sets whose targets
+# were implied by an if/elif chain. Every security-domain relation name maps to
+# a canonical autobot_memory_graph relation here; create_relation() rejects
+# anything else, and _create_security_relation() swallows the ValueError, so an
+# unmapped name means a silently dropped edge (#13367). The assertion below
+# makes drift an import-time failure rather than a missing graph edge.
+SECURITY_TO_BASE_RELATION: dict[str, str] = {
+    "contains": "contains",
+    "runs": "contains",  # host contains the service it runs
+    "has_vulnerability": "contains",  # service contains the finding
+    "exploited_by": "contains",
+    "affects": "related_to",  # vulnerability ←→ affected host/service
+    "related_to": "related_to",
+    "depends_on": "depends_on",
+}
 
 
 # Security-specific entity types (extend base ENTITY_TYPES)
@@ -82,7 +94,7 @@ SECURITY_ENTITY_TYPES = {
     "finding": "General security finding",
 }
 
-# Security-specific relation types (extend base RELATION_TYPES)
+# Security-specific relation types (documentation for SECURITY_TO_BASE_RELATION)
 SECURITY_RELATION_TYPES = {
     "contains": "Parent contains child (assessment → network → host)",
     "runs": "Host runs service",
@@ -92,6 +104,26 @@ SECURITY_RELATION_TYPES = {
     "depends_on": "Dependency relationship",
     "affects": "Vulnerability affects service/host",
 }
+
+
+def _verify_security_relation_vocabulary() -> None:
+    """Fail at import if the security vocabulary drifts from the canonical one.
+
+    Raises:
+        RuntimeError: If the two security tables disagree, or if any mapped
+            target is not a canonical autobot_memory_graph relation type.
+    """
+    if set(SECURITY_RELATION_TYPES) != set(SECURITY_TO_BASE_RELATION):
+        raise RuntimeError(
+            "security relation tables disagree: "
+            f"{sorted(set(SECURITY_RELATION_TYPES) ^ set(SECURITY_TO_BASE_RELATION))}"
+        )
+    unmapped = set(SECURITY_TO_BASE_RELATION.values()) - RELATION_TYPES
+    if unmapped:
+        raise RuntimeError(f"security relations map onto non-canonical types: {sorted(unmapped)}")
+
+
+_verify_security_relation_vocabulary()
 
 
 class SecurityFindingsIndex:
@@ -705,16 +737,12 @@ class SecurityMemoryIntegration:
             True if created successfully
         """
         try:
-            # Map security relation types onto the base graph's RELATION_TYPES
-            # vocabulary (autobot_memory_graph.core.RELATION_TYPES) — create_relation
-            # rejects anything outside it. The base name is "related_to"; the
-            # previous "relates_to" was not a valid type, so every mapped relation
-            # raised ValueError and was silently swallowed below.
-            base_relation = relation_type
-            if relation_type in DETAIL_RELATION_TYPES:
-                base_relation = "contains"
-            elif relation_type in SEVERITY_RELATION_TYPES:
-                base_relation = "related_to"
+            # Map security relation names onto the canonical vocabulary
+            # (autobot_memory_graph.core.RELATION_TYPES) — create_relation
+            # rejects anything outside it and the except below swallows the
+            # ValueError, so an unmapped name is a silently dropped edge
+            # (#13367, #13452).
+            base_relation = SECURITY_TO_BASE_RELATION.get(relation_type, canonical_relation_type(relation_type))
 
             await self._memory_graph.create_relation(
                 from_entity=from_entity,

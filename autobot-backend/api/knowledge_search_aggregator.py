@@ -86,7 +86,7 @@ def _build_relation_context(rel: Dict[str, Any], total_length: int, max_length: 
     content = rel["target_fact"].get("content", "")[:300]
     if total_length + len(content) > max_length:
         return total_length
-    rel_type = rel.get("relation_type", "relates_to")
+    rel_type = rel.get("relation_type", "related_to")
     context_parts.append(f"- [{rel_type}] {content}\n")
     return total_length + len(content)
 
@@ -714,7 +714,7 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
                         {
                             "from": fact_id,
                             "to": target_id,
-                            "type": rel.get("relation_type", "relates_to"),
+                            "type": rel.get("relation_type", "related_to"),
                             "strength": rel.get("strength", 0.8),
                         }
                     )
