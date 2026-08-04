@@ -186,11 +186,7 @@ def test_every_managed_component_has_an_application_path():
 def test_undelivered_roles_are_reported_for_visibility(capsys):
     """Always print the current delivery gap, so CI logs carry it while xfail hides the failure."""
     applied = applied_roles()
-    gap = [
-        f"{c}: roles/{r} NEVER applied"
-        for c, r in sorted(MANAGED_COMPONENT_ROLES.items())
-        if r not in applied
-    ]
+    gap = [f"{c}: roles/{r} NEVER applied" for c, r in sorted(MANAGED_COMPONENT_ROLES.items()) if r not in applied]
     print("\n#12959 delivery gap — roles the builtin updater cannot deliver a change through:")
     for line in gap:
         print(f"  {line}")
