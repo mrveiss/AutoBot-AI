@@ -16,8 +16,17 @@ These tests pin the three properties that close it:
 2. it exists exactly once — extracted to its own task file and *included* by
    ``databases.yml``, not copied into the playbook, because inline-vs-role
    duplication is the root cause #12959 is about;
-3. it is guarded, so a host whose canonical store has no managed block is left
-   alone rather than stripped of every credential it has.
+3. it actually runs and actually reconciles: the shell tasks declare
+   ``executable: /bin/bash``, and the collapse leaves exactly one assignment per
+   key carrying the value every consumer already resolves to.
+
+#13454 shipped 1 and 2 and still delivered nothing, because ``shell`` runs under
+``/bin/sh`` -- dash on the deployed hosts -- where ``set -o pipefail`` is an
+illegal option in a special builtin. Every task aborted on line 1 with rc=2,
+``failed_when: false`` made that a green ``ok``, and the tasks gated on
+``rc == 0`` were skipped on every host. Hence the behavioural tests below:
+asserting the task's *shape* is what let a fix that could not execute look
+delivered twice.
 
 ``tasks_from`` is the intended shape, not a compromise: applying the postgresql
 role in full on an update path would re-run installation, configuration and
@@ -42,9 +51,15 @@ _ROLE_TASKS = _ANSIBLE / "roles" / "postgresql" / "tasks"
 _RECONCILE = _ROLE_TASKS / "credentials_reconcile.yml"
 _DATABASES = _ROLE_TASKS / "databases.yml"
 
-#: The awk program that strips unmarked duplicates. Distinctive enough that a
+#: The awk program that collapses duplicate keys. Distinctive enough that a
 #: copy anywhere else in the tree is a real duplication, not a coincidence.
-_STRIP_FINGERPRINT = "dropped++; next"
+_STRIP_FINGERPRINT = 'sub(/=.*/, "", k); last[k] = NR'
+
+#: Name fragment of the task that owns the collapse; extracted and executed
+#: against fixtures below.
+_STRIP_TASK = "Collapse duplicate"
+
+_MARKER = "# {mark} {prefix} DB CREDENTIALS (managed by postgresql role)"
 
 
 def _iter_mappings(node):
@@ -171,21 +186,183 @@ def test_databases_yml_includes_rather_than_repeats_it():
     )
 
 
-def test_strip_is_guarded_on_the_managed_block_existing():
-    """Unguarded, the strip would wipe every credential off a pre-#12224 host.
+def _shell_tasks_using_pipefail() -> list[tuple[Path, dict]]:
+    """Every shell task in the ansible tree whose body relies on ``pipefail``."""
+    found = []
+    for path in sorted(_ANSIBLE.rglob("*.yml")):
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            continue  # vault/templated files are not what this guard is about
+        for task in _iter_mappings(doc):
+            module = task.get("ansible.builtin.shell", task.get("shell"))
+            body = module.get("cmd", "") if isinstance(module, dict) else module
+            if isinstance(body, str) and "pipefail" in body:
+                found.append((path, task))
+    return found
 
-    The awk drops any ``PREFIX_*=`` assignment outside the managed markers. On a
-    host that has no managed block at all, that is *every* assignment — the
-    strip is only safe because ``databases.yml`` writes the block immediately
-    before. Standalone application has no such guarantee.
+
+def test_every_pipefail_shell_task_declares_bash():
+    """``shell`` runs under /bin/sh, which is dash -- where pipefail is illegal.
+
+    This is the whole of why #13454 delivered nothing: ``set -euo pipefail``
+    made every reconcile task exit 2 on its first line, before any credential
+    logic ran. The failure is invisible (``failed_when: false`` reports ``ok``
+    and ansible.cfg sets ``display_skipped_hosts = False``), so it gets a static
+    guard rather than another live deploy to re-discover it.
     """
-    tasks = yaml.safe_load(_RECONCILE.read_text(encoding="utf-8"))
-    strip = next(t for t in tasks if "Strip pre-#12224" in t["name"])
-    guard = strip.get("when")
-    guard = [guard] if isinstance(guard, str) else list(guard or [])
-    assert any("_cred_block_present" in str(c) for c in guard), (
-        "the strip task must be conditional on the managed block being present; " f"found when={guard!r}"
+    tasks = _shell_tasks_using_pipefail()
+    assert tasks, "no pipefail shell tasks found — did the ansible tree move?"
+
+    offenders = []
+    for path, task in tasks:
+        module = task.get("ansible.builtin.shell", task.get("shell"))
+        executable = (task.get("args") or {}).get("executable") or (
+            module.get("executable") if isinstance(module, dict) else None
+        )
+        if not str(executable or "").endswith("bash"):
+            offenders.append(f"{path.name}: {task.get('name')!r} (executable={executable!r})")
+
+    assert not offenders, (
+        "shell tasks using `set -o pipefail` must declare `executable: /bin/bash`; "
+        "under /bin/sh (dash) they abort with rc=2 before running:\n  " + "\n  ".join(offenders)
     )
+
+
+def _run_collapse(tmp_path: Path, content: str, prefix: str = "AUTOBOT") -> tuple[str, str]:
+    """Run the SHIPPED collapse task against a fixture credential file.
+
+    Extracts the task body from the role instead of re-implementing it, so the
+    test cannot pass against a transform the host never runs.
+    """
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not installed")
+
+    tasks = yaml.safe_load(_RECONCILE.read_text(encoding="utf-8"))
+    task = next(t for t in tasks if _STRIP_TASK in t["name"])
+    script = task["ansible.builtin.shell"]["cmd"]
+    for placeholder, value in (
+        ("{{ postgresql_credentials_dir }}", str(tmp_path)),
+        ("{{ postgresql_credentials_file }}", "db-credentials.env"),
+        ("{{ db_env_prefix }}", prefix),
+    ):
+        script = script.replace(placeholder, value)
+
+    target = tmp_path / "db-credentials.env"
+    target.write_text(content, encoding="utf-8")
+    result = subprocess.run([bash, "-c", script], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, f"collapse refused: rc={result.returncode} {result.stderr}"
+    return target.read_text(encoding="utf-8"), result.stdout
+
+
+def _values(text: str, key: str) -> list[str]:
+    return [line.split("=", 1)[1] for line in text.splitlines() if line.startswith(f"{key}=")]
+
+
+#: The observed live shape: two full sets of AUTOBOT keys, neither inside a
+#: managed block (the host predates #12224), the dead copy FIRST. Every value is
+#: a fixture placeholder — the real store is mode 0600 and is never read here.
+_LEGACY = """# AutoBot database credentials
+SLM_DB_USER=slm_app
+SLM_DB_PASSWORD=slm-value
+AUTOBOT_DB_HOST=127.0.0.1
+AUTOBOT_DB_USER=autobot_app
+AUTOBOT_DB_PASSWORD=first-copy-dead
+AUTOBOT_DATABASE_URL=postgresql+asyncpg://db-node:5432/autobot_users?copy=first
+AUTOBOT_DB_HOST=127.0.0.1
+AUTOBOT_DB_USER=autobot_app
+AUTOBOT_DB_PASSWORD=last-copy-live
+AUTOBOT_DATABASE_URL=postgresql+asyncpg://db-node:5432/autobot_users?copy=last
+"""
+
+_BEGIN_SLM = _MARKER.format(mark="BEGIN", prefix="SLM")
+_END_SLM = _MARKER.format(mark="END", prefix="SLM")
+_BEGIN_AUTOBOT = _MARKER.format(mark="BEGIN", prefix="AUTOBOT")
+_END_AUTOBOT = _MARKER.format(mark="END", prefix="AUTOBOT")
+
+#: A migrated host: residue above, both managed blocks below. The SLM block
+#: carries AUTOBOT_USERS_DATABASE_URL (#12297) — an AUTOBOT_-prefixed key that
+#: lives inside the *other* prefix's block.
+_WITH_BLOCKS = f"""AUTOBOT_DB_PASSWORD=first-copy-dead
+{_BEGIN_SLM}
+SLM_DB_PASSWORD=slm-value
+AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://db-node:5432/autobot_users?owner=slm-block
+{_END_SLM}
+{_BEGIN_AUTOBOT}
+AUTOBOT_DB_PASSWORD=last-copy-live
+AUTOBOT_DATABASE_URL=postgresql+asyncpg://db-node:5432/autobot_users?copy=managed
+{_END_AUTOBOT}
+"""
+
+
+def test_collapse_keeps_the_current_value_on_a_legacy_host(tmp_path):
+    """The whole point: duplicates outside any managed block must be reconciled.
+
+    The gate #13454 used — "only strip when this prefix's marker exists" —
+    skipped precisely this host, because the marker is what a pre-#12224 host
+    does not have.
+    """
+    after, stdout = _run_collapse(tmp_path, _LEGACY)
+
+    assert "CHANGED" in stdout
+    assert _values(after, "AUTOBOT_DB_PASSWORD") == ["last-copy-live"], (
+        "must keep the LAST assignment: the dead copy is first, and retaining "
+        "it locks the deployment out of PostgreSQL"
+    )
+    assert _values(after, "AUTOBOT_DATABASE_URL") == [
+        "postgresql+asyncpg://db-node:5432/autobot_users?copy=last"
+    ]
+    assert _values(after, "SLM_DB_PASSWORD") == ["slm-value"], "the other prefix must not be touched"
+    assert after.startswith("# AutoBot database credentials\n"), "comments must survive"
+
+
+def test_collapse_is_idempotent(tmp_path):
+    """A second application must be a byte-for-byte no-op."""
+    once, _ = _run_collapse(tmp_path, _LEGACY)
+    twice, stdout = _run_collapse(tmp_path, once)
+
+    assert twice == once
+    assert "CHANGED" not in stdout, "a reconciled file must not be rewritten again"
+
+
+def test_collapse_does_not_damage_a_clean_file(tmp_path):
+    """One assignment per key: nothing to do, and nothing done."""
+    clean = "AUTOBOT_DB_PASSWORD=last-copy-live\nAUTOBOT_DB_HOST=127.0.0.1\n"
+    after, stdout = _run_collapse(tmp_path, clean)
+
+    assert after == clean
+    assert "CHANGED" not in stdout
+    assert not (tmp_path / "db-credentials.env.pre-12907.bak").exists(), "an untouched file must not be backed up"
+
+
+def test_collapse_preserves_a_managed_block_and_the_other_prefixs_key(tmp_path):
+    """Regression guard for the #12297 landmine the previous strip re-armed.
+
+    That awk dropped every ``AUTOBOT_*`` line outside the *AUTOBOT* block —
+    which includes ``AUTOBOT_USERS_DATABASE_URL``, deliberately emitted inside
+    the **SLM** block. Collapsing by last assignment has no such blind spot: a
+    key that appears once is its own last assignment.
+    """
+    after, stdout = _run_collapse(tmp_path, _WITH_BLOCKS)
+
+    assert "CHANGED" in stdout
+    assert _values(after, "AUTOBOT_DB_PASSWORD") == ["last-copy-live"]
+    assert _values(after, "AUTOBOT_USERS_DATABASE_URL") == [
+        "postgresql+asyncpg://db-node:5432/autobot_users?owner=slm-block"
+    ], "the SLM block's AUTOBOT_-prefixed key must survive an AUTOBOT reconcile"
+    for marker in (_BEGIN_SLM, _END_SLM, _BEGIN_AUTOBOT, _END_AUTOBOT):
+        assert marker in after, f"blockinfile marker lost: {marker}"
+    assert after.count("AUTOBOT_DB_PASSWORD=") == 1
+
+
+def test_collapse_backs_the_file_up_before_mutating_it(tmp_path):
+    """The store holds live DB passwords; a wrong rewrite is an outage."""
+    _run_collapse(tmp_path, _LEGACY)
+    backup = tmp_path / "db-credentials.env.pre-12907.bak"
+
+    assert backup.is_file(), "no recovery copy taken before rewriting the credential store"
+    assert backup.read_text(encoding="utf-8") == _LEGACY
 
 
 def test_updater_asserts_delivery_instead_of_reporting_success_blindly():
