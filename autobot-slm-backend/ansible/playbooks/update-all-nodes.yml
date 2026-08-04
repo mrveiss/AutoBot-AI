@@ -310,6 +310,20 @@
       become: true
       tags: [slm, slm-backend, shared]
 
+    # #12907/#12959: same role-owned reconciliation as PLAY 2, for the SLM
+    # prefix. db-credentials.env is shared between both prefixes, and the parse
+    # below takes the FIRST `DATABASE_URL=` match — so a pre-#12224 unmarked
+    # duplicate feeds the migration a dead URL. Strip them before reading.
+    - name: "[PLAY 1] SLM | Reconcile the SLM credential store (#12907, #12959)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: credentials_reconcile
+        apply:
+          become: true
+      vars:
+        db_env_prefix: SLM
+      tags: [slm, slm-backend, credentials]
+
     # --- SLM custom migrations (#1630) ---
     - name: "[PLAY 1] SLM | Load db credentials for migration (#2293)"
       slurp:
@@ -626,6 +640,26 @@
         - hostvars['localhost']['python_deps_changed'] | bool
       register: backend_pip_install
       tags: [backend, deps]
+
+    # #12907/#12959: the credential-store reconciliation is owned by
+    # roles/postgresql (tasks/credentials_reconcile.yml) and this play applied
+    # neither the role nor an inline copy — so the #12907 fix was merged, closed
+    # and inert: duplicate keys and the month-stale legacy store survived five
+    # full self-update runs untouched. Applying the role's own task file keeps
+    # ONE implementation and makes the fix reach hosts.
+    #
+    # Must precede the credential reads below so they see the reconciled file
+    # rather than a stale first-match duplicate.
+    - name: "[PLAY 2] Backend | Reconcile the AUTOBOT credential store (#12907, #12959)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: credentials_reconcile
+        apply:
+          become: true
+      vars:
+        db_env_prefix: AUTOBOT
+      when: "'backend' in group_names"
+      tags: [backend, env, credentials]
 
     # Migrations moved AFTER the .env regen so they run with the fresh
     # credentials and BEFORE the service restart — see the
@@ -1332,6 +1366,107 @@
       ignore_errors: true
       when: slm_token | default('') | length > 0
       tags: [always]
+
+    # =========================================================================
+    # #12959: post-update delivery assertions
+    #
+    # The expensive part of #12959 was not the missing role application — it was
+    # that the update REPORTED SUCCESS while delivering nothing, so three issues
+    # (#12777, #12886, #12907) were closed against a mechanism that could not
+    # deliver them and their symptoms were re-diagnosed weeks later.
+    #
+    # Each check below asserts an invariant that a task EARLIER IN THIS PLAY
+    # just guaranteed, so a failure means delivery silently regressed — never a
+    # pre-existing host condition. That is why they are fail-closed: a green run
+    # that delivered nothing is the exact outcome this issue is about.
+    # =========================================================================
+    - name: "[PLAY 2] Verify | Collect delivery evidence (#12959)"
+      ansible.builtin.shell:
+        cmd: |
+          set -uo pipefail
+          f=/etc/autobot/db-credentials.env
+          echo "faulthandler=$(systemctl cat autobot-backend 2>/dev/null \
+            | grep -c PYTHONFAULTHANDLER)"
+          echo "cred_block=$(grep -c '^# BEGIN AUTOBOT DB CREDENTIALS' \
+            "$f" 2>/dev/null)"
+          echo "dup_cred_keys=$(grep -oE '^AUTOBOT_[A-Z0-9_]+=' "$f" 2>/dev/null \
+            | sort | uniq -d | wc -l)"
+          echo "legacy_store=$(test -f /etc/autobot/autobot-db-credentials.env \
+            && echo 1 || echo 0)"
+      register: delivery_evidence
+      become: true
+      changed_when: false
+      failed_when: false
+      when: "'backend' in group_names"
+      tags: [backend, verify]
+
+    - name: "[PLAY 2] Verify | Backend systemd unit reached the host (#12777, #12959)"
+      ansible.builtin.assert:
+        that:
+          # rendered by "Render systemd unit" above via roles/backend unit_only
+          - "'faulthandler=0' not in delivery_evidence.stdout"
+        fail_msg: >-
+          #12959: the update ran green but roles/backend unit_only did not
+          render the systemd unit — the #12777 faulthandler diagnostic is not
+          active. Evidence: {{ delivery_evidence.stdout | default('(none)') }}.
+          Do not close an issue against this run.
+        success_msg: "Backend systemd unit delivered (#12777)"
+      when:
+        - "'backend' in group_names"
+        - delivery_evidence.stdout | default('') | length > 0
+      tags: [backend, verify]
+
+    # Gated on the managed block existing: credentials_reconcile deliberately
+    # no-ops on a host whose canonical store was never written by the postgresql
+    # role, because stripping unmarked keys there would leave it with none. That
+    # host has a provisioning gap, not a delivery regression, so asserting on it
+    # would fail the fleet update for the wrong reason.
+    - name: "[PLAY 2] Verify | Credential store reconciled (#12907, #12959)"
+      ansible.builtin.assert:
+        that:
+          # Defect 1 — pre-#12224 unmarked duplicates stripped
+          - "'dup_cred_keys=0' in delivery_evidence.stdout"
+          # Defect 2 — superseded legacy store retired
+          - "'legacy_store=0' in delivery_evidence.stdout"
+        fail_msg: >-
+          #12959: the update ran green but roles/postgresql
+          credentials_reconcile did not apply — duplicate keys and/or the
+          superseded autobot-db-credentials.env survive, which is how #12883
+          became an outage. Evidence:
+          {{ delivery_evidence.stdout | default('(none)') }}
+        success_msg: "Credential store reconciled (#12907)"
+      when:
+        - "'backend' in group_names"
+        - delivery_evidence.stdout | default('') | length > 0
+        - "'cred_block=0' not in delivery_evidence.stdout"
+      tags: [backend, verify]
+
+    - name: "[PLAY 2] Verify | TTS worker carries the streaming route (#12886, #12959)"
+      ansible.builtin.command:
+        cmd: grep -c '/tts/synthesize/stream' /opt/autobot/autobot-tts-worker/tts-worker.py
+      register: tts_stream_route
+      become: true
+      changed_when: false
+      failed_when: false
+      when: "'npu' in group_names"
+      tags: [tts, verify]
+
+    - name: "[PLAY 2] Verify | Fail if the TTS worker was not refreshed (#12886, #12959)"
+      ansible.builtin.assert:
+        that:
+          - tts_stream_route.stdout | default('0') | trim | int > 0
+        fail_msg: >-
+          #12959: /opt/autobot/autobot-tts-worker/tts-worker.py lacks
+          /tts/synthesize/stream after this update — roles/tts-worker code_only
+          did not deliver, so backend TTS calls will 404 (#12886).
+        success_msg: "TTS worker refreshed (#12886)"
+      # rc != 0 also means "file absent", i.e. the worker is not installed on
+      # this node at all — that is a provisioning gap (#12872), not a delivery
+      # regression, so it is not this assertion's failure to report.
+      when:
+        - "'npu' in group_names"
+        - tts_stream_route.rc | default(1) == 0
+      tags: [tts, verify]
 
     - name: "[PLAY 2] Node Update Complete"
       debug:
