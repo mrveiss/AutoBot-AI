@@ -28,12 +28,15 @@ that every role owning deployed artifacts exposes a code/config-only task file
 (`env_only`, `unit_only`, `code_only`, `credentials_reconcile`) which the updater
 applies, and which contains no provisioning. One implementation, two callers.
 
-`test_every_managed_component_has_an_application_path` stays
-``xfail(strict=True)`` while four components still have none: it keeps the suite
-green, and the moment the gap closes it XPASSes — which strict xfail reports as a
-FAILURE, forcing whoever fixed it to delete the marker. A baseline would instead
-quietly absorb the fix and keep claiming the problem is still there (the #12894
-lesson).
+`test_every_managed_component_has_an_application_path` was
+``xfail(strict=True)`` while four components had none. #13460 closed that gap and
+the test XPASSed — which strict xfail reports as a FAILURE, forcing the marker's
+removal. That is exactly what the marker was for, and why it was never replaced
+with a baseline: a baseline would have quietly absorbed the fix and kept claiming
+the problem was still there (the #12894 lesson).
+
+Every managed component now has a delivery path, so this asserts a property that
+holds rather than one that is aspirational.
 """
 
 import pathlib
@@ -65,6 +68,10 @@ DELIVERED = {
     "backend": {"env_only", "unit_only"},  # #12871, #12777
     "tts-worker": {"code_only"},  # #12886
     "postgresql": {"credentials_reconcile"},  # #12907
+    "ai-stack": {"code_only"},  # #13460
+    "npu-worker": {"code_only"},  # #13460
+    "frontend": {"code_only"},  # #13460
+    "browser": {"code_only"},  # #13460
 }
 
 #: Task-name substrings that mean provisioning. None may appear in a task file
@@ -158,12 +165,6 @@ def test_applied_task_files_exist_and_carry_no_provisioning(component, task_file
             )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="#13460: ai-stack, npu-worker, frontend and browser own systemd units and env "
-    "templates but expose no code/config-only task file, so a fix in any of them is still "
-    "inert on hosts (#12959). When all four gain one this XPASSes — delete this marker then.",
-)
 def test_every_managed_component_has_an_application_path():
     """Every managed component's role must be reachable from the updater.
 

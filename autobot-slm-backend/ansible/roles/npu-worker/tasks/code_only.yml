@@ -1,0 +1,48 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The service files that carry code changes: the worker script, its .env and its
+# systemd unit. Split out of main.yml (#13460) so the builtin updater can refresh
+# a deployed NPU worker without re-running provisioning.
+#
+# npu-worker.py.j2 is *worker code* rendered from a template — the same shape as
+# the TTS worker that served four-day-old code in #12886, and the reason this
+# role was the sharpest case in #13460.
+#
+# Everything main.yml does around these — the service account, the venv, the
+# OpenVINO install — is provisioning: slow, network-dependent, and able to break
+# a box that is already correctly installed. main.yml includes this file rather
+# than repeating it, so there is exactly one definition of "deploy the NPU
+# service files".
+#
+# Handlers (`restart npu-worker`, `reload systemd`) live in the role, so this
+# file is only usable via include_role/import_role — which is intended.
+
+- name: Deploy NPU worker script
+  ansible.builtin.template:
+    src: npu-worker.py.j2
+    dest: "{{ npu_install_dir }}/npu-worker.py"
+    mode: "0755"
+    owner: "{{ npu_user }}"
+    group: "{{ npu_group }}"
+  notify: restart npu-worker
+
+- name: Deploy NPU worker configuration
+  ansible.builtin.template:
+    src: npu-worker.env.j2
+    dest: "{{ npu_install_dir }}/.env"
+    mode: "0600"
+    owner: "{{ npu_user }}"
+    group: "{{ npu_group }}"
+  notify: restart npu-worker
+
+- name: Deploy NPU worker systemd service
+  ansible.builtin.template:
+    src: autobot-npu-worker.service.j2
+    dest: /etc/systemd/system/autobot-npu-worker.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart npu-worker
