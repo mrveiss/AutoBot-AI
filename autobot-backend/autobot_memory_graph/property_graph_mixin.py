@@ -114,6 +114,13 @@ class PropertyGraphMixin:
             metadata=metadata,
         )
         if relation:
+            # #13452: label the property-graph edge with the type that was
+            # actually stored, not the caller's raw spelling. super() folds
+            # aliases onto the canonical name, so using relation_type here wrote
+            # "related_to" into Redis JSON but "pg:adj:out:<id>:RELATES_TO" into
+            # the adjacency index — two stores silently disagreeing, and nothing
+            # canonicalises the index later.
+            edge_label = relation.get("type", relation_type).upper()
             edge_props: Dict[str, Any] = {"strength": str(strength)}
             if metadata:
                 for k, v in metadata.items():
@@ -127,14 +134,14 @@ class PropertyGraphMixin:
                     await self.graph.add_edge(
                         from_entity_data["id"],
                         to_entity_data["id"],
-                        relation_type.upper(),
+                        edge_label,
                         edge_props,
                     )
                     if bidirectional:
                         await self.graph.add_edge(
                             to_entity_data["id"],
                             from_entity_data["id"],
-                            relation_type.upper(),
+                            edge_label,
                             edge_props,
                         )
             except Exception as exc:

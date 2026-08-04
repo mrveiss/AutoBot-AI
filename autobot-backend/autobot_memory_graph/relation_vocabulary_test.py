@@ -251,3 +251,117 @@ class TestMemoryGraphRoundTrip:
         graph, _ = self._graph([{"to": "id-b", "from": "id-a", "type": "related_to"}])
 
         assert await graph.invalidate_relation("id-a", "relates_to", "id-b") is True
+
+
+class TestPropertyGraphMirrorLabel:
+    """The property-graph mirror must carry the same label the JSON store did.
+
+    PropertyGraphMixin.create_relation is the live override (first in
+    AutoBotMemoryGraph's MRO), so every write goes through it. It calls
+    super().create_relation, which canonicalises, then mirrors the edge into the
+    property graph. Labelling that edge from the caller's raw spelling persisted
+    "related_to" in Redis JSON but RELATES_TO in the pg:adj:* index — a
+    divergence nothing canonicalises later (#13452).
+    """
+
+    @staticmethod
+    def _graph():
+        graph = AutoBotMemoryGraph()
+        graph._initialized = True
+        graph.redis_client = Mock()
+        graph._resolve_entity_ids = AsyncMock(return_value=("id-a", "id-b"))
+        graph._store_outgoing_relation = AsyncMock()
+        graph._store_incoming_relation = AsyncMock()
+        graph.get_entity = AsyncMock(
+            side_effect=lambda **kw: {"id": "id-a" if kw.get("entity_name") == "A" else "id-b"}
+        )
+        property_graph = Mock()
+        property_graph.add_edge = AsyncMock(return_value="edge-1")
+        graph._property_graph = property_graph
+        return graph, property_graph
+
+    async def test_alias_write_mirrors_the_canonical_label(self):
+        graph, property_graph = self._graph()
+
+        await graph.create_relation("A", "B", relation_type="relates_to")
+
+        property_graph.add_edge.assert_awaited_once()
+        assert property_graph.add_edge.await_args.args[2] == "RELATED_TO"
+
+    async def test_bidirectional_reverse_edge_uses_the_canonical_label_too(self):
+        graph, property_graph = self._graph()
+
+        await graph.create_relation("A", "B", relation_type="relates_to", bidirectional=True)
+
+        assert property_graph.add_edge.await_count == 2
+        for call in property_graph.add_edge.await_args_list:
+            assert call.args[2] == "RELATED_TO"
+
+    async def test_canonical_write_is_unchanged(self):
+        graph, property_graph = self._graph()
+
+        await graph.create_relation("A", "B", relation_type="depends_on")
+
+        assert property_graph.add_edge.await_args.args[2] == "DEPENDS_ON"
+
+    async def test_mirror_label_matches_what_the_json_store_recorded(self):
+        """The two stores must agree by construction, not by coincidence."""
+        graph, property_graph = self._graph()
+
+        relation = await graph.create_relation("A", "B", relation_type="relates_to")
+
+        assert property_graph.add_edge.await_args.args[2] == relation["type"].upper()
+
+
+class TestUserSessionVocabulary:
+    """has_session / has_activity / uses_secret must be writable (#13452).
+
+    None of the three was declared, so create_relation_by_id raised ValueError
+    on every one. create_chat_session_entity re-raises, so chat-session creation
+    failed outright after "owns" had already been written — a half-built graph —
+    and get_user_sessions then filtered on names that could never match.
+    """
+
+    @pytest.mark.parametrize("relation_type", ["owns", "has_session", "has_participant"])
+    def test_session_relations_are_declared(self, relation_type):
+        assert relation_type in RELATION_TYPES
+
+    @pytest.mark.parametrize("relation_type", ["has_activity", "performed_by"])
+    def test_activity_relations_are_declared(self, relation_type):
+        assert relation_type in RELATION_TYPES
+
+    def test_uses_secret_maps_onto_the_declared_tense(self):
+        """ "used_secret" is the declared #608 name but had no writer;
+        "uses_secret" is what user_session.py emits. One relation, one spelling."""
+        assert canonical_relation_type("uses_secret") == "used_secret"
+        assert "uses_secret" not in RELATION_TYPES
+
+    def test_session_relations_are_identity_tier_not_knowledge_base(self):
+        for relation_type in ("has_session", "has_activity"):
+            assert relation_type in IDENTITY_RELATION_TYPES
+            assert relation_type not in KB_RELATION_TYPES
+
+    async def test_create_relation_by_id_accepts_every_user_session_type(self):
+        """The three writers in user_session.py must all reach storage."""
+        graph = AutoBotMemoryGraph()
+        graph._initialized = True
+        graph.redis_client = Mock()
+        graph._store_outgoing_relation = AsyncMock()
+        graph._store_incoming_relation = AsyncMock()
+
+        for relation_type in ("has_session", "has_activity", "uses_secret"):
+            assert await graph.create_relation_by_id("id-a", "id-b", relation_type) is True
+
+    async def test_get_relations_filter_matches_what_user_session_writes(self):
+        """get_user_sessions filters on ["owns", "has_session"] (#13452)."""
+        graph = AutoBotMemoryGraph()
+        graph._initialized = True
+        graph.redis_client = Mock()
+        graph._get_outgoing_relations = AsyncMock(
+            return_value=[{"to": "sess-1", "type": "has_session"}, {"to": "sec-1", "type": "used_secret"}]
+        )
+        graph._get_incoming_relations = AsyncMock(return_value=[])
+
+        result = await graph.get_relations("user-1", relation_types=["owns", "has_session"], direction="outgoing")
+
+        assert len(result["relations"]) == 1
