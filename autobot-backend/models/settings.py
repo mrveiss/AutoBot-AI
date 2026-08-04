@@ -13,6 +13,7 @@ import os
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import RedactedReprMixin
 from type_defs.common import Metadata
 
 logger = get_logger(__name__)
@@ -28,7 +29,7 @@ _VALID_LOG_LEVELS = ("debug", "info", "warning", "error", "critical")
 _VALID_TASK_TRANSPORTS = ("local", "redis")
 
 
-class LLMSettings(BaseSettings):
+class LLMSettings(RedactedReprMixin, BaseSettings):
     """LLM configuration settings with validation."""
 
     default_llm: str = Field(default="ollama", description="Default LLM provider")
@@ -52,7 +53,7 @@ class LLMSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTOBOT_", case_sensitive=False)
 
 
-class RedisSettings(BaseSettings):
+class RedisSettings(RedactedReprMixin, BaseSettings):
     """Redis configuration settings with validation."""
 
     enabled: bool = Field(default=True, description="Enable Redis for caching and task transport")
@@ -72,7 +73,7 @@ class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTOBOT_REDIS_", case_sensitive=False)
 
 
-class DataSettings(BaseSettings):
+class DataSettings(RedactedReprMixin, BaseSettings):
     """Data storage configuration settings."""
 
     base_directory: str = Field(default="data", description="Base data directory")
@@ -88,7 +89,7 @@ class DataSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTOBOT_DATA_", case_sensitive=False)
 
 
-class BackendSettings(BaseSettings):
+class BackendSettings(RedactedReprMixin, BaseSettings):
     """Backend server configuration settings."""
 
     server_host: str = Field(default=NetworkConstants.BIND_ALL_INTERFACES, description="Server bind address")
@@ -123,7 +124,7 @@ class BackendSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTOBOT_BACKEND_", case_sensitive=False)
 
 
-class SecuritySettings(BaseSettings):
+class SecuritySettings(RedactedReprMixin, BaseSettings):
     """Security configuration settings."""
 
     # Issue #756: Security hardening - auth enabled by default
@@ -135,7 +136,7 @@ class SecuritySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTOBOT_SECURITY_", case_sensitive=False)
 
 
-class DiagnosticsSettings(BaseSettings):
+class DiagnosticsSettings(RedactedReprMixin, BaseSettings):
     """Diagnostics and monitoring configuration."""
 
     enabled: bool = Field(default=True, description="Enable diagnostics")

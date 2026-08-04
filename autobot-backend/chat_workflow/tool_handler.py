@@ -53,6 +53,18 @@ CODEEXEC_MAX_SCRIPT_RETRIES: int = env_int("AUTOBOT_CODEEXEC_MAX_SCRIPT_RETRIES"
 # (design §3.1) is CODEEXEC_READONLY_TOOLS, imported above from the single
 # tool-policy classification source (readonly ⊆ injectable; sensitive excluded).
 # Approval-wait polling knobs (mirrors terminal-command approval loop).
+#
+# #13481: this is how long THIS TURN waits, not how long the approval lives.
+# The distinction was invisible before and is the whole of #13216's confusion:
+# the approval is persisted, and approving after this budget still executes the
+# command. Exhausting it means "stop holding the request/generator open", never
+# "the command failed" and never "the approval expired".
+#
+# There is deliberately NO approval-expiry knob here. The reported expectation —
+# that approval should not expire — is the behaviour, so nothing discards a
+# pending approval on a timer. A real expiry policy, if ever wanted, belongs
+# next to the approval's own storage with its own message ("this approval
+# expired, re-request it"), not as a side effect of how long a coroutine lives.
 CODEEXEC_APPROVAL_WAIT_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_WAIT_SECONDS", default=1800)
 CODEEXEC_APPROVAL_POLL_SECONDS: int = env_int("AUTOBOT_CODEEXEC_APPROVAL_POLL_SECONDS", default=2)
 
@@ -1453,25 +1465,55 @@ class ToolHandlerMixin:
         elapsed_time = 0
         poll_count = 0
 
-        while elapsed_time < max_wait_time:
-            await asyncio.sleep(poll_interval)
-            elapsed_time += poll_interval
-            poll_count += 1
+        # #13480: claim interpretation for this turn. The approve path skips its
+        # own interpretation while this is set, so the same command is not
+        # interpreted twice — two LLM calls, two persisted interpretations.
+        await self._claim_interpretation(terminal_session_id, True)
 
-            try:
-                session_info = await self.terminal_tool.get_session_info(terminal_session_id)
-                self._log_polling_status(poll_count, session_info, elapsed_time)
+        try:
+            while elapsed_time < max_wait_time:
+                await asyncio.sleep(poll_interval)
+                elapsed_time += poll_interval
+                poll_count += 1
 
-                result_data, status_msg, should_break = self._check_approval_completion(
-                    session_info, command, elapsed_time, max_wait_time
-                )
-                if should_break:
-                    yield (result_data, status_msg)
-                    return
-            except Exception as check_error:
-                logger.error("Error checking approval status: %s", check_error)
+                try:
+                    session_info = await self.terminal_tool.get_session_info(terminal_session_id)
+                    self._log_polling_status(poll_count, session_info, elapsed_time)
 
-        yield (None, None)
+                    result_data, status_msg, should_break = self._check_approval_completion(
+                        session_info, command, elapsed_time, max_wait_time
+                    )
+                    if should_break:
+                        yield (result_data, status_msg)
+                        return
+                except Exception as check_error:
+                    logger.error("Error checking approval status: %s", check_error)
+
+            yield (None, None)
+        finally:
+            # Load-bearing, and the reason this is a `finally` rather than a line
+            # after the loop: the claim MUST be released on every exit — timeout,
+            # decision, an exception, or the consumer closing this generator
+            # early (GeneratorExit runs finally). A leaked claim means the approve
+            # path keeps skipping while no turn is listening, so a late approval
+            # produces no interpretation at all — silently re-breaking #13479 in
+            # exactly the case it was filed for.
+            await self._claim_interpretation(terminal_session_id, False)
+
+    async def _claim_interpretation(self, terminal_session_id: str, live: bool) -> None:
+        """Mark/unmark this turn as the interpreter for a pending approval (#13480).
+
+        Never raises: failing to claim only costs a duplicate interpretation,
+        and failing to release is already guarded by the approve path treating an
+        absent marker as "interpret". Neither is worth failing the turn over.
+        """
+        service = getattr(self.terminal_tool, "agent_terminal_service", None)
+        if service is None or not hasattr(service, "set_live_turn_interpreting"):
+            return
+        try:
+            await service.set_live_turn_interpreting(terminal_session_id, live)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not %s interpretation claim: %s", "set" if live else "release", exc)
 
     async def _handle_pending_approval(
         self,
@@ -1607,7 +1649,21 @@ class ToolHandlerMixin:
     ) -> tuple[WorkflowMessage, str]:
         """Issue #665: Extracted from _handle_approval_workflow to reduce function length.
 
-        Handle approval denial or timeout.
+        Handle approval denial, or this turn giving up on waiting for a decision.
+
+        #13481: those two are NOT the same outcome and used to be reported
+        identically, as ``type="error"``. A denial is a real, final failure. The
+        no-decision case is not a failure at all — the approval is still pending
+        and still executable:
+
+        * the poll timing out does not clear it (``clear_pending_and_resume()``
+          runs only on the approve/deny paths);
+        * ``AgentTerminalService._approve_command_internal`` executes on approve
+          with no coroutine waiting, so approving later still runs the command.
+
+        So ``Approval timeout for command: ls -la`` claimed a command had failed
+        when it had neither failed nor run, and the user could still make it run.
+        That wording is what made the reported behaviour unreadable.
 
         Returns:
             Tuple of (WorkflowMessage, additional_text)
@@ -1622,15 +1678,27 @@ class ToolHandlerMixin:
                 ),
                 f"\n\n❌ {error}",
             )
-        else:
-            return (
-                WorkflowMessage(
-                    type="error",
-                    content=f"Approval timeout for command: {command}",
-                    metadata={"command": command, "timeout": True},
-                ),
-                f"\n\n⏱️ Approval timeout for command: {command}",
-            )
+
+        still_pending = (
+            f"Still waiting on your approval for: `{command}`\n"
+            "This turn stopped waiting, but the request is still open — "
+            "approving it will run the command."
+        )
+        return (
+            WorkflowMessage(
+                type="response",
+                content=still_pending,
+                metadata={
+                    "command": command,
+                    "message_type": "approval_still_pending",
+                    # #13481: kept so existing consumers keying on it keep working,
+                    # but it now means "this turn stopped waiting", not "expired".
+                    "timeout": True,
+                    "approval_still_actionable": True,
+                },
+            ),
+            f"\n\n⏳ {still_pending}",
+        )
 
     async def _handle_approval_workflow(
         self,
@@ -2131,16 +2199,20 @@ class ToolHandlerMixin:
                 metadata={"message_type": "delegate_tool", "error": True},
             )
 
-    def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
+    async def _validate_browser_params(self, tool_name: str, params: dict[str, Any]) -> str | None:
         """Validate browser tool params. Returns a user-friendly block notice or None.
 
         #1368 / #10914: a disallowed URL or unsafe script is an *expected* policy
         outcome, so the returned text reads as a friendly notice (rendered as a
         normal assistant message, not a scary error banner — see _handle_browser_tool).
+
+        #13236 step 5: ``is_url_allowed`` became async when it stopped matching
+        URL prefixes with a regex and started resolving the host, so this is
+        async too. The caller already awaits inside an async method.
         """
         from api.browser_mcp import is_script_safe, is_url_allowed
 
-        if tool_name == "navigate" and not is_url_allowed(params.get("url", "")):
+        if tool_name == "navigate" and not await is_url_allowed(params.get("url", "")):
             url = params.get("url", "")
             return f"I can't open that link ({url}) — it isn't on the list of sites I'm allowed to browse."
         if tool_name == "evaluate" and not is_script_safe(params.get("script", "")):
@@ -2175,7 +2247,7 @@ class ToolHandlerMixin:
         )
 
         try:
-            validation_error = self._validate_browser_params(tool_name, params)
+            validation_error = await self._validate_browser_params(tool_name, params)
             if validation_error:
                 # Keep status="error" so the agent loop still knows the tool didn't run.
                 execution_results.append({"tool": tool_name, "status": "error", "error": validation_error})

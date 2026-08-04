@@ -39,6 +39,7 @@ from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
 from autobot_shared.redis_mixin import AsyncRedisClientLockedMixin
+from autobot_shared.redis_utils import decode_redis_value
 from constants.ttl_constants import TTL_30_DAYS, TTL_90_DAYS
 
 router = APIRouter()
@@ -244,18 +245,25 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             logger.error("Failed to update embedding stats: %s", e)
 
     def _sum_daily_stats(self, all_stats: list) -> tuple:
-        """Aggregate daily Redis stats into counters. Ref: #1088."""
+        """Aggregate daily Redis stats into counters. Ref: #1088.
+
+        ``_update_stats`` writes these fields with ``hincrby``/``hincrbyfloat``
+        under ``str`` names and the shared client is ``decode_responses=True``,
+        so ``hgetall`` yields ``str`` keys. Probing with bytes literals never
+        matched, so every counter fell through to its default and the whole
+        endpoint reported zero operations and $0.00 cost (#13278).
+        """
         ops = tokens = documents = batch = successful = 0
         cost = processing_time = 0.0
         for stats in all_stats:
             if stats:
-                ops += int(stats.get(b"total_operations", 0))
-                tokens += int(stats.get(b"total_tokens", 0))
-                documents += int(stats.get(b"total_documents", 0))
-                cost += float(stats.get(b"total_cost", 0))
-                processing_time += float(stats.get(b"total_processing_time", 0))
-                batch += int(stats.get(b"total_batch_size", 0))
-                successful += int(stats.get(b"successful_operations", 0))
+                ops += int(decode_redis_value(stats.get("total_operations")) or 0)
+                tokens += int(decode_redis_value(stats.get("total_tokens")) or 0)
+                documents += int(decode_redis_value(stats.get("total_documents")) or 0)
+                cost += float(decode_redis_value(stats.get("total_cost")) or 0)
+                processing_time += float(decode_redis_value(stats.get("total_processing_time")) or 0)
+                batch += int(decode_redis_value(stats.get("total_batch_size")) or 0)
+                successful += int(decode_redis_value(stats.get("successful_operations")) or 0)
         return ops, tokens, documents, cost, processing_time, batch, successful
 
     async def get_stats(
@@ -312,15 +320,20 @@ class EmbeddingPatternAnalyzer(AsyncRedisClientLockedMixin):
             logger.error("Failed to get embedding stats: %s", e)
             return {"status": "error", "error": "Internal server error"}
 
-    def _parse_model_stats(self, key: bytes, stats: dict) -> dict | None:
-        """Parse model stats from Redis hash. (Issue #315 - extracted)"""
+    def _parse_model_stats(self, key: str | bytes, stats: dict) -> dict | None:
+        """Parse model stats from Redis hash. (Issue #315 - extracted)
+
+        Same decoded-client key shape as ``_sum_daily_stats``: the per-model
+        hash is written by ``_update_stats`` with ``str`` field names, so the
+        bytes probes always missed and every model reported 0 ops / $0 (#13278).
+        """
         if not stats:
             return None
-        key_str = key.decode() if isinstance(key, bytes) else key
+        key_str = decode_redis_value(key) or ""
         model_name = key_str.split(":")[-1]
-        total_ops = int(stats.get(b"total_operations", 0))
-        total_tokens = int(stats.get(b"total_tokens", 0))
-        total_cost = float(stats.get(b"total_cost", 0))
+        total_ops = int(decode_redis_value(stats.get("total_operations")) or 0)
+        total_tokens = int(decode_redis_value(stats.get("total_tokens")) or 0)
+        total_cost = float(decode_redis_value(stats.get("total_cost")) or 0)
         return {
             "model": model_name,
             "total_operations": total_ops,

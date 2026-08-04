@@ -8,7 +8,7 @@ Issue #243 - Code Evolution Mining from Git History
 """
 
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from code_intelligence.code_evolution_miner import (
@@ -27,7 +27,7 @@ class TestPatternOccurrence:
 
     def test_create_occurrence(self):
         """Test creating a pattern occurrence"""
-        timestamp = datetime.now()
+        timestamp = datetime.now(tz=timezone.utc)
         occurrence = PatternOccurrence(
             pattern_type="god_class",
             file_path="test.py",
@@ -64,7 +64,7 @@ class TestPatternLifecycle:
         """Test adding occurrences to lifecycle"""
         lifecycle = PatternLifecycle("god_class", "test.py", 10)
 
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         occurrence1 = PatternOccurrence("god_class", "test.py", 10, "abc", now, "high")
         occurrence2 = PatternOccurrence("god_class", "test.py", 10, "def", now + timedelta(days=1), "high")
 
@@ -86,7 +86,7 @@ class TestPatternLifecycle:
         assert lifecycle.get_lifespan_days() == 0
 
         # Add occurrences
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         lifecycle.add_occurrence(PatternOccurrence("god_class", "test.py", 10, "a", now, "high"))
         lifecycle.add_occurrence(PatternOccurrence("god_class", "test.py", 10, "b", now + timedelta(days=30), "high"))
 
@@ -122,7 +122,7 @@ class TestTemporalEmbedding:
         """Test adding patterns to timeline"""
         embedding = TemporalEmbedding()
 
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         occurrence = PatternOccurrence("god_class", "test.py", 10, "abc", now, "high")
 
         embedding.add_pattern(occurrence)
@@ -133,7 +133,7 @@ class TestTemporalEmbedding:
         """Test monthly pattern counts"""
         embedding = TemporalEmbedding()
 
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         month_key = now.strftime("%Y-%m")
 
         # Add multiple patterns
@@ -151,8 +151,8 @@ class TestTemporalEmbedding:
         """Test trend calculation for emerging patterns"""
         embedding = TemporalEmbedding()
 
-        old_date = datetime.now() - timedelta(days=200)
-        recent_date = datetime.now()
+        old_date = datetime.now(tz=timezone.utc) - timedelta(days=200)
+        recent_date = datetime.now(tz=timezone.utc)
 
         # Add old occurrences
         embedding.add_pattern(PatternOccurrence("god_class", "a.py", 1, "a", old_date, "high"))
@@ -168,8 +168,8 @@ class TestTemporalEmbedding:
         """Test trend calculation for declining patterns"""
         embedding = TemporalEmbedding()
 
-        old_date = datetime.now() - timedelta(days=200)
-        recent_date = datetime.now()
+        old_date = datetime.now(tz=timezone.utc) - timedelta(days=200)
+        recent_date = datetime.now(tz=timezone.utc)
 
         # Add many old occurrences
         for i in range(5):
@@ -185,8 +185,8 @@ class TestTemporalEmbedding:
         """Test trend calculation for stable patterns"""
         embedding = TemporalEmbedding()
 
-        old_date = datetime.now() - timedelta(days=200)
-        recent_date = datetime.now()
+        old_date = datetime.now(tz=timezone.utc) - timedelta(days=200)
+        recent_date = datetime.now(tz=timezone.utc)
 
         # Add equal old and recent occurrences
         for i in range(3):
@@ -204,7 +204,7 @@ class TestPatternEvolutionTracker:
         """Test tracking pattern occurrences"""
         tracker = PatternEvolutionTracker()
 
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         occurrence = PatternOccurrence("god_class", "test.py", 10, "abc", now, "high")
 
         tracker.track_pattern(occurrence)
@@ -216,7 +216,7 @@ class TestPatternEvolutionTracker:
         """Test finding existing lifecycle"""
         tracker = PatternEvolutionTracker()
 
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         occurrence1 = PatternOccurrence("god_class", "test.py", 10, "abc", now, "high")
         occurrence2 = PatternOccurrence("god_class", "test.py", 12, "def", now + timedelta(days=1), "high")
 
@@ -231,8 +231,8 @@ class TestPatternEvolutionTracker:
         """Test getting emerging patterns"""
         tracker = PatternEvolutionTracker()
 
-        old_date = datetime.now() - timedelta(days=200)
-        recent_date = datetime.now()
+        old_date = datetime.now(tz=timezone.utc) - timedelta(days=200)
+        recent_date = datetime.now(tz=timezone.utc)
 
         # Add old occurrence
         tracker.track_pattern(PatternOccurrence("god_class", "a.py", 1, "a", old_date, "high"))
@@ -251,7 +251,7 @@ class TestPatternEvolutionTracker:
         """Test calculating adoption rate"""
         tracker = PatternEvolutionTracker()
 
-        start = datetime.now() - timedelta(days=60)  # 2 months ago
+        start = datetime.now(tz=timezone.utc) - timedelta(days=60)  # 2 months ago
 
         # Add occurrences over 2 months (6 total)
         for i in range(6):
@@ -299,7 +299,7 @@ class TestCodeEvolutionMiner:
             miner = CodeEvolutionMiner(tmpdir)
 
             # Add some patterns
-            now = datetime.now()
+            now = datetime.now(tz=timezone.utc)
             occurrence = PatternOccurrence("god_class", "test.py", 10, "abc", now, "high")
             miner.tracker.track_pattern(occurrence)
 
@@ -314,7 +314,7 @@ class TestCodeEvolutionMiner:
             miner = CodeEvolutionMiner(tmpdir)
 
             # Add patterns
-            now = datetime.now()
+            now = datetime.now(tz=timezone.utc)
             for i in range(3):
                 occurrence = PatternOccurrence("god_class", f"{i}.py", 1, f"h{i}", now, "high")
                 miner.tracker.track_pattern(occurrence)

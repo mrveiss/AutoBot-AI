@@ -1,0 +1,203 @@
+# Marker-excluded test suite — #13286
+#
+# `ci.yml` runs the Python suite with
+# `-m "not integration and not slow and not distributed and not performance"`,
+# and until this workflow existed nothing anywhere selected those markers back
+# in. Marking a test was therefore deletion from CI, not relocation: every
+# `slow` / `integration` / `distributed` / `performance` mark added to date
+# silently retired that test with no signal of any kind.
+#
+# This workflow is the missing other half. It runs exactly the complement of the
+# PR gate's exclusion, so the union of the two covers the whole suite.
+#
+# Deliberate design choices:
+#
+#   * runs-on: ubuntu-latest on every job. The self-hosted runner is a singleton
+#     and is the PR gate's bottleneck (#10691); a nightly long-running suite must
+#     never contend with it. GitHub-hosted minutes are the correct trade here.
+#   * Scheduled, not per-PR. These are the tests that were excluded because they
+#     are slow or need external services; putting them in the PR gate is the
+#     change #10691 owns and is owner-gated.
+#   * Non-blocking by construction — it is not a `pull_request` workflow, so it
+#     is not a required context and cannot block a merge. It still FAILS (red in
+#     the Actions tab) when a test fails.
+#
+#     A red run here is a DEFECT TO TRIAGE, never an accepted steady state. A
+#     workflow that is expected to be red is a workflow nobody reads — that is
+#     exactly how `self-hosted-runner-health` sat red on 100% of its scheduled
+#     runs while reporting nothing, and this file must not inherit that habit.
+#     The excluded set is dominated by `integration` tests that need a real
+#     Redis, so one is provided below rather than letting the first night fail
+#     for infrastructure reasons and calling it "the point". #13286 stays open
+#     until a run is green or its remaining failures have been triaged.
+#   * No coverage gate. Coverage is measured by the PR gate; adding tracing here
+#     would roughly double the runtime for no added assertion.
+#   * Two invocations, same reason as ci.yml: autobot-backend/ and
+#     autobot-slm-backend/ define top-level packages with identical names, so a
+#     single interpreter session binds the wrong one in sys.modules (#13084).
+
+name: Marker-excluded Tests
+
+on:
+  # SCHEDULE INTENTIONALLY WITHHELD UNTIL THE SUITE IS GREEN (#13286).
+  #
+  # GitHub registers `schedule` AND `workflow_dispatch` from the DEFAULT branch
+  # only. This file lives on the integration branch, so while it stayed there
+  # neither trigger could fire: the workflow produced ZERO runs of any kind, and
+  # `gh run list --workflow=marker-tests.yml` answered "could not find any
+  # workflows named marker-tests.yml" because GitHub had never registered it.
+  #
+  # That changes the moment the integration branch is promoted to the default
+  # branch — the cron would start firing immediately. Its one observed run is
+  # RED (11 failed, 7 passed, 40 errors), so registering it as-is would install
+  # a nightly that fails every night against the default branch. A permanently
+  # red scheduled workflow is not a signal; it is noise that trains everyone to
+  # ignore the one place marker-excluded regressions would show up.
+  #
+  # So the cron is commented rather than deleted — it is correct, and it is what
+  # #13286 exists to deliver. Restore it as the closing step of that issue, once
+  # the 11 failures and 40 collection errors are triaged and the suite is green.
+  # `workflow_dispatch` below stays live, so the suite remains runnable on demand
+  # to verify exactly that.
+  #
+  # schedule:
+  #   # 03:20 UTC daily — off the */15 dispatch-watchdog and */30 runner-health
+  #   # slots, and well clear of working-hours PR traffic.
+  #   - cron: '20 3 * * *'
+  workflow_dispatch:
+    inputs:
+      markers:
+        description: 'pytest -m expression to select (default: the full excluded set)'
+        required: false
+        default: 'integration or slow or distributed or performance'
+  # Until promotion, these are the only triggers that actually fire, and they
+  # exist so this workflow is never again shipped unexecuted. Scoped to its own
+  # file: a full marker sweep on every push would contend for nothing (it is
+  # ubuntu-latest) but would spend GitHub-hosted minutes for no new signal,
+  # whereas a change to the workflow is precisely when its result is unknown.
+  #
+  # This is what turns "a nightly nobody has ever seen run" into a workflow with
+  # an observed conclusion — the standing objection to shipping it.
+  push:
+    branches: [Dev_new_gui]
+    paths:
+      - '.github/workflows/marker-tests.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/marker-tests.yml'
+
+concurrency:
+  group: marker-tests
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  marker-tests:
+    name: Run slow / integration / distributed / performance tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    # The marker-excluded set is mostly `integration`, and those tests talk to a
+    # real Redis rather than the `fakeredis` the PR gate installs — one module
+    # alone carries 20 of them. Without this the first scheduled run would fail
+    # on connection errors and say nothing about the tests themselves.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Single source for the marker expression: the schedule uses the default,
+      # a manual dispatch may narrow it to one marker while triaging.
+      MARKER_EXPRESSION: ${{ github.event.inputs.markers || 'integration or slow or distributed or performance' }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            autobot-backend/requirements*.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements-ci.txt --prefer-binary
+          python -m pip install pytest pytest-asyncio pytest-xdist==3.8.0 'fakeredis[lua]'
+
+      - name: Create necessary directories and config files
+        run: |
+          mkdir -p data logs static config
+          touch data/.gitkeep logs/.gitkeep static/.gitkeep
+
+          cat > config/config.yaml << 'EOF'
+          # CI Testing Configuration
+          llm:
+            orchestrator_llm: "mock"
+            task_llm: "mock"
+            ollama:
+              model: "mock-model"
+              models: {}
+            unified:
+              embedding:
+                providers:
+                  ollama:
+                    selected_model: "mock-embed"
+
+          deployment:
+            mode: "local"
+
+          data:
+            reliability_stats_file: "data/reliability_stats.json"
+
+          diagnostics:
+            enabled: false
+            use_llm_for_analysis: false
+            use_web_search_for_analysis: false
+            auto_apply_fixes: false
+
+          redis:
+            host: "localhost"
+            port: 6379
+            db: 0
+          EOF
+
+      - name: Run marked tests — backend, shared, tts-worker, repo_tests
+        run: |
+          echo "Selecting: $MARKER_EXPRESSION"
+          # Exit 5 is pytest's "no tests collected". For a marker selection that
+          # is a legitimate outcome (no test currently carries the marker in this
+          # tree), not a failure — anything else propagates.
+          python -m pytest \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests \
+            -n auto --dist loadscope \
+            -m "$MARKER_EXPRESSION" \
+            --tb=short \
+            --durations=25 \
+            -q || [ $? -eq 5 ]
+
+      - name: Run marked tests — slm-backend
+        # Same decoupling as ci.yml (#13300): a failure in the tree above must
+        # not silently skip this one.
+        if: ${{ !cancelled() }}
+        run: |
+          echo "Selecting: $MARKER_EXPRESSION"
+          python -m pytest \
+            autobot-slm-backend \
+            -n auto --dist loadscope \
+            -m "$MARKER_EXPRESSION" \
+            --tb=short \
+            --durations=25 \
+            -q || [ $? -eq 5 ]

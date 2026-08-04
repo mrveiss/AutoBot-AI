@@ -3,3 +3,8 @@ pre-commit==4.6.1
 detect-secrets==1.5.0
 pycryptodome==3.23.0
 cryptography==49.0.0
+# #13411: imported unconditionally at module scope by autobot_shared/auth/jwt_core.py
+# and autobot-backend/api/jwks.py, and declared in autobot_shared/pyproject.toml — but CI
+# installs these files, not that package, so it was only ever satisfied transitively.
+# The [crypto] extra is required: jwks.py uses jwt.algorithms.RSAAlgorithm.
+PyJWT[crypto]>=2.8.0

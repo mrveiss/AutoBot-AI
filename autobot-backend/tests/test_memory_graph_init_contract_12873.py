@@ -16,7 +16,9 @@ error because nothing had failed, which is why #12780's fix removed the visible
 errors without recovering the feature.
 """
 
+import ast
 import inspect
+import textwrap
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -82,10 +84,39 @@ def test_signature_declares_a_bool_return():
     )
 
 
-def test_every_exit_path_returns_true_or_raises():
-    """No path may fall off the end and implicitly return None again."""
-    src = inspect.getsource(AutoBotMemoryGraph.initialize)
-    body = src.split('"""', 2)[-1]
+def _return_statements(func) -> list[ast.Return]:
+    """Every ``return`` in *func*, parsed rather than grepped.
 
-    assert body.count("return True") == 2, "expected the early-return and success paths to return True"
-    assert "return False" not in body, "failures raise; a False return would be silently unactionable"
+    ``assert body.count("return True") == 2`` (#13311) counted literals in the
+    source text: it matched a ``return True`` in a comment, missed
+    ``return bool(...)``, and pinned the exact number of branches so any
+    refactor broke it. The property that actually matters is that no exit path
+    yields a falsy value.
+    """
+    tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    return [node for node in ast.walk(tree) if isinstance(node, ast.Return)]
+
+
+def test_no_exit_path_yields_a_falsy_value():
+    """The #12873 defect: a successful init that the caller reads as failure."""
+    returns = _return_statements(AutoBotMemoryGraph.initialize)
+
+    assert returns, "initialize has no return statement at all — it falls through to None"
+    for node in returns:
+        assert node.value is not None, f"bare `return` at line {node.lineno} yields None — the original bug"
+        assert not isinstance(node.value, ast.Constant) or bool(node.value.value), (
+            f"`return {ast.unparse(node.value)}` at line {node.lineno} is falsy; "
+            "a failed init must raise so the cause reaches the caller"
+        )
+
+
+def test_the_function_cannot_fall_off_its_end():
+    """A trailing non-return statement re-creates the implicit ``return None``."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(AutoBotMemoryGraph.initialize)))
+    func = tree.body[0]
+    last = func.body[-1]
+
+    assert isinstance(last, (ast.Return, ast.Raise, ast.With, ast.AsyncWith, ast.Try)), (
+        f"initialize ends with {type(last).__name__}; execution can reach the end of "
+        "the function and implicitly return None (#12873)"
+    )

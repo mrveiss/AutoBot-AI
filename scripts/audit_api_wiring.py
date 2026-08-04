@@ -55,6 +55,14 @@ from collections import defaultdict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Imported here, not inside the dump helpers: each of them prepends a backend
+# dir to sys.path and chdirs into it, and the repo root is not on sys.path when
+# this script runs as `python3 scripts/audit_api_wiring.py` — so a late import
+# fails with "No module named 'autobot_shared'" and takes the whole dump with it.
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from autobot_shared.openapi_schema import normalize_pattern_anchors  # noqa: E402
 BACKEND = REPO_ROOT / "autobot-backend"
 # #12381: the SLM control-plane backend (autobot-slm-backend, :8000) mounts
 # its own '/api'-prefixed route table, entirely separate from autobot-backend
@@ -135,7 +143,10 @@ def dump_openapi(out_path: str) -> int:
         from app_factory import create_app  # type: ignore
 
         app = create_app()
-        spec = app.openapi()
+        # Same anchor normalisation as the SLM path below — the main backend has
+        # no Field(pattern=…) today, so this is prophylactic, not a fix. It is
+        # here so the first one added does not silently publish `\z`.
+        spec = normalize_pattern_anchors(app.openapi())
         # FastAPI omits WebSocket routes from OpenAPI — record them in a
         # custom key so the audit can verify /api/ws* style frontend calls
         # against the real route table instead of flagging them (GH#9864).
@@ -176,7 +187,10 @@ def dump_slm_openapi(out_path: str) -> int:
     try:
         from main import app  # type: ignore
 
-        spec = app.openapi()
+        # Must match autobot-slm-backend/scripts/dump_openapi.py exactly: CI
+        # regenerates through THIS path and diffs against the file the other
+        # path produced, so any divergence is reported as stale generated types.
+        spec = normalize_pattern_anchors(app.openapi())
         # Same runtime+static WebSocket union as dump_openapi() (GH#9864, #12381).
         ws = _runtime_websocket_paths(app) | static_websocket_paths(SLM_BACKEND)
         spec["x-websocket-paths"] = sorted(ws)

@@ -1,8 +1,16 @@
 # AI/ML frameworks — heavy native deps, numpy-sensitive
-openai==2.48.0
+openai==2.51.0
 tiktoken==0.13.0   # >=0.13 ships cp314 wheels (0.11 builds pyo3-ffi from source, caps at py3.13) — #9825
 transformers==5.14.1
 sentence-transformers==5.6.1
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
 pillow==12.3.0
+# Mirrors autobot-backend/requirements.txt:42. training/evaluator.py imports it at
+# module level, so without it completion_trainer_test.py's 17 tests never run —
+# including the torch.load weights_only=True RCE regression test (#13086).
+# Cheap: torchmetrics and its only new transitive (lightning-utilities) are both
+# py3-none-any, and torch is ALREADY installed here transitively via
+# sentence-transformers. No nvidia-* wheels — the CPU-only index in
+# .github/actions/setup-python-suite keeps resolving torch, so the ~3GB saving stands.
+torchmetrics>=1.9.0,<2.0.0

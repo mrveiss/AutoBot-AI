@@ -92,6 +92,77 @@ class RBACMiddleware:
         """Initialize RBAC middleware."""
         self._config = get_deployment_config()
 
+    # ------------------------------------------------------------------
+    # Cache helpers (#12925)
+    #
+    # One accessor pair for the whole L1->L2 path, so a cache read or write
+    # cannot drift between call sites. SLM carried these as unused methods
+    # against a second key prefix (`slm:perm:`); they are wired in here
+    # against the canonical ``_REDIS_KEY_PREFIX`` instead of being dropped,
+    # so there is exactly one cache and one set of keys.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _redis_key(user_id: uuid.UUID | str) -> str:
+        """Canonical L2 key for *user_id* — one prefix, repo-wide."""
+        return f"{_REDIS_KEY_PREFIX}{user_id}"
+
+    async def _cache_get(self, user_id: uuid.UUID) -> Set[str] | None:
+        """Read permissions from L1, then L2. Returns None on a miss.
+
+        An L2 hit repopulates L1, so the next request on this worker skips
+        the round-trip.
+        """
+        cache_key = str(user_id)
+
+        entry = _permission_cache.get(cache_key)
+        if entry is not None:
+            permissions, timestamp = entry
+            if time.time() - timestamp < CACHE_TTL_SECONDS:
+                return permissions
+
+        redis = await get_async_redis_client()
+        if redis is not None:
+            try:
+                raw = await redis.get(self._redis_key(cache_key))
+            except Exception as exc:
+                logger.warning("RBAC: Redis cache read failed: %s", exc)
+                return None
+            if raw is not None:
+                permissions = set(json.loads(raw))
+                _permission_cache[cache_key] = (permissions, time.time())
+                return permissions
+
+        return None
+
+    async def _cache_set(self, user_id: uuid.UUID, permissions: Set[str]) -> None:
+        """Populate L1 and L2. A Redis failure leaves L1 populated."""
+        cache_key = str(user_id)
+        _permission_cache[cache_key] = (permissions, time.time())
+
+        redis = await get_async_redis_client()
+        if redis is not None:
+            try:
+                await redis.setex(
+                    self._redis_key(cache_key),
+                    CACHE_TTL_SECONDS,
+                    json.dumps(list(permissions)),
+                )
+            except Exception as exc:
+                logger.warning("RBAC: Redis cache write failed: %s", exc)
+
+    async def _cache_delete(self, user_id: uuid.UUID) -> None:
+        """Drop one user from L1 and L2 on this worker."""
+        cache_key = str(user_id)
+        _permission_cache.pop(cache_key, None)
+
+        redis = await get_async_redis_client()
+        if redis is not None:
+            try:
+                await redis.delete(self._redis_key(cache_key))
+            except Exception as exc:
+                logger.warning("RBAC: Redis cache delete failed: %s", exc)
+
     async def get_user_permissions(
         self,
         user_id: uuid.UUID | None,
@@ -112,24 +183,10 @@ class RBACMiddleware:
 
         await _ensure_listener_started()
 
-        cache_key = str(user_id)
+        cached = await self._cache_get(user_id)
+        if cached is not None:
+            return cached
 
-        # L1: check local per-worker cache
-        if cache_key in _permission_cache:
-            permissions, timestamp = _permission_cache[cache_key]
-            if time.time() - timestamp < CACHE_TTL_SECONDS:
-                return permissions
-
-        # L2: check Redis shared cache
-        redis = await get_async_redis_client()
-        if redis is not None:
-            raw = await redis.get(f"{_REDIS_KEY_PREFIX}{cache_key}")
-            if raw is not None:
-                permissions = set(json.loads(raw))
-                _permission_cache[cache_key] = (permissions, time.time())
-                return permissions
-
-        # Fetch from database and populate both caches
         if self._config.postgres_enabled:
             try:
                 async with db_session_context() as session:
@@ -137,13 +194,7 @@ class RBACMiddleware:
                     user_service = UserService(session, context)
                     permissions = await user_service.get_user_permissions(user_id)
 
-                    _permission_cache[cache_key] = (permissions, time.time())
-                    if redis is not None:
-                        await redis.setex(
-                            f"{_REDIS_KEY_PREFIX}{cache_key}",
-                            CACHE_TTL_SECONDS,
-                            json.dumps(list(permissions)),
-                        )
+                    await self._cache_set(user_id, permissions)
                     return permissions
 
             except Exception as e:
@@ -232,19 +283,28 @@ class RBACMiddleware:
         else:
             _permission_cache.clear()
 
-        # Clear Redis L2 and notify other workers
+        # #11794: awaited, for BOTH paths — the single-user path previously
+        # never touched Redis L2 / pub-sub at all (other uvicorn workers kept
+        # serving stale permissions after a role change), and the all-users
+        # path was fire-and-forget so callers could observe stale state right
+        # after clear_cache() returned.
+        await self._clear_all_redis_keys(user_id)
+
+    async def _clear_all_redis_keys(self, user_id: "uuid.UUID | None") -> None:
+        """Delete the L2 key(s) and tell every other worker to drop L1."""
         redis = await get_async_redis_client()
-        if redis is not None:
-            if user_id:
-                await redis.delete(f"{_REDIS_KEY_PREFIX}{user_id}")
-            else:
-                pipeline = redis.pipeline()
-                async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
-                    pipeline.delete(key)
-                await pipeline.execute()
-            payload = json.dumps({"user_id": str(user_id)} if user_id else {})
-            await redis.publish(_PUBSUB_CHANNEL, payload)
-            logger.debug("RBAC cache invalidated for user=%s", user_id)
+        if redis is None:
+            return
+        if user_id:
+            await redis.delete(self._redis_key(user_id))
+        else:
+            pipeline = redis.pipeline()
+            async for key in redis.scan_iter(f"{_REDIS_KEY_PREFIX}*"):
+                pipeline.delete(key)
+            await pipeline.execute()
+        payload = json.dumps({"user_id": str(user_id)} if user_id else {})
+        await redis.publish(_PUBSUB_CHANNEL, payload)
+        logger.debug("RBAC cache invalidated for user=%s", user_id)
 
 
 # Global RBAC middleware instance

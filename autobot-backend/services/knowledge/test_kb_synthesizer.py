@@ -48,7 +48,17 @@ _ssot.config.port.chromadb = 8100  # type: ignore[attr-defined]
 # utils / chromadb_client stubs (loaded lazily inside methods — stub at import time)
 _utils_stub = _make_stub("utils")
 _chromadb_stub = _make_stub("utils.chromadb_client")
-_async_chromadb_stub = _make_stub("utils.async_chromadb_client")
+# _make_stub() uses sys.modules.setdefault but returns its own fresh object, so
+# when a sibling test module registered this name first the returned stub is a
+# dangling copy that production code never sees. Read the registered module back.
+_make_stub("utils.async_chromadb_client")
+_async_chromadb_stub = sys.modules["utils.async_chromadb_client"]
+# Injecting a submodule straight into sys.modules does not bind it on the
+# parent package, so mock.patch("utils.async_chromadb_client....") — used by
+# services/rag_service_kb_synthesis_test.py — cannot resolve it. Bind it, and
+# seed the symbol production imports so patch() finds an existing attribute.
+_async_chromadb_stub.get_async_chromadb_client = AsyncMock()  # type: ignore[attr-defined]
+sys.modules["utils"].async_chromadb_client = _async_chromadb_stub  # type: ignore[attr-defined]
 
 # ---------------------------------------------------------------------------
 # Load kb_synthesizer via importlib to bypass package __init__ imports
@@ -69,6 +79,18 @@ from services.knowledge.kb_synthesizer import (  # noqa: E402
     KBSynthesizer,
     get_kb_synthesizer,
 )
+
+# #13435: see the matching note in test_analyzer_service.py. The stubs were
+# needed to import kb_synthesizer and are needed again while this module's tests
+# run, but not in between — and "in between" is when pytest imports every other
+# module in the worker, which is how ``utils`` and its children escaped this
+# directory. ``_reinstall_module_stubs`` in this package's conftest puts these
+# exact objects back around this module's tests and removes them afterwards.
+_STUBS_UNLOADED_AFTER_IMPORT = {
+    name: sys.modules.pop(name)
+    for name in ("utils.chromadb_client", "utils.async_chromadb_client")
+    if name in sys.modules
+}
 
 # Private static helpers — in Python 3.10+ staticmethods are plain functions on the class
 _cluster_id = KBSynthesizer._cluster_id  # type: ignore[attr-defined]
@@ -152,8 +174,10 @@ async def test_get_collection_creates_once() -> None:
     client = _make_chromadb_client(col)
 
     synth = KBSynthesizer(llm_service=_make_llm())
-    # Patch the lazily-imported symbol inside utils.chromadb_client stub
-    _chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
+    # knowledge.backends.get_async_default_client() lazily imports
+    # get_async_chromadb_client from utils.async_chromadb_client (#5316), so the
+    # mock belongs on that stub — not on the sync utils.chromadb_client one.
+    _async_chromadb_stub.get_async_chromadb_client = AsyncMock(return_value=client)
 
     c1 = await synth._get_collection()
     c2 = await synth._get_collection()

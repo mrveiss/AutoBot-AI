@@ -14,7 +14,7 @@
 #
 # Usage (from dev machine):
 #   ansible-playbook -i inventory/hosts.yml playbooks/sync-code-source.yml \
-#       -e "controller_repo_root=/home/martins/AutoBot-Ai/AutoBot-AI"
+#       -e "controller_repo_root=/path/to/AutoBot-AI"
 #
 # When imported by deploy-slm-manager.yml the variable is set automatically
 # via the playbook vars block at the top of that file.

@@ -7,6 +7,8 @@ Test suite for computer vision system refactoring (Issue #312)
 Verifies Tell Don't Ask pattern implementation and backward compatibility
 """
 
+from unittest.mock import patch
+
 import numpy as np
 import pytest
 
@@ -62,13 +64,42 @@ class TestUIElementCollection:
         ]
 
     def test_detect_application_type_form(self, sample_elements):
-        """Test application type detection for form applications"""
-        collection = UIElementCollection(sample_elements)
+        """Test application type detection for form applications.
+
+        Pre-existing red test found while converting this file (#13311): the
+        shared fixture carries ONE input field, but ``detect_application_type``
+        requires ``input_count > 3 and button_count > 1``, so it returned
+        "unknown". The heuristic is left alone -- lowering the threshold is a
+        product decision -- and the test now supplies a screen that genuinely
+        clears it.
+        """
+        form_fields = [
+            UIElement(
+                element_id=f"input_{i}",
+                element_type=ElementType.INPUT_FIELD,
+                bbox={"x": 10, "y": 100 + i * 40, "width": 200, "height": 30},
+                center_point=(110, 115 + i * 40),
+                confidence=0.85,
+                text_content="",
+                attributes={},
+                possible_interactions=[InteractionType.CLICK, InteractionType.TYPE_TEXT],
+            )
+            for i in range(2, 6)
+        ]
+        collection = UIElementCollection(sample_elements + form_fields)
         screenshot = np.zeros((100, 400, 3), dtype=np.uint8)
 
         app_type = collection.detect_application_type(screenshot)
 
         assert app_type == "form_application", "Should detect form application with inputs and buttons"
+
+    def test_detect_application_type_needs_more_than_three_inputs(self, sample_elements):
+        """Pin the threshold the test above depends on, so a change to the
+        heuristic surfaces here rather than as a mystery failure."""
+        collection = UIElementCollection(sample_elements)
+
+        assert collection.count_input_elements() == 1
+        assert collection.detect_application_type(np.zeros((100, 400, 3), dtype=np.uint8)) == "unknown"
 
     def test_detect_application_type_web(self):
         """Test application type detection for web browsers"""
@@ -238,26 +269,83 @@ class TestContextAnalyzer:
         assert "input_field" in distribution
 
 
+# #13311: a module-level element set for the delegation tests below. The two
+# per-class ``sample_elements`` fixtures above predate this file's split and are
+# left untouched; this one is scoped to the Feature-Envy checks.
+@pytest.fixture
+def context_elements():
+    """One clickable button and one typable input — enough for every branch."""
+    return [
+        UIElement(
+            element_id="button_1",
+            element_type=ElementType.BUTTON,
+            bbox={"x": 10, "y": 20, "width": 100, "height": 30},
+            center_point=(60, 35),
+            confidence=0.9,
+            text_content="Submit",
+            attributes={},
+            possible_interactions=[InteractionType.CLICK],
+        ),
+        UIElement(
+            element_id="input_1",
+            element_type=ElementType.INPUT_FIELD,
+            bbox={"x": 10, "y": 60, "width": 200, "height": 30},
+            center_point=(110, 75),
+            confidence=0.85,
+            text_content="",
+            attributes={},
+            possible_interactions=[InteractionType.CLICK, InteractionType.TYPE_TEXT],
+        ),
+    ]
+
+
 class TestFeatureEnvyElimination:
     """Verify Feature Envy code smells are eliminated"""
 
-    def test_context_analyzer_uses_collection(self):
-        """Verify ContextAnalyzer delegates to UIElementCollection (Tell Don't Ask)"""
-        import inspect
+    # Delegation is observed, not grepped (#13311): asserting
+    # ``"collection.count_by_type" in inspect.getsource(...)`` passed for a
+    # call sitting in a dead branch and failed for a rename that changed
+    # nothing, and it never showed that the collection's answer is the one the
+    # caller receives.
+    DELEGATED = [
+        ("detect_application_type", "application_type"),
+        ("calculate_interaction_complexity", "interaction_complexity"),
+        ("assess_automation_readiness", "automation_readiness"),
+        ("count_by_type", "dominant_element_types"),
+    ]
 
-        source = inspect.getsource(ContextAnalyzer.analyze_context)
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method, context_key", DELEGATED)
+    async def test_each_context_field_comes_from_the_collection(self, context_elements, method, context_key):
+        """Stub one collection method and watch its value surface in the result."""
+        import computer_vision.classifiers as classifiers_mod
 
-        # Should create UIElementCollection and use its methods
-        assert "UIElementCollection" in source, "Should use UIElementCollection for analysis"
+        sentinel = f"sentinel-for-{method}"
+        with patch.object(classifiers_mod.UIElementCollection, method, return_value=sentinel):
+            context = await ContextAnalyzer().analyze_context(np.zeros((100, 400, 3), dtype=np.uint8), context_elements)
 
-        # Should NOT directly access element internals in loops
-        assert "for el in ui_elements" not in source, "Should NOT iterate elements directly - use collection methods"
+        assert context[context_key] == sentinel, (
+            f"context['{context_key}'] did not come from "
+            f"UIElementCollection.{method} — ContextAnalyzer computed it itself (Feature Envy)"
+        )
 
-        # Should use collection methods
-        assert "collection.detect_application_type" in source
-        assert "collection.calculate_interaction_complexity" in source
-        assert "collection.assess_automation_readiness" in source
-        assert "collection.count_by_type" in source
+    @pytest.mark.asyncio
+    async def test_the_collection_is_built_from_the_caller_s_elements(self, context_elements):
+        """Delegation to a collection built from *something else* would still
+        pass the per-field checks above."""
+        import computer_vision.classifiers as classifiers_mod
+
+        seen = []
+        original = classifiers_mod.UIElementCollection
+
+        def _record(elements):
+            seen.append(list(elements))
+            return original(elements)
+
+        with patch.object(classifiers_mod, "UIElementCollection", _record):
+            await ContextAnalyzer().analyze_context(np.zeros((100, 400, 3), dtype=np.uint8), context_elements)
+
+        assert seen == [list(context_elements)]
 
     def test_ui_element_collection_encapsulates_behavior(self):
         """Verify UIElementCollection owns element analysis logic"""

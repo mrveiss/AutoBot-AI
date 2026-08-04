@@ -11,39 +11,13 @@ calls are made.
 
 from __future__ import annotations
 
-import sys
-import types
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Minimal stubs so the module can be imported without the real anthropic SDK
-# or the full autobot runtime.
-# ---------------------------------------------------------------------------
-
-
-def _make_anthropic_stub():
-    """Return a minimal ``anthropic`` module stub."""
-    stub = types.ModuleType("anthropic")
-    stub.AsyncAnthropic = MagicMock
-    sys.modules["anthropic"] = stub
-    return stub
-
-
-def _make_xxhash_stub():
-    stub = types.ModuleType("xxhash")
-    stub.xxh64 = MagicMock(return_value=MagicMock(hexdigest=MagicMock(return_value="0" * 16)))
-    sys.modules["xxhash"] = stub
-
-
-_make_anthropic_stub()
-_make_xxhash_stub()
-
-
-from llm_shared.models import LLMRequest  # noqa: E402
-from llm_shared.providers.anthropic import (  # noqa: E402  (import after stub)
+from llm_shared.models import LLMRequest
+from llm_shared.providers.anthropic import (
     AnthropicProvider,
     _build_api_kwargs,
     _extract_content_pair,
@@ -51,6 +25,21 @@ from llm_shared.providers.anthropic import (  # noqa: E402  (import after stub)
     _extract_think_tag_content,
     _strip_think_blocks,
 )
+
+# #13361: this module used to install ``sys.modules`` stubs for ``anthropic``
+# and ``xxhash`` before the imports below, and never removed them.  Both are
+# hard requirements in ``autobot-backend/requirements.txt`` and therefore
+# always importable, so the stubs stood in for nothing — while leaking into
+# every later test in the session.  The ``xxhash`` one was the damaging half:
+# ``llm_shared/cache.py`` does a module-level ``import xxhash`` and keys the
+# LLM cache with ``xxhash.xxh64(...).hexdigest()``, and the stub answered every
+# input with the same 16 zeros, so any cache test collected afterwards scored
+# a hit on the first key it looked up.
+#
+# Nothing here needs either package at import time either: ``AnthropicProvider``
+# imports ``anthropic`` lazily inside ``_ensure_client()``, and every test below
+# assigns ``provider._client`` directly, so that branch never runs.
+
 
 # ---------------------------------------------------------------------------
 # _strip_think_blocks

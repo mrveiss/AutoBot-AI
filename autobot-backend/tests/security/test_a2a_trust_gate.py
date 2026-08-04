@@ -10,8 +10,9 @@ all capability checks entirely.  The fix adds a mandatory header check:
 missing header → 401 Unauthorized before any trust evaluation fires.
 
 Import note: a2a.task_manager creates a TaskManager singleton at module
-level (Redis-backed).  We pre-stub it in sys.modules before any import of
-the a2a package to prevent socket connections during test collection.
+level (Redis-backed).  Every import of ``api.a2a`` here happens inside a test
+body, so the stand-in is installed for exactly one test at a time and taken
+back out again — see ``_stub_task_manager``.
 """
 
 from __future__ import annotations
@@ -23,17 +24,32 @@ from unittest.mock import MagicMock
 import pytest
 
 # ---------------------------------------------------------------------------
-# Pre-stub a2a.task_manager so the a2a package can be imported without
-# triggering the module-level TaskManager() Redis initialisation.
+# a2a.task_manager stand-in, so importing the a2a package never triggers the
+# module-level TaskManager() Redis initialisation.
+#
+# Built here but NOT registered here (#13450): installing it at module import
+# time left it in sys.modules for the rest of the session, shadowing the real
+# module for every node collected after this file. Building it once still
+# matters — ``api.a2a`` binds names off it on its first import, and a fresh
+# object per test would move those bindings away from the ones under test.
 # ---------------------------------------------------------------------------
 
-if "a2a.task_manager" not in sys.modules:
-    _tm_stub = types.ModuleType("a2a.task_manager")
-    _tm_stub.__path__ = []  # type: ignore[attr-defined]
-    _tm_stub.TaskManager = MagicMock  # type: ignore[attr-defined]
-    _tm_stub.get_task_manager = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
-    _tm_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
-    sys.modules["a2a.task_manager"] = _tm_stub
+_TASK_MANAGER_STUB = types.ModuleType("a2a.task_manager")
+_TASK_MANAGER_STUB.__path__ = []  # type: ignore[attr-defined]
+_TASK_MANAGER_STUB.TaskManager = MagicMock  # type: ignore[attr-defined]
+_TASK_MANAGER_STUB.get_task_manager = MagicMock(return_value=MagicMock())  # type: ignore[attr-defined]
+_TASK_MANAGER_STUB.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
+
+
+@pytest.fixture(autouse=True)
+def _stub_task_manager(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Answer for ``a2a.task_manager`` while one test runs, and no longer.
+
+    ``monkeypatch.setitem`` restores whatever the key held before — including
+    deleting it again when it held nothing — so nothing this file installs can
+    reach a sibling directory.
+    """
+    monkeypatch.setitem(sys.modules, "a2a.task_manager", _TASK_MANAGER_STUB)
 
 
 # ---------------------------------------------------------------------------

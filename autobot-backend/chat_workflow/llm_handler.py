@@ -18,7 +18,7 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from constants.api_constants import PATH_OLLAMA_GENERATE
-from constants.model_constants import ModelConstants
+from constants.model_constants import ModelConfig
 from dependencies import get_config
 from middleware.base import HookContext
 from middleware.hooks import HookPoint
@@ -904,7 +904,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         return {
             "temperature": 0.7,
             "top_p": 0.9,
-            "num_ctx": ModelConstants.DEFAULT_NUM_CTX,
+            "num_ctx": ModelConfig.DEFAULT_NUM_CTX,
         }
 
     async def _interpret_non_streaming(

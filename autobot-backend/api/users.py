@@ -37,27 +37,27 @@ class UserPreferences(BaseModel):
 
     reasoning_effort: str = Field(
         "auto",
-        pattern="^(low|medium|high|auto)$",
+        pattern=r"^(low|medium|high|auto)\z",
         description="Default reasoning effort level (low, medium, high, auto)",
     )
     theme: str = Field(
         "dark",
-        pattern="^(dark|light|system)$",
+        pattern=r"^(dark|light|system)\z",
         description="Base theme mode (dark, light, system)",
     )
     accent_color: str = Field(
         "blue",
-        pattern="^(blue|green|purple|orange|pink|teal|indigo|red)$",
+        pattern=r"^(blue|green|purple|orange|pink|teal|indigo|red)\z",
         description="Accent color preset",
     )
     layout_density: str = Field(
         "comfortable",
-        pattern="^(compact|comfortable|spacious)$",
+        pattern=r"^(compact|comfortable|spacious)\z",
         description="Layout density (compact, comfortable, spacious)",
     )
     font_size: str = Field(
         "medium",
-        pattern="^(small|medium|large)$",
+        pattern=r"^(small|medium|large)\z",
         description="Base font size (small, medium, large)",
     )
     theme_preset: str = Field(

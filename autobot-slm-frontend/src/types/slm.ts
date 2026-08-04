@@ -342,8 +342,12 @@ export interface Backup {
   backup_id: string
   node_id: string
   service_type: string
-  backup_path: string
-  state: 'pending' | 'in_progress' | 'completed' | 'failed'
+  backup_path: string | null
+  // #13307: the API field is `status` (models/schemas.py BackupResponse). This
+  // said `state`, so every read of it was undefined: the Status column rendered
+  // blank and `v-if="backup.state === 'completed'"` meant the Restore button
+  // never appeared at all. `backup_path` is nullable until the copy succeeds.
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
   size_bytes: number
   started_at: string | null
   completed_at: string | null

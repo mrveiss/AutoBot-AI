@@ -9,6 +9,28 @@ on:
     branches: [ main, dev, Dev_new_gui ]
   pull_request:
     branches: [ main, Dev_new_gui ]  # Issue #6597: Semgrep blocks merge on all feature PRs
+    # #13388: SAFE — this workflow publishes no required status context (none of
+    # the ten on Dev_new_gui comes from here), so skipping the run cannot deadlock
+    # a pull request on a check that never reports.
+    #
+    # Exact UNION of the `python` and `deps` filters in `changes` below, which
+    # gate `dependency-security` and `static-analysis`. `compliance-check` is
+    # ungated but only greps the three backend package trees and writes counts to
+    # the step summary — it has no failure path, so losing it on a pull request
+    # that touches none of those trees removes no signal.
+    #
+    # The `schedule:` trigger below is NOT affected by path filters, so the daily
+    # full scan still covers everything unconditionally.
+    paths:
+      - 'autobot-backend/**/*.py'
+      - 'autobot-slm-backend/**/*.py'
+      - 'autobot_shared/**/*.py'
+      - '**/requirements*.txt'
+      - 'requirements-ci/**'
+      - 'pyproject.toml'
+      - 'autobot_shared/pyproject.toml'
+      - 'autobot-frontend/package*.json'
+      - '.github/workflows/security.yml'
   schedule:
     # Run security scans daily at 2 AM UTC
     - cron: '0 2 * * *'
@@ -101,6 +123,11 @@ jobs:
         cache-dependency-path: autobot-frontend/package-lock.json
 
     - name: Install Frontend dependencies
+      # #13410: no CI job runs Cypress (only `test:e2e` needs the binary), so
+      # skip the ~100MB CDN download — a Cypress CDN 504 must never red out a
+      # required check. Local dev `npm ci` is unaffected and still gets it.
+      env:
+        CYPRESS_INSTALL_BINARY: '0'
       run: |
         cd autobot-frontend
         npm ci
@@ -184,7 +211,7 @@ jobs:
           autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
 
     - name: Upload Semgrep SARIF to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81  # v3
+      uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38  # v3
       if: always()
       with:
         sarif_file: semgrep.sarif

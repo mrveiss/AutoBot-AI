@@ -21,6 +21,7 @@ from knowledge.backends import (
     ChromaDBClient,
     InMemoryClient,
 )
+from knowledge.backends._chromadb_support import require_real_chromadb
 
 # --- fixture factories ------------------------------------------------------
 #
@@ -36,7 +37,7 @@ def _memory_client(tmp_path) -> BaseClient:  # tmp_path unused, kept for uniform
 
 
 def _chromadb_client(tmp_path) -> BaseClient:
-    chromadb = pytest.importorskip("chromadb")
+    chromadb = require_real_chromadb()
     return ChromaDBClient(chromadb.PersistentClient(path=str(tmp_path)))
 
 

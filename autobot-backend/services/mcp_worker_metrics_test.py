@@ -40,10 +40,14 @@ class TestMCPWorkerMetricsRecorder:
         recorder.record_restart_budget_exhaustion("filesystem_mcp")
         recorder.record_restart_budget_exhaustion("filesystem_mcp")
 
-        # Verify counter was incremented
+        # Verify counter was incremented. prometheus_client strips the `_total`
+        # suffix from the metric *family* name and keeps it on the sample, so
+        # assert on the sample that actually carries the value.
         metrics = registry.collect()
         metric_dict = {m.name: m for m in metrics}
-        assert "autobot_mcp_worker_restart_budget_exhaustion_total" in metric_dict
+        assert "autobot_mcp_worker_restart_budget_exhaustion" in metric_dict
+        samples = {s.name: s.value for s in metric_dict["autobot_mcp_worker_restart_budget_exhaustion"].samples}
+        assert samples["autobot_mcp_worker_restart_budget_exhaustion_total"] == 2
 
     def test_record_crash_interval(self) -> None:
         """Record crash interval records to histogram."""

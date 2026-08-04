@@ -16,6 +16,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.proxy_utils import get_client_ip
 from mcp.autobot_server import AutoBotMCPServer
 
 logger = get_logger(__name__)
@@ -51,9 +52,19 @@ async def mcp_tool_call(request: Request) -> JSONResponse:
     auth_header = request.headers.get("Authorization", "")
     token = auth_header.removeprefix("Bearer ").strip()
 
+    # #13268: this route has no FastAPI auth dependency and is listed in neither
+    # EXEMPT_PATHS nor SERVICE_ONLY_PATHS, so the MCP secret is the entire
+    # boundary. Resolve the caller address for the pre-auth throttle.
+    # get_client_ip only honours X-Forwarded-For from a trusted proxy peer, but
+    # the shipped nginx templates APPEND with $proxy_add_x_forwarded_for, so the
+    # leftmost element is still caller-supplied. The throttle therefore also
+    # enforces an endpoint-wide ceiling that IP rotation cannot evade.
+    client_ip = get_client_ip(request)
+
     try:
         body = await request.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("mcp_tool_call: rejecting unparseable JSON-RPC body: %s", exc)
         return JSONResponse(
             status_code=400,
             content={"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
@@ -64,7 +75,7 @@ async def mcp_tool_call(request: Request) -> JSONResponse:
     req_id = body.get("id")
 
     server = _get_server()
-    response = await server.handle_request(method, params, token, req_id)
+    response = await server.handle_request(method, params, token, req_id, client_ip=client_ip)
 
     status = 200
     if "error" in response:

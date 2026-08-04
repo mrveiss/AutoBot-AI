@@ -41,6 +41,16 @@ from services.knowledge.lineage_service import (  # noqa: E402
     get_lineage_service,
 )
 
+# #13435: see the matching note in test_analyzer_service.py. ``utils.chromadb_client``
+# is the one stub above that escapes this directory — it is not needed after the
+# import, and leaving it installed poisoned utils/chromadb_auth_test.py and
+# utils/chromadb_client_cache_key_test.py, which pass alone and failed in CI.
+# ``_reinstall_module_stubs`` in this package's conftest puts it back around this
+# module's own tests and removes it afterwards.
+_STUBS_UNLOADED_AFTER_IMPORT = {
+    name: sys.modules.pop(name) for name in ("utils.chromadb_client",) if name in sys.modules
+}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

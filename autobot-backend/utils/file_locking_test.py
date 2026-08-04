@@ -20,10 +20,14 @@ These tests verify the acceptance criteria:
 import asyncio
 import tempfile
 import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# Enough concurrency to lose an unguarded double-check reliably on WSL2/CI.
+THREAD_COUNT = 20
 
 
 class TestWebsocketsNPUEventsLocking:
@@ -42,19 +46,75 @@ class TestWebsocketsNPUEventsLocking:
 
         assert hasattr(websockets, "_npu_events_subscribed")
 
-    def test_init_npu_worker_websocket_uses_lock(self):
-        """Test that init_npu_worker_websocket uses the lock"""
-        import inspect
+    @staticmethod
+    def _slow_recording_bus(subscriptions: list) -> MagicMock:
+        """A bus whose subscribe is slow enough to expose an unguarded check."""
+        bus = MagicMock()
 
+        def _record(topic, _handler):
+            subscriptions.append(topic)
+            time.sleep(0.001)
+
+        bus.subscribe = _record
+        return bus
+
+    @staticmethod
+    def _init_concurrently(websockets, bus) -> list:
+        """Release THREAD_COUNT initialisers at once; return their errors."""
+        barrier = threading.Barrier(THREAD_COUNT)
+        errors = []
+
+        def _init():
+            try:
+                barrier.wait(timeout=5)
+                websockets.init_npu_worker_websocket()
+            except Exception as exc:  # noqa: BLE001 - reported via `errors`
+                errors.append(exc)
+
+        with patch.object(websockets, "get_event_bus", lambda: bus):
+            threads = [threading.Thread(target=_init) for _ in range(THREAD_COUNT)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=10)
+        return errors
+
+    def test_subscription_happens_exactly_once_under_contention(self):
+        """The #513 defect: without the lock, racing callers each subscribed.
+
+        This used to grep ``inspect.getsource`` for ``with _npu_events_lock:``
+        and count occurrences of the flag name (#13311) -- a pattern match that
+        passes for a lock held around the wrong thing, and breaks on any
+        refactor. The observable is duplicate subscriptions: a handler
+        registered N times fires N times per event.
+        """
         from api import websockets
 
-        source = inspect.getsource(websockets.init_npu_worker_websocket)
+        websockets._npu_events_subscribed = False
+        subscriptions = []
 
-        # Verify double-checked locking pattern
-        assert "_npu_events_lock" in source, "Lock not used in function"
-        assert "with _npu_events_lock:" in source, "Lock context manager not used"
-        # Check for double-check pattern (two checks of _npu_events_subscribed)
-        assert source.count("_npu_events_subscribed") >= 2, "Double-checked locking not implemented"
+        errors = self._init_concurrently(websockets, self._slow_recording_bus(subscriptions))
+
+        assert not errors, f"errors during concurrent init: {errors}"
+        assert len(subscriptions) == len(set(subscriptions)), (
+            f"#513 regression: {len(subscriptions)} subscribe() calls for "
+            f"{len(set(subscriptions))} distinct topics — every event would be "
+            f"broadcast more than once"
+        )
+        assert websockets._npu_events_subscribed is True
+
+    def test_a_failed_subscribe_does_not_latch_the_flag(self):
+        """The mirror: the flag must not claim success the bus never gave."""
+        from api import websockets
+
+        websockets._npu_events_subscribed = False
+        bus = MagicMock()
+        bus.subscribe = MagicMock(side_effect=RuntimeError("bus down"))
+
+        with patch.object(websockets, "get_event_bus", lambda: bus):
+            websockets.init_npu_worker_websocket()
+
+        assert websockets._npu_events_subscribed is False, "a failed subscribe must stay retryable"
 
     def test_concurrent_init_npu_worker_websocket(self):
         """Test concurrent calls to init_npu_worker_websocket"""
@@ -313,7 +373,15 @@ class TestConcurrentFileWriteSafety:
 
     @pytest.mark.asyncio
     async def test_concurrent_writes_same_file_no_corruption(self):
-        """Test that concurrent writes to same file don't corrupt data"""
+        """Test that concurrent writes to same file don't corrupt data.
+
+        #13284 measured this at 13.62s on CI and deliberately left it alone:
+        it is not the module's first import of api.filesystem_mcp (that is
+        test_file_locks_dict_exists above), so the usual first-import
+        explanation does not apply, and no other cause was identified. The
+        assertions are a real corruption guard (#514) worth keeping on the PR
+        gate, so it is not marked. Cause tracked in #13287.
+        """
         import aiofiles
 
         from api.filesystem_mcp import _get_file_lock
@@ -350,35 +418,58 @@ class TestConcurrentFileWriteSafety:
 
     @pytest.mark.asyncio
     async def test_different_files_can_write_concurrently(self):
-        """Test that writes to different files happen concurrently"""
-        import time
+        """Writes to different files must hold their locks concurrently.
 
+        Issue #13162: the previous version inferred concurrency from wall-clock
+        elapsed time (<0.04s for five 10ms critical sections), which reported a
+        serialization regression whenever the machine was merely busy — it was
+        already relaxed once for the same reason (#11954). This version proves
+        the property directly: every writer parks inside its own critical
+        section until all five are inside simultaneously. A shared (serialized)
+        lock makes that state unreachable, so the wait times out and the test
+        fails with a clear message instead of depending on scheduler timing.
+        """
         import aiofiles
 
         from api.filesystem_mcp import _get_file_lock
 
+        writer_count = 5
+        # Generous: only a genuinely serialized lock can exhaust this.
+        rendezvous_timeout = 10.0
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            start_times = {}
-            end_times = {}
+            inside = 0
+            all_inside = asyncio.Event()
+            peak_concurrency = 0
 
             async def write_to_file(file_num: int):
+                nonlocal inside, peak_concurrency
                 test_file = Path(tmpdir) / f"file_{file_num}.txt"
                 lock = await _get_file_lock(str(test_file))
                 async with lock:
-                    start_times[file_num] = time.time()
                     async with aiofiles.open(test_file, "w", encoding="utf-8") as f:
                         await f.write(f"Content {file_num}")
-                    await asyncio.sleep(0.01)  # Small delay to detect serialization
-                    end_times[file_num] = time.time()
+                    inside += 1
+                    peak_concurrency = max(peak_concurrency, inside)
+                    if inside == writer_count:
+                        all_inside.set()
+                    try:
+                        await asyncio.wait_for(all_inside.wait(), timeout=rendezvous_timeout)
+                    except asyncio.TimeoutError:
+                        # Serialized: release the other writers so the run ends
+                        # cleanly; peak_concurrency below reports the failure.
+                        all_inside.set()
+                    finally:
+                        inside -= 1
 
-            # Write to 5 different files
-            await asyncio.gather(*[write_to_file(i) for i in range(5)])
+            await asyncio.gather(*[write_to_file(i) for i in range(writer_count)])
 
-            # If writes were serialized, total time would be ~50ms
-            # If concurrent, should be close to 10ms. Threshold has headroom
-            # above the 10ms sleep for scheduler jitter (#11954 flaky at 0.03).
-            total_elapsed = max(end_times.values()) - min(start_times.values())
-            assert total_elapsed < 0.04, f"Writes appear serialized: {total_elapsed:.3f}s (expected <0.04s)"
+            assert peak_concurrency == writer_count, (
+                f"Writes to different files are serialized: only {peak_concurrency} of "
+                f"{writer_count} per-file locks were held at the same time"
+            )
+            for file_num in range(writer_count):
+                assert (Path(tmpdir) / f"file_{file_num}.txt").read_text(encoding="utf-8") == f"Content {file_num}"
 
 
 class TestLockPatternConsistency:
