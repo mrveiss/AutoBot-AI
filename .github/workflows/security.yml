@@ -343,14 +343,20 @@ jobs:
     - name: Download all security reports
       uses: actions/download-artifact@v8
 
+    # #13516: `github.ref_name` / `github.sha` through `env:`. Neither is
+    # attacker-settable here — on `pull_request` these resolve to the PR number,
+    # not the fork's branch name — so this is defence in depth, fixed as a pair.
     - name: Generate Security Summary
+      env:
+        REF_NAME: ${{ github.ref_name }}
+        COMMIT_SHA: ${{ github.sha }}
       run: |
         {
           echo "# Security Scan Summary"
           echo ""
           echo "**Scan Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "**Branch:** ${{ github.ref_name }}"
-          echo "**Commit:** ${{ github.sha }}"
+          echo "**Branch:** $REF_NAME"
+          echo "**Commit:** $COMMIT_SHA"
           echo ""
         } > security-summary.md
 

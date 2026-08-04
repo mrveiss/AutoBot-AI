@@ -28,10 +28,17 @@ jobs:
       pull-requests: write
 
     steps:
+      # #13516: `inputs.confirm` reaches the shell through `env:`, not inline
+      # `${{ }}`. Triggering this needs repo write access, so it is
+      # privilege-equivalent rather than an escalation — but this job holds
+      # `contents: write` (see permissions above), which makes it the one site
+      # in the batch worth fixing on its own merits.
       - name: Validate confirmation
         if: inputs.confirm != 'release'
+        env:
+          CONFIRM: ${{ inputs.confirm }}
         run: |
-          echo "::error::You must type 'release' to confirm. Got: '${{ inputs.confirm }}'"
+          echo "::error::You must type 'release' to confirm. Got: '$CONFIRM'"
           exit 1
 
       - name: Checkout repository
