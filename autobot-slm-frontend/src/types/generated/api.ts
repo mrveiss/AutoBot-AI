@@ -6056,7 +6056,15 @@ export interface paths {
         get: operations["get_backup_api_stateful_backups__backup_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Backup
+         * @description Delete a backup and its stored file (#13307).
+         *
+         *     There was no delete route at all before this, so nothing in the system could
+         *     reclaim space and retention was unimplementable — while the destination sat
+         *     on the root filesystem.
+         */
+        delete: operations["delete_backup_api_stateful_backups__backup_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -24518,6 +24526,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BackupResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_backup_api_stateful_backups__backup_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                backup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
