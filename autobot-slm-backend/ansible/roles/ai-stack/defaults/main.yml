@@ -31,6 +31,9 @@ chromadb_port: 8100
 # backend_chromadb_auth_token when chroma is co-located here instead of on
 # the db-stack node (#4087 topology).
 chromadb_auth_token: ""
+# Same file, same contract as the redis role: it must equal the unit's
+# EnvironmentFile= line, and it is written before the unit is deployed (#12513).
+chromadb_authn_env_file: /etc/autobot/chromadb.env
 
 # Ollama (remote on backend node - resolved from inventory)
 ollama_host: "{{ backend_host | default(ansible_host) }}"

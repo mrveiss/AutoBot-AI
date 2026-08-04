@@ -61,7 +61,18 @@ chromadb_port: 8100
 chromadb_install_dir: /opt/autobot/autobot-db-stack/chromadb
 chromadb_data_dir: /opt/autobot/autobot-db-stack/chromadb/data
 # CHROMA_SERVER_AUTHN_* token auth (#12513). Empty (default) = auth disabled,
-# matching pre-#12513 behaviour. Override via group_vars/vault — never commit
-# a real value. Must match backend_chromadb_auth_token (backend role) so the
-# client credentials match the server.
+# matching pre-#12513 behaviour. Normally adopted from the SLM-generated value in
+# slm-secrets.env (see _shared/tasks/read_chromadb_auth_token.yml); override via
+# group_vars/vault only — never commit a real value. Must match
+# backend_chromadb_auth_token (backend role) so the client credential matches the
+# server's.
 chromadb_auth_token: ""
+# The one file the chroma unit loads its server credential from (#12513). This
+# MUST stay equal to the EnvironmentFile= line in
+# templates/autobot-chromadb.service.j2: the unit used to declare an optional
+# `-/opt/autobot/autobot-db-stack/.env` that nothing ever wrote, so a missing
+# credential produced a running-but-unauthenticated chroma instead of a failure.
+# Lives under /etc/autobot with the other credential stores (slm-secrets.env,
+# db-credentials.env) rather than under /opt, which decommission-node.yml and
+# remove-role.yml wipe.
+chromadb_authn_env_file: /etc/autobot/chromadb.env

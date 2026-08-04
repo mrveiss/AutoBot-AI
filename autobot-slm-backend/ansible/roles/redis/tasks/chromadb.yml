@@ -87,6 +87,14 @@
   no_log: true
   tags: ['redis', 'chromadb']
 
+# Must precede the unit template and the start task below: the unit declares a
+# MANDATORY EnvironmentFile at this exact path (#12513), so the file has to exist
+# before systemd is asked to (re)start chroma. Rendered unconditionally — it just
+# carries no authn keys when no token is configured.
+- name: "ChromaDB | Render the server-authn env file the unit reads (#12513)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/write_chromadb_authn_env.yml
+  tags: ['redis', 'chromadb']
+
 - name: "ChromaDB | Deploy systemd service unit"
   ansible.builtin.template:
     src: autobot-chromadb.service.j2

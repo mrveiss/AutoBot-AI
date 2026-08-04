@@ -27,6 +27,14 @@
   no_log: true
   tags: ['ai', 'deploy']
 
+# Same ordering contract as roles/redis/tasks/chromadb.yml: the unit's
+# EnvironmentFile is mandatory, so the file is rendered first (#12513). main.yml
+# includes this file before "Enable and start ChromaDB service", so the ordering
+# holds on the provisioning path too, not just on the updater's code_only path.
+- name: "ChromaDB | Render the server-authn env file the unit reads (#12513)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/write_chromadb_authn_env.yml
+  tags: ['ai', 'deploy']
+
 - name: Deploy ChromaDB systemd service
   ansible.builtin.template:
     src: autobot-chromadb.service.j2
