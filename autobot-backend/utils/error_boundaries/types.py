@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict
 
+from autobot_shared.status_enums import Severity
+
 # Module-level tuples for error type classification (from original module)
 CRITICAL_ERROR_TYPES = (SystemExit, KeyboardInterrupt, MemoryError)
 HIGH_SEVERITY_ERROR_TYPES = (ConnectionError, TimeoutError, OSError)
@@ -23,13 +25,23 @@ RETRY_ERROR_TYPES = (ConnectionError, TimeoutError)
 SYSTEM_RESTART_ERROR_TYPES = (MemoryError, SystemExit)
 
 
-class ErrorSeverity(Enum):
-    """Error severity levels"""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+# Error severity levels (#13597).
+#
+# This was a local `Enum` declaring LOW/MEDIUM/HIGH/CRITICAL — an exact subset of
+# the canonical `Severity`, same base class, no added behaviour. `Severity`'s own
+# docstring records that #6689 collapsed 10+ severity enums into it; this one and
+# `utils.monitoring_alerts.AlertSeverity` were missed.
+#
+# Kept as an alias rather than removed, so every existing `ErrorSeverity.HIGH`
+# call site keeps working and keeps meaning the same member. Same pattern the
+# canonical module already uses for `WorkflowStatus = TaskStatus`.
+#
+# The alias exposes three members the local enum did not have (UNKNOWN, INFO,
+# MINIMAL). Nothing iterates this enum or takes its length, and both severity
+# mappings that exist (`_max_retries_for_severity` in agent_loop/loop.py and the
+# emoji/tier maps in monitoring_alerts.py) are `.get(..., default)` lookups, so
+# the extra members are inert rather than a behaviour change.
+ErrorSeverity = Severity
 
 
 def classify_error(error: Exception) -> ErrorSeverity:
