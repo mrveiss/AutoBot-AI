@@ -1465,25 +1465,55 @@ class ToolHandlerMixin:
         elapsed_time = 0
         poll_count = 0
 
-        while elapsed_time < max_wait_time:
-            await asyncio.sleep(poll_interval)
-            elapsed_time += poll_interval
-            poll_count += 1
+        # #13480: claim interpretation for this turn. The approve path skips its
+        # own interpretation while this is set, so the same command is not
+        # interpreted twice — two LLM calls, two persisted interpretations.
+        await self._claim_interpretation(terminal_session_id, True)
 
-            try:
-                session_info = await self.terminal_tool.get_session_info(terminal_session_id)
-                self._log_polling_status(poll_count, session_info, elapsed_time)
+        try:
+            while elapsed_time < max_wait_time:
+                await asyncio.sleep(poll_interval)
+                elapsed_time += poll_interval
+                poll_count += 1
 
-                result_data, status_msg, should_break = self._check_approval_completion(
-                    session_info, command, elapsed_time, max_wait_time
-                )
-                if should_break:
-                    yield (result_data, status_msg)
-                    return
-            except Exception as check_error:
-                logger.error("Error checking approval status: %s", check_error)
+                try:
+                    session_info = await self.terminal_tool.get_session_info(terminal_session_id)
+                    self._log_polling_status(poll_count, session_info, elapsed_time)
 
-        yield (None, None)
+                    result_data, status_msg, should_break = self._check_approval_completion(
+                        session_info, command, elapsed_time, max_wait_time
+                    )
+                    if should_break:
+                        yield (result_data, status_msg)
+                        return
+                except Exception as check_error:
+                    logger.error("Error checking approval status: %s", check_error)
+
+            yield (None, None)
+        finally:
+            # Load-bearing, and the reason this is a `finally` rather than a line
+            # after the loop: the claim MUST be released on every exit — timeout,
+            # decision, an exception, or the consumer closing this generator
+            # early (GeneratorExit runs finally). A leaked claim means the approve
+            # path keeps skipping while no turn is listening, so a late approval
+            # produces no interpretation at all — silently re-breaking #13479 in
+            # exactly the case it was filed for.
+            await self._claim_interpretation(terminal_session_id, False)
+
+    async def _claim_interpretation(self, terminal_session_id: str, live: bool) -> None:
+        """Mark/unmark this turn as the interpreter for a pending approval (#13480).
+
+        Never raises: failing to claim only costs a duplicate interpretation,
+        and failing to release is already guarded by the approve path treating an
+        absent marker as "interpret". Neither is worth failing the turn over.
+        """
+        service = getattr(self.terminal_tool, "agent_terminal_service", None)
+        if service is None or not hasattr(service, "set_live_turn_interpreting"):
+            return
+        try:
+            await service.set_live_turn_interpreting(terminal_session_id, live)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Could not %s interpretation claim: %s", "set" if live else "release", exc)
 
     async def _handle_pending_approval(
         self,
