@@ -12,7 +12,7 @@ Issue: #260
 """
 
 import re
-import xml.etree.ElementTree as ET  # nosec B405 - parsing trusted nmap output
+import xml.etree.ElementTree as ET  # nosec B405  # parsing trusted nmap output
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -209,7 +209,7 @@ class NmapParser(BaseToolParser):
         result = self._create_output(scan_type="xml")
 
         try:
-            root = ET.fromstring(xml_output)  # nosec B314 - parsing trusted nmap output
+            root = ET.fromstring(xml_output)  # nosec B314  # parsing trusted nmap output
 
             # Get scan info
             if root.get("args"):

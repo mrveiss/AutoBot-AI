@@ -10,7 +10,7 @@ Handles checkpoint save/load/resume functionality.
 """
 
 import json
-import pickle  # nosec B403 - pickle used for internal checkpoint serialization only
+import pickle  # nosec B403  # pickle used for internal checkpoint serialization only
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 

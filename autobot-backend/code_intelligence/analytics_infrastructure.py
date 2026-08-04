@@ -516,7 +516,7 @@ class AnalyticsInfrastructureMixin:
         if self._redis_client:
             try:
                 await self._redis_client.close()
-            except Exception:  # nosec B110 - cleanup ignores close errors
+            except Exception:  # nosec B110  # cleanup ignores close errors
                 logger.debug("Suppressed exception in try block", exc_info=True)
             self._redis_client = None
         logger.info("Infrastructure resources cleaned up")

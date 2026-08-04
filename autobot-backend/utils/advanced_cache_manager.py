@@ -701,7 +701,7 @@ class AdvancedCacheManager:
                 entry = json.loads(cached_data)
                 timestamp = entry.get("timestamp", 0)
                 keys_with_time.append((timestamp, key))
-            except Exception:  # nosec B112 - intentional skip on parse errors
+            except Exception:  # nosec B112  # intentional skip on parse errors
                 continue
 
         return keys_with_time

@@ -119,7 +119,7 @@ class DisplayDetector:
         try:
             result = subprocess.run(
                 ["xrandr", "--query"], capture_output=True, text=True, timeout=5
-            )  # nosec B603 B607 - fixed argv, system display tool
+            )  # nosec B603 B607  # fixed argv, system display tool
             if result.returncode != 0:
                 return None
 
@@ -140,7 +140,7 @@ class DisplayDetector:
         try:
             result = subprocess.run(
                 ["xdpyinfo"], capture_output=True, text=True, timeout=5
-            )  # nosec B603 B607 - fixed argv, system display info tool
+            )  # nosec B603 B607  # fixed argv, system display info tool
             if result.returncode != 0:
                 return None
 
@@ -163,7 +163,7 @@ class DisplayDetector:
             # Try wlr-randr (for wlroots-based compositors)
             result = subprocess.run(
                 ["wlr-randr"], capture_output=True, text=True, timeout=5
-            )  # nosec B603 B607 - fixed argv, Wayland compositor display tool
+            )  # nosec B603 B607  # fixed argv, Wayland compositor display tool
             if result.returncode != 0:
                 return None
 
@@ -217,7 +217,7 @@ class DisplayDetector:
     def _detect_macos_resolution(self) -> Tuple[int, int]:
         """Detect resolution on macOS (Issue #315 - refactored)."""
         try:
-            result = subprocess.run(  # nosec B603 B607 - fixed argv, macOS system display profiler
+            result = subprocess.run(  # nosec B603 B607  # fixed argv, macOS system display profiler
                 ["system_profiler", "SPDisplaysDataType"],
                 capture_output=True,
                 text=True,
@@ -259,7 +259,7 @@ class DisplayDetector:
 
             result = subprocess.run(
                 powershell_cmd, capture_output=True, text=True, timeout=10
-            )  # nosec B603 - fixed PowerShell script with no user-controlled input
+            )  # nosec B603  # fixed PowerShell script with no user-controlled input
 
             if result.returncode == 0:
                 import json

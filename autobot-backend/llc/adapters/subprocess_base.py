@@ -41,7 +41,7 @@ logger = get_logger(__name__)
 SIGTERM_GRACE_SECONDS = 10
 ADAPTER_TIMEOUT_SECONDS = 3600  # per-adapter default (preserves current behavior)
 DEFAULT_TIMEOUT_SECONDS = 3600  # fallback when a state file omits timeout_seconds
-DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108 - test/controlled code uses tmpdir intentionally
+DEFAULT_OUTPUT_DIR = "/tmp"  # nosec B108  # test/controlled code uses tmpdir intentionally
 
 # Per-user CLI install locations that a systemd service account's PATH typically
 # does NOT include (GH#12478). Checked, in order, after a bare `shutil.which()`

@@ -14,7 +14,7 @@ reports which resolved models are actually pulled; that probe is operator
 diagnostics, not an assertion, so it stays out of the test function.
 """
 
-import subprocess  # nosec B404 - fixed argv, no shell, operator diagnostics only
+import subprocess  # nosec B404  # fixed argv, no shell, operator diagnostics only
 import sys
 
 from autobot_shared.ssot_config import config
@@ -53,7 +53,7 @@ def test_agent_models_resolve():
 def _available_ollama_models() -> set[str]:
     """Return model names reported by a local Ollama install (empty when absent)."""
     try:
-        result = subprocess.run(  # nosec B603 - fixed argv, shell=False
+        result = subprocess.run(  # nosec B603  # fixed argv, shell=False
             ["ollama", "list"],
             capture_output=True,
             text=True,

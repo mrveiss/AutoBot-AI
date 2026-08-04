@@ -165,3 +165,230 @@ def test_consumers_keep_their_existing_value_when_the_read_is_empty(role, spec):
             f"roles/{role}: {var} is assigned unconditionally — an empty read would "
             "silently turn auth off on this side"
         )
+
+
+# ---------------------------------------------------------------------------
+# Post-deploy round two (#12513): the token was provisioned and chroma still
+# answered an unauthenticated create_collection with 200.
+#
+# The credential was written into the unit as `Environment=`, wrapped in
+# `{% if chromadb_auth_token %}`, and the unit's only env-file input on the
+# database role was `EnvironmentFile=-/opt/autobot/autobot-db-stack/.env` — a
+# path nothing in this repository writes, made OPTIONAL by the leading `-`. So
+# both routes for the credential were no-ops and systemd reported success:
+# `systemctl cat autobot-chromadb | grep -c CHROMA_SERVER_AUTHN` → 0.
+#
+# The tests below pin the three properties that make that unrepresentable:
+# one provisioned path, equal on both sides; a MANDATORY EnvironmentFile; and the
+# file written before anything starts the unit.
+# ---------------------------------------------------------------------------
+
+_WRITE_ENV = _ANSIBLE / "_shared" / "tasks" / "write_chromadb_authn_env.yml"
+
+#: Roles that render the chroma unit → (task file that must render the env file,
+#: relative path of the unit template).
+_UNIT_OWNERS = {
+    "redis": ("tasks/chromadb.yml", "templates/autobot-chromadb.service.j2"),
+    "ai-stack": ("tasks/code_only.yml", "templates/autobot-chromadb.service.j2"),
+}
+
+#: chromadb's own pydantic Settings field names, uppercased — that is how it
+#: reads the environment (chromadb/config.py: chroma_server_authn_provider /
+#: chroma_server_authn_credentials). Guessing these is the whole failure mode.
+_SERVER_KEYS = ("CHROMA_SERVER_AUTHN_PROVIDER", "CHROMA_SERVER_AUTHN_CREDENTIALS")
+
+_ENV_FILE_VAR = "chromadb_authn_env_file"
+
+
+def _role_defaults(role: str) -> dict:
+    return yaml.safe_load((_ANSIBLE / "roles" / role / "defaults" / "main.yml").read_text(encoding="utf-8"))
+
+
+def _tasks(path: Path) -> list:
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or []
+
+
+def _env_file_lines(unit_text: str) -> list:
+    return [ln.strip() for ln in unit_text.splitlines() if ln.strip().startswith("EnvironmentFile=")]
+
+
+def test_the_env_file_task_emits_the_keys_chromadb_actually_reads():
+    """The keys must be chromadb's Settings field names, not plausible ones."""
+    copy_task = next(
+        (t for t in _iter_mappings(_tasks(_WRITE_ENV)) if (t.get("ansible.builtin.copy") or t.get("copy"))),
+        None,
+    )
+    assert copy_task is not None, f"{_WRITE_ENV} no longer renders the env file"
+
+    spec = copy_task.get("ansible.builtin.copy") or copy_task["copy"]
+    content = str(spec.get("content", ""))
+    for key in _SERVER_KEYS:
+        assert f"{key}=" in content, f"the rendered env file omits {key}; chroma would enforce nothing"
+
+    assert "chromadb.auth.token_authn.TokenAuthenticationServerProvider" in content, (
+        "the server provider must be chromadb's token_authn class — the same module that "
+        "ships the TokenAuthClientProvider the backend sets, so the two cannot drift"
+    )
+    # Empty credentials with a provider configured is a chroma boot crash, so the
+    # keys stay conditional even though the FILE is unconditional.
+    assert "chromadb_auth_token" in content and "{% if" in content, (
+        "the authn keys must be gated on a non-empty token — a provider with empty "
+        "credentials crashes chroma at startup"
+    )
+    assert spec.get("mode") == "0600", (
+        "the credential file must not be readable beyond root; systemd reads "
+        "EnvironmentFile as PID 1 before dropping privileges, so 0600 root:root suffices"
+    )
+
+
+def test_the_env_file_is_written_unconditionally():
+    """A conditional file plus a mandatory EnvironmentFile would brick startup."""
+    copy_task = next(
+        (t for t in _iter_mappings(_tasks(_WRITE_ENV)) if (t.get("ansible.builtin.copy") or t.get("copy"))),
+        None,
+    )
+    assert copy_task.get("when") is None, (
+        "the env file must be rendered on every run, token or not — the units declare it "
+        "as a MANDATORY EnvironmentFile, so a skipped render is a failed start"
+    )
+
+
+@pytest.mark.parametrize("role", sorted(_UNIT_OWNERS))
+def test_unit_environmentfile_path_equals_the_provisioned_path(role):
+    """The exact mismatch #13462 hit: token written where the unit does not read."""
+    _, unit_rel = _UNIT_OWNERS[role]
+    unit = (_ANSIBLE / "roles" / role / unit_rel).read_text(encoding="utf-8")
+
+    declared = [ln for ln in _env_file_lines(unit) if _ENV_FILE_VAR in ln]
+    assert declared == [f"EnvironmentFile={{{{ {_ENV_FILE_VAR} }}}}"], (
+        f"roles/{role} unit must load the credential from {{{{ {_ENV_FILE_VAR} }}}} verbatim; "
+        f"found {declared or _env_file_lines(unit)}"
+    )
+
+    spec = next(
+        (
+            t.get("ansible.builtin.copy") or t.get("copy")
+            for t in _iter_mappings(_tasks(_WRITE_ENV))
+            if (t.get("ansible.builtin.copy") or t.get("copy"))
+        ),
+        None,
+    )
+    assert spec["dest"].strip() == f"{{{{ {_ENV_FILE_VAR} }}}}", (
+        "the provisioning task must write the very variable the unit reads, not a " "path that merely looks like it"
+    )
+
+    default = _role_defaults(role).get(_ENV_FILE_VAR)
+    assert default, f"roles/{role}/defaults/main.yml does not define {_ENV_FILE_VAR}"
+    assert default.startswith("/"), "the credential path must be absolute"
+
+
+def test_both_unit_owners_resolve_to_one_credential_file():
+    paths = {role: _role_defaults(role)[_ENV_FILE_VAR] for role in _UNIT_OWNERS}
+    assert len(set(paths.values())) == 1, (
+        f"the two chroma-owning roles point at different credential files ({paths}) — "
+        "a node that changes owner would silently lose its server credential"
+    )
+
+
+@pytest.mark.parametrize("role", sorted(_UNIT_OWNERS))
+def test_environmentfile_is_mandatory_not_optional(role):
+    """`EnvironmentFile=-` is why a missing credential ran unauthenticated."""
+    _, unit_rel = _UNIT_OWNERS[role]
+    unit = (_ANSIBLE / "roles" / role / unit_rel).read_text(encoding="utf-8")
+
+    for line in _env_file_lines(unit):
+        assert not line.startswith("EnvironmentFile=-"), (
+            f"roles/{role} declares an OPTIONAL env file ({line}) — systemd tolerates it "
+            "missing, so chroma starts with no authentication and nothing reports a failure"
+        )
+
+
+@pytest.mark.parametrize("role", sorted(_UNIT_OWNERS))
+def test_the_credential_never_lands_in_the_world_readable_unit(role):
+    _, unit_rel = _UNIT_OWNERS[role]
+    unit = (_ANSIBLE / "roles" / role / unit_rel).read_text(encoding="utf-8")
+
+    inline = [ln for ln in unit.splitlines() if ln.strip().startswith("Environment=") and "CHROMA_SERVER_AUTHN" in ln]
+    assert not inline, (
+        f"roles/{role} inlines the chroma credential into a unit deployed 0644 — every "
+        f"local user could read it: {inline}"
+    )
+
+
+@pytest.mark.parametrize("role", sorted(_UNIT_OWNERS))
+def test_the_env_file_is_rendered_before_the_unit_is(role):
+    """Mandatory EnvironmentFile + late provisioning = a bricked fresh install."""
+    tasks_rel, _ = _UNIT_OWNERS[role]
+    tasks = _tasks(_ANSIBLE / "roles" / role / tasks_rel)
+
+    def index(predicate):
+        return next((i for i, t in enumerate(tasks) if predicate(t)), None)
+
+    write_at = index(lambda t: "write_chromadb_authn_env.yml" in str(t.get("ansible.builtin.include_tasks", "")))
+    read_at = index(lambda t: "read_chromadb_auth_token.yml" in str(t.get("ansible.builtin.include_tasks", "")))
+    unit_at = index(
+        lambda t: "autobot-chromadb.service.j2"
+        in str((t.get("ansible.builtin.template") or t.get("template") or {}).get("src", ""))
+    )
+
+    assert write_at is not None, f"roles/{role}/{tasks_rel} never renders the credential file"
+    assert unit_at is not None, f"roles/{role}/{tasks_rel} no longer renders the chroma unit"
+    assert read_at < write_at, "the token must be read before the file that carries it is written"
+    assert write_at < unit_at, (
+        f"roles/{role}/{tasks_rel} renders the unit before the env file it mandates — a "
+        "restart between the two would fail to start chroma at all"
+    )
+
+    start_at = index(
+        lambda t: "autobot-chromadb"
+        in str((t.get("ansible.builtin.systemd") or t.get("systemd") or {}).get("name", ""))
+    )
+    if start_at is not None:
+        assert write_at < start_at, "chroma is started before its mandatory env file exists"
+
+
+def test_ai_stack_starts_chroma_only_after_including_the_render():
+    """ai-stack keeps the render in code_only.yml; main.yml must include it first."""
+    tasks = _tasks(_ANSIBLE / "roles" / "ai-stack" / "tasks" / "main.yml")
+    include_at = next(
+        (i for i, t in enumerate(tasks) if "code_only.yml" in str(t.get("ansible.builtin.include_tasks", ""))),
+        None,
+    )
+    start_at = next(
+        (
+            i
+            for i, t in enumerate(tasks)
+            if "autobot-chromadb" in str((t.get("ansible.builtin.systemd") or t.get("systemd") or {}).get("name", ""))
+            and str((t.get("ansible.builtin.systemd") or t.get("systemd") or {}).get("state", "")) == "started"
+        ),
+        None,
+    )
+    assert include_at is not None and start_at is not None
+    assert include_at < start_at, (
+        "roles/ai-stack/tasks/main.yml starts chroma before code_only.yml renders the "
+        "mandatory env file — the service would fail to start on a fresh node"
+    )
+
+
+def test_the_client_reads_the_same_credential_through_ssot_config():
+    """Server authn without a wired client is an outage, not a fix."""
+    auth = (Path(__file__).resolve().parents[2] / "autobot-backend" / "utils" / "chromadb_auth.py").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "_ssot_config.misc.chromadb_auth_token" in auth
+    ), "the client credential must come from ssot_config, not a second env lookup"
+    assert (
+        "chromadb.auth.token_authn.TokenAuthClientProvider" in auth
+    ), "the client provider must be token_authn's, matching the server provider"
+
+    ssot = (Path(__file__).resolve().parents[2] / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
+    assert f'alias="{_TOKEN_KEY}"' in ssot, (
+        f"ssot_config.misc.chromadb_auth_token must alias {_TOKEN_KEY} — the same key "
+        "slm-secrets.env and backend.env carry, or the client sends nothing"
+    )
+
+    backend_env = (_ANSIBLE / "roles" / "backend" / "templates" / "backend.env.j2").read_text(encoding="utf-8")
+    assert f"{_TOKEN_KEY}={{{{ backend_chromadb_auth_token }}}}" in backend_env, (
+        "backend.env must carry the token or the client has nothing to send once the " "server starts enforcing"
+    )

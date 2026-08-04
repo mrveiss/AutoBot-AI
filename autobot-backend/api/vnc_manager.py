@@ -81,7 +81,7 @@ def is_vnc_running() -> bool:
     """Check if VNC server is running on the canonical desktop display."""
     try:
         # Check for Xtigervnc process on the canonical display (Issue #11579)
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
             ["pgrep", "-f", f"Xtigervnc {NetworkConstants.DESKTOP_DISPLAY}"],
             capture_output=True,
             timeout=5,
@@ -97,7 +97,7 @@ def _launch_websockify() -> None:
     """Start websockify daemon for noVNC access (TLS-only, proxied by nginx). Ref: #2735."""
     websockify_bind = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.VNC_PORT}"
     vnc_target = f"{NetworkConstants.LOCALHOST_NAME}:5901"
-    subprocess.Popen(  # nosec B603 B607 - fixed argv, no user input
+    subprocess.Popen(  # nosec B603 B607  # fixed argv, no user input
         [
             "/usr/bin/websockify",
             "--web",
@@ -133,7 +133,7 @@ def start_vnc_server() -> Dict[str, str]:
         }
 
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
             [
                 "/usr/bin/vncserver",
                 NetworkConstants.DESKTOP_DISPLAY,
@@ -555,7 +555,7 @@ async def _run_screenshot_capture(argv: list):
     Each command carries a 10s timeout and there are two of them, so running
     these inline blocked the loop for up to 20s per failed capture.
     """
-    return await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+    return await asyncio.to_thread(  # nosec B603 B607  # fixed argv, no user input
         subprocess.run,
         argv,
         capture_output=True,
@@ -635,7 +635,7 @@ async def vnc_clipboard_sync(
     """
     try:
         # Use xclip to set clipboard content
-        proc = subprocess.Popen(  # nosec B603 B607 - fixed argv, no user input
+        proc = subprocess.Popen(  # nosec B603 B607  # fixed argv, no user input
             ["xclip", "-selection", "clipboard"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -750,7 +750,7 @@ async def get_connection_quality_metrics(
 
     # Get websockify process info
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
             ["pgrep", "-a", "websockify"],
             capture_output=True,
             text=True,
@@ -830,7 +830,7 @@ def _get_desktop_info() -> Dict[str, str]:
 
     # Screen resolution
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
             ["xdpyinfo"],
             capture_output=True,
             text=True,
@@ -849,7 +849,7 @@ def _get_desktop_info() -> Dict[str, str]:
 
     # Active window
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
             ["xdotool", "getactivewindow", "getwindowname"],
             capture_output=True,
             text=True,
@@ -863,7 +863,7 @@ def _get_desktop_info() -> Dict[str, str]:
 
     # Window count
     try:
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
             ["wmctrl", "-l"],
             capture_output=True,
             text=True,
@@ -889,7 +889,7 @@ def _get_process_list() -> List[Dict[str, str]]:
 
     try:
         # Get process list with their display usage
-        result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+        result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
             ["ps", "aux"],
             capture_output=True,
             text=True,

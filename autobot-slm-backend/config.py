@@ -226,7 +226,7 @@ class Settings(RedactedReprMixin, BaseSettings):
     db_pool_recycle: int = int(os.getenv("SLM_DB_POOL_RECYCLE", str(_SSOT_POOL_RECYCLE)))
 
     # Server
-    host: str = "0.0.0.0"  # nosec B104 — bound behind nginx reverse proxy
+    host: str = "0.0.0.0"  # nosec B104  # bound behind nginx reverse proxy
     port: int = 8000
     debug: bool = False
 

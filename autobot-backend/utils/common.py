@@ -407,7 +407,7 @@ class DatabaseUtils:
             # strict allowlist (letters/digits/underscore) before interpolation
             # so metacharacters can never reach the SQL engine. (#12284, #2845)
             safe_table = validate_sql_identifier(table_name, "table name")
-            query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608 - identifier allowlisted
+            query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608  # identifier allowlisted
             cursor = conn.cursor()
             cursor.execute(query)
             result = cursor.fetchone()

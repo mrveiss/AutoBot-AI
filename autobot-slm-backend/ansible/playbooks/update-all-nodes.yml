@@ -1380,6 +1380,12 @@
     # pre-existing host condition. That is why they are fail-closed: a green run
     # that delivered nothing is the exact outcome this issue is about.
     # =========================================================================
+    # `executable: /bin/bash` is load-bearing (#12907): ansible.builtin.shell
+    # runs under /bin/sh, which is dash on these hosts, and dash aborts on
+    # `set -o pipefail` with rc=2 before the first echo. That left
+    # delivery_evidence.stdout EMPTY, and every assert below is gated on it
+    # being non-empty — so the delivery checks #12959 added to stop "green but
+    # undelivered" were themselves silently skipped on every run.
     - name: "[PLAY 2] Verify | Collect delivery evidence (#12959)"
       ansible.builtin.shell:
         cmd: |
@@ -1389,10 +1395,13 @@
             | grep -c PYTHONFAULTHANDLER)"
           echo "cred_block=$(grep -c '^# BEGIN AUTOBOT DB CREDENTIALS' \
             "$f" 2>/dev/null)"
+          echo "cred_pw=$(grep -cE '^AUTOBOT_DB_PASSWORD=.+' "$f" 2>/dev/null)"
           echo "dup_cred_keys=$(grep -oE '^AUTOBOT_[A-Z0-9_]+=' "$f" 2>/dev/null \
             | sort | uniq -d | wc -l)"
           echo "legacy_store=$(test -f /etc/autobot/autobot-db-credentials.env \
             && echo 1 || echo 0)"
+      args:
+        executable: /bin/bash
       register: delivery_evidence
       become: true
       changed_when: false
@@ -1416,11 +1425,13 @@
         - delivery_evidence.stdout | default('') | length > 0
       tags: [backend, verify]
 
-    # Gated on the managed block existing: credentials_reconcile deliberately
-    # no-ops on a host whose canonical store was never written by the postgresql
-    # role, because stripping unmarked keys there would leave it with none. That
-    # host has a provisioning gap, not a delivery regression, so asserting on it
-    # would fail the fleet update for the wrong reason.
+    # Gated on the canonical store actually holding an AUTOBOT password, NOT on
+    # a blockinfile marker (#12907). Marker-gating suppressed this assertion on
+    # exactly the hosts that carried the pre-#12224 duplicates — they have no
+    # marker — so the check that was supposed to catch non-delivery went quiet
+    # on the one host shape where delivery had failed. A host with no AUTOBOT
+    # credentials at all has a provisioning gap, not a delivery regression, and
+    # is still excluded so it cannot fail the fleet update for the wrong reason.
     - name: "[PLAY 2] Verify | Credential store reconciled (#12907, #12959)"
       ansible.builtin.assert:
         that:
@@ -1438,7 +1449,7 @@
       when:
         - "'backend' in group_names"
         - delivery_evidence.stdout | default('') | length > 0
-        - "'cred_block=0' not in delivery_evidence.stdout"
+        - "'cred_pw=0' not in delivery_evidence.stdout"
       tags: [backend, verify]
 
     - name: "[PLAY 2] Verify | TTS worker carries the streaming route (#12886, #12959)"

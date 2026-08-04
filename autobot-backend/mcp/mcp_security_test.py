@@ -37,7 +37,7 @@ from autobot_shared.ssot_config import config
 # shell placeholders that Python never expands, so the "legitimate path" cases
 # asserted against paths that exist nowhere.
 PROJECT_ROOT = str(config.base_dir).rstrip("/")
-TMP_ROOT = "/tmp/autobot"  # nosec B108 - matches the bridge's own whitelist entry
+TMP_ROOT = "/tmp/autobot"  # nosec B108  # matches the bridge's own whitelist entry
 
 
 @pytest.fixture
@@ -73,7 +73,7 @@ def admin_client(app):
 def temp_allowed_dir(tmp_path):
     """Create temporary directory within allowed paths for testing"""
     # Use /tmp/autobot/ which is in ALLOWED_DIRECTORIES
-    test_dir = Path("/tmp/autobot/test_security")  # nosec B108 - test/controlled code uses tmpdir intentionally
+    test_dir = Path("/tmp/autobot/test_security")  # nosec B108  # test/controlled code uses tmpdir intentionally
     test_dir.mkdir(parents=True, exist_ok=True)
     yield test_dir
     # Cleanup

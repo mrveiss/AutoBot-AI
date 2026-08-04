@@ -721,7 +721,7 @@ async def _get_fact_relations_for_graph(kb: Any, fact_ids: List[str], max_relati
 
             if len(relations) >= max_relations:
                 break
-        except Exception:  # nosec B112 - continue on single fact failure is intentional
+        except Exception:  # nosec B112  # continue on single fact failure is intentional
             continue
 
     return relations

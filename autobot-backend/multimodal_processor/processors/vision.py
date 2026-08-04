@@ -101,7 +101,7 @@ class VisionProcessor(BaseModalProcessor):
             self.logger.info("Loading CLIP model...")
             self.clip_model = CLIPModel.from_pretrained(
                 "openai/clip-vit-base-patch32", resume_download=True
-            ).to(  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+            ).to(  # nosec B615  # HuggingFace model loaded by name; revision pinning managed operationally
                 self.device
             )
             self.clip_processor = CLIPProcessor.from_pretrained(  # nosec B615

@@ -19,7 +19,7 @@ Beat pidfile MUST NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
 import json
 import os
 import re
-import subprocess  # nosec B404 — internal git/gh CLI calls only
+import subprocess  # nosec B404  # internal git/gh CLI calls only
 import sys
 from datetime import datetime, timezone
 from pathlib import Path

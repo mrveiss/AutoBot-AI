@@ -233,7 +233,7 @@ class OSDetector:
             is_root=is_root,
             is_wsl=is_wsl,
             package_manager=package_manager,
-            shell=shell,  # nosec B604 - dataclass field assignment
+            shell=shell,  # nosec B604  # dataclass field assignment
             capabilities=capabilities,
         )
 
@@ -325,7 +325,7 @@ class OSDetector:
                     return "microsoft" in content or "wsl" in content
         except OSError as e:
             logger.debug("Failed to read /proc/version: %s", e)
-        except Exception:  # nosec B110 - WSL detection fallback
+        except Exception:  # nosec B110  # WSL detection fallback
             logger.debug("Suppressed exception in try block", exc_info=True)
 
         return False

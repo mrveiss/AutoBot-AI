@@ -256,7 +256,11 @@ def _get_simple_configs() -> Dict[str, Any]:
             "log_file_path": "logs/autobot.log",
         },
         "network": {
-            "share": {"username": None, "password": None}  # nosec B105 - default config with None values; real password
+            "share": {
+                "username": None,
+                # Default config carries None; the real password comes from config.
+                "password": None,  # nosec B105
+            }
         },
     }
 

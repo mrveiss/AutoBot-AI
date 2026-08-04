@@ -14,7 +14,7 @@ import logging
 import os
 import platform
 import socket
-import subprocess  # nosec B404 - required for systemctl interaction
+import subprocess  # nosec B404  # required for systemctl interaction
 import time
 import urllib.request
 from datetime import datetime
@@ -125,7 +125,7 @@ class HealthCollector:
     def check_service(self, service_name: str) -> Dict:
         """Check systemd service status."""
         try:
-            result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv; service_name is validated by caller
+            result = subprocess.run(  # nosec B603 B607  # fixed systemctl argv; service_name is validated by caller
                 ["systemctl", "is-active", service_name],
                 capture_output=True,
                 text=True,
@@ -198,7 +198,7 @@ class HealthCollector:
 
     def _run_systemctl_list_units(self) -> str | None:
         """Run systemctl list-units command. Issue #620."""
-        result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv for service enumeration
+        result = subprocess.run(  # nosec B603 B607  # fixed systemctl argv for service enumeration
             [
                 "systemctl",
                 "list-units",
@@ -261,7 +261,7 @@ class HealthCollector:
         details = {}
         try:
             # Get service properties
-            result = subprocess.run(  # nosec B603 B607 - fixed systemctl argv; service_name is a discovered unit name
+            result = subprocess.run(  # nosec B603 B607  # fixed systemctl argv; service_name is a discovered unit name
                 [
                     "systemctl",
                     "show",
@@ -300,7 +300,7 @@ class HealthCollector:
         can display why a service failed without requiring SSH.
         """
         try:
-            result = subprocess.run(  # nosec B603 B607 - fixed journalctl argv; service_name is a discovered unit name
+            result = subprocess.run(  # nosec B603 B607  # fixed journalctl argv; service_name is a discovered unit name
                 [
                     "journalctl",
                     "-u",
@@ -406,7 +406,7 @@ class HealthCollector:
         if not url:
             return {}
         try:
-            with urllib.request.urlopen(  # nosec B310 - fixed local http:// URL, not user input
+            with urllib.request.urlopen(  # nosec B310  # fixed local http:// URL, not user input
                 url, timeout=APP_HEALTH_TIMEOUT_SECONDS
             ) as resp:
                 payload = json.loads(resp.read().decode("utf-8"))

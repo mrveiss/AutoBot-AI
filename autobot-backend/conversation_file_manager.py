@@ -995,7 +995,7 @@ class ConversationFileManager:
             JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
             WHERE sfa.session_id = ? {deleted_filter}
             ORDER BY sfa.associated_at DESC
-            """,  # nosec B608 - deleted_filter is a hardcoded constant
+            """,  # nosec B608  # deleted_filter is a hardcoded constant
             (session_id,),
         ) as cursor:
             rows = await cursor.fetchall()
@@ -1075,7 +1075,7 @@ class ConversationFileManager:
             # Issue #397: Batch SQL delete using IN clause
             placeholders = ",".join("?" * len(file_ids))
             await connection.execute(
-                f"DELETE FROM conversation_files WHERE file_id IN ({placeholders})",  # nosec B608 - parameterized ?
+                f"DELETE FROM conversation_files WHERE file_id IN ({placeholders})",  # nosec B608  # parameterized ?
                 file_ids,
             )
         else:
@@ -1086,7 +1086,7 @@ class ConversationFileManager:
                 UPDATE conversation_files
                 SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
                 WHERE file_id IN ({placeholders})
-                """,  # nosec B608 - parameterized placeholders, not string interpolation
+                """,  # nosec B608  # parameterized placeholders, not string interpolation
                 file_ids,
             )
             logger.info("Soft deleted %d files in batch", len(file_ids))

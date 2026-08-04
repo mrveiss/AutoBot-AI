@@ -2129,8 +2129,14 @@ class SearchCategoriesByPathRequest(BaseModel):
 
     @field_validator("path_pattern")
     @classmethod
-    def validate_path_pattern(cls, v):
-        """Validate path pattern format."""
+    def normalise_category_path_pattern(cls, v):
+        """Validate path pattern format.
+
+        #13518: renamed off ``validate_path_pattern`` for the same reason as
+        ``reject_traversal_in_path`` in schemas_system.py — it grepped as a
+        path-containment helper and is not one. This validates a *category*
+        pattern's character set; no filesystem path is involved.
+        """
         v = v.lower().strip()
         # Remove trailing asterisk for validation
         check_pattern = v.rstrip("*")
