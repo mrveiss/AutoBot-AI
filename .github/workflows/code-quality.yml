@@ -216,6 +216,9 @@ jobs:
     - name: Check design-token contrast meets WCAG AA (#12730)
       run: python3 scripts/check_token_contrast.py
 
+    - name: Check script exec bits agree with how the docs invoke them (#13355)
+      run: python3 scripts/check_script_exec_bits.py
+
     - name: Check for unused imports with autoflake
       run: |
         python3 -m autoflake --check --recursive \
