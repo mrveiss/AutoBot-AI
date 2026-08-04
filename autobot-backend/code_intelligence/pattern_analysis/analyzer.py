@@ -560,7 +560,8 @@ class CodePatternAnalyzer:
                     lines = f.readlines()
                     file_count += 1
                     line_count += len(lines)
-            except Exception:  # nosec B110 - file read errors ignored
+            # File read errors are ignored: an unreadable file is skipped, not fatal.
+            except Exception:  # nosec B110
                 logger.debug("Suppressed exception in try block", exc_info=True)
 
         return file_count, line_count
@@ -1015,29 +1016,47 @@ class CodePatternAnalyzer:
             except Exception as e:
                 logger.warning("Embedding cache read failed, generating fresh: %s", e)
 
+            # #13437: generation and the cache write are separately guarded.
+            # They were in one try/except, so a failed cache write discarded a
+            # perfectly good embedding and fell through to the hash fallback —
+            # poisoning code_patterns similarity search with a vector that
+            # encodes nothing about the code. The cache is an optimisation; its
+            # failure must never change the value returned.
+            embedding = None
             try:
                 from services.npu_client import generate_embedding_with_fallback
 
                 embedding = await generate_embedding_with_fallback(code, model_name=EMBEDDING_MODEL)
-                if embedding:
-                    await self._embedding_cache.put(code, embedding, model=EMBEDDING_MODEL)
-                    return embedding
-                logger.warning("Embedding generation returned no vector, using hash fallback")
             except Exception as e:
                 logger.warning("Embedding generation failed, using hash fallback: %s", e)
 
-        # Last-resort fallback: hash-based pseudo-embedding, ONLY reached when
-        # the real embedding infrastructure is genuinely unavailable/failed.
+            if embedding:
+                try:
+                    await self._embedding_cache.put(code, embedding, model=EMBEDDING_MODEL)
+                except Exception as e:
+                    logger.warning("Embedding cache write failed, returning the embedding anyway: %s", e)
+                return embedding
+
+            logger.warning("Embedding generation returned no vector, using hash fallback")
+
+        # Last-resort fallback, ONLY reached when the real embedding
+        # infrastructure is genuinely unavailable or failed.
+        return self._hash_pseudo_embedding(code)
+
+    @staticmethod
+    def _hash_pseudo_embedding(code: str) -> List[float]:
+        """Deterministic stand-in vector derived from ``sha256(code)``.
+
+        Encodes nothing semantic — two functions that do the same thing in
+        different words are as far apart as two unrelated ones. It exists so
+        callers get a well-shaped vector when embedding infrastructure is
+        unavailable, never as a substitute for one (#12407, #13437).
+        """
         import hashlib
 
         hash_bytes = hashlib.sha256(code.encode()).digest()
-        # Convert to list of floats (768 dimensions to match nomic-embed-text)
-        embedding = []
-        for i in range(768):
-            byte_idx = i % 32
-            embedding.append((hash_bytes[byte_idx] - 128) / 128.0)
-
-        return embedding
+        # 768 dimensions to match nomic-embed-text.
+        return [(hash_bytes[i % 32] - 128) / 128.0 for i in range(768)]
 
 
 async def analyze_codebase_patterns(
