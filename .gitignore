@@ -491,3 +491,8 @@ docs/.obsidian/core-plugins.json
 # Claims audit generated output
 .claude/skills/claims-audit/extracted-claims.json
 .superpowers/
+
+# .paperclip/ holds a generated per-machine config ("$meta.source": "configure").
+# It carried five absolute machine paths, including a master-key location, into a
+# public repository, and regenerates on demand — so it is not tracked (#13429).
+.paperclip/
