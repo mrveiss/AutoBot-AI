@@ -307,9 +307,8 @@ class GUIController:
             try:
                 import subprocess
 
-                result = subprocess.run(
-                    ["which", "kex"], capture_output=True, text=True
-                )  # nosec B603 B607  # fixed argv, probing kex availability
+                # Fixed argv, probing kex availability.
+                result = subprocess.run(["which", "kex"], capture_output=True, text=True)  # nosec B603 B607
                 if result.stdout.strip():
                     logger.info("Kex is available. If GUI fails, consider starting " "a Kex session.")
                     return True

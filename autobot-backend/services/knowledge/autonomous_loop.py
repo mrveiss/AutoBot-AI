@@ -574,9 +574,8 @@ class AutonomousLoopRunner:
                         "ucb1_exploration_constant": round(
                             random.uniform(0.5, 3.0), 2  # nosec B311  # UCB1 exploration constant, not cryptographic
                         ),
-                        "max_results_per_stage": random.choice(
-                            [5, 10, 20, 30]
-                        ),  # nosec B311  # variant selection for autonomous loop, not cryptographic
+                        # Variant selection for autonomous loop, not cryptographic.
+                        "max_results_per_stage": random.choice([5, 10, 20, 30]),  # nosec B311
                     }
                 )
             logger.info("AutonomousLoop[%s] HYPOTHESIZE: using %d fallback variants", run_id, len(fallback))

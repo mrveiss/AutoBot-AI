@@ -187,8 +187,9 @@ class TestResolveSafeIP:
                     socket.SOCK_STREAM,
                     6,
                     "",
-                    ("0.0.0.0", 0),
-                )  # nosec B104  # intentional bind to all interfaces for service/test
+                    # Intentional bind to all interfaces for service/test.
+                    ("0.0.0.0", 0),  # nosec B104
+                )
             ]
             mock_loop.return_value.getaddrinfo = mock_getaddrinfo
 
