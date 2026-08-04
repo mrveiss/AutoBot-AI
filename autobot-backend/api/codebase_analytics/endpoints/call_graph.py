@@ -16,6 +16,8 @@ import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
+from autobot_shared.code_graph import resolve_callee as _shared_resolve_callee
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -309,46 +311,6 @@ def _build_call_edge(
     }
 
 
-def _resolve_via_import_context(
-    callee_name: str,
-    import_context: ImportContext,
-    functions: Dict,
-) -> tuple[str | None, bool]:
-    """
-    Resolve callee via import context.
-
-    Issue #713: Extracted from _resolve_callee_id to reduce function length.
-
-    Args:
-        callee_name: Name of the called function
-        import_context: Import context for the current file
-        functions: Dictionary of registered functions
-
-    Returns:
-        Tuple of (resolved_id, is_external)
-    """
-    imported_path = import_context.resolve_name(callee_name)
-    if not imported_path:
-        return None, False
-
-    # Check if it's an external library call
-    if import_context.is_external(callee_name):
-        return None, True  # External call, not truly unresolved
-
-    # Try the imported path directly
-    if imported_path in functions:
-        return imported_path, False
-
-    # Try variations (module.func vs module.Class.func)
-    parts = imported_path.split(".")
-    for i in range(len(parts) - 1, 0, -1):
-        candidate = ".".join(parts[:i]) + "." + parts[-1]
-        if candidate in functions:
-            return candidate, False
-
-    return None, False
-
-
 def _resolve_callee_id(
     callee_name: str,
     module_path: str,
@@ -361,6 +323,17 @@ def _resolve_callee_id(
 
     Issue #665: Extracted from _create_function_visitor to reduce function length.
     Issue #713: Enhanced with import context for cross-module resolution.
+    Issue #13470: Delegates the module-local/class-local/import-context
+    resolution to the canonical resolver in autobot_shared/code_graph/ —
+    the same one services/knowledge/code_indexer.py (#13469) uses — so this
+    module no longer keeps its own copy. ``functions`` (id -> info) is passed
+    straight through as the resolver's ``known_ids`` container; dict
+    membership checks by key, so this is not a behaviour change.
+
+    The trailing dotted-name check below is retained for exact behaviour
+    parity even though ``FunctionCallVisitor._extract_callee_name`` never
+    actually returns a name containing "." (attribute calls yield only the
+    final ``.attr`` component) — filed as a follow-up (#13470 remaining work).
 
     Args:
         callee_name: Name of the called function
@@ -374,24 +347,12 @@ def _resolve_callee_id(
         - resolved_id: Function ID if found, None otherwise
         - is_external: True if call is to external library (not unresolved)
     """
-    # Try module-level function first
-    possible_id = f"{module_path}.{callee_name}"
-    if possible_id in functions:
-        return possible_id, False
+    resolved_id, is_external = _shared_resolve_callee(
+        callee_name, module_path, current_class, functions, import_context
+    )
+    if resolved_id or is_external:
+        return resolved_id, is_external
 
-    # Try class method if in class context
-    if current_class:
-        possible_id = f"{module_path}.{current_class}.{callee_name}"
-        if possible_id in functions:
-            return possible_id, False
-
-    # Issue #713: Try resolving via import context
-    if import_context:
-        result = _resolve_via_import_context(callee_name, import_context, functions)
-        if result[0] or result[1]:  # Found or is external
-            return result
-
-    # Issue #713: Check if callee_name itself is external (e.g., json.loads)
     if callee_name and "." in callee_name:
         base = callee_name.split(".")[0]
         if base in STDLIB_MODULES or base in COMMON_THIRD_PARTY:
@@ -444,6 +405,10 @@ def _compute_func_identity(node_name: str, module_path: str, current_class: str 
 
     Issue #665: Extracted from _create_function_visitor._process_function
     to reduce nested class method size.
+    Issue #13470: The id itself now comes from the canonical
+    autobot_shared.code_graph.compute_node_id — this was the "richer" of the
+    two node-identity schemes in the codebase, so it became the shared one
+    rather than being duplicated here.
 
     Args:
         node_name: Name of the function node
@@ -453,12 +418,8 @@ def _compute_func_identity(node_name: str, module_path: str, current_class: str 
     Returns:
         Tuple of (func_id, full_name)
     """
-    if current_class:
-        func_id = f"{module_path}.{current_class}.{node_name}"
-        full_name = f"{current_class}.{node_name}"
-    else:
-        func_id = f"{module_path}.{node_name}"
-        full_name = node_name
+    func_id = compute_node_id(node_name, module_path, parent_class=current_class)
+    full_name = f"{current_class}.{node_name}" if current_class else node_name
     return func_id, full_name
 
 
@@ -651,11 +612,14 @@ async def _analyze_python_files(
 
     Issue #665: Extracted from get_call_graph to reduce function length.
     Issue #713: Added import context extraction for cross-module resolution.
+    Issue #13470: module_path now comes from the canonical
+    module_path_from_rel_path (identical output for .py files; shared with
+    services/knowledge/code_indexer.py).
     """
     for py_file in python_files[:300]:
         try:
             rel_path = str(py_file.relative_to(project_root))
-            module_path = rel_path.replace("/", ".").replace(".py", "")
+            module_path = module_path_from_rel_path(rel_path)
             try:
                 async with aiofiles.open(py_file, "r", encoding="utf-8") as f:
                     content = await f.read()
