@@ -18,6 +18,13 @@ import pytest
 # root conftest installs for services.npu_pipeline.*.
 _PKG_DIR = Path(__file__).parent
 
+_MISSING = object()
+
+_REAL_LOAD_KEYS = (
+    "services.npu_pipeline.shard_planner",
+    "services.npu_pipeline.dispatcher",
+)
+
 
 def _load_module(name: str, filename: str):
     # Probe __dict__ rather than using hasattr: the root conftest's package
@@ -35,8 +42,32 @@ def _load_module(name: str, filename: str):
     return mod
 
 
-_shard_planner = _load_module("services.npu_pipeline.shard_planner", "shard_planner.py")
-_dispatcher_mod = _load_module("services.npu_pipeline.dispatcher", "dispatcher.py")
+def _load_real_modules():
+    """Real-load both modules, then hand ``sys.modules`` back untouched (#13361).
+
+    The registrations are needed only while the two files execute:
+    ``dispatcher.py`` resolves ``from services.npu_pipeline.shard_planner import
+    ShardAssignment`` at exec time, and the module object itself has to be in
+    ``sys.modules`` before its own body runs. Afterwards every symbol the tests
+    need is bound below, so keeping the entries buys nothing and costs the rest
+    of the session: they replaced the root conftest's package stubs for every
+    later-collected module, which is the escape #13361 tracks.
+    """
+    prior = {key: sys.modules.get(key, _MISSING) for key in _REAL_LOAD_KEYS}
+    try:
+        return (
+            _load_module("services.npu_pipeline.shard_planner", "shard_planner.py"),
+            _load_module("services.npu_pipeline.dispatcher", "dispatcher.py"),
+        )
+    finally:
+        for key, module in prior.items():
+            if module is _MISSING:
+                sys.modules.pop(key, None)
+            else:
+                sys.modules[key] = module
+
+
+_shard_planner, _dispatcher_mod = _load_real_modules()
 
 LayerRange = _shard_planner.LayerRange
 ShardAssignment = _shard_planner.ShardAssignment

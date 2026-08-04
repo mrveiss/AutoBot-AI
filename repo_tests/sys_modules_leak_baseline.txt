@@ -56,15 +56,10 @@ autobot-backend/code_intelligence/conftest.py
 autobot-backend/conftest.py
 autobot-backend/knowledge/vector_search_engine_test.py
 autobot-backend/llm_shared/npu_pipeline_routing_test.py
-autobot-backend/services/npu_pipeline/test_dispatcher.py
 autobot-backend/tests/agents/test_causal_reasoning.py
-autobot-backend/tests/knowledge/test_cleanup_endpoint.py
-autobot-backend/tests/llm_interface_pkg/test_anthropic_provider.py
-autobot-backend/tests/llm_interface_pkg/test_groq_provider.py
 autobot-backend/tests/orchestration/test_causal_error_recovery.py
 autobot-backend/tests/search/conftest.py
 autobot-backend/tests/services/rag_service_events_test.py
-autobot-backend/tests/services/test_scheduler_registry.py
 autobot-backend/tests/test_conftest_real_load_identity.py run-phase
 autobot-backend/tests/test_tool_schema_correction.py
 autobot-backend/tests/test_vnc_mcp_async.py run-phase
@@ -86,5 +81,3 @@ autobot-slm-backend/tests/services/test_sso_vault_client.py
 autobot-slm-backend/tests/test_api_request_counter.py
 autobot-slm-backend/tests/test_prometheus_registry_endpoint.py run-phase
 autobot-slm-backend/user_management/services/sso_e2e_test.py run-phase
-autobot_shared/jina_parser_test.py run-phase
-autobot_shared/url_safety_test.py run-phase
