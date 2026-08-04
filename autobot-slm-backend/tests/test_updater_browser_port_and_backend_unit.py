@@ -23,6 +23,7 @@ playbook parses fine either way, and only a live run exposed them.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -135,8 +136,14 @@ def test_faulthandler_is_actually_in_the_unit_template() -> None:
     )
 
 
-def test_playbook_passes_ansible_syntax_check() -> None:
-    """Only ansible's parser catches semantically invalid task keywords."""
+def test_playbook_passes_ansible_syntax_check(tmp_path) -> None:
+    """Only ansible's parser catches semantically invalid task keywords.
+
+    ``ANSIBLE_LOG_PATH`` is redirected because ansible.cfg logs to
+    ``/var/log/autobot/ansible.log``, a deployed-host path. Anywhere else
+    ansible exits 5 with ``Permission denied`` before parsing anything, so this
+    guard failed identically for a valid and an invalid playbook (#12959).
+    """
     ansible = shutil.which("ansible-playbook")
     if ansible is None:
         pytest.skip("ansible-playbook not installed")
@@ -147,6 +154,7 @@ def test_playbook_passes_ansible_syntax_check() -> None:
         text=True,
         cwd=_ANSIBLE,
         timeout=180,
+        env={**os.environ, "ANSIBLE_LOG_PATH": str(tmp_path / "ansible.log")},
     )
 
     assert result.returncode == 0, f"ansible rejected the playbook:\n{result.stderr[-1200:]}"
