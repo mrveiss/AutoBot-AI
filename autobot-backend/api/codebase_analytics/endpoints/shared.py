@@ -350,4 +350,3 @@ def filter_problems_by_file_existence(
         )
 
     return validated
-

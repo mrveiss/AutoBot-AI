@@ -432,9 +432,7 @@ async def test_ambiguous_and_unresolved_calls_recorded_honestly(tmp_path) -> Non
     target_id="" and resolved=False, never invented."""
     (tmp_path / "a_one.py").write_bytes(b"def process() -> None:\n    pass\n")
     (tmp_path / "a_two.py").write_bytes(b"def process() -> None:\n    pass\n")
-    (tmp_path / "b_caller.py").write_bytes(
-        b"def caller() -> None:\n    process()\n    totally_unknown_function()\n"
-    )
+    (tmp_path / "b_caller.py").write_bytes(b"def caller() -> None:\n    process()\n    totally_unknown_function()\n")
     indexer = _make_indexer(tmp_path)
     result = await indexer.index_directory(str(tmp_path))
     assert result.failed == 0
