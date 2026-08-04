@@ -26,6 +26,8 @@ question of applying roles in full is separate.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -72,6 +74,45 @@ def test_reconcile_task_file_exists():
     assert _RECONCILE.is_file(), (
         f"{_RECONCILE} missing — without it the #12907 fix has no application "
         "path that does not also run the whole postgresql role"
+    )
+
+
+def test_no_role_task_file_is_git_ignored():
+    """A .gitignore pattern must never silently swallow a role's own code.
+
+    ``credentials*`` (a rule for credential *data*) matched
+    ``roles/postgresql/tasks/credentials_reconcile.yml``. Every test here passed
+    off the working copy while the file never reached the remote — a host would
+    have gotten an ``include_role`` pointing at a task file that does not exist.
+    That is the same "green but not delivered" shape as #12959 itself, one layer
+    down, so it gets its own guard.
+    """
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git not installed")
+
+    roles = _ANSIBLE / "roles"
+    candidates = [p for p in roles.rglob("*.yml")] + [p for p in roles.rglob("*.j2")]
+    assert candidates, f"no role files found under {roles} — did the layout move?"
+
+    # --no-index is load-bearing: without it check-ignore reports nothing for a
+    # file that is already in the index, so the guard would go green the moment
+    # someone ran `git add -f` locally and still ship an ignore rule that traps
+    # the next role file added.
+    result = subprocess.run(
+        [git, "check-ignore", "--no-index", "--stdin"],
+        input="\n".join(str(p) for p in candidates),
+        capture_output=True,
+        text=True,
+        cwd=roles,
+        timeout=60,
+    )
+
+    ignored = [line for line in result.stdout.splitlines() if line.strip()]
+    assert not ignored, (
+        "role files excluded by .gitignore — they exist locally, are absent from "
+        "the remote, and every include_role pointing at them breaks on a host:\n  "
+        + "\n  ".join(ignored)
     )
 
 
