@@ -20429,6 +20429,11 @@ export interface paths {
          *     Issue #12330: Scope the scan to the requested source's clone path so one
          *     project cannot see another's call graph. The cache key is derived from the
          *     resolved root (path-hashed) so each source keeps a distinct cache entry.
+         *     Issue #13468: scans every file by default (previously hardcoded to the
+         *     first 300 while reporting summary statistics as if they were repo-wide).
+         *     Configurable back down via AUTOBOT_CALL_GRAPH_MAX_FILES for a deployment
+         *     that needs to bound scan cost; either way the response states exactly
+         *     how many files it covers.
          */
         get: operations["get_call_graph_api_analytics_codebase_analytics_call_graph_get"];
         put?: never;
