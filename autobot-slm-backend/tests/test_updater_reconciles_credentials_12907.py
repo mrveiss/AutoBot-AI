@@ -310,9 +310,7 @@ def test_collapse_keeps_the_current_value_on_a_legacy_host(tmp_path):
         "must keep the LAST assignment: the dead copy is first, and retaining "
         "it locks the deployment out of PostgreSQL"
     )
-    assert _values(after, "AUTOBOT_DATABASE_URL") == [
-        "postgresql+asyncpg://db-node:5432/autobot_users?copy=last"
-    ]
+    assert _values(after, "AUTOBOT_DATABASE_URL") == ["postgresql+asyncpg://db-node:5432/autobot_users?copy=last"]
     assert _values(after, "SLM_DB_PASSWORD") == ["slm-value"], "the other prefix must not be touched"
     assert after.startswith("# AutoBot database credentials\n"), "comments must survive"
 
