@@ -6,12 +6,13 @@
 import py_compile
 import sys
 
-files_to_check = [
-    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/metrics/mcp_worker.py",
-    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/metrics/__init__.py",
-    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot_shared/monitoring/prometheus_metrics.py",
-    "/home/martins/AutoBot-Ai/AutoBot-AI/.worktrees/issue-4109/autobot-backend/services/mcp_isolated_runtime.py",
-]
+import glob
+import os
+
+# Dynamically find Python files in the repository
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+files_to_check = glob.glob(os.path.join(repo_root, "**", "*.py"), recursive=True)
+files_to_check.sort()
 
 all_ok = True
 for filepath in files_to_check:
