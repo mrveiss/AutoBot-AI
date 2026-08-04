@@ -244,12 +244,74 @@ jobs:
           CYPRESS_INSTALL_BINARY: '0'
         run: npm ci
 
+      # #13400: this step GATES. `npm audit --audit-level=high` runs without
+      # `|| true`, so a high or critical advisory in the frontend lockfile fails
+      # the job on purpose — that is the whole point of the check's name.
+      #
+      # The backlog was measured at 0 advisories (every severity) across 1191
+      # dependencies immediately before the gate was armed, so arming it broke
+      # no open PR and required no triage campaign.
+      #
+      # Do NOT re-add `|| true` here to clear a red build. A red on this step
+      # means a real advisory reached package-lock.json; the fix is to bump the
+      # dependency (dependabot raises those PRs). If an advisory ever has no
+      # published fix and the gate has to yield, change it deliberately and
+      # record why on #13400 — do not silence it as an infra flake.
       - name: Run npm audit
         working-directory: autobot-frontend
         run: |
-          npm audit --audit-level=high || true
+          # Machine-readable report first, non-blocking: a non-zero exit here
+          # only means advisories exist, which the gate at the end is what
+          # reports. This is also the artifact uploaded below.
           npm audit --json > audit-results.json || true
 
+          # #13400: surface the counts in the job summary so the result is
+          # readable from the checks tab without downloading the artifact.
+          # Parsing failures must not fail the job — only the gate may.
+          node --input-type=commonjs -e '
+            const fs = require("fs");
+            const order = ["critical", "high", "moderate", "low", "info"];
+            const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+            let lines;
+            try {
+              const report = JSON.parse(fs.readFileSync("audit-results.json", "utf8"));
+              const counts = (report.metadata || {}).vulnerabilities || {};
+              const total = order.reduce((sum, key) => sum + (counts[key] || 0), 0);
+              lines = [
+                "## Frontend dependency audit",
+                "",
+                total === 0
+                  ? "No known advisories in autobot-frontend."
+                  : "npm audit reported " + total + " advisory record(s).",
+                "",
+                "| Severity | Count |",
+                "| --- | --- |",
+              ].concat(
+                order.map((key) => "| " + key + " | " + (counts[key] || 0) + " |"),
+                ["", "High and critical advisories fail this job (#13400)."]
+              );
+            } catch (error) {
+              lines = [
+                "## Frontend dependency audit",
+                "",
+                "Could not parse audit-results.json: " + error.message,
+              ];
+            }
+            try {
+              fs.appendFileSync(summaryPath, lines.join("\n") + "\n", "utf8");
+            } catch (error) {
+              console.log("Could not write job summary: " + error.message);
+            }
+          '
+
+          # THE GATE — deliberately not suffixed with `|| true`.
+          npm audit --audit-level=high
+
+      # Stays non-blocking by design (#13400): auditjs queries a third-party
+      # network service (OSS Index) whose availability is outside this repo's
+      # control, and its data duplicates the npm advisory feed the gate above
+      # already enforces. It is kept for the extra signal in the log, not as a
+      # second gate — an outage here must never red out the check.
       - name: Run dependency vulnerability scan
         working-directory: autobot-frontend
         run: |
