@@ -33,112 +33,63 @@ practice this file only has to fill in whatever is still a stub.
 Issue #6627, #13162.
 """
 
-import importlib.util
-import sys
-import types
 from pathlib import Path
+
+from autobot_shared.logging_manager import get_logger
+from testkit.module_stubs import StubSet
 
 _BACKEND = Path(__file__).parent.parent.parent  # .../autobot-backend
 _AL_DIR = _BACKEND / "agent_loop"
 
-# Only the entries this file actually replaces are saved — restoring keys we
-# never touched is what made the old save/pop/restore cycle destructive.
-_SAVED: dict[str, object] = {}
-_ADDED: set = set()
+_logger = get_logger(__name__)
+_stubs = StubSet()
 
 
-def _bind_on_parent(full_name: str, mod: object) -> None:
-    """Bind *mod* as an attribute of its parent package.
+def _load_best_effort(name: str, rel: str) -> None:
+    """Load *name*, tolerating an import failure but never hiding it.
 
-    Load-bearing for ``unittest.mock.patch`` (#11532/#11618): it resolves
-    ``"agent_loop.loop.X"`` via ``getattr(sys.modules["agent_loop"], "loop")``,
-    NOT via ``sys.modules["agent_loop.loop"]``.  A module registered in
-    ``sys.modules`` by hand — as ``_load_real`` does — never gets that bind
-    from the import machinery, so without this every such patch target either
-    raised ``AttributeError`` or (against the root conftest's catch-all
-    package stub) silently patched a MagicMock.
+    Some of these pull heavy transitive deps (loop.py reaches events/planner/
+    tools) that a lean environment may not satisfy; the tests mock them, so a
+    failure here is survivable. Survivable is not the same as invisible: the
+    previous version swallowed the exception and stashed it in ``sys.modules``
+    under an invented ``_stagnation_load_err_*`` key, which both hid the error
+    and leaked a key nothing would ever clean up (#13575).
+
+    ``StubSet.real_load`` removes the half-executed module and re-raises, so the
+    only thing left to decide here is whether to continue — and to say why.
     """
-    parent, _, child = full_name.rpartition(".")
-    if parent and parent in sys.modules:
-        setattr(sys.modules[parent], child, mod)
-
-
-def _load_real(full_name: str, rel: str) -> None:
-    """Register the REAL module for *full_name*, unless it already is real.
-
-    Re-executing a module that is already loaded from this same file builds a
-    second set of class objects while every importer keeps referencing the
-    first — the identity split that #13162 traced.  An already-real entry is
-    therefore left alone and only (re)bound on its parent.
-    """
-    path = _BACKEND / rel
-    existing = sys.modules.get(full_name)
-    if existing is not None and getattr(existing, "__file__", None) == str(path):
-        _bind_on_parent(full_name, existing)
-        return
-    spec = importlib.util.spec_from_file_location(full_name, str(path))
-    if not spec or not spec.loader:
-        return
-    mod = importlib.util.module_from_spec(spec)
-    mod.__package__ = full_name.rpartition(".")[0] or full_name
-    if existing is None:
-        _ADDED.add(full_name)
-    else:
-        _SAVED.setdefault(full_name, existing)
-    sys.modules[full_name] = mod
     try:
-        spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    except Exception as exc:
-        # Leave partial module in sys.modules so subsequent imports don't retrigger the error
-        sys.modules.setdefault(f"_stagnation_load_err_{full_name}", exc)
-    _bind_on_parent(full_name, mod)
+        _stubs.real_load(name, _BACKEND / rel)
+    except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+        _logger.warning("agent_loop conftest: %s could not be real-loaded (%s); tests must mock it", name, exc)
 
 
-# Reuse the session's ``agent_loop`` package object rather than planting a new
-# one — see the module docstring.  The root conftest already gives it a real
-# ``__path__``; assert that here so ``from agent_loop.X import Y`` resolves the
-# light submodules straight from disk even if this file is the first to need
-# them.
-_pkg = sys.modules.get("agent_loop")
-if _pkg is None:
-    _pkg = types.ModuleType("agent_loop")
-    _pkg.__package__ = "agent_loop"
-    sys.modules["agent_loop"] = _pkg
-    _ADDED.add("agent_loop")
-_pkg.__path__ = [str(_AL_DIR)]  # type: ignore[assignment]
+# adopt_package, NOT install_package: the root conftest already planted
+# ``agent_loop``, and replacing that object is the identity swap #13551 traced.
+_stubs.adopt_package("agent_loop", _AL_DIR)
 
-# Load in dependency order (fingerprint and types have no heavy local deps).
-_load_real("agent_loop.fingerprint", "agent_loop/fingerprint.py")
-_load_real("agent_loop.types", "agent_loop/types.py")
-# loop.py pulls in events/planner/tools — load best-effort; tests mock these.
-_load_real("agent_loop.think_tool", "agent_loop/think_tool.py")
-_load_real("agent_loop.slack_hook", "agent_loop/slack_hook.py")
-_load_real("agent_loop.loop", "agent_loop/loop.py")
+# Dependency order (fingerprint and types have no heavy local deps).
+_load_best_effort("agent_loop.fingerprint", "agent_loop/fingerprint.py")
+_load_best_effort("agent_loop.types", "agent_loop/types.py")
+_load_best_effort("agent_loop.think_tool", "agent_loop/think_tool.py")
+_load_best_effort("agent_loop.slack_hook", "agent_loop/slack_hook.py")
+_load_best_effort("agent_loop.loop", "agent_loop/loop.py")
 
-# MVA-1407: belief state + extractors package — reuse an existing entry for the
-# same identity reason as the parent package above.
-_ext_pkg = sys.modules.get("agent_loop.extractors")
-if _ext_pkg is None:
-    _ext_pkg = types.ModuleType("agent_loop.extractors")
-    _ext_pkg.__package__ = "agent_loop.extractors"
-    sys.modules["agent_loop.extractors"] = _ext_pkg
-    _ADDED.add("agent_loop.extractors")
-_ext_pkg.__path__ = [str(_AL_DIR / "extractors")]  # type: ignore[assignment]
-_pkg.extractors = _ext_pkg  # type: ignore[attr-defined]
-_load_real("agent_loop.extractors.read_file", "agent_loop/extractors/read_file.py")
-_load_real("agent_loop.extractors.run_command", "agent_loop/extractors/run_command.py")
-_load_real("agent_loop.extractors.web_search", "agent_loop/extractors/web_search.py")
-_load_real("agent_loop.extractors", "agent_loop/extractors/__init__.py")
-_load_real("agent_loop.belief_state", "agent_loop/belief_state.py")
+# MVA-1407: belief state + extractors package.
+_stubs.adopt_package("agent_loop.extractors", _AL_DIR / "extractors")
+_load_best_effort("agent_loop.extractors.read_file", "agent_loop/extractors/read_file.py")
+_load_best_effort("agent_loop.extractors.run_command", "agent_loop/extractors/run_command.py")
+_load_best_effort("agent_loop.extractors.web_search", "agent_loop/extractors/web_search.py")
+_stubs.real_load_package("agent_loop.extractors", _AL_DIR / "extractors" / "__init__.py", _AL_DIR / "extractors")
+_load_best_effort("agent_loop.belief_state", "agent_loop/belief_state.py")
 
 
 def pytest_unconfigure(config) -> None:  # noqa: ARG001
     """Undo exactly what this file changed, and nothing else.
 
-    Sweeping every ``agent_loop*`` key out of ``sys.modules`` here would drop
-    submodules other collectors imported on their own during the session.
+    StubSet.restore() reverses sys.modules entries, parent bindings and __path__
+    mutations together. The hand-rolled version let ``_ADDED`` and ``_SAVED``
+    overlap, so popping the added key and then restoring the saved one put a
+    synthetic ``agent_loop.extractors`` straight back (#13575).
     """
-    for k in _ADDED:
-        sys.modules.pop(k, None)
-    for k, v in _SAVED.items():
-        sys.modules[k] = v  # type: ignore[assignment]
+    _stubs.restore()

@@ -92,8 +92,40 @@ class StubSet:
         self._binds: List[Tuple[Any, str, Any]] = []
         self._owned: Dict[str, types.ModuleType] = {}
         self._detached: Dict[str, types.ModuleType] = {}
+        # name -> (module we mutated, its previous __path__ or _MISSING)
+        self._paths: List[Tuple[Any, Any]] = []
 
     # -- construction ----------------------------------------------------
+
+    def adopt_package(self, name: str, path: Path) -> types.ModuleType:
+        """Give the session's EXISTING package a real ``__path__``, without replacing it.
+
+        Use this, not :meth:`install_package`, whenever something earlier in the
+        session already planted the package and other modules may hold references
+        to that object.
+
+        The difference is the whole of #13551. ``install_package`` builds a fresh
+        ``ModuleType`` and puts it in ``sys.modules``. If a root conftest already
+        planted ``agent_loop`` and ``agent_loop/tests/`` has since bound
+        ``AgentLoop`` from it, replacing the package object splits identity: the
+        bindings survive, but ``sys.modules`` no longer holds the module that owns
+        them, so ``patch("agent_loop.loop.X")`` re-imports a SECOND copy from disk
+        and patches that one. The real module's globals stay untouched — an inert
+        patch, with production code running unmocked while the test asserts against
+        a mock nothing calls.
+
+        Rule 2 does not apply here: we are not displacing anything. A genuinely
+        file-backed package is adopted as readily as a synthetic one, since all we
+        change is ``__path__``, and that change is recorded and restored.
+        """
+        existing = sys.modules.get(name)
+        if existing is None:
+            return self.install_package(name, path)
+
+        self._paths.append((existing, getattr(existing, "__path__", _MISSING)))
+        existing.__path__ = [str(path)]  # type: ignore[attr-defined]
+        self._bind_on_parent(name, existing)
+        return existing
 
     def install_package(self, name: str, path: Path) -> types.ModuleType:
         """Register *name* as a hollow package whose ``__path__`` is the real dir.
@@ -133,16 +165,32 @@ class StubSet:
                 f"process, which is how #13385 broke autobot_shared.async_compat."
             )
 
-    def real_load(self, name: str, file_path: Path) -> Optional[types.ModuleType]:
+    def real_load(self, name: str, file_path: Path, reuse_if_loaded: bool = True) -> Optional[types.ModuleType]:
         """Execute a real source file and register it under *name*.
 
         Preferred over a mock whenever downstream code imports concrete names
         from the module — a hand-written stand-in silently lacks them (#13385).
+
+        With *reuse_if_loaded* (the default), a module already loaded from this
+        very file is left alone and only re-bound on its parent. Re-executing it
+        would build a second set of class objects while every existing importer
+        keeps referencing the first — the same identity split :meth:`adopt_package`
+        exists to avoid, one level down. Pass ``False`` only when you genuinely
+        want a fresh execution and know nothing holds a reference.
         """
+        if reuse_if_loaded:
+            already = sys.modules.get(name)
+            if already is not None and getattr(already, "__file__", None) == str(file_path):
+                self._bind_on_parent(name, already)
+                return already
+
         self._refuse_if_real(name)
         spec = importlib.util.spec_from_file_location(name, str(file_path))
         if not spec or not spec.loader:
-            return None
+            # Returning None here would leave any placeholder in place and surface
+            # later as a confusing "new sys.modules leak" rather than as the file
+            # being missing, which is what actually went wrong.
+            raise RuntimeError(f"cannot build an import spec for {name!r} from {file_path}")
         module = importlib.util.module_from_spec(spec)
         # No `or name` fallback: a top-level module's __package__ is "", and
         # naming itself would let a relative import inside it resolve against
@@ -238,6 +286,7 @@ class StubSet:
         for name in reversed(list(self._owned)):
             self._put_back(name)
         self._restore_binds()
+        self._restore_paths()
         self._owned.clear()
         self._displaced.clear()
         self._detached.clear()
@@ -256,6 +305,36 @@ class StubSet:
             sys.modules.pop(name, None)
         else:
             sys.modules[name] = previous
+
+    def real_load_package(self, name: str, init_path: Path, package_dir: Path) -> Optional[types.ModuleType]:
+        """:meth:`real_load` an ``__init__.py``, keeping the package's ``__path__``.
+
+        Executing an ``__init__.py`` through a *file* spec yields a module with no
+        ``__path__``, so ``from pkg.sub import X`` stops resolving from disk for
+        everything imported afterwards. Restoring it is not optional, and doing it
+        by hand at each call site is how the three copies of this logic drifted.
+        """
+        module = self.real_load(name, init_path)
+        if module is not None:
+            module.__path__ = [str(package_dir)]  # type: ignore[attr-defined]
+        return module
+
+    def _restore_paths(self) -> None:
+        """Undo ``__path__`` mutations made by :meth:`adopt_package`.
+
+        The leak guard compares ``sys.modules`` *identity*, so it cannot see a
+        mutated ``__path__`` — an unrestored one silently re-enables on-disk
+        resolution of a whole package for every later-collected sibling.
+        """
+        for module, previous in reversed(self._paths):
+            if previous is _MISSING:
+                try:
+                    delattr(module, "__path__")
+                except AttributeError:
+                    pass
+            else:
+                module.__path__ = previous
+        self._paths.clear()
 
     def _restore_binds(self) -> None:
         for parent, attribute, previous in reversed(self._binds):
