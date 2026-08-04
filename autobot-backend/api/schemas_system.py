@@ -3197,8 +3197,16 @@ class FileOperation(BaseModel):
 
     @field_validator("path")
     @classmethod
-    def validate_path(cls, v):
-        """Validate path to prevent directory traversal attacks."""
+    def reject_traversal_in_path(cls, v):
+        """Validate path to prevent directory traversal attacks.
+
+        #13518: renamed off ``validate_path``. That is the name of the canonical
+        containment helper in ``autobot_shared/security/path_validator.py``, so
+        a reviewer grepping it to audit path handling got this field validator
+        as a false hit. This is a shape check on a request field, not
+        containment — it never resolves anything and must not be mistaken for
+        the helper.
+        """
         if not v or ".." in v or v.startswith("/"):
             raise ValueError("Invalid path")
         return v
