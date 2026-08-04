@@ -19,9 +19,11 @@ These tests pin the three properties that close it:
 3. it is guarded, so a host whose canonical store has no managed block is left
    alone rather than stripped of every credential it has.
 
-The companion guard ``test_update_all_applies_roles_12959.py`` still xfails
-after this: ``tasks_from`` is partial application, and the architectural
-question of applying roles in full is separate.
+``tasks_from`` is the intended shape, not a compromise: applying the postgresql
+role in full on an update path would re-run installation, configuration and
+database creation on a host that already has all three. The companion guard
+``test_update_all_applies_roles_12959.py`` asserts that contract, and still
+xfails for the four components that have no task file at all yet (#13460).
 """
 
 from __future__ import annotations
