@@ -80,6 +80,18 @@ from services.knowledge.kb_synthesizer import (  # noqa: E402
     get_kb_synthesizer,
 )
 
+# #13435: see the matching note in test_analyzer_service.py. The stubs were
+# needed to import kb_synthesizer and are needed again while this module's tests
+# run, but not in between — and "in between" is when pytest imports every other
+# module in the worker, which is how ``utils`` and its children escaped this
+# directory. ``_reinstall_module_stubs`` in this package's conftest puts these
+# exact objects back around this module's tests and removes them afterwards.
+_STUBS_UNLOADED_AFTER_IMPORT = {
+    name: sys.modules.pop(name)
+    for name in ("utils.chromadb_client", "utils.async_chromadb_client")
+    if name in sys.modules
+}
+
 # Private static helpers — in Python 3.10+ staticmethods are plain functions on the class
 _cluster_id = KBSynthesizer._cluster_id  # type: ignore[attr-defined]
 _read_docs = KBSynthesizer._read_docs  # type: ignore[attr-defined]
