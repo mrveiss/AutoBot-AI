@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from playwright.async_api import Error as PlaywrightError
 from playwright.async_api import async_playwright, expect
 
 # Add project root to path
@@ -56,9 +57,19 @@ def backend_url():
 
 @pytest.fixture
 async def browser_context():
-    """Create browser context for E2E testing."""
+    """Create browser context for E2E testing.
+
+    The Chromium binary is a separate download (`playwright install`), not a pip
+    dependency, so a checkout with playwright installed can still have no browser
+    to launch. That is a missing optional dependency, which skips — the same rule
+    the repo applies to `pytest.importorskip`. Without this the fixture raises and
+    every test here reports as an error rather than a skip (#13549).
+    """
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            pytest.skip(f"no Chromium available for Playwright: {exc}")
         context = await browser.new_context(
             viewport={"width": 1280, "height": 720},
             record_video_dir="tests/results/videos/",  # Record videos for debugging
