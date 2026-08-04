@@ -229,6 +229,20 @@
     - autobot_shared
   tags: ['ai', 'deploy']
 
+# #12513: see roles/redis/tasks/chromadb.yml — same read, same reason. Whichever
+# of the two roles owns chroma on this topology must land the same credential the
+# backend sends, so both defer to the SLM-generated value.
+- name: "ChromaDB | Read the shared auth token from slm-secrets.env (#12513)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_chromadb_auth_token.yml
+  tags: ['ai', 'deploy']
+
+- name: "ChromaDB | Adopt the SLM-managed auth token when present (#12513)"
+  ansible.builtin.set_fact:
+    chromadb_auth_token: "{{ _chromadb_auth_token_read }}"
+  when: (_chromadb_auth_token_read | default('') | trim) | length > 0
+  no_log: true
+  tags: ['ai', 'deploy']
+
 - name: Deploy ChromaDB systemd service
   ansible.builtin.template:
     src: autobot-chromadb.service.j2

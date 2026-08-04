@@ -371,6 +371,17 @@
          else lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
     slm_auth_token: >-
       {{ lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    # #12513: shared secret for chroma's CHROMA_SERVER_AUTHN_* token auth. The
+    # whole mechanism (server env, client kwargs, ssot_config field, role vars)
+    # already existed and every default was "", so auth was off on every
+    # deployment and any container on the internal docker network could
+    # read/write every collection unauthenticated. Generating it here is what
+    # turns the feature on; the chroma unit and the backend both read it back
+    # from this file, so one value reaches both sides.
+    chromadb_auth_token: >-
+      {{ chromadb_auth_token
+         if (chromadb_auth_token | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
   when: not slm_secrets_stat.stat.exists
   no_log: true
   tags: ['slm', 'secrets']
@@ -410,6 +421,41 @@
   when:
     - slm_secrets_stat.stat.exists
     - _slm_auth_tok_check.rc != 0
+  no_log: true
+  tags: ['slm', 'secrets']
+
+# #12513: same back-fill for the chroma token. Existing installations skip the
+# template above, so without this every host provisioned before #12513 would keep
+# running chroma unauthenticated forever — which is the state the issue reports.
+#
+# `lineinfile` with a `regexp` that does not match APPENDS, so this only ever adds
+# the key; it never rewrites an operator-supplied one, because it is gated on the
+# grep finding nothing. Rotating the token silently here would break every
+# already-running client until the next backend restart.
+- name: "SLM | Check if AUTOBOT_CHROMADB_AUTH_TOKEN present in secrets file (#12513)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -q '^AUTOBOT_CHROMADB_AUTH_TOKEN=.\+'
+      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
+  register: _slm_chroma_tok_check
+  changed_when: false
+  failed_when: false
+  when: slm_secrets_stat.stat.exists
+  no_log: true
+  tags: ['slm', 'secrets']
+
+- name: "SLM | Add AUTOBOT_CHROMADB_AUTH_TOKEN to existing secrets file (#12513)"
+  ansible.builtin.lineinfile:
+    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
+    regexp: "^AUTOBOT_CHROMADB_AUTH_TOKEN="
+    line: >-
+      AUTOBOT_CHROMADB_AUTH_TOKEN={{ chromadb_auth_token
+         if (chromadb_auth_token | default('') | trim | length > 0)
+         else lookup('password', '/dev/null length=48 chars=ascii_letters,digits') }}
+    create: false
+  when:
+    - slm_secrets_stat.stat.exists
+    - _slm_chroma_tok_check.rc != 0
   no_log: true
   tags: ['slm', 'secrets']
 
