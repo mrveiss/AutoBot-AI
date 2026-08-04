@@ -199,24 +199,15 @@
   when: not _redis_service_file.stat.exists
   tags: ['redis', 'systemd']
 
-- name: "Redis | Create systemd override directory"
-  file:
-    path: /etc/systemd/system/redis-stack-server.service.d
-    state: directory
-    mode: '0755'
-  become: true
-  tags: ['redis', 'systemd']
-
-- name: "Redis | Configure systemd service override"
-  template:
-    src: redis-stack-override.conf.j2
-    dest: /etc/systemd/system/redis-stack-server.service.d/override.conf
-    mode: '0644'
-  become: true
-  notify:
-    - reload systemd
-    - restart redis-stack
-  tags: ['redis', 'systemd']
+# #13535: the systemd override, the backup script and the ChromaDB credential
+# file + unit are defined once, in code_only.yml, so the builtin updater can
+# deliver them without dragging this file's provisioning half (apt, the
+# redis-stack package, service accounts, the chroma venv) onto the update path.
+# Included HERE so the override lands before "Enable and start Redis Stack"
+# below, and the chroma credential file lands before chromadb.yml starts the
+# service — the unit's EnvironmentFile is mandatory (#12513).
+- name: "Redis | Deploy role-owned service files (#13535)"
+  ansible.builtin.include_tasks: code_only.yml
 
 - name: "Redis | Enable and start Redis Stack"
   systemd:
@@ -248,16 +239,6 @@
     owner: autobot
     group: autobot
     mode: '0755'
-  become: true
-  tags: ['redis', 'backup']
-
-- name: "Redis | Create backup script"
-  template:
-    src: redis-backup.sh.j2
-    dest: /usr/local/bin/redis-backup.sh
-    mode: '0755'
-    owner: root
-    group: root
   become: true
   tags: ['redis', 'backup']
 

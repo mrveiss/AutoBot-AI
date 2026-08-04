@@ -60,6 +60,11 @@ MANAGED_COMPONENT_ROLES = {
     "browser": "browser",
     "tts-worker": "tts-worker",
     "postgresql": "postgresql",
+    # #13535: the database node. Its role owns the Redis systemd override, the
+    # backup script and the ChromaDB unit + credential file, and the updater had
+    # no play that reached it at all — `infrastructure` (Play 2's host list) does
+    # not contain `database`.
+    "database": "redis",
 }
 
 #: Components with a delivery path today. Each entry is a regression guard: the
@@ -72,6 +77,7 @@ DELIVERED = {
     "npu-worker": {"code_only"},  # #13460
     "frontend": {"code_only"},  # #13460
     "browser": {"code_only"},  # #13460
+    "database": {"code_only"},  # #13535
 }
 
 #: Task-name substrings that mean provisioning. None may appear in a task file
