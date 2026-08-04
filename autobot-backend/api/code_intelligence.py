@@ -1148,8 +1148,15 @@ async def get_redis_usage_health_score(
 
 
 async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
-    """Run Redis health analysis in a thread. Issue #1034."""
+    """Run Redis health analysis off the API process. Issue #1034, #12866."""
     results = await run_isolated(RedisOptimizer, {"project_root": path}, "analyze_directory", path)
+
+    # #12866: the scan ran in another process, so its optimizer is gone. Summarise
+    # through a local instance carrying the findings — get_summary() reads
+    # self.results, and reading it off an un-run optimizer returns an empty
+    # by_type map, i.e. a silently empty category_breakdown.
+    optimizer = RedisOptimizer(project_root=path)
+    optimizer.results = results
 
     score = _calculate_redis_health_score(results)
     grade = get_grade_from_score(score)
