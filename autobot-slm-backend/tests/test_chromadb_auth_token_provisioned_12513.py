@@ -83,9 +83,9 @@ def test_slm_manager_generates_a_token_for_a_fresh_install():
         "slm_manager must generate chromadb_auth_token alongside the other secrets — "
         "otherwise the template renders it empty and chroma runs unauthenticated"
     )
-    assert "lookup('password'" in str(facts["chromadb_auth_token"]), (
-        "the token must be generated, not defaulted to a constant"
-    )
+    assert "lookup('password'" in str(
+        facts["chromadb_auth_token"]
+    ), "the token must be generated, not defaulted to a constant"
 
 
 def test_existing_installations_are_backfilled():
@@ -96,11 +96,7 @@ def test_existing_installations_are_backfilled():
     """
     tasks = yaml.safe_load(_SLM_TASKS.read_text(encoding="utf-8"))
     backfill = next(
-        (
-            t
-            for t in _iter_mappings(tasks)
-            if _TOKEN_KEY in str(t.get("name", "")) and "Add" in str(t.get("name", ""))
-        ),
+        (t for t in _iter_mappings(tasks) if _TOKEN_KEY in str(t.get("name", "")) and "Add" in str(t.get("name", ""))),
         None,
     )
     assert backfill is not None, f"no task adds {_TOKEN_KEY} to an existing secrets file"
