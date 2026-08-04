@@ -520,7 +520,7 @@ Import statement has been added: `import {{ devLog }} from '@/utils/devLogger.js
             output_file: Optional path override for the markdown report file
         """
         report_content += (
-            "\n## Next Steps\n"  # nosec B608 - markdown report text, not SQL
+            "\n## Next Steps\n"  # nosec B608  # markdown report text, not SQL
             "1. **Test Development Mode**: Verify logs appear in browser console during development\n"
             "2. **Test Production Build**: Confirm logs are silent in production build\n"
             "3. **Update Build Config**: Ensure NODE_ENV is properly set for different environments\n"

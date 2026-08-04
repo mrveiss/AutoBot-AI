@@ -305,7 +305,7 @@ async def oauth_initiate(
         authorize_url=req.authorize_url,
         token_url=req.token_url,
         client_id_setting="",
-        client_secret_setting="",  # nosec B106 - setting NAME (empty), not a secret value
+        client_secret_setting="",  # nosec B106  # setting NAME (empty), not a secret value
         default_scopes=scopes or (),
     )
 
@@ -367,7 +367,7 @@ async def oauth_callback(
         authorize_url="",
         token_url=token_url,
         client_id_setting="",
-        client_secret_setting="",  # nosec B106 - setting NAME (empty), not a secret value
+        client_secret_setting="",  # nosec B106  # setting NAME (empty), not a secret value
     )
 
     try:
@@ -378,7 +378,7 @@ async def oauth_callback(
         resp = await exchange_code(
             provider_cfg,
             stored["client_id"],
-            "",  # nosec B106 - PKCE public client: no client_secret
+            "",  # nosec B106  # PKCE public client: no client_secret
             req.code,
             req.redirect_uri,
             stored["verifier"],

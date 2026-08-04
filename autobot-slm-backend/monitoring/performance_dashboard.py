@@ -690,7 +690,7 @@ class PerformanceDashboard:
         # Start the web server
         runner = web.AppRunner(self.app)
         await runner.setup()
-        bind_host = "0.0.0.0"  # nosec B104: dashboard bind
+        bind_host = "0.0.0.0"  # nosec B104  # dashboard bind
         site = web.TCPSite(runner, bind_host, self.port)
         await site.start()
 

@@ -188,7 +188,7 @@ class AuthService:
         )
         return TokenResponse(
             access_token=access_token,
-            token_type="bearer",  # nosec B106 - standard OAuth2 token type
+            token_type="bearer",  # nosec B106  # standard OAuth2 token type
             expires_in=settings.access_token_expire_minutes * 60,
         )
 

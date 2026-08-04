@@ -286,8 +286,13 @@ def _list_tables_sync(db_path: Path) -> list[dict]:
             # validate_sql_identifier enforces an allowlist as defence-in-depth.
             validate_sql_identifier(table_name, "table name")
             # Bare-assign the SQL so the nosec/nosemgrep stay on the flagged line:
-            # black would split `cursor.execute(f"...")  # nosec` and orphan the
-            # comment onto the `)` line, defeating the suppression (#9489).
+            # black would split a call spanning several lines and orphan the
+            # suppression comment onto the closing paren, defeating it (#9489).
+            #
+            # #13521: this explanation deliberately avoids writing the literal
+            # suppression token followed by prose — bandit parses any such
+            # occurrence as a test-id list and warns once per following word,
+            # even inside a comment that is only talking about it.
             count_sql = f"SELECT COUNT(*) FROM [{table_name}]"  # nosec B608  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query,python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query  # noqa: E501
             cursor.execute(count_sql)
             row_count = cursor.fetchone()[0]

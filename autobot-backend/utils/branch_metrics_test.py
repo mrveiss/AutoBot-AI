@@ -74,7 +74,7 @@ class TestBranchMetricsCollector:
     def collector(self):
         """Create a collector instance."""
         return BranchMetricsCollector(
-            repo_path="/tmp/test-repo",  # nosec B108 - test/controlled code uses tmpdir intentionally
+            repo_path="/tmp/test-repo",  # nosec B108  # test/controlled code uses tmpdir intentionally
             base_branch="Dev_new_gui",
             stale_threshold_days=30,
         )
@@ -82,7 +82,7 @@ class TestBranchMetricsCollector:
     @pytest.mark.asyncio
     async def test_initialization(self, collector):
         """Test collector initialization."""
-        assert collector.repo_path == "/tmp/test-repo"  # nosec B108 - test/controlled code uses tmpdir intentionally
+        assert collector.repo_path == "/tmp/test-repo"  # nosec B108  # test/controlled code uses tmpdir intentionally
         assert collector.base_branch == "Dev_new_gui"
         assert collector.stale_threshold_days == 30
 

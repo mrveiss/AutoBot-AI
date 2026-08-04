@@ -496,7 +496,7 @@ async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata
     button_map = {"left": "1", "middle": "2", "right": "3"}
     button_num = button_map.get(request.button, "1")
 
-    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+    result = await asyncio.to_thread(  # nosec B603 B607  # fixed argv, validated by _run_xdotool_cmd
         _run_xdotool_cmd, ["mousemove", str(request.x), str(request.y), "click", button_num]
     )
 
@@ -532,7 +532,7 @@ async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Meta
             "muted": True,
         }
 
-    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+    result = await asyncio.to_thread(  # nosec B603 B607  # fixed argv, validated by _run_xdotool_cmd
         _run_xdotool_cmd, ["type", "--", request.text]
     )
 
@@ -567,7 +567,7 @@ async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata
             "muted": True,
         }
 
-    result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, validated by _run_xdotool_cmd
+    result = await asyncio.to_thread(  # nosec B603 B607  # fixed argv, validated by _run_xdotool_cmd
         _run_xdotool_cmd, ["key", request.key]
     )
 
@@ -583,7 +583,7 @@ async def _run_capture_command(argv: list):
     """Run one screenshot capture command off the event loop. Issue #10785."""
     import subprocess  # nosec B404
 
-    return await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+    return await asyncio.to_thread(  # nosec B603 B607  # fixed argv, no user input
         subprocess.run,
         argv,
         capture_output=True,
@@ -681,7 +681,7 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
 
     # Get screen resolution
     try:
-        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607  # fixed argv, no user input
             subprocess.run,
             ["xdpyinfo"],
             capture_output=True,
@@ -701,7 +701,7 @@ async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Meta
 
     # Get active window info
     try:
-        result = await asyncio.to_thread(  # nosec B603 B607 - fixed argv, no user input
+        result = await asyncio.to_thread(  # nosec B603 B607  # fixed argv, no user input
             subprocess.run,
             ["xdotool", "getactivewindow", "getwindowname"],
             capture_output=True,

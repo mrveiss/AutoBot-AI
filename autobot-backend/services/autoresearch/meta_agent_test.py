@@ -53,11 +53,11 @@ def test_metapatch_to_dict_keys() -> None:
     patch = MetaPatch(
         patch_id="abc",
         target_path="/tmp/foo.py",
-        generation=3,  # nosec B108 - test/controlled code uses tmpdir intentionally
+        generation=3,  # nosec B108  # test/controlled code uses tmpdir intentionally
     )
     d = patch.to_dict()
     assert d["patch_id"] == "abc"
-    assert d["target_path"] == "/tmp/foo.py"  # nosec B108 - test/controlled code uses tmpdir intentionally
+    assert d["target_path"] == "/tmp/foo.py"  # nosec B108  # test/controlled code uses tmpdir intentionally
     assert d["generation"] == 3
     assert "has_changes" in d
 
@@ -65,7 +65,7 @@ def test_metapatch_to_dict_keys() -> None:
 def test_metapatch_from_dict_roundtrip() -> None:
     original = MetaPatch(
         patch_id="roundtrip-id",
-        target_path="/tmp/foo.py",  # nosec B108 - test/controlled code uses tmpdir intentionally
+        target_path="/tmp/foo.py",  # nosec B108  # test/controlled code uses tmpdir intentionally
         original_content="x = 1\n",
         modified_content="x = 2\n",
         rationale="test",

@@ -210,17 +210,35 @@ else
       fail "isort -- run: python3 -m isort --settings-path=. --line-length=120 ${PY[*]}"
     fi
 
-    if python3 -m flake8 --config=.flake8 "${PY[@]}" >/dev/null 2>&1; then
+    # #13521: flake8 checks a file named explicitly on the command line even when
+    # .flake8 excludes it, so passing changed files by path made this stricter
+    # than CI -- which lints whole directories and therefore honours `exclude`.
+    # That produced failures on pre-existing findings in excluded trees
+    # (code_analysis, tools, scripts, tests...) that CI never sees. Drop the same
+    # directories here so the gate matches the gate it is meant to predict.
+    FLAKE_EXCLUDES=$(awk '/^exclude *=/{f=1;next} /^[a-z_-]+ *=/{f=0} f' .flake8 \
+                     | sed 's/#.*//' | tr -d ' ,' | grep -vE '^\*|^$' | tr '\n' '|' | sed 's/|$//')
+    mapfile -t PY_LINT < <(printf '%s\n' "${PY[@]}" \
+                           | grep -vE "(^|/)(${FLAKE_EXCLUDES})(/|$)" || true)
+
+    if [ "${#PY_LINT[@]}" -eq 0 ]; then
+      note "flake8 -- every changed Python file is in .flake8's exclude list"
+    elif python3 -m flake8 --config=.flake8 "${PY_LINT[@]}" >/dev/null 2>&1; then
       pass "flake8 --config=.flake8"
     else
       fail "flake8 --config=.flake8"
-      python3 -m flake8 --config=.flake8 "${PY[@]}" 2>&1 | head -15 | sed 's/^/        /'
+      python3 -m flake8 --config=.flake8 "${PY_LINT[@]}" 2>&1 | head -15 | sed 's/^/        /'
     fi
 
     # code-quality.yml runs bandit with NO severity floor -- stricter than the
     # medium-and-up filter used elsewhere. A B105 on a constant named *_PREFIX
     # is the classic false positive; annotate it with "# nosec B105".
-    BANDIT_OUT=$(python3 -m bandit -c .bandit -q "${PY[@]}" 2>&1)
+    # #13521: "nosec encountered (Bxxx), but no failed test" is bandit telling
+    # you a suppression is unnecessary, not that this change is unsafe. It is a
+    # property of the file you happened to touch, and blocking on it would stop
+    # anyone editing a file that carries a stale suppression. Reported by the
+    # dedicated sweep instead; a real finding still says "Issue:".
+    BANDIT_OUT=$(python3 -m bandit -c .bandit -q "${PY[@]}" 2>&1 | grep -v "nosec encountered")
     if [ -z "$BANDIT_OUT" ]; then
       pass "bandit -c .bandit (no severity floor, as CI runs it)"
     else

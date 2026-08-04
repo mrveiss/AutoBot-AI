@@ -23,7 +23,7 @@ from autobot_shared.redis_utils import decode_redis_value
 logger = get_logger(__name__)
 
 # Redis key prefixes
-_TOKEN_TRACKER_KEY_PREFIX = "chat:tokens:"  # nosec B105 - Redis key prefix, not a password
+_TOKEN_TRACKER_KEY_PREFIX = "chat:tokens:"  # nosec B105  # Redis key prefix, not a password
 _SUMMARY_MARKER_KEY_PREFIX = "chat:summary_marker:"
 
 # Default thresholds (can be overridden)
