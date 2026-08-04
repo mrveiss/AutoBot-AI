@@ -25,6 +25,7 @@ from agents.graph_entity_extractor import (
     GraphEntityExtractor,
     RelationCandidate,
 )
+from autobot_memory_graph.core import RELATION_TYPES
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 
 # ============================================================================
@@ -412,9 +413,12 @@ def test_infer_relationships(entity_extractor):
         assert isinstance(relation, RelationCandidate)
         assert relation.from_entity
         assert relation.to_entity
-        assert (
-            relation.relation_type in entity_extractor.relationship_keywords.keys()
-            or relation.relation_type == "relates_to"
+        # #13452: every inferred type must be one create_relation accepts.
+        # The old assertion also allowed "relates_to", which create_relation
+        # rejects — so it could not catch the silently dropped edges.
+        assert relation.relation_type in RELATION_TYPES
+        assert relation.relation_type in entity_extractor.relationship_keywords.keys() or (
+            relation.relation_type == "related_to"
         )
 
 
@@ -461,13 +465,13 @@ def test_deduplicate_relations(entity_extractor):
         RelationCandidate(
             from_entity="Entity A",
             to_entity="Entity B",
-            relation_type="relates_to",
+            relation_type="related_to",
             confidence=0.7,
         ),
         RelationCandidate(
             from_entity="Entity A",
             to_entity="Entity B",
-            relation_type="relates_to",
+            relation_type="related_to",
             confidence=0.9,  # Higher confidence
         ),
         RelationCandidate(

@@ -149,9 +149,15 @@ Relation = {
 
 #### 2.2.1 Relationship Types
 
+Declared in `autobot_memory_graph/core.py` as `CORE_RELATION_TYPES` — the single
+canonical vocabulary, which `knowledge/relations.py` imports rather than
+restating. `relates_to` is a legacy spelling of `related_to`: it is accepted on
+input and folded onto the canonical name, so only `related_to` is ever stored
+(#13452).
+
 | Relation Type   | Description                          | Example                                      |
 |-----------------|--------------------------------------|----------------------------------------------|
-| `relates_to`    | General association                  | Conversation → Conversation                  |
+| `related_to`    | General association                  | Conversation → Conversation                  |
 | `depends_on`    | Dependency relationship              | Task → Task (blocking)                       |
 | `implements`    | Implementation link                  | Feature → Code Changes                       |
 | `fixes`         | Fix relationship                     | Bug Fix → Bug                                |
@@ -372,7 +378,7 @@ async def create_relation(
     Args:
         from_entity: Source entity name
         to_entity: Target entity name
-        relation_type: Type of relationship (relates_to, depends_on, etc.)
+        relation_type: Type of relationship (related_to, depends_on, etc.)
         bidirectional: Create reverse relation as well
         strength: Relationship strength (0.0-1.0)
         metadata: Optional additional metadata
@@ -549,7 +555,7 @@ async def link_conversations(
     self,
     session_id_1: str,
     session_id_2: str,
-    relation_type: str = "relates_to"
+    relation_type: str = "related_to"
 ) -> Dict[str, Any]:
     """
     Create relationship between two conversations.
@@ -983,7 +989,7 @@ async def test_create_relation():
     relation = await memory_graph.create_relation(
         from_entity=entity1["name"],
         to_entity=entity2["name"],
-        relation_type="relates_to"
+        relation_type="related_to"
     )
     assert relation["from_entity"] == entity1["entity_id"]
     assert relation["to_entity"] == entity2["entity_id"]
@@ -1220,13 +1226,13 @@ JSON.DEL entity:uuid123
 
 ```bash
 # Create relation
-GRAPH.QUERY memory_graph "CREATE (:Entity {id:'uuid1'})-[:relates_to]->(:Entity {id:'uuid2'})"
+GRAPH.QUERY memory_graph "CREATE (:Entity {id:'uuid1'})-[:related_to]->(:Entity {id:'uuid2'})"
 
 # Get related entities
-GRAPH.QUERY memory_graph "MATCH (e:Entity {id:'uuid1'})-[:relates_to]->(related) RETURN related"
+GRAPH.QUERY memory_graph "MATCH (e:Entity {id:'uuid1'})-[:related_to]->(related) RETURN related"
 
 # Delete relation
-GRAPH.QUERY memory_graph "MATCH (:Entity {id:'uuid1'})-[r:relates_to]->(:Entity {id:'uuid2'}) DELETE r"
+GRAPH.QUERY memory_graph "MATCH (:Entity {id:'uuid1'})-[r:related_to]->(:Entity {id:'uuid2'}) DELETE r"
 ```
 
 ### Search Operations (RediSearch)

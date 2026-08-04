@@ -24,6 +24,9 @@ from .core import (
     OUTGOING_DIRECTIONS,
     RELATION_TYPES,
     AutoBotMemoryGraphCore,
+    canonical_relation_filter,
+    canonical_relation_type,
+    relation_type_matches,
 )
 
 logger = get_logger(__name__)
@@ -118,6 +121,10 @@ class RelationOperationsMixin:
             Created relation data
         """
         self.ensure_initialized()
+        # #13452: fold legacy spellings (e.g. "relates_to") onto the canonical
+        # name before validating, so a caller using the knowledge-base spelling
+        # writes a real edge instead of raising into a swallowing except block.
+        relation_type = canonical_relation_type(relation_type)
         if relation_type not in RELATION_TYPES:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
@@ -176,6 +183,7 @@ class RelationOperationsMixin:
         """Create relationship between entities using IDs. Issue #620."""
         self.ensure_initialized()
 
+        relation_type = canonical_relation_type(relation_type)  # #13452
         if relation_type not in RELATION_TYPES:
             raise ValueError(f"Invalid relation_type: {relation_type}")
 
@@ -285,18 +293,22 @@ class RelationOperationsMixin:
         """Get relations for an entity. Issue #620."""
         self.ensure_initialized()
 
+        # #13452: reads must canonicalise both sides, exactly as writes do, or a
+        # relation created as "relates_to" (stored "related_to") is unreachable.
+        wanted = canonical_relation_filter(relation_types)
+
         try:
             relations = []
             if direction in OUTGOING_DIRECTIONS:
                 outgoing = await self._get_outgoing_relations(entity_id)
                 for rel in outgoing:
-                    if relation_types is None or rel.get("type") in relation_types:
+                    if wanted is None or canonical_relation_type(rel.get("type", "")) in wanted:
                         relations.append(self._format_outgoing_relation(entity_id, rel))
 
             if direction in INCOMING_DIRECTIONS:
                 incoming = await self._get_incoming_relations(entity_id)
                 for rel in incoming:
-                    if relation_types is None or rel.get("type") in relation_types:
+                    if wanted is None or canonical_relation_type(rel.get("type", "")) in wanted:
                         relations.append(self._format_incoming_relation(entity_id, rel))
 
             return {"relations": relations}
@@ -388,7 +400,8 @@ class RelationOperationsMixin:
         queue: List,
     ) -> List[Dict[str, Any]]:
         """Process relations in a single direction. Issue #620."""
-        filtered = [rel for rel in relations if relation_type is None or rel["type"] == relation_type]
+        # #13452: alias-aware so legacy-spelled stored edges still match.
+        filtered = [rel for rel in relations if relation_type_matches(rel["type"], relation_type)]
         if not filtered:
             return []
 
@@ -426,6 +439,7 @@ class RelationOperationsMixin:
             List of related entities with relation metadata
         """
         self.ensure_initialized()
+        relation_type = canonical_relation_type(relation_type) if relation_type else relation_type  # #13452
 
         try:
             entity = await self.get_entity(entity_name=entity_name)
@@ -475,7 +489,9 @@ class RelationOperationsMixin:
 
         if out_data and "relations" in out_data:
             filtered_relations = [
-                rel for rel in out_data["relations"] if not (rel["to"] == to_id and rel["type"] == relation_type)
+                rel
+                for rel in out_data["relations"]
+                if not (rel["to"] == to_id and relation_type_matches(rel["type"], relation_type))
             ]
             await self.redis_client.json().set(out_key, "$.relations", filtered_relations)
 
@@ -500,7 +516,9 @@ class RelationOperationsMixin:
 
         if in_data and "relations" in in_data:
             filtered_relations = [
-                rel for rel in in_data["relations"] if not (rel["from"] == from_id and rel["type"] == relation_type)
+                rel
+                for rel in in_data["relations"]
+                if not (rel["from"] == from_id and relation_type_matches(rel["type"], relation_type))
             ]
             await self.redis_client.json().set(in_key, "$.relations", filtered_relations)
 
@@ -519,7 +537,7 @@ class RelationOperationsMixin:
 
         updated = False
         for rel in data["relations"]:
-            if rel.get(id_field) == match_id and rel.get("type") == relation_type:
+            if rel.get(id_field) == match_id and relation_type_matches(rel.get("type", ""), relation_type):
                 rel["valid_to"] = valid_to
                 updated = True
 
@@ -546,6 +564,7 @@ class RelationOperationsMixin:
             ended_at: ISO-8601 timestamp for valid_to (default: now)
         """
         self.ensure_initialized()
+        relation_type = canonical_relation_type(relation_type)  # #13452
 
         try:
             valid_to = ended_at or datetime.now(tz=timezone.utc).isoformat()
@@ -591,6 +610,7 @@ class RelationOperationsMixin:
             True if deleted, False if not found
         """
         self.ensure_initialized()
+        relation_type = canonical_relation_type(relation_type)  # #13452
 
         try:
             from_entity_data, to_entity_data = await asyncio.gather(

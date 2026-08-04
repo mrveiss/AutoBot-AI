@@ -42,7 +42,27 @@ ENTITY_TYPES: Set[str] = {
     "SECRET_USAGE",  # Issue #608
 }
 
-RELATION_TYPES: Set[str] = {
+# ----------------------------------------------------------------------------
+# Relation vocabulary (Issue #13452)
+#
+# CORE_RELATION_TYPES is the single canonical, domain-neutral relation
+# vocabulary for the whole codebase. Every other relation store derives from
+# it instead of restating its own list:
+#   - autobot_memory_graph  -> RELATION_TYPES     (core + identity extras)
+#   - knowledge.relations   -> KB_RELATION_TYPES  (core, fact-to-fact)
+#   - api.schemas_knowledge -> RelationCreateRequest validator
+#
+# Before #13452 the memory graph spelled the general relation "related_to"
+# while the knowledge base spelled it "relates_to", and neither accepted the
+# other's spelling. create_relation() raises ValueError for unknown types and
+# several callers swallow it, so every edge written with the wrong spelling
+# was silently dropped (#13367 fixed one call site; the divergence itself is
+# fixed here). "related_to" is canonical; "relates_to" survives only as a
+# read/write alias in RELATION_TYPE_ALIASES so already-persisted Redis
+# relations stay resolvable without a data migration.
+# ----------------------------------------------------------------------------
+
+CORE_RELATION_TYPES: Set[str] = {
     "contains",
     "depends_on",
     "implements",
@@ -51,6 +71,19 @@ RELATION_TYPES: Set[str] = {
     "related_to",
     "leads_to",
     "blocks",
+    # Document/issue-level names — previously knowledge-base-only, promoted to
+    # the canonical set because agents.graph_entity_extractor infers them and
+    # writes them straight into the memory graph.
+    "fixes",
+    "informs",
+    "guides",
+    "follows",
+    "supersedes",
+    "contradicts",
+}
+
+# Identity/activity relations — memory-graph only, meaningless between facts.
+IDENTITY_RELATION_TYPES: Set[str] = {
     "owns",  # Issue #608 - User owns Secret
     "has_secret",  # Issue #608 - User/Session has Secret
     "shared_with",  # Issue #608 - Secret shared with User
@@ -58,6 +91,65 @@ RELATION_TYPES: Set[str] = {
     "performed_by",  # Issue #608 - Activity performed by User
     "used_secret",  # Issue #608 - Activity used Secret
 }
+
+RELATION_TYPES: Set[str] = CORE_RELATION_TYPES | IDENTITY_RELATION_TYPES
+
+# Legacy/alternate spellings mapped onto their canonical name. Callers are
+# canonicalised on write, so no new relation is ever persisted under an alias,
+# while relations already stored under one keep resolving.
+RELATION_TYPE_ALIASES: Dict[str, str] = {
+    "relates_to": "related_to",  # knowledge-base spelling before #13452
+}
+
+
+def canonical_relation_type(relation_type: str) -> str:
+    """Return the canonical spelling for a relation type.
+
+    Unknown names are returned unchanged so the caller's own validation still
+    reports them, rather than this helper masking a genuine typo.
+
+    Args:
+        relation_type: Relation name as supplied by the caller.
+
+    Returns:
+        The canonical relation name.
+    """
+    return RELATION_TYPE_ALIASES.get(relation_type, relation_type)
+
+
+def relation_type_matches(stored_type: str, wanted_type: str | None) -> bool:
+    """Compare a stored relation type against a caller-supplied filter.
+
+    Both sides are canonicalised, so relations persisted under a legacy
+    spelling stay reachable through the canonical name and vice versa — reads
+    and deletes therefore stay symmetric with writes, which canonicalise. An
+    empty or absent filter matches everything.
+
+    Args:
+        stored_type: Relation type as read back from the store.
+        wanted_type: Relation type the caller filtered on, or None/"" for any.
+
+    Returns:
+        True when the stored relation satisfies the filter.
+    """
+    if not wanted_type:
+        return True
+    return canonical_relation_type(stored_type) == canonical_relation_type(wanted_type)
+
+
+def canonical_relation_filter(relation_types: List[str] | None) -> Set[str] | None:
+    """Canonicalise a list-shaped relation filter once, for repeated matching.
+
+    Args:
+        relation_types: Relation names the caller filtered on, or None for any.
+
+    Returns:
+        A set of canonical names, or None when no filter was supplied.
+    """
+    if not relation_types:
+        return None
+    return {canonical_relation_type(rt) for rt in relation_types}
+
 
 VALID_ACTIVITY_TYPES: Set[str] = {
     "chat",
@@ -266,10 +358,17 @@ __all__ = [
     "AutoBotMemoryGraphCore",
     # Constants
     "ENTITY_TYPES",
+    "CORE_RELATION_TYPES",
+    "IDENTITY_RELATION_TYPES",
     "RELATION_TYPES",
+    "RELATION_TYPE_ALIASES",
     "VALID_ACTIVITY_TYPES",
     "OUTGOING_DIRECTIONS",
     "INCOMING_DIRECTIONS",
+    # Helpers
+    "canonical_relation_type",
+    "canonical_relation_filter",
+    "relation_type_matches",
     # Config
     "config",
 ]
