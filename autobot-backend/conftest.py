@@ -796,6 +796,22 @@ _real_load_and_bind(
     backend_root / "code_intelligence" / "shared" / "scoring.py",
 )
 
+# code_intelligence.shared.process_offload real-load (#12866) — api/code_intelligence.py
+# imports run_directory_scan/run_isolated at module level to run whole-tree scans in a
+# separate process instead of a GIL-bound thread. Same situation as scoring above: the
+# package is stubbed, so without this the module import fails outright and every
+# api.code_intelligence import test breaks.
+#
+# Real-loaded rather than stubbed on purpose. A MagicMock here would hand callers a mock
+# that never runs the scan and never populates analyzer.results — the endpoints would
+# "pass" while returning empty findings, which is the #13111 / #13162 harness-bug shape.
+# The module is self-contained: stdlib (asyncio, multiprocessing, concurrent.futures) plus
+# autobot_shared.logging_manager, which every consumer already real-imports.
+_real_load_and_bind(
+    "code_intelligence.shared.process_offload",
+    backend_root / "code_intelligence" / "shared" / "process_offload.py",
+)
+
 # code_intelligence submodule stubs — code_intelligence itself is stubbed above
 # (its __init__ has Python-3.10-incompatible annotations), so submodule imports
 # from api/*.py need their own stubs with the right symbol names.
