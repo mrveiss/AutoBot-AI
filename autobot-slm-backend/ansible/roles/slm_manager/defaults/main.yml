@@ -139,3 +139,9 @@ slm_backend_health_check_retries: 60   # Max attempts (60 × 5s = 300s)
 slm_backend_health_check_delay: 5      # Seconds between retries
 grafana_health_check_retries: 60       # Max attempts (60 × 5s = 300s)
 grafana_health_check_delay: 5          # Seconds between retries
+
+# #12513: shared secret for chroma's CHROMA_SERVER_AUTHN_* token auth, written
+# into slm-secrets.env and read back by the chroma unit (redis / ai-stack roles)
+# and the backend env template. Empty here means "generate one" -- set it in
+# group_vars/vault only to pin a specific value, never commit a real one.
+chromadb_auth_token: ""
