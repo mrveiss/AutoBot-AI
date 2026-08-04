@@ -671,3 +671,43 @@ class TestExecuteA2aTaskEvalGate:
             if a.artifact_type == "json" and isinstance(a.content, dict) and "eval_reason" in a.content
         ]
         assert len(eval_artifacts) == 1, "Expected exactly one eval_reason artifact"
+
+
+class TestRedisClientRecovery:
+    """#13339: a backend that starts while Redis is down must recover.
+
+    ``TaskManager`` resolved its client once in ``__init__``, and the module-level
+    singleton is built at import. ``get_redis_client`` documents ``None`` as a
+    return value, so a process that started while Redis was unreachable held
+    ``None`` for its whole life: every store, fetch and audit append raised
+    ``AttributeError: 'NoneType' object has no attribute 'set'``, and nothing ever
+    retried. The A2A task store was permanently broken for that process.
+    """
+
+    def test_reresolves_after_redis_becomes_available(self):
+        good = make_redis_mock()
+        # None at construction (Redis down), a working client on the next attempt.
+        with patch("a2a.task_manager.get_redis_client", side_effect=[None, good]):
+            mgr = TaskManager()
+            assert mgr._redis is None, "precondition: constructed with no client"
+            task = mgr.create_task("recovered after redis came back")
+
+        assert task.id
+        assert mgr._redis is good, "should have re-resolved and cached the working client"
+
+    def test_raises_a_named_error_while_redis_stays_down(self):
+        """Not AttributeError on None — a message that says what is actually wrong."""
+        with patch("a2a.task_manager.get_redis_client", return_value=None):
+            mgr = TaskManager()
+            with pytest.raises(RuntimeError, match="task store unavailable"):
+                mgr.create_task("still down")
+
+    def test_a_working_client_is_resolved_once_not_per_call(self):
+        """The happy path must not add a lookup to every Redis operation."""
+        good = make_redis_mock()
+        with patch("a2a.task_manager.get_redis_client", return_value=good) as resolver:
+            mgr = TaskManager()
+            mgr.create_task("one")
+            mgr.create_task("two")
+
+        assert resolver.call_count == 1, "re-resolution should only happen while the client is None"
