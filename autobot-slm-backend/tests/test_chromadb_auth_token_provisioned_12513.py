@@ -266,12 +266,15 @@ def test_unit_environmentfile_path_equals_the_provisioned_path(role):
     )
 
     spec = next(
-        (t.get("ansible.builtin.copy") or t.get("copy") for t in _iter_mappings(_tasks(_WRITE_ENV)) if (t.get("ansible.builtin.copy") or t.get("copy"))),
+        (
+            t.get("ansible.builtin.copy") or t.get("copy")
+            for t in _iter_mappings(_tasks(_WRITE_ENV))
+            if (t.get("ansible.builtin.copy") or t.get("copy"))
+        ),
         None,
     )
     assert spec["dest"].strip() == f"{{{{ {_ENV_FILE_VAR} }}}}", (
-        "the provisioning task must write the very variable the unit reads, not a "
-        "path that merely looks like it"
+        "the provisioning task must write the very variable the unit reads, not a " "path that merely looks like it"
     )
 
     default = _role_defaults(role).get(_ENV_FILE_VAR)
@@ -305,11 +308,7 @@ def test_the_credential_never_lands_in_the_world_readable_unit(role):
     _, unit_rel = _UNIT_OWNERS[role]
     unit = (_ANSIBLE / "roles" / role / unit_rel).read_text(encoding="utf-8")
 
-    inline = [
-        ln
-        for ln in unit.splitlines()
-        if ln.strip().startswith("Environment=") and "CHROMA_SERVER_AUTHN" in ln
-    ]
+    inline = [ln for ln in unit.splitlines() if ln.strip().startswith("Environment=") and "CHROMA_SERVER_AUTHN" in ln]
     assert not inline, (
         f"roles/{role} inlines the chroma credential into a unit deployed 0644 — every "
         f"local user could read it: {inline}"
@@ -341,7 +340,8 @@ def test_the_env_file_is_rendered_before_the_unit_is(role):
     )
 
     start_at = index(
-        lambda t: "autobot-chromadb" in str((t.get("ansible.builtin.systemd") or t.get("systemd") or {}).get("name", ""))
+        lambda t: "autobot-chromadb"
+        in str((t.get("ansible.builtin.systemd") or t.get("systemd") or {}).get("name", ""))
     )
     if start_at is not None:
         assert write_at < start_at, "chroma is started before its mandatory env file exists"
@@ -375,12 +375,12 @@ def test_the_client_reads_the_same_credential_through_ssot_config():
     auth = (Path(__file__).resolve().parents[2] / "autobot-backend" / "utils" / "chromadb_auth.py").read_text(
         encoding="utf-8"
     )
-    assert "_ssot_config.misc.chromadb_auth_token" in auth, (
-        "the client credential must come from ssot_config, not a second env lookup"
-    )
-    assert "chromadb.auth.token_authn.TokenAuthClientProvider" in auth, (
-        "the client provider must be token_authn's, matching the server provider"
-    )
+    assert (
+        "_ssot_config.misc.chromadb_auth_token" in auth
+    ), "the client credential must come from ssot_config, not a second env lookup"
+    assert (
+        "chromadb.auth.token_authn.TokenAuthClientProvider" in auth
+    ), "the client provider must be token_authn's, matching the server provider"
 
     ssot = (Path(__file__).resolve().parents[2] / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
     assert f'alias="{_TOKEN_KEY}"' in ssot, (
@@ -390,6 +390,5 @@ def test_the_client_reads_the_same_credential_through_ssot_config():
 
     backend_env = (_ANSIBLE / "roles" / "backend" / "templates" / "backend.env.j2").read_text(encoding="utf-8")
     assert f"{_TOKEN_KEY}={{{{ backend_chromadb_auth_token }}}}" in backend_env, (
-        "backend.env must carry the token or the client has nothing to send once the "
-        "server starts enforcing"
+        "backend.env must carry the token or the client has nothing to send once the " "server starts enforcing"
     )
