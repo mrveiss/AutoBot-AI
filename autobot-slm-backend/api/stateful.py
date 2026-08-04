@@ -13,7 +13,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
@@ -133,6 +133,29 @@ async def create_backup(
 
     logger.info("Backup created: %s for node %s", backup_id, request.node_id)
     return BackupResponse.model_validate(backup)
+
+
+@router.delete("/backups/{backup_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_backup(
+    backup_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> Response:
+    """Delete a backup and its stored file (#13307).
+
+    There was no delete route at all before this, so nothing in the system could
+    reclaim space and retention was unimplementable — while the destination sat
+    on the root filesystem.
+    """
+    from services.backup import backup_service
+
+    success, message = await backup_service.delete_backup(db, backup_id)
+    if not success:
+        raise HTTPException(
+            status_code=(status.HTTP_404_NOT_FOUND if message == "Backup not found" else status.HTTP_409_CONFLICT),
+            detail=message,
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/backups/{backup_id}/restore", response_model=BackupRestoreResponse)
@@ -520,10 +543,24 @@ async def _run_backup(backup_id: str, host: str, service_type: str) -> None:
             return
 
         # Execute backup using the dedicated service
-        if service_type == "redis":
-            success, message = await backup_service.execute_redis_backup(db, backup_id, node)
+        # #13307: PostgreSQL holds users, LLC work items and chat/session data.
+        # It was simply absent from a feature called "Backups", so a restore
+        # silently omitted all of it — discovered only during recovery.
+        runners = {
+            "redis": backup_service.execute_redis_backup,
+            "postgres": backup_service.execute_postgres_backup,
+            "postgresql": backup_service.execute_postgres_backup,
+        }
+        runner = runners.get(service_type)
+        if runner is not None:
+            success, message = await runner(db, backup_id, node)
             if not success:
                 logger.error("Backup %s failed: %s", backup_id, message)
+            else:
+                # #13307: prune here rather than on a timer — a new good backup
+                # is the only moment it is safe to drop an old one, and it keeps
+                # retention working without a scheduler this service does not have.
+                await backup_service.apply_retention(db, backup.node_id, service_type)
         else:
             # For unsupported service types, mark as failed
             backup.status = BackupStatus.FAILED.value
