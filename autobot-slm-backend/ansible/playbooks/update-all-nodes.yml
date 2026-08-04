@@ -1468,6 +1468,54 @@
         - tts_stream_route.rc | default(1) == 0
       tags: [tts, verify]
 
+    # =========================================================================
+    # #13460: the last four components whose role-owned files the updater could
+    # not deliver. Each applies its role's code_only task file — the service
+    # units, worker code and configs that carry changes — never the full role,
+    # whose provisioning half (apt, venv, OpenVINO, Playwright downloads, npm)
+    # must not re-run on an already-installed box.
+    #
+    # `apply: {become: true}` on every one: this play sets no play-level become,
+    # and a bare `become` on include_role makes ansible reject the WHOLE playbook
+    # ("'become' is not a valid attribute for a IncludeRole"), breaking every
+    # self-update rather than just the task (#12886).
+    # =========================================================================
+    - name: "[PLAY 2] AI Stack | Deploy role-owned service files (#13460)"
+      ansible.builtin.include_role:
+        name: ai-stack
+        tasks_from: code_only
+        apply:
+          become: true
+      when: "'aiml' in group_names"
+      tags: [ai-stack, deploy]
+
+    - name: "[PLAY 2] NPU | Deploy role-owned service files (#13460)"
+      ansible.builtin.include_role:
+        name: npu-worker
+        tasks_from: code_only
+        apply:
+          become: true
+      when: "'npu' in group_names"
+      tags: [npu, npu-worker, deploy]
+
+    - name: "[PLAY 2] Frontend | Deploy role-owned nginx config (#13460)"
+      ansible.builtin.include_role:
+        name: frontend
+        tasks_from: code_only
+        apply:
+          become: true
+      when: "'frontend' in group_names"
+      tags: [frontend, nginx, deploy]
+
+    - name: "[PLAY 2] Browser | Deploy role-owned service files (#13460)"
+      ansible.builtin.include_role:
+        name: browser
+        tasks_from: code_only
+        apply:
+          become: true
+      when: "'browser' in group_names"
+      tags: [browser, deploy]
+
     - name: "[PLAY 2] Node Update Complete"
       debug:
         msg: "{{ inventory_hostname }} updated"

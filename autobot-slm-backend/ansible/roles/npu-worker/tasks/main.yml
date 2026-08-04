@@ -217,32 +217,12 @@
     - npu_install_openvino | default(true)
     - _openvino_check.rc != 0
 
-- name: Deploy NPU worker script
-  ansible.builtin.template:
-    src: npu-worker.py.j2
-    dest: "{{ npu_install_dir }}/npu-worker.py"
-    mode: "0755"
-    owner: "{{ npu_user }}"
-    group: "{{ npu_group }}"
-  notify: restart npu-worker
-
-- name: Deploy NPU worker configuration
-  ansible.builtin.template:
-    src: npu-worker.env.j2
-    dest: "{{ npu_install_dir }}/.env"
-    mode: "0600"
-    owner: "{{ npu_user }}"
-    group: "{{ npu_group }}"
-  notify: restart npu-worker
-
-- name: Deploy NPU worker systemd service
-  ansible.builtin.template:
-    src: autobot-npu-worker.service.j2
-    dest: /etc/systemd/system/autobot-npu-worker.service
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart npu-worker
+# #13460: these service files are defined once, in code_only.yml, so the
+# builtin updater can deliver them without re-running provisioning. Copying
+# them into the playbook instead is the inline-vs-role duplication that made
+# this role undeliverable in the first place (#12959).
+- name: "NPU Worker | Deploy service files"
+  ansible.builtin.include_tasks: code_only.yml
 
 - name: Check if UFW is installed
   ansible.builtin.command: which ufw

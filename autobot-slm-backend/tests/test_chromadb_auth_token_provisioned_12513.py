@@ -40,7 +40,11 @@ _TOKEN_KEY = "AUTOBOT_CHROMADB_AUTH_TOKEN"
 _CONSUMERS = {
     "backend": ("tasks/main.yml", "backend_chromadb_auth_token"),
     "redis": ("tasks/chromadb.yml", "chromadb_auth_token"),
-    "ai-stack": ("tasks/main.yml", "chromadb_auth_token"),
+    # #13460 moved ai-stack's read into code_only.yml, alongside the chroma unit
+    # it feeds, so the builtin updater delivers both together. Rendering that
+    # unit without the read would redeploy chroma with auth SILENTLY DISABLED —
+    # which is precisely why this test follows the read rather than the file.
+    "ai-stack": ("tasks/code_only.yml", "chromadb_auth_token"),
 }
 
 

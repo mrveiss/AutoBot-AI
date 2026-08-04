@@ -1,0 +1,46 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The service files that carry code changes: the ChromaDB and AI Stack systemd
+# units. Split out of main.yml (#13460) so the builtin updater can deliver unit
+# changes without re-running provisioning (venv, model downloads, pip installs).
+#
+# The chroma token read is part of this file, not an optional extra. The unit
+# template emits CHROMA_SERVER_AUTHN_* only when `chromadb_auth_token` is
+# non-empty, and its role default is "". Rendering the unit on the update path
+# without reading the SLM-managed token would redeploy chroma with authentication
+# SILENTLY DISABLED — undoing #12513 on every update, with nothing failing.
+#
+# Handlers (`reload systemd`, `restart chromadb`, `restart ai-stack`) live in the
+# role, so this file is only usable via include_role/import_role.
+
+- name: "ChromaDB | Read the shared auth token from slm-secrets.env (#12513)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/read_chromadb_auth_token.yml
+  tags: ['ai', 'deploy']
+
+- name: "ChromaDB | Adopt the SLM-managed auth token when present (#12513)"
+  ansible.builtin.set_fact:
+    chromadb_auth_token: "{{ _chromadb_auth_token_read }}"
+  when: (_chromadb_auth_token_read | default('') | trim) | length > 0
+  no_log: true
+  tags: ['ai', 'deploy']
+
+- name: Deploy ChromaDB systemd service
+  ansible.builtin.template:
+    src: autobot-chromadb.service.j2
+    dest: /etc/systemd/system/autobot-chromadb.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart chromadb
+
+- name: Deploy AI Stack API systemd service
+  ansible.builtin.template:
+    src: autobot-ai-stack.service.j2
+    dest: /etc/systemd/system/autobot-ai-stack.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart ai-stack
