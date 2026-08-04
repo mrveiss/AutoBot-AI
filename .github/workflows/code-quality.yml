@@ -219,7 +219,7 @@ jobs:
     - name: Check script exec bits agree with how the docs invoke them (#13355)
       run: python3 scripts/check_script_exec_bits.py
 
-    - name: Check nosec annotations keep prose out of the test-id list (#13521)
+    - name: Check nosec annotations reach bandit intact (#13521, #13528)
       run: python3 scripts/check_nosec_format.py
 
     - name: Check for unused imports with autoflake

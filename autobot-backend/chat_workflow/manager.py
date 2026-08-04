@@ -1847,8 +1847,9 @@ class ChatWorkflowManager(
             "[Issue #2310] Injecting available-tools reminder after %d consecutive invalid tool calls",
             consecutive_invalid_tool_calls,
         )
+        # Prompt template, not SQL; consecutive_invalid_tool_calls is an int counter.
         _reminder = (
-            f"\n**[SYSTEM] TOOL NAME CORRECTION REQUIRED:**\n"  # nosec B608  # prompt template, not SQL
+            f"\n**[SYSTEM] TOOL NAME CORRECTION REQUIRED:**\n"  # nosec B608
             f"Your last {consecutive_invalid_tool_calls} tool call(s) used invalid tool names. "
             "You MUST use ONLY the following tool names:\n"
             "- execute_command: Run shell commands\n"
@@ -1871,7 +1872,7 @@ class ChatWorkflowManager(
             "- delegate: Delegate a subtask to a subordinate agent\n"
             "- respond: Signal task completion with a final message\n"
             "Do NOT invent new tool names. Use ONLY the names listed above.\n\n"
-        )  # nosec B608  # prompt template, not SQL; consecutive_invalid_tool_calls is an int counter
+        )
         return _reminder
 
     def _get_continuation_instructions(

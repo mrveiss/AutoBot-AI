@@ -114,8 +114,9 @@ class TestValidatePath:
         """When allowed_roots is None, _DEFAULT_ALLOWED_ROOTS is used."""
         assert "/tmp" in _DEFAULT_ALLOWED_ROOTS  # nosec B108  # test/controlled code uses tmpdir intentionally
         result = validate_path(
-            "/tmp/test_path_validator_check"
-        )  # nosec B108  # test/controlled code uses tmpdir intentionally
+            # Test/controlled code uses tmpdir intentionally.
+            "/tmp/test_path_validator_check"  # nosec B108
+        )
         assert str(result).startswith("/tmp")  # nosec B108  # test/controlled code uses tmpdir intentionally
 
     def test_symlink_escape(self, tmp_path) -> None:
@@ -165,8 +166,10 @@ class TestValidateRelativePath:
         """Null byte in segment raises ValueError."""
         with pytest.raises(ValueError, match="empty or contains null bytes"):
             validate_relative_path(
-                "file\x00.txt", "/tmp/base"
-            )  # nosec B108  # test/controlled code uses tmpdir intentionally
+                "file\x00.txt",
+                # Test/controlled code uses tmpdir intentionally.
+                "/tmp/base",  # nosec B108
+            )
 
     def test_absolute_path_as_segment(self, tmp_path) -> None:
         """Absolute path as segment escapes base and raises."""

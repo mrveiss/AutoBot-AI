@@ -30,9 +30,8 @@ def humanize_click_position(x: int, y: int, radius: int = 5) -> Tuple[int, int]:
     Returns:
         Tuple of (humanized_x, humanized_y) with random offset applied
     """
-    offset_x = random.randint(
-        -radius, radius
-    )  # nosec B311  # mouse position jitter for UI humanization, not cryptographic
+    # Mouse position jitter for UI humanization, not cryptographic.
+    offset_x = random.randint(-radius, radius)  # nosec B311
     offset_y = random.randint(-radius, radius)  # nosec B311  # mouse position jitter for UI humanization
     return (max(0, x + offset_x), max(0, y + offset_y))
 
@@ -109,9 +108,8 @@ def simulate_mouse_curve(x1: int, y1: int, x2: int, y2: int, steps: int = 10) ->
                 perp_y = dx / length
 
                 # Sine wave for smooth curve
-                curve_amount = math.sin(t * math.pi) * random.uniform(
-                    2, 8
-                )  # nosec B311  # mouse path curve simulation, not cryptographic
+                # Mouse path curve simulation, not cryptographic.
+                curve_amount = math.sin(t * math.pi) * random.uniform(2, 8)  # nosec B311
 
                 x += int(perp_x * curve_amount)
                 y += int(perp_y * curve_amount)

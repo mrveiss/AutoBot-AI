@@ -242,9 +242,8 @@ class BrowserFingerprint:
     def _generate_fingerprint(self) -> Dict[str, Any]:
         """Generate randomized browser fingerprint."""
         return {
-            "user_agent": random.choice(
-                self.USER_AGENTS
-            ),  # nosec B311  # browser fingerprint sampling, not cryptographic
+            # Browser fingerprint sampling, not cryptographic.
+            "user_agent": random.choice(self.USER_AGENTS),  # nosec B311
             "viewport": random.choice(self.VIEWPORTS),  # nosec B311  # non-crypto viewport selection
             "timezone": random.choice(  # nosec B311  # non-crypto timezone selection
                 [
@@ -254,15 +253,12 @@ class BrowserFingerprint:
                     "Europe/Berlin",
                 ]
             ),
-            "language": random.choice(
-                ["en-US,en", "en-GB,en", "en-CA,en"]
-            ),  # nosec B311  # non-crypto language selection
-            "platform": random.choice(
-                ["Win32", "MacIntel", "Linux x86_64"]
-            ),  # nosec B311  # non-crypto platform selection
-            "webgl_vendor": random.choice(
-                ["Intel Inc.", "NVIDIA Corporation", "AMD"]
-            ),  # nosec B311  # non-crypto vendor selection
+            # Non-crypto language selection.
+            "language": random.choice(["en-US,en", "en-GB,en", "en-CA,en"]),  # nosec B311
+            # Non-crypto platform selection.
+            "platform": random.choice(["Win32", "MacIntel", "Linux x86_64"]),  # nosec B311
+            # Non-crypto vendor selection.
+            "webgl_vendor": random.choice(["Intel Inc.", "NVIDIA Corporation", "AMD"]),  # nosec B311
             "hardware_concurrency": random.choice([4, 8, 12, 16]),  # nosec B311  # non-crypto concurrency selection
         }
 
