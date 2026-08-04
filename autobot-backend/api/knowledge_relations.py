@@ -63,19 +63,13 @@ async def create_fact_relation(req: Request, body: CreateRelationRequest):
 
     This enables graph-based knowledge retrieval alongside vector search.
 
-    Valid relation types:
-    - relates_to: General relationship
-    - depends_on: Dependency relationship
-    - implements: Implementation relationship
-    - fixes: Bug fix relationship
-    - informs: Information flow
-    - guides: Guidance relationship
-    - follows: Sequential relationship
-    - contains: Containment relationship
-    - blocks: Blocking relationship
-    - references: Reference relationship
-    - supersedes: Replacement relationship
-    - contradicts: Contradiction relationship
+    Valid relation types are served by GET /api/knowledge/relations/types,
+    which reads the canonical vocabulary directly. They are deliberately not
+    restated here: the hand-maintained copy that used to live in this docstring
+    had already drifted from the vocabulary it documented (#13452).
+
+    The legacy spelling "relates_to" is still accepted and is stored as its
+    canonical name "related_to".
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 

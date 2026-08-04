@@ -16,20 +16,25 @@ These tests fail the moment any vocabulary restates names instead of deriving
 them from ``autobot_memory_graph.core.CORE_RELATION_TYPES``.
 """
 
+from unittest.mock import AsyncMock, Mock
+
 import pytest
 
 from api.schemas_knowledge import _VALID_RELATION_TYPES, RelationCreateRequest
+from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_memory_graph.core import (
     CORE_RELATION_TYPES,
     IDENTITY_RELATION_TYPES,
     RELATION_TYPE_ALIASES,
     RELATION_TYPES,
+    canonical_relation_filter,
     canonical_relation_type,
+    relation_type_matches,
 )
-from knowledge.relations import KB_RELATION_TYPES
+from knowledge.relations import KB_RELATION_TYPES, RelationsMixin
 from services.security_memory_integration import (
-    SECURITY_RELATION_TYPES,
     SECURITY_TO_BASE_RELATION,
+    verify_security_relation_vocabulary,
 )
 
 
@@ -110,12 +115,139 @@ class TestApiSchemaVocabulary:
 class TestSecurityVocabulary:
     """The security domain's third partial vocabulary maps onto the canonical one."""
 
-    def test_every_security_relation_maps_to_a_canonical_type(self):
-        assert set(SECURITY_TO_BASE_RELATION.values()) <= RELATION_TYPES
+    def test_vocabulary_has_not_drifted(self):
+        """Runs the module's own guard here rather than at import (#13452).
 
-    def test_documented_and_mapped_tables_agree(self):
-        assert set(SECURITY_RELATION_TYPES) == set(SECURITY_TO_BASE_RELATION)
+        Calling it at import would turn a static, source-level mistake into a
+        backend startup failure.
+        """
+        verify_security_relation_vocabulary()
 
     def test_affects_is_mapped(self):
         """ "affects" is in no canonical set, so it is unusable without a mapping."""
         assert SECURITY_TO_BASE_RELATION["affects"] in RELATION_TYPES
+
+
+class TestMatcherSymmetry:
+    """Reads and deletes must resolve a legacy spelling exactly as writes do."""
+
+    @pytest.mark.parametrize(
+        "stored, wanted",
+        [
+            ("related_to", "relates_to"),  # canonical stored, legacy queried
+            ("relates_to", "related_to"),  # legacy stored (pre-#13452), canonical queried
+            ("relates_to", "relates_to"),
+            ("related_to", "related_to"),
+        ],
+    )
+    def test_alias_and_canonical_are_interchangeable(self, stored, wanted):
+        assert relation_type_matches(stored, wanted)
+
+    def test_distinct_types_still_do_not_match(self):
+        assert not relation_type_matches("related_to", "depends_on")
+
+    @pytest.mark.parametrize("empty", [None, ""])
+    def test_absent_filter_matches_everything(self, empty):
+        """An empty filter must mean "all", not "none" — reachable via
+        GET /api/knowledge/relations/fact/{id}?relation_type= ."""
+        assert relation_type_matches("related_to", empty)
+
+    def test_list_filter_is_canonicalised(self):
+        assert canonical_relation_filter(["relates_to", "blocks"]) == {"related_to", "blocks"}
+
+    @pytest.mark.parametrize("empty", [None, []])
+    def test_absent_list_filter_is_none(self, empty):
+        assert canonical_relation_filter(empty) is None
+
+    def test_kb_reuses_the_shared_matcher(self):
+        """One matcher, so the two stores cannot drift in how they resolve aliases."""
+        assert RelationsMixin._relation_type_matches is relation_type_matches
+
+
+class TestMemoryGraphRoundTrip:
+    """Write with the alias, then read and delete by it (#13452 blocker).
+
+    Writes canonicalise, so without the same normalisation on the read and
+    delete paths a relation created as "relates_to" is stored as "related_to"
+    and then unreachable: GET returns 0 rows, DELETE 404s, invalidate no-ops.
+    """
+
+    @staticmethod
+    def _graph(stored_relations=None):
+        """Build a graph whose redis_client.json() is sync but its ops async."""
+        graph = AutoBotMemoryGraph()
+        graph._initialized = True
+        json_ops = Mock()
+        json_ops.get = AsyncMock(return_value={"relations": list(stored_relations or [])})
+        json_ops.set = AsyncMock()
+        graph.redis_client = Mock()
+        graph.redis_client.json = Mock(return_value=json_ops)
+        return graph, json_ops
+
+    async def test_write_stores_the_canonical_spelling(self):
+        graph, _ = self._graph()
+        graph._resolve_entity_ids = AsyncMock(return_value=("id-a", "id-b"))
+        graph._store_outgoing_relation = AsyncMock()
+        graph._store_incoming_relation = AsyncMock()
+
+        relation = await graph.create_relation("A", "B", relation_type="relates_to")
+
+        assert relation["type"] == "related_to"
+
+    async def test_get_relations_finds_it_by_the_alias(self):
+        graph, _ = self._graph()
+        graph._get_outgoing_relations = AsyncMock(return_value=[{"to": "id-b", "type": "related_to"}])
+        graph._get_incoming_relations = AsyncMock(return_value=[])
+
+        result = await graph.get_relations("id-a", relation_types=["relates_to"])
+
+        assert len(result["relations"]) == 1
+
+    async def test_get_relations_finds_legacy_rows_by_the_canonical_name(self):
+        """Rows persisted before #13452 still carry the alias in Redis."""
+        graph, _ = self._graph()
+        graph._get_outgoing_relations = AsyncMock(return_value=[{"to": "id-b", "type": "relates_to"}])
+        graph._get_incoming_relations = AsyncMock(return_value=[])
+
+        result = await graph.get_relations("id-a", relation_types=["related_to"])
+
+        assert len(result["relations"]) == 1
+
+    async def test_get_related_entities_traverses_through_the_alias(self):
+        graph, _ = self._graph()
+        graph.get_entity = AsyncMock(return_value={"id": "id-a", "name": "A"})
+        # Only id-a has an outgoing edge, so the BFS terminates at id-b.
+        graph._get_outgoing_relations = AsyncMock(
+            side_effect=lambda eid: [{"to": "id-b", "type": "related_to"}] if eid == "id-a" else []
+        )
+        graph._get_incoming_relations = AsyncMock(return_value=[])
+
+        related = await graph.get_related_entities("A", relation_type="relates_to", direction="outgoing")
+
+        assert len(related) == 1
+        assert related[0]["relation"]["type"] == "related_to"
+
+    async def test_delete_relation_removes_it_when_asked_by_the_alias(self):
+        graph, json_ops = self._graph([{"to": "id-b", "from": "id-a", "type": "related_to"}])
+        graph.get_entity = AsyncMock(side_effect=[{"id": "id-a"}, {"id": "id-b"}])
+
+        assert await graph.delete_relation("A", "B", relation_type="relates_to") is True
+
+        # Both directions rewritten with the matching relation removed.
+        assert json_ops.set.call_count == 2
+        for call in json_ops.set.call_args_list:
+            assert call.args[2] == []
+
+    async def test_delete_relation_leaves_other_types_alone(self):
+        graph, json_ops = self._graph([{"to": "id-b", "from": "id-a", "type": "depends_on"}])
+        graph.get_entity = AsyncMock(side_effect=[{"id": "id-a"}, {"id": "id-b"}])
+
+        await graph.delete_relation("A", "B", relation_type="relates_to")
+
+        for call in json_ops.set.call_args_list:
+            assert len(call.args[2]) == 1
+
+    async def test_invalidate_relation_matches_through_the_alias(self):
+        graph, _ = self._graph([{"to": "id-b", "from": "id-a", "type": "related_to"}])
+
+        assert await graph.invalidate_relation("id-a", "relates_to", "id-b") is True

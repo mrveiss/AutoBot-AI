@@ -3853,7 +3853,8 @@ class RelationCreateRequest(BaseModel):
     @classmethod
     def validate_relation_type(cls, v):
         if v not in _VALID_RELATION_TYPES:
-            raise ValueError(f"relation_type must be one of: {_VALID_RELATION_TYPES}")
+            # sorted(): a raw frozenset repr renders in arbitrary order (#13452).
+            raise ValueError(f"relation_type must be one of: {sorted(_VALID_RELATION_TYPES)}")
         # #13452: normalise legacy spellings so only the canonical name is stored.
         return canonical_relation_type(v)
 
@@ -4374,7 +4375,7 @@ class CreateRelationRequest(BaseModel):
 
     source_fact_id: str = Field(..., description="ID of the source fact")
     target_fact_id: str = Field(..., description="ID of the target fact")
-    relation_type: str = Field(..., description="Type of relation (e.g., relates_to, depends_on, implements)")
+    relation_type: str = Field(..., description="Type of relation (e.g., related_to, depends_on, implements)")
     metadata: dict | None = Field(None, description="Optional metadata for the relation")
 
 

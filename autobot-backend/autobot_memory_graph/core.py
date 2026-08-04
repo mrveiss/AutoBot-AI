@@ -117,6 +117,40 @@ def canonical_relation_type(relation_type: str) -> str:
     return RELATION_TYPE_ALIASES.get(relation_type, relation_type)
 
 
+def relation_type_matches(stored_type: str, wanted_type: str | None) -> bool:
+    """Compare a stored relation type against a caller-supplied filter.
+
+    Both sides are canonicalised, so relations persisted under a legacy
+    spelling stay reachable through the canonical name and vice versa — reads
+    and deletes therefore stay symmetric with writes, which canonicalise. An
+    empty or absent filter matches everything.
+
+    Args:
+        stored_type: Relation type as read back from the store.
+        wanted_type: Relation type the caller filtered on, or None/"" for any.
+
+    Returns:
+        True when the stored relation satisfies the filter.
+    """
+    if not wanted_type:
+        return True
+    return canonical_relation_type(stored_type) == canonical_relation_type(wanted_type)
+
+
+def canonical_relation_filter(relation_types: List[str] | None) -> Set[str] | None:
+    """Canonicalise a list-shaped relation filter once, for repeated matching.
+
+    Args:
+        relation_types: Relation names the caller filtered on, or None for any.
+
+    Returns:
+        A set of canonical names, or None when no filter was supplied.
+    """
+    if not relation_types:
+        return None
+    return {canonical_relation_type(rt) for rt in relation_types}
+
+
 VALID_ACTIVITY_TYPES: Set[str] = {
     "chat",
     "terminal",
@@ -333,6 +367,8 @@ __all__ = [
     "INCOMING_DIRECTIONS",
     # Helpers
     "canonical_relation_type",
+    "canonical_relation_filter",
+    "relation_type_matches",
     # Config
     "config",
 ]

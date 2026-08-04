@@ -23,7 +23,12 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Set
 
-from autobot_memory_graph.core import CORE_RELATION_TYPES, canonical_relation_type
+from autobot_memory_graph.core import (
+    CORE_RELATION_TYPES,
+    canonical_relation_filter,
+    canonical_relation_type,
+    relation_type_matches,
+)
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
 
@@ -53,24 +58,9 @@ class RelationsMixin:
 
     # -- helpers ----------------------------------------------------------
 
-    @staticmethod
-    def _relation_type_matches(stored_type: str, wanted_type: str | None) -> bool:
-        """Compare a stored relation type against a requested one (#13452).
-
-        Both sides are canonicalised, so relations persisted under the legacy
-        "relates_to" spelling stay reachable through the canonical
-        "related_to" and vice versa — no Redis migration required.
-
-        Args:
-            stored_type: Relation type as read back from Redis.
-            wanted_type: Relation type the caller filtered on, or None for any.
-
-        Returns:
-            True when the stored relation satisfies the filter.
-        """
-        if wanted_type is None:
-            return True
-        return canonical_relation_type(stored_type) == canonical_relation_type(wanted_type)
+    # #13452: the one matcher, shared with autobot_memory_graph so the two
+    # stores cannot drift in how they resolve a legacy spelling.
+    _relation_type_matches = staticmethod(relation_type_matches)
 
     def _rel_out_key(self, fact_id: str) -> str:
         return f"kb:rel:out:{fact_id}"
@@ -278,7 +268,7 @@ class RelationsMixin:
         nodes: list = []
         edges: list = []
         # #13452: canonicalise the filter once so legacy-spelled stored edges match.
-        wanted = {canonical_relation_type(rt) for rt in relation_types} if relation_types else None
+        wanted = canonical_relation_filter(relation_types)
 
         while queue:
             current_id, depth = queue.pop(0)
@@ -386,7 +376,10 @@ class RelationsMixin:
                 for entry_bytes in raw:
                     entry = json.loads(entry_bytes)
                     total += 1
-                    by_type[entry["type"]] += 1
+                    # #13452: bucket under the canonical name, otherwise a
+                    # legacy "relates_to" row surfaces as a bucket that is
+                    # absent from the available_types list returned alongside it.
+                    by_type[canonical_relation_type(entry["type"])] += 1
             if cursor == b"0" or cursor == 0:
                 break
 

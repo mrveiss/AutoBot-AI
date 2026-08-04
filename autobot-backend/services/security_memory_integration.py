@@ -106,8 +106,13 @@ SECURITY_RELATION_TYPES = {
 }
 
 
-def _verify_security_relation_vocabulary() -> None:
-    """Fail at import if the security vocabulary drifts from the canonical one.
+def verify_security_relation_vocabulary() -> None:
+    """Raise if the security vocabulary has drifted from the canonical one.
+
+    Deliberately NOT called at import: the drift it detects is static, so a
+    failure here would only ever turn a source-level mistake into a backend
+    startup failure. relation_vocabulary_test.py calls it instead, which
+    catches the same drift at the point it is introduced.
 
     Raises:
         RuntimeError: If the two security tables disagree, or if any mapped
@@ -121,9 +126,6 @@ def _verify_security_relation_vocabulary() -> None:
     unmapped = set(SECURITY_TO_BASE_RELATION.values()) - RELATION_TYPES
     if unmapped:
         raise RuntimeError(f"security relations map onto non-canonical types: {sorted(unmapped)}")
-
-
-_verify_security_relation_vocabulary()
 
 
 class SecurityFindingsIndex:
