@@ -55,7 +55,9 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
         """
         confidence = min(1.0, len(threats) * 0.4 + 0.3)
         threat_level = ThreatLevel.HIGH if "bulk_data_download" in threats else ThreatLevel.MEDIUM
-        base_fields = event.get_threat_base_fields()
+        # Overrides go through get_threat_base_fields so the key appears once
+        # in the ThreatEvent call (#13551).
+        base_fields = event.get_threat_base_fields(action="api_request")
 
         return ThreatEvent(
             event_id=event.generate_threat_id("api_abuse"),
@@ -63,7 +65,6 @@ class APIAbuseAnalyzer(ThreatAnalyzer):
             threat_category=ThreatCategory.API_ABUSE,
             threat_level=threat_level,
             confidence_score=confidence,
-            action="api_request",
             details={
                 "abuse_patterns": threats,
                 "request_rate": recent_requests,

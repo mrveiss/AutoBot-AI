@@ -32,7 +32,9 @@ class BruteForceAnalyzer(ThreatAnalyzer):
             confidence = min(1.0, recent_failures / threshold)
 
             # Issue #372: Use SecurityEvent methods to reduce feature envy
-            base_fields = event.get_threat_base_fields()
+            # Overrides go through get_threat_base_fields so the key appears once
+            # in the ThreatEvent call (#13551).
+            base_fields = event.get_threat_base_fields(action="authentication", resource="login")
 
             return ThreatEvent(
                 event_id=event.generate_threat_id("brute_force"),
@@ -40,8 +42,6 @@ class BruteForceAnalyzer(ThreatAnalyzer):
                 threat_category=ThreatCategory.BRUTE_FORCE,
                 threat_level=ThreatLevel.HIGH,
                 confidence_score=confidence,
-                action="authentication",  # Override base action
-                resource="login",  # Override base resource
                 details={
                     "failed_attempts": recent_failures,
                     "time_window_minutes": window_minutes,

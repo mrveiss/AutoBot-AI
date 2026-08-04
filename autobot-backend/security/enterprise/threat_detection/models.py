@@ -111,12 +111,20 @@ class SecurityEvent:
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
-    def get_threat_base_fields(self) -> Dict:
+    def get_threat_base_fields(self, **overrides) -> Dict:
         """Get base fields for ThreatEvent creation (Issue #372 - reduces feature envy).
 
         Returns dict with common fields needed when creating a ThreatEvent from this event.
+
+        Args:
+            **overrides: Field values that replace the event-derived defaults.
+                Analyzers that need a fixed ``action``/``resource`` must pass it
+                here rather than as a second keyword to ``ThreatEvent(...)``:
+                splatting this dict AND repeating the key raised
+                ``TypeError: got multiple values for keyword argument`` at the
+                exact moment a threat was detected (#13551).
         """
-        return {
+        fields = {
             "timestamp": self.timestamp,
             "user_id": self.user_id,
             "source_ip": self.source_ip,
@@ -124,6 +132,8 @@ class SecurityEvent:
             "resource": self.resource,
             "raw_event": self.raw_event,
         }
+        fields.update(overrides)
+        return fields
 
     def generate_threat_id(self, prefix: str) -> str:
         """Generate a unique threat ID based on this event (Issue #372 - reduces feature envy)."""
