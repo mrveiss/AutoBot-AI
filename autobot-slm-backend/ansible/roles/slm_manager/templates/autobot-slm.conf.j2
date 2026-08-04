@@ -77,9 +77,13 @@ server {
     }
 
     # SLM Backend API reverse proxy
+    # #13604: upgrade headers here so a new SLM WebSocket route works without
+    # its own location block. $connection_upgrade is "close" for plain HTTP.
     location /slm/api/ {
         proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -192,6 +196,13 @@ server {
     }
 
     # User backend API proxy
+    #
+    # #13604: the upgrade headers are what make a new WebSocket route work
+    # without its own block above. $connection_upgrade is "close" for plain HTTP,
+    # so REST is unaffected. An upgraded request matching here inherits
+    # proxy_read_timeout 300s rather than the 86400 the dedicated blocks use —
+    # proxy_read_timeout takes no variables, so a route needing a longer idle
+    # window still adds its own block, but now degrades to a reconnect, not 404.
     location /api/ {
         proxy_pass {{ frontend_backend_protocol }}://autobot_backend;
         proxy_http_version 1.1;
@@ -200,6 +211,8 @@ server {
         # with 413. User-backend uploads need a generous cap; the app enforces its
         # own per-file limit. Scoped here so SLM agent paths keep the 10m default.
         client_max_body_size 1g;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -275,9 +288,13 @@ server {
         proxy_read_timeout 86400;
     }
 
+    # #13604: upgrade headers on the generic blocks — see the equivalents in the
+    # first server block above for the rationale and the timeout caveat.
     location /slm/api/ {
         proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -291,6 +308,8 @@ server {
     location /api/ {
         proxy_pass http://{{ slm_backend_host }}:{{ slm_backend_port }}/api/;
         proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
