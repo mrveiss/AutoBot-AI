@@ -11,6 +11,7 @@ Author: mrveiss
 """
 
 import asyncio
+import functools
 import os
 import sys
 import types
@@ -261,6 +262,181 @@ for _svc_mod in [
         # return a MagicMock and cause a UsageError during test collection.
         _svc_stub.pytest_plugins = []  # type: ignore[attr-defined]
         sys.modules[_svc_mod] = _svc_stub
+
+# ---------------------------------------------------------------------------
+# autobot_shared.redis_client stand-in (#13446)
+# ---------------------------------------------------------------------------
+# Backend unit tests must never open a Redis socket. ``get_async_redis_client()``
+# spends the client's full retry budget before giving up — 60s per call, 121s for
+# the 56 Redis-agnostic tests in tests/services/test_claim_verifier.py.
+#
+# The stand-in used to be installed 400 lines below, and only ``if
+# "autobot_shared.redis_client" not in sys.modules``, which made "does this unit
+# test talk to a live Redis" a function of who imported first: collection order,
+# and under ``-n auto --dist loadscope`` whichever files the worker was handed.
+# This file also defeated its own guard — the real-load of
+# services.tool_output_filter directly below reaches
+# autobot_shared.logging_manager -> config.registry._get_redis(), which imports
+# the genuine module, so the guard could never fire on this path.
+#
+# It is now installed unconditionally, and released again, for exactly the four
+# windows that belong to this directory (the #13359 pattern): this file's own
+# real-loads, pytest_configure's real-loads, the collection of each backend test
+# module, and the run of each backend test. Outside them the genuine module is
+# put back, because autobot_shared/'s own tests exercise it for real in the same
+# CI invocation (#13084) and several of them install their own stub only ``if it
+# is not already there`` — leaving the key empty flips those on.
+_REDIS_CLIENT_KEY = "autobot_shared.redis_client"
+
+
+def _import_real_redis_client() -> types.ModuleType | None:
+    """Import the genuine module once, before the first window opens.
+
+    Importing it opens no socket — that only happens when something *calls*
+    ``get_redis_client()``, and every such call site this directory reaches runs
+    inside a window, where the stand-in answers None. Having it loaded gives the
+    stand-in something to delegate to, and gives each window the module the rest
+    of the session expects to find rather than an empty key.
+    """
+    import importlib as _rc_il
+
+    try:
+        return _rc_il.import_module(_REDIS_CLIENT_KEY)
+    except Exception:  # bare env without the redis package — stand-in only
+        return None
+
+
+def _make_redis_client_standin(real: types.ModuleType | None) -> types.ModuleType:
+    """Build the socket-free ``autobot_shared.redis_client`` stand-in.
+
+    Only the two connection factories are replaced. Everything else — the
+    ``RedisConnectionManager`` class, the enums, the statistics dataclasses —
+    delegates to *real*, because backend tests do use them: e.g.
+    monitoring/redis_prometheus_metrics_test.py drives the genuine
+    ``RedisConnectionManager`` with a mocked metrics manager, and a MagicMock in
+    its place turns every assertion into a tautology.
+
+    Built once and reused by every window so ``mock.patch`` targets keep their
+    identity across them (#13359).
+    """
+    mod = types.ModuleType(_REDIS_CLIENT_KEY)
+
+    async def _get_async_redis_client(*_a, **_k):
+        # A coroutine returning None, so callers take their documented "Redis
+        # unavailable" branch instead of awaiting a MagicMock (TypeError).
+        return None
+
+    def _get_redis_client(*_a, **_k):
+        # A real callable returning None, NOT a MagicMock:
+        # config.registry._fetch_from_redis() treats any truthy client as usable
+        # and would hand that MagicMock straight back as a config *value*.
+        return None
+
+    def _delegate(attr: str):
+        # Dunders are answered by the module object itself or not at all — a
+        # MagicMock __path__ would make the import system treat this as a
+        # package.
+        if not attr.startswith("__") and real is not None:
+            try:
+                return getattr(real, attr)
+            except AttributeError:
+                pass
+        if attr.startswith("__"):
+            raise AttributeError(attr)
+        return MagicMock()
+
+    # Carry the genuine signature and docstring across, so introspection keeps
+    # working: utils/redis_consolidation_test.py asserts get_redis_client's
+    # parameter defaults and the "CANONICAL" line in its docstring.
+    # ``update_wrapper`` also sets ``__wrapped__``, which is what makes
+    # ``inspect.signature`` report the real one.
+    for _name, _fn in (
+        ("get_async_redis_client", _get_async_redis_client),
+        ("get_redis_client", _get_redis_client),
+    ):
+        _genuine = getattr(real, _name, None) if real is not None else None
+        setattr(mod, _name, _fn if _genuine is None else functools.update_wrapper(_fn, _genuine))
+    mod.__getattr__ = _delegate  # type: ignore[attr-defined]
+    return mod
+
+
+class _ScopedRedisClient:
+    """Own ``sys.modules["autobot_shared.redis_client"]`` for this directory only.
+
+    Re-entrant: the snapshot is taken on the outermost enter and put back when
+    the last holder leaves, so a nested window (pytest_configure inside the
+    import window) cannot restore early. Every caller installs and removes from
+    the same ``try/finally``.
+    """
+
+    def __init__(self) -> None:
+        self._holders: set[str] = set()
+        self._snapshot: tuple | None = None
+
+    def enter(self, holder: str) -> None:
+        """Install the stand-in if *holder* is the first to ask for it."""
+        first = not self._holders
+        self._holders.add(holder)
+        if not first:
+            return
+        pkg = sys.modules.get("autobot_shared")
+        self._snapshot = (
+            _REDIS_CLIENT_KEY in sys.modules,
+            sys.modules.get(_REDIS_CLIENT_KEY),
+            pkg is not None and "redis_client" in pkg.__dict__,
+            getattr(pkg, "redis_client", None),
+        )
+        self._bind(_REDIS_CLIENT_STANDIN)
+
+    def exit(self, holder: str) -> None:
+        """Put the previous module back once the last holder is done."""
+        self._holders.discard(holder)
+        if not self._holders:
+            self._restore()
+
+    def restore_all(self) -> None:
+        """Unconditionally release the stand-in (session-teardown safety net)."""
+        self._holders.clear()
+        self._restore()
+
+    def _restore(self) -> None:
+        snapshot, self._snapshot = self._snapshot, None
+        if snapshot is None:
+            return
+        had_mod, prior_mod, had_attr, prior_attr = snapshot
+        if had_mod:
+            sys.modules[_REDIS_CLIENT_KEY] = prior_mod
+        else:
+            sys.modules.pop(_REDIS_CLIENT_KEY, None)
+        pkg = sys.modules.get("autobot_shared")
+        if pkg is None:
+            return
+        if had_attr:
+            pkg.redis_client = prior_attr  # type: ignore[attr-defined]
+        else:
+            pkg.__dict__.pop("redis_client", None)
+
+    @staticmethod
+    def _bind(mod: types.ModuleType) -> None:
+        """Install *mod* and bind it on the parent package.
+
+        The parent bind is load-bearing: ``patch("autobot_shared.redis_client.X")``
+        resolves through ``getattr(autobot_shared, "redis_client")`` (#11661),
+        which a bare ``sys.modules`` assignment never sets.
+        """
+        sys.modules[_REDIS_CLIENT_KEY] = mod
+        pkg = sys.modules.get("autobot_shared")
+        if pkg is not None:
+            pkg.redis_client = mod  # type: ignore[attr-defined]
+
+
+_REDIS_CLIENT_STANDIN = _make_redis_client_standin(_import_real_redis_client())
+_SCOPED_REDIS = _ScopedRedisClient()
+
+# Window 1 of 4 — every module-level real-load below binds whichever
+# ``get_async_redis_client`` it finds into its own globals and keeps it for the
+# rest of the session. Closed at the end of this file's module-level code.
+_SCOPED_REDIS.enter("conftest-import")
 
 # #11248: tool_output_filter is lightweight (stdlib + yaml + autobot_shared; Redis
 # is only touched lazily inside methods, not at import), so its unit tests exercise
@@ -683,22 +859,6 @@ if "auth_middleware" not in sys.modules:
     _auth_stub.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
     sys.modules["auth_middleware"] = _auth_stub
 
-# autobot_shared.redis_client stub — provides get_async_redis_client as a
-# proper coroutine returning None so that rate-limiters and other callers that
-# do ``redis = await get_async_redis_client()`` fall back to in-process logic
-# instead of awaiting a MagicMock (which raises TypeError).
-if "autobot_shared.redis_client" not in sys.modules:
-    pass
-
-    _redis_client_mod = types.ModuleType("autobot_shared.redis_client")
-
-    async def _get_async_redis_client_stub(*_a, **_k):
-        return None
-
-    _redis_client_mod.get_async_redis_client = _get_async_redis_client_stub  # type: ignore[attr-defined]
-    _redis_client_mod.__getattr__ = lambda attr: MagicMock()  # type: ignore[attr-defined]
-    sys.modules["autobot_shared.redis_client"] = _redis_client_mod
-
 # autobot_shared.redis_management stubs — the real package tries to open
 # sockets at import time; tests must not do that.
 for _redis_sub in [
@@ -1043,6 +1203,10 @@ if "models" not in sys.modules:
 # and no __init__.py side-effects like find_spec() would cause.
 
 
+# End of window 1 (#13446) — nothing below this line runs at import time.
+_SCOPED_REDIS.exit("conftest-import")
+
+
 def _parse_requirements(path: Path) -> list[str]:
     """Return package names declared in a requirements.txt file."""
     names: list[str] = []
@@ -1245,9 +1409,16 @@ def pytest_configure(config):  # noqa: ANN001
     Real-loading here ensures ``sys.modules["services.llm_cost_tracker"]`` is the
     same object as ``_check_pricing_staleness.__globals__`` so patch() is effective.
     """
-    _real_load_and_bind("services.llm_api_key_service", backend_root / "services" / "llm_api_key_service.py")
-    _real_load_and_bind("services.llm_cost_tracker", backend_root / "services" / "llm_cost_tracker.py")
-    _real_load_light_services()
+    # Window 2 of 4 (#13446): these modules import autobot_shared.redis_client at
+    # module top — the paragraph above says so — and bind what they find there
+    # for the rest of the session.
+    _SCOPED_REDIS.enter("configure")
+    try:
+        _real_load_and_bind("services.llm_api_key_service", backend_root / "services" / "llm_api_key_service.py")
+        _real_load_and_bind("services.llm_cost_tracker", backend_root / "services" / "llm_cost_tracker.py")
+        _real_load_light_services()
+    finally:
+        _SCOPED_REDIS.exit("configure")
 
 
 # #12463: cascade hardening for manually-installed stub modules.
@@ -1317,3 +1488,73 @@ def pytest_collectreport(report) -> None:  # noqa: ANN001
             if _mod is not None and not _looks_like_uninitialized_stub(_mod):
                 continue  # healthy real module — leave it cached, don't re-run its import
             sys.modules.pop(_name, None)
+
+
+# ---------------------------------------------------------------------------
+# Windows 3 and 4 of the redis_client stand-in (#13446)
+# ---------------------------------------------------------------------------
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):  # noqa: ANN001, ANN201
+    """Window 3: hold the stand-in around this directory's own module imports.
+
+    Directory-scoped — pytest dispatches this through ``collector.ihook``, so it
+    fires only for nodes whose conftest chain includes this file — and it wraps
+    exactly ``collector.collect()``, the call in which a ``Module`` node imports
+    its test file, and with it every production module that binds
+    ``get_async_redis_client`` into its own globals at import time.
+
+    ``pytest_collectstart``/``pytest_collectreport`` cannot serve here:
+    ``pytest_collectreport`` never fires for a ``Dir`` or ``Package`` node, so a
+    pair keyed on one would install the stand-in and never restore it (#13359).
+    """
+    holder = f"collect:{collector.nodeid}"
+    _SCOPED_REDIS.enter(holder)
+    try:
+        yield
+    finally:
+        _SCOPED_REDIS.exit(holder)
+
+
+def _is_backend_item(item) -> bool:  # noqa: ANN001
+    """True when *item* lives under autobot-backend/.
+
+    ``pytest_runtest_protocol`` is NOT directory-scoped, unlike
+    ``pytest_make_collect_report``: ``Session.pytest_runtestloop`` dispatches it
+    through ``item.config.hook``, the global relay, so a hookwrapper defined in
+    any conftest wraps every item in the session (#13359). Without this check
+    the stand-in would be live while autobot_shared/'s own Redis tests run.
+    """
+    path = getattr(item, "path", None)
+    return path is not None and backend_root in Path(str(path)).parents
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item, nextitem):  # noqa: ANN001, ANN201
+    """Window 4: hold the stand-in for setup, call and teardown of each test here.
+
+    Needed on top of window 3 because several callers import the client lazily
+    inside a function — ``config.registry._get_redis()`` does ``from
+    autobot_shared.redis_client import get_redis_client`` on every call — so the
+    name is resolved when the test runs, not when its module was imported.
+    """
+    if not _is_backend_item(item):
+        yield
+        return
+    holder = f"run:{item.nodeid}"
+    _SCOPED_REDIS.enter(holder)
+    try:
+        yield
+    finally:
+        _SCOPED_REDIS.exit(holder)
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ANN001
+    """Safety net: never let the stand-in outlive the session.
+
+    Every window restores from a ``finally``, but a ``BaseException`` unwinding
+    past pytest's hook machinery (KeyboardInterrupt during collection, a worker
+    crash) could still strand the holders set.
+    """
+    _SCOPED_REDIS.restore_all()
