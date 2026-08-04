@@ -180,7 +180,7 @@ jobs:
         # in sys.modules for the rest of the session, breaking the other
         # backend's own tests.
         python -m pytest \
-          autobot-backend autobot_shared autobot-tts-worker repo_tests \
+          autobot-backend autobot_shared autobot-tts-worker repo_tests tools \
           -n auto --dist loadscope \
           --splits 12 --group ${{ matrix.shard }} \
           --durations-path .test_durations \
