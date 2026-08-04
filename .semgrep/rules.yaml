@@ -109,6 +109,11 @@ rules:
           - pattern: $DB.execute("..." + $VAR + "...")
           - pattern: $DB.execute("..." + $VAR)
           - pattern: $DB.execute($VAR + "...")
+          # #13519: executescript takes a whole SQL script and cannot take bound
+          # parameters at all, so interpolation into it is strictly worse than
+          # into execute(). It was the one construction shape this rule missed.
+          - pattern: $DB.executescript(f"...{$VAR}...")
+          - pattern: $DB.executescript("..." % $VAR)
       - pattern-not: $DB.execute(f"PRAGMA table_info([{$VAR}])")
     message: >
       SQL query built with string interpolation/concatenation risks SQL
@@ -118,6 +123,13 @@ rules:
     metadata:
       category: security
       cwe: CWE-89
+      # #13519: this rule matches on how the SQL is CONSTRUCTED, which is why it
+      # is the one worth having. The platform "SQL Injection with FastAPI" rule
+      # matches on taint SHAPE instead: it reported 33 sites, all false positives
+      # (SQLAlchemy Core constructs assembled across statements, which its taint
+      # tracker mistakes for strings), and MISSED api/database_mcp.py — the only
+      # file in either backend that genuinely interpolates SQL. Triage that rule
+      # family as a batch; see docs/developer/CODEQL_SUPPRESSION.md.
 
   # ── Unsafe deserialisation ────────────────────────────────────────────────────
 
@@ -313,3 +325,4 @@ rules:
         - autobot-frontend/src/**
     metadata:
       category: best-practice
+
