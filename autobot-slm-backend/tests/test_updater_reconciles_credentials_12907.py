@@ -42,7 +42,7 @@ _DATABASES = _ROLE_TASKS / "databases.yml"
 
 #: The awk program that strips unmarked duplicates. Distinctive enough that a
 #: copy anywhere else in the tree is a real duplication, not a coincidence.
-_STRIP_FINGERPRINT = 'dropped++; next'
+_STRIP_FINGERPRINT = "dropped++; next"
 
 
 def _iter_mappings(node):
@@ -111,8 +111,7 @@ def test_no_role_task_file_is_git_ignored():
     ignored = [line for line in result.stdout.splitlines() if line.strip()]
     assert not ignored, (
         "role files excluded by .gitignore — they exist locally, are absent from "
-        "the remote, and every include_role pointing at them breaks on a host:\n  "
-        + "\n  ".join(ignored)
+        "the remote, and every include_role pointing at them breaks on a host:\n  " + "\n  ".join(ignored)
     )
 
 
@@ -122,9 +121,7 @@ def test_updater_applies_the_reconcile_for_both_prefixes():
     Reconciling only one leaves the other's stale duplicates in place, and the
     SLM migration parse takes the *first* ``DATABASE_URL=`` match.
     """
-    prefixes = {
-        (task.get("vars") or {}).get("db_env_prefix") for task in _reconcile_includes()
-    }
+    prefixes = {(task.get("vars") or {}).get("db_env_prefix") for task in _reconcile_includes()}
     assert {"SLM", "AUTOBOT"} <= prefixes, (
         "update-all-nodes.yml must apply roles/postgresql credentials_reconcile "
         f"for both prefixes; found {sorted(p for p in prefixes if p)}"
@@ -165,9 +162,7 @@ def test_reconcile_is_defined_exactly_once():
 
 def test_databases_yml_includes_rather_than_repeats_it():
     tasks = yaml.safe_load(_DATABASES.read_text(encoding="utf-8"))
-    includes = [
-        (t.get("ansible.builtin.include_tasks") or t.get("include_tasks")) for t in tasks
-    ]
+    includes = [(t.get("ansible.builtin.include_tasks") or t.get("include_tasks")) for t in tasks]
     assert "credentials_reconcile.yml" in includes, (
         "roles/postgresql/tasks/databases.yml must include credentials_reconcile.yml "
         "so provisioning and the updater share one implementation"
@@ -187,8 +182,7 @@ def test_strip_is_guarded_on_the_managed_block_existing():
     guard = strip.get("when")
     guard = [guard] if isinstance(guard, str) else list(guard or [])
     assert any("_cred_block_present" in str(c) for c in guard), (
-        "the strip task must be conditional on the managed block being present; "
-        f"found when={guard!r}"
+        "the strip task must be conditional on the managed block being present; " f"found when={guard!r}"
     )
 
 
@@ -199,14 +193,11 @@ def test_updater_asserts_delivery_instead_of_reporting_success_blindly():
     asserts = [
         task
         for task in _iter_mappings(playbook)
-        if (task.get("ansible.builtin.assert") or task.get("assert"))
-        and "12959" in str(task.get("name", ""))
+        if (task.get("ansible.builtin.assert") or task.get("assert")) and "12959" in str(task.get("name", ""))
     ]
     assert asserts, "update-all-nodes.yml has no post-update delivery assertion (#12959)"
 
-    covered = " ".join(
-        str((t.get("ansible.builtin.assert") or t["assert"]).get("that")) for t in asserts
-    )
+    covered = " ".join(str((t.get("ansible.builtin.assert") or t["assert"]).get("that")) for t in asserts)
     for invariant, issue in (
         ("faulthandler", "#12777"),
         ("dup_cred_keys", "#12907 Defect 1"),
