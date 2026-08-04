@@ -32909,6 +32909,45 @@
       }
     },
     "/api/stateful/backups/{backup_id}": {
+      "delete": {
+        "description": "Delete a backup and its stored file (#13307).\n\nThere was no delete route at all before this, so nothing in the system could\nreclaim space and retention was unimplementable — while the destination sat\non the root filesystem.",
+        "operationId": "delete_backup_api_stateful_backups__backup_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backup_id",
+            "required": true,
+            "schema": {
+              "title": "Backup Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Backup",
+        "tags": [
+          "stateful"
+        ]
+      },
       "get": {
         "description": "Get a backup by ID.",
         "operationId": "get_backup_api_stateful_backups__backup_id__get",
