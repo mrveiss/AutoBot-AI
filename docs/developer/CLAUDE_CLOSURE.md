@@ -13,6 +13,7 @@ These compare the delivery against the ORIGINAL ISSUE BODY — implementation he
    ```
    Forward-tracking references (`tracked in #N`, `TODO(#N)`, `deferred to #N`, wrapped across lines included) **block closure** until a real follow-up issue exists and each reference is updated. Historical mentions pass. Also eyeball the credited PR diff for `#N`. Exit 1 ⇒ do not close.
 3. **No partial close.** A bundled/multi-issue PR's `Closes #N` requires the FULL AC set of N. If a PR delivers a subset: check off the delivered subtask on the issue and either leave it open or name the follow-up issue number in the same comment. Riding along on a bundle's momentum never closes an issue.
+4. **Merged ≠ delivered (#12959).** A fix whose only home is a file the runtime never applies is not delivered. Before closing an issue whose fix lands in `autobot-slm-backend/ansible/roles/`, name the task in `playbooks/update-all-nodes.yml` that applies it — `include_role` (with `tasks_from` if partial) or a bare `roles:` entry. No such task ⇒ the builtin updater cannot deliver it and the issue stays open. #12777, #12886 and #12907 were each closed against a green merge and were still absent from every host weeks later; the playbook's `[PLAY 2] Verify | …` assertions now fail such a run instead of reporting success.
 
 ## Before Closing an Issue
 
