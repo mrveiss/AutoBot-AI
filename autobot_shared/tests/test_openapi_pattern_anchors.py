@@ -8,10 +8,16 @@ author wrote with ``$``. JSON Schema's regex dialect is ECMA-262, which has no
 
     JS   /^(hour|day)\\z/.test("hour")  -> False   the valid value fails
     JS   /^(hour|day)\\z/.test("hourz") -> True    an invalid value passes
-    Py   re.match(r"^(hour|day)\\z", …) -> re.error: bad escape \\z
+    Py   re.match(r"^(hour|day)\\z", …) -> re.error: bad escape \\z   (3.10-3.12)
+    Py   re.match(r"^(hour|day)\\z", "hour\\n") -> None                (3.14)
 
-Both measured. Validation is inverted for every JS client and impossible for
-every Python one, from a spec that looks fine in review.
+All measured. Validation is inverted for every JS client and, on the
+interpreters that reject ``\\z``, impossible for every Python one — from a spec
+that looks fine in review. Newer interpreters accept ``\\z`` as a synonym of
+``\\Z``, so there the Python half stops raising and starts silently disagreeing
+with the ``$`` the author wrote instead; see
+``test_rust_anchor_is_genuinely_unusable_in_python``. The normalisation is
+required either way, and the guard that enforces it never compiles a pattern.
 
 Surfaced by `verify-generated-types-slm` failing on a PR that touched no schema:
 the committed spec had ``$`` and a fresh dump produced ``\\z``, so CI reported
@@ -121,9 +127,41 @@ def test_both_dump_paths_normalize():
 
 
 def test_rust_anchor_is_genuinely_unusable_in_python():
-    """Pins the premise, so nobody 'simplifies' this away as cosmetic."""
-    with pytest.raises(re.error):
-        re.compile("^(hour|day)\\z")
+    """Pins the premise, so nobody 'simplifies' this away as cosmetic.
+
+    The premise outlived the assertion that expressed it (#13551). This used to
+    require ``re.compile`` to raise, which was true when written and stopped
+    being true: newer interpreters accept ``\\z`` as a synonym of ``\\Z``
+    (measured here: 3.10, 3.11 and 3.12 raise; 3.14 compiles). The contract is
+    still broken on those interpreters, just silently — ``$`` also matches
+    before a trailing newline and ``\\z`` never does, so a value the schema
+    author meant to accept is rejected instead.
+
+    Asserted behaviourally rather than by version, because the exact boundary
+    cannot be pinned from the interpreters available here and a wrong constant
+    would re-break this the same way. Whichever branch the interpreter takes,
+    the statement is the same and always load-bearing: a Rust ``\\z`` anchor
+    never behaves like the ``$`` it replaced.
+
+    ``normalize_pattern_anchors`` itself is unaffected — it is a string-level
+    ``endswith`` rewrite that never compiles the pattern — and the guard that
+    actually keeps ``\\z`` out of the published spec is
+    ``test_committed_slm_spec_carries_no_rust_anchor``, which scans the
+    artifact directly. Neither depends on ``re`` rejecting anything.
+    """
+    try:
+        rust_anchored = re.compile("^(hour|day)\\z")
+    except re.error:
+        rust_anchored = None
+
+    intended = re.compile("^(hour|day)$")
+    assert intended.match("hour\n") is not None, "premise: the `$` the author wrote accepts a trailing newline"
+
+    assert rust_anchored is None or rust_anchored.match("hour\n") is None, (
+        "a Rust `\\z` anchor must never behave like the `$` it replaced: it either "
+        "fails to compile, or compiles and rejects a value `$` accepts. If it ever "
+        "matches identically, re-derive why this spec is normalised at all."
+    )
 
 
 def test_node_reads_the_rust_anchor_as_a_literal_z():

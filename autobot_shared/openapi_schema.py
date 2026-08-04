@@ -29,7 +29,13 @@ def normalize_pattern_anchors(node: Any) -> Any:
 
         JS   /^(hour|day)\\z/.test("hour")  -> false     (the valid value fails)
         JS   /^(hour|day)\\z/.test("hourz") -> true      (an invalid value passes)
-        Py   re.match(r"^(hour|day)\\z", …) -> re.error: bad escape \\z
+        Py   re.match(r"^(hour|day)\\z", …) -> re.error  (3.10-3.12)
+        Py   re.match(r"^(hour|day)\\z", "hour\\n") -> None   (3.14; `$` matches)
+
+    Newer interpreters accept ``\\z`` as a synonym of ``\\Z``, so on those the
+    Python breakage turns silent rather than disappearing (#13551). This rewrite
+    is a string comparison and never compiles the pattern, so it is unaffected
+    by which interpreter runs it.
 
     So a spec carrying it silently inverts validation for every JS client and
     breaks every Python one. Field authors write ``$``; this restores what they
