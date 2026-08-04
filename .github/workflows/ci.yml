@@ -38,7 +38,26 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # #13432: cancel superseded PR runs, but let a push to a base branch finish.
+  #
+  # On a pull request a new push makes the previous run obsolete, so cancelling
+  # is right. On a push to Dev_new_gui it meant each merge cancelled the previous
+  # merge's verification, and merges arrive faster than the suite completes: of
+  # the last 39 completed base runs, 26 were cancelled and NONE succeeded. The
+  # base branch was effectively never verified, and measuring the #13162 backlog
+  # repeatedly meant hunting for a run that happened to survive.
+  #
+  # This does not queue unboundedly. With cancel-in-progress false, GitHub keeps
+  # at most one run in progress plus one pending per group — a newly queued run
+  # cancels the previously pending one. So base runs serialise, each completes,
+  # and at most one waits. Under a burst you get a verdict for a recent commit
+  # rather than for every commit, which is the useful half.
+  #
+  # Cost is bounded to GitHub-hosted capacity: every job in THIS workflow is
+  # ubuntu-latest (the twelve python-suite shards included, see the note above
+  # the python-shard job). It adds nothing to the [self-hosted, Linux, X64]
+  # singleton, which other workflows depend on.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 
 permissions:
