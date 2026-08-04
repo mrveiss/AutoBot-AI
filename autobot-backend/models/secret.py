@@ -35,12 +35,12 @@ class SecretType(str, Enum):
 
     SSH_KEY = "ssh_key"
     # nosemgrep: autobot-hardcoded-secret-key
-    PASSWORD = "password"  # nosec B105 - enum value, not actual password
+    PASSWORD = "password"  # nosec B105  # enum value, not actual password
     # nosemgrep: autobot-hardcoded-secret-key
     API_KEY = "api_key"
     # nosemgrep: autobot-hardcoded-secret-key
-    TOKEN = "token"  # nosec B105 - enum value, not actual token
-    OAUTH_REFRESH_TOKEN = "oauth_refresh_token"  # nosec B105 - enum value
+    TOKEN = "token"  # nosec B105  # enum value, not actual token
+    OAUTH_REFRESH_TOKEN = "oauth_refresh_token"  # nosec B105  # enum value
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     INFRASTRUCTURE_HOST = "infrastructure_host"

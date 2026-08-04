@@ -210,7 +210,7 @@ class ConnectorCredentialStore:
             None,
             lambda: self._svc.create_secret(
                 name=name,
-                secret_type="connector_oauth_token",  # nosec B106 - SecretType label, not a credential
+                secret_type="connector_oauth_token",  # nosec B106  # SecretType label, not a credential
                 value=value,
                 scope="user",
                 created_by=owner_id,
@@ -223,7 +223,7 @@ class ConnectorCredentialStore:
                 owner_id,
                 value,
                 name=name,
-                secret_type="connector_oauth_token",  # nosec B106 - SecretType label, not a credential
+                secret_type="connector_oauth_token",  # nosec B106  # SecretType label, not a credential
             )
         return result["id"]
 

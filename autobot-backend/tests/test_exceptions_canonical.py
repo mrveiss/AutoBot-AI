@@ -108,9 +108,9 @@ class TestInstantiation:
         err = exc.FileOperationError(
             "io fail",
             file_path="/tmp/x",
-            operation="read",  # nosec B108 - test/controlled code uses tmpdir intentionally
+            operation="read",  # nosec B108  # test/controlled code uses tmpdir intentionally
         )
-        assert err.file_path == "/tmp/x"  # nosec B108 - test/controlled code uses tmpdir intentionally
+        assert err.file_path == "/tmp/x"  # nosec B108  # test/controlled code uses tmpdir intentionally
         assert err.operation == "read"
 
     def test_internal_error_safe_message(self):

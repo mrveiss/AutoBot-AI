@@ -102,7 +102,7 @@ class GUIController:
     def _is_canonical_display_active(self) -> bool:
         """Check whether an X server is already listening on the canonical display."""
         try:
-            result = subprocess.run(  # nosec B603 B607 - fixed argv, no user input
+            result = subprocess.run(  # nosec B603 B607  # fixed argv, no user input
                 ["pgrep", "-f", f"Xtigervnc {CANONICAL_DISPLAY}"],
                 capture_output=True,
                 timeout=5,
@@ -257,7 +257,7 @@ class GUIController:
         """
         try:
             result = await asyncio.to_thread(
-                subprocess.run,  # nosec B603 B607 - fixed argv, app_title passed as a single arg (no shell)
+                subprocess.run,  # nosec B603 B607  # fixed argv, app_title passed as a single arg (no shell)
                 ["/usr/bin/xdotool", "search", "--name", app_title, "windowactivate"],
                 capture_output=True,
                 timeout=5,
@@ -309,7 +309,7 @@ class GUIController:
 
                 result = subprocess.run(
                     ["which", "kex"], capture_output=True, text=True
-                )  # nosec B603 B607 - fixed argv, probing kex availability
+                )  # nosec B603 B607  # fixed argv, probing kex availability
                 if result.stdout.strip():
                     logger.info("Kex is available. If GUI fails, consider starting " "a Kex session.")
                     return True

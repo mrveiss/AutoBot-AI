@@ -727,7 +727,7 @@ class SecureSandboxExecutor:
             container_config["volumes"] = config.volumes
         else:
             # Default volumes
-            container_config["tmpfs"] = {  # nosec B108 - container tmpfs mounts
+            container_config["tmpfs"] = {  # nosec B108  # container tmpfs mounts
                 "/tmp": "size=50M,mode=1777",
                 "/sandbox/tmp": "size=50M,mode=1777",
             }

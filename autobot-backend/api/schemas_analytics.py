@@ -2652,7 +2652,7 @@ class NodeType(str, Enum):
     RAISE = "raise"
     BREAK = "break"
     CONTINUE = "continue"
-    PASS = "pass"  # nosec B105 - CFG statement type enum value, not a password
+    PASS = "pass"  # nosec B105  # CFG statement type enum value, not a password
 
 
 class EdgeType(str, Enum):

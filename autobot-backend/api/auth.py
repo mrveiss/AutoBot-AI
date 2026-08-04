@@ -564,7 +564,7 @@ def _decode_refresh_token(token: str) -> Dict:
     mw = get_auth_middleware()
     token_alg = _peek_alg(token)
     try:
-        if token_alg == "RS256":  # nosec B105 - JWT algorithm identifier, not a credential
+        if token_alg == "RS256":  # nosec B105  # JWT algorithm identifier, not a credential
             payload = decode_jwt_no_verify_exp(
                 token,
                 public_key=mw.jwt_public_key,
@@ -712,7 +712,7 @@ async def validate_token(
     # Step 2: try decode ignoring expiry to distinguish expired vs. invalid
     token_alg = _peek_alg(token)
     try:
-        if token_alg == "RS256":  # nosec B105 - JWT algorithm identifier, not a credential
+        if token_alg == "RS256":  # nosec B105  # JWT algorithm identifier, not a credential
             expired_payload = decode_jwt_no_verify_exp(token, public_key=mw.jwt_public_key, algorithms=["RS256"])
         else:
             expired_payload = decode_jwt_no_verify_exp(token, secret=mw.jwt_secret, algorithms=["HS256"])

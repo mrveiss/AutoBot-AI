@@ -115,7 +115,7 @@ class TestAtomicWriteJson:
             data = {
                 "backend": {
                     "server_host": "0.0.0.0"
-                }  # nosec B104 - intentional bind to all interfaces for service/test
+                }  # nosec B104  # intentional bind to all interfaces for service/test
             }
             await _atomic_write_json(target, data)
             assert target.exists()

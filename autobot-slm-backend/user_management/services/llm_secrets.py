@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # The only sensitive field in an LLM provider config entry.
 _SENSITIVE_FIELD = "api_key"
-_SECRET_TYPE = "llm-api-key"  # nosec B105 - type label, not a hardcoded secret
+_SECRET_TYPE = "llm-api-key"  # nosec B105  # type label, not a hardcoded secret
 _VAULT_ID_KEY = "api_key_vault_id"
 
 

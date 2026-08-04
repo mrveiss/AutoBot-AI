@@ -53,7 +53,7 @@ async def revoke_authority_token_jti(token: str) -> bool:
         JWTDecodeError: Token is malformed and the jti cannot be extracted.
     """
     alg = _peek_alg(token)
-    if alg != "RS256":  # nosec B105 - JWT algorithm identifier string, not a credential
+    if alg != "RS256":  # nosec B105  # JWT algorithm identifier string, not a credential
         raise JWTDecodeError(f"revoke_authority_token_jti: expected RS256 token, got alg={alg!r}")
 
     mw = get_auth_middleware()

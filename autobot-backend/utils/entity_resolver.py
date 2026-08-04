@@ -536,7 +536,7 @@ class EntityResolver:
                 totals["processing_time"] += history.get("processing_time", 0)
                 totals["entities_processed"] += history.get("total_original", 0)
                 totals["entities_resolved"] += history.get("total_canonical", 0)
-            except Exception:  # nosec B112 - skip malformed JSON entries
+            except Exception:  # nosec B112  # skip malformed JSON entries
                 continue
         return totals
 

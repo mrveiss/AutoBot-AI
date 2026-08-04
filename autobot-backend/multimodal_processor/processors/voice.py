@@ -117,7 +117,7 @@ class VoiceProcessor(BaseModalProcessor):
             self.logger.info("Loading Whisper model...")
             self.whisper_processor = WhisperProcessor.from_pretrained(
                 "openai/whisper-base", resume_download=True
-            )  # nosec B615 - HuggingFace model loaded by name; revision pinning managed operationally
+            )  # nosec B615  # HuggingFace model loaded by name; revision pinning managed operationally
             self.whisper_model = WhisperForConditionalGeneration.from_pretrained(  # nosec B615
                 "openai/whisper-base",
                 torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),

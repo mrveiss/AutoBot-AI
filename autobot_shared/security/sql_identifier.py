@@ -14,7 +14,7 @@ Usage:
     from autobot_shared.security.sql_identifier import validate_sql_identifier
 
     safe_table = validate_sql_identifier(table_name, "table name")
-    query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608 - identifier allowlisted
+    query = f"SELECT COUNT(*) FROM {safe_table}"  # nosec B608  # identifier allowlisted
 """
 
 from __future__ import annotations

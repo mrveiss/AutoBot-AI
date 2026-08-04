@@ -144,7 +144,7 @@ class SSHBackend(ExecutionBackend):
             # Try a simple command
             stdin, stdout, stderr = client.exec_command(
                 "true"
-            )  # nosec B601 - hardcoded literal command in health check, not user input
+            )  # nosec B601  # hardcoded literal command in health check, not user input
             stdout.channel.recv_exit_status()
             return True
         except Exception as e:

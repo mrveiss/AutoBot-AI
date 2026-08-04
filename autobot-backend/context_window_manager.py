@@ -121,7 +121,7 @@ class ContextWindowManager:
             "token_estimation": {
                 "chars_per_token": 4,
                 "safety_margin": 0.9,
-            },  # nosec B105 - config dict; 'token_estimation' refers to LLM token counting, not a credential
+            },  # nosec B105  # config dict; 'token_estimation' refers to LLM token counting, not a credential
         }
 
     def set_model(self, model_name: str):

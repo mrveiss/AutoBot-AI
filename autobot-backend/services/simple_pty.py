@@ -137,7 +137,7 @@ class SimplePTY:
             bash_cmd.append("--login")
             logger.info(f"Starting login shell for session {self.session_id} (loads profile files)")
         self.process = (
-            subprocess.Popen(  # nosec B603 - bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
+            subprocess.Popen(  # nosec B603  # bash_cmd is ["/bin/bash"] with optional --login; fixed absolute path
                 bash_cmd,
                 stdin=slave_fd,
                 stdout=slave_fd,

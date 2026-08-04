@@ -74,7 +74,7 @@ _JS_API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
 
 # Issue #380: Module-level frozensets for file operation safety patterns
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
-# nosec B108 - These are string patterns for detection, not actual temp directory usage
+# nosec B108  # These are string patterns for detection, not actual temp directory usage
 _TEMP_INDICATORS = frozenset({"tmp", "temp", "tempfile", "temporary", "/tmp/"})  # nosec B108
 _SAFE_FILE_TYPES = frozenset(
     {
@@ -776,8 +776,8 @@ def _extract_class_info(node: ast.ClassDef) -> Dict:
 DEFAULT_HARDCODE_SEVERITY: Dict[str, str] = {
     "ip": "high",
     "api_key": "high",
-    "password": "high",  # nosec B105 - dict mapping security field names to severity labels, not a password
-    "secret": "high",  # nosec B105 - dict mapping security field names to severity labels, not a secret
+    "password": "high",  # nosec B105  # dict mapping security field names to severity labels, not a password
+    "secret": "high",  # nosec B105  # dict mapping security field names to severity labels, not a secret
     "port": "medium",
     "url": "medium",
     "api_path": "low",
