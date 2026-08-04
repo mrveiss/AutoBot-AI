@@ -80,6 +80,24 @@ from services.knowledge.analyzer_service import (  # noqa: E402
     get_analyzer_service,
 )
 
+# #13435: the stubs above were needed to import analyzer_service, and they are
+# needed again while this module's tests run, because those tests patch through
+# dotted paths such as ``utils.async_chromadb_client.get_async_chromadb_client``
+# which resolve via ``sys.modules``. They are NOT needed in between — and
+# "in between" is when every other test module in the worker gets imported, so
+# leaving them installed is what leaked ``utils`` and its children across the
+# session (the leak guard added in #13361 now fails the run on it).
+#
+# Unload them here; ``_reinstall_module_stubs`` in this package's conftest puts
+# these exact objects back for the duration of this module's tests and removes
+# them afterwards. The same objects, not fresh ones — analyzer_service captured
+# references at import and a different stub would not be the module it holds.
+_STUBS_UNLOADED_AFTER_IMPORT = {
+    name: sys.modules.pop(name)
+    for name in ("utils.chromadb_client", "utils.async_chromadb_client")
+    if name in sys.modules
+}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

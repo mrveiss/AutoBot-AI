@@ -419,13 +419,18 @@ class TestRateLimitDictHandling:
 # Tier 2 — AnthropicProvider integration (skipped if llm_shared not importable)
 # ---------------------------------------------------------------------------
 
-# Inject the anthropic SDK stub before attempting the provider import so that
-# the import itself succeeds even in the minimal test environment.
-if "anthropic" not in sys.modules:
-    _anthr_stub = types.ModuleType("anthropic")
-    _anthr_stub.AsyncAnthropic = MagicMock
-    sys.modules["anthropic"] = _anthr_stub
+# The anthropic SDK stand-in exists only so the provider import below succeeds
+# in the minimal test environment. It answers for the key for exactly that
+# import and is then taken back out (#13450): left registered, it shadowed the
+# real SDK — which CI installs — for every node collected after this file, and
+# every shard reported it as a leak escaping autobot-backend/tests/.
+#
+# ``setdefault`` plus the identity check on the way out means a real, already
+# imported ``anthropic`` is never displaced and never deleted.
+_ANTHROPIC_SDK_STUB = types.ModuleType("anthropic")
+_ANTHROPIC_SDK_STUB.AsyncAnthropic = MagicMock
 
+sys.modules.setdefault("anthropic", _ANTHROPIC_SDK_STUB)
 try:
     from llm_shared.providers.anthropic import AnthropicProvider as _AnthropicProvider  # noqa: E402
     from llm_shared.providers.anthropic import _get_adapter_sync as _get_adapter_sync_fn
@@ -435,6 +440,9 @@ except Exception:
     _AnthropicProvider = None  # type: ignore[assignment,misc]
     _get_adapter_sync_fn = None  # type: ignore[assignment]
     _ANTHROPIC_PROVIDER_AVAILABLE = False
+finally:
+    if sys.modules.get("anthropic") is _ANTHROPIC_SDK_STUB:
+        del sys.modules["anthropic"]
 
 _skip_no_provider = pytest.mark.skipif(
     not _ANTHROPIC_PROVIDER_AVAILABLE,

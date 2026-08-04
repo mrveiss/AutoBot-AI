@@ -14,6 +14,7 @@ Comprehensive end-to-end tests for the mobile device pairing flow:
 - Security: token encryption, one-time use, user isolation
 """
 
+import asyncio
 import uuid
 from datetime import timedelta
 from fnmatch import fnmatch
@@ -149,6 +150,9 @@ class _FakeRedis:
 
     def __init__(self) -> None:
         self._store: dict[str, tuple[str, float]] = {}
+        # #13408: call counts, so a test can assert that token consumption goes
+        # through the atomic GETDEL rather than a separate GET then DELETE.
+        self.calls: dict[str, int] = {"get": 0, "delete": 0, "getdel": 0}
 
     def _read(self, key: str) -> tuple[str, float] | None:
         entry = self._store.get(key)
@@ -164,11 +168,29 @@ class _FakeRedis:
         return True
 
     def get(self, key: str) -> str | None:
+        self.calls["get"] += 1
         entry = self._read(key)
         return None if entry is None else entry[0]
 
     def delete(self, *keys: str) -> int:
+        self.calls["delete"] += 1
         return sum(1 for key in keys if self._store.pop(key, None) is not None)
+
+    def getdel(self, key: str) -> str | None:
+        """Atomically return a key's value and remove it (Redis 6.2 GETDEL).
+
+        #13408: the real client exposes this and ``client_getdel`` prefers it.
+        A double without it would silently push the code under test down the
+        non-atomic GET+DELETE fallback — the double would then be testing a
+        path production never takes, which is how a single-use control can look
+        covered while the race it exists to prevent goes untested.
+        """
+        self.calls["getdel"] += 1
+        entry = self._read(key)
+        if entry is None:
+            return None
+        del self._store[key]
+        return entry[0]
 
     def ttl(self, key: str) -> int:
         entry = self._read(key)
@@ -734,6 +756,71 @@ async def test_concurrent_pairing_same_token_race_condition(test_client, redis_c
 
     assert response1.status_code == 201
     assert response2.status_code == 400  # Token already consumed
+
+
+@pytest.mark.asyncio
+async def test_pairing_consumes_token_atomically(test_client, redis_client):
+    """The challenge token is consumed with GETDEL, not GET-then-DELETE (#13408).
+
+    ``test_concurrent_pairing_same_token_race_condition`` above cannot catch the
+    race it is named for: ``TestClient`` is synchronous, so the first request has
+    already finished — and deleted the key — before the second begins. The two
+    calls never interleave, and a GET-then-DELETE implementation passes it.
+
+    This asserts the property that actually closes the race: the read and the
+    delete are one operation. With a separate GET and DELETE there is a window
+    in which a second request reads a value the first has not yet removed, and
+    both pair a device against the bound ``user_id`` — on an endpoint that is
+    deliberately unauthenticated, where single-use is the entire control.
+    """
+    qr_response = test_client.get("/api/devices/pair-qr")
+    challenge_token = qr_response.json()["challenge_token"]
+
+    redis_client.calls["get"] = 0
+    redis_client.calls["delete"] = 0
+    redis_client.calls["getdel"] = 0
+
+    response = test_client.post(
+        "/api/devices/pair",
+        json={
+            "challenge_token": challenge_token,
+            "device_name": "Device",
+            "device_token": "token",
+            "platform": "ios",
+        },
+    )
+
+    assert response.status_code == 201
+    assert redis_client.calls["getdel"] == 1, "challenge token was not consumed atomically"
+    assert redis_client.calls["delete"] == 0, "a separate DELETE means the read and delete can interleave"
+
+
+@pytest.mark.asyncio
+async def test_only_one_of_two_interleaved_consumers_wins(redis_client):
+    """Two consumers racing for one token: exactly one gets it (#13408).
+
+    Drives ``client_getdel`` — the primitive the endpoint now uses — directly,
+    concurrently, against the same key. This is the interleaving the endpoint
+    test above cannot produce through a synchronous ``TestClient``.
+
+    Scope, stated precisely: this pins the *primitive*. It does not observe the
+    endpoint, so an endpoint that stopped calling ``client_getdel`` would still
+    pass here — ``test_pairing_consumes_token_atomically`` above is what guards
+    that, and it is the one verified to fail against a GET-then-DELETE
+    implementation. The two are complementary and neither is sufficient alone.
+    """
+    from autobot_shared.redis_client import client_getdel
+
+    key = _redis_challenge_key("race-token")
+    redis_client.setex(key, 300, "user-42")
+
+    results = await asyncio.gather(
+        client_getdel(redis_client, key),
+        client_getdel(redis_client, key),
+    )
+
+    assert sorted(r is None for r in results) == [False, True], f"expected exactly one winner, got {results!r}"
+    assert redis_client.get(key) is None
 
 
 if __name__ == "__main__":
