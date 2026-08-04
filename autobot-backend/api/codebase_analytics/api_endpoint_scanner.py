@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Set
 
+from autobot_shared.api_routing import router_prefixes as _routing
 from autobot_shared.logging_manager import get_logger
 
 from .endpoints.shared import resolve_project_root
@@ -40,10 +41,13 @@ _ROUTER_DECORATOR_RE = re.compile(
 )
 
 # Pattern for router variable names to detect prefix
-_ROUTER_INCLUDE_RE = re.compile(r'include_router\s*\([^,]+,\s*prefix\s*=\s*[\'"]([^\'"]+)[\'"]', re.IGNORECASE)
+# NOTE (#12985): currently unreferenced — it was already dead before this
+# convergence, so it is left in place rather than removed as a drive-by.
+# Kept pointing at the shared grammar so it cannot drift while unused.
+_ROUTER_INCLUDE_RE = _routing.INCLUDE_ROUTER_RE
 
 # Pattern for router prefix in APIRouter() initialization
-_APIROUTER_PREFIX_RE = re.compile(r'APIRouter\s*\([^)]*prefix\s*=\s*[\'"]([^\'"]+)[\'"]', re.IGNORECASE)
+_APIROUTER_PREFIX_RE = _routing.APIROUTER_PREFIX_RE
 
 # Frontend patterns for API calls
 _API_CALL_PATTERNS = [
@@ -111,8 +115,8 @@ _FOUR_ELEMENT_TUPLE_RE = re.compile(
 # Issue #552: Dynamic router loading pattern
 # #12956: names actually passed to include_router(), and the relative imports
 # that bind them to a submodule -- `from .costs import router as costs_router`.
-_INCLUDE_ROUTER_NAME_RE = re.compile(r"include_router\(\s*(\w+)")
-_RELATIVE_ROUTER_IMPORT_RE = re.compile(r"^from\s+\.(\w+)\s+import\s+router\s+as\s+(\w+)", re.MULTILINE)
+_INCLUDE_ROUTER_NAME_RE = _routing.INCLUDE_ROUTER_NAME_RE
+_RELATIVE_ROUTER_IMPORT_RE = _routing.RELATIVE_ROUTER_IMPORT_RE
 
 
 _DYNAMIC_ROUTER_TUPLE_RE = re.compile(
