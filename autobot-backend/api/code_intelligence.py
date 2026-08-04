@@ -571,9 +571,7 @@ async def _run_redis_analysis(
     """
     is_file = await asyncio.to_thread(os.path.isfile, path)
     if is_file:
-        return await run_isolated(
-            RedisOptimizer, {"project_root": project_root}, "analyze_file", path
-        )
+        return await run_isolated(RedisOptimizer, {"project_root": project_root}, "analyze_file", path)
     return await run_isolated(
         RedisOptimizer,
         {"project_root": project_root},
@@ -1151,9 +1149,7 @@ async def get_redis_usage_health_score(
 
 async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
     """Run Redis health analysis in a thread. Issue #1034."""
-    results = await run_isolated(
-        RedisOptimizer, {"project_root": path}, "analyze_directory", path
-    )
+    results = await run_isolated(RedisOptimizer, {"project_root": path}, "analyze_directory", path)
 
     score = _calculate_redis_health_score(results)
     grade = get_grade_from_score(score)

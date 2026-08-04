@@ -174,9 +174,7 @@ async def run_isolated(
 
     loop = asyncio.get_running_loop()
     try:
-        return await loop.run_in_executor(
-            pool, _call_in_child, cls, init_kwargs, method_name, args, kwargs
-        )
+        return await loop.run_in_executor(pool, _call_in_child, cls, init_kwargs, method_name, args, kwargs)
     except Exception as exc:  # noqa: BLE001
         logger.error("Isolated %s.%s failed in the worker process: %s", cls.__name__, method_name, exc)
         await shutdown_scan_pool()
