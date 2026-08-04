@@ -118,6 +118,23 @@
     - /var/lib/slm
   tags: ['slm', 'directories']
 
+# #13307: backups used to land in the service account's home directory, chosen
+# by a fallback rather than a decision — on the root filesystem, in a place
+# nobody thinks to look. config.py now defaults to /var/lib/slm/backups, so the
+# directory has to exist with the right ownership before the service starts.
+#
+# 0750, not the 0755 the loop above uses: a backup is a full dump of Redis and
+# the PostgreSQL cluster, so it carries every credential, user record and chat
+# message the platform holds. World-readable is wrong for that.
+- name: "SLM | Create backup storage directory (#13307)"
+  ansible.builtin.file:
+    path: "{{ slm_backup_dir }}"
+    state: directory
+    mode: "0750"
+    owner: "{{ slm_user }}"
+    group: "{{ slm_group }}"
+  tags: ['slm', 'directories', 'backup']
+
 # ==========================================================
 # TLS certificates (idempotent - skip if valid cert exists)
 # ==========================================================
