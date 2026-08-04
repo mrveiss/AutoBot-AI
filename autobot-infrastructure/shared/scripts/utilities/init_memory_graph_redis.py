@@ -541,7 +541,10 @@ class MemoryGraphInitializer:
                         {
                             "from": entity_a["id"],
                             "to": entity_b["id"],
-                            "type": "relates_to",
+                            # #13452: canonical spelling. This writes the JSON
+                            # directly, bypassing create_relation, so nothing
+                            # canonicalises it on the way in.
+                            "type": "related_to",
                             "created_at": max(entity_a["created_at"], entity_b["created_at"]),
                             "metadata": {
                                 "strength": strength,

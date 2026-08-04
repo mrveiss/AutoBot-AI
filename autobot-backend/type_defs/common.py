@@ -8,7 +8,8 @@ Common Type Definitions for AutoBot
 Provides reusable type definitions to replace generic Dict[str, Any] patterns.
 """
 
-from typing import Any, Dict, List
+from enum import Enum
+from typing import Any, Dict, FrozenSet, List, NewType
 
 # Type alias for timestamp strings (ISO 8601 format)
 TimestampStr = str
@@ -64,12 +65,32 @@ OptionalMetadata = Metadata | None
 # Message type constants for chat/streaming systems
 # Used for deduplication logic and persistence filtering
 
+# Issue #13452: two distinct types, not two aliases of frozenset[str]. The two
+# collections below answer different questions and were once aliased to each
+# other, which silently deleted terminal output, terminal commands and approval
+# requests from restored chat history (#13402). NewType makes assigning one
+# where the other is expected a type error rather than a comment nobody reads.
+#
+#   SkipPersistenceTypes: "is this message persisted somewhere other than the
+#       websocket broadcast path?"
+#   StreamingTypes:       "may an earlier frame of this type be discarded in
+#       favour of a longer one?" — api/chat.py::_process_streaming_groups keeps
+#       only the longest message per 2-minute window for every type listed.
+SkipPersistenceTypes = NewType("SkipPersistenceTypes", FrozenSet[str])
+StreamingTypes = NewType("StreamingTypes", FrozenSet[str])
 
-class MessageTypes:
-    """Constants for message types in the chat system.
+
+class MessageTypes(str, Enum):
+    """Message types in the chat system.
 
     Issue #650: Extended to include display-related types for frontend filtering.
-    Aligned with Agent Zero's 13-type message system for better UX.
+
+    Issue #13452: promoted from a bare constant bag to an enum. ``(str, Enum)``
+    rather than ``StrEnum`` — the shape ``autobot_shared.browser.base.Capability``
+    and ``autobot_shared.status_enums`` already use, and the one that keeps this
+    module importable on Python 3.10 (``StrEnum`` is 3.11+) as well as the 3.14
+    that CI runs. Members compare and hash equal to their string values, so
+    existing ``message_type in <set>`` checks against plain strings are unaffected.
     """
 
     # Streaming LLM response types - these accumulate tokens progressively
@@ -104,6 +125,15 @@ class MessageTypes:
     WARNING = "warning"  # Warning messages (non-fatal)
     INFO = "info"  # Informational messages
 
+    # Issue #3232: chain-of-thought reasoning-trace events emitted by
+    # chat_workflow/cot_events.py. Live-stream-only signals, never persisted.
+    AGENT_STEP_START = "agent.step.start"
+    AGENT_STEP_COMPLETE = "agent.step.complete"
+    AGENT_TOOL_CALL = "agent.tool.call"
+    AGENT_TOOL_RESULT = "agent.tool.result"
+    AGENT_LLM_CHUNK = "agent.llm.chunk"
+    AGENT_PLAN = "agent.plan"
+
 
 # Frozenset of message types that should NOT be persisted in websockets.py
 # These are either:
@@ -112,28 +142,30 @@ class MessageTypes:
 #
 # Issue #350 Root Cause Fix: Adding explicitly-persisted types prevents duplication
 # from multiple persistence paths (websocket broadcast + explicit persistence).
-SKIP_WEBSOCKET_PERSISTENCE_TYPES: frozenset = frozenset(
-    [
-        # Streaming LLM response types - persisted once at completion
-        MessageTypes.LLM_RESPONSE,
-        MessageTypes.LLM_RESPONSE_CHUNK,
-        MessageTypes.RESPONSE,
-        # Terminal types - explicitly persisted by chat_integration.py and service.py
-        MessageTypes.TERMINAL_COMMAND,
-        MessageTypes.TERMINAL_OUTPUT,
-        # Approval request - explicitly persisted by tool_handler.py::_persist_approval_request()
-        MessageTypes.COMMAND_APPROVAL_REQUEST,
-        # Terminal interpretation - explicitly persisted by llm_handler.py
-        MessageTypes.TERMINAL_INTERPRETATION,
-        # Issue #3232: Chain-of-thought reasoning trace events — ephemeral, not
-        # persisted to chat history since they are live-stream-only signals.
-        "agent.step.start",
-        "agent.step.complete",
-        "agent.tool.call",
-        "agent.tool.result",
-        "agent.llm.chunk",
-        "agent.plan",
-    ]
+SKIP_WEBSOCKET_PERSISTENCE_TYPES: SkipPersistenceTypes = SkipPersistenceTypes(
+    frozenset(
+        [
+            # Streaming LLM response types - persisted once at completion
+            MessageTypes.LLM_RESPONSE.value,
+            MessageTypes.LLM_RESPONSE_CHUNK.value,
+            MessageTypes.RESPONSE.value,
+            # Terminal types - explicitly persisted by chat_integration.py and service.py
+            MessageTypes.TERMINAL_COMMAND.value,
+            MessageTypes.TERMINAL_OUTPUT.value,
+            # Approval request - explicitly persisted by tool_handler.py::_persist_approval_request()
+            MessageTypes.COMMAND_APPROVAL_REQUEST.value,
+            # Terminal interpretation - explicitly persisted by llm_handler.py
+            MessageTypes.TERMINAL_INTERPRETATION.value,
+            # Issue #3232: Chain-of-thought reasoning trace events — ephemeral, not
+            # persisted to chat history since they are live-stream-only signals.
+            MessageTypes.AGENT_STEP_START.value,
+            MessageTypes.AGENT_STEP_COMPLETE.value,
+            MessageTypes.AGENT_TOOL_CALL.value,
+            MessageTypes.AGENT_TOOL_RESULT.value,
+            MessageTypes.AGENT_LLM_CHUNK.value,
+            MessageTypes.AGENT_PLAN.value,
+        ]
+    )
 )
 
 # Message types whose text accumulates progressively across a single turn, so a
@@ -149,10 +181,12 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES: frozenset = frozenset(
 # 2-minute window for every type listed here, so aliasing the two made
 # merge_messages silently drop terminal output, terminal commands, approval
 # requests and reasoning-trace events from restored chat history.
-STREAMING_MESSAGE_TYPES: frozenset = frozenset(
-    [
-        MessageTypes.LLM_RESPONSE,
-        MessageTypes.LLM_RESPONSE_CHUNK,
-        MessageTypes.RESPONSE,
-    ]
+STREAMING_MESSAGE_TYPES: StreamingTypes = StreamingTypes(
+    frozenset(
+        [
+            MessageTypes.LLM_RESPONSE.value,
+            MessageTypes.LLM_RESPONSE_CHUNK.value,
+            MessageTypes.RESPONSE.value,
+        ]
+    )
 )
