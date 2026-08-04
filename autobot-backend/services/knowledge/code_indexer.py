@@ -141,6 +141,7 @@ def _record_call_edge(
             "current_class": current_class,
             "kind": "calls",
             "source_path": source_path,
+            "line": node.start_point[0] + 1,  # call site, not the callee's def line (#13471)
         }
     )
 
@@ -592,6 +593,9 @@ def _build_edge_metadata(source_id: str, edge: dict, resolved: ResolvedCall, rel
         "resolved": resolved.resolved,
         "candidate_count": resolved.candidate_count,
         "source_path": rel_path,
+        # #13471: call-site line within source_path, consumed by impact analysis
+        # to report "where do I click" instead of the callee's definition line.
+        "call_line": edge.get("line", 0),
     }
 
 
