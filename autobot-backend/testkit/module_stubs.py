@@ -66,13 +66,18 @@ _MISSING = object()
 
 
 def _is_real_module(module: Any) -> bool:
-    """True only for a genuine, file-backed module — never for a mock.
+    """True only for a genuine, file-backed module — never for a stand-in.
 
-    ``getattr(MagicMock(), "__file__")`` auto-creates a truthy attribute, so a
-    truthiness test reads every mock as a real module. That is the same vacuous
-    -mock trap #13162 kept turning up, and it fired here immediately: the root
-    conftest plants ``agent_loop`` as a MagicMock, and rule 2 refused to stub it.
-    Requiring a genuine ``str`` path is what distinguishes the two.
+    The check is ``isinstance(..., str)`` rather than a truthiness test because
+    a module carrying a PEP-562 module-level ``__getattr__`` shim answers *every*
+    attribute, dunders included, so ``getattr(module, "__file__", None)`` hands
+    back a truthy ``MagicMock`` and a truthiness test reads the stand-in as a
+    real module.
+
+    Note this is specifically about module-level ``__getattr__``. A bare
+    ``MagicMock`` is *not* the hazard: ``Mock.__getattr__`` rejects dunder names,
+    so ``getattr(MagicMock(), "__file__", None)`` is ``None`` and would classify
+    correctly either way. Only a genuine ``str`` path proves a real module.
     """
     return isinstance(getattr(module, "__file__", None), str)
 
@@ -93,9 +98,33 @@ class StubSet:
     def install_package(self, name: str, path: Path) -> types.ModuleType:
         """Register *name* as a hollow package whose ``__path__`` is the real dir.
 
-        Refuses to displace a real, file-backed module (rule 2). Returns the
-        module now registered under *name*.
+        Refuses to displace a real, file-backed module (rule 2). Always returns
+        *our* module for *name*, never whatever happens to occupy the slot: a
+        caller decorates the return value, and handing back a foreign module
+        means those attributes land somewhere nothing will ever read.
+
+        Re-installing a name we already own reuses the same module object rather
+        than building a second one. A second object would be silently discarded
+        by :meth:`reattach`, which restores from ``_detached`` — so anything the
+        caller patched onto it would be invisible for the whole run.
         """
+        self._refuse_if_real(name)
+
+        module = self._owned.get(name)
+        if module is None:
+            module = types.ModuleType(name)
+            module.__path__ = [str(path)]  # type: ignore[attr-defined]
+            module.__package__ = name
+            self._owned[name] = module
+
+        self._displaced.setdefault(name, sys.modules.get(name, _MISSING))
+        self._detached.pop(name, None)
+        sys.modules[name] = module
+        self._bind_on_parent(name, module)
+        return module
+
+    def _refuse_if_real(self, name: str) -> None:
+        """Rule 2, enforced at every point that writes ``sys.modules``."""
         existing = sys.modules.get(name)
         if existing is not None and _is_real_module(existing):
             raise RuntimeError(
@@ -103,17 +132,6 @@ class StubSet:
                 f"{existing.__file__}. Stubbing it would replace it for the whole "
                 f"process, which is how #13385 broke autobot_shared.async_compat."
             )
-        if existing is not None and name in self._owned:
-            return existing
-
-        module = types.ModuleType(name)
-        module.__path__ = [str(path)]  # type: ignore[attr-defined]
-        module.__package__ = name
-        self._displaced.setdefault(name, sys.modules.get(name, _MISSING))
-        sys.modules[name] = module
-        self._owned[name] = module
-        self._bind_on_parent(name, module)
-        return module
 
     def real_load(self, name: str, file_path: Path) -> Optional[types.ModuleType]:
         """Execute a real source file and register it under *name*.
@@ -121,15 +139,28 @@ class StubSet:
         Preferred over a mock whenever downstream code imports concrete names
         from the module — a hand-written stand-in silently lacks them (#13385).
         """
+        self._refuse_if_real(name)
         spec = importlib.util.spec_from_file_location(name, str(file_path))
         if not spec or not spec.loader:
             return None
         module = importlib.util.module_from_spec(spec)
-        module.__package__ = name.rpartition(".")[0] or name
+        # No `or name` fallback: a top-level module's __package__ is "", and
+        # naming itself would let a relative import inside it resolve against
+        # itself instead of raising.
+        module.__package__ = name.rpartition(".")[0]
         self._displaced.setdefault(name, sys.modules.get(name, _MISSING))
         sys.modules[name] = module
-        spec.loader.exec_module(module)
         self._owned[name] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            # CPython removes a half-initialized module on import failure; a
+            # helper that leaves one behind is strictly worse than a plain
+            # import, and leaves the leak guard (#13361) blaming the importing
+            # file for a key nobody owns.
+            self._owned.pop(name, None)
+            self._put_back(name)
+            raise
         self._bind_on_parent(name, module)
         return module
 
@@ -168,19 +199,48 @@ class StubSet:
         and the attribute is silently never set — which surfaces later as
         ``AttributeError: module 'agent_loop' has no attribute 'search'``.
         ``detach`` walks in reverse for the same reason, mirrored.
+
+        Rule 2 is enforced here too, and this is the point where it actually
+        matters. ``install_package`` checks at conftest import, when nothing is
+        imported yet; ``reattach`` runs *after* pytest has imported the whole
+        session, so it is the call that can genuinely find a real module in the
+        slot. Overwriting it here would then make ``restore`` pop the real
+        module — rule 2 enforced only in the safe window is rule 2 not enforced.
+
+        What we displace is recorded by plain assignment, not ``setdefault``, so
+        ``restore`` undoes the *most recent* attach rather than a stale one.
         """
+        if self._owned and not self._detached:
+            raise RuntimeError(
+                "reattach() before detach(): there is nothing to reinstall, but "
+                "restore() will still uninstall at teardown, so the stubs would "
+                "vanish permanently after the first scope. Call detach() once "
+                "the importing is done (rule 5)."
+            )
         for name in self._owned:
             module = self._detached.get(name)
             if module is None:
                 continue
+            self._refuse_if_real(name)
+            current = sys.modules.get(name, _MISSING)
+            self._displaced[name] = current
             sys.modules[name] = module
             self._bind_on_parent(name, module)
 
     def restore(self) -> None:
-        """Return ``sys.modules`` to what it was before this StubSet existed."""
+        """Return ``sys.modules`` to what it was before this StubSet existed.
+
+        Clears the bookkeeping afterwards. Leaving ``_owned``/``_displaced``
+        populated makes every later ``restore()`` re-pop the same keys, which is
+        how a legitimately re-imported module gets destroyed by a teardown that
+        should have been a no-op.
+        """
         for name in reversed(list(self._owned)):
             self._put_back(name)
         self._restore_binds()
+        self._owned.clear()
+        self._displaced.clear()
+        self._detached.clear()
 
     def _put_back(self, name: str) -> None:
         """Restore one key to its pre-StubSet value, removing it only if it was absent.
@@ -217,12 +277,18 @@ class StubSet:
         Pair with :meth:`detach` at conftest import time: the stubs exist while
         the module imports its subject, vanish while pytest collects everything
         else, and come back only for the tests that need them.
+
+        Teardown is :meth:`detach`, not :meth:`restore` — the symmetric, repeatable
+        counterpart of ``reattach``. ``restore`` is terminal: it clears the
+        bookkeeping, so a second scope would find nothing to reinstall and the
+        stubs would be gone for the rest of the run. That failure is silent,
+        which is exactly the kind this helper exists to stop.
         """
 
         @pytest.fixture(scope=scope, autouse=True)
         def _reattach_stubs() -> Iterator[None]:
             self.reattach()
             yield
-            self.restore()
+            self.detach()
 
         return _reattach_stubs
