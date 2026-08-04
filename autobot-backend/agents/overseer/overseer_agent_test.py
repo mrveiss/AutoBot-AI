@@ -21,6 +21,7 @@ from agents.overseer.types import (
     StepStatus,
     TaskPlan,
 )
+from autobot_shared.ssot_config import DEFAULT_LLM_MODEL
 
 
 @pytest.fixture()
@@ -118,7 +119,9 @@ class TestOverseerAgentConfig:
     @patch("agents.overseer.overseer_agent.get_config")
     def test_get_model_fallback(self, mock_get_config, agent):
         mock_get_config.return_value.get_selected_model.side_effect = Exception("no config")
-        assert agent._get_model() == "qwen3:14b"
+        # The fallback is the SSOT default model — asserting the constant keeps this
+        # test correct when the default is rolled forward.
+        assert agent._get_model() == DEFAULT_LLM_MODEL
 
 
 class TestAnalyzeQuery:

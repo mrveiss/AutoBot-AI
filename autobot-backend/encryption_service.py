@@ -59,10 +59,10 @@ class EncryptionService:
 
     def _load_master_key(self) -> str | None:
         """Load master key from environment variables."""
-        key = config.encryption_key
-        if not key:
-            # Try alternative environment variable names
-            key = config.encryption_key or config.master_key
+        # AUTOBOT_ENCRYPTION_KEY / ENCRYPTION_KEY first, then MASTER_KEY.
+        # (#13162: the old two-step form re-tested config.encryption_key
+        # inside its own `if not key` branch — same result, twice the read.)
+        key = config.encryption_key or config.master_key
 
         if not key:
             logger.error("No encryption key found in environment variables. " "Please set AUTOBOT_ENCRYPTION_KEY.")

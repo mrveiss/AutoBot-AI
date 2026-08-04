@@ -6,6 +6,7 @@ Tests REST API functionality for security management
 """
 
 import json
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,6 +15,13 @@ from fastapi.testclient import TestClient
 
 # Import the security API module
 from api.security import CommandApprovalRequest, router
+
+# Logger name used by api/security.py (``get_logger(__name__)``). The endpoints
+# answer with a generic ``detail`` and keep the underlying exception in the log
+# only — see d6659fddf (#1733, CodeQL stack-trace exposure). The error tests below
+# pin both halves of that contract.
+SECURITY_LOGGER = "api.security"
+GENERIC_ERROR_DETAIL = "Internal server error"
 
 
 class TestSecurityAPI:
@@ -67,23 +75,48 @@ class TestSecurityAPI:
         assert data["docker_sandbox_enabled"] is True
         assert len(data["pending_approvals"]) == 2
 
-    def test_get_security_status_fallback_to_basic_security(self):
-        """Test security status fallback when enhanced security not available"""
-        # Remove enhanced security layer, add basic security layer
+    def test_get_security_status_reads_the_layer_currently_on_app_state(self):
+        """Status is read from whichever SecurityLayer app.state holds right now.
+
+        This test used to assert a "fall back to the basic security layer" branch
+        that hard-coded command_security_enabled/docker_sandbox_enabled to False
+        and pending_approvals to []. That branch existed only while there were two
+        classes on two different app.state attributes (enhanced_security_layer vs
+        security_layer); ee20dd6c7 (#10666) folded EnhancedSecurityLayer into the
+        single canonical SecurityLayer, which always defines all four attributes
+        (security_layer.py:99-109), so the branch was correctly removed.
+
+        What is worth pinning on the surviving single-path implementation is that
+        the endpoint re-reads app.state per request — a layer swapped in after
+        startup is the one reported, no new SecurityLayer is constructed while one
+        is present, and every value is mirrored from the layer rather than
+        hard-coded.
+        """
         delattr(self.app.state, "security_layer")
 
-        basic_security = MagicMock()
-        basic_security.enable_auth = True
-        self.app.state.security_layer = basic_security
+        replacement_layer = MagicMock()
+        replacement_layer.enable_auth = True
+        replacement_layer.enable_command_security = False
+        replacement_layer.use_docker_sandbox = False
+        replacement_layer.get_pending_approvals.return_value = []
+        self.app.state.security_layer = replacement_layer
 
-        response = self.client.get("/api/security/status")
+        with patch("api.security.SecurityLayer") as MockSecurityLayer:
+            response = self.client.get("/api/security/status")
 
         assert response.status_code == 200
         data = response.json()
         assert data["security_enabled"] is True
-        assert data["command_security_enabled"] is False  # Not available in basic
-        assert data["docker_sandbox_enabled"] is False  # Not available in basic
-        assert data["pending_approvals"] == []  # Not available in basic
+        assert data["command_security_enabled"] is False
+        assert data["docker_sandbox_enabled"] is False
+        assert data["pending_approvals"] == []
+
+        # The replacement layer was the one consulted...
+        replacement_layer.get_pending_approvals.assert_called_once()
+        # ...the layer removed from app.state was not...
+        self.mock_security_layer.get_pending_approvals.assert_not_called()
+        # ...and no redundant layer was built while one was already installed.
+        MockSecurityLayer.assert_not_called()
 
     def test_get_security_status_on_demand_initialization(self):
         """Test security status with on-demand initialization"""
@@ -108,15 +141,17 @@ class TestSecurityAPI:
             assert hasattr(self.app.state, "security_layer")
             MockSecurityLayer.assert_called_once()
 
-    def test_get_security_status_error(self):
-        """Test security status endpoint error handling"""
+    def test_get_security_status_error(self, caplog):
+        """Failures answer 500 with a generic detail and log the real cause."""
         self.mock_security_layer.get_pending_approvals.side_effect = Exception("Test error")
 
-        response = self.client.get("/api/security/status")
+        with caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER):
+            response = self.client.get("/api/security/status")
 
         assert response.status_code == 500
-        data = response.json()
-        assert "Test error" in data["detail"]
+        assert response.json()["detail"] == GENERIC_ERROR_DETAIL
+        assert "Test error" not in response.text
+        assert "Test error" in caplog.text
 
     def test_approve_command_success(self):
         """Test successful command approval"""
@@ -145,17 +180,19 @@ class TestSecurityAPI:
 
         self.mock_security_layer.approve_command.assert_called_once_with("cmd_456", False)
 
-    def test_approve_command_error(self):
-        """Test command approval error handling"""
+    def test_approve_command_error(self, caplog):
+        """Failures answer 500 with a generic detail and log the real cause."""
         self.mock_security_layer.approve_command.side_effect = Exception("Approval error")
 
         approval_request = {"command_id": "cmd_123", "approved": True}
 
-        response = self.client.post("/api/security/approve-command", json=approval_request)
+        with caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER):
+            response = self.client.post("/api/security/approve-command", json=approval_request)
 
         assert response.status_code == 500
-        data = response.json()
-        assert "Approval error" in data["detail"]
+        assert response.json()["detail"] == GENERIC_ERROR_DETAIL
+        assert "Approval error" not in response.text
+        assert "Approval error" in caplog.text
 
     def test_get_pending_approvals_success(self):
         """Test successful pending approvals retrieval"""
@@ -186,15 +223,17 @@ class TestSecurityAPI:
         assert data["count"] == 0
         assert data["pending_approvals"] == []
 
-    def test_get_pending_approvals_error(self):
-        """Test pending approvals endpoint error handling"""
+    def test_get_pending_approvals_error(self, caplog):
+        """Failures answer 500 with a generic detail and log the real cause."""
         self.mock_security_layer.get_pending_approvals.side_effect = Exception("Database error")
 
-        response = self.client.get("/api/security/pending-approvals")
+        with caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER):
+            response = self.client.get("/api/security/pending-approvals")
 
         assert response.status_code == 500
-        data = response.json()
-        assert "Database error" in data["detail"]
+        assert response.json()["detail"] == GENERIC_ERROR_DETAIL
+        assert "Database error" not in response.text
+        assert "Database error" in caplog.text
 
     def test_get_command_history_success(self):
         """Test successful command history retrieval"""
@@ -247,19 +286,35 @@ class TestSecurityAPI:
         # Verify default parameters
         self.mock_security_layer.get_command_history.assert_called_once_with(user=None, limit=50)
 
-    def test_get_command_history_error(self):
-        """Test command history endpoint error handling"""
+    def test_get_command_history_error(self, caplog):
+        """Failures answer 500 with a generic detail and log the real cause."""
         self.mock_security_layer.get_command_history.side_effect = Exception("History error")
 
-        response = self.client.get("/api/security/command-history")
+        with caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER):
+            response = self.client.get("/api/security/command-history")
 
         assert response.status_code == 500
-        data = response.json()
-        assert "History error" in data["detail"]
+        assert response.json()["detail"] == GENERIC_ERROR_DETAIL
+        assert "History error" not in response.text
+        assert "History error" in caplog.text
 
-    def test_get_audit_log_success(self):
+    def _write_audit_log(self, tmp_path, lines):
+        """Point the security layer at a real audit log file holding ``lines``.
+
+        api/security.py reads the audit log through ``aiofiles.open``, and
+        aiofiles captures the builtin as ``aiofiles.threadpool.sync_open = open``
+        at import time — so the ``patch("builtins.open", ...)`` these tests used
+        to rely on never intercepted anything and the endpoint was silently
+        reading (and failing to find) a literal ``test_audit.log`` in the CWD.
+        A real file on disk exercises the actual read/parse path.
+        """
+        log_file = tmp_path / "audit.log"
+        log_file.write_text("".join(lines), encoding="utf-8")
+        self.mock_security_layer.audit_log_file = str(log_file)
+        return log_file
+
+    def test_get_audit_log_success(self, tmp_path):
         """Test successful audit log retrieval"""
-        # Mock audit log file content
         audit_entries = [
             {
                 "timestamp": "2023-01-01T10:00:00",
@@ -275,80 +330,78 @@ class TestSecurityAPI:
             },
         ]
 
-        self.mock_security_layer.audit_log_file = "test_audit.log"
+        self._write_audit_log(tmp_path, [json.dumps(entry) + "\n" for entry in audit_entries])
 
-        # Mock file reading
-        with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value.readlines.return_value = [
-                json.dumps(entry) + "\n" for entry in audit_entries
-            ]
+        response = self.client.get("/api/security/audit-log")
 
-            response = self.client.get("/api/security/audit-log")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["count"] == 2
+        assert data["audit_entries"] == audit_entries
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert data["count"] == 2
-            assert len(data["audit_entries"]) == 2
-
-    def test_get_audit_log_with_limit(self):
+    def test_get_audit_log_with_limit(self, tmp_path):
         """Test audit log retrieval with limit parameter"""
-        self.mock_security_layer.audit_log_file = "test_audit.log"
+        self._write_audit_log(tmp_path, ['{"entry": 1}\n', '{"entry": 2}\n', '{"entry": 3}\n'])
 
-        with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value.readlines.return_value = [
-                '{"entry": 1}\n',
-                '{"entry": 2}\n',
-                '{"entry": 3}\n',
-            ]
+        response = self.client.get("/api/security/audit-log?limit=2")
 
-            response = self.client.get("/api/security/audit-log?limit=2")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 2
+        # The limit keeps the *most recent* entries, not the first two.
+        assert data["audit_entries"] == [{"entry": 2}, {"entry": 3}]
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["count"] == 2  # Limited to last 2 entries
+    def test_get_audit_log_file_not_found(self, tmp_path):
+        """A log that was never written is an empty log, not an error."""
+        self.mock_security_layer.audit_log_file = str(tmp_path / "nonexistent.log")
 
-    def test_get_audit_log_file_not_found(self):
-        """Test audit log retrieval when file doesn't exist"""
-        self.mock_security_layer.audit_log_file = "nonexistent.log"
+        response = self.client.get("/api/security/audit-log")
 
-        with patch("builtins.open", side_effect=FileNotFoundError()):
-            response = self.client.get("/api/security/audit-log")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["count"] == 0
+        assert data["audit_entries"] == []
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert data["count"] == 0
-            assert data["audit_entries"] == []
-
-    def test_get_audit_log_malformed_json(self):
+    def test_get_audit_log_malformed_json(self, tmp_path):
         """Test audit log retrieval with malformed JSON entries"""
-        self.mock_security_layer.audit_log_file = "test_audit.log"
+        self._write_audit_log(
+            tmp_path,
+            ['{"valid": "entry1"}\n', "invalid json line\n", '{"valid": "entry2"}\n'],
+        )
 
-        with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value.readlines.return_value = [
-                '{"valid": "entry1"}\n',
-                "invalid json line\n",
-                '{"valid": "entry2"}\n',
-            ]
+        response = self.client.get("/api/security/audit-log")
 
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["count"] == 2
+        # The unparseable line is skipped; the surrounding valid ones survive.
+        assert data["audit_entries"] == [{"valid": "entry1"}, {"valid": "entry2"}]
+
+    def test_get_audit_log_error(self, tmp_path, caplog):
+        """An unreadable audit log is a 500, never a silent empty log.
+
+        Reporting ``count: 0`` when the file could not be read would tell an
+        admin the audit trail is empty when it is merely inaccessible — see
+        #13258. The exception text stays in the log, out of the response.
+        """
+        self.mock_security_layer.audit_log_file = str(tmp_path / "audit.log")
+
+        with (
+            patch(
+                "api.security.aiofiles.open",
+                side_effect=PermissionError("Permission denied"),
+            ),
+            caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER),
+        ):
             response = self.client.get("/api/security/audit-log")
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert data["count"] == 2  # Only valid JSON entries
-
-    def test_get_audit_log_error(self):
-        """Test audit log endpoint error handling"""
-        self.mock_security_layer.audit_log_file = "test_audit.log"
-
-        with patch("builtins.open", side_effect=PermissionError("Permission denied")):
-            response = self.client.get("/api/security/audit-log")
-
-            assert response.status_code == 500
-            data = response.json()
-            assert "Permission denied" in data["detail"]
+        assert response.status_code == 500
+        assert response.json()["detail"] == GENERIC_ERROR_DETAIL
+        assert "Permission denied" not in response.text
+        assert "Permission denied" in caplog.text
 
 
 class TestSecurityAPIModels:
@@ -418,19 +471,25 @@ class TestSecurityAPIIntegration:
         )
         assert approval_response.status_code == 200
 
-    def test_api_error_consistency(self):
+    def test_api_error_consistency(self, caplog):
         """Test that all endpoints handle errors consistently"""
         # Remove enhanced security layer to trigger error
         if hasattr(self.app.state, "security_layer"):
             delattr(self.app.state, "security_layer")
 
-        with patch(
-            "api.security.SecurityLayer",
-            side_effect=Exception("Init error"),
+        with (
+            patch(
+                "api.security.SecurityLayer",
+                side_effect=Exception("Init error"),
+            ),
+            caplog.at_level(logging.ERROR, logger=SECURITY_LOGGER),
         ):
             response = self.client.get("/api/security/status")
-            assert response.status_code == 500
-            assert "Init error" in response.json()["detail"]
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == GENERIC_ERROR_DETAIL
+        assert "Init error" not in response.text
+        assert "Init error" in caplog.text
 
 
 # Run tests

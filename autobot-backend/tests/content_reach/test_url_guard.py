@@ -233,10 +233,9 @@ async def test_jina_reader_ssrf_block_no_fetch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch):
+async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch, stub_browser_manager):
     """BrowserBackend.fetch raises BackendError on private URL and never calls manager."""
     import content_reach._url_guard as guard_mod
-    import content_reach.backends.browser as browser_mod
     from content_reach.backends.browser import BrowserBackend
     from content_reach.base import BackendError, ContentRequest
     from source_attribution import SourceType
@@ -253,7 +252,7 @@ async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch):
             manager_calls.append(url)
             return {"success": True, "content": {"text_content": "x", "structured_data": {}}}
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: _StubManager())
+    stub_browser_manager(_StubManager())
 
     backend = BrowserBackend(source_type=SourceType.WEB_PAGE)
     request = ContentRequest(url="http://192.168.1.1/internal")
@@ -376,10 +375,9 @@ async def test_yt_dlp_ssrf_block_caption_url_no_http(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_browser_search_ssrf_block_ddg_url(monkeypatch):
+async def test_browser_search_ssrf_block_ddg_url(monkeypatch, stub_browser_manager):
     """BrowserSearchBackend raises BackendError when SSRF guard blocks the DDG URL."""
     import content_reach._url_guard as guard_mod
-    import content_reach.backends.browser as browser_mod
     from content_reach.backends.browser import BrowserSearchBackend
     from content_reach.base import BackendError, ContentRequest
     from source_attribution import SourceType
@@ -396,7 +394,7 @@ async def test_browser_search_ssrf_block_ddg_url(monkeypatch):
             manager_calls.append(url)
             return {"success": True, "content": {"text_content": "x", "structured_data": {}}}
 
-    monkeypatch.setattr(browser_mod, "_get_manager", lambda: _StubManager())
+    stub_browser_manager(_StubManager())
 
     backend = BrowserSearchBackend(source_type=SourceType.WEB_SEARCH)
     request = ContentRequest(query="test query")
@@ -459,6 +457,12 @@ async def test_trafilatura_robots_disabled_env_passes(monkeypatch):
     monkeypatch.setattr(guard_mod, "_is_public_url_async", _always_public)
     monkeypatch.setattr(guard_mod, "_RESPECT_ROBOTS", False)
 
+    # TrafilaturaBackend.fetch() gates on _import_trafilatura() BEFORE it
+    # extracts, so patching the extraction seam alone is not enough: on a
+    # runner without the optional `trafilatura` wheel the gate raises
+    # BackendError before client.get is ever reached (#13162). Patch both
+    # module seams so this guard test stays independent of that optional dep.
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "extracted text")
 
     mock_response = MagicMock()
@@ -496,6 +500,8 @@ async def test_trafilatura_public_allowed_url_reaches_fetch(monkeypatch):
         return True
 
     monkeypatch.setattr(guard_mod, "_robots_is_allowed", _allowed)
+    # Same optional-dependency gate as above (#13162).
+    monkeypatch.setattr(wp_mod, "_import_trafilatura", lambda: object())
     monkeypatch.setattr(wp_mod, "_trafilatura_extract", lambda html: "article body")
 
     mock_response = MagicMock()

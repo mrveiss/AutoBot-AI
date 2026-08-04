@@ -7,6 +7,15 @@
 # merge-conflict surprises at review time.
 #
 # See: #9300 post-mortem — direct hotfixes on main caused drift
+#
+# #12823: the merge commit this job creates is pushed with the default
+# GITHUB_TOKEN, so GitHub attributes it to github-actions[bot]. The repository's
+# fork-PR approval policy treats that bot as an external contributor, so every
+# `pull_request` run the refresh triggers is created with
+# conclusion=action_required and never starts — the refreshed PR ends up with a
+# head commit carrying ZERO executed checks, which reads as "no failures" to any
+# rollup. The `approve-refreshed-runs` job below runs immediately afterwards to
+# repair that, and publishes a visible commit status when it cannot.
 
 name: Auto-update PR branches
 
@@ -17,26 +26,54 @@ on:
 
 jobs:
   auto-update:
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 15  # #11077: fail fast (self-hosted); not GitHub's 24h default
+    # #13401: ubuntu-latest, NOT the singleton self-hosted runner.
+    #
+    # `strict: true` on Dev_new_gui means a PR cannot merge while its branch is
+    # behind, and this job is the only thing that clears "behind". Pinning it to
+    # the self-hosted runner put the recovery mechanism inside the failure domain
+    # it recovers from: when that runner went offline on 2026-08-03, every open
+    # PR fell behind, none could merge, and the sweep that would have fixed them
+    # could not start. The repository deadlocked until a human intervened.
+    #
+    # This is the same reasoning ci-dispatch-watchdog.yml already states for
+    # itself: "a watchdog that queues behind the outage it exists to report is
+    # useless." The sibling approve-refreshed-runs job below was already
+    # ubuntu-latest for exactly this reason; only this job was pinned.
+    #
+    # Nothing here needs the self-hosted host: the steps are `gh pr list`,
+    # `gh api compare` and `gh api update-branch` — REST calls against
+    # github.com, no build, no test, no local toolchain.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      - name: Install GitHub CLI
-        run: |
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt update
-            sudo apt install gh -y
-          fi
-
+      # gh is preinstalled on GitHub-hosted runners, so the self-hosted install
+      # dance (apt keyring + sudo) is no longer needed (#13401).
       - name: Update out-of-date PR branches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          # #13426: how many stale branches one sweep may refresh.
+          #
+          # Dev_new_gui has `strict: true` (require branches up to date before
+          # merging), so AT MOST ONE updated PR can merge before the next base
+          # landing makes the rest stale again. Refreshing N branches to land 1
+          # therefore costs N × ~25 runs (#13388) and discards N-1 of them —
+          # and it gets worse as the backlog grows, so the queue slows down
+          # exactly when it is busiest.
+          #
+          # It also un-approves work: the ruleset sets
+          # dismiss_stale_reviews_on_push, so every branch this sweep touches
+          # loses its approving review and has to be re-approved.
+          #
+          # 1 is the correct default under `strict: true`: refresh the next
+          # merge candidate, let it land, and let the push it produces refresh
+          # the one after. Raise this only if `strict` is relaxed, where
+          # refreshing several at once becomes useful rather than wasted.
+          MAX_BRANCH_UPDATES: '1'
         run: |
           echo "Dev_new_gui was updated — checking open PRs for staleness..."
 
@@ -101,6 +138,20 @@ jobs:
 
           echo "PRs behind Dev_new_gui: $(echo "$OUTDATED" | tr '\n' ' ')"
 
+          # #13426: refresh at most MAX_BRANCH_UPDATES of them, oldest PR first.
+          # Under `strict: true` only one can merge per base landing, so the
+          # rest would be re-staled before they were ever mergeable. Oldest-first
+          # (lowest PR number) keeps the queue FIFO instead of starving whichever
+          # PR happens to sort last.
+          TOTAL_OUTDATED=$(echo "$OUTDATED" | tr ' ' '\n' | grep -c '[0-9]' || true)
+          OUTDATED=$(echo "$OUTDATED" | tr ' ' '\n' | grep '[0-9]' | sort -n | head -n "$MAX_BRANCH_UPDATES")
+          DEFERRED=$((TOTAL_OUTDATED - $(echo "$OUTDATED" | grep -c '[0-9]' || true)))
+          if [ "$DEFERRED" -gt 0 ]; then
+            # Say what was skipped. A cap that silently drops work reads as
+            # "everything was refreshed" when it was not.
+            echo "Refreshing $MAX_BRANCH_UPDATES of $TOTAL_OUTDATED; deferring $DEFERRED to the next base push (#13426)."
+          fi
+
           UPDATED=0
           FAILED=0
           for PR in $OUTDATED; do
@@ -129,3 +180,32 @@ jobs:
           echo "Done: $UPDATED updated, $FAILED need manual attention."
           # Never fail — conflicting PRs just need human resolution
           exit 0
+
+  # #12823: repair the runs the refresh above just parked.
+  #
+  # This job must NOT run on the self-hosted runner: it exists to unblock CI,
+  # and the singleton runner is exactly the resource that is contended when
+  # several PRs are refreshed at once. `needs: auto-update` guarantees it runs
+  # after the branches were actually updated, so the parked runs already exist
+  # by the time it looks; the standalone `ci-dispatch-watchdog` schedule is the
+  # safety net for anything that appears later.
+  approve-refreshed-runs:
+    needs: auto-update
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+      statuses: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Approve parked runs and publish dispatch state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          WATCHDOG_BASE_BRANCH: Dev_new_gui
+        run: python3 pipeline-scripts/ci_dispatch_watchdog.py --check dispatch

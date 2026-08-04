@@ -35,6 +35,17 @@
   become: true
   notify: restart backend
 
+# #13335: the role declares `service_auth_rate_limit_window` but never wrote it
+# here, so the window came only from backend.env.j2. Both keys of the #13326 pair
+# must be written together or the pair drifts again.
+- name: "ServiceAuth | Set rate limit window"
+  ansible.builtin.lineinfile:
+    path: "{{ service_auth_config_dir }}/service-auth.env"
+    regexp: "^SERVICE_AUTH_RATE_LIMIT_WINDOW="
+    line: "SERVICE_AUTH_RATE_LIMIT_WINDOW={{ service_auth_rate_limit_window }}"
+  become: true
+  notify: restart backend
+
 - name: "ServiceAuth | Set rate limit max failures"
   ansible.builtin.lineinfile:
     path: "{{ service_auth_config_dir }}/service-auth.env"

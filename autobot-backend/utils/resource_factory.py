@@ -103,13 +103,17 @@ class ResourceFactory:
 
             # Fallback to module-level import and creation
             from chat_history import ChatHistoryManager
-            from config import config as global_config_manager
+
+            # `config.config` is the SSOT AutoBotConfig proxy — it has neither
+            # get_redis_config() nor get_nested(). The config *manager* is the
+            # canonical holder of both, as every other call site uses.
+            from config import unified_config_manager
 
             logger.info("Creating new ChatHistoryManager instance (expensive operation)")
 
-            redis_config = global_config_manager.get_redis_config()
+            redis_config = unified_config_manager.get_redis_config()
             chm = ChatHistoryManager(
-                history_file=global_config_manager.get_nested("data.chat_history_file", "data/chat_history.json"),
+                history_file=unified_config_manager.get_nested("data.chat_history_file", "data/chat_history.json"),
                 use_redis=redis_config.get("enabled", False),
                 redis_host=redis_config.get("host", NetworkConstants.LOCALHOST_NAME),
                 redis_port=redis_config.get("port", NetworkConstants.REDIS_PORT),

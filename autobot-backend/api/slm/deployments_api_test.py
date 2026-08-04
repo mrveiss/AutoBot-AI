@@ -163,6 +163,11 @@ class TestCreateDeployment:
 
         # Pydantic v2 rejects unknown enum values at request validation time (422).
         assert response.status_code == 422
+        # #13253: assert the 422 names the offending BODY field. Without this the
+        # test passed vacuously while a broken auth dependency rejected every
+        # request with a 422 naming spurious ``query`` parameters instead.
+        errors = response.json()["detail"]
+        assert any(err["loc"] == ["body", "strategy"] for err in errors), errors
 
     def test_create_deployment_missing_fields(self, client, mock_orchestrator):
         """Test create with missing required fields — Pydantic returns 422."""
@@ -176,6 +181,10 @@ class TestCreateDeployment:
             )
 
         assert response.status_code == 422
+        # #13253: the 422 must be about the missing body field, not about a
+        # dependency that FastAPI mis-resolved into required query parameters.
+        errors = response.json()["detail"]
+        assert any(err["loc"] == ["body", "target_nodes"] for err in errors), errors
 
 
 class TestGetDeployment:

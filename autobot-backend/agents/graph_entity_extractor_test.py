@@ -37,7 +37,8 @@ def mock_extraction_agent():
     """Mock KnowledgeExtractionAgent for isolated testing."""
     agent = Mock()
 
-    # Mock extract_facts to return sample facts (using Mock objects for simplicity)
+    # GraphEntityExtractor calls KnowledgeExtractionAgent.extract_facts_from_text();
+    # that is the only fact-extraction entry point the agent exposes.
     mock_result = Mock()
 
     fact1 = Mock(spec=AtomicFact)
@@ -63,7 +64,7 @@ def mock_extraction_agent():
 
     mock_result.facts = [fact1, fact2, fact3]
 
-    agent.extract_facts = AsyncMock(return_value=mock_result)
+    agent.extract_facts_from_text = AsyncMock(return_value=mock_result)
     return agent
 
 
@@ -149,7 +150,7 @@ async def test_extract_and_populate_basic(entity_extractor, mock_extraction_agen
     )
 
     # Verify extraction agent was called (composition)
-    mock_extraction_agent.extract_facts.assert_called_once()
+    mock_extraction_agent.extract_facts_from_text.assert_called_once()
 
     # Verify entities were created
     assert result.entities_created > 0
@@ -210,7 +211,7 @@ async def test_extract_and_populate_confidence_threshold(entity_extractor, mock_
             },
         ),
     ]
-    mock_extraction_agent.extract_facts = AsyncMock(return_value=mock_result)
+    mock_extraction_agent.extract_facts_from_text = AsyncMock(return_value=mock_result)
 
     messages = [{"role": "user", "content": "test"}]
 
@@ -543,7 +544,7 @@ def test_generate_entity_name(entity_extractor):
 async def test_extract_and_populate_handles_extraction_error(entity_extractor, mock_extraction_agent):
     """Test handling of extraction errors."""
     # Mock extraction failure
-    mock_extraction_agent.extract_facts = AsyncMock(side_effect=Exception("Extraction failed"))
+    mock_extraction_agent.extract_facts_from_text = AsyncMock(side_effect=Exception("Extraction failed"))
 
     messages = [{"role": "user", "content": "test"}]
 

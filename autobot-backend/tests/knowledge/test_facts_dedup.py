@@ -8,52 +8,26 @@ Tests for semantic duplicate guard on individual fact writes — Issue #3788.
 Verifies that store_fact() skips near-duplicate content above the configured
 threshold, allows content below threshold, and handles edge cases correctly.
 
-Heavy dependencies (llama_index, chromadb, aioredis, redis) are stubbed via
-sys.modules patching so the test suite can run without the full backend stack.
+No stubbing is needed: every module below imports for real (#13361).
 """
 
-import sys
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import knowledge.facts as facts_module
 from knowledge.facts import FactsMixin
 from tests.helpers.fake_kb import FactsFakeKB
 
-# ---------------------------------------------------------------------------
-# Stub out heavy dependencies before importing knowledge.facts
-# ---------------------------------------------------------------------------
-
-_llama_core = types.ModuleType("llama_index.core")
-_llama_core.Document = MagicMock
-_llama_core.Settings = MagicMock()
-_llama_index = types.ModuleType("llama_index")
-
-sys.modules.setdefault("llama_index", _llama_index)
-sys.modules.setdefault("llama_index.core", _llama_core)
-sys.modules.setdefault("llama_index.vector_stores", types.ModuleType("llama_index.vector_stores"))
-sys.modules.setdefault("llama_index.vector_stores.chroma", types.ModuleType("llama_index.vector_stores.chroma"))
-sys.modules.setdefault("chromadb", types.ModuleType("chromadb"))
-sys.modules.setdefault("redis", types.ModuleType("redis"))
-sys.modules.setdefault("aioredis", types.ModuleType("aioredis"))
-
-# knowledge.utils is imported lazily inside _vectorize_fact_in_chromadb
-_knowledge_utils = types.ModuleType("knowledge.utils")
-_knowledge_utils.sanitize_metadata_for_chromadb = lambda m: m
-sys.modules.setdefault("knowledge.utils", _knowledge_utils)
-
-# services.content_fingerprint is imported lazily inside _prepare_fact_metadata
-_svc_fp = types.ModuleType("services.content_fingerprint")
-_svc_fp.compute_fingerprint = lambda c: "fp-test"
-sys.modules.setdefault("services.content_fingerprint", _svc_fp)
-
-# services.npu_client is imported lazily inside _get_npu_client_cached
-_svc_npu = types.ModuleType("services.npu_client")
-_svc_npu.get_npu_client = MagicMock()
-sys.modules.setdefault("services.npu_client", _svc_npu)
-
-import knowledge.facts as facts_module  # noqa: E402 — must follow sys.modules patches
+# #13361: a block of eleven ``sys.modules.setdefault`` stubs used to sit here —
+# llama_index.*, chromadb, redis, aioredis, knowledge.utils,
+# services.content_fingerprint, services.npu_client — installed at import time
+# and never removed. They never did anything for this file even before that:
+# ``from knowledge.facts import FactsMixin`` ran three lines ABOVE them, so the
+# import they claimed to protect had already completed. What they did do was
+# escape, and their owner only became visible once the identical block in
+# ``test_cleanup_endpoint.py`` (which sorts first and won the setdefault race)
+# was removed in this same change.
 
 _THRESHOLD = 0.92
 

@@ -19,6 +19,7 @@ import aiofiles
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import REDIS_KEY
 
 from .models import WorkflowSession
 
@@ -30,7 +31,7 @@ class ConversationHandlerMixin:
 
     def _get_conversation_key(self, session_id: str) -> str:
         """Generate Redis key for conversation history."""
-        return f"chat:conversation:{session_id}"
+        return f"{REDIS_KEY.CHAT_CONVERSATION_PREFIX}{session_id}"
 
     async def _try_redis_history(self, session_id: str) -> List[Dict[str, str]] | None:
         """Try to load conversation history from Redis (Issue #332 - extracted helper).

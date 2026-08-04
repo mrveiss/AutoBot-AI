@@ -152,6 +152,20 @@ for _mod in _SIMPLE_STUBS:
         except ImportError:
             sys.modules[_mod] = MagicMock()
 
+# #13162: a machine without torch has no CUDA either, and the stub must say so.
+# A bare MagicMock returns a truthy MagicMock from ``torch.cuda.is_available()``,
+# which sends production code down the GPU branch — where it formats MagicMock
+# device properties ("unsupported format string passed to MagicMock.__format__")
+# and compares MagicMock device capability against an int. Attribute access on
+# the parent stub auto-creates its own ``cuda`` child, so the ``torch.cuda``
+# sys.modules entry must be that same object or the two disagree.
+_torch_stub = sys.modules.get("torch")
+if isinstance(_torch_stub, MagicMock):
+    _torch_stub.cuda.is_available.return_value = False
+    _torch_stub.cuda.device_count.return_value = 0
+    _torch_stub.cuda.get_device_capability.return_value = (0, 0)
+    sys.modules["torch.cuda"] = _torch_stub.cuda
+
 # Celery stub — issue #4455. When celery isn't installed in the dev venv,
 # provide a tiny shim so modules that do ``@celery_app.task`` import cleanly.
 # The real package is used on production nodes; tests never rely on Beat.
@@ -611,13 +625,34 @@ if "llm_shared" not in sys.modules:
 
 # auth_middleware stub — the real module pulls in the full config/Redis chain
 # at import time (config.manager, error_catalog, etc.) which fails in the dev
-# venv.  Tests that exercise openai_compat patch _get_user directly and never
-# call get_current_user, so a lightweight stub is safe here.
+# venv.  Every name exported here must be a real callable with a real
+# signature, because routers capture them in ``Depends(...)`` at import time.
 if "auth_middleware" not in sys.modules:
+    from fastapi import Request as _FastAPIRequest
+
     _auth_stub = types.ModuleType("auth_middleware")
     _auth_stub.__path__ = []  # type: ignore[attr-defined]
     _auth_stub.__package__ = "auth_middleware"
-    _auth_stub.get_current_user = MagicMock()  # type: ignore[attr-defined]
+
+    # get_current_user must be a real callable, not a bare MagicMock (#13253).
+    # ``inspect.signature(MagicMock())`` is ``(*args, **kwargs)``; FastAPI's
+    # get_dependant() does not skip VAR_POSITIONAL/VAR_KEYWORD parameters, so
+    # both become REQUIRED query parameters. Every request to any router that
+    # declares ``Depends(get_current_user)`` then fails validation with
+    # ``422 {'loc': ['query', 'args'], 'msg': 'Field required'}`` before the
+    # handler ever runs — same failure mode as #10472 below.
+    # The ``request`` parameter is annotated ``Request`` so FastAPI injects it
+    # instead of treating it as a request field, and defaults to None so
+    # direct ``get_current_user()`` call sites keep working.
+    def _get_current_user_stub(request: _FastAPIRequest = None) -> dict:  # type: ignore[assignment] # noqa: E301
+        return {
+            "username": "test-user",
+            "user_id": "test-user",
+            "role": "admin",
+            "auth_method": "stub",
+        }
+
+    _auth_stub.get_current_user = _get_current_user_stub  # type: ignore[attr-defined]
 
     # check_admin_permission must be a proper no-arg callable so FastAPI can
     # inspect its signature at route-registration time without producing spurious
@@ -708,10 +743,23 @@ except Exception:
 # modules with Python-3.10-incompatible annotations or missing config keys.
 # Stub these modules so the lightweight types-only tests can collect without
 # needing the full backend stack.
+#
+# ``orchestration.causal_validator`` is deliberately NOT on this list (#13162).
+# It has none of the heavy chain the entries below are here for — its only
+# imports are ``autobot_shared.logging_manager``, ``orchestration.causal_models``
+# (stdlib dataclasses/enum only) and ``orchestration.dag_executor``, both of
+# which every consumer already real-imports. Stubbing it handed
+# ``orchestration/test_causal_executor.py`` a MagicMock ``CausalValidator``, so
+# ``validate_workflow()`` returned a mock whose ``.valid`` was truthy, whose
+# ``errors()``/``warnings()`` had ``len() == 0`` and iterated empty — the whole
+# TestCausalValidator class asserted against mock defaults instead of the real
+# validator (2 tests failed outright, 3 silently asserted nothing, and
+# ``test_validate_no_issues_linear_workflow`` passed for the wrong reason).
+# Same class of harness bug as ``code_intelligence.merge_conflict_resolver``
+# below (#13111).
 for _causal_mod in [
     "orchestration.causal_error_recovery",
     "orchestration.causal_error_analyzer",
-    "orchestration.causal_validator",
     "agent_loop",
     "agent_loop.loop",
     "agent_loop.think_tool",
@@ -831,25 +879,49 @@ if "code_intelligence.cross_language_patterns" not in sys.modules:
     _ci_clp_stub.CrossLanguagePatternDetector = MagicMock()  # type: ignore[attr-defined]
     sys.modules["code_intelligence.cross_language_patterns"] = _ci_clp_stub
 
+
+def _stub_symbols(name: str, **symbols) -> types.ModuleType:
+    """Return the ``sys.modules`` entry for *name*, decorating it ONLY if it is a stub.
+
+    #13162: these three blocks used to read
+    ``sys.modules.get(name) or _make_pkg_stub(name)`` and then assign MagicMocks
+    unconditionally. When the real module was already imported — anything loaded
+    earlier in this conftest can pull ``orchestration/__init__.py``, whose line
+    ``from .causal_error_recovery import CausalErrorRecovery, RecoveryPlan, ...``
+    imports the genuine module — that assignment silently REPLACED real classes
+    in a real module's globals. The module then keeps executing its own code
+    against mocks: ``recommend_recovery()`` runs for real, logs a real pattern
+    hash, and returns ``RecoveryPlan(...)`` — a MagicMock. Callers see
+    ``plan.error_type`` as a mock and ``plan.causal_chain.encode()`` blows up in
+    ``hashlib.md5`` with "object supporting the buffer API required".
+
+    A module loaded from a file has ``__file__``; the package stubs built by
+    ``_make_pkg_stub`` never do. Decorating only the latter keeps the stub
+    contract (orchestration's import must resolve) without ever mutating real code.
+    """
+    existing = sys.modules.get(name)
+    if existing is not None and getattr(existing, "__file__", None) is not None:
+        return existing  # real module — never overwrite its symbols
+    stub = existing if existing is not None else _make_pkg_stub(name)
+    for _sym_name, _sym_value in symbols.items():
+        setattr(stub, _sym_name, _sym_value)
+    sys.modules[name] = stub
+    return stub
+
+
 # Ensure CausalErrorRecovery / RecoveryPlan / get_recovery_recommender are
 # resolvable from the stub so orchestration/__init__.py's wildcard import
 # (`from .causal_error_recovery import CausalErrorRecovery, ...`) succeeds.
-_cer_stub = sys.modules.get("orchestration.causal_error_recovery") or _make_pkg_stub(
-    "orchestration.causal_error_recovery"
+_stub_symbols(
+    "orchestration.causal_error_recovery",
+    CausalErrorRecovery=MagicMock(),
+    RecoveryPlan=MagicMock(),
+    get_recovery_recommender=MagicMock(),
 )
-_cer_stub.CausalErrorRecovery = MagicMock()  # type: ignore[attr-defined]
-_cer_stub.RecoveryPlan = MagicMock()  # type: ignore[attr-defined]
-_cer_stub.get_recovery_recommender = MagicMock()  # type: ignore[attr-defined]
-sys.modules["orchestration.causal_error_recovery"] = _cer_stub
 
-_cea_stub = sys.modules.get("orchestration.causal_error_analyzer") or _make_pkg_stub(
-    "orchestration.causal_error_analyzer"
-)
-_cea_stub.CausalErrorAnalysis = MagicMock()  # type: ignore[attr-defined]
-sys.modules["orchestration.causal_error_analyzer"] = _cea_stub
+_stub_symbols("orchestration.causal_error_analyzer", CausalErrorAnalysis=MagicMock())
 
-_al_stub = sys.modules.get("agent_loop") or _make_pkg_stub("agent_loop")
-_al_stub.AgentLoop = MagicMock()  # type: ignore[attr-defined]
+_al_stub = _stub_symbols("agent_loop", AgentLoop=MagicMock())
 # Give the injected stub a REAL __path__ so the package's light submodules
 # (types, belief_state, pre_action_verifier, slack_hook, …) resolve on-demand from
 # disk for the in-package agent_loop/ tests (#11153) — WITHOUT running agent_loop/

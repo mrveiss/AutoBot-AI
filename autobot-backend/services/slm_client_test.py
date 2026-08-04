@@ -10,6 +10,7 @@ and service JWT minting (#9852).
 import os
 import ssl
 import tempfile
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -297,14 +298,19 @@ class TestMintServiceJwt:
         assert "exp" in payload
 
     def test_expiry_roughly_one_hour(self) -> None:
-        """Expiry is within ±5 s of _SERVICE_JWT_TTL_HOURS from now."""
-        import time
+        """exp is _SERVICE_JWT_TTL_HOURS after the mint, to the second.
 
+        Bounded by the whole seconds read either side of the mint rather than
+        an +-5 s tolerance on ``exp - time.time()``: exp is a whole-second
+        claim, so the bound is exact and a loaded runner cannot widen it
+        (#13399).
+        """
+        ttl_secs = int(_SERVICE_JWT_TTL_HOURS * 3600)
+        before = int(time.time())
         token = _mint_service_jwt(_TEST_SECRET)
+        after = int(time.time())
         payload = decode_jwt(token, secret=_TEST_SECRET)
-        expected_ttl_secs = _SERVICE_JWT_TTL_HOURS * 3600
-        actual_remaining = payload["exp"] - time.time()
-        assert abs(actual_remaining - expected_ttl_secs) < 5
+        assert before + ttl_secs <= payload["exp"] <= after + ttl_secs
 
     def test_wrong_secret_fails_decode(self) -> None:
         """Token minted with one secret cannot be decoded with another."""

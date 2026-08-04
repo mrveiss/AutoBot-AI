@@ -5,6 +5,7 @@
 """Tests for device JWT service (GH#9493)."""
 
 import os
+import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -238,35 +239,46 @@ class TestInvalidateDeviceCache:
 
 
 class TestConfigurationDefaults:
-    """Tests for configuration defaults and env var handling."""
+    """Tests for configuration defaults and env var handling.
 
-    def test_default_ttl_is_90_days(self, test_device):
+    The ``exp`` claim is a whole-second integer: ``floor(mint_time) + ttl``.
+    Bounding it by the whole seconds read either side of the mint call is
+    therefore exact, and needs no tolerance. The previous
+    ``abs(exp - time.time() - ttl) < 1`` compared a truncated int against a
+    float and failed (``1.000488 < 1``) whenever the mint landed late enough
+    in a second -- a threshold that was never true with margin (#13399).
+    """
+
+    def test_default_ttl_is_90_days(self, test_device, monkeypatch):
         """Should default to 90-day TTL."""
-        os.environ.pop("DEVICE_JWT_TTL_DAYS", None)
+        default_ttl_seconds = 90 * 24 * 3600
+        monkeypatch.delenv("DEVICE_JWT_TTL_DAYS", raising=False)
+        before = int(time.time())
         token = mint_device_jwt(
             device_id=test_device["device_id"],
             user_id=test_device["user_id"],
         )
+        after = int(time.time())
         claims = decode_jwt(token, os.environ["DEVICE_JWT_SECRET"])
-        # Verify exp is ~90 days in the future (allow 1 second tolerance)
-        import time
+        assert before + default_ttl_seconds <= claims["exp"] <= after + default_ttl_seconds
 
-        expected_exp = time.time() + (90 * 24 * 3600)
-        assert abs(claims["exp"] - expected_exp) < 1
+    def test_custom_ttl_from_env(self, test_device, monkeypatch):
+        """Should use custom TTL from DEVICE_JWT_TTL_DAYS.
 
-    def test_custom_ttl_from_env(self, test_device):
-        """Should use custom TTL from DEVICE_JWT_TTL_DAYS."""
-        os.environ["DEVICE_JWT_TTL_DAYS"] = "30"
+        ``monkeypatch`` (not a trailing ``os.environ.pop``) restores the var:
+        the old cleanup never ran when the assertion failed, leaking a 30-day
+        TTL into every later test in the session (#13399).
+        """
+        custom_ttl_seconds = 30 * 24 * 3600
+        monkeypatch.setenv("DEVICE_JWT_TTL_DAYS", "30")
+        before = int(time.time())
         token = mint_device_jwt(
             device_id=test_device["device_id"],
             user_id=test_device["user_id"],
         )
+        after = int(time.time())
         claims = decode_jwt(token, os.environ["DEVICE_JWT_SECRET"])
-        import time
-
-        expected_exp = time.time() + (30 * 24 * 3600)
-        assert abs(claims["exp"] - expected_exp) < 1
-        os.environ.pop("DEVICE_JWT_TTL_DAYS")
+        assert before + custom_ttl_seconds <= claims["exp"] <= after + custom_ttl_seconds
 
     def test_default_audience(self, test_device):
         """Should default to 'autobot:device' audience."""

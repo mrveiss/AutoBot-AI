@@ -899,7 +899,7 @@ class RestartAllServicesRequest(BaseModel):
 
     category: str | None = Field(
         None,
-        pattern="^(autobot|system|all)$",
+        pattern=r"^(autobot|system|all)\z",
         description="Category of services to restart. 'all' or null restarts all services.",
     )
     exclude_services: List[str] = Field(
@@ -930,7 +930,7 @@ class RestartAllServicesResponse(BaseModel):
 class ServiceCategoryUpdate(BaseModel):
     """Request to update service category."""
 
-    category: str = Field(..., pattern="^(autobot|system)$")
+    category: str = Field(..., pattern=r"^(autobot|system)\z")
 
 
 class FleetServiceStatus(BaseModel):
@@ -1160,7 +1160,7 @@ class EligibleNodesResponse(BaseModel):
 class VNCCredentialCreate(BaseModel):
     """Create VNC credential for a node."""
 
-    vnc_type: str = Field(default="desktop", pattern="^(desktop|browser|custom)$")
+    vnc_type: str = Field(default="desktop", pattern=r"^(desktop|browser|custom)\z")
     name: str | None = Field(None, description="Optional friendly name for the credential")
     password: str = Field(..., min_length=1, description="VNC password (will be encrypted)")
     port: int | None = Field(None, ge=1, le=65535, description="websockify port")
@@ -1742,7 +1742,7 @@ class NodeSyncRequest(BaseModel):
     """Request to sync code to a node."""
 
     restart: bool = True
-    strategy: str = Field(default="graceful", pattern="^(immediate|graceful|manual)$")
+    strategy: str = Field(default="graceful", pattern=r"^(immediate|graceful|manual)\z")
 
 
 class NodeSyncResponse(BaseModel):
@@ -1758,7 +1758,7 @@ class FleetSyncRequest(BaseModel):
     """Request to sync code to multiple nodes."""
 
     node_ids: List[str] | None = None
-    strategy: str = Field(default="rolling", pattern="^(immediate|graceful|manual|rolling)$")
+    strategy: str = Field(default="rolling", pattern=r"^(immediate|graceful|manual|rolling)\z")
     batch_size: int = Field(default=1, ge=1, le=10)
     restart: bool = True
 
@@ -1838,9 +1838,9 @@ class ScheduleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     cron_expression: str = Field(..., min_length=9, max_length=100)
     enabled: bool = True
-    target_type: str = Field(default="all", pattern="^(all|specific|tag)$")
+    target_type: str = Field(default="all", pattern=r"^(all|specific|tag)\z")
     target_nodes: List[str] | None = None
-    restart_strategy: str = Field(default="graceful", pattern="^(immediate|graceful|manual)$")
+    restart_strategy: str = Field(default="graceful", pattern=r"^(immediate|graceful|manual)\z")
     restart_after_sync: bool = True
 
 
@@ -1850,9 +1850,9 @@ class ScheduleUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     cron_expression: str | None = Field(None, min_length=9, max_length=100)
     enabled: bool | None = None
-    target_type: str | None = Field(None, pattern="^(all|specific|tag)$")
+    target_type: str | None = Field(None, pattern=r"^(all|specific|tag)\z")
     target_nodes: List[str] | None = None
-    restart_strategy: str | None = Field(None, pattern="^(immediate|graceful|manual)$")
+    restart_strategy: str | None = Field(None, pattern=r"^(immediate|graceful|manual)\z")
     restart_after_sync: bool | None = None
 
 
@@ -1934,7 +1934,7 @@ class NodeConfigSetRequest(BaseModel):
     """Request to set a configuration value."""
 
     value: str
-    value_type: str = Field(default="string", pattern="^(string|int|bool|json)$")
+    value_type: str = Field(default="string", pattern=r"^(string|int|bool|json)\z")
 
 
 class NodeConfigBulkResponse(BaseModel):
@@ -1968,7 +1968,7 @@ class ServiceConflictCreateRequest(BaseModel):
     service_a: str = Field(..., min_length=1, max_length=128)
     service_b: str = Field(..., min_length=1, max_length=128)
     reason: str | None = None
-    conflict_type: str = Field(default="port", pattern="^(port|dependency|resource)$")
+    conflict_type: str = Field(default="port", pattern=r"^(port|dependency|resource)\z")
 
 
 class ServiceConflictListResponse(BaseModel):
@@ -2018,10 +2018,10 @@ class AgentResponse(BaseModel):
 class AgentCreateRequest(BaseModel):
     """Request to create an agent."""
 
-    agent_id: str = Field(..., min_length=1, max_length=64, pattern="^[a-z0-9-]+$")
+    agent_id: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z0-9-]+\z")
     name: str = Field(..., min_length=1, max_length=128)
     description: str | None = None
-    llm_provider: str = Field(..., pattern="^(ollama|openai|anthropic|vllm)$")
+    llm_provider: str = Field(..., pattern=r"^(ollama|openai|anthropic|vllm)\z")
     llm_endpoint: str | None = None
     llm_model: str = Field(..., min_length=1, max_length=64)
     llm_api_key: str | None = None  # Will be encrypted before storage
@@ -2037,7 +2037,7 @@ class AgentUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=128)
     description: str | None = None
-    llm_provider: str | None = Field(default=None, pattern="^(ollama|openai|anthropic|vllm)$")
+    llm_provider: str | None = Field(default=None, pattern=r"^(ollama|openai|anthropic|vllm)\z")
     llm_endpoint: str | None = None
     llm_model: str | None = Field(default=None, min_length=1, max_length=64)
     llm_api_key: str | None = None  # Will be encrypted before storage

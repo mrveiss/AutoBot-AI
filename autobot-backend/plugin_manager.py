@@ -31,6 +31,7 @@ from autobot_shared.plugin_sdk import (
 from autobot_shared.plugin_sdk.base import PluginLoadError
 from autobot_shared.plugin_sdk.loader import validate_plugin_config
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import decode_redis_value
 from autobot_shared.ssot_config import config
 from plugin_install import install_from_git, install_from_zip
 
@@ -623,6 +624,18 @@ async def approve_plugin_capabilities(
     }
 
 
+def _audit_field(data: Dict, name: str, default: str = "") -> str:
+    """Read one field from a ``plugin:capability:audit`` stream entry (#13274).
+
+    The shared client is ``decode_responses=True``, so ``xrevrange`` yields ``str``
+    field names. Looking the field up with a ``bytes`` literal never matched, so
+    every entry rendered blank with ``granted`` pinned to ``False``. Indexing by
+    ``str`` fixes that; ``decode_redis_value`` keeps a non-decoding client working.
+    """
+    value = decode_redis_value(data.get(name))
+    return default if value is None else value
+
+
 @router.get("/plugins/audit")
 @with_error_handling(error_code_prefix="PLUGIN_AUDIT_GET")
 async def get_capability_audit_log(
@@ -660,12 +673,14 @@ async def get_capability_audit_log(
     for entry_id, data in entries:
         audit_entries.append(
             CapabilityAuditEntry(
-                timestamp=data.get(b"timestamp", b"").decode("utf-8"),
-                plugin_name=data.get(b"plugin_name", b"").decode("utf-8"),
-                capability=data.get(b"capability", b"").decode("utf-8"),
-                granted=data.get(b"granted", b"false").decode("utf-8") == "true",
-                operation=data.get(b"operation", b"").decode("utf-8"),
-                metadata=data.get(b"metadata", b"").decode("utf-8"),
+                timestamp=_audit_field(data, "timestamp"),
+                plugin_name=_audit_field(data, "plugin_name"),
+                capability=_audit_field(data, "capability"),
+                # CapabilityChecker._log_capability_use writes str(context.granted),
+                # i.e. "True"/"False" -- casefold before comparing (#13274).
+                granted=_audit_field(data, "granted", "false").lower() == "true",
+                operation=_audit_field(data, "operation"),
+                metadata=_audit_field(data, "metadata"),
             )
         )
 

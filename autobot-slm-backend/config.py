@@ -20,6 +20,8 @@ from typing import Optional
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
+from autobot_shared.secret_redaction import RedactedReprMixin
+
 logger = logging.getLogger(__name__)
 
 # Filename for the auto-generated persistent keys file inside data_dir.
@@ -174,7 +176,7 @@ _SSOT_POOL_SIZE, _SSOT_MAX_OVERFLOW, _SSOT_POOL_RECYCLE = _get_ssot_pool_default
 _SSOT_BACKEND_URL = _get_ssot_backend_url()
 
 
-class Settings(BaseSettings):
+class Settings(RedactedReprMixin, BaseSettings):
     """SLM Server Settings."""
 
     # Paths - relative to slm-server directory (where config.py lives)

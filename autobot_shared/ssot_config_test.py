@@ -375,6 +375,45 @@ class TestProjectRoot:
         assert PROJECT_ROOT.is_dir()
 
 
+class TestMCPAuthDefaults:
+    """#13263: the #7437 migration dropped both MCP authentication defaults.
+
+    ``AUTOBOT_MCP_TOKEN`` shipped as ``dev`` and ``MCP_RUN_JWT_ENFORCE`` as ``1``.
+    Declaring them ``""`` made the MCP server compare an incoming token's secret
+    segment against the empty string, and turned run-scoped JWT enforcement off in
+    every bridge worker. Neither var is set by any env template, so the shipped
+    default is the effective value everywhere.
+    """
+
+    def test_mcp_token_has_no_working_default(self) -> None:
+        """#13263: a non-empty default is itself a working credential.
+
+        The pre-#7437 value was ``dev``, but the secret *is* the whole check and
+        that string is published in this repo — restoring it would let any caller
+        present ``dev:<scopes>`` and choose their own privileges. Empty means
+        unconfigured, and ``_validate_token`` fails closed on it.
+        """
+        from autobot_shared.ssot_config import MiscConfig
+
+        # _env_file=None so the true field default is asserted, not a local .env.
+        with patch.dict(os.environ, {}, clear=True):
+            assert MiscConfig(_env_file=None).mcp_token == ""
+
+    def test_mcp_run_jwt_enforce_default_documents_the_regression(self) -> None:
+        """#13263: enforcement shipped ON ("1"); #7437 dropped it to "".
+
+        Restoring it is blocked on #13265 — mcp_dispatch does not propagate
+        run_jwt to out-of-process bridges, so switching enforcement on would
+        fail every filesystem/browser/vnc tool call with -32001. This pins the
+        current (regressed) value deliberately, so the flip is a conscious edit
+        against a passing test rather than a silent change.
+        """
+        from autobot_shared.ssot_config import MiscConfig
+
+        with patch.dict(os.environ, {}, clear=True):
+            assert MiscConfig(_env_file=None).mcp_run_jwt_enforce == ""
+
+
 class TestChatCitationInstructionAliasChoices:
     """#10736: Both env vars set chat_citation_instruction_enabled correctly."""
 

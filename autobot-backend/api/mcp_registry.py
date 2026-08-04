@@ -34,6 +34,7 @@ Key Features:
 
 import importlib
 import importlib.metadata
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple
 
@@ -79,7 +80,7 @@ router = APIRouter(
 
 # Load cache configuration from environment
 CACHE_ENABLED = bool(config.mcp_registry_cache_enabled)
-CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl or "300")
+CACHE_TTL_SECONDS = int(config.mcp_registry_cache_ttl or "60")
 
 logger.info("MCP Registry Cache: enabled=%s, TTL=%ss", CACHE_ENABLED, CACHE_TTL_SECONDS)
 
@@ -823,6 +824,21 @@ async def _fetch_tools_from_bridge(backend_url: str, endpoint: str) -> list:
         return await response.json()
 
 
+#: MCP tool names are identifiers. Anything else cannot name a real tool, so
+#: it is rejected before the registry spends an outbound bridge request on it
+#: (#13162) — an unauthenticated caller must not be able to drive backend HTTP
+#: traffic with an arbitrary string, and a lookup that can only ever miss must
+#: answer 404 rather than surface whatever the fetch happened to fail with.
+_TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+def _validate_tool_name(tool_name: str) -> None:
+    """Reject tool names that cannot identify a tool. Raises 404 when malformed."""
+    if not _TOOL_NAME_PATTERN.fullmatch(tool_name):
+        logger.warning("Rejected malformed MCP tool name (%d chars)", len(tool_name))
+        raise HTTPException(status_code=404, detail="Tool not found")
+
+
 def _find_tool_in_list(tools: list, tool_name: str, bridge_name: str) -> dict:
     """
     Find a specific tool in the tools list.
@@ -873,6 +889,9 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     """
     backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
 
+    # #13162: shape-check the tool name before any network work is done for it.
+    _validate_tool_name(tool_name)
+
     # Find the bridge (Issue #620: uses helper)
     bridge = _find_bridge_by_name(bridge_name)
     _, bridge_desc, endpoint, _ = bridge  # Issue #382: features unused
@@ -911,7 +930,14 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     error_code_prefix="MCP_REGISTRY",
 )
 async def enable_mcp_bridge(name: str) -> Metadata:
-    """Enable a registered MCP bridge (Issue #4462)."""
+    """Enable a registered MCP bridge (Issue #4462).
+
+    #13261: the registry cache is a per-process global, so ``invalidate_all()``
+    clears only the worker that handled this request. With multiple uvicorn
+    workers the others keep serving the previous ``enabled`` flag until their
+    own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+    same worker-locality caveat.
+    """
     _find_bridge_by_name(name)
     toggle_svc = get_toggle_service()
     await toggle_svc.set_bridge_enabled(name, True)
@@ -932,7 +958,14 @@ async def enable_mcp_bridge(name: str) -> Metadata:
     error_code_prefix="MCP_REGISTRY",
 )
 async def disable_mcp_bridge(name: str) -> Metadata:
-    """Disable a registered MCP bridge (Issue #4462)."""
+    """Disable a registered MCP bridge (Issue #4462).
+
+    #13261: the registry cache is a per-process global, so ``invalidate_all()``
+    clears only the worker that handled this request. With multiple uvicorn
+    workers the others keep serving the previous ``enabled`` flag until their
+    own entry expires (TTL, default 60s). ``reload_mcp_bridge`` documents the
+    same worker-locality caveat.
+    """
     _find_bridge_by_name(name)
     toggle_svc = get_toggle_service()
     await toggle_svc.set_bridge_enabled(name, False)

@@ -441,6 +441,11 @@ class RedisKeyConstants:
     CHAT_RECENT: str = "chat:recent"
     CHAT_FOLDERS: str = "chat:folders:{username}"
     LLM_MODELS_CACHE: str = "llm_models"
+    # #13303: single source for the `{user, assistant}` pair-history prefix —
+    # was duplicated inline in chat_workflow/conversation.py, as
+    # tasks/chat_retention.py's own module constant, and again in
+    # chat_history/session_reply_backfill.py.
+    CHAT_CONVERSATION_PREFIX: str = "chat:conversation:"
 
 
 REDIS_KEY = RedisKeyConstants()

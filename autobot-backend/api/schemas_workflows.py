@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-from api.schemas_common import SuccessMessageResponse
+from api.schemas_common import MAX_THOUGHT_COUNT, SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.time_utils import now_utc
 from constants.path_constants import PATH
@@ -2398,8 +2398,8 @@ class SequentialThinkingRequest(BaseModel):
     """Request model for sequential thinking tool."""
 
     thought: str = Field(..., description="Current thinking step and analysis")
-    thought_number: int = Field(..., ge=1, description="Current thought number in sequence")
-    total_thoughts: int = Field(..., ge=1, description="Estimated total thoughts needed")
+    thought_number: int = Field(..., ge=1, le=MAX_THOUGHT_COUNT, description="Current thought number in sequence")
+    total_thoughts: int = Field(..., ge=1, le=MAX_THOUGHT_COUNT, description="Estimated total thoughts needed")
     next_thought_needed: bool = Field(..., description="Whether another thought step is needed")
 
     is_revision: bool | None = Field(False, description="Whether this revises previous thinking")
@@ -2992,8 +2992,9 @@ class StructuredThinkingSummaryData(BaseModel):
     thought_count: int = 0
     overview: StructuredThinkingOverview = Field(default_factory=StructuredThinkingOverview)
     stage_distribution: Dict[str, int] = Field(default_factory=dict)
-    stage_progression: List[Any] = Field(default_factory=list)
+    stage_progression: Dict[str, List[Any]] = Field(default_factory=dict)
     metadata_analysis: Dict[str, Any] = Field(default_factory=dict)
+    cognitive_flow: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class SequentialThinkingClearData(BaseModel):

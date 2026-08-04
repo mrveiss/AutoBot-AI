@@ -8,15 +8,19 @@ Covers the fixes for CodeQL/semgrep ``autobot-sql-string-format`` alerts
 against a strict allowlist (SQLite value queries) or safely quoted/escaped
 (SQLite/MySQL identifier grammar) so SQL metacharacters are treated as data,
 never executed.
+
+Direct unit tests for the allowlist validator itself now live alongside its
+single shared implementation at
+``autobot_shared/security/sql_identifier_test.py`` (#13393). This module keeps
+only the tests that exercise the validator indirectly through
+``DatabaseUtils`` and the migration-quoting helper.
 """
 
 import importlib.util
 import sqlite3
 from pathlib import Path
 
-import pytest
-
-from utils.common import DatabaseUtils, _validate_sql_identifier
+from utils.common import DatabaseUtils
 
 # Payload containing SQL metacharacters that must never be executed.
 INJECTION = "widgets; DROP TABLE widgets;--"
@@ -54,13 +58,6 @@ def test_get_table_row_count_treats_metacharacters_as_data():
         assert remaining == 3
     finally:
         conn.close()
-
-
-def test_validate_sql_identifier_rejects_metacharacters():
-    """The allowlist validator raises on any non-identifier character."""
-    with pytest.raises(ValueError):
-        _validate_sql_identifier(INJECTION, "table name")
-    assert _validate_sql_identifier("valid_name_1", "table name") == "valid_name_1"
 
 
 def _load_migration_module():

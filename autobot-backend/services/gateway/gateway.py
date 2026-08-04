@@ -256,7 +256,7 @@ class Gateway:
 
         if success:
             # Update session
-            session.add_message(sender=message.message_id)
+            session.add_message(message_id=message.message_id)
 
         return success
 
@@ -303,7 +303,7 @@ class Gateway:
         # Parse message
         message = await adapter.receive_message(raw_data, session)
         if message:
-            session.add_message(sender=message.message_id)
+            session.add_message(message_id=message.message_id)
 
         return message
 

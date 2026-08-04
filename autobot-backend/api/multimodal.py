@@ -24,7 +24,6 @@ from api.schemas_ai_stack import (
     MultimodalPerfSummaryData,
     MultimodalStatsData,
 )
-from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
     CrossModalSearchRequest,
     CrossModalSearchResponse,
@@ -290,7 +289,7 @@ async def process_text(
         )
 
 
-@router.post("/embeddings/generate", response_model=DataResponse[MultimodalEmbeddingData])
+@router.post("/embeddings/generate", response_model=MultimodalEmbeddingData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_embedding",
@@ -419,7 +418,7 @@ async def cross_modal_search(
         )
 
 
-@router.get("/stats", response_model=DataResponse[MultimodalStatsData])
+@router.get("/stats", response_model=MultimodalStatsData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_multimodal_stats",
@@ -582,7 +581,7 @@ def _create_combined_input(
     )
 
 
-@router.post("/fusion/combine", response_model=DataResponse[MultimodalFusionData])
+@router.post("/fusion/combine", response_model=MultimodalFusionData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="combine_multimodal_inputs",
@@ -647,7 +646,7 @@ async def combine_multimodal_inputs(
 
 
 # Performance monitoring endpoints
-@router.get("/performance/stats", response_model=DataResponse[MultimodalPerfStatsData])
+@router.get("/performance/stats", response_model=MultimodalPerfStatsData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_stats",
@@ -691,7 +690,7 @@ async def get_performance_stats(
         }
 
 
-@router.post("/performance/optimize", response_model=DataResponse[MultimodalOptimizeData])
+@router.post("/performance/optimize", response_model=MultimodalOptimizeData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="optimize_performance",
@@ -724,7 +723,7 @@ async def optimize_performance(
         }
 
 
-@router.get("/performance/summary", response_model=DataResponse[MultimodalPerfSummaryData])
+@router.get("/performance/summary", response_model=MultimodalPerfSummaryData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_performance_summary",
@@ -752,7 +751,7 @@ async def get_performance_summary(
         }
 
 
-@router.post("/performance/batch-size", response_model=DataResponse[MultimodalBatchSizeData])
+@router.post("/performance/batch-size", response_model=MultimodalBatchSizeData)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_batch_size",
