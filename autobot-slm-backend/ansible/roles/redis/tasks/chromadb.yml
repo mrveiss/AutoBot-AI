@@ -71,41 +71,11 @@
   become: true
   tags: ['redis', 'chromadb']
 
-# #12513: the unit template only emits CHROMA_SERVER_AUTHN_* when
-# chromadb_auth_token is non-empty, and its default is "" — so chroma ran
-# unauthenticated on every deployment. Read the shared token the SLM generates,
-# so the server credential matches the one the backend sends. Never generate one
-# here: two independent generators produce two values and a total RAG outage.
-- name: "ChromaDB | Read the shared auth token from slm-secrets.env (#12513)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/read_chromadb_auth_token.yml
-  tags: ['redis', 'chromadb']
-
-- name: "ChromaDB | Adopt the SLM-managed auth token when present (#12513)"
-  ansible.builtin.set_fact:
-    chromadb_auth_token: "{{ _chromadb_auth_token_read }}"
-  when: (_chromadb_auth_token_read | default('') | trim) | length > 0
-  no_log: true
-  tags: ['redis', 'chromadb']
-
-# Must precede the unit template and the start task below: the unit declares a
-# MANDATORY EnvironmentFile at this exact path (#12513), so the file has to exist
-# before systemd is asked to (re)start chroma. Rendered unconditionally — it just
-# carries no authn keys when no token is configured.
-- name: "ChromaDB | Render the server-authn env file the unit reads (#12513)"
-  ansible.builtin.include_tasks: ../../../_shared/tasks/write_chromadb_authn_env.yml
-  tags: ['redis', 'chromadb']
-
-- name: "ChromaDB | Deploy systemd service unit"
-  ansible.builtin.template:
-    src: autobot-chromadb.service.j2
-    dest: /etc/systemd/system/autobot-chromadb.service
-    mode: "0644"
-  become: true
-  notify:
-    - reload systemd
-    - restart chromadb
-  tags: ['redis', 'chromadb']
-
+# #13535: the token read, the credential file and the unit template moved to
+# code_only.yml, which main.yml includes BEFORE importing this file — so the
+# mandatory EnvironmentFile (#12513) is already on disk by the time the service
+# is started below, on the provisioning path and the updater's path alike.
+# Repeating them here would give the fix two definitions and let them drift.
 - name: "ChromaDB | Enable and start service"
   ansible.builtin.systemd:
     name: autobot-chromadb

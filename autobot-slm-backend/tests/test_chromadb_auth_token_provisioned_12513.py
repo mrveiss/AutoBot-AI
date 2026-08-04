@@ -39,7 +39,10 @@ _TOKEN_KEY = "AUTOBOT_CHROMADB_AUTH_TOKEN"
 #: `backend` renders the client credential; the other two render the chroma unit.
 _CONSUMERS = {
     "backend": ("tasks/main.yml", "backend_chromadb_auth_token"),
-    "redis": ("tasks/chromadb.yml", "chromadb_auth_token"),
+    # #13535 moved redis's read into code_only.yml for the same reason #13460
+    # moved ai-stack's: the database role had no delivery path at all, so this
+    # fix could not reach a database host.
+    "redis": ("tasks/code_only.yml", "chromadb_auth_token"),
     # #13460 moved ai-stack's read into code_only.yml, alongside the chroma unit
     # it feeds, so the builtin updater delivers both together. Rendering that
     # unit without the read would redeploy chroma with auth SILENTLY DISABLED —
@@ -188,7 +191,7 @@ _WRITE_ENV = _ANSIBLE / "_shared" / "tasks" / "write_chromadb_authn_env.yml"
 #: Roles that render the chroma unit → (task file that must render the env file,
 #: relative path of the unit template).
 _UNIT_OWNERS = {
-    "redis": ("tasks/chromadb.yml", "templates/autobot-chromadb.service.j2"),
+    "redis": ("tasks/code_only.yml", "templates/autobot-chromadb.service.j2"),  # #13535
     "ai-stack": ("tasks/code_only.yml", "templates/autobot-chromadb.service.j2"),
 }
 
@@ -367,6 +370,33 @@ def test_ai_stack_starts_chroma_only_after_including_the_render():
     assert include_at < start_at, (
         "roles/ai-stack/tasks/main.yml starts chroma before code_only.yml renders the "
         "mandatory env file — the service would fail to start on a fresh node"
+    )
+
+
+def test_redis_starts_chroma_only_after_including_the_render():
+    """redis keeps the render in code_only.yml; main.yml must include it first.
+
+    The start task stayed in ``tasks/chromadb.yml`` when #13535 split the render
+    out, so the ordering that makes the mandatory EnvironmentFile safe is now a
+    property of ``main.yml``: the include has to come before the import that
+    starts the service, or a fresh database node comes up with chroma unable to
+    start at all.
+    """
+    tasks = _tasks(_ANSIBLE / "roles" / "redis" / "tasks" / "main.yml")
+    include_at = next(
+        (i for i, t in enumerate(tasks) if "code_only.yml" in str(t.get("ansible.builtin.include_tasks", ""))),
+        None,
+    )
+    chromadb_at = next(
+        (i for i, t in enumerate(tasks) if "chromadb.yml" in str(t.get("ansible.builtin.import_tasks", ""))),
+        None,
+    )
+    assert include_at is not None, "roles/redis/tasks/main.yml no longer includes code_only.yml"
+    assert chromadb_at is not None, "roles/redis/tasks/main.yml no longer imports chromadb.yml"
+    assert include_at < chromadb_at, (
+        "roles/redis/tasks/main.yml imports chromadb.yml (which starts the service) "
+        "before code_only.yml renders the mandatory env file — chroma would fail to "
+        "start on a fresh database node"
     )
 
 

@@ -1532,6 +1532,128 @@
         msg: "{{ inventory_hostname }} updated"
 
 # =============================================================================
+# PLAY 2b: Update Database Nodes
+# =============================================================================
+# #13535: the database role had NO builtin update route. Play 2 targets the
+# `infrastructure` group, and `database` is not one of its children — so nothing
+# code-sync / self-update ran ever touched a database host, and roles/redis had
+# no code-only task file for a play to apply even if it had. That is why the
+# #12513 chroma-auth work merged in #13462/#13537 "looked deployed" while the
+# host was unchanged: the #12959 failure shape, one role further along.
+#
+# A separate play rather than adding `database` to the `infrastructure` group:
+# that group is Play 2's host list, and Play 2 is a backend/frontend/worker
+# update — package installs, npm builds, alembic migrations, a backend .env
+# regeneration. None of it is designed for a database node, and all of it is
+# guarded by `'<component>' in group_names` checks a database node would skip
+# anyway. Targeting `database` directly runs the one thing that node needs and
+# nothing else.
+#
+# Placed AFTER Play 2, deliberately. Play 2 regenerates backend.env with the
+# chroma CLIENT token and restarts the backend; this play then switches the
+# chroma SERVER to enforcing. The reverse order would enable server-side auth
+# while the backend still ran without the credential — every RAG call 401s for
+# the length of Play 2. Same ordering the ai-stack chroma unit already follows
+# inside Play 2 (backend tasks first, ai-stack code_only last).
+- name: "Play 2b - Update Database Nodes"
+  hosts: database
+  gather_facts: false
+  # Consistent with Play 2: a database node that fails to take the update must
+  # stop the rollout rather than leave the fleet diverged (#10026).
+  any_errors_fatal: true
+
+  tasks:
+    - name: "[PLAY 2b] Starting Database Node Update"
+      ansible.builtin.debug:
+        msg:
+          - "======================================================="
+          - "  PLAY 2b: Database Node Update (role-owned files)"
+          - "======================================================="
+          - "  Target: {{ inventory_hostname }}"
+
+    # Applies the role's code_only task file — the systemd override, the backup
+    # script and the ChromaDB credential file + unit — NEVER the full role,
+    # whose provisioning half (the redis-stack package, service accounts, the
+    # data directory and its recursive chown, the chroma venv and its package
+    # installs) must not re-run on an already-installed box.
+    #
+    # `apply: {become: true}` because this play sets no play-level become, and a
+    # bare `become` on include_role makes ansible reject the WHOLE playbook
+    # ("'become' is not a valid attribute for a IncludeRole"), breaking every
+    # self-update rather than just the task (#12886).
+    - name: "[PLAY 2b] Database | Deploy role-owned service files (#13535)"
+      ansible.builtin.include_role:
+        name: redis
+        tasks_from: code_only
+        apply:
+          become: true
+      tags: [database, redis, chromadb, deploy]
+
+    # Flush here rather than letting the handlers fall to the end of the play.
+    # #12886 recorded both halves of why that matters: queued handlers are
+    # DISCARDED when a later task aborts the play, and a handler that never ran
+    # leaves a host holding a new credential file that nothing has read yet.
+    # Flushing immediately after the only task that notifies makes the restart
+    # part of the delivery instead of a hope, and keeps it before the assertions
+    # below — which check the running unit, not the file on disk.
+    - name: "[PLAY 2b] Database | Apply pending restarts before verifying (#13535)"
+      ansible.builtin.meta: flush_handlers
+
+    # =========================================================================
+    # #12959 post-update delivery assertion.
+    #
+    # The expensive part of #13462 was not the missing fix — it was that the
+    # update REPORTED SUCCESS while delivering nothing, so the chroma-auth work
+    # was closed against a mechanism that could not deliver it and the symptom
+    # was re-diagnosed later. This asserts an invariant the include above just
+    # guaranteed, so a failure means delivery silently regressed.
+    #
+    # `executable: /bin/bash` is load-bearing (#12907): ansible.builtin.shell
+    # runs under /bin/sh, which is dash on these hosts, and dash aborts on
+    # `set -o pipefail` before the first echo — leaving the evidence empty and
+    # every assertion gated on it silently skipped.
+    # =========================================================================
+    - name: "[PLAY 2b] Verify | Collect ChromaDB delivery evidence (#12513, #13535)"
+      ansible.builtin.shell:
+        cmd: |
+          set -uo pipefail
+          envfile=$(systemctl cat autobot-chromadb 2>/dev/null \
+            | sed -n 's/^EnvironmentFile=//p' | head -1)
+          echo "envfile_declared=$(test -n "$envfile" && echo 1 || echo 0)"
+          echo "envfile_optional=$(case "$envfile" in -*) echo 1 ;; *) echo 0 ;; esac)"
+          echo "envfile_present=$(test -n "$envfile" \
+            && test -f "${envfile#-}" && echo 1 || echo 0)"
+      args:
+        executable: /bin/bash
+      register: chromadb_delivery_evidence
+      become: true
+      changed_when: false
+      failed_when: false
+      tags: [database, chromadb, verify]
+
+    - name: "[PLAY 2b] Verify | ChromaDB unit carries its credential file (#12513, #13535)"
+      ansible.builtin.assert:
+        that:
+          # rendered by roles/redis code_only above, from the unit template
+          - "'envfile_declared=1' in chromadb_delivery_evidence.stdout"
+          # `EnvironmentFile=-` is why a missing credential ran unauthenticated
+          - "'envfile_optional=0' in chromadb_delivery_evidence.stdout"
+          # written by _shared/tasks/write_chromadb_authn_env.yml
+          - "'envfile_present=1' in chromadb_delivery_evidence.stdout"
+        fail_msg: >-
+          #13535: the update ran green but roles/redis code_only did not deliver
+          the ChromaDB credential file the unit mandates — chroma is running
+          unauthenticated or cannot start. Evidence:
+          {{ chromadb_delivery_evidence.stdout | default('(none)') }}.
+        success_msg: "ChromaDB unit + credential file delivered (#12513)"
+      when: chromadb_delivery_evidence.stdout | default('') | trim | length > 0
+      tags: [database, chromadb, verify]
+
+    - name: "[PLAY 2b] Database Node Update Complete"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} updated"
+
+# =============================================================================
 # PLAY 3: Verify + Cleanup
 # =============================================================================
 - name: "Play 3 - Verify & Cleanup"
