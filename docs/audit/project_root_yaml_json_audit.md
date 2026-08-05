@@ -45,7 +45,7 @@ self.audit_base_path.mkdir(parents=True, exist_ok=True)
 `yaml.safe_load` performs no expansion, and **`expandvars` appears nowhere in this
 repository's Python**. Reproduced:
 
-```
+```text
 yaml value  : ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/audit
 is_absolute : False
 created     : ['${AUTOBOT_PROJECT_ROOT:-']
@@ -62,6 +62,41 @@ The `.get(key, default)` shape hides it: the fallback is a correct
 `PATH.get_log_path("audit")`, but it never fires, because the key **is** present
 — it is just wrong.
 
+## Two siblings that look identical and are not bugs
+
+Both were first recorded here as "same shape" on the strength of the YAML alone.
+Checking their consumers showed neither is a live defect — a reminder that this
+audit's premise is per-consumer confirmation, and that file content is not
+sufficient evidence.
+
+**`config/logging.yml` is generated, not consumed.** `log_aggregator.py:809-813`
+opens it in `"w"` mode and `yaml.dump`s a config it has just built, in which
+`filename` is already resolved:
+
+```python
+"filename": str(self.logs_dir / "system.log"),
+...
+config_file = self.project_root / "config" / "logging.yml"
+with open(config_file, "w", encoding="utf-8") as f:
+    yaml.dump(log_config, f)
+```
+
+The checked-in file carrying the placeholder is a stale artefact that the next
+run overwrites — the same category as the `vue_*.json` results.
+
+**`threat_detection.yaml`'s `model_storage_path` is dead.**
+`git grep model_storage_path -- '*.py'` returns nothing: no consumer reads it, so
+the placeholder has no runtime effect.
+
+### Noted in passing
+
+`log_aggregator.py:127` computes `self.project_root = Path(__file__).parent.parent`
+— a fifth ad-hoc root derivation, and wrong for its own location: the file sits in
+`autobot-infrastructure/shared/scripts/`, so two levels up is
+`autobot-infrastructure/shared`, not the checkout root. That is why the stale
+`logging.yml` lives under `autobot-infrastructure/shared/config/`. Fixing it
+belongs with the Task 2 migration, not here.
+
 ## Needs a live check, not a guess
 
 `ansible.builtin.synchronize` builds an rsync invocation rather than running a
@@ -76,9 +111,11 @@ updater, not ad hoc. Marked for confirmation rather than assumed.
 
 ## Recommendation
 
-1. `compliance.yaml`, `threat_detection.yaml`, `logging.yml` — drop the
-   placeholder and let the consumer's own `PATH.get_*` default apply, or resolve
-   through `autobot_shared.paths.project_root()`. These are ordinary bugs.
+1. `compliance.yaml` — the only confirmed bug. Drop the placeholder so the
+   consumer's own `PATH.get_log_path("audit")` default applies, or resolve it
+   through `autobot_shared.paths.project_root()`. Tracked as #13658.
+   `threat_detection.yaml` and `logging.yml` need no fix: a dead key and a
+   regenerated artefact respectively.
 2. `synchronize` playbooks — confirm on a live run before editing.
 3. `sync-user-backend.yml` — keep the expansion, replace the live-install default.
 4. `vue_*.json` — regenerate; editing generated output is pointless.
