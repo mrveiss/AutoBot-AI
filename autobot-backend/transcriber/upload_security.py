@@ -125,9 +125,7 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     # before any Path/os operations receive the user-controlled value.
     upload_dir_str = str(user_upload_dir)
     if not file_path.startswith(upload_dir_str + os.sep) and file_path != upload_dir_str:
-        raise UploadSecurityError(
-            "Path traversal attempt detected: path is outside upload directory"
-        )
+        raise UploadSecurityError("Path traversal attempt detected: path is outside upload directory")
 
     try:
         # Resolve symlinks and canonicalize — use only this resolved path hereafter
@@ -139,9 +137,7 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     try:
         path.relative_to(user_upload_dir)
     except ValueError:
-        raise UploadSecurityError(
-            "Path traversal attempt detected: resolved path is outside upload directory"
-        )
+        raise UploadSecurityError("Path traversal attempt detected: resolved path is outside upload directory")
 
     # Reject symlinks — check on the resolved path object, not the raw input
     if path.is_symlink():
@@ -174,9 +170,7 @@ def save_uploaded_file(file_content: bytes, original_filename: str, user_id: int
     """
     # Validate file size
     if len(file_content) > MAX_FILE_SIZE:
-        raise UploadSecurityError(
-            f"File too large: {len(file_content)} bytes (max: {MAX_FILE_SIZE})"
-        )
+        raise UploadSecurityError(f"File too large: {len(file_content)} bytes (max: {MAX_FILE_SIZE})")
 
     # Generate secure filename
     secure_filename = generate_secure_filename(original_filename)
