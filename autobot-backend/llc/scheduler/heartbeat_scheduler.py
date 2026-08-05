@@ -769,6 +769,8 @@ async def _record_run_for_replay(
                     recorded_events = parse_jsonl_events(raw)
                 except OSError:
                     pass
+            else:
+                logger.warning("Transcript output file does not exist at path: %s", output_file)        
 
         svc = RunReplayService()
         await svc.record_run(
