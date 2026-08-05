@@ -153,6 +153,13 @@ MAX_STATUS_DESCRIPTION = 140
 # Run states that mean "created but no job has started yet".
 UNSTARTED_RUN_STATUSES = frozenset({"queued", "waiting", "pending", "requested"})
 
+# Deliberately narrower than UNSTARTED_RUN_STATUSES (#13439). A run holding a
+# concurrency group while a newer one waits is ``queued`` or ``pending``.
+# ``waiting`` and ``requested`` are approval gates — a human or a policy has yet
+# to release them — and force-cancelling those would destroy work nobody has
+# decided about rather than clearing a stuck queue.
+STUCK_QUEUE_STATUSES = frozenset({"queued", "pending"})
+
 # Transport failure — no HTTP status was ever received.
 NO_RESPONSE_STATUS = 0
 
@@ -396,7 +403,9 @@ def is_already_released(message: str) -> bool:
     return NOT_WAITING_MARKER in message.lower()
 
 
-def starved_runs(runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: int) -> List[Dict[str, Any]]:
+def starved_runs(
+    runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: int
+) -> List[Dict[str, Any]]:
     """Runs queued longer than *stall_minutes* without allocating a job."""
     starved = []
     for run in runs:
@@ -406,6 +415,77 @@ def starved_runs(runs: Sequence[Dict[str, Any]], now: datetime, stall_minutes: i
         if waited is not None and waited >= stall_minutes:
             starved.append(run)
     return starved
+
+
+def concurrency_group_key(run: Dict[str, Any]) -> Tuple[Any, Any, Any]:
+    """The identity a concurrency group actually has (#13439).
+
+    Grouped by ``(workflow_id, head_branch, event)``, **not** by workflow and
+    branch alone. The group expression is ``${{ github.workflow }}-${{ github.ref }}``
+    and ``github.ref`` differs between a ``push`` run (``refs/heads/...``) and a
+    ``pull_request`` run (``refs/pull/N/merge``) on the same branch. Grouping
+    across that boundary would treat a PR run as superseding a push run and
+    cancel work that is not superseded at all.
+    """
+    return (run.get("workflow_id"), run.get("head_branch"), run.get("event"))
+
+
+def _run_ordering_key(run: Dict[str, Any]) -> Tuple[Any, Any]:
+    """Newest-last ordering: ``run_number`` first, ``created_at`` as tiebreak."""
+    return (run.get("run_number") or 0, run.get("created_at") or "")
+
+
+def superseded_stuck_runs(
+    runs: Sequence[Dict[str, Any]],
+    now: datetime,
+    repository: str,
+    grace_minutes: int,
+    budget: int,
+) -> List[Dict[str, Any]]:
+    """Runs safe to force-cancel because a newer run holds their group (#13439).
+
+    ``concurrency.cancel-in-progress: true`` reaps an *in-progress* predecessor
+    and never a *queued* one. While the singleton self-hosted runner is offline a
+    predecessor never reaches in-progress, so it keeps holding the group and its
+    successors sit ``pending`` with an empty ``jobs`` array until a human runs
+    ``force-cancel``. This selects exactly the runs where that is provably safe.
+
+    A run qualifies only when **all** hold:
+
+    * it is **not the newest** in its group — the newest is never touched, under
+      any condition, because it is the run everything else is waiting for;
+    * its status is in :data:`STUCK_QUEUE_STATUSES` — ``in_progress`` means real
+      work is happening, and ``waiting``/``requested`` are approval gates;
+    * it is older than *grace_minutes* — a legitimate brief queue must not be
+      mistaken for a stuck one;
+    * its head repository is *repository* — the same fork restriction the
+      approval sweep uses, and for the same reason: never act on a run built
+      from contributor-supplied code.
+
+    The result is truncated to *budget* oldest-first, so one sweep cannot cancel
+    the world if the grouping logic is ever wrong.
+    """
+    groups: Dict[Tuple[Any, Any, Any], List[Dict[str, Any]]] = {}
+    for run in runs:
+        if not run_is_same_repo(run, repository):
+            continue
+        groups.setdefault(concurrency_group_key(run), []).append(run)
+
+    stuck: List[Dict[str, Any]] = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue  # nothing supersedes it
+        ordered = sorted(members, key=_run_ordering_key)
+        for run in ordered[:-1]:  # every member except the newest
+            if run.get("status") not in STUCK_QUEUE_STATUSES:
+                continue
+            waited = age_minutes(run.get("created_at"), now)
+            if waited is None or waited < grace_minutes:
+                continue
+            stuck.append(run)
+
+    stuck.sort(key=lambda r: r.get("created_at") or "")
+    return stuck[:budget]
 
 
 def job_is_self_hosted(job: Dict[str, Any]) -> bool:
@@ -481,11 +561,15 @@ def classify_dispatch(
             # demonstrably not verified yet.
             return (
                 "pending",
-                _truncate(f"{len(starved)} run(s) queued over {stall_minutes}m behind a busy runner pool: {names}"),
+                _truncate(
+                    f"{len(starved)} run(s) queued over {stall_minutes}m behind a busy runner pool: {names}"
+                ),
             )
         return (
             "failure",
-            _truncate(f"{len(starved)} run(s) queued over {stall_minutes}m with no runner available: {names}"),
+            _truncate(
+                f"{len(starved)} run(s) queued over {stall_minutes}m with no runner available: {names}"
+            ),
         )
 
     if not runs:
@@ -493,9 +577,14 @@ def classify_dispatch(
         if waited is None or waited >= grace_minutes:
             return (
                 "failure",
-                _truncate(f"no workflow runs exist for this commit after {grace_minutes}m — CI never dispatched"),
+                _truncate(
+                    f"no workflow runs exist for this commit after {grace_minutes}m — CI never dispatched"
+                ),
             )
-        return ("pending", _truncate("no workflow runs yet — still inside the dispatch grace window"))
+        return (
+            "pending",
+            _truncate("no workflow runs yet — still inside the dispatch grace window"),
+        )
 
     return ("success", _truncate(f"{len(runs)} workflow run(s) dispatched for this commit"))
 
@@ -515,7 +604,9 @@ class GitHubApi:
         self.api_root = api_root.rstrip("/")
         self.timeout = timeout
 
-    def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
+    def request(
+        self, method: str, path: str, payload: Optional[Dict[str, Any]] = None
+    ) -> Tuple[int, Any]:
         """
         Issue a request and return ``(status_code, decoded_body)``.
 
@@ -534,7 +625,9 @@ class GitHubApi:
         if data is not None:
             request.add_header("Content-Type", "application/json")
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed api host
+            with urllib.request.urlopen(
+                request, timeout=self.timeout
+            ) as response:  # noqa: S310 - fixed api host
                 body = response.read().decode("utf-8")
                 return response.status, (json.loads(body) if body else None)
         except urllib.error.HTTPError as exc:
@@ -580,19 +673,25 @@ class GitHubApi:
 
     def run_jobs(self, run_id: int) -> List[Dict[str, Any]]:
         query = urllib.parse.urlencode({"per_page": "100"})
-        status, body = self.request("GET", f"/repos/{self.repository}/actions/runs/{run_id}/jobs?{query}")
+        status, body = self.request(
+            "GET", f"/repos/{self.repository}/actions/runs/{run_id}/jobs?{query}"
+        )
         if status != 200 or not isinstance(body, dict):
             raise WatchdogApiError(f"cannot list jobs for run {run_id} (HTTP {status}): {body}")
         return list(body.get("jobs") or [])
 
     def approve_run(self, run_id: int) -> Tuple[int, str]:
-        status, body = self.request("POST", f"/repos/{self.repository}/actions/runs/{run_id}/approve")
+        status, body = self.request(
+            "POST", f"/repos/{self.repository}/actions/runs/{run_id}/approve"
+        )
         message = ""
         if isinstance(body, dict):
             message = str(body.get("message", ""))
         return status, message
 
-    def set_status(self, sha: str, state: str, context: str, description: str, target_url: str) -> int:
+    def set_status(
+        self, sha: str, state: str, context: str, description: str, target_url: str
+    ) -> int:
         payload: Dict[str, Any] = {
             "state": state,
             "context": context,
@@ -716,7 +815,10 @@ def interpret_probe(status: int, message: str) -> Tuple[Optional[bool], str]:
     if status == 401:
         return None, "unresolved — the credential was rejected (401 Bad credentials)"
     if status == 404:
-        return None, "unresolved — the probe run was not found (404); the token may lack read access"
+        return (
+            None,
+            "unresolved — the probe run was not found (404); the token may lack read access",
+        )
     if status == 429:
         return None, "unresolved — rate limited (429); retry on the next sweep"
     return None, f"unresolved — unrecognised response (HTTP {status}: {message or 'no message'})"
@@ -830,14 +932,20 @@ def _approve_head(
             # the outcome this tool wanted — not a failure, and emphatically not
             # evidence that the credential is inadequate.
             raced += 1
-            print(f"  PR #{number}: '{run.get('name')}' already released by a concurrent sweep — no action needed")
+            print(
+                f"  PR #{number}: '{run.get('name')}' already released by a concurrent sweep — no action needed"
+            )
         else:
             refused += 1
-            print(f"  PR #{number}: could NOT approve '{run.get('name')}' — HTTP {status}: {message}")
+            print(
+                f"  PR #{number}: could NOT approve '{run.get('name')}' — HTTP {status}: {message}"
+            )
     return ApprovalOutcome(approved, refused, raced, budget, exhausted)
 
 
-def _sweep_once(api: GitHubApi, heads: Sequence[PullHead], budget: int, dry_run: bool) -> SweepOutcome:
+def _sweep_once(
+    api: GitHubApi, heads: Sequence[PullHead], budget: int, dry_run: bool
+) -> SweepOutcome:
     """One pass over every head."""
     approved = 0
     refused = 0
@@ -856,7 +964,9 @@ def _sweep_once(api: GitHubApi, heads: Sequence[PullHead], budget: int, dry_run:
             unsettled = True
         if not head.same_repo:
             if any(is_parked(run) for run in runs):
-                print(f"  PR #{head.number}: fork pull request — parked runs left for a human to approve")
+                print(
+                    f"  PR #{head.number}: fork pull request — parked runs left for a human to approve"
+                )
             continue
         outcome = _approve_head(api, head.number, runs, budget, dry_run)
         budget = outcome.budget
@@ -1017,14 +1127,18 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
     pulls = api.open_pull_requests(config["base_branch"])
     heads = collect_heads(pulls, api.repository)
     forks = sum(1 for head in heads if not head.same_repo)
-    print(f"Open PRs targeting {config['base_branch']}: {len(pulls)} ({forks} from forks, never auto-approved)")
+    print(
+        f"Open PRs targeting {config['base_branch']}: {len(pulls)} ({forks} from forks, never auto-approved)"
+    )
 
     only_pr = config.get("only_pr", 0)
     if only_pr:
         heads = select_heads(heads, only_pr)
         print(f"Scoped to PR #{only_pr}: {len(heads)} head(s) selected")
         if not heads:
-            print(f"PR #{only_pr} is not an open PR targeting {config['base_branch']} — nothing to sweep.")
+            print(
+                f"PR #{only_pr} is not an open PR targeting {config['base_branch']} — nothing to sweep."
+            )
             return 0
 
     permitted, explanation = probe_approval_capability(api, dry_run)
@@ -1040,7 +1154,9 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
         f"{refused} refused, {blocked} PR(s) not dispatched."
     )
     if raced:
-        print(f"{raced} run(s) had already been released by a concurrent sweep — routine, not a failure.")
+        print(
+            f"{raced} run(s) had already been released by a concurrent sweep — routine, not a failure."
+        )
 
     failed = False
     if deferred and not dry_run:
@@ -1048,7 +1164,10 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
         # "next sweep" is not enough when the schedule that would provide one
         # has never fired, so the run goes red and names what was left.
         left = ", ".join(f"#{number}" for number in sorted(deferred))
-        print("::error::" + budget_exhausted_message(deferred, config["max_approvals"]).replace("\n", "%0A"))
+        print(
+            "::error::"
+            + budget_exhausted_message(deferred, config["max_approvals"]).replace("\n", "%0A")
+        )
         print(budget_exhausted_message(deferred, config["max_approvals"]))
         print(f"PR(s) left with parked runs: {left}")
         failed = True
@@ -1066,7 +1185,9 @@ def check_dispatch(api: GitHubApi, config: Dict[str, Any], dry_run: bool = False
         # it skips the probe deliberately, and `--check probe` answers the
         # question on its own, so warning here would be noise that trains
         # readers to ignore the warning that matters.
-        print(f"::warning::Approval capability is UNRESOLVED — {explanation}. Do not treat #12823 as proven fixed.")
+        print(
+            f"::warning::Approval capability is UNRESOLVED — {explanation}. Do not treat #12823 as proven fixed."
+        )
     return 0
 
 
@@ -1125,17 +1246,23 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
     # remains open.
     queued = api.recent_runs(run_status="queued")
     starved = starved_runs(queued, now, config["stall_minutes"])
-    pool = inspect_self_hosted_pool(api, config["max_job_lookups"], config["job_overdue_minutes"], now)
+    pool = inspect_self_hosted_pool(
+        api, config["max_job_lookups"], config["job_overdue_minutes"], now
+    )
     report_overdue_jobs(pool.overdue, config["job_overdue_minutes"])
 
     if not starved:
         if pool.overdue:
             return 1
-        print(f"No run has been queued longer than {config['stall_minutes']}m — runner pool is keeping up.")
+        print(
+            f"No run has been queued longer than {config['stall_minutes']}m — runner pool is keeping up."
+        )
         return 0
 
     if pool.serving is None:
-        print(f"::warning::{len(starved)} run(s) queued over {config['stall_minutes']}m; runner liveness UNKNOWN")
+        print(
+            f"::warning::{len(starved)} run(s) queued over {config['stall_minutes']}m; runner liveness UNKNOWN"
+        )
         return 1 if pool.overdue else 0
     if pool.serving:
         # `pool.serving` excludes wedged jobs, so this really is healthy work in
@@ -1146,8 +1273,14 @@ def check_runner_starvation(api: GitHubApi, config: Dict[str, Any]) -> int:
         )
         return 1 if pool.overdue else 0
 
-    reason = "while a self-hosted job is wedged" if pool.overdue else "while no self-hosted job is executing"
-    print(f"::error::{len(starved)} workflow run(s) queued over {config['stall_minutes']}m {reason}")
+    reason = (
+        "while a self-hosted job is wedged"
+        if pool.overdue
+        else "while no self-hosted job is executing"
+    )
+    print(
+        f"::error::{len(starved)} workflow run(s) queued over {config['stall_minutes']}m {reason}"
+    )
     for run in starved:
         waited = age_minutes(run.get("created_at"), now)
         waited_text = f"{waited:.0f}m" if waited is not None else "unknown"
@@ -1173,16 +1306,22 @@ def load_config() -> Dict[str, Any]:
         "stall_minutes": _env_int("WATCHDOG_STALL_MINUTES", DEFAULT_STALL_MINUTES),
         "max_approvals": _env_int("WATCHDOG_MAX_APPROVALS", DEFAULT_MAX_APPROVALS),
         "poll_attempts": _env_int("WATCHDOG_POLL_ATTEMPTS", DEFAULT_POLL_ATTEMPTS),
-        "poll_interval_seconds": _env_int("WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS),
+        "poll_interval_seconds": _env_int(
+            "WATCHDOG_POLL_INTERVAL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS
+        ),
         "status_context": os.environ.get("WATCHDOG_STATUS_CONTEXT", DEFAULT_STATUS_CONTEXT),
         "max_job_lookups": _env_int("WATCHDOG_MAX_JOB_LOOKUPS", DEFAULT_MAX_JOB_LOOKUPS),
-        "job_overdue_minutes": _env_int("WATCHDOG_JOB_OVERDUE_MINUTES", DEFAULT_JOB_OVERDUE_MINUTES),
+        "job_overdue_minutes": _env_int(
+            "WATCHDOG_JOB_OVERDUE_MINUTES", DEFAULT_JOB_OVERDUE_MINUTES
+        ),
         "only_pr": _env_non_negative_int("WATCHDOG_ONLY_PR", DEFAULT_ONLY_PR),
     }
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--check",
         choices=("dispatch", "probe", "runner-starvation"),
