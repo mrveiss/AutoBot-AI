@@ -26,6 +26,26 @@ from autobot_shared.time_utils import parse_utc_iso
 
 logger = get_logger(__name__)
 
+
+def _as_utc(value: datetime) -> datetime:
+    """Return *value* as an aware UTC datetime, treating naive input as UTC.
+
+    Mixing naive and aware datetimes raises ``TypeError: can't compare
+    offset-naive and offset-aware datetimes`` — the failure that made ten tests
+    in this module and its scheduler sibling red (#13162).
+
+    The mix is not a test artefact. ``parse_utc_iso`` returns aware values while
+    the objects it is compared against arrive from callers: a database column
+    declared without a timezone, a JSON payload, or a plain ``datetime.now()``
+    all produce naive ones. Rejecting them would turn a recoverable ambiguity
+    into a crash on the request path.
+
+    UTC is the right assumption rather than a convenient one: every timestamp
+    this codebase writes goes through ``autobot_shared.time_utils.now_utc``.
+    """
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
 # Issue #78: Pre-compiled patterns for performance
 _WORD_PATTERN = re.compile(r"\b\w+\b")
 
@@ -246,7 +266,7 @@ class RelevanceScorer:
         if not created_at:
             return 0.5  # Neutral for unknown age
 
-        age = datetime.now(tz=timezone.utc) - created_at
+        age = datetime.now(tz=timezone.utc) - _as_utc(created_at)
         if age.days <= 0:
             return 1.0
         if age.days >= max_age_days:
@@ -333,7 +353,9 @@ class RelevanceScorer:
             return self.factors.exact_match_boost
         return 1.0
 
-    def _parse_result_metadata(self, result: Dict[str, Any]) -> Tuple[str, str, str, str, bool, datetime | None]:
+    def _parse_result_metadata(
+        self, result: Dict[str, Any]
+    ) -> Tuple[str, str, str, str, bool, datetime | None]:
         """Parse metadata from result for scoring (Issue #398: extracted)."""
         metadata = result.get("metadata", {})
         content = result.get("content", "")
@@ -381,7 +403,9 @@ class RelevanceScorer:
         )
         return min(boosted_score / max_possible, 1.0)
 
-    def calculate_relevance_score(self, base_score: float, query: str, result: Dict[str, Any]) -> float:
+    def calculate_relevance_score(
+        self, base_score: float, query: str, result: Dict[str, Any]
+    ) -> float:
         """Calculate final relevance score with all factors (Issue #398: refactored)."""
         (
             content,
@@ -391,7 +415,9 @@ class RelevanceScorer:
             verified,
             created_at,
         ) = self._parse_result_metadata(result)
-        return self._compute_boosted_score(base_score, query, content, title, doc_id, source, verified, created_at)
+        return self._compute_boosted_score(
+            base_score, query, content, title, doc_id, source, verified, created_at
+        )
 
     def record_access(self, doc_id: str) -> None:
         """Record document access for popularity tracking."""
@@ -514,9 +540,11 @@ class AdvancedFilter:
         except (ValueError, TypeError):
             return True
 
-        if self.filters.created_after and created_at < self.filters.created_after:
+        # The bounds come from the caller and may be naive, while created_at is
+        # aware from parse_utc_iso — comparing the two raises TypeError (#13162).
+        if self.filters.created_after and created_at < _as_utc(self.filters.created_after):
             return False
-        if self.filters.created_before and created_at > self.filters.created_before:
+        if self.filters.created_before and created_at > _as_utc(self.filters.created_before):
             return False
 
         return True
@@ -640,9 +668,13 @@ class ResultClusterer:
         scores = [r.get("score", 0) for r in cluster_results]
         avg_score = sum(scores) / len(scores) if scores else 0.0
         keywords = self.TOPIC_KEYWORDS.get(topic, [])[:5]
-        return ResultCluster(topic=topic, results=cluster_results, keywords=keywords, avg_score=avg_score)
+        return ResultCluster(
+            topic=topic, results=cluster_results, keywords=keywords, avg_score=avg_score
+        )
 
-    def cluster_results(self, results: List[Dict[str, Any]]) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
+    def cluster_results(
+        self, results: List[Dict[str, Any]]
+    ) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
         """Cluster results by topic (Issue #398: refactored)."""
         if not results:
             return [], []
