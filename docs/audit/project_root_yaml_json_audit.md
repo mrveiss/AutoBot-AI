@@ -14,8 +14,8 @@ That theory holds for exactly one group. The rest are the same defect as Class A
 | `ansible/playbooks/fix-slm-agent-node-id.yml` | `synchronize` `src:` | **no** | needs live confirmation |
 | `ansible/playbooks/enroll-node.yml` (×2) | Jinja `default('${…}')` | **no** | literal default |
 | `config/security/compliance.yaml` | `compliance_manager.py` | **no** | **confirmed broken** |
-| `config/security/threat_detection.yaml` | `threat_detection/engine.py` | **no** | same shape |
-| `config/logging.yml` | `log_aggregator.py` | **no** | same shape |
+| `config/security/threat_detection.yaml` | **nothing** | n/a | dead config key |
+| `config/logging.yml` | `log_aggregator.py` **writes** it | n/a | stale generated artefact |
 | `config/logging/promtail/promtail-config.yml` | Promtail (Grafana) | conditional | only with `-config.expand-env=true` |
 | `code_analysis/auto-tools/results/vue_*.json` (×2) | none — generated output | n/a | stale artefact |
 | `.mcp/config.json`, `mcp-autobot-tracker/*.json` (×3) | MCP clients | **no** | literal |
