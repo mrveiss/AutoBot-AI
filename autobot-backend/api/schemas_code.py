@@ -1496,9 +1496,7 @@ class MCPPromptTemplate(BaseModel):
 
     name: str = Field(..., description="Prompt template name")
     description: str | None = Field(None, description="Template description")
-    arguments: List[Dict[str, Any]] = Field(
-        default_factory=list, description="Template arguments schema"
-    )
+    arguments: List[Dict[str, Any]] = Field(default_factory=list, description="Template arguments schema")
 
 
 class FilesystemResourcesListResponse(BaseModel):
@@ -2477,9 +2475,7 @@ _GIT_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")
 class GitStatusRequest(BaseModel):
     """Git status request model"""
 
-    repo_path: str = Field(
-        default_factory=_git_default_repo_path, description="Repository path (must be whitelisted)"
-    )
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path (must be whitelisted)")
     short: bool | None = Field(default=False, description="Use short format output")
 
 
@@ -2662,12 +2658,8 @@ class CodeIntelAnalysisRequest(BaseModel):
     code: str | None = Field(default=None, description="Inline code to analyze")
     language: str | None = Field(default=None, description="Language of the inline code")
     filename: str | None = Field(default=None, description="Virtual filename for inline code")
-    include_suggestions: bool | None = Field(
-        default=None, description="Whether to include improvement suggestions"
-    )
-    exclude_dirs: list | None = Field(
-        default=None, description="Directories to exclude from analysis"
-    )
+    include_suggestions: bool | None = Field(default=None, description="Whether to include improvement suggestions")
+    exclude_dirs: list | None = Field(default=None, description="Directories to exclude from analysis")
     min_severity: str | None = Field(default=None, description="Minimum severity level to include")
 
 
@@ -2688,9 +2680,7 @@ class RedisAnalysisRequest(BaseModel):
     """Request model for Redis optimization analysis."""
 
     path: str = Field(..., description="Directory or file path to analyze for Redis optimizations")
-    exclude_patterns: list | None = Field(
-        default=None, description="Glob patterns to exclude from analysis"
-    )
+    exclude_patterns: list | None = Field(default=None, description="Glob patterns to exclude from analysis")
     min_severity: str | None = Field(
         default=None,
         description="Minimum severity level to include (info, low, medium, high, critical)",
@@ -2726,9 +2716,7 @@ class PerformanceAnalysisRequest(BaseModel):
     """Request model for performance analysis."""
 
     path: str = Field(..., description="Directory path to analyze for performance issues")
-    exclude_patterns: list | None = Field(
-        default=None, description="Patterns to exclude from analysis"
-    )
+    exclude_patterns: list | None = Field(default=None, description="Patterns to exclude from analysis")
     min_severity: str | None = Field(default=None, description="Minimum severity level to include")
 
 
@@ -2759,9 +2747,7 @@ class SQLQueryRequest(BaseModel):
 
     database: str = Field(..., description="Database name from whitelist")
     query: str = Field(..., description="SQL SELECT query (parameterized)")
-    params: List[Any] | None = Field(
-        default=None, description="Query parameters for ? placeholders"
-    )
+    params: List[Any] | None = Field(default=None, description="Query parameters for ? placeholders")
     limit: int | None = Field(
         default=100,
         ge=1,
@@ -2783,9 +2769,7 @@ class SQLExecuteRequest(BaseModel):
 
     database: str = Field(..., description="Database name from whitelist")
     statement: str = Field(..., description="SQL statement (INSERT/UPDATE/DELETE)")
-    params: List[Any] | None = Field(
-        default=None, description="Statement parameters for ? placeholders"
-    )
+    params: List[Any] | None = Field(default=None, description="Statement parameters for ? placeholders")
 
     @field_validator("statement")
     @classmethod
@@ -2831,9 +2815,7 @@ class ConflictResolutionRequest(BaseModel):
             "accept_ours, accept_theirs, manual_review"
         ),
     )
-    safe_mode: bool = Field(
-        default=True, description="Enable safe mode (require review for complex conflicts)"
-    )
+    safe_mode: bool = Field(default=True, description="Enable safe mode (require review for complex conflicts)")
     validate: bool = Field(default=True, description="Validate resolved code for syntax errors")
 
 
@@ -2860,9 +2842,7 @@ class AntiPatternAnalysisRequest(BaseModel):
     """Request model for anti-pattern analysis."""
 
     root_path: str = Field(default=".", description="Root path to analyze")
-    patterns: List[str] = Field(
-        default=["**/*.py"], description="Glob patterns for files to include"
-    )
+    patterns: List[str] = Field(default=["**/*.py"], description="Glob patterns for files to include")
     exclude_patterns: List[str] = Field(
         default=[
             "__pycache__",

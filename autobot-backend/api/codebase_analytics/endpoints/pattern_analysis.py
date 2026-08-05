@@ -48,19 +48,11 @@ class PatternAnalysisRequest(BaseModel):
         default=None,
         description="#1772: source_id for API consistency",
     )
-    enable_clone_detection: bool = Field(
-        default=True, description="Enable clone/duplicate detection"
-    )
-    enable_anti_pattern_detection: bool = Field(
-        default=True, description="Enable anti-pattern detection"
-    )
-    enable_regex_detection: bool = Field(
-        default=True, description="Enable regex optimization detection"
-    )
+    enable_clone_detection: bool = Field(default=True, description="Enable clone/duplicate detection")
+    enable_anti_pattern_detection: bool = Field(default=True, description="Enable anti-pattern detection")
+    enable_regex_detection: bool = Field(default=True, description="Enable regex optimization detection")
     enable_complexity_analysis: bool = Field(default=True, description="Enable complexity analysis")
-    similarity_threshold: float = Field(
-        default=0.8, ge=0.0, le=1.0, description="Similarity threshold for clustering"
-    )
+    similarity_threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Similarity threshold for clustering")
 
 
 class PatternAnalysisStatus(BaseModel):
@@ -146,9 +138,7 @@ async def _clear_checkpoint(task_id: str) -> None:
 
 
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
-async def start_pattern_analysis(
-    request: PatternAnalysisRequest, http_request: Request
-) -> PatternAnalysisStatus:
+async def start_pattern_analysis(request: PatternAnalysisRequest, http_request: Request) -> PatternAnalysisStatus:
     """Enqueue code pattern analysis as a Celery task (GH#6505, GH#8436)."""
     # #12375: source_id arrives in the request BODY here, so the router-level
     # require_source_access dependency (which reads path/query params only)
@@ -193,9 +183,7 @@ async def get_analysis_result(task_id: str) -> Dict[str, Any]:
     if task is None:
         raise HTTPException(status_code=404, detail=f"Analysis task {task_id} not found")
     if task["status"] != "completed":
-        raise HTTPException(
-            status_code=400, detail=f"Analysis not complete. Status: {task['status']}"
-        )
+        raise HTTPException(status_code=400, detail=f"Analysis not complete. Status: {task['status']}")
     return task.get("result") or {}
 
 
@@ -214,12 +202,7 @@ async def list_analysis_tasks() -> Dict[str, Any]:
     from celery_app import celery_app
 
     active = await asyncio.to_thread(lambda: celery_app.control.inspect().active() or {})
-    analytics_tasks = [
-        t
-        for worker_tasks in active.values()
-        for t in worker_tasks
-        if "pattern" in t.get("name", "")
-    ]
+    analytics_tasks = [t for worker_tasks in active.values() for t in worker_tasks if "pattern" in t.get("name", "")]
     return {"tasks": analytics_tasks, "count": len(analytics_tasks)}
 
 
@@ -238,10 +221,7 @@ async def clear_all_tasks() -> Dict[str, str]:
 
     active = await asyncio.to_thread(lambda: celery_app.control.inspect().active() or {})
     analytics_task_ids = [
-        t["id"]
-        for worker_tasks in active.values()
-        for t in worker_tasks
-        if t.get("name", "").startswith("analytics.")
+        t["id"] for worker_tasks in active.values() for t in worker_tasks if t.get("name", "").startswith("analytics.")
     ]
     for task_id in analytics_task_ids:
         await asyncio.to_thread(celery_app.control.revoke, task_id, terminate=True)
@@ -250,9 +230,7 @@ async def clear_all_tasks() -> Dict[str, str]:
 
 @router.get("/patterns/summary", response_model=PatternSummary)
 async def get_pattern_summary(
-    path: str = Query(
-        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"
-    ),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
 ) -> PatternSummary:
     """Get a quick summary of patterns in the codebase.
 
@@ -285,9 +263,7 @@ async def get_pattern_summary(
 
 @router.post("/patterns/summary/analyze")
 async def start_pattern_summary_analysis(
-    path: str = Query(
-        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"
-    ),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
 ):
     """Enqueue pattern summary analysis as a Celery task (GH#6505)."""
     result = run_pattern_summary_analysis.delay(path)
@@ -314,9 +290,7 @@ async def clear_stuck_summary_tasks(
 
 @router.get("/patterns/duplicates")
 async def get_duplicate_patterns(
-    path: str = Query(
-        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"
-    ),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get duplicate code patterns in the codebase.
@@ -345,9 +319,7 @@ async def get_duplicate_patterns(
 
 @router.get("/patterns/regex-opportunities")
 async def get_regex_opportunities(
-    path: str = Query(
-        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"
-    ),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get regex optimization opportunities.
@@ -376,9 +348,7 @@ async def get_regex_opportunities(
 
 @router.get("/patterns/complexity-hotspots")
 async def get_complexity_hotspots(
-    path: str = Query(
-        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"
-    ),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
     min_complexity: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
@@ -405,9 +375,7 @@ async def get_complexity_hotspots(
         report = await analyzer.analyze_directory(path)
 
         # Filter by minimum complexity
-        filtered = [
-            h for h in report.complexity_hotspots if h.cyclomatic_complexity >= min_complexity
-        ]
+        filtered = [h for h in report.complexity_hotspots if h.cyclomatic_complexity >= min_complexity]
 
         return [ch.to_dict() for ch in filtered[:limit]]
 
@@ -418,9 +386,7 @@ async def get_complexity_hotspots(
 
 @router.get("/patterns/refactoring-suggestions")
 async def get_refactoring_suggestions(
-    path: str = Query(
-        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"
-    ),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ) -> List[Dict[str, Any]]:
     """Get prioritized refactoring suggestions.
@@ -438,9 +404,7 @@ async def get_refactoring_suggestions(
 
         # Generate refactoring suggestions
         generator = RefactoringSuggestionGenerator()
-        all_patterns = (
-            report.duplicate_patterns + report.regex_opportunities + report.complexity_hotspots
-        )
+        all_patterns = report.duplicate_patterns + report.regex_opportunities + report.complexity_hotspots
         suggestions = generator.generate_suggestions(all_patterns)
 
         return [s.to_dict() for s in suggestions[:limit]]
@@ -452,9 +416,7 @@ async def get_refactoring_suggestions(
 
 @router.get("/patterns/report")
 async def get_pattern_report(
-    path: str = Query(
-        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"
-    ),
+    path: str = Query(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to analyze"),
     format: str = Query(default="json", description="Output format: json or markdown"),
 ) -> Any:
     """Generate a comprehensive pattern analysis report.
@@ -484,9 +446,7 @@ async def get_pattern_report(
 
 @router.get("/patterns/storage/stats")
 async def get_pattern_storage_stats(
-    source_id: str | None = Query(
-        default=None, description="Code source to scope stats to (Issue #12384)"
-    ),
+    source_id: str | None = Query(default=None, description="Code source to scope stats to (Issue #12384)"),
 ) -> Dict[str, Any]:
     """Get statistics about stored patterns in ChromaDB.
 
@@ -570,9 +530,7 @@ def _aggregate_pattern_metadata(metadatas: List[Dict]) -> Dict[str, Any]:
 
 @router.get("/patterns/cached-summary")
 async def get_cached_pattern_summary(
-    source_id: str | None = Query(
-        default=None, description="Code source to scope the summary to (Issue #12384)"
-    ),
+    source_id: str | None = Query(default=None, description="Code source to scope the summary to (Issue #12384)"),
 ) -> Dict[str, Any]:
     """Get cached pattern summary from ChromaDB without re-analyzing.
 
@@ -594,9 +552,7 @@ async def get_cached_pattern_summary(
         if collection is None:
             return _build_empty_pattern_summary()
 
-        where_filter = _build_chromadb_where_filter(
-            pattern_type=None, severity=None, source_id=source_id
-        )
+        where_filter = _build_chromadb_where_filter(pattern_type=None, severity=None, source_id=source_id)
 
         # Get metadata for aggregation (limit to 2000 for performance)
         sample = await collection.get(
@@ -711,18 +667,14 @@ def _format_pattern_results(
 async def get_cached_patterns(
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
     severity: str | None = Query(None, description="Filter by severity"),
-    source_id: str | None = Query(
-        default=None, description="Code source to scope results to (Issue #12384)"
-    ),
+    source_id: str | None = Query(default=None, description="Code source to scope results to (Issue #12384)"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_PAGE_SIZE,
         ge=1,
         le=200,
         description="Maximum results",
     ),
-    offset: int = Query(
-        default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Offset for pagination"
-    ),
+    offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0, description="Offset for pagination"),
 ) -> Dict[str, Any]:
     """Get cached patterns from ChromaDB with filtering and pagination.
 
@@ -782,9 +734,7 @@ async def get_cached_patterns(
 
 @router.post("/patterns/storage/clear")
 async def clear_pattern_storage(
-    source_id: str | None = Query(
-        default=None, description="Code source to scope the clear to (Issue #12408)"
-    ),
+    source_id: str | None = Query(default=None, description="Code source to scope the clear to (Issue #12408)"),
 ) -> Dict[str, str]:
     """Clear stored patterns for a single source from ChromaDB.
 
@@ -815,9 +765,7 @@ async def clear_pattern_storage(
 async def search_similar_patterns_endpoint(
     code: str = Query(..., description="Code snippet to find similar patterns for"),
     pattern_type: str | None = Query(None, description="Filter by pattern type"),
-    source_id: str | None = Query(
-        default=None, description="Code source to scope results to (Issue #12384)"
-    ),
+    source_id: str | None = Query(default=None, description="Code source to scope results to (Issue #12384)"),
     limit: int = Query(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,

@@ -475,8 +475,7 @@ def _validate_upload_file(file: UploadFile, content: bytes) -> None:
     detected_mime = mimetypes.guess_type(file.filename)[0]
     if detected_mime and file.content_type and file.content_type != detected_mime:
         logger.warning(
-            f"MIME type mismatch for {file.filename}: "
-            f"declared={file.content_type}, detected={detected_mime}"
+            f"MIME type mismatch for {file.filename}: " f"declared={file.content_type}, detected={detected_mime}"
         )
 
 
@@ -547,9 +546,7 @@ def _log_upload_audit(
     )
 
 
-async def _delete_file_item(
-    target_path: Path, path: str, security_layer, user_data: dict, request: Request
-) -> dict:
+async def _delete_file_item(target_path: Path, path: str, security_layer, user_data: dict, request: Request) -> dict:
     """
     Delete a single file and log audit.
 
@@ -861,9 +858,7 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
-async def rename_file_or_directory(
-    request: Request, path: str = Form(...), new_name: str = Form(...)
-):
+async def rename_file_or_directory(request: Request, path: str = Form(...), new_name: str = Form(...)):
     """
     Rename a file or directory within the sandbox.
 
@@ -1267,9 +1262,7 @@ def _entry_to_file_item(entry: Path) -> dict:
         }
 
 
-@router.get(
-    "", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse
-)
+@router.get("", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_list_directory",
