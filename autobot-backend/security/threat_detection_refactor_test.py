@@ -532,3 +532,140 @@ class TestFeatureEnvyFixes:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ---------------------------------------------------------------------------
+# Positive-detection coverage for the analyzers that had none (#13561)
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyzerPositiveDetection:
+    """Drive each analyzer past its threshold and assert it builds a ThreatEvent.
+
+    #13561: ``BruteForceAnalyzer``, ``APIAbuseAnalyzer`` and
+    ``MaliciousFileAnalyzer`` all raised
+    ``TypeError: ThreatEvent() got multiple values for keyword argument`` the
+    moment they crossed detection — they splatted
+    ``SecurityEvent.get_threat_base_fields()`` and then repeated ``action`` /
+    ``resource`` as explicit keywords. Only brute force had a test, which is the
+    sole reason the defect was visible at all; the other two were fixed blind.
+
+    A test that merely asserts ``analyze()`` returns ``None`` below the threshold
+    would have passed throughout. These reach the ``_build_threat_event`` path,
+    which is the only place that class of bug can appear.
+    """
+
+    @staticmethod
+    def _context(**overrides):
+        """An AnalysisContext with empty collections, overridable per test."""
+        base = {
+            "config": {},
+            "user_profiles": {},
+            "event_history": EventHistory(events=deque(maxlen=100)),
+            "injection_patterns": [],
+            "file_signatures": [],
+            "api_patterns": [],
+        }
+        base.update(overrides)
+        return AnalysisContext(**base)
+
+    @pytest.mark.asyncio
+    async def test_api_abuse_analyzer_builds_a_threat_event_on_bulk_download(self):
+        """A response far over the bulk threshold must produce a HIGH threat."""
+        from security.enterprise.threat_detection.analyzers.api_abuse import APIAbuseAnalyzer
+
+        event = SecurityEvent(
+            {
+                "user_id": "u1",
+                "source_ip": "10.0.0.1",
+                "action": "api_request",
+                "resource": "/api/export",
+                "timestamp": utc_timestamp(),
+                "outcome": "success",
+                "details": {"response_size": 200 * 1024 * 1024},
+            }
+        )
+        context = self._context(config={"thresholds": {"bulk_data_threshold_mb": 100}})
+
+        threat = await APIAbuseAnalyzer().analyze(event, context)
+
+        assert threat is not None, "bulk download over the threshold produced no threat"
+        assert threat.threat_category == ThreatCategory.API_ABUSE
+        assert threat.threat_level == ThreatLevel.HIGH
+        assert "bulk_data_download" in threat.details["abuse_patterns"]
+        # The repeated-keyword bug showed up as these being absent or wrong.
+        assert threat.action == "api_request"
+        assert threat.resource == "/api/export"
+
+    @pytest.mark.asyncio
+    async def test_api_abuse_analyzer_is_silent_below_the_threshold(self):
+        """Guards against the opposite failure — a detector that always fires."""
+        from security.enterprise.threat_detection.analyzers.api_abuse import APIAbuseAnalyzer
+
+        event = SecurityEvent(
+            {
+                "user_id": "u1",
+                "source_ip": "10.0.0.1",
+                "action": "api_request",
+                "resource": "/api/export",
+                "timestamp": utc_timestamp(),
+                "outcome": "success",
+                "details": {"response_size": 1024},
+            }
+        )
+        context = self._context(config={"thresholds": {"bulk_data_threshold_mb": 100}})
+
+        assert await APIAbuseAnalyzer().analyze(event, context) is None
+
+    @pytest.mark.asyncio
+    async def test_malicious_file_analyzer_builds_a_threat_event_on_bad_extension(self):
+        """A filename matching a signature extension must produce a threat."""
+        from security.enterprise.threat_detection.analyzers.malicious_file import (
+            MaliciousFileAnalyzer,
+        )
+
+        event = SecurityEvent(
+            {
+                "user_id": "u1",
+                "source_ip": "10.0.0.1",
+                "action": "file_upload",
+                "resource": "/uploads",
+                "timestamp": utc_timestamp(),
+                "outcome": "success",
+                "details": {"filename": "payload.exe", "file_size": 1024},
+            }
+        )
+        context = self._context(file_signatures=[{"extension": [".exe"]}])
+
+        threat = await MaliciousFileAnalyzer().analyze(event, context)
+
+        assert threat is not None, "a signature-matching extension produced no threat"
+        assert threat.threat_category == ThreatCategory.MALICIOUS_UPLOAD
+        assert threat.action == "file_upload"
+        # resource is deliberately the *filename*, not the endpoint: the analyzer
+        # calls get_threat_base_fields(resource=filename) so the threat names the
+        # offending file (malicious_file.py:96). Asserted so that override is
+        # pinned — it is exactly the kind of keyword the #13551 bug duplicated.
+        assert threat.resource == "payload.exe"
+
+    @pytest.mark.asyncio
+    async def test_malicious_file_analyzer_is_silent_on_a_clean_file(self):
+        """No signature match and no size anomaly means no threat."""
+        from security.enterprise.threat_detection.analyzers.malicious_file import (
+            MaliciousFileAnalyzer,
+        )
+
+        event = SecurityEvent(
+            {
+                "user_id": "u1",
+                "source_ip": "10.0.0.1",
+                "action": "file_upload",
+                "resource": "/uploads",
+                "timestamp": utc_timestamp(),
+                "outcome": "success",
+                "details": {"filename": "notes.txt", "file_size": 512},
+            }
+        )
+        context = self._context(file_signatures=[{"extension": [".exe"]}])
+
+        assert await MaliciousFileAnalyzer().analyze(event, context) is None
