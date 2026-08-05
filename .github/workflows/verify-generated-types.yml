@@ -121,6 +121,18 @@ jobs:
           # exactly what the live server serves to `npm run gen:types`.
           python -c "import json; s=json.load(open('openapi.raw.json')); s.pop('x-websocket-paths', None); json.dump(s, open('openapi.json','w'))"
 
+      # #13572: reject absolute-path schema defaults here, where the contract has
+      # just been built, rather than paying for a second app.openapi().
+      #
+      # This runs BEFORE the diff below on purpose. An absolute-path default makes
+      # the contract host-dependent, so it surfaces as a spurious generated-types
+      # diff on whichever runner regenerated it — an unactionable failure that has
+      # already happened twice (#13357). Failing here names the offending field.
+      - name: Check no schema default is an absolute filesystem path (#13572)
+        run: |
+          export PYTHONPATH="$PWD:$PWD/autobot-backend:${PYTHONPATH:-}"
+          python scripts/check_openapi_absolute_defaults.py --contract openapi.raw.json
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:

@@ -1704,7 +1704,7 @@ class CreateChatBrowserRequest(BaseModel):
 class CodebaseIndexingRequest(BaseModel):
     """Request model for codebase indexing operations."""
 
-    codebase_path: str = Field(default=str(PATH.PROJECT_ROOT), description="Path to codebase to index")
+    codebase_path: str = Field(default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to codebase to index")
     file_patterns: List[str] = Field(
         default=["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"],
         description="File patterns to include",
@@ -1718,7 +1718,7 @@ class CodebaseIndexingRequest(BaseModel):
 class TestSuiteRequest(BaseModel):
     """Request model for comprehensive test suite operations."""
 
-    test_path: str = Field(default=str(PATH.TESTS_DIR), description="Path to test directory")
+    test_path: str = Field(default_factory=lambda: str(PATH.TESTS_DIR), description="Path to test directory")
     test_patterns: List[str] = Field(default=["test_*.py", "*_test.py"], description="Test file patterns")
     test_types: List[str] = Field(
         default=["unit", "integration", "performance"],
@@ -1732,7 +1732,9 @@ class TestSuiteRequest(BaseModel):
 class KnowledgeBaseRequest(BaseModel):
     """Request model for knowledge base operations."""
 
-    source_paths: List[str] = Field(default=[str(PATH.PROJECT_ROOT)], description="Paths to populate from")
+    source_paths: List[str] = Field(
+        default_factory=lambda: [str(PATH.PROJECT_ROOT)], description="Paths to populate from"
+    )
     document_types: List[str] = Field(default=["code", "docs", "config"], description="Document types to include")
     chunk_size: int = Field(default=1000, description="Chunk size for text processing")
     overlap: int = Field(default=200, description="Overlap between chunks")
@@ -1743,7 +1745,7 @@ class KnowledgeBaseRequest(BaseModel):
 class SecurityScanRequest(BaseModel):
     """Request model for security scan operations."""
 
-    scan_paths: List[str] = Field(default=[str(PATH.PROJECT_ROOT)], description="Paths to scan")
+    scan_paths: List[str] = Field(default_factory=lambda: [str(PATH.PROJECT_ROOT)], description="Paths to scan")
     scan_types: List[str] = Field(
         default=["vulnerability", "dependency", "secrets"],
         description="Types of security scans",

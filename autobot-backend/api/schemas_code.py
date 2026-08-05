@@ -2454,7 +2454,17 @@ class OAIModelListResponse(BaseModel):
 # git_mcp.py request schemas (#6042)
 # ---------------------------------------------------------------------------
 
-_GIT_DEFAULT_REPO_PATH = str(PROJECT_ROOT)
+
+# #13572: a factory, not a constant. As a plain default this value was dumped
+# into the OpenAPI schema and published in the committed frontend types, so the
+# contract carried whichever absolute path the generating machine resolved.
+# A default_factory is invisible to JSON Schema while the runtime default is
+# unchanged — the same form schemas_analytics.py:1084 already uses.
+def _git_default_repo_path() -> str:
+    """Return the server's project root, resolved per request."""
+    return str(PROJECT_ROOT)
+
+
 _GIT_MAX_LOG_ENTRIES = 100
 _GIT_SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9_\-./]+$")
 _GIT_SHELL_METACHAR_RE = re.compile(r"[;&|`$]")
@@ -2465,14 +2475,14 @@ _GIT_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")
 class GitStatusRequest(BaseModel):
     """Git status request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path (must be whitelisted)")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path (must be whitelisted)")
     short: bool | None = Field(default=False, description="Use short format output")
 
 
 class GitLogRequest(BaseModel):
     """Git log request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     max_count: int | None = Field(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
@@ -2507,7 +2517,7 @@ class GitLogRequest(BaseModel):
 class GitDiffRequest(BaseModel):
     """Git diff request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     staged: bool | None = Field(default=False, description="Show staged changes only")
     file_path: str | None = Field(default=None, description="Diff specific file")
     commit: str | None = Field(default=None, description="Compare with specific commit")
@@ -2544,14 +2554,14 @@ class GitDiffRequest(BaseModel):
 class GitBranchRequest(BaseModel):
     """Git branch request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     all_branches: bool | None = Field(default=False, description="Show remote branches too")
 
 
 class GitBlameRequest(BaseModel):
     """Git blame request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     file_path: str = Field(..., description="File to blame")
     line_start: int | None = Field(default=None, ge=1, description="Starting line number")
     line_end: int | None = Field(default=None, ge=1, description="Ending line number")
@@ -2580,7 +2590,7 @@ class GitBlameRequest(BaseModel):
 class GitShowRequest(BaseModel):
     """Git show request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     ref: str = Field(default="HEAD", description="Commit or ref to show (default: HEAD)")
 
     @field_validator("ref")
@@ -2672,7 +2682,8 @@ class RedisAnalysisRequest(BaseModel):
     path: str = Field(..., description="Directory or file path to analyze for Redis optimizations")
     exclude_patterns: list | None = Field(default=None, description="Glob patterns to exclude from analysis")
     min_severity: str | None = Field(
-        default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
+        default=None,
+        description="Minimum severity level to include (info, low, medium, high, critical)",
     )
 
 
@@ -2690,7 +2701,8 @@ class SecurityAnalysisRequest(BaseModel):
         default=None, description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])"
     )
     min_severity: str | None = Field(
-        default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
+        default=None,
+        description="Minimum severity level to include (info, low, medium, high, critical)",
     )
 
 
