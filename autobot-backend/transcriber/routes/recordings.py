@@ -28,6 +28,7 @@ from fastapi.responses import StreamingResponse
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
+from autobot_shared.ssot_constants import SecurityConstants
 from transcriber.database import Database
 from transcriber.deps import DEFAULT_USER, can_access, get_db
 from transcriber.models import RecordingOut
@@ -37,7 +38,9 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["transcriber-recordings"])
 
-_ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
+# Same canonical set the upload security boundary enforces (#13512) — this
+# route guard admitting a format the validator rejects would be a gap.
+_ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 _CHUNK_SIZE = 65536
 
 
@@ -323,7 +326,11 @@ async def audio_waveform(
     peaks = _generate_waveform(str(audio_path), width)
     segments_raw = await db.list_segments(recording_id)
     segments = [
-        {"start_time": s["start_time"], "end_time": s["end_time"], "speaker_id": s.get("speaker_id")}
+        {
+            "start_time": s["start_time"],
+            "end_time": s["end_time"],
+            "speaker_id": s.get("speaker_id"),
+        }
         for s in segments_raw
     ]
 
