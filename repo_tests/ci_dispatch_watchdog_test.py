@@ -138,14 +138,16 @@ def test_sweep_never_approves_a_fork_origin_parked_run(watchdog):
 
 def test_a_fork_head_is_flagged_by_collect_heads(watchdog):
     heads = watchdog.collect_heads(
-        [{"number": 1, "head": {"sha": "a" * 40, "repo": {"full_name": FORK}}, "html_url": "u"}], REPO
+        [{"number": 1, "head": {"sha": "a" * 40, "repo": {"full_name": FORK}}, "html_url": "u"}],
+        REPO,
     )
     assert heads[0].same_repo is False
 
 
 def test_same_repo_head_is_recognised(watchdog):
     heads = watchdog.collect_heads(
-        [{"number": 1, "head": {"sha": "b" * 40, "repo": {"full_name": REPO}}, "html_url": "u"}], REPO
+        [{"number": 1, "head": {"sha": "b" * 40, "repo": {"full_name": REPO}}, "html_url": "u"}],
+        REPO,
     )
     assert heads[0].same_repo is True
 
@@ -204,7 +206,9 @@ def test_parked_run_outranks_otherwise_green_runs(watchdog):
 
 
 def test_queued_run_past_the_stall_threshold_with_an_empty_pool_is_failure(watchdog):
-    runs = [_run(status="queued", conclusion=None, created_at=_ts(45), name="Unit & Integration Tests")]
+    runs = [
+        _run(status="queued", conclusion=None, created_at=_ts(45), name="Unit & Integration Tests")
+    ]
     state, description = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30, False)
     assert state == "failure"
     assert "no runner available" in description
@@ -212,7 +216,9 @@ def test_queued_run_past_the_stall_threshold_with_an_empty_pool_is_failure(watch
 
 def test_queued_run_behind_a_busy_pool_is_pending_not_failure(watchdog):
     """Normal contention on the singleton runner must not raise a false outage."""
-    runs = [_run(status="queued", conclusion=None, created_at=_ts(45), name="Unit & Integration Tests")]
+    runs = [
+        _run(status="queued", conclusion=None, created_at=_ts(45), name="Unit & Integration Tests")
+    ]
     state, description = watchdog.classify_dispatch(runs, _ts(45), NOW, 10, 30, True)
     assert state == "pending"
     assert "busy runner pool" in description
@@ -268,7 +274,9 @@ def test_an_api_error_publishes_unknown_not_never_dispatched(watchdog):
     api = _FakeApi({sha: watchdog.WatchdogApiError("HTTP 429: rate limited")})
     head = watchdog.PullHead(number=5, sha=sha, updated_at=_ts(60), url="u", same_repo=True)
     config = {"grace_minutes": 10, "stall_minutes": 30, "status_context": "ctx"}
-    blocked = watchdog.publish_dispatch_states(api, [head], config, dry_run=False, pool_serving=True)
+    blocked = watchdog.publish_dispatch_states(
+        api, [head], config, dry_run=False, pool_serving=True
+    )
     assert blocked == 1
     _, state, description = api.statuses[0]
     assert state == "pending"
@@ -412,12 +420,17 @@ def test_a_self_hosted_job_inside_the_ceiling_is_healthy_not_wedged(watchdog):
 
 def test_a_long_running_github_hosted_job_is_not_wedged(watchdog):
     """marker-tests declares 180m on ubuntu-latest and holds no singleton."""
-    state = watchdog.inspect_self_hosted_pool(_pool_api([_job(120, labels=("ubuntu-latest",))]), 10, 45, NOW)
+    state = watchdog.inspect_self_hosted_pool(
+        _pool_api([_job(120, labels=("ubuntu-latest",))]), 10, 45, NOW
+    )
     assert state.overdue == []
 
 
 def test_a_job_that_has_not_started_is_never_wedged(watchdog):
-    assert watchdog.job_is_overdue({"status": "in_progress", "labels": ["self-hosted"]}, NOW, 45) is False
+    assert (
+        watchdog.job_is_overdue({"status": "in_progress", "labels": ["self-hosted"]}, NOW, 45)
+        is False
+    )
 
 
 def test_a_completed_job_is_never_wedged(watchdog):
@@ -435,8 +448,16 @@ def test_the_wedged_run_is_found_even_when_it_is_the_oldest_of_many(watchdog):
     therefore drops exactly the run being looked for. Measured live: 12 runs in
     progress, the wedging one the oldest of the 12, a budget of 10 — missed.
     """
-    healthy = [{"id": i, "name": "CI", "head_sha": f"sha{i}", "run_started_at": _ts(i)} for i in range(1, 12)]
-    wedged = {"id": 99, "name": "Frontend Testing Suite", "head_sha": "wedged", "run_started_at": _ts(185)}
+    healthy = [
+        {"id": i, "name": "CI", "head_sha": f"sha{i}", "run_started_at": _ts(i)}
+        for i in range(1, 12)
+    ]
+    wedged = {
+        "id": 99,
+        "name": "Frontend Testing Suite",
+        "head_sha": "wedged",
+        "run_started_at": _ts(185),
+    }
 
     class _Api:
         repository = REPO
@@ -455,7 +476,9 @@ def test_the_wedged_run_is_found_even_when_it_is_the_oldest_of_many(watchdog):
 
 
 def test_a_healthy_job_alongside_a_wedged_one_still_proves_liveness(watchdog):
-    state = watchdog.inspect_self_hosted_pool(_pool_api([_job(185), _job(3, name="Build Test")]), 10, 45, NOW)
+    state = watchdog.inspect_self_hosted_pool(
+        _pool_api([_job(185), _job(3, name="Build Test")]), 10, 45, NOW
+    )
     assert state.serving is True
     assert [entry.job for entry in state.overdue] == ["Unit & Integration Tests"]
 
@@ -470,7 +493,9 @@ def test_overdue_jobs_are_grouped_by_head(watchdog):
 
 
 def test_a_wedged_head_is_published_as_a_failure_not_a_healthy_in_progress(watchdog):
-    overdue = [watchdog.OverdueJob("sha", "Frontend Testing Suite", "Unit & Integration Tests", 185.0, "u")]
+    overdue = [
+        watchdog.OverdueJob("sha", "Frontend Testing Suite", "Unit & Integration Tests", 185.0, "u")
+    ]
     state, description = watchdog.classify_dispatch([_run()], _ts(5), NOW, 10, 30, True, overdue)
     assert state == "failure"
     assert "wedged" in description
@@ -511,7 +536,9 @@ _STARVATION_CONFIG = {"stall_minutes": 45, "max_job_lookups": 5, "job_overdue_mi
 
 def _live_ts(minutes_ago):
     """Relative to the real clock — check_runner_starvation reads it itself."""
-    return (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 def _live_job(minutes_running, name="Unit & Integration Tests"):
@@ -524,7 +551,9 @@ def _live_job(minutes_running, name="Unit & Integration Tests"):
 
 
 def _live_queue():
-    return [{"id": 9, "name": "CI", "status": "queued", "created_at": _live_ts(60), "head_branch": "b"}]
+    return [
+        {"id": 9, "name": "CI", "status": "queued", "created_at": _live_ts(60), "head_branch": "b"}
+    ]
 
 
 def test_a_wedged_job_fails_the_probe_even_with_an_empty_queue(watchdog):
@@ -671,7 +700,10 @@ def test_scoping_selects_only_the_firing_pull_request(watchdog):
 
 
 def test_scoping_off_returns_every_head(watchdog):
-    heads = [watchdog.PullHead(1, "a" * 40, _ts(5), "u", True), watchdog.PullHead(2, "b" * 40, _ts(5), "u", True)]
+    heads = [
+        watchdog.PullHead(1, "a" * 40, _ts(5), "u", True),
+        watchdog.PullHead(2, "b" * 40, _ts(5), "u", True),
+    ]
     assert watchdog.select_heads(heads, 0) == heads
 
 
@@ -686,8 +718,18 @@ def test_scoping_to_a_fork_pr_still_never_approves_it(watchdog):
     sha = "9" * 40
     api = _FakeApi({sha: [_parked(id=77, head_repository={"full_name": FORK})]})
     api.open_pull_requests = lambda base: [
-        {"number": 12, "head": {"sha": sha, "repo": {"full_name": FORK}}, "html_url": "u", "updated_at": _ts(5)},
-        {"number": 13, "head": {"sha": "8" * 40, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)},
+        {
+            "number": 12,
+            "head": {"sha": sha, "repo": {"full_name": FORK}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        },
+        {
+            "number": 13,
+            "head": {"sha": "8" * 40, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        },
     ]
     api.recent_runs = lambda per_page=100, run_status="": []
     api.run_jobs = lambda run_id: []
@@ -713,7 +755,12 @@ def test_scoping_to_a_same_repo_pr_still_approves_its_parked_bot_runs(watchdog):
     sha = "7" * 40
     api = _FakeApi({sha: [_parked(id=55)]})
     api.open_pull_requests = lambda base: [
-        {"number": 21, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+        {
+            "number": 21,
+            "head": {"sha": sha, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        }
     ]
     api.recent_runs = lambda per_page=100, run_status="": []
     api.run_jobs = lambda run_id: []
@@ -736,7 +783,12 @@ def test_scoping_to_a_same_repo_pr_still_approves_its_parked_bot_runs(watchdog):
 def test_a_closed_or_renumbered_scope_target_sweeps_nothing(watchdog, capsys):
     api = _FakeApi()
     api.open_pull_requests = lambda base: [
-        {"number": 1, "head": {"sha": "6" * 40, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+        {
+            "number": 1,
+            "head": {"sha": "6" * 40, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        }
     ]
     config = {"base_branch": "Dev_new_gui", "only_pr": 4242}
     assert watchdog.check_dispatch(api, config, dry_run=False) == 0
@@ -798,7 +850,12 @@ def test_a_raced_sweep_exits_zero_and_never_prints_the_credential_remediation(wa
     sha = "a" * 40
     api = _FakeApi({sha: [_parked(id=3)]}, approve_response=RACE_403)
     api.open_pull_requests = lambda base: [
-        {"number": 31, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+        {
+            "number": 31,
+            "head": {"sha": sha, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        }
     ]
     api.recent_runs = lambda per_page=100, run_status="": [{"id": 1, "conclusion": "success"}]
     api.run_jobs = lambda run_id: []
@@ -830,7 +887,9 @@ def _sweep_config(**overrides):
 
 def test_exhausting_the_budget_marks_the_head_deferred(watchdog):
     api = _FakeApi()
-    outcome = watchdog._approve_head(api, 9, [_parked(id=i) for i in range(4)], budget=2, dry_run=False)
+    outcome = watchdog._approve_head(
+        api, 9, [_parked(id=i) for i in range(4)], budget=2, dry_run=False
+    )
     assert outcome.approved == 2
     assert outcome.exhausted is True
 
@@ -838,7 +897,10 @@ def test_exhausting_the_budget_marks_the_head_deferred(watchdog):
 def test_a_sweep_reports_which_prs_the_budget_could_not_reach(watchdog):
     a, b = "1" * 40, "2" * 40
     api = _FakeApi({a: [_parked(id=1), _parked(id=2)], b: [_parked(id=3), _parked(id=4)]})
-    heads = [watchdog.PullHead(101, a, _ts(5), "u", True), watchdog.PullHead(102, b, _ts(5), "u", True)]
+    heads = [
+        watchdog.PullHead(101, a, _ts(5), "u", True),
+        watchdog.PullHead(102, b, _ts(5), "u", True),
+    ]
     outcome = watchdog._sweep_once(api, heads, budget=3, dry_run=False)
     assert outcome.approved == 3
     assert outcome.deferred == {102}
@@ -849,7 +911,12 @@ def test_a_budget_exhausted_sweep_exits_non_zero(watchdog, capsys):
     sha = "3" * 40
     api = _FakeApi({sha: [_parked(id=i) for i in range(5)]})
     api.open_pull_requests = lambda base: [
-        {"number": 55, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+        {
+            "number": 55,
+            "head": {"sha": sha, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        }
     ]
     api.recent_runs = lambda per_page=100, run_status="": [{"id": 1, "conclusion": "success"}]
     api.run_jobs = lambda run_id: []
@@ -871,7 +938,12 @@ def test_a_dry_run_previews_exhaustion_without_failing(watchdog):
     sha = "4" * 40
     api = _FakeApi({sha: [_parked(id=i) for i in range(5)]})
     api.open_pull_requests = lambda base: [
-        {"number": 56, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+        {
+            "number": 56,
+            "head": {"sha": sha, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        }
     ]
     api.recent_runs = lambda per_page=100, run_status="": []
     api.run_jobs = lambda run_id: []
@@ -888,7 +960,9 @@ def test_a_bigger_budget_does_not_widen_what_is_approvable(watchdog):
     """SECURITY: the cap bounds HOW MANY, never WHAT. Fork runs stay excluded."""
     api = _FakeApi()
     fork_runs = [_parked(id=i, head_repository={"full_name": FORK}) for i in range(50)]
-    outcome = watchdog._approve_head(api, 1, fork_runs, budget=watchdog.DEFAULT_MAX_APPROVALS, dry_run=False)
+    outcome = watchdog._approve_head(
+        api, 1, fork_runs, budget=watchdog.DEFAULT_MAX_APPROVALS, dry_run=False
+    )
     assert api.approved == []
     assert outcome.budget == watchdog.DEFAULT_MAX_APPROVALS
     assert outcome.exhausted is False
@@ -936,7 +1010,12 @@ def test_a_dry_run_does_not_warn_about_the_probe_it_skipped_on_purpose(watchdog,
     sha = "1" * 40
     api = _FakeApi({sha: [_run()]})
     api.open_pull_requests = lambda base: [
-        {"number": 3, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+        {
+            "number": 3,
+            "head": {"sha": sha, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        }
     ]
     api.recent_runs = lambda per_page=100, run_status="": []
     api.run_jobs = lambda run_id: []
@@ -959,7 +1038,12 @@ def test_a_real_sweep_does_warn_when_the_probe_is_unresolved(watchdog, capsys):
     sha = "2" * 40
     api = _FakeApi({sha: [_run()]})
     api.open_pull_requests = lambda base: [
-        {"number": 4, "head": {"sha": sha, "repo": {"full_name": REPO}}, "html_url": "u", "updated_at": _ts(5)}
+        {
+            "number": 4,
+            "head": {"sha": sha, "repo": {"full_name": REPO}},
+            "html_url": "u",
+            "updated_at": _ts(5),
+        }
     ]
     api.recent_runs = lambda per_page=100, run_status="": []
     api.run_jobs = lambda run_id: []
@@ -976,3 +1060,92 @@ def test_a_real_sweep_does_warn_when_the_probe_is_unresolved(watchdog, capsys):
     }
     assert watchdog.check_dispatch(api, config, dry_run=False) == 0
     assert "UNRESOLVED" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# superseded_stuck_runs — force-cancel selection (#13439)
+# ---------------------------------------------------------------------------
+
+
+def _member(run_number: int, minutes_ago: float, **overrides):
+    """A queued run in the default concurrency group."""
+    base = {
+        "id": 1000 + run_number,
+        "run_number": run_number,
+        "workflow_id": 77,
+        "head_branch": "Dev_new_gui",
+        "event": "push",
+        "status": "queued",
+        "conclusion": None,
+        "created_at": _ts(minutes_ago),
+    }
+    base.update(overrides)
+    return _run(**base)
+
+
+def _select(watchdog, runs, grace=5, budget=10):
+    return watchdog.superseded_stuck_runs(runs, NOW, REPO, grace, budget)
+
+
+def test_the_newest_run_in_a_group_is_never_cancelled(watchdog):
+    """The newest run is what everything else is waiting for."""
+    older, newest = _member(1, 60), _member(2, 30)
+
+    picked = _select(watchdog, [older, newest])
+
+    assert [r["run_number"] for r in picked] == [1]
+
+
+def test_an_in_progress_run_is_never_cancelled(watchdog):
+    """in_progress means real work is happening — cancelling it destroys it."""
+    working, newest = _member(1, 60, status="in_progress"), _member(2, 30)
+
+    assert _select(watchdog, [working, newest]) == []
+
+
+def test_approval_gated_statuses_are_never_cancelled(watchdog):
+    """`waiting`/`requested` are approval gates, not a stuck queue."""
+    for status in ("waiting", "requested"):
+        gated, newest = _member(1, 60, status=status), _member(2, 30)
+        assert _select(watchdog, [gated, newest]) == [], status
+
+
+def test_runs_for_different_events_are_not_the_same_group(watchdog):
+    """push and pull_request produce different github.ref, so different groups.
+
+    Grouping them together would treat a PR run as superseding a push run on the
+    same branch and cancel work that is not superseded at all.
+    """
+    push_run = _member(1, 60, event="push")
+    pr_run = _member(2, 30, event="pull_request")
+
+    assert _select(watchdog, [push_run, pr_run]) == []
+
+
+def test_a_run_inside_the_grace_window_is_left_alone(watchdog):
+    """A legitimate brief queue must not be mistaken for a stuck one."""
+    recent, newest = _member(1, 2), _member(2, 1)
+
+    assert _select(watchdog, [recent, newest], grace=5) == []
+
+
+def test_selection_is_capped_by_the_budget_oldest_first(watchdog):
+    """One sweep cannot cancel the world if the grouping is ever wrong."""
+    runs = [_member(n, 100 - n) for n in range(1, 6)]  # 1 oldest ... 5 newest
+
+    picked = _select(watchdog, runs, budget=2)
+
+    assert [r["run_number"] for r in picked] == [1, 2]
+
+
+def test_fork_runs_are_never_cancelled(watchdog):
+    """Same restriction as the approval sweep, for the same reason."""
+    fork = _member(1, 60, head_repository={"full_name": "someone/fork"})
+    newest = _member(2, 30, head_repository={"full_name": "someone/fork"})
+
+    assert _select(watchdog, [fork, newest]) == []
+
+
+def test_a_lone_run_is_never_cancelled(watchdog):
+    """With nothing newer, nothing supersedes it."""
+    assert _select(watchdog, [_member(1, 60)]) == []
