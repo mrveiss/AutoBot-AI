@@ -22,7 +22,6 @@ one implementation rather than two that can drift.
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 from pathlib import Path
 
 #: Markers that identify a source checkout root and nothing below it. Both must
@@ -48,7 +47,6 @@ def is_checkout_root(path: Path) -> bool:
     return all((path / marker).exists() for marker in CHECKOUT_MARKERS)
 
 
-@lru_cache(maxsize=1)
 def project_root() -> Path:
     """Resolve the project root: explicit env, configured deployment, checkout, install.
 
@@ -74,19 +72,22 @@ def project_root() -> Path:
     deployment case: an install has a ``.env`` and no ``.git``, so it matches on
     the ``.env`` arm before any checkout marker is ever seen.
 
-    Cached: the answer cannot change within a process, and the walk touches the
-    filesystem once per ancestor. Call ``project_root.cache_clear()`` in tests
-    that manipulate the environment.
+    Deliberately **not** cached. Caching looks free — the answer rarely changes
+    within a process — but it silently defeats any caller that sets
+    ``AUTOBOT_PROJECT_ROOT`` or ``AUTOBOT_BASE_DIR`` after the first call, which
+    is exactly what the drift detector's own fallback test does. The walk is a
+    handful of ``stat`` calls against a short ancestor chain; hidden state is
+    the more expensive of the two.
     """
     return resolve_project_root(Path(__file__).resolve())
 
 
 def resolve_project_root(start: Path) -> Path:
-    """The uncached resolution, walking upward from *start*.
+    """The resolution itself, walking upward from *start*.
 
     Split out from :func:`project_root` so the walk can be exercised against a
-    temporary directory tree — the cached entry point is pinned to this file's
-    own location and cannot be pointed at a fixture.
+    temporary directory tree — the entry point is pinned to this file's own
+    location and cannot be pointed at a fixture.
     """
     configured = os.environ.get(PROJECT_ROOT_ENV)
     if configured:
