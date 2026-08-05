@@ -90,7 +90,20 @@ class ComplianceManager:
         self.config_path = config_path
         self.config = self._load_config()
 
-        # Initialize audit storage
+        # Initialize audit storage.
+        #
+        # #13658: `compliance.yaml` set `base_path` to
+        # "${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/logs/audit" — a
+        # shell placeholder that `yaml.safe_load` does not expand, and nothing in
+        # this repository routes config through `expandvars`. Being relative, the
+        # `mkdir` below silently created a tree literally named
+        # "${AUTOBOT_PROJECT_ROOT:-" under the working directory, so the audit
+        # key and PII access logs landed where nobody reads them, at a location
+        # that moved with `cwd`.
+        #
+        # `.get(key, default)` could not save it: the fallback only fires when
+        # the key is *absent*, and it was present, just wrong. The placeholder is
+        # now gone from the YAML, so this correctly-resolving default applies.
         self.audit_base_path = Path(
             self.config.get("audit_storage", {}).get("base_path", str(PATH.get_log_path("audit")))
         )
