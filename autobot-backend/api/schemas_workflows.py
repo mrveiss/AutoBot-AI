@@ -1362,13 +1362,17 @@ class ImportWorkflowRequest(BaseModel):
         ...,
         description="WorkflowExportFormat.to_dict() payload produced by the export endpoint.",
     )
-    session_id: str | None = Field(default=None, description="Session to associate with the imported workflow.")
+    session_id: str | None = Field(
+        default=None, description="Session to associate with the imported workflow."
+    )
 
 
 class CloneWorkflowRequest(BaseModel):
     """Request body for cloning a shared workflow (#2165)."""
 
-    session_id: str | None = Field(default=None, description="Session to associate with the cloned workflow.")
+    session_id: str | None = Field(
+        default=None, description="Session to associate with the cloned workflow."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1415,7 +1419,10 @@ _WORKFLOW_SECRET_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 def _validate_workflow_secret_name(name: str) -> str:
     """Reject names containing characters outside the safe set. Issue #2153."""
     if not _WORKFLOW_SECRET_NAME_RE.match(name):
-        raise ValueError("Secret name must contain only alphanumeric characters, " "underscores, hyphens, and dots")
+        raise ValueError(
+            "Secret name must contain only alphanumeric characters, "
+            "underscores, hyphens, and dots"
+        )
     return name
 
 
@@ -1704,7 +1711,9 @@ class CreateChatBrowserRequest(BaseModel):
 class CodebaseIndexingRequest(BaseModel):
     """Request model for codebase indexing operations."""
 
-    codebase_path: str = Field(default=str(PATH.PROJECT_ROOT), description="Path to codebase to index")
+    codebase_path: str = Field(
+        default_factory=lambda: str(PATH.PROJECT_ROOT), description="Path to codebase to index"
+    )
     file_patterns: List[str] = Field(
         default=["*.py", "*.js", "*.vue", "*.ts", "*.jsx", "*.tsx"],
         description="File patterns to include",
@@ -1718,8 +1727,12 @@ class CodebaseIndexingRequest(BaseModel):
 class TestSuiteRequest(BaseModel):
     """Request model for comprehensive test suite operations."""
 
-    test_path: str = Field(default=str(PATH.TESTS_DIR), description="Path to test directory")
-    test_patterns: List[str] = Field(default=["test_*.py", "*_test.py"], description="Test file patterns")
+    test_path: str = Field(
+        default_factory=lambda: str(PATH.TESTS_DIR), description="Path to test directory"
+    )
+    test_patterns: List[str] = Field(
+        default=["test_*.py", "*_test.py"], description="Test file patterns"
+    )
     test_types: List[str] = Field(
         default=["unit", "integration", "performance"],
         description="Types of tests to run",
@@ -1732,8 +1745,12 @@ class TestSuiteRequest(BaseModel):
 class KnowledgeBaseRequest(BaseModel):
     """Request model for knowledge base operations."""
 
-    source_paths: List[str] = Field(default=[str(PATH.PROJECT_ROOT)], description="Paths to populate from")
-    document_types: List[str] = Field(default=["code", "docs", "config"], description="Document types to include")
+    source_paths: List[str] = Field(
+        default_factory=lambda: [str(PATH.PROJECT_ROOT)], description="Paths to populate from"
+    )
+    document_types: List[str] = Field(
+        default=["code", "docs", "config"], description="Document types to include"
+    )
     chunk_size: int = Field(default=1000, description="Chunk size for text processing")
     overlap: int = Field(default=200, description="Overlap between chunks")
     force_reindex: bool = Field(default=False, description="Force reindexing of existing documents")
@@ -1743,7 +1760,9 @@ class KnowledgeBaseRequest(BaseModel):
 class SecurityScanRequest(BaseModel):
     """Request model for security scan operations."""
 
-    scan_paths: List[str] = Field(default=[str(PATH.PROJECT_ROOT)], description="Paths to scan")
+    scan_paths: List[str] = Field(
+        default_factory=lambda: [str(PATH.PROJECT_ROOT)], description="Paths to scan"
+    )
     scan_types: List[str] = Field(
         default=["vulnerability", "dependency", "secrets"],
         description="Types of security scans",
@@ -1929,7 +1948,9 @@ class GitHubConnectionTestRequest(BaseModel):
     """Request body for testing a GitHub token."""
 
     token: str = Field(..., description="GitHub Personal Access Token")
-    base_url: str | None = Field(None, description="Custom GitHub API base URL (e.g. GitHub Enterprise)")
+    base_url: str | None = Field(
+        None, description="Custom GitHub API base URL (e.g. GitHub Enterprise)"
+    )
 
 
 class GitHubReviewRequest(BaseModel):
@@ -2356,8 +2377,12 @@ class VCSProviderInfo(BaseModel):
     id: str = Field(..., description="Provider identifier")
     name: str = Field(..., description="Provider display name")
     description: str = Field(..., description="Provider description")
-    required_settings: List[str] = Field(default_factory=list, description="Required configuration settings")
-    optional_settings: List[str] = Field(default_factory=list, description="Optional configuration settings")
+    required_settings: List[str] = Field(
+        default_factory=list, description="Required configuration settings"
+    )
+    optional_settings: List[str] = Field(
+        default_factory=list, description="Optional configuration settings"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2398,15 +2423,25 @@ class SequentialThinkingRequest(BaseModel):
     """Request model for sequential thinking tool."""
 
     thought: str = Field(..., description="Current thinking step and analysis")
-    thought_number: int = Field(..., ge=1, le=MAX_THOUGHT_COUNT, description="Current thought number in sequence")
-    total_thoughts: int = Field(..., ge=1, le=MAX_THOUGHT_COUNT, description="Estimated total thoughts needed")
+    thought_number: int = Field(
+        ..., ge=1, le=MAX_THOUGHT_COUNT, description="Current thought number in sequence"
+    )
+    total_thoughts: int = Field(
+        ..., ge=1, le=MAX_THOUGHT_COUNT, description="Estimated total thoughts needed"
+    )
     next_thought_needed: bool = Field(..., description="Whether another thought step is needed")
 
     is_revision: bool | None = Field(False, description="Whether this revises previous thinking")
-    revises_thought: int | None = Field(None, ge=1, description="Which thought is being reconsidered")
-    branch_from_thought: int | None = Field(None, ge=1, description="Branching point thought number")
+    revises_thought: int | None = Field(
+        None, ge=1, description="Which thought is being reconsidered"
+    )
+    branch_from_thought: int | None = Field(
+        None, ge=1, description="Branching point thought number"
+    )
     branch_id: str | None = Field(None, description="Branch identifier")
-    needs_more_thoughts: bool | None = Field(False, description="If more thoughts are needed beyond initial estimate")
+    needs_more_thoughts: bool | None = Field(
+        False, description="If more thoughts are needed beyond initial estimate"
+    )
 
     session_id: str | None = Field("default", description="Thinking session identifier")
 
@@ -2604,7 +2639,9 @@ class HTTPPostRequest(HTTPRequestBase):
     """POST request model."""
 
     json_body: _HTTPClientJSONObject | None = Field(default=None, description="JSON request body")
-    form_data: Dict[str, str] | None = Field(default=None, description="Form data (mutually exclusive with json_body)")
+    form_data: Dict[str, str] | None = Field(
+        default=None, description="Form data (mutually exclusive with json_body)"
+    )
 
 
 class HTTPPutRequest(HTTPRequestBase):
@@ -2616,7 +2653,9 @@ class HTTPPutRequest(HTTPRequestBase):
 class HTTPPatchRequest(HTTPRequestBase):
     """PATCH request model."""
 
-    json_body: _HTTPClientJSONObject | None = Field(default=None, description="JSON request body for partial update")
+    json_body: _HTTPClientJSONObject | None = Field(
+        default=None, description="JSON request body for partial update"
+    )
 
 
 class HTTPDeleteRequest(HTTPRequestBase):

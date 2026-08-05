@@ -1496,7 +1496,9 @@ class MCPPromptTemplate(BaseModel):
 
     name: str = Field(..., description="Prompt template name")
     description: str | None = Field(None, description="Template description")
-    arguments: List[Dict[str, Any]] = Field(default_factory=list, description="Template arguments schema")
+    arguments: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Template arguments schema"
+    )
 
 
 class FilesystemResourcesListResponse(BaseModel):
@@ -2454,7 +2456,17 @@ class OAIModelListResponse(BaseModel):
 # git_mcp.py request schemas (#6042)
 # ---------------------------------------------------------------------------
 
-_GIT_DEFAULT_REPO_PATH = str(PROJECT_ROOT)
+
+# #13572: a factory, not a constant. As a plain default this value was dumped
+# into the OpenAPI schema and published in the committed frontend types, so the
+# contract carried whichever absolute path the generating machine resolved.
+# A default_factory is invisible to JSON Schema while the runtime default is
+# unchanged — the same form schemas_analytics.py:1084 already uses.
+def _git_default_repo_path() -> str:
+    """Return the server's project root, resolved per request."""
+    return str(PROJECT_ROOT)
+
+
 _GIT_MAX_LOG_ENTRIES = 100
 _GIT_SAFE_PATH_RE = re.compile(r"^[a-zA-Z0-9_\-./]+$")
 _GIT_SHELL_METACHAR_RE = re.compile(r"[;&|`$]")
@@ -2465,14 +2477,16 @@ _GIT_FULL_REF_RE = re.compile(r"^[a-zA-Z0-9_\-./^~:]+$")
 class GitStatusRequest(BaseModel):
     """Git status request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path (must be whitelisted)")
+    repo_path: str = Field(
+        default_factory=_git_default_repo_path, description="Repository path (must be whitelisted)"
+    )
     short: bool | None = Field(default=False, description="Use short format output")
 
 
 class GitLogRequest(BaseModel):
     """Git log request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     max_count: int | None = Field(
         default=QueryDefaults.DEFAULT_SEARCH_LIMIT,
         ge=1,
@@ -2507,7 +2521,7 @@ class GitLogRequest(BaseModel):
 class GitDiffRequest(BaseModel):
     """Git diff request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     staged: bool | None = Field(default=False, description="Show staged changes only")
     file_path: str | None = Field(default=None, description="Diff specific file")
     commit: str | None = Field(default=None, description="Compare with specific commit")
@@ -2544,14 +2558,14 @@ class GitDiffRequest(BaseModel):
 class GitBranchRequest(BaseModel):
     """Git branch request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     all_branches: bool | None = Field(default=False, description="Show remote branches too")
 
 
 class GitBlameRequest(BaseModel):
     """Git blame request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     file_path: str = Field(..., description="File to blame")
     line_start: int | None = Field(default=None, ge=1, description="Starting line number")
     line_end: int | None = Field(default=None, ge=1, description="Ending line number")
@@ -2580,7 +2594,7 @@ class GitBlameRequest(BaseModel):
 class GitShowRequest(BaseModel):
     """Git show request model"""
 
-    repo_path: str = Field(default=_GIT_DEFAULT_REPO_PATH, description="Repository path")
+    repo_path: str = Field(default_factory=_git_default_repo_path, description="Repository path")
     ref: str = Field(default="HEAD", description="Commit or ref to show (default: HEAD)")
 
     @field_validator("ref")
@@ -2648,8 +2662,12 @@ class CodeIntelAnalysisRequest(BaseModel):
     code: str | None = Field(default=None, description="Inline code to analyze")
     language: str | None = Field(default=None, description="Language of the inline code")
     filename: str | None = Field(default=None, description="Virtual filename for inline code")
-    include_suggestions: bool | None = Field(default=None, description="Whether to include improvement suggestions")
-    exclude_dirs: list | None = Field(default=None, description="Directories to exclude from analysis")
+    include_suggestions: bool | None = Field(
+        default=None, description="Whether to include improvement suggestions"
+    )
+    exclude_dirs: list | None = Field(
+        default=None, description="Directories to exclude from analysis"
+    )
     min_severity: str | None = Field(default=None, description="Minimum severity level to include")
 
 
@@ -2670,9 +2688,12 @@ class RedisAnalysisRequest(BaseModel):
     """Request model for Redis optimization analysis."""
 
     path: str = Field(..., description="Directory or file path to analyze for Redis optimizations")
-    exclude_patterns: list | None = Field(default=None, description="Glob patterns to exclude from analysis")
+    exclude_patterns: list | None = Field(
+        default=None, description="Glob patterns to exclude from analysis"
+    )
     min_severity: str | None = Field(
-        default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
+        default=None,
+        description="Minimum severity level to include (info, low, medium, high, critical)",
     )
 
 
@@ -2690,7 +2711,8 @@ class SecurityAnalysisRequest(BaseModel):
         default=None, description="Patterns to exclude from analysis (e.g., ['test_*', 'venv'])"
     )
     min_severity: str | None = Field(
-        default=None, description="Minimum severity level to include (info, low, medium, high, critical)"
+        default=None,
+        description="Minimum severity level to include (info, low, medium, high, critical)",
     )
 
 
@@ -2704,7 +2726,9 @@ class PerformanceAnalysisRequest(BaseModel):
     """Request model for performance analysis."""
 
     path: str = Field(..., description="Directory path to analyze for performance issues")
-    exclude_patterns: list | None = Field(default=None, description="Patterns to exclude from analysis")
+    exclude_patterns: list | None = Field(
+        default=None, description="Patterns to exclude from analysis"
+    )
     min_severity: str | None = Field(default=None, description="Minimum severity level to include")
 
 
@@ -2735,7 +2759,9 @@ class SQLQueryRequest(BaseModel):
 
     database: str = Field(..., description="Database name from whitelist")
     query: str = Field(..., description="SQL SELECT query (parameterized)")
-    params: List[Any] | None = Field(default=None, description="Query parameters for ? placeholders")
+    params: List[Any] | None = Field(
+        default=None, description="Query parameters for ? placeholders"
+    )
     limit: int | None = Field(
         default=100,
         ge=1,
@@ -2757,7 +2783,9 @@ class SQLExecuteRequest(BaseModel):
 
     database: str = Field(..., description="Database name from whitelist")
     statement: str = Field(..., description="SQL statement (INSERT/UPDATE/DELETE)")
-    params: List[Any] | None = Field(default=None, description="Statement parameters for ? placeholders")
+    params: List[Any] | None = Field(
+        default=None, description="Statement parameters for ? placeholders"
+    )
 
     @field_validator("statement")
     @classmethod
@@ -2803,7 +2831,9 @@ class ConflictResolutionRequest(BaseModel):
             "accept_ours, accept_theirs, manual_review"
         ),
     )
-    safe_mode: bool = Field(default=True, description="Enable safe mode (require review for complex conflicts)")
+    safe_mode: bool = Field(
+        default=True, description="Enable safe mode (require review for complex conflicts)"
+    )
     validate: bool = Field(default=True, description="Validate resolved code for syntax errors")
 
 
@@ -2830,7 +2860,9 @@ class AntiPatternAnalysisRequest(BaseModel):
     """Request model for anti-pattern analysis."""
 
     root_path: str = Field(default=".", description="Root path to analyze")
-    patterns: List[str] = Field(default=["**/*.py"], description="Glob patterns for files to include")
+    patterns: List[str] = Field(
+        default=["**/*.py"], description="Glob patterns for files to include"
+    )
     exclude_patterns: List[str] = Field(
         default=[
             "__pycache__",

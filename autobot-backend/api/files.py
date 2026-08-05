@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import aiofiles
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 
@@ -475,7 +475,8 @@ def _validate_upload_file(file: UploadFile, content: bytes) -> None:
     detected_mime = mimetypes.guess_type(file.filename)[0]
     if detected_mime and file.content_type and file.content_type != detected_mime:
         logger.warning(
-            f"MIME type mismatch for {file.filename}: " f"declared={file.content_type}, detected={detected_mime}"
+            f"MIME type mismatch for {file.filename}: "
+            f"declared={file.content_type}, detected={detected_mime}"
         )
 
 
@@ -546,7 +547,9 @@ def _log_upload_audit(
     )
 
 
-async def _delete_file_item(target_path: Path, path: str, security_layer, user_data: dict, request: Request) -> dict:
+async def _delete_file_item(
+    target_path: Path, path: str, security_layer, user_data: dict, request: Request
+) -> dict:
     """
     Delete a single file and log audit.
 
@@ -858,7 +861,9 @@ async def _validate_rename_paths(source_path: Path, new_name: str) -> Path:
     operation="rename_file_or_directory",
     error_code_prefix="FILES",
 )
-async def rename_file_or_directory(request: Request, path: str = Form(...), new_name: str = Form(...)):
+async def rename_file_or_directory(
+    request: Request, path: str = Form(...), new_name: str = Form(...)
+):
     """
     Rename a file or directory within the sandbox.
 
@@ -1216,6 +1221,10 @@ _ADMIN_ALLOWED_DIRS = (
 )
 _ADMIN_MAX_READ_BYTES = 1 * 1024 * 1024  # 1 MB cap for inline reads
 
+#: Directory the admin browser opens on when the caller supplies no path.
+#: Referenced through a factory at the endpoint so it never reaches the schema.
+_ADMIN_DEFAULT_BROWSE_DIR = "/home/autobot"  # noqa: ssot-path
+
 
 def _validate_admin_path(path: str) -> Path:
     """Resolve and validate an absolute path for the SLM admin file browser.
@@ -1258,13 +1267,21 @@ def _entry_to_file_item(entry: Path) -> dict:
         }
 
 
-@router.get("", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse)
+@router.get(
+    "", summary="List directory for SLM admin file browser", response_model=AdminFileListResponse
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_list_directory",
     error_code_prefix="FILES",
 )
-async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
+async def admin_list_directory(
+    # #13572: default_factory keeps this out of the published OpenAPI schema.
+    # As a plain default it was dumped into the contract and shipped in the
+    # committed frontend types, disclosing the service account's home directory
+    # to every API consumer. Runtime behaviour is unchanged.
+    path: str = Query(default_factory=lambda: _ADMIN_DEFAULT_BROWSE_DIR),
+) -> dict:
     """List directory contents at an absolute path.
 
     No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
@@ -1282,7 +1299,11 @@ async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ss
         raise HTTPException(status_code=403, detail="Permission denied")
 
 
-@router.get("/read", summary="Read file content for SLM admin file browser", response_model=AdminFileReadResponse)
+@router.get(
+    "/read",
+    summary="Read file content for SLM admin file browser",
+    response_model=AdminFileReadResponse,
+)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="admin_read_file",
