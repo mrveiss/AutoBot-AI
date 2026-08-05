@@ -23,8 +23,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
-from autobot_shared.ssot_config import config
-
 
 # #13149: this module carried its own ``.env``-walk copy of the project-root
 # search. It had no checkout step, so from a source tree with no ``.env`` it
