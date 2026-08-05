@@ -175,7 +175,8 @@ class TestConnectorSchedulerRedis:
 
     async def test_stop_removes_redis_key(self):
         store = {
-            _SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})
+            _SCHEDULE_PREFIX
+            + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})
         }
         mock_redis, store = _make_redis_mock(store)
 
@@ -225,7 +226,8 @@ class TestConnectorSchedulerRedis:
     async def test_stop_all_does_not_delete_redis_keys(self):
         """stop_all cancels local asyncio tasks but leaves Redis schedules intact."""
         store = {
-            _SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})
+            _SCHEDULE_PREFIX
+            + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300})
         }
         mock_redis, _ = _make_redis_mock(store)
 
@@ -234,7 +236,11 @@ class TestConnectorSchedulerRedis:
             return_value=mock_redis,
         ):
             scheduler = ConnectorScheduler()
-            scheduler._is_leader = True
+            # start() gates on self._lease.is_leader (scheduler.py:129) — the
+            # flag moved onto the lease with the election logic (#13162), so
+            # setting scheduler._is_leader left the gate closed and no local
+            # task was ever created.
+            scheduler._lease._is_leader = True
             await scheduler.start("c1", "*/5")
             assert "c1" in scheduler._tasks
 
@@ -248,9 +254,12 @@ class TestConnectorSchedulerRedis:
     async def test_restart_simulation_rehydrate(self):
         """Simulates worker restart: new scheduler leader picks up existing Redis schedules."""
         store = {
-            _SCHEDULE_PREFIX + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300}),
             _SCHEDULE_PREFIX
-            + "c2": json.dumps({"connector_id": "c2", "schedule": "@hourly", "interval_seconds": 3600}),
+            + "c1": json.dumps({"connector_id": "c1", "schedule": "*/5", "interval_seconds": 300}),
+            _SCHEDULE_PREFIX
+            + "c2": json.dumps(
+                {"connector_id": "c2", "schedule": "@hourly", "interval_seconds": 3600}
+            ),
         }
         mock_redis, _ = _make_redis_mock(store)
 
@@ -294,11 +303,11 @@ class TestConnectorSchedulerRedis:
         mock_redis, _ = _make_redis_mock(store)
 
         with patch(
-            "knowledge.connectors.scheduler.get_async_redis_client",
+            "autobot_shared.leader_lease.get_async_redis_client",
             return_value=mock_redis,
         ):
             scheduler = ConnectorScheduler()
-            won = await scheduler._try_acquire_or_refresh()
+            won = await scheduler._lease.try_acquire_or_refresh()
 
         assert won is True
         assert _LEADER_KEY in store
@@ -309,13 +318,13 @@ class TestConnectorSchedulerRedis:
         mock_redis, _ = _make_redis_mock(store)
 
         with patch(
-            "knowledge.connectors.scheduler.get_async_redis_client",
+            "autobot_shared.leader_lease.get_async_redis_client",
             return_value=mock_redis,
         ):
             a = ConnectorScheduler()
             b = ConnectorScheduler()
-            assert await a._try_acquire_or_refresh() is True
-            assert await b._try_acquire_or_refresh() is False
+            assert await a._lease.try_acquire_or_refresh() is True
+            assert await b._lease.try_acquire_or_refresh() is False
 
     async def test_leader_refresh_succeeds(self):
         """The current leader can refresh its own key."""
@@ -323,15 +332,15 @@ class TestConnectorSchedulerRedis:
         mock_redis, _ = _make_redis_mock(store)
 
         with patch(
-            "knowledge.connectors.scheduler.get_async_redis_client",
+            "autobot_shared.leader_lease.get_async_redis_client",
             return_value=mock_redis,
         ):
             scheduler = ConnectorScheduler()
             # Acquire
-            await scheduler._try_acquire_or_refresh()
-            scheduler._is_leader = True
+            await scheduler._lease.try_acquire_or_refresh()
+            scheduler._lease._is_leader = True
             # Refresh
-            refreshed = await scheduler._try_acquire_or_refresh()
+            refreshed = await scheduler._lease.try_acquire_or_refresh()
 
         assert refreshed is True
 
@@ -341,14 +350,14 @@ class TestConnectorSchedulerRedis:
         mock_redis, _ = _make_redis_mock(store)
 
         with patch(
-            "knowledge.connectors.scheduler.get_async_redis_client",
+            "autobot_shared.leader_lease.get_async_redis_client",
             return_value=mock_redis,
         ):
             scheduler = ConnectorScheduler()
-            scheduler._is_leader = True
+            scheduler._lease._is_leader = True
             # Plant another worker's ID in the key
             store[_LEADER_KEY] = "other-worker-9999"
-            result = await scheduler._try_acquire_or_refresh()
+            result = await scheduler._lease.try_acquire_or_refresh()
 
         assert result is False
 
@@ -362,28 +371,31 @@ class TestConnectorSchedulerRedis:
         mock_redis, _ = _make_redis_mock(store)
 
         with patch(
-            "knowledge.connectors.scheduler.get_async_redis_client",
+            "autobot_shared.leader_lease.get_async_redis_client",
             return_value=mock_redis,
         ):
             worker_a = ConnectorScheduler()
             worker_b = ConnectorScheduler()
-            # Give distinct IDs so they behave as separate workers
-            worker_a._worker_id = "host-a-1"
-            worker_b._worker_id = "host-b-2"
+            # Give distinct IDs so they behave as separate workers.
+            # The id moved onto the lease with the election logic (#13162):
+            # setting it on the scheduler left both workers sharing the
+            # lease-generated default, so A's stale refresh wrongly succeeded.
+            worker_a._lease.worker_id = "host-a-1"
+            worker_b._lease.worker_id = "host-b-2"
 
             # Worker A acquires leadership
-            assert await worker_a._try_acquire_or_refresh() is True
-            worker_a._is_leader = True
+            assert await worker_a._lease.try_acquire_or_refresh() is True
+            worker_a._lease._is_leader = True
 
             # Simulate GC pause: lock expires then worker B re-acquires atomically
             del store[_LEADER_KEY]
-            assert await worker_b._try_acquire_or_refresh() is True
-            worker_b._is_leader = True
+            assert await worker_b._lease.try_acquire_or_refresh() is True
+            worker_b._lease._is_leader = True
 
             # Worker A refresh MUST fail — it no longer holds the key
-            assert await worker_a._try_acquire_or_refresh() is False
+            assert await worker_a._lease.try_acquire_or_refresh() is False
             # Worker B refresh MUST succeed — it is the rightful leader
-            assert await worker_b._try_acquire_or_refresh() is True
+            assert await worker_b._lease.try_acquire_or_refresh() is True
 
 
 async def _sleeper(done: asyncio.Event) -> None:
