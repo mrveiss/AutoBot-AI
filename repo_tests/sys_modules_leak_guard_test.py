@@ -46,7 +46,14 @@ def make_guard(monkeypatch):
     monkeypatch.setattr(sys, "modules", dict(sys.modules))
     monkeypatch.setattr(
         "repo_tests.sys_modules_leak_guard._DISK_CACHE",
-        dict(_DISK_CACHE, agents=True, autobot_shared=True, celery=True, knowledge=True, _sodium=False),
+        dict(
+            _DISK_CACHE,
+            agents=True,
+            autobot_shared=True,
+            celery=True,
+            knowledge=True,
+            _sodium=False,
+        ),
     )
 
     def build(removal_candidates: frozenset[str] = frozenset()) -> _LeakGuard:
@@ -177,8 +184,25 @@ def test_a_cffi_pseudo_module_is_not_a_stub(guard):
     assert _leaks_for(guard, _OTHER_MODULE) == []
 
 
-def test_a_synthetic_child_of_a_real_package_is_still_a_stub(guard):
-    """Stubbing one submodule of real code is a leak like any other."""
+def test_a_synthetic_child_of_a_real_package_is_not_reported(guard):
+    """A new spec-less child of an untouched real package is the library's own (#13450).
+
+    This asserted the opposite until #13450. The reversal is deliberate and is
+    the one detection case that fix trades away, recorded here rather than left
+    implicit.
+
+    The reason: ``transformers==5.14.1`` *removed* ``tokenization_utils`` and two
+    siblings and installs spec-less compatibility objects under the old names —
+    the files are not on disk. By ``__spec__``, ``__file__``, ``__loader__`` and
+    object type those entries are identical to ``types.ModuleType("x")``, so no
+    property of the entry can tell a library's shim from a test's leftover. The
+    guard reported them on every base-branch run, against a test module that
+    references neither ``transformers`` nor ``sys.modules``, while the suite
+    itself was green (#13599).
+
+    Ownership of the parent is what separates the two, and it keeps every real
+    leak caught — see the test below.
+    """
     parent = types.ModuleType("knowledge")
     parent.__spec__ = object()  # type: ignore[assignment]
     _install("knowledge", parent)
@@ -186,7 +210,22 @@ def test_a_synthetic_child_of_a_real_package_is_still_a_stub(guard):
     _install("knowledge.utils", types.ModuleType("knowledge.utils"))
     guard.attribute(_LLC_CONFTEST)
 
-    assert _leaks_for(guard, _OTHER_MODULE) == ["knowledge.utils"]
+    assert _leaks_for(guard, _OTHER_MODULE) == []
+
+
+def test_a_synthetic_child_is_still_a_stub_when_the_parent_is_stubbed_too(guard):
+    """The exemption must not cover a package the session itself replaced (#13450).
+
+    This is the shape all three historical leaks took — ``sqlalchemy``,
+    ``autobot_shared``, ``agents`` — a stubbed package dragging its children
+    along. Stubbing a package drops the parent's ``__spec__``, so the parent is
+    not genuine and both it and its children stay reportable.
+    """
+    _install("knowledge", types.ModuleType("knowledge"))  # no __spec__ — a stub
+    _install("knowledge.utils", types.ModuleType("knowledge.utils"))
+    guard.attribute(_LLC_CONFTEST)
+
+    assert _leaks_for(guard, _OTHER_MODULE) == ["knowledge", "knowledge.utils"]
 
 
 def test_a_restored_stub_stops_being_reported(guard):
@@ -338,7 +377,9 @@ def test_a_still_leaking_listed_owner_is_exercised_and_reported(make_guard):
 def test_the_baseline_file_ignores_comments_and_blank_lines(tmp_path):
     """The file carries its own instructions, so comments have to be free."""
     path = tmp_path / "baseline.txt"
-    path.write_text("# header\n\nbackend/conftest.py\n  backend/x/conftest.py  \n", encoding="utf-8")
+    path.write_text(
+        "# header\n\nbackend/conftest.py\n  backend/x/conftest.py  \n", encoding="utf-8"
+    )
 
     baseline = _load_baseline(path)
 
