@@ -566,8 +566,20 @@ class TestMCPInputValidation:
                 # read outside the whitelist; /etc/passwd is the payload's target.
                 assert "root:" not in response.text, f"Traversal succeeded for payload: {payload!r}"
 
-    def test_ldap_injection_attempts(self, client):
-        """Test LDAP injection protection (if applicable)"""
+    def test_ldap_injection_attempts(self, client, tmp_root_exists):
+        """Test LDAP injection protection (if applicable).
+
+        Takes ``tmp_root_exists`` for the same reason
+        ``test_sql_injection_attempts`` does (#13598): this posts
+        ``{"path": TMP_ROOT}`` to ``search_files``, which pre-checks
+        ``os.path.exists`` and answers 404 before the pattern is used. On a
+        runner without that directory the endpoint returned a correct 404 and
+        the assertion below — which deliberately excludes 404 — failed.
+
+        Missed when #13598 was fixed: that issue named the SQL and Unicode
+        tests, and this third instance was found only when the base branch went
+        red on it.
+        """
         ldap_payloads = [
             "*)(uid=*))(|(uid=*",
             "admin)(&(password=*))",
@@ -580,7 +592,10 @@ class TestMCPInputValidation:
                 "/api/filesystem/mcp/search_files",
                 json={"path": TMP_ROOT, "pattern": payload},
             )
+            # 404 stays excluded: the directory exists, so a 404 would mean the
+            # pre-check fired anyway and no LDAP payload was ever exercised.
             assert response.status_code in [200, 400, 422]
+            assert response.status_code < 500, f"payload crashed the endpoint: {payload}"
 
 
 # ============================================================================
