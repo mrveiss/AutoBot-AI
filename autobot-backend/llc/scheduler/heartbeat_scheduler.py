@@ -770,7 +770,7 @@ async def _record_run_for_replay(
                 except OSError:
                     pass
             else:
-                logger.warning("Transcript output file does not exist at path: %s", output_file)        
+                logger.warning("Transcript output file does not exist at path: %s (run_id: %s)", output_file, run_id)     
 
         svc = RunReplayService()
         await svc.record_run(
