@@ -92,11 +92,7 @@ def tmp_root_exists():
             shutil.rmtree(root, ignore_errors=True)
             return
         for entry in set(root.iterdir()) - preexisting:
-            (
-                shutil.rmtree(entry, ignore_errors=True)
-                if entry.is_dir()
-                else entry.unlink(missing_ok=True)
-            )
+            (shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True))
 
 
 @pytest.fixture
@@ -132,9 +128,7 @@ def admin_client(app):
 def temp_allowed_dir(tmp_path):
     """Create temporary directory within allowed paths for testing"""
     # Use /tmp/autobot/ which is in ALLOWED_DIRECTORIES
-    test_dir = Path(
-        "/tmp/autobot/test_security"
-    )  # nosec B108  # test/controlled code uses tmpdir intentionally
+    test_dir = Path("/tmp/autobot/test_security")  # nosec B108  # test/controlled code uses tmpdir intentionally
     test_dir.mkdir(parents=True, exist_ok=True)
     yield test_dir
     # Cleanup
@@ -254,8 +248,7 @@ class TestFilesystemMCPPathTraversal:
             response = client.post("/api/filesystem/mcp/read_text_file", json=payload)
             # Should either return 400 (validation error) or 403 (forbidden)
             assert response.status_code in [400, 403, 422], (
-                f"API did not block path traversal: {payload['path']}, "
-                f"status: {response.status_code}"
+                f"API did not block path traversal: {payload['path']}, " f"status: {response.status_code}"
             )
 
 
@@ -648,9 +641,7 @@ class TestMCPSizeLimiting:
         # Try to read 1000 files at once
         file_paths = [f"{TMP_ROOT}/file{i}.txt" for i in range(1000)]
 
-        response = client.post(
-            "/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths}
-        )
+        response = client.post("/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths})
 
         # Should have limits on batch operations
         assert response.status_code in [200, 400, 422]
@@ -797,9 +788,7 @@ class TestSecurityCoverage:
         }
 
         missing = tested_bridges - registered_bridges
-        assert (
-            not missing
-        ), f"Security tests target bridges that are not registered: {sorted(missing)}"
+        assert not missing, f"Security tests target bridges that are not registered: {sorted(missing)}"
 
     def test_critical_attack_vectors_covered(self):
         """Verify all critical attack vectors are tested"""
