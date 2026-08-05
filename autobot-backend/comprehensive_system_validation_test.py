@@ -14,11 +14,10 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Dict
 
-from autobot_shared.ssot_config import config
 from autobot_shared.paths import project_root
+from autobot_shared.ssot_config import config
 
 # Add AutoBot paths
 sys.path.append(config.project_root)

@@ -36,11 +36,11 @@ from typing import Any, Dict, List
 import aiohttp
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.paths import project_root
 
 # Import canonical Redis client pattern
 from autobot_shared.redis_client import get_async_redis_client
 from constants.network_constants import NetworkConstants, ServiceURLs
-from autobot_shared.paths import project_root
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

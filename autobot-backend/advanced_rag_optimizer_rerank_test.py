@@ -18,8 +18,8 @@ import math
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from knowledge.search_components.reranking import RerankWeights
 from autobot_shared.paths import project_root
+from knowledge.search_components.reranking import RerankWeights
 
 # ---------------------------------------------------------------------------
 # Helpers

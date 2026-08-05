@@ -20,8 +20,8 @@ import requests
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from constants.network_constants import ServiceURLs
 from autobot_shared.paths import project_root
+from constants.network_constants import ServiceURLs
 
 pytestmark = pytest.mark.integration
 
