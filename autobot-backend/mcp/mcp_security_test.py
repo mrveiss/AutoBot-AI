@@ -19,6 +19,7 @@ Test Categories:
 Issue: #47 - Security Penetration Testing for MCP Bridges
 """
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,60 @@ from autobot_shared.ssot_config import config
 # asserted against paths that exist nowhere.
 PROJECT_ROOT = str(config.base_dir).rstrip("/")
 TMP_ROOT = "/tmp/autobot"  # nosec B108  # matches the bridge's own whitelist entry
+
+#: Substrings that only appear when a database driver error or traceback reaches
+#: the response body. Deliberately module-qualified or unambiguous — the
+#: validation middleware's own rejection reads "sql_injection pattern detected",
+#: so a plain "sql" test would flag the *secure* outcome as a leak (#13598).
+_DB_ERROR_SIGNATURES = (
+    "traceback (most recent call last)",
+    "syntax error",
+    "sqlite3.",
+    "psycopg2.",
+    "operationalerror",
+    "programmingerror",
+)
+
+
+@pytest.fixture
+def tmp_root_exists():
+    """Guarantee ``TMP_ROOT`` exists so endpoints reach their real code path (#13598).
+
+    ``search_files`` pre-checks ``os.path.exists`` and answers 404 when the
+    directory is missing, *before* the pattern is ever used. On a developer
+    machine running AutoBot the directory happens to exist and the injection
+    tests exercise the search path; on a fresh CI runner it does not, so the
+    endpoint returned a correct 404 and the test read that as a failure. The
+    suite therefore passed locally and failed in CI from the same commit.
+
+    ``pytest``'s ``tmp_path`` cannot be used here: the bridge only accepts paths
+    under ``ALLOWED_DIRECTORIES``, which lists ``/tmp/autobot/`` specifically, so
+    a path elsewhere would be rejected before reaching the search code — the same
+    vacuum in a different disguise.
+
+    Cleanup is by difference, not by blanket removal: entries present at setup
+    are left alone, and anything the test added is removed. A real AutoBot
+    installation's directory therefore survives running the suite, while the
+    suite stops accumulating state in it.
+
+    That second half matters — ``test_command_injection_attempts`` posts to
+    ``create_directory`` with payloads like ``test `whoami` `` and, when the
+    handler correctly treats them as literal names rather than shell, leaves
+    those directories behind. They were never cleaned up, so every run added to
+    a shared absolute path.
+    """
+    root = Path(TMP_ROOT)
+    created = not root.exists()
+    root.mkdir(parents=True, exist_ok=True)
+    preexisting = set(root.iterdir()) if not created else set()
+    try:
+        yield root
+    finally:
+        if created:
+            shutil.rmtree(root, ignore_errors=True)
+            return
+        for entry in set(root.iterdir()) - preexisting:
+            (shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True))
 
 
 @pytest.fixture
@@ -342,8 +397,13 @@ class TestFilesystemMCPAccessControl:
 class TestMCPInputValidation:
     """Test input validation for all MCP bridges"""
 
-    def test_sql_injection_attempts(self, client):
-        """Test SQL injection protection across MCP tools"""
+    def test_sql_injection_attempts(self, client, tmp_root_exists):
+        """Test SQL injection protection across MCP tools.
+
+        #13598: takes ``tmp_root_exists`` so the endpoint gets past its
+        existence pre-check and the payload actually reaches the search code.
+        Without it this asserted only that a missing directory 404s.
+        """
         sql_injection_payloads = [
             "'; DROP TABLE users; --",
             "1' OR '1'='1",
@@ -358,12 +418,26 @@ class TestMCPInputValidation:
                 "/api/filesystem/mcp/search_files",
                 json={"path": TMP_ROOT, "pattern": payload},
             )
-            # Should handle safely (not crash)
+            # 404 is deliberately NOT accepted: the directory exists, so a 404
+            # would mean the pre-check fired anyway and nothing was tested.
             assert response.status_code in [
                 200,
                 400,
                 422,
             ], f"SQL injection caused unexpected response: {payload}"
+            # The payload must be neutralised, not merely survived. A 5xx would
+            # mean it reached something that could not cope with it, and a
+            # database error echoed back would mean it reached a query at all —
+            # this endpoint searches a filesystem and should touch neither.
+            assert response.status_code < 500, f"Payload crashed the endpoint: {payload}"
+            # Not a bare "sql" substring check: the correct rejection message is
+            # itself "sql_injection pattern detected", so that would flag the
+            # secure path as a leak. These signatures only appear in a real
+            # driver error or a traceback.
+            body = response.text.lower()
+            assert not any(
+                marker in body for marker in _DB_ERROR_SIGNATURES
+            ), f"Response leaked database internals for payload: {payload}"
 
     def test_xss_injection_attempts(self, client):
         """Test XSS protection in MCP tools"""
@@ -389,8 +463,13 @@ class TestMCPInputValidation:
             # Should handle safely without executing scripts
             assert response.status_code in [200, 400, 422]
 
-    def test_command_injection_attempts(self, admin_client):
-        """Test command injection protection"""
+    def test_command_injection_attempts(self, admin_client, tmp_root_exists):
+        """Test command injection protection.
+
+        #13598: takes ``tmp_root_exists`` so the directories this creates — the
+        payloads are treated as literal names, which is the point — are removed
+        afterwards instead of accumulating in a shared path on every run.
+        """
         command_injection_payloads = [
             "test; rm -rf /",
             "test && cat /etc/passwd",
@@ -409,7 +488,12 @@ class TestMCPInputValidation:
                 json={"path": f"{TMP_ROOT}/{payload}"},
             )
             # Should either sanitize or reject — never reach a shell.
-            assert response.status_code in [200, 400, 403, 422], f"Unexpected response for {payload!r}"
+            assert response.status_code in [
+                200,
+                400,
+                403,
+                422,
+            ], f"Unexpected response for {payload!r}"
 
     def test_null_byte_injection(self, client):
         """Test null byte injection protection"""
@@ -455,8 +539,14 @@ class TestMCPInputValidation:
                 422,
             ], f"Integer overflow not validated: {payload}"
 
-    def test_unicode_normalization_attacks(self, client):
-        """Test Unicode normalization attack prevention"""
+    def test_unicode_normalization_attacks(self, client, tmp_root_exists):
+        """Test Unicode normalization attack prevention.
+
+        #13598: ``404`` stays acceptable here — unlike the search case, these
+        filenames genuinely do not exist and "not found" is the correct answer.
+        What was missing is an assertion that the request did not *succeed* in
+        reading something it should not have, which is the actual attack.
+        """
         unicode_payloads = [
             "\u202e/etc/passwd",  # Right-to-left override
             "file\ufeff.txt",  # Zero-width no-break space
@@ -470,6 +560,11 @@ class TestMCPInputValidation:
             )
             # Should handle Unicode safely
             assert response.status_code in [200, 400, 404, 422]
+            assert response.status_code < 500, f"Unicode payload crashed the endpoint: {payload!r}"
+            if response.status_code == 200:
+                # A right-to-left override or zero-width space must not smuggle a
+                # read outside the whitelist; /etc/passwd is the payload's target.
+                assert "root:" not in response.text, f"Traversal succeeded for payload: {payload!r}"
 
     def test_ldap_injection_attempts(self, client):
         """Test LDAP injection protection (if applicable)"""
