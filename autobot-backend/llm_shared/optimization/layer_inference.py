@@ -49,6 +49,12 @@ def _get_torch() -> Any:
 #: Valid compression modes understood by LayerInferenceConfig.
 _VALID_COMPRESSIONS = frozenset({"4bit", "8bit", "none"})
 
+#: Architectures that nest transformer blocks under ``transformer.`` and name
+#: their token embedding ``wte``, rather than the LLaMA-style ``model.`` layout.
+#: Shared by the prefix, embedding and head resolvers so they cannot disagree
+#: about which family a model belongs to (#13032).
+_GPT2_STYLE = frozenset({"gpt2", "gptj", "gpt_neo", "gpt_neox"})
+
 
 @dataclass
 class LayerInferenceConfig:
@@ -77,7 +83,9 @@ class LayerInferenceConfig:
         if not self.model_name:
             raise ValueError("model_name must not be empty")
         if self.compression not in _VALID_COMPRESSIONS:
-            raise ValueError(f"compression must be one of {sorted(_VALID_COMPRESSIONS)}, got '{self.compression}'")
+            raise ValueError(
+                f"compression must be one of {sorted(_VALID_COMPRESSIONS)}, got '{self.compression}'"
+            )
         if self.max_seq_len < 1:
             raise ValueError(f"max_seq_len must be >= 1, got {self.max_seq_len}")
         if self.batch_size < 1:
@@ -180,7 +188,8 @@ class LayerInferenceEngine:
             from transformers import AutoConfig  # noqa: PLC0415
         except ImportError as exc:
             raise ImportError(
-                "transformers is required for load_model_config. " "Install with: pip install transformers>=4.40.0"
+                "transformers is required for load_model_config. "
+                "Install with: pip install transformers>=4.40.0"
             ) from exc
 
         kwargs: Dict[str, Any] = {}
@@ -189,7 +198,9 @@ class LayerInferenceEngine:
 
         logger.debug("Loading model config for %s", model_name)
         # HuggingFace model loaded by name; revision pinning managed operationally.
-        auto_cfg = AutoConfig.from_pretrained(model_name, resume_download=True, **kwargs)  # nosec B615
+        auto_cfg = AutoConfig.from_pretrained(
+            model_name, resume_download=True, **kwargs
+        )  # nosec B615
         cfg_dict: Dict[str, Any] = auto_cfg.to_dict()
         logger.info(
             "Loaded model config for %s: arch=%s",
@@ -216,10 +227,14 @@ class LayerInferenceEngine:
         Returns:
             Ordered list of transformer layer name strings.
         """
-        num_layers = config.get("num_hidden_layers") or config.get("n_layer") or config.get("num_layers")
+        num_layers = (
+            config.get("num_hidden_layers") or config.get("n_layer") or config.get("num_layers")
+        )
 
         if num_layers is None:
-            logger.warning("Could not determine num_hidden_layers from config — returning ['model']")
+            logger.warning(
+                "Could not determine num_hidden_layers from config — returning ['model']"
+            )
             return ["model"]
 
         model_type: str = str(config.get("model_type", "")).lower()
@@ -232,6 +247,24 @@ class LayerInferenceEngine:
             prefix,
         )
         return names
+
+    def get_embedding_name(self, config: Dict[str, Any]) -> str:
+        """Return the token-embedding module name for this model config (#13032).
+
+        Deliberately separate from :meth:`get_layer_names` rather than prepended
+        to it. That method's contract is "the ordered transformer blocks", and
+        callers index into it and evict per entry; folding non-block modules in
+        would silently change what those callers iterate over.
+        """
+        return _embedding_name_for_arch(str(config.get("model_type", "")).lower())
+
+    def get_head_name(self, config: Dict[str, Any]) -> str:
+        """Return the LM-head module name for this model config (#13032).
+
+        The head projects hidden states to vocabulary logits. Without it the
+        engine had nothing to argmax over except hidden units.
+        """
+        return _head_name_for_arch(str(config.get("model_type", "")).lower())
 
     # ------------------------------------------------------------------
     # Layer load / evict
@@ -371,6 +404,8 @@ class LayerInferenceEngine:
         input_ids: "torch.Tensor",
         layers: List[Any],
         kv_cache: Any | None = None,
+        embedding: Any | None = None,
+        head: Any | None = None,
     ) -> "torch.Tensor":
         """Run a sequential forward pass through an ordered list of layers.
 
@@ -405,12 +440,29 @@ class LayerInferenceEngine:
         if not layers:
             raise ValueError("layers must not be empty")
 
-        hidden = input_ids.float() if input_ids.dtype not in (torch.float16, torch.float32) else input_ids
+        # #13032: embed when an embedding module is supplied. Without one, an
+        # integer tensor is still cast to float as before — that path cannot
+        # produce meaningful activations (token ids are vocabulary indices, not
+        # a hidden-state vector), so it warns rather than failing silently.
+        # Callers passing float hidden states directly are unaffected.
+        if embedding is not None:
+            hidden = _apply_embedding(embedding, input_ids)
+        elif input_ids.dtype not in (torch.float16, torch.float32):
+            logger.warning(
+                "forward_pass received integer token ids with no embedding module — "
+                "casting to float. Layer 0 will see vocabulary indices as activations "
+                "and the result cannot be meaningful (#13032)."
+            )
+            hidden = input_ids.float()
+        else:
+            hidden = input_ids
 
         for layer in layers:
             out = layer(hidden)
             hidden = out[0] if isinstance(out, (tuple, list)) else out
 
+        if head is not None:
+            hidden = _apply_head(head, hidden)
         return hidden
 
     # ------------------------------------------------------------------
@@ -458,7 +510,8 @@ class LayerInferenceEngine:
             from transformers import AutoTokenizer  # noqa: PLC0415
         except (ImportError, RuntimeError) as exc:
             raise ImportError(
-                "transformers is required for generate. " "Install with: pip install transformers>=4.40.0"
+                "transformers is required for generate. "
+                "Install with: pip install transformers>=4.40.0"
             ) from exc
 
         t_start = time.monotonic()
@@ -519,7 +572,9 @@ class LayerInferenceEngine:
         if self._config.cache_dir:
             kwargs["cache_dir"] = self._config.cache_dir
         # HuggingFace model loaded by name; revision pinning managed operationally.
-        return AutoTokenizer.from_pretrained(self._config.model_name, resume_download=True, **kwargs)  # nosec B615
+        return AutoTokenizer.from_pretrained(
+            self._config.model_name, resume_download=True, **kwargs
+        )  # nosec B615
 
     def _resolve_checkpoint_path(self) -> str:
         """Return the checkpoint path for the configured model.
@@ -550,10 +605,15 @@ class LayerInferenceEngine:
             stats: Stats object to update with per-layer timing.
 
         Returns:
-            Hidden states after all layers [batch, seq, hidden_size].
+            Vocabulary logits [batch, seq, vocab_size] when the checkpoint
+            carries an embedding, so the caller can argmax over a real vocab
+            axis. #13032: this used to return raw post-block hidden states, and
+            before that it started from ``input_ids.float()`` — token ids fed in
+            as activations.
         """
         _get_torch()  # Validate torch is available
-        hidden = input_ids.float()
+        arch = self._arch_from_layer_names(layer_names)
+        hidden, embed_weight = self._embed_inputs(input_ids, state_dict_path, arch)
 
         for name in layer_names:
             t0 = time.monotonic()
@@ -569,7 +629,74 @@ class LayerInferenceEngine:
             stats.per_layer_times[name] = stats.per_layer_times.get(name, 0.0) + elapsed
             logger.debug("Layer '%s' forward: %.4fs", name, elapsed)
 
-        return hidden
+        return self._project_logits(hidden, state_dict_path, embed_weight, arch)
+
+    @staticmethod
+    def _arch_from_layer_names(layer_names: List[str]) -> str:
+        """Infer the architecture family from the block names already resolved.
+
+        Derived rather than stored: :meth:`get_layer_names` is the only place the
+        model config is seen, and caching its answer on the instance would make
+        a getter side-effecting and would go stale if a second model were used.
+        The block prefix already encodes the family — that is what
+        :func:`_layer_prefix_for_arch` produced — so reading it back is exact.
+        """
+        return "gpt2" if any(n.startswith("transformer.h.") for n in layer_names) else ""
+
+    def _embed_inputs(
+        self, input_ids: "torch.Tensor", state_dict_path: str, arch: str
+    ) -> "tuple[torch.Tensor, Any]":
+        """Embed token ids, returning hidden states and the embedding weight.
+
+        The weight comes back so :meth:`_project_logits` can tie against it when
+        the checkpoint has no separate ``lm_head`` (#13032).
+
+        If the checkpoint carries no embedding at all the previous behaviour is
+        kept — ids cast to float — rather than raising, because a partial or
+        block-only checkpoint is a legitimate thing to feed this engine for a
+        timing run. It is logged at warning level, since the output cannot be
+        meaningful.
+        """
+        name = _embedding_name_for_arch(arch)
+        try:
+            module = self.load_layer(name, state_dict_path)
+        except (KeyError, FileNotFoundError) as exc:
+            logger.warning(
+                "No embedding '%s' in %s (%s) — falling back to raw ids as activations. "
+                "Output cannot be meaningful (#13032).",
+                name,
+                state_dict_path,
+                exc,
+            )
+            return input_ids.float(), None
+        weight = getattr(module, "weight", None)
+        return _apply_embedding(module, input_ids), weight
+
+    def _project_logits(
+        self, hidden: "torch.Tensor", state_dict_path: str, embed_weight: Any, arch: str
+    ) -> "torch.Tensor":
+        """Project post-block hidden states to vocabulary logits (#13032).
+
+        Falls back to the tied embedding weight when the checkpoint ships no
+        ``lm_head`` — the common case for GPT-2 and many LLaMA-family models.
+        With neither, the hidden states are returned unchanged so existing
+        block-only callers keep working; sampling from that is meaningless, so
+        it is logged.
+        """
+        name = _head_name_for_arch(arch)
+        module = None
+        try:
+            module = self.load_layer(name, state_dict_path)
+        except (KeyError, FileNotFoundError):
+            if embed_weight is None:
+                logger.warning(
+                    "No '%s' and no embedding to tie against — returning hidden states, "
+                    "not logits. Sampling from these is meaningless (#13032).",
+                    name,
+                )
+                return hidden
+            logger.debug("No '%s' in checkpoint — tying head to the embedding weight", name)
+        return _apply_head(module, hidden, fallback_weight=embed_weight)
 
 
 # ---------------------------------------------------------------------------
@@ -588,11 +715,80 @@ def _layer_prefix_for_arch(model_type: str) -> str:
     Returns:
         Dot-separated prefix including trailing dot, e.g. ``"model.layers."``.
     """
-    gpt2_style = {"gpt2", "gptj", "gpt_neo", "gpt_neox"}
-    if model_type in gpt2_style:
+    if model_type in _GPT2_STYLE:
         return "transformer.h."
     # LLaMA, Mistral, Falcon, Qwen, Gemma, Phi, etc.
     return "model.layers."
+
+
+def _embedding_name_for_arch(model_type: str) -> str:
+    """Return the token-embedding module name for an architecture (#13032).
+
+    The embedding is what turns token ids into hidden states. Without it the
+    engine fed raw vocabulary indices into layer 0 as floats, so every
+    downstream activation was meaningless.
+    """
+    if model_type in _GPT2_STYLE:
+        return "transformer.wte"
+    return "model.embed_tokens"
+
+
+def _head_name_for_arch(model_type: str) -> str:
+    """Return the LM-head module name for an architecture (#13032).
+
+    ``lm_head`` is the same name in both families. It is kept as a function so
+    the caller reads symmetrically with the embedding and prefix helpers, and so
+    an architecture needing something else has one place to change.
+    """
+    return "lm_head"
+
+
+def _apply_embedding(module: Any, input_ids: "torch.Tensor") -> "torch.Tensor":
+    """Turn token ids into hidden states using a loaded embedding module (#13032).
+
+    ``_build_layer_module`` returns a bare ``nn.Module`` carrying the checkpoint's
+    parameters — not an ``nn.Embedding`` — so it is not callable as one. The
+    lookup is therefore done directly against the weight matrix, which is what
+    ``nn.Embedding.forward`` does anyway.
+
+    Args:
+        module: Loaded embedding module exposing ``weight`` [vocab, hidden].
+        input_ids: Token ids [batch, seq].
+
+    Returns:
+        Hidden states [batch, seq, hidden].
+    """
+    weight = getattr(module, "weight", None)
+    if weight is None:
+        raise KeyError("embedding module has no 'weight' parameter to index")
+    return weight[input_ids]
+
+
+def _apply_head(module: Any, hidden: "torch.Tensor", fallback_weight: Any = None) -> "torch.Tensor":
+    """Project hidden states to vocabulary logits (#13032).
+
+    ``fallback_weight`` supports **tied embeddings**, which are the norm rather
+    than the exception — GPT-2 and many LLaMA-family checkpoints ship no
+    ``lm_head.weight`` at all because the head reuses the embedding matrix. When
+    the head is absent the caller passes the embedding weight and the same
+    matrix is applied transposed, which is exactly what a tied head computes.
+
+    Args:
+        module: Loaded head module with ``weight`` [vocab, hidden], or None.
+        hidden: Hidden states [batch, seq, hidden].
+        fallback_weight: Embedding weight to use when no head module exists.
+
+    Returns:
+        Logits [batch, seq, vocab].
+    """
+    weight = getattr(module, "weight", None) if module is not None else None
+    if weight is None:
+        weight = fallback_weight
+    if weight is None:
+        raise KeyError("no lm_head weight and no embedding weight to tie against")
+    logits = hidden @ weight.t()
+    bias = getattr(module, "bias", None) if module is not None else None
+    return logits + bias if bias is not None else logits
 
 
 def _build_layer_module(torch: Any, layer_sd: Dict[str, Any], device: str) -> Any:
@@ -690,16 +886,27 @@ def _set_buffer(module: Any, torch: Any, name: str, device: Any, buf: Any) -> No
 
 
 def _greedy_sample(torch: Any, hidden: "torch.Tensor") -> int:
-    """Return the argmax token id from the last position of hidden states.
+    """Return the argmax token id from the last position of the logits.
 
     Issue #1946.
 
+    #13032 named this as a third defect — "sampling reads the wrong axis". It is
+    really the *symptom* of the other two: ``argmax(dim=-1)`` over the last axis
+    is correct whenever that axis is the vocabulary, and it was not, because
+    nothing projected hidden states through an LM head. With the head applied in
+    ``_run_layer_loop`` this function is right as written and is unchanged.
+
+    It remains the caller's job to pass logits. When a checkpoint has neither a
+    head nor a tied embedding to fall back on, ``_project_logits`` logs that it
+    is returning hidden states, and an index from this function is a hidden-unit
+    index rather than a token id.
+
     Args:
         torch: The torch module.
-        hidden: Tensor shaped ``[batch, seq, vocab_or_hidden]``.
+        hidden: Logits shaped ``[batch, seq, vocab]``.
 
     Returns:
-        Integer token id (argmax over last dimension at last seq position).
+        Integer token id (argmax over the vocabulary axis at the last position).
     """
     last_logits = hidden[:, -1, :]  # [batch, vocab]
     return int(last_logits.argmax(dim=-1)[0].item())
