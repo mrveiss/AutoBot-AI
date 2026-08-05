@@ -7,10 +7,17 @@
 
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running from a checkout
+# operated on the LIVE install instead of this tree (the #13092 failure class).
+# The shared helper resolves the root from this file's own location and still
+# lets AUTOBOT_PROJECT_ROOT override it.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
+
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
-LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}/autobot-slm-frontend"
+LOCAL_FRONTEND_DIR="${PROJECT_ROOT:-${PROJECT_ROOT}}/autobot-slm-frontend"
 
 # Remote Configuration
 FRONTEND_VM="${AUTOBOT_FRONTEND_HOST:-localhost}"
