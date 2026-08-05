@@ -298,11 +298,11 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             "started_at": time.time(),
             "timeout_seconds": timeout_sec,
         }
-        with open(_state_path(output_dir, run_id_placeholder), "w", encoding="utf-8") as fh:
+        with open(_state_path(output_dir, run_id), "w", encoding="utf-8") as fh:
             json.dump(state, fh)
 
         await self._store_session(agent_id, session_id)
-        return run_id_placeholder
+        return run_id
 
     async def _status(self, agent_config: dict, run_id: str) -> AdapterRunStatus:
         """Extend base status to detect provider rate-limiting on process exit (GH#9773).
