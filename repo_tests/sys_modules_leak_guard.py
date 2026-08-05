@@ -243,6 +243,48 @@ def _is_synthetic(module: object) -> bool:
     return getattr(module, "__spec__", None) is None
 
 
+def _is_self_rebind(name: str, module: object, previous: object) -> bool:
+    """True when *module* is a real package re-registering itself under its own name.
+
+    A package may legitimately replace its own ``sys.modules`` entry while it is
+    importing.  ``transformers`` does exactly this: the entry the import
+    machinery installs is swapped for a ``_LazyModule``, so the key changes
+    object mid-import.  The guard's "replaced" rule was written for a *test*
+    swapping a real module out, and cannot tell the two apart by the fact of
+    replacement alone.
+
+    What separates them is whether the replacement is itself a real module that
+    still knows its own name.  A ``_LazyModule`` keeps a populated ``__spec__``
+    and a ``__name__`` equal to the key.  The three historical leaks do not:
+    ``autobot_shared`` and ``sqlalchemy`` were replaced by bare ``MagicMock``
+    objects and ``agents`` by a ``types.ModuleType`` with no spec — none carries
+    a ``__spec__``, so all three stay reported (#13599).
+
+    The name check matters as well as the spec: aliasing one real module onto a
+    different key (``sys.modules["x"] = real_yaml``) is a genuine swap, and its
+    ``__name__`` would not match, so it is still caught.
+
+    **What was there before matters just as much.** Displacing a conftest stub
+    with the genuine module — which ``tests/agents/test_causal_reasoning.py`` and
+    ``tests/orchestration/test_causal_error_recovery.py`` both do deliberately —
+    also ends with a real, correctly-named module under the key. Judging on the
+    new object alone silences those, and they are exactly the kind of run-phase
+    leak the baseline tracks. A package rebinding itself is distinguished by the
+    *previous* value also being a real spec-carrying module of the same name:
+    the partially-initialised module the import machinery installed moments
+    earlier. Replacing a stub does not satisfy that, because a stub has no spec.
+    """
+    if not isinstance(module, types.ModuleType):
+        return False
+    if getattr(module, "__spec__", None) is None:
+        return False
+    if getattr(module, "__name__", None) != name:
+        return False
+    if not isinstance(previous, types.ModuleType):
+        return False
+    return getattr(previous, "__spec__", None) is not None
+
+
 def _is_conftest_module(module: object) -> bool:
     """True when *module* is a conftest pytest loaded, not a stub of anything.
 
@@ -445,6 +487,8 @@ class _LeakGuard:
             return None
         if _is_conftest_module(module):
             return None  # pytest's own bookkeeping, not a stub
+        if _is_self_rebind(name, module, previous) and self._is_third_party(module):
+            return None  # a third-party package re-registering itself mid-import  # a package re-registering itself during its own import
         if previous is _MISSING and self._parent_is_genuine(name):
             return None  # a real package's own shim, not a test's leftover
         if not self._shadows_real_code(name):
@@ -452,6 +496,26 @@ class _LeakGuard:
         if previous is not _MISSING:
             return "replaced"
         return "synthetic" if _is_synthetic(module) else None
+
+    def _is_third_party(self, module: object) -> bool:
+        """True when *module* is loaded from outside this repository.
+
+        The last discriminator standing. Repo code re-importing a real module
+        over another real module — which ``conftest``'s ``_real_load_and_bind``
+        plus a test's stub displacement produce together — is structurally
+        identical to a package rebinding itself during import: both end with a
+        correctly-named, spec-carrying module replacing another. Only the file
+        location tells them apart, and it is the property that actually matters:
+        the guard exists to police *this repository's* stubs.
+        """
+        origin = getattr(module, "__file__", None)
+        if not origin:
+            return False
+        try:
+            Path(origin).resolve().relative_to(self._rootdir)
+        except ValueError:
+            return True
+        return False
 
     def _parent_is_genuine(self, name: str) -> bool:
         """True when *name* is a **new** child of a real, untouched package (#13450).
@@ -494,7 +558,23 @@ class _LeakGuard:
         parent = sys.modules.get(parent_name)
         if not isinstance(parent, types.ModuleType):
             return False
-        return getattr(parent, "__spec__", None) is not None
+        if getattr(parent, "__spec__", None) is None:
+            return False
+        # The parent must be a third-party distribution, not repo code. Without
+        # this the exemption also covers a conftest stubbing one submodule of a
+        # real repo package — which this repository genuinely does:
+        # ``tests/orchestration/test_causal_error_recovery.py`` leaves spec-less
+        # ``orchestration.causal_error_analyzer`` / ``…causal_error_recovery``
+        # entries under the real ``orchestration`` package, and both are on the
+        # leak baseline. Those must stay reported (#13599).
+        parent_file = getattr(parent, "__file__", None)
+        if not parent_file:
+            return False
+        try:
+            Path(parent_file).resolve().relative_to(self._rootdir)
+        except ValueError:
+            return True  # outside the repo — a third-party package's own shim
+        return False
 
     def _shadows_real_code(self, name: str) -> bool:
         """True when a synthetic entry could be hiding something that exists.
@@ -543,6 +623,9 @@ class _LeakGuard:
             if not mutation.is_live():
                 self._tracked.pop(mutation.key, None)
                 continue
+            if self._now_exempt(mutation.key):
+                self._tracked.pop(mutation.key, None)
+                continue
             if not mutation.escapes_to(path, path_parents):
                 continue
             token = (mutation.key, mutation.owner)
@@ -552,6 +635,28 @@ class _LeakGuard:
             leak = _Leak(mutation=mutation, observed_at=observed_at)
             self.leaks.append(leak)
             self._warn_once_per_owner(leak)
+
+    def _now_exempt(self, key: str) -> bool:
+        """True when a tracked key has since become explicable (#13599).
+
+        Classification happens at the snapshot that first sees a key, and that
+        is sometimes *mid-import* of the package the key belongs to. A
+        ``transformers.*`` compat shim is registered before the parent finishes
+        binding its own ``_LazyModule``, so at classification time the parent is
+        not yet a genuine spec-carrying package and the exemption in
+        :meth:`_classify` cannot apply. Once tracked, a mutation was never
+        revisited, so the entry stayed reportable for the rest of the session
+        even though the reason for suspecting it had evaporated.
+
+        Re-checking here costs one dict lookup per tracked key per node and is
+        what makes the exemption actually reachable. It only ever *removes*
+        suspicion, and only on the same two grounds :meth:`_classify` uses, so
+        it cannot hide a stub that classification would have caught.
+        """
+        module = sys.modules.get(key)
+        if module is None:
+            return False
+        return _is_synthetic(module) and self._parent_is_genuine(key)
 
     def _warn_once_per_owner(self, leak: _Leak) -> None:
         """Warn on the first key each owner leaks, not on all of them.
