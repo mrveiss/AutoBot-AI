@@ -82,6 +82,7 @@ Configuration:
 from __future__ import annotations
 
 import os
+import types
 import sys
 import warnings
 from dataclasses import dataclass
@@ -422,7 +423,9 @@ class _LeakGuard:
         actually changed.
         """
         previous_of = self._baseline.get
-        changed = [name for name, module in current.items() if previous_of(name, _MISSING) is not module]
+        changed = [
+            name for name, module in current.items() if previous_of(name, _MISSING) is not module
+        ]
         return [(name, current[name], previous_of(name, _MISSING)) for name in changed]
 
     def _classify(self, name: str, module: object, previous: object) -> str | None:
@@ -442,11 +445,56 @@ class _LeakGuard:
             return None
         if _is_conftest_module(module):
             return None  # pytest's own bookkeeping, not a stub
+        if previous is _MISSING and self._parent_is_genuine(name):
+            return None  # a real package's own shim, not a test's leftover
         if not self._shadows_real_code(name):
             return None
         if previous is not _MISSING:
             return "replaced"
         return "synthetic" if _is_synthetic(module) else None
+
+    def _parent_is_genuine(self, name: str) -> bool:
+        """True when *name* is a **new** child of a real, untouched package (#13450).
+
+        ``_is_synthetic`` asks whether a ``sys.modules`` entry lacks a
+        ``__spec__``.  That correctly describes a hand-built stub — and it also
+        describes something else the guard was never meant to police: a real
+        distribution registering a shim for one of its own submodules.
+
+        ``transformers==5.14.1`` does exactly that.  It *removed*
+        ``tokenization_utils``, ``tokenization_utils_fast`` and
+        ``image_processing_utils_fast`` and installs spec-less compatibility
+        objects under the old names; the files do not exist on disk.  Measured,
+        those entries are indistinguishable from ``types.ModuleType("x")`` by
+        ``__spec__``, ``__file__``, ``__loader__`` and object type alike, so no
+        attribute of the entry itself can separate the two cases.
+
+        What does separate them is **ownership of the parent**.  A library's
+        shim always sits under its own real, spec-carrying package.  A leaked
+        stub replaces the package itself, which is why all three historical
+        leaks — ``sqlalchemy``, ``autobot_shared``, ``agents`` — are unaffected:
+        stubbing a package drops the parent's ``__spec__``, and this returns
+        False for them and for their children.
+
+        The parent must also not be tracked. If the session installed the parent
+        as a stub, its children are that stub's business and stay reportable
+        however genuine the parent looks.
+
+        **The trade this makes, stated plainly:** a test that stubs only a
+        submodule while leaving the real parent intact is no longer caught —
+        ``sys.modules["json.decoder"] = MagicMock()`` with ``json`` untouched.
+        Nothing in this repository does that; both stub lists in
+        ``autobot-backend/conftest.py`` install the parent alongside the child.
+        Accepted deliberately (#13450) to stop the guard reddening every base
+        run over a library's own bookkeeping.
+        """
+        parent_name, _, _ = name.rpartition(".")
+        if not parent_name or parent_name in self._tracked:
+            return False
+        parent = sys.modules.get(parent_name)
+        if not isinstance(parent, types.ModuleType):
+            return False
+        return getattr(parent, "__spec__", None) is not None
 
     def _shadows_real_code(self, name: str) -> bool:
         """True when a synthetic entry could be hiding something that exists.
@@ -528,7 +576,11 @@ class _LeakGuard:
         if owner_file.name not in self._candidate_names:
             return
         owner = _display(owner_file, self._rootdir)
-        if owner not in self._removal_candidates or owner in self._visited or owner in self._exercised:
+        if (
+            owner not in self._removal_candidates
+            or owner in self._visited
+            or owner in self._exercised
+        ):
             return
         owner_dir = owner_file if owner_file.is_dir() else owner_file.parent
         self._visited[owner] = (owner_dir, frozenset(owner_dir.parents))
@@ -617,7 +669,9 @@ def pytest_configure(config: pytest.Config) -> None:
     """Keep the guard's warnings visible even under a strict filter set."""
     if _GUARD is None:
         return
-    config.addinivalue_line("filterwarnings", f"always::{__name__}.{_SysModulesLeakWarning.__name__}")
+    config.addinivalue_line(
+        "filterwarnings", f"always::{__name__}.{_SysModulesLeakWarning.__name__}"
+    )
 
 
 def pytest_plugin_registered(plugin: object, manager: object) -> None:
@@ -842,7 +896,9 @@ def pytest_terminal_summary(terminalreporter: object, exitstatus: int) -> None:
     _write_known_owners(terminalreporter, verdict, grouped)
 
 
-def _write_new_owners(terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]) -> None:
+def _write_new_owners(
+    terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]
+) -> None:
     """Regressions: files that leak and are not on the baseline."""
     if not verdict.new_owners:
         return
@@ -866,7 +922,9 @@ def _write_fixed_owners(terminalreporter: object, verdict: _Verdict) -> None:
         )
 
 
-def _write_known_owners(terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]) -> None:
+def _write_known_owners(
+    terminalreporter: object, verdict: _Verdict, grouped: dict[str, list[dict]]
+) -> None:
     """Known debt (#13361): listed, still leaking, and not a failure."""
     if not verdict.known_owners:
         return
