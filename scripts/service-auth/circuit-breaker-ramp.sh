@@ -13,6 +13,12 @@
 #   bash scripts/service-auth/circuit-breaker-ramp.sh --dry-run  # Show plan only
 set -euo pipefail
 
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/project_root.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _PROJECT_ROOT="$SCRIPT_DIR"
 while [ "$_PROJECT_ROOT" != "/" ] && [ ! -f "$_PROJECT_ROOT/.env" ]; do
@@ -26,7 +32,7 @@ source "$_PROJECT_ROOT/infrastructure/shared/scripts/lib/ssot-config.sh" 2>/dev/
 BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-localhost}"
 BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
 HEALTH_ENDPOINT="http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"
-ENV_FILE="${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/.env"
+ENV_FILE="${PROJECT_ROOT}/.env"
 HEALTH_CHECK_INTERVAL=30  # seconds between health checks during stage
 STARTUP_WAIT=5
 
@@ -175,7 +181,7 @@ restart_backend() {
     else
         pkill -f "uvicorn.*8001" 2>/dev/null || true
         sleep 1
-        cd ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}
+        cd ${PROJECT_ROOT}
         nohup python -m uvicorn autobot_user_backend.main:app \
             --host 0.0.0.0 --port "${BACKEND_PORT}" \
             > /tmp/autobot-backend-ramp.log 2>&1 &

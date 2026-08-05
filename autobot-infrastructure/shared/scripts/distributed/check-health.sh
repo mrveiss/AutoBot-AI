@@ -6,13 +6,19 @@
 #
 # Check health of all distributed AutoBot services
 
+
+# #13149: this defaulted to the deployed install, so running it from a checkout
+# read or wrote the LIVE install instead of this tree. The shared helper resolves
+# the root from this file's own location; AUTOBOT_PROJECT_ROOT still overrides.
+# shellcheck source=scripts/lib/project_root.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../../../scripts/lib/project_root.sh"
 # =============================================================================
 # SSOT Configuration - Issue #694
 # =============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/ssot-config.sh" 2>/dev/null || source "$SCRIPT_DIR/lib/ssot-config.sh" 2>/dev/null || {
     # Fallback if lib not found
-    PROJECT_ROOT="${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}"
+    PROJECT_ROOT="${PROJECT_ROOT:-${PROJECT_ROOT}}"
     [ -f "$PROJECT_ROOT/.env" ] && { set -a; source "$PROJECT_ROOT/.env"; set +a; }
 }
 
@@ -74,7 +80,7 @@ echo "  Browser VM (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}): Playwright Auto
 
 echo ""
 echo "Testing Distributed Redis Connection:"
-cd "${PROJECT_ROOT:-${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}}"
+cd "${PROJECT_ROOT:-${PROJECT_ROOT}}"
 if python src/utils/distributed_redis_client.py 2>/dev/null | grep -q "connection working correctly"; then
     echo "  Redis Connection: OK"
 else
