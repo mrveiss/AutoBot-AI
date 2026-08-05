@@ -21,13 +21,12 @@ import torch
 _TORCH_IS_STUB = not isinstance(torch, types.ModuleType)
 requires_torch = pytest.mark.skipif(_TORCH_IS_STUB, reason="requires real PyTorch")
 
-from llm_shared.optimization import layer_inference
 from llm_shared.optimization.layer_inference import (
     LayerInferenceConfig,
-    _apply_embedding,
-    _apply_head,
     LayerInferenceEngine,
     LayerInferenceStats,
+    _apply_embedding,
+    _apply_head,
     _get_peak_memory,
     _greedy_sample,
     _is_eos,
@@ -122,12 +121,8 @@ class TestLayerInferenceConfig:
 
     def test_cache_dir_accepted(self):
         """cache_dir string should be stored on the config."""
-        cfg = _make_config(
-            cache_dir="/tmp/models"
-        )  # nosec B108  # test/controlled code uses tmpdir intentionally
-        assert (
-            cfg.cache_dir == "/tmp/models"
-        )  # nosec B108  # test/controlled code uses tmpdir intentionally
+        cfg = _make_config(cache_dir="/tmp/models")  # nosec B108  # test/controlled code uses tmpdir intentionally
+        assert cfg.cache_dir == "/tmp/models"  # nosec B108  # test/controlled code uses tmpdir intentionally
 
 
 # ---------------------------------------------------------------------------

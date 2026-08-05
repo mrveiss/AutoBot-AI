@@ -83,9 +83,7 @@ class LayerInferenceConfig:
         if not self.model_name:
             raise ValueError("model_name must not be empty")
         if self.compression not in _VALID_COMPRESSIONS:
-            raise ValueError(
-                f"compression must be one of {sorted(_VALID_COMPRESSIONS)}, got '{self.compression}'"
-            )
+            raise ValueError(f"compression must be one of {sorted(_VALID_COMPRESSIONS)}, got '{self.compression}'")
         if self.max_seq_len < 1:
             raise ValueError(f"max_seq_len must be >= 1, got {self.max_seq_len}")
         if self.batch_size < 1:
@@ -188,8 +186,7 @@ class LayerInferenceEngine:
             from transformers import AutoConfig  # noqa: PLC0415
         except ImportError as exc:
             raise ImportError(
-                "transformers is required for load_model_config. "
-                "Install with: pip install transformers>=4.40.0"
+                "transformers is required for load_model_config. " "Install with: pip install transformers>=4.40.0"
             ) from exc
 
         kwargs: Dict[str, Any] = {}
@@ -198,9 +195,7 @@ class LayerInferenceEngine:
 
         logger.debug("Loading model config for %s", model_name)
         # HuggingFace model loaded by name; revision pinning managed operationally.
-        auto_cfg = AutoConfig.from_pretrained(
-            model_name, resume_download=True, **kwargs
-        )  # nosec B615
+        auto_cfg = AutoConfig.from_pretrained(model_name, resume_download=True, **kwargs)  # nosec B615
         cfg_dict: Dict[str, Any] = auto_cfg.to_dict()
         logger.info(
             "Loaded model config for %s: arch=%s",
@@ -227,14 +222,10 @@ class LayerInferenceEngine:
         Returns:
             Ordered list of transformer layer name strings.
         """
-        num_layers = (
-            config.get("num_hidden_layers") or config.get("n_layer") or config.get("num_layers")
-        )
+        num_layers = config.get("num_hidden_layers") or config.get("n_layer") or config.get("num_layers")
 
         if num_layers is None:
-            logger.warning(
-                "Could not determine num_hidden_layers from config — returning ['model']"
-            )
+            logger.warning("Could not determine num_hidden_layers from config — returning ['model']")
             return ["model"]
 
         model_type: str = str(config.get("model_type", "")).lower()
@@ -510,8 +501,7 @@ class LayerInferenceEngine:
             from transformers import AutoTokenizer  # noqa: PLC0415
         except (ImportError, RuntimeError) as exc:
             raise ImportError(
-                "transformers is required for generate. "
-                "Install with: pip install transformers>=4.40.0"
+                "transformers is required for generate. " "Install with: pip install transformers>=4.40.0"
             ) from exc
 
         t_start = time.monotonic()
@@ -572,9 +562,7 @@ class LayerInferenceEngine:
         if self._config.cache_dir:
             kwargs["cache_dir"] = self._config.cache_dir
         # HuggingFace model loaded by name; revision pinning managed operationally.
-        return AutoTokenizer.from_pretrained(
-            self._config.model_name, resume_download=True, **kwargs
-        )  # nosec B615
+        return AutoTokenizer.from_pretrained(self._config.model_name, resume_download=True, **kwargs)  # nosec B615
 
     def _resolve_checkpoint_path(self) -> str:
         """Return the checkpoint path for the configured model.
@@ -643,9 +631,7 @@ class LayerInferenceEngine:
         """
         return "gpt2" if any(n.startswith("transformer.h.") for n in layer_names) else ""
 
-    def _embed_inputs(
-        self, input_ids: "torch.Tensor", state_dict_path: str, arch: str
-    ) -> "tuple[torch.Tensor, Any]":
+    def _embed_inputs(self, input_ids: "torch.Tensor", state_dict_path: str, arch: str) -> "tuple[torch.Tensor, Any]":
         """Embed token ids, returning hidden states and the embedding weight.
 
         The weight comes back so :meth:`_project_logits` can tie against it when
