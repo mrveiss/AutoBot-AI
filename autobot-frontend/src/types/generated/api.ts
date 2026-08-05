@@ -62556,9 +62556,8 @@ export interface components {
             /**
              * Codebase Path
              * @description Path to codebase to index
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
-            codebase_path: string;
+            codebase_path?: string;
             /**
              * File Patterns
              * @description File patterns to include
@@ -73706,9 +73705,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * File Path
              * @description File to blame
@@ -73735,9 +73733,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * All Branches
              * @description Show remote branches too
@@ -73755,9 +73752,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Staged
              * @description Show staged changes only
@@ -73987,9 +73983,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Max Count
              * @description Maximum number of commits (1-100)
@@ -74077,9 +74072,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Ref
              * @description Commit or ref to show (default: HEAD)
@@ -74097,9 +74091,8 @@ export interface components {
             /**
              * Repo Path
              * @description Repository path (must be whitelisted)
-             * @default /opt/autobot
              */
-            repo_path: string;
+            repo_path?: string;
             /**
              * Short
              * @description Use short format output
@@ -76399,11 +76392,8 @@ export interface components {
             /**
              * Source Paths
              * @description Paths to populate from
-             * @default [
-             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
-             *     ]
              */
-            source_paths: string[];
+            source_paths?: string[];
             /**
              * Document Types
              * @description Document types to include
@@ -84635,9 +84625,8 @@ export interface components {
             /**
              * Path
              * @description Path to analyze (defaults to project root)
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI
              */
-            path: string;
+            path?: string;
             /**
              * Source Id
              * @description #1772: source_id for API consistency
@@ -91275,11 +91264,8 @@ export interface components {
             /**
              * Scan Paths
              * @description Paths to scan
-             * @default [
-             *       "/home/runner/work/AutoBot-AI/AutoBot-AI"
-             *     ]
              */
-            scan_paths: string[];
+            scan_paths?: string[];
             /**
              * Scan Types
              * @description Types of security scans
@@ -96477,9 +96463,8 @@ export interface components {
             /**
              * Test Path
              * @description Path to test directory
-             * @default /home/runner/work/AutoBot-AI/AutoBot-AI/autobot-backend
              */
-            test_path: string;
+            test_path?: string;
             /**
              * Test Patterns
              * @description Test file patterns
