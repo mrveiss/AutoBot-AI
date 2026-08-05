@@ -353,9 +353,7 @@ class RelevanceScorer:
             return self.factors.exact_match_boost
         return 1.0
 
-    def _parse_result_metadata(
-        self, result: Dict[str, Any]
-    ) -> Tuple[str, str, str, str, bool, datetime | None]:
+    def _parse_result_metadata(self, result: Dict[str, Any]) -> Tuple[str, str, str, str, bool, datetime | None]:
         """Parse metadata from result for scoring (Issue #398: extracted)."""
         metadata = result.get("metadata", {})
         content = result.get("content", "")
@@ -403,9 +401,7 @@ class RelevanceScorer:
         )
         return min(boosted_score / max_possible, 1.0)
 
-    def calculate_relevance_score(
-        self, base_score: float, query: str, result: Dict[str, Any]
-    ) -> float:
+    def calculate_relevance_score(self, base_score: float, query: str, result: Dict[str, Any]) -> float:
         """Calculate final relevance score with all factors (Issue #398: refactored)."""
         (
             content,
@@ -415,9 +411,7 @@ class RelevanceScorer:
             verified,
             created_at,
         ) = self._parse_result_metadata(result)
-        return self._compute_boosted_score(
-            base_score, query, content, title, doc_id, source, verified, created_at
-        )
+        return self._compute_boosted_score(base_score, query, content, title, doc_id, source, verified, created_at)
 
     def record_access(self, doc_id: str) -> None:
         """Record document access for popularity tracking."""
@@ -668,13 +662,9 @@ class ResultClusterer:
         scores = [r.get("score", 0) for r in cluster_results]
         avg_score = sum(scores) / len(scores) if scores else 0.0
         keywords = self.TOPIC_KEYWORDS.get(topic, [])[:5]
-        return ResultCluster(
-            topic=topic, results=cluster_results, keywords=keywords, avg_score=avg_score
-        )
+        return ResultCluster(topic=topic, results=cluster_results, keywords=keywords, avg_score=avg_score)
 
-    def cluster_results(
-        self, results: List[Dict[str, Any]]
-    ) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
+    def cluster_results(self, results: List[Dict[str, Any]]) -> Tuple[List[ResultCluster], List[Dict[str, Any]]]:
         """Cluster results by topic (Issue #398: refactored)."""
         if not results:
             return [], []
