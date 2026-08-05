@@ -235,6 +235,88 @@ class TestLoadEvictCycle:
         finally:
             os.unlink(path)
 
+    def test_checkpoint_is_read_once_across_many_layer_loads(self):
+        """The file must be deserialised once per path, not once per load (#13031).
+
+        This is the whole point of the issue: ``generate()`` calls
+        ``load_layer`` once per layer per token, so a 32-layer model producing
+        64 tokens used to hit ``torch.load`` 2,048 times on the same file.
+        """
+        engine = _make_engine()
+        names = [f"model.layers.{i}" for i in range(4)]
+        sd = {}
+        for name in names:
+            sd.update(_tiny_state_dict(name))
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
+            path = f.name
+        try:
+            _write_state_dict(sd, path)
+            real_load = torch.load
+            calls = []
+
+            def counting_load(*args, **kwargs):
+                calls.append(kwargs.get("mmap", False))
+                return real_load(*args, **kwargs)
+
+            with patch.object(torch, "load", side_effect=counting_load):
+                for _ in range(3):  # stand in for successive generated tokens
+                    for name in names:
+                        engine.load_layer(name, path)
+
+            assert len(calls) == 1, f"expected 1 deserialisation, got {len(calls)}"
+            assert calls[0] is True, "checkpoint should be opened with mmap=True"
+        finally:
+            os.unlink(path)
+
+    def test_mmap_failure_falls_back_and_does_not_cache(self):
+        """A checkpoint that cannot be mapped must still load — and not be cached.
+
+        Caching the fallback would keep a full in-RAM copy of the model, which
+        is the failure mode this module exists to avoid; re-reading is the lesser
+        evil, so the fallback deliberately reloads each time.
+        """
+        engine = _make_engine()
+        layer_name = "model.layers.0"
+        sd = _tiny_state_dict(layer_name)
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
+            path = f.name
+        try:
+            _write_state_dict(sd, path)
+            real_load = torch.load
+
+            def no_mmap(*args, **kwargs):
+                if kwargs.pop("mmap", False):
+                    raise RuntimeError("mmap unsupported for this checkpoint")
+                return real_load(*args, **kwargs)
+
+            with patch.object(torch, "load", side_effect=no_mmap):
+                first = engine.load_layer(layer_name, path)
+                second = engine.load_layer(layer_name, path)
+
+            assert isinstance(first, torch.nn.Module)
+            assert isinstance(second, torch.nn.Module)
+            assert engine._mapped_checkpoints == {}
+        finally:
+            os.unlink(path)
+
+    def test_release_checkpoints_drops_the_cache(self):
+        """release_checkpoints clears cached mappings so a swap can reclaim them."""
+        engine = _make_engine()
+        layer_name = "model.layers.0"
+        sd = _tiny_state_dict(layer_name)
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
+            path = f.name
+        try:
+            _write_state_dict(sd, path)
+            engine.load_layer(layer_name, path)
+            assert engine._mapped_checkpoints
+
+            engine.release_checkpoints()
+
+            assert engine._mapped_checkpoints == {}
+        finally:
+            os.unlink(path)
+
     def test_missing_layer_prefix_raises_key_error(self):
         """load_layer should raise KeyError when no keys match the prefix."""
         engine = _make_engine()

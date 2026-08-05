@@ -136,6 +136,11 @@ class LayerInferenceEngine:
 
     def __init__(self, config: LayerInferenceConfig) -> None:
         self._config = config
+        # #13031: one memory-mapped handle per checkpoint, reused across every
+        # load_layer call. Without it the generate() loop re-deserialised the
+        # whole file once per layer per token — 2,048 times for a 32-layer model
+        # producing 64 tokens.
+        self._mapped_checkpoints: Dict[str, Any] = {}
         logger.info(
             "LayerInferenceEngine initialised: model=%s compression=%s device=%s max_seq=%d",
             config.model_name,
@@ -232,6 +237,61 @@ class LayerInferenceEngine:
     # Layer load / evict
     # ------------------------------------------------------------------
 
+    def _checkpoint(self, torch: Any, state_dict_path: str) -> Dict[str, Any]:
+        """Return the checkpoint's tensors, memory-mapped and cached per path.
+
+        ``mmap=True`` makes ``torch.load`` map the file rather than deserialise
+        it: the returned dict holds tensor views backed by the file on disk, and
+        only the bytes a caller actually reads are paged in. Selecting one
+        layer's keys therefore touches one layer's weights, which is what makes
+        peak memory bounded by the largest single layer as this module's
+        docstring promises — the previous full ``torch.load`` materialised every
+        parameter and then discarded all but one layer's.
+
+        Caching the handle is what removes the per-token cost. It is cheap to
+        hold precisely because it is a mapping and not a copy: the pages are
+        clean and the kernel can reclaim them under pressure.
+
+        The fallback path is deliberately **not** cached. Legacy (non-zipfile)
+        checkpoints cannot be mapped, and there the dict is a real in-RAM copy —
+        keeping it would trade this issue's problem for the one the module was
+        written to avoid.
+        """
+        cached = self._mapped_checkpoints.get(state_dict_path)
+        if cached is not None:
+            return cached
+        try:
+            mapped = torch.load(state_dict_path, map_location="cpu", weights_only=True, mmap=True)
+        except (RuntimeError, ValueError, TypeError) as exc:
+            logger.warning(
+                "Checkpoint %s cannot be memory-mapped (%s) — falling back to a full load. "
+                "Peak memory is the whole model and the load repeats per layer (#13031).",
+                state_dict_path,
+                exc,
+            )
+            return torch.load(state_dict_path, map_location="cpu", weights_only=True)
+        self._mapped_checkpoints[state_dict_path] = mapped
+        return mapped
+
+    def release_checkpoints(self) -> None:
+        """Drop cached memory-mapped checkpoints so their mappings can close.
+
+        Call when a model is swapped out.
+
+        Note that on a **CPU** device this does not necessarily unmap anything
+        immediately: ``_build_layer_module`` ends in ``module.to(device)``, which
+        is a no-op when the tensors are already on CPU, so those parameters
+        still alias the mapped file. Refcounting keeps the mapping alive for as
+        long as any live layer references it, so dropping the cache here is safe
+        either way — it releases the mapping once the last layer holding it is
+        evicted. On CUDA the ``.to()`` genuinely copies and the mapping is
+        released as soon as this returns.
+        """
+        count = len(self._mapped_checkpoints)
+        self._mapped_checkpoints.clear()
+        if count:
+            logger.debug("Released %d memory-mapped checkpoint(s)", count)
+
     def load_layer(self, layer_name: str, state_dict_path: str) -> Any:
         """Load a single transformer layer's weights onto the configured device.
 
@@ -260,7 +320,7 @@ class LayerInferenceEngine:
         logger.debug("Loading layer '%s' from %s", layer_name, state_dict_path)
         t0 = time.monotonic()
 
-        full_sd: Dict[str, Any] = torch.load(state_dict_path, map_location="cpu", weights_only=True)
+        full_sd = self._checkpoint(torch, state_dict_path)
         prefix = layer_name + "."
         layer_sd = {k[len(prefix) :]: v for k, v in full_sd.items() if k.startswith(prefix)}
 
