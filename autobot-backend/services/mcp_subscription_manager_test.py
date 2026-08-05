@@ -86,7 +86,7 @@ async def test_file_watcher():
     manager = MCPSubscriptionManager()
 
     # Create a temporary file
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
         temp_path = f.name
         f.write("Initial content\n")
 
@@ -143,6 +143,7 @@ async def main():
     except Exception as e:
         print(f"\n❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
