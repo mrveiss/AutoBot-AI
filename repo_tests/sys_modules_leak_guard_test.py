@@ -184,8 +184,32 @@ def test_a_cffi_pseudo_module_is_not_a_stub(guard):
     assert _leaks_for(guard, _OTHER_MODULE) == []
 
 
-def test_a_synthetic_child_of_a_real_package_is_not_reported(guard):
-    """A new spec-less child of an untouched real package is the library's own (#13450).
+def test_a_synthetic_child_of_a_real_REPO_package_is_still_a_stub(guard):
+    """A spec-less child of a real *repo* package is still a leak (#13599).
+
+    #13450 exempted any spec-less child of a genuine parent. That went too far:
+    this repository really does stub one submodule of a real package and leave
+    the parent alone — ``tests/orchestration/test_causal_error_recovery.py``
+    leaves ``orchestration.causal_error_analyzer`` and
+    ``orchestration.causal_error_recovery`` behind, both on the leak baseline —
+    and the exemption silenced them.
+
+    The exemption is now limited to parents loaded from **outside** the repo, so
+    a third-party package's own compat shims are ignored while repo stubs are
+    not. ``knowledge`` here has no ``__file__``, so it is not third-party.
+    """
+    parent = types.ModuleType("knowledge")
+    parent.__spec__ = object()  # type: ignore[assignment]
+    _install("knowledge", parent)
+    guard.snapshot()
+    _install("knowledge.utils", types.ModuleType("knowledge.utils"))
+    guard.attribute(_LLC_CONFTEST)
+
+    assert _leaks_for(guard, _OTHER_MODULE) == ["knowledge.utils"]
+
+
+def test_a_synthetic_child_of_a_third_party_package_is_not_reported(guard, tmp_path):
+    """A spec-less child of an installed distribution is that library's own (#13599).
 
     This asserted the opposite until #13450. The reversal is deliberate and is
     the one detection case that fix trades away, recorded here rather than left
@@ -205,6 +229,7 @@ def test_a_synthetic_child_of_a_real_package_is_not_reported(guard):
     """
     parent = types.ModuleType("knowledge")
     parent.__spec__ = object()  # type: ignore[assignment]
+    parent.__file__ = str(tmp_path / "site-packages" / "knowledge" / "__init__.py")
     _install("knowledge", parent)
     guard.snapshot()
     _install("knowledge.utils", types.ModuleType("knowledge.utils"))
