@@ -25,6 +25,8 @@ from llm_shared.optimization.layer_inference import (
     LayerInferenceConfig,
     LayerInferenceEngine,
     LayerInferenceStats,
+    _apply_embedding,
+    _apply_head,
     _get_peak_memory,
     _greedy_sample,
     _is_eos,
@@ -632,3 +634,82 @@ class TestModuleHelpers:
     def test_get_peak_memory_cpu_returns_zero(self):
         """_get_peak_memory for CPU should return 0."""
         assert _get_peak_memory(torch, "cpu") == 0
+
+
+# ---------------------------------------------------------------------------
+# #13032 — embedding, LM head, and the sampling axis
+# ---------------------------------------------------------------------------
+
+
+@requires_torch
+class TestEmbeddingAndHead:
+    """Token ids must become hidden states, and hidden states must become logits.
+
+    These exercise the helpers directly rather than driving ``_run_layer_loop``
+    end to end. A transformer block rebuilt by ``_build_layer_module`` is a bare
+    parameter container with no ``forward``, so the full loop cannot execute for
+    any checkpoint — a separate and deeper defect than the three in #13032, filed
+    on its own. Testing through it would only be testing a stub of my own making.
+    """
+
+    def test_embedding_lookup_returns_the_weight_rows(self):
+        """The core of defect 1: ids index the embedding, they are not activations."""
+        weight = torch.randn(7, 4)
+        module = torch.nn.Module()
+        module.weight = torch.nn.Parameter(weight)
+
+        embedded = _apply_embedding(module, torch.tensor([[1, 3]]))
+
+        assert embedded.shape == (1, 2, 4)
+        assert torch.allclose(embedded[0, 0], weight[1])
+        assert torch.allclose(embedded[0, 1], weight[3])
+
+    def test_embedding_without_weight_raises(self):
+        """A module with no weight cannot embed — say so rather than return garbage."""
+        with pytest.raises(KeyError, match="weight"):
+            _apply_embedding(torch.nn.Module(), torch.tensor([[0]]))
+
+    def test_head_projects_hidden_states_onto_the_vocabulary(self):
+        """The core of defect 2: without this the last axis is hidden, not vocab."""
+        vocab, hidden_dim = 7, 4
+        head = torch.nn.Module()
+        head.weight = torch.nn.Parameter(torch.randn(vocab, hidden_dim))
+        hidden = torch.randn(1, 3, hidden_dim)
+
+        logits = _apply_head(head, hidden)
+
+        assert logits.shape == (1, 3, vocab)
+        assert torch.allclose(logits, hidden @ head.weight.t(), atol=1e-5)
+
+    def test_head_falls_back_to_the_tied_embedding_weight(self):
+        """GPT-2 and many LLaMA checkpoints ship no lm_head — the head is tied."""
+        vocab, hidden_dim = 7, 4
+        embed_weight = torch.randn(vocab, hidden_dim)
+        hidden = torch.randn(1, 3, hidden_dim)
+
+        logits = _apply_head(None, hidden, fallback_weight=embed_weight)
+
+        assert logits.shape == (1, 3, vocab)
+        assert torch.allclose(logits, hidden @ embed_weight.t(), atol=1e-5)
+
+    def test_head_with_neither_weight_raises(self):
+        """No head and nothing to tie against is unrecoverable — do not guess."""
+        with pytest.raises(KeyError, match="tie against"):
+            _apply_head(None, torch.randn(1, 2, 4), fallback_weight=None)
+
+    def test_sampling_over_logits_yields_a_valid_token_id(self):
+        """Defect 3 is a symptom: argmax is correct once the axis is the vocabulary."""
+        vocab = 7
+        logits = torch.randn(1, 3, vocab)
+        logits[0, -1, 5] = 100.0
+
+        assert _greedy_sample(torch, logits) == 5
+
+    def test_arch_resolution_is_consistent_across_prefix_embedding_and_head(self):
+        """One family set drives all three resolvers, so they cannot disagree."""
+        engine = _make_engine()
+        assert engine.get_embedding_name({"model_type": "gpt2"}) == "transformer.wte"
+        assert engine.get_embedding_name({"model_type": "llama"}) == "model.embed_tokens"
+        assert engine.get_head_name({"model_type": "llama"}) == "lm_head"
+        assert engine._arch_from_layer_names(["transformer.h.0"]) == "gpt2"
+        assert engine._arch_from_layer_names(["model.layers.0"]) == ""
