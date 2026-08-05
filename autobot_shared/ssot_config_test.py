@@ -515,13 +515,13 @@ class TestCheckoutRootDetection:
 
     def test_recognises_a_normal_clone(self, tmp_path) -> None:
         """A clone has .git as a directory."""
-        from autobot_shared.ssot_config import _is_checkout_root
+        from autobot_shared.paths import is_checkout_root
 
         root = tmp_path / "clone"
         (root / "autobot_shared").mkdir(parents=True)
         (root / ".git").mkdir()
 
-        assert _is_checkout_root(root) is True
+        assert is_checkout_root(root) is True
 
     def test_recognises_a_git_worktree(self, tmp_path) -> None:
         """In a worktree .git is a FILE, not a directory.
@@ -529,13 +529,13 @@ class TestCheckoutRootDetection:
         Tested explicitly because this repository's whole workflow runs from
         worktrees, and an ``is_dir()`` check would have excluded every one.
         """
-        from autobot_shared.ssot_config import _is_checkout_root
+        from autobot_shared.paths import is_checkout_root
 
         root = tmp_path / "worktree"
         (root / "autobot_shared").mkdir(parents=True)
         (root / ".git").write_text("gitdir: /elsewhere\n", encoding="utf-8")
 
-        assert _is_checkout_root(root) is True
+        assert is_checkout_root(root) is True
 
     def test_requires_both_markers(self, tmp_path) -> None:
         """Either marker alone is not enough.
@@ -544,19 +544,19 @@ class TestCheckoutRootDetection:
         vendored into; ``autobot_shared`` alone matches ordinary parent
         directories in some layouts.
         """
-        from autobot_shared.ssot_config import _is_checkout_root
+        from autobot_shared.paths import is_checkout_root
 
         git_only = tmp_path / "other-repo"
         (git_only / ".git").mkdir(parents=True)
         pkg_only = tmp_path / "vendored"
         (pkg_only / "autobot_shared").mkdir(parents=True)
 
-        assert _is_checkout_root(git_only) is False
-        assert _is_checkout_root(pkg_only) is False
+        assert is_checkout_root(git_only) is False
+        assert is_checkout_root(pkg_only) is False
 
     def test_a_configured_env_still_wins(self, tmp_path) -> None:
         """The .env walk keeps priority — a configured deployment is authoritative."""
-        from autobot_shared import ssot_config
+        from autobot_shared import paths
 
         # Both markers AND a .env: the .env branch is checked first, so a
         # deployment that has been configured is never overridden by detection.
@@ -565,5 +565,5 @@ class TestCheckoutRootDetection:
         (root / ".git").mkdir()
         (root / ".env").write_text("X=1\n", encoding="utf-8")
 
-        assert ssot_config._is_checkout_root(root) is True
+        assert paths.is_checkout_root(root) is True
         assert (root / ".env").exists()

@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
+from autobot_shared.paths import project_root
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -332,21 +334,18 @@ def _resolve_env_path(env_path: str | None) -> Path:
     if env_path:
         return Path(env_path).resolve()
 
-    # Mirror ssot_config._find_project_root() logic
-    import os
-
-    current = Path(__file__).resolve()
-    for candidate in [current] + list(current.parents):
-        if (candidate / ".env").exists():
-            return candidate / ".env"
+    # #13149: this was a hand-copied mirror of ssot_config's project-root walk,
+    # and it drifted — it never gained the checkout step, so from a source tree
+    # with no ``.env`` it reported drift against the deployed install's file.
+    # ``project_root()`` is the one implementation both now share.
+    #
     # ssot-config-exempt: bootstrap, before config is available.
-    # #12782: the `/ ".env"` join used to sit inside this trailing comment, so
-    # the fallback returned the DIRECTORY. _parse_env_file then failed with
+    # #12782: the `/ ".env"` join used to sit inside a trailing comment, so the
+    # fallback returned the DIRECTORY. _parse_env_file then failed with
     # IsADirectoryError, swallowed it into an empty dict, and every SSOT key was
     # reported missing -- "194 drifted, (194 SSOT keys, 0 .env keys)" on a host
-    # whose .env actually held 93 keys.
-    base = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
-    return base / ".env"
+    # whose .env actually held 93 keys. Keep the join on the return itself.
+    return project_root() / ".env"
 
 
 def _emit_drift_warnings(report: DriftReport) -> None:
