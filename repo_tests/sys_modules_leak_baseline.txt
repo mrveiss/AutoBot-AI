@@ -67,7 +67,6 @@ autobot-backend/worker_node_test.py run-phase
 autobot-slm-backend/api/monitoring_applogs_test.py
 autobot-slm-backend/services/a2a_card_fetcher_test.py
 autobot-slm-backend/services/reconciler_check_node_health_test.py
-autobot-slm-backend/tests/api/conftest.py
 autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py
 autobot-slm-backend/tests/api/test_fleet_health.py
 autobot-slm-backend/tests/api/test_node_update_availability_11964.py
