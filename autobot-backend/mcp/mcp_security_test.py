@@ -92,7 +92,11 @@ def tmp_root_exists():
             shutil.rmtree(root, ignore_errors=True)
             return
         for entry in set(root.iterdir()) - preexisting:
-            (shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True))
+            (
+                shutil.rmtree(entry, ignore_errors=True)
+                if entry.is_dir()
+                else entry.unlink(missing_ok=True)
+            )
 
 
 @pytest.fixture
@@ -128,7 +132,9 @@ def admin_client(app):
 def temp_allowed_dir(tmp_path):
     """Create temporary directory within allowed paths for testing"""
     # Use /tmp/autobot/ which is in ALLOWED_DIRECTORIES
-    test_dir = Path("/tmp/autobot/test_security")  # nosec B108  # test/controlled code uses tmpdir intentionally
+    test_dir = Path(
+        "/tmp/autobot/test_security"
+    )  # nosec B108  # test/controlled code uses tmpdir intentionally
     test_dir.mkdir(parents=True, exist_ok=True)
     yield test_dir
     # Cleanup
@@ -248,7 +254,8 @@ class TestFilesystemMCPPathTraversal:
             response = client.post("/api/filesystem/mcp/read_text_file", json=payload)
             # Should either return 400 (validation error) or 403 (forbidden)
             assert response.status_code in [400, 403, 422], (
-                f"API did not block path traversal: {payload['path']}, " f"status: {response.status_code}"
+                f"API did not block path traversal: {payload['path']}, "
+                f"status: {response.status_code}"
             )
 
 
@@ -566,8 +573,20 @@ class TestMCPInputValidation:
                 # read outside the whitelist; /etc/passwd is the payload's target.
                 assert "root:" not in response.text, f"Traversal succeeded for payload: {payload!r}"
 
-    def test_ldap_injection_attempts(self, client):
-        """Test LDAP injection protection (if applicable)"""
+    def test_ldap_injection_attempts(self, client, tmp_root_exists):
+        """Test LDAP injection protection (if applicable).
+
+        Takes ``tmp_root_exists`` for the same reason
+        ``test_sql_injection_attempts`` does (#13598): this posts
+        ``{"path": TMP_ROOT}`` to ``search_files``, which pre-checks
+        ``os.path.exists`` and answers 404 before the pattern is used. On a
+        runner without that directory the endpoint returned a correct 404 and
+        the assertion below — which deliberately excludes 404 — failed.
+
+        Missed when #13598 was fixed: that issue named the SQL and Unicode
+        tests, and this third instance was found only when the base branch went
+        red on it.
+        """
         ldap_payloads = [
             "*)(uid=*))(|(uid=*",
             "admin)(&(password=*))",
@@ -580,7 +599,10 @@ class TestMCPInputValidation:
                 "/api/filesystem/mcp/search_files",
                 json={"path": TMP_ROOT, "pattern": payload},
             )
+            # 404 stays excluded: the directory exists, so a 404 would mean the
+            # pre-check fired anyway and no LDAP payload was ever exercised.
             assert response.status_code in [200, 400, 422]
+            assert response.status_code < 500, f"payload crashed the endpoint: {payload}"
 
 
 # ============================================================================
@@ -626,7 +648,9 @@ class TestMCPSizeLimiting:
         # Try to read 1000 files at once
         file_paths = [f"{TMP_ROOT}/file{i}.txt" for i in range(1000)]
 
-        response = client.post("/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths})
+        response = client.post(
+            "/api/filesystem/mcp/read_multiple_files", json={"paths": file_paths}
+        )
 
         # Should have limits on batch operations
         assert response.status_code in [200, 400, 422]
@@ -773,7 +797,9 @@ class TestSecurityCoverage:
         }
 
         missing = tested_bridges - registered_bridges
-        assert not missing, f"Security tests target bridges that are not registered: {sorted(missing)}"
+        assert (
+            not missing
+        ), f"Security tests target bridges that are not registered: {sorted(missing)}"
 
     def test_critical_attack_vectors_covered(self):
         """Verify all critical attack vectors are tested"""
