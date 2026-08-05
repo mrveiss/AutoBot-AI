@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, FrozenSet, List
+from typing import Dict, FrozenSet, List, Set
 
 # ============================================================================
 # API CONSTANTS
@@ -59,7 +59,9 @@ ERR_TEMPLATE_NOT_FOUND = "Template not found"
 ERR_WORKFLOW_NOT_FOUND = "Workflow not found"
 ERR_EXPERIMENT_NOT_FOUND = "Experiment not found"
 ERR_INVALID_CREDENTIALS = "Invalid username or password"
-ERR_INVALID_TOKEN = "Invalid token"  # nosec B105  # user-facing error message string, not a credential
+ERR_INVALID_TOKEN = (
+    "Invalid token"  # nosec B105  # user-facing error message string, not a credential
+)
 
 
 # ============================================================================
@@ -472,6 +474,31 @@ class SecurityConstants:
 
     # Web ports permitted for outbound/domain network validation (#10384).
     ALLOWED_WEB_PORTS: List[int] = [80, 443, 8080, 8443]
+
+    # Audio/container extensions accepted for transcriber upload, route
+    # admission, and ffmpeg processing (#13512).
+    #
+    # This existed as three byte-identical literals: the upload security
+    # boundary (``transcriber/upload_security.py``), the route guard
+    # (``transcriber/routes/recordings.py``) and the processing guard
+    # (``media/audio/ffmpeg_service.py``). The last carried the comment
+    # "must match upload_security.py" — an invariant nothing enforced.
+    #
+    # Three copies of a security-relevant allowlist drift independently: adding
+    # a format to the route guard alone admits a file the validator was never
+    # taught to accept, and dropping one from the security module alone leaves
+    # two paths still advertising it. One set removes that failure mode. A
+    # genuine difference between the three belongs here as a named subset,
+    # never as a fourth literal.
+    ALLOWED_AUDIO_EXTENSIONS: Set[str] = {
+        ".wav",
+        ".mp3",
+        ".mp4",
+        ".m4a",
+        ".ogg",
+        ".flac",
+        ".webm",
+    }
 
     USER_AGENT_POOL: List[str] = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",  # noqa: E501

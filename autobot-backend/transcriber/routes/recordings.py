@@ -32,12 +32,15 @@ from transcriber.database import Database
 from transcriber.deps import DEFAULT_USER, can_access, get_db
 from transcriber.models import RecordingOut
 from transcriber.upload_security import MAX_FILE_SIZE
+from autobot_shared.ssot_constants import SecurityConstants
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["transcriber-recordings"])
 
-_ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
+# Same canonical set the upload security boundary enforces (#13512) — this
+# route guard admitting a format the validator rejects would be a gap.
+_ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 _CHUNK_SIZE = 65536
 
 
@@ -92,7 +95,9 @@ async def upload_recording(
     # The file is on disk before the DB row exists; unlink the partial upload
     # if the insert fails so a rejected recording never leaks an orphan (GH#12310).
     try:
-        rid = await db.create_recording(project_id, file.filename or safe_name, str(dest), user_id=_user_id(request))
+        rid = await db.create_recording(
+            project_id, file.filename or safe_name, str(dest), user_id=_user_id(request)
+        )
     except Exception:
         dest.unlink(missing_ok=True)
         raise
@@ -212,7 +217,9 @@ def _wav_frames_to_peaks(frames: bytes, n_channels: int, sampwidth: int, width: 
     normalized = np.abs(arr.astype(np.float32) / max_val)
     bucket_size = max(1, len(normalized) // width)
     n_buckets = min(width, len(normalized))
-    peaks = [float(np.max(normalized[i * bucket_size : (i + 1) * bucket_size])) for i in range(n_buckets)]
+    peaks = [
+        float(np.max(normalized[i * bucket_size : (i + 1) * bucket_size])) for i in range(n_buckets)
+    ]
     return peaks
 
 
@@ -271,7 +278,9 @@ async def audio_chunks(recording_id: int, request: Request, db: Database = Depen
     return _handle_range_request(audio_path, range_header, file_size, content_type)
 
 
-def _handle_range_request(audio_path: Path, range_header: str, file_size: int, content_type: str) -> Response:
+def _handle_range_request(
+    audio_path: Path, range_header: str, file_size: int, content_type: str
+) -> Response:
     """Parse Range header and return 206 Partial Content or 416 on error."""
     try:
         unit, rng = range_header.split("=", 1)
@@ -323,7 +332,11 @@ async def audio_waveform(
     peaks = _generate_waveform(str(audio_path), width)
     segments_raw = await db.list_segments(recording_id)
     segments = [
-        {"start_time": s["start_time"], "end_time": s["end_time"], "speaker_id": s.get("speaker_id")}
+        {
+            "start_time": s["start_time"],
+            "end_time": s["end_time"],
+            "speaker_id": s.get("speaker_id"),
+        }
         for s in segments_raw
     ]
 

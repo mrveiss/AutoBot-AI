@@ -13,11 +13,13 @@ import uuid
 from pathlib import Path
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import SecurityConstants
 
 logger = get_logger(__name__)
 
-# Allowed audio file extensions
-ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
+# Allowed audio file extensions — canonical set, shared with the route guard
+# and the ffmpeg processing guard so the three cannot drift (#13512).
+ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 
 # Maximum file size: 500MB
 MAX_FILE_SIZE = 500 * 1024 * 1024
@@ -123,7 +125,9 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     # before any Path/os operations receive the user-controlled value.
     upload_dir_str = str(user_upload_dir)
     if not file_path.startswith(upload_dir_str + os.sep) and file_path != upload_dir_str:
-        raise UploadSecurityError("Path traversal attempt detected: path is outside upload directory")
+        raise UploadSecurityError(
+            "Path traversal attempt detected: path is outside upload directory"
+        )
 
     try:
         # Resolve symlinks and canonicalize — use only this resolved path hereafter
@@ -135,7 +139,9 @@ def validate_upload_path(file_path: str, user_id: int) -> Path:
     try:
         path.relative_to(user_upload_dir)
     except ValueError:
-        raise UploadSecurityError("Path traversal attempt detected: resolved path is outside upload directory")
+        raise UploadSecurityError(
+            "Path traversal attempt detected: resolved path is outside upload directory"
+        )
 
     # Reject symlinks — check on the resolved path object, not the raw input
     if path.is_symlink():
@@ -168,7 +174,9 @@ def save_uploaded_file(file_content: bytes, original_filename: str, user_id: int
     """
     # Validate file size
     if len(file_content) > MAX_FILE_SIZE:
-        raise UploadSecurityError(f"File too large: {len(file_content)} bytes (max: {MAX_FILE_SIZE})")
+        raise UploadSecurityError(
+            f"File too large: {len(file_content)} bytes (max: {MAX_FILE_SIZE})"
+        )
 
     # Generate secure filename
     secure_filename = generate_secure_filename(original_filename)

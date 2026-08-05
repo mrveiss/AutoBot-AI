@@ -17,11 +17,13 @@ from typing import Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.ssot_constants import SecurityConstants
 
 logger = get_logger(__name__)
 
-# Allowed audio extensions (must match upload_security.py)
-ALLOWED_EXTENSIONS = {".wav", ".mp3", ".mp4", ".m4a", ".ogg", ".flac", ".webm"}
+# Allowed audio extensions. The "must match upload_security.py" comment this
+# replaces was an invariant nothing enforced — it is now the same object (#13512).
+ALLOWED_EXTENSIONS = SecurityConstants.ALLOWED_AUDIO_EXTENSIONS
 
 # Extension to FFmpeg format mapping (for -f flag)
 EXTENSION_TO_FORMAT = {
@@ -78,7 +80,9 @@ class FFmpegService:
         # Security: Validate extension
         input_ext = Path(input_path).suffix.lower()
         if input_ext not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"File extension '{input_ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+            raise ValueError(
+                f"File extension '{input_ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            )
 
         # Security: Reject relative paths
         if not os.path.isabs(input_path):
@@ -150,7 +154,9 @@ class FFmpegService:
             return output_path
 
         except FileNotFoundError:
-            raise RuntimeError(f"FFmpeg not found at {self.ffmpeg_path}. Please install FFmpeg: apt-get install ffmpeg")
+            raise RuntimeError(
+                f"FFmpeg not found at {self.ffmpeg_path}. Please install FFmpeg: apt-get install ffmpeg"
+            )
         except Exception as exc:
             logger.error("Audio extraction error: %s", exc)
             # Clean up output file on error
