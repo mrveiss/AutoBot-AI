@@ -11,7 +11,13 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from autobot-backend.services.mcp_subscription_manager import (
+# #13662: this file lived at the repository root and imported
+# `autobot-backend.services.mcp_subscription_manager`. A hyphen is not valid
+# in a module path, so it raised SyntaxError and had never run since #9275
+# introduced it — the repository root is in neither of ci.yml's pytest
+# collection lists, so nothing ever tried to import it. Moved here to sit
+# beside its subject, inside a directory CI actually collects.
+from services.mcp_subscription_manager import (
     MCPSubscriptionManager,
     _uri_to_channel,
 )
