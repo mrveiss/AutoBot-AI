@@ -224,6 +224,16 @@ jobs:
         # trees run in 336s without it and 35m11s with it, while pytest's own
         # --durations reported every one of the 25 slowest tests under 10s. It
         # is the wrong thing to pay for on every PR.
+        # #13637: pytest exits 5 for "no tests collected". Under --splits 12
+        # that is a scheduling artefact rather than a result — .test_durations_slm
+        # describes 1501 tests against 1644 collected, so pytest-split packs
+        # unevenly and the later groups come out empty. Measured: group 1 took
+        # 497 of 1644 while groups 8-12 took none, and `bash -e` then failed the
+        # step, reddening the base branch on runs with zero test failures.
+        #
+        # The empty shard is announced rather than silently swallowed, and 5 is
+        # the only tolerated code. Fixing the packing is the real repair.
+        set +e
         python -m pytest \
           autobot-slm-backend \
           -n auto --dist loadscope \
@@ -234,6 +244,13 @@ jobs:
           --durations=25 \
           --durations-min=10.0 \
           -q
+        status=$?
+        set -e
+        if [ "$status" -eq 5 ]; then
+          echo "::notice::autobot-slm-backend shard ${{ matrix.shard }}/12 collected no tests (pytest exit 5) — empty split group, see #13637"
+          exit 0
+        fi
+        exit "$status"
 
     - name: Run integration tests
       # Shard 1 only — this suite is selected by DIRECTORY, not by the split, so
