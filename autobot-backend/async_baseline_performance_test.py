@@ -40,6 +40,7 @@ from autobot_shared.logging_manager import get_logger
 # Import canonical Redis client pattern
 from autobot_shared.redis_client import get_async_redis_client
 from constants.network_constants import NetworkConstants, ServiceURLs
+from autobot_shared.paths import project_root
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -548,7 +549,7 @@ class AsyncBaselineTest:
         }
 
         # Save report to file
-        output_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/performance/results")
+        output_dir = project_root() / "tests" / "performance" / "results"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")

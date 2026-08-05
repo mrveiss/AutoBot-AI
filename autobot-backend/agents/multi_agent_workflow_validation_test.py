@@ -18,6 +18,7 @@ from typing import Dict, List
 import requests
 
 from autobot_shared.ssot_config import config
+from autobot_shared.paths import project_root
 
 # Add AutoBot paths
 sys.path.append(config.project_root)
@@ -519,7 +520,7 @@ class MultiAgentWorkflowValidator:
 
     def save_workflow_results(self, report: Dict):
         """Save workflow validation results"""
-        results_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/tests/results")
+        results_dir = project_root() / "tests" / "results"
         results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

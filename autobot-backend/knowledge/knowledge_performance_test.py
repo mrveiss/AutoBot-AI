@@ -35,6 +35,7 @@ import aiohttp
 
 from autobot_shared.logging_manager import get_logger
 from constants.network_constants import ServiceURLs
+from autobot_shared.paths import project_root
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -744,7 +745,7 @@ class KnowledgePerformanceTest:
         }
 
         # Save report to proper directory (NOT root!)
-        output_dir = Path("${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/reports/performance")
+        output_dir = project_root() / "reports" / "performance"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
